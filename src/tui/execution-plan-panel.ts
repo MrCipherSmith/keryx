@@ -4,6 +4,7 @@ import {
   type ExecutionPlan,
   type ExecutionPlanStatus,
 } from "../session/execution-plan";
+import { displayWidth } from "../lib/live-render";
 
 const GLYPHS: Readonly<Record<ExecutionPlanStatus, string>> = {
   completed: "✓",
@@ -28,8 +29,14 @@ export type ExecutionPlanPanelProjection = {
 
 function truncate(text: string, width: number): string {
   if (width <= 0) return "";
-  if (text.length <= width) return text;
-  return width === 1 ? "…" : `${text.slice(0, width - 1)}…`;
+  if (displayWidth(text) <= width) return text;
+  if (width === 1) return "…";
+  let prefix = "";
+  for (const character of text) {
+    if (displayWidth(prefix + character) > width - 1) break;
+    prefix += character;
+  }
+  return `${prefix}…`;
 }
 
 export function projectExecutionPlanPanel(
@@ -66,6 +73,8 @@ export function mountExecutionPlanPanel(
   const box = parent as PanelParent;
   let paintedDir: string | undefined;
   let paintedRevision: number | undefined;
+  let refreshGeneration = 0;
+  let disposed = false;
   const paint = (plan: ExecutionPlan | undefined, dir: string | undefined): void => {
     const projected = projectExecutionPlanPanel(plan, {
       width: options.width,
@@ -84,11 +93,24 @@ export function mountExecutionPlanPanel(
   };
   const refresh = async (): Promise<void> => {
     const dir = options.getSessionDir();
-    paint(dir === undefined ? undefined : await getExecutionPlan(dir).catch(() => undefined), dir);
+    const generation = ++refreshGeneration;
+    const plan = dir === undefined ? undefined : await getExecutionPlan(dir).catch(() => undefined);
+    if (disposed || generation !== refreshGeneration || dir !== options.getSessionDir()) return;
+    paint(plan, dir);
   };
   const unsubscribe = subscribeExecutionPlans((dir, plan) => {
-    if (dir === options.getSessionDir()) paint(plan, dir);
+    if (dir === options.getSessionDir()) {
+      refreshGeneration += 1;
+      paint(plan, dir);
+    }
   });
   void refresh();
-  return { refresh, dispose: unsubscribe };
+  return {
+    refresh,
+    dispose: () => {
+      disposed = true;
+      refreshGeneration += 1;
+      unsubscribe();
+    },
+  };
 }

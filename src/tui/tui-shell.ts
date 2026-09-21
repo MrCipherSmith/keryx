@@ -3266,12 +3266,10 @@ export async function launchTuiAgentShell(opts: {
     // either way a late reply can never reach `chrome.showSuggestion`. See
     // `suggestNextStep` and `next-step-suggestion.ts`.
     const suggestionGate = new NextStepSuggestionGate();
-    // SLATE-3a (flow 161, AC5): the session-tracking variable this closure
-    // reads is declared further down in this same function body. The getter
-    // only runs once a turn actually executes a tool call, well after that
-    // declaration has run, so referencing it here (textually earlier) is
-    // safe — TDZ is a call-time concern for a closure, not a
-    // closure-creation-time one.
+    // Declare the session ref before any consumer can call the getter. The
+    // execution-plan panel refreshes immediately when mounted, before the live
+    // session is bound, and must observe `undefined` rather than hit the TDZ.
+    let slateSession: SlateSessionRef | undefined;
     // Finding 1 fix: pass the FULL live `slateSession` ref through, not just
     // `.dir` — `makeAgentDeps`'s widened contract (see `opts.makeAgentDeps`
     // doc comment above) needs it to wire `createSpawnSubagentTool`'s new
@@ -4443,7 +4441,6 @@ export async function launchTuiAgentShell(opts: {
      * The TUI always has a live session (no sessions-off path here, unlike the
      * REPL), so this is unconditional once `liveSession` is set below.
      */
-    let slateSession: SlateSessionRef | undefined;
     const bindSlateToLiveSession = (): void => {
       slateSession = freshSlateSessionRef(liveSession.dir, sessionCwd);
       void executionPlanPanel.refresh();

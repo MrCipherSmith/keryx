@@ -2413,6 +2413,20 @@ async function runAgentTurnCore(
         continue;
       }
 
+      if (planFollowThroughUsed && hasActionableExecutionPlanItems(currentPlan)) {
+        const actionable = currentPlan?.items.filter(
+          (item) => item.status === "pending" || item.status === "in_progress",
+        ) ?? [];
+        const shown = actionable.slice(0, 7).map((item) => {
+          const title = item.title.length > 120 ? `${item.title.slice(0, 119)}…` : item.title;
+          return `- ${item.id} [${item.status}]: ${title}`;
+        });
+        if (actionable.length > shown.length) {
+          shown.push(`- … ${actionable.length - shown.length} more actionable item(s)`);
+        }
+        system(`\n[plan] Actionable items remain after the single follow-through:\n${shown.join("\n")}\n`);
+      }
+
       return {}; // error, or a text-only finish → turn complete
     }
 

@@ -56,7 +56,15 @@ function validateItems(items: readonly ExecutionPlanItem[]): ExecutionPlanItem[]
 }
 
 function notify(dir: string, plan: ExecutionPlan): void {
-  for (const listener of listeners) listener(dir, clonePlan(plan));
+  for (const listener of listeners) {
+    try {
+      listener(dir, clonePlan(plan));
+    } catch {
+      // Persistence already succeeded. A faulty observer must neither prevent
+      // later observers from running nor turn the completed mutation into a
+      // rejected promise.
+    }
+  }
 }
 
 export function subscribeExecutionPlans(listener: PlanListener): () => void {

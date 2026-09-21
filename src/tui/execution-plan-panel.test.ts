@@ -19,6 +19,11 @@ test("the Plan projection is hidden when empty and caps a populated plan at seve
     rows: [],
     revision: undefined,
   });
+  expect(projectExecutionPlanPanel({ revision: 3, items: [] }, { width: 26, maxRows: 7 })).toEqual({
+    visible: false,
+    rows: [],
+    revision: undefined,
+  });
 
   const projected = projectExecutionPlanPanel(plan(5), { width: 26, maxRows: 7 });
   expect(projected.visible).toBe(true);
@@ -54,8 +59,8 @@ test("the Plan projection distinguishes all five states and changes its repaint 
 
 test("tui-shell mounts the conditional Plan panel immediately before Background Jobs", () => {
   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
-  const planMount = source.indexOf("mountExecutionPlanPanel");
-  const jobsMount = source.indexOf("Background Jobs");
+  const planMount = source.indexOf("const executionPlanPanel = mountExecutionPlanPanel");
+  const jobsMount = source.indexOf("const sbJobs = new otui.BoxRenderable", planMount);
 
   expect(planMount).toBeGreaterThanOrEqual(0);
   expect(jobsMount).toBeGreaterThan(planMount);

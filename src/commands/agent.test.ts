@@ -325,12 +325,16 @@ test("runAgentTurn injects the current plan and allows at most one follow-throug
   const history: NormalizedMessage[] = [];
   const slateSession: SlateSessionRef = { dir, cwd: dir, opened: true };
 
-  await runAgentTurn(collectingIo().io, deps, history, "hello", { slateSession });
+  const collected = collectingIo();
+  await runAgentTurn(collected.io, deps, history, "hello", { slateSession });
 
   expect(requests).toHaveLength(2);
   expect(requests[0]?.systemInstruction).toContain("Current execution plan (revision 1)");
   expect(requests[0]?.systemInstruction).toContain("implement [in_progress]");
   expect(history.some((message) => message.provenance === "project" && message.content.includes("actionable items remain"))).toBe(true);
+  expect(collected.system.join("")).toContain("Actionable items remain after the single follow-through");
+  expect(collected.system.join("")).toContain("implement [in_progress]");
+  expect(collected.system.join("")).toContain("verify [pending]");
 });
 
 test("runAgentTurn: a main-turn round's request budget defaults to DEFAULT_MAX_OUTPUT_TOKENS", async () => {
