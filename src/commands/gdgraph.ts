@@ -28,8 +28,28 @@ import { explainAbsentGraphTarget, loadDeletionTrail } from "../forgetting/servi
 
 export async function gdgraphCommand(args: string[]): Promise<void> {
   if (process.env.KERYX_GDGRAPH_LOCAL !== "1") {
-    const delegated = await delegateToLocalRunner(args);
-    if (delegated) {
+    const delegation = await delegateToLocalRunner(args);
+    if (delegation.delegated) {
+      // Flow 281 (gdgraph-template-provenance): see the long comment on
+      // `delegateToLocalRunner` below for the decision and the rejected
+      // alternatives. Short version — the copied local runner
+      // (`.metaproject/core/gdgraph/cli.ts`) never calls `recordProvenance`,
+      // so this is the ONLY place that can stamp provenance for a delegated
+      // `build` without either duplicating provenance logic into the template
+      // or waiting on every scaffolded project to run `keryx update`.
+      //
+      // Gated on the delegated command being exactly "build" (the only
+      // delegatable command `SYNCED_MODULES` tracks provenance for — `query`
+      // reads the graph, it does not build it) AND on the child having
+      // exited successfully. A non-zero exit means the copied runner's own
+      // `buildGraph()` call threw (or something else in that process failed)
+      // before ever reaching its own success output; recording provenance
+      // for a build that did not complete would claim the graph reflects a
+      // commit it may not actually reflect.
+      if (args[0] === "build" && delegation.exitCode === 0) {
+        const { recordProvenance } = await import("../sync/provenance");
+        await recordProvenance(process.cwd(), "gdgraph", new Date().toISOString());
+      }
       return;
     }
   }
@@ -53,29 +73,20 @@ export async function gdgraphCommand(args: string[]): Promise<void> {
     // on an empty diff, so `keryx sync --apply` alone reaches a recordable
     // wiki baseline without requiring a manual build at all.
     //
-    // Separately discovered while reproducing this flow's defect (not fixed
-    // here — a distinct bug, out of this flow's scope): the delegation just
-    // above (`delegateToLocalRunner`) means this `recordProvenance` call is
-    // UNREACHABLE for a normal project. Any project scaffolded by `keryx
-    // init`/`keryx update` carries `.metaproject/core/gdgraph/cli.ts`
-    // (`src/lib/templates.ts`), and `gdgraphCommand`'s top of function hands
-    // `build` off to that copied runner (`.metaproject/core/gdgraph/cli.ts`)
-    // whenever it exists and the treesitter capability is off — which returns
-    // before this line is ever reached. Measured directly: `keryx gdgraph
-    // build` in a scaffolded project rewrites the graph artifacts but never
-    // even CREATES `.metaproject/data/gdgraph/.provenance.json`, because the
-    // copied runner's own `build` handler (`.metaproject/core/gdgraph/cli.ts`,
-    // mirrored from a template) never calls `recordProvenance` at all. This is
-    // exactly the "keryx gdgraph build ... leaves .provenance.json on the old
-    // commit" symptom this flow's description names — but it is caused by the
-    // delegation bypass, not by anything the diff stage or the wiki gate
-    // decide, and `keryx sync --apply` is unaffected (it calls
-    // `recordProvenance` a second time, unconditionally, right after
-    // `applyModule`'s `gdgraphCommand(["build"])`, so the delegated build's
-    // own omission never surfaces there). Filing this as a follow-up rather
-    // than fixing it inline: the real fix lives in the template source that
-    // `src/lib/templates.ts` copies, which is a different, more invasive
-    // surface than this flow's diff-stage fix.
+    // Flow 281 (gdgraph-template-provenance), AC3 (regression test,
+    // `gdgraph.test.ts`): this call is exercised only when this branch itself
+    // runs — no copied local runner present, or `gdgraph.treesitter` enabled
+    // (see `delegateToLocalRunner`'s `treesitterOn` check below), so `build`
+    // stays in-process. Flow 280 had found this call UNREACHABLE for a
+    // normal (treesitter-off, scaffolded) project, because
+    // `delegateToLocalRunner` handed `build` to
+    // `.metaproject/core/gdgraph/cli.ts` before this line, and that copied
+    // runner's own `build` handler never called `recordProvenance` at all.
+    // Flow 281 closed that gap in `gdgraphCommand` itself, right after the
+    // delegation call above returns — see the comment there and on
+    // `delegateToLocalRunner` for the decision and the two rejected
+    // alternatives (adding the call to the template; dropping delegation for
+    // `build` entirely).
     return;
   }
 
@@ -991,7 +1002,50 @@ async function changedFiles(): Promise<string[]> {
   });
 }
 
-async function delegateToLocalRunner(args: string[]): Promise<boolean> {
+// Flow 281 (gdgraph-template-provenance), T6: the repair for the
+// no-provenance-on-delegated-build defect lives in this function's caller
+// (`gdgraphCommand`, right after it calls this), not here and not in the
+// template `.metaproject/core/gdgraph/cli.ts` is rendered from
+// (`renderGdgraphCoreCli`, `src/lib/templates.ts`). Recorded per AC5:
+//
+// Why this function (delegation) exists at all, read from what it actually
+// gates: `.metaproject/core/gdgraph/cli.ts` is a deliberately minimal,
+// STANDALONE-invocable copy (`bun .metaproject/core/gdgraph/cli.ts build`
+// works with nothing but that one file plus its `GDGRAPH_CORE_SOURCES`
+// siblings — no installed keryx package required at all). Delegation makes
+// `keryx gdgraph build`/`query` — run through the full, installed CLI —
+// exercise that SAME copied code path rather than a second, package-side
+// implementation that could silently drift from what the standalone runner
+// does (exactly the class of drift `gdgraph/core-sources.test.ts` already
+// guards for the source files it copies). `treesitterOn` below is the one
+// carve-out: the copy has no capability seam, so a project that turned on
+// the symbol layer needs the package's own `build` to run instead.
+//
+// Two repairs were considered and rejected:
+//   - Add `recordProvenance` to the template
+//     (`renderGdgraphCoreCli`/`src/lib/templates.ts`): rejected — see the
+//     comment on that function. Short form: it would need to duplicate
+//     `src/sync/provenance.ts`'s HEAD-resolution logic into the template (the
+//     copied runner cannot import package-internal modules), AND it would
+//     only reach a project on that project's NEXT `keryx init`/`keryx
+//     update` — every already-scaffolded project would stay broken.
+//   - Drop delegation for `build` entirely (always run the package's own
+//     `buildGraph()` in-process): rejected — it would throw away the
+//     standalone-invocability guarantee above (or leave the copied runner's
+//     own `build` handler out of step with a package that had since fixed a
+//     graph-building bug), for a fix that a simpler, additive change (record
+//     provenance in the caller after the delegated child exits) achieves
+//     without touching what `build` actually does.
+//
+// The chosen repair — `gdgraphCommand` calling `recordProvenance` itself once
+// this function reports a successful delegated `build` — fixes EVERY existing
+// scaffolded project (old or new `.metaproject/core/gdgraph/cli.ts` alike) as
+// soon as that project's keryx is upgraded, with no `keryx update` needed:
+// the fix lives in package code that ships with the keryx binary, not in
+// anything copied into the project.
+async function delegateToLocalRunner(
+  args: string[],
+): Promise<{ delegated: false } | { delegated: true; exitCode: number }> {
   const localRunner = path.join(
     process.cwd(),
     ".metaproject",
@@ -1001,7 +1055,7 @@ async function delegateToLocalRunner(args: string[]): Promise<boolean> {
   );
 
   if (!existsSync(localRunner)) {
-    return false;
+    return { delegated: false };
   }
 
   // New surfaces (repomap/assets) + affected flags are only implemented in this
@@ -1022,10 +1076,10 @@ async function delegateToLocalRunner(args: string[]): Promise<boolean> {
   const delegatable = (command === "build" && !treesitterOn)
     || (command === "query" && !args.includes("--json") && (args[1] === "cycles" || args[1] === "orphans"));
   if (!delegatable) {
-    return false;
+    return { delegated: false };
   }
 
-  await new Promise<void>((resolve, reject) => {
+  const exitCode = await new Promise<number>((resolve, reject) => {
     const child = spawn(process.execPath, [localRunner, ...args], {
       cwd: process.cwd(),
       stdio: "inherit",
@@ -1037,12 +1091,12 @@ async function delegateToLocalRunner(args: string[]): Promise<boolean> {
 
     child.on("error", reject);
     child.on("close", (code) => {
-      process.exitCode = code ?? 1;
-      resolve();
+      resolve(code ?? 1);
     });
   });
 
-  return true;
+  process.exitCode = exitCode;
+  return { delegated: true, exitCode };
 }
 
 function printHelp(): void {

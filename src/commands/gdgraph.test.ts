@@ -12,11 +12,13 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { gdgraphCommand } from "./gdgraph";
-import { recordProvenance } from "../sync/provenance";
+import { recordProvenance, readProvenance } from "../sync/provenance";
+import { GDGRAPH_CORE_SOURCES } from "../gdgraph/core-sources";
+import { renderGdgraphCoreCli } from "../lib/templates";
 
 describe("keryx gdgraph affected — unknown target vs. indexed-with-no-edges", () => {
   let root = "";
@@ -512,5 +514,180 @@ describe("keryx gdgraph find/path/symbol — staleness note carries the tri-stat
 
     const output = loggedOut.join("\n");
     expect(output).toContain("an untracked or newly added file exists in the working tree");
+  });
+});
+
+// Flow 281 (gdgraph-template-provenance): before this flow's fix,
+// `gdgraphCommand`'s "build" branch called `recordProvenance` right after
+// `buildGraph()` — but only reached that line when NOT delegated. Any
+// scaffolded project (one carrying `.metaproject/core/gdgraph/cli.ts`, i.e.
+// any project that ran `keryx init`/`keryx update`) with `gdgraph.treesitter`
+// off had `build` handed off to that copied runner instead
+// (`delegateToLocalRunner`), and the copied runner never called
+// `recordProvenance` at all — so `keryx gdgraph build` left no
+// `.provenance.json` whatsoever (AC1). The fix records provenance in
+// `gdgraphCommand` itself, right after `delegateToLocalRunner` reports the
+// delegated child exited 0 — reproduced live against the pre-fix code on a
+// real scratch project (see this flow's `context.md`, "T5 — reproduction").
+//
+// These tests exercise the REAL delegated path: a genuine child `bun`
+// process running a copy of `.metaproject/core/gdgraph/cli.ts`, built from
+// the same `GDGRAPH_CORE_SOURCES` list and `renderGdgraphCoreCli` template
+// that `keryx init`/`keryx update` use — not a stand-in.
+function git(cwd: string, args: string[]): void {
+  execFileSync("git", args, { cwd, stdio: "ignore" });
+}
+
+function headCommit(cwd: string): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], { cwd }).toString().trim();
+}
+
+/** Copies the real `.metaproject/core/gdgraph/{build,query,target,types}.ts`
+ * + a rendered `cli.ts`, exactly as `keryx init`/`keryx update` do (same
+ * source list, same template), so the delegated child process it drives is
+ * the genuine article, not a test double. */
+async function scaffoldGdgraphCoreRunner(root: string): Promise<void> {
+  const coreDir = path.join(root, ".metaproject", "core", "gdgraph");
+  await mkdir(coreDir, { recursive: true });
+  const gdgraphSrcDir = path.join(import.meta.dir, "..", "gdgraph");
+  for (const file of GDGRAPH_CORE_SOURCES) {
+    await copyFile(path.join(gdgraphSrcDir, file), path.join(coreDir, file));
+  }
+  await writeFile(path.join(coreDir, "cli.ts"), renderGdgraphCoreCli(), "utf8");
+}
+
+describe("keryx gdgraph build — delegated-runner provenance (flow 281)", () => {
+  let root = "";
+  let cwd = "";
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-build-provenance-"));
+    cwd = process.cwd();
+  });
+
+  afterEach(async () => {
+    process.chdir(cwd);
+    process.exitCode = 0;
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("AC2: a delegated build on a scaffolded project records provenance naming HEAD, and a second build with no commits in between keeps the same commit", async () => {
+    git(root, ["init", "-q"]);
+    git(root, ["config", "user.email", "test@test.com"]);
+    git(root, ["config", "user.name", "test"]);
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+    await scaffoldGdgraphCoreRunner(root);
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "scaffolded project"]);
+    const commit = headCommit(root);
+
+    process.chdir(root);
+    await gdgraphCommand(["build"]);
+
+    expect(process.exitCode ?? 0).toBe(0);
+    const first = await readProvenance(root, "gdgraph");
+    expect(first).not.toBeNull();
+    expect(first!.commit).toBe(commit);
+
+    // Second build, no commits in between: same commit, provenance re-stamped
+    // (not left stale, not moved to a different one).
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await gdgraphCommand(["build"]);
+    const second = await readProvenance(root, "gdgraph");
+    expect(second).not.toBeNull();
+    expect(second!.commit).toBe(commit);
+    expect(headCommit(root)).toBe(commit);
+  });
+
+  test("AC3 (regression): the in-process path — no copied runner present — still records provenance exactly as before", async () => {
+    // Deliberately NOT scaffolded: `.metaproject/core/gdgraph/cli.ts` does not
+    // exist, so `delegateToLocalRunner` returns `{ delegated: false }` and
+    // `gdgraphCommand`'s own in-process "build" branch runs, unchanged.
+    git(root, ["init", "-q"]);
+    git(root, ["config", "user.email", "test@test.com"]);
+    git(root, ["config", "user.name", "test"]);
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "no copied runner"]);
+    const commit = headCommit(root);
+
+    process.chdir(root);
+    await gdgraphCommand(["build"]);
+
+    expect(process.exitCode ?? 0).toBe(0);
+    const provenance = await readProvenance(root, "gdgraph");
+    expect(provenance).not.toBeNull();
+    expect(provenance!.commit).toBe(commit);
+  });
+
+  test("AC4: a repository with no commits does not fail and does not write a provenance file", async () => {
+    git(root, ["init", "-q"]);
+    git(root, ["config", "user.email", "test@test.com"]);
+    git(root, ["config", "user.name", "test"]);
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+    await scaffoldGdgraphCoreRunner(root);
+    // No `git add` / `git commit` at all — `git rev-parse HEAD` fails inside
+    // `recordProvenance`'s `gitHead()`, which no-ops rather than throwing.
+
+    process.chdir(root);
+    await gdgraphCommand(["build"]);
+
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(await readProvenance(root, "gdgraph")).toBeNull();
+  });
+
+  test("AC4: a detached HEAD does not fail and names the actual checked-out commit, never one that does not exist", async () => {
+    git(root, ["init", "-q"]);
+    git(root, ["config", "user.email", "test@test.com"]);
+    git(root, ["config", "user.name", "test"]);
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "first"]);
+    const firstCommit = headCommit(root);
+    await writeFile(path.join(root, "src", "b.ts"), "export const b = 2;\n");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "second"]);
+    await scaffoldGdgraphCoreRunner(root);
+    git(root, ["checkout", "-q", firstCommit]);
+
+    process.chdir(root);
+    await gdgraphCommand(["build"]);
+
+    expect(process.exitCode ?? 0).toBe(0);
+    const provenance = await readProvenance(root, "gdgraph");
+    expect(provenance).not.toBeNull();
+    // Names the commit actually checked out — verified to exist via
+    // `git cat-file`, not merely a plausible-looking sha.
+    expect(provenance!.commit).toBe(firstCommit);
+    expect(() =>
+      execFileSync("git", ["cat-file", "-e", `${provenance!.commit}^{commit}`], { cwd: root }),
+    ).not.toThrow();
+  });
+
+  test("a FAILED delegated build does not record provenance", async () => {
+    git(root, ["init", "-q"]);
+    git(root, ["config", "user.email", "test@test.com"]);
+    git(root, ["config", "user.name", "test"]);
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+    await scaffoldGdgraphCoreRunner(root);
+    // Break the copied runner: `query.ts` imports `./target`, so removing the
+    // copied `target.ts` makes the delegated child fail at module load —
+    // before it ever reaches (or would reach) a success path — for ANY
+    // subcommand, `build` included. This is what "the delegated build FAILED"
+    // looks like from `gdgraphCommand`'s side: a non-zero exit.
+    await unlink(path.join(root, ".metaproject", "core", "gdgraph", "target.ts"));
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "scaffolded but broken runner"]);
+
+    process.chdir(root);
+    await gdgraphCommand(["build"]);
+
+    expect(process.exitCode).not.toBe(0);
+    expect(await readProvenance(root, "gdgraph")).toBeNull();
   });
 });

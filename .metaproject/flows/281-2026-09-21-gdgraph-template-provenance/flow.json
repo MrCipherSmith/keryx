@@ -7,14 +7,14 @@
   "id": "281",
   "slug": "gdgraph-template-provenance",
   "title": "manual gdgraph build never records provenance: the command delegates to the copied template runner, which has no recordProvenance",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-21T07:05:06.205Z",
-  "updatedAt": "2026-09-21T07:05:49.499Z",
+  "updatedAt": "2026-09-21T07:56:41.609Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:74b4b786e79f6d8190926dfc70c88ef93171c93520e22e95d1bf2b3ada307f87",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -88,8 +88,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T07:56:41.394Z",
+            "outcome": "started",
+            "detail": "281-T5 sonnet implementer"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -104,8 +110,14 @@
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T07:56:41.504Z",
+            "outcome": "started",
+            "detail": "281-T6 sonnet implementer"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -120,8 +132,14 @@
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T07:56:41.609Z",
+            "outcome": "started",
+            "detail": "281-T7 sonnet implementer"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -168,6 +186,30 @@
       "at": "2026-09-21T07:05:49.499Z",
       "event": "task-added",
       "detail": "T8: Full verification: bun run check and keryx health run"
+    },
+    {
+      "at": "2026-09-21T07:56:41.185Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-21T07:56:41.290Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-21T07:56:41.394Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 281-T5 sonnet implementer"
+    },
+    {
+      "at": "2026-09-21T07:56:41.504Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 281-T6 sonnet implementer"
+    },
+    {
+      "at": "2026-09-21T07:56:41.609Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 281-T7 sonnet implementer"
     }
   ]
 }
