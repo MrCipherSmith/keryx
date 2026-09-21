@@ -251,6 +251,19 @@ Refusals print their code and exit non-zero (except where noted):
   a click on `[ Apply ]` — Esc/close leaves the current theme untouched.
   `/theme <name>` still applies immediately without opening the picker.
   Readline / `--no-tui` supports only the immediate-apply form.
+  The chosen palette also drives existing and future transcript content:
+  prose, headings, emphasis, inline code, syntax roles, diff rows, and table
+  chrome repaint together. In assistant Markdown, use a language-tagged fence
+  such as `typescript` for syntax color, `diff` for themed additions and
+  deletions, and `text` or `txt` for literal preformatted output. GFM pipe
+  tables render as responsive bordered tables; escape a literal separator as
+  `\|` or place it inside inline code.
+- Structured execution plans need no operator command. During multi-step work,
+  the agent can create and update a session-backed plan with `pending`,
+  `in_progress`, `completed`, `blocked`, and `skipped` states. When present,
+  its current window appears automatically under **Plan** in the TUI sidebar
+  and returns after session resume. This is separate from `/plan`, whose name
+  predates the panel and still means the operator-controlled read-only mode.
 - `/search-provider` configures and tests web search providers for `web_search`
   (DuckDuckGo is the default and needs no setup): run with no arguments to open
   a wizard (select provider → enter fields/credential when required →

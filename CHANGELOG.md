@@ -3,6 +3,32 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.141] — 2026-09-22
+Long-running shell work now keeps its execution plan visible and persistent,
+while assistant output follows the selected theme across prose, Markdown,
+code, diffs, and tables.
+### Added
+- **Persistent execution plans.** Agent-mode sessions can store a structured
+  plan with pending, active, completed, blocked, and skipped steps. The TUI
+  shows the current steps in a compact sidebar panel, resumes them with the
+  session, and gives the agent one follow-through turn when actionable work
+  remains instead of accepting an early final reply.
+- **Native Markdown tables in the transcript.** GFM pipe tables render as
+  responsive bordered tables with balanced columns, word wrapping, escaped
+  pipes, and inline-code pipes handled correctly.
+### Changed
+- **Transcript colors now come from the active theme.** Prose, headings,
+  emphasis, inline code, code syntax, table chrome, and diff additions and
+  deletions use softer semantic colors derived from every dark and light
+  palette instead of fixed white, cyan, green, yellow, and red ANSI colors.
+- **Fenced content has purpose-specific rendering.** Language-tagged code gets
+  themed syntax roles, `diff` fences keep visible `+`/`-` prefixes with subtle
+  semantic backgrounds, and `text`/`txt` fences stay literal for diagrams,
+  command output, and other preformatted content.
+### Fixed
+- **Changing themes repaints existing rich content.** Styled transcript spans,
+  code backgrounds, diff rows, and table cells are recolored immediately along
+  with the surrounding panels.
 ## [0.2.140] — 2026-09-21
 
 The shell theme picker now offers a broader set of accessible dark and light

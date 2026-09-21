@@ -2,15 +2,15 @@
 
 ## Stats
 
-- Source files indexed: 1585
+- Source files indexed: 1587
 - Imported asset files indexed: 4
-- Total nodes: 1589
-- Edges: 4823
-- Import edges: 4749
+- Total nodes: 1591
+- Edges: 4834
+- Import edges: 4760
 - Asset edges: 11
 - Unresolved imports: 63
 - Import resolution: 98.7%
-- Skipped generated/static directories: 9
+- Skipped generated/static directories: 11
 
 ## Top Modules
 
@@ -20,8 +20,8 @@
 | commands | 182 |
 | tui | 133 |
 | lib | 124 |
+| sac | 61 |
 | wiki | 60 |
-| sac | 59 |
 | mcp-servers | 53 |
 | health | 52 |
 | security | 52 |
@@ -60,6 +60,8 @@
 - `fixtures/paraphrase/.metaproject`
 - `fixtures/temporal/.metaproject`
 - `node_modules`
+- `src/lib/dist`
+- `vscode-extension/node_modules`
 
 ## Generated Files
 

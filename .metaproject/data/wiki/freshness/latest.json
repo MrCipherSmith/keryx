@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-16T16:25:10.145Z",
+  "generatedAt": "2026-09-21T14:09:21.681Z",
   "range": {
-    "toRev": "93805ac03a719c21cdd2dbc1b3b124dba5eb878f",
+    "toRev": "d2a0eada312ba1e4d69c4d36e3525fda175cbb53",
     "fromRev": "HEAD~1",
     "queueEntriesConsumed": 0
   },
   "totals": {
-    "pagesTotal": 95,
+    "pagesTotal": 96,
     "pagesFresh": 8,
-    "pagesAffected": 83,
+    "pagesAffected": 84,
     "pagesUndecidable": 0,
     "pagesNotCodeScoped": 4,
-    "filesChanged": 8,
+    "filesChanged": 2,
     "filesCosmetic": 0
   },
   "pages": [
@@ -21,7 +21,7 @@
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 27,
+      "commitsBehind": 61,
       "reasons": []
     },
     {
@@ -29,15 +29,23 @@
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 12,
+      "commitsBehind": 47,
       "reasons": []
     },
     {
-      "path": "components/src-gdskills.md",
+      "path": "components/src-harness-provider.md",
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 7,
+      "commitsBehind": 11,
+      "reasons": []
+    },
+    {
+      "path": "components/src-lib.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 10,
       "reasons": []
     },
     {
@@ -45,11 +53,67 @@
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 7,
+      "commitsBehind": 10,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-tool-builtin.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 9,
+      "reasons": []
+    },
+    {
+      "path": "components/src-gdskills.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 8,
+      "reasons": []
+    },
+    {
+      "path": "components/src-wiki.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 8,
       "reasons": []
     },
     {
       "path": "components/src-harness-tool.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 7,
+      "reasons": []
+    },
+    {
+      "path": "components/src.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 7,
+      "reasons": []
+    },
+    {
+      "path": "components/src-flow.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 6,
+      "reasons": []
+    },
+    {
+      "path": "components/src-mcp.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 6,
+      "reasons": []
+    },
+    {
+      "path": "components/src-review.md",
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
@@ -62,38 +126,6 @@
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
       "commitsBehind": 6,
-      "reasons": []
-    },
-    {
-      "path": "components/src-flow.md",
-      "category": "stale-prose",
-      "confidence": "review-suggested",
-      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 5,
-      "reasons": []
-    },
-    {
-      "path": "components/src-harness-tool-builtin.md",
-      "category": "stale-prose",
-      "confidence": "review-suggested",
-      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 5,
-      "reasons": []
-    },
-    {
-      "path": "components/src-mcp.md",
-      "category": "stale-prose",
-      "confidence": "review-suggested",
-      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 5,
-      "reasons": []
-    },
-    {
-      "path": "components/src-harness-provider.md",
-      "category": "stale-prose",
-      "confidence": "review-suggested",
-      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 4,
       "reasons": []
     },
     {
@@ -113,22 +145,6 @@
       "reasons": []
     },
     {
-      "path": "components/src-wiki.md",
-      "category": "stale-prose",
-      "confidence": "review-suggested",
-      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 4,
-      "reasons": []
-    },
-    {
-      "path": "components/src.md",
-      "category": "stale-prose",
-      "confidence": "review-suggested",
-      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 4,
-      "reasons": []
-    },
-    {
       "path": "components/src-gdgraph.md",
       "category": "stale-prose",
       "confidence": "review-suggested",
@@ -138,22 +154,6 @@
     },
     {
       "path": "components/src-health-sources.md",
-      "category": "stale-prose",
-      "confidence": "review-suggested",
-      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 3,
-      "reasons": []
-    },
-    {
-      "path": "components/src-lib.md",
-      "category": "stale-prose",
-      "confidence": "review-suggested",
-      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 3,
-      "reasons": []
-    },
-    {
-      "path": "components/src-review.md",
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
@@ -209,6 +209,14 @@
       "reasons": []
     },
     {
+      "path": "components/src-sync.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 2,
+      "reasons": []
+    },
+    {
       "path": "components/src-flow-tracker.md",
       "category": "stale-prose",
       "confidence": "review-suggested",
@@ -249,11 +257,11 @@
       "reasons": []
     },
     {
-      "path": "components/src-sync.md",
-      "category": "stale-prose",
-      "confidence": "review-suggested",
-      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 1,
+      "path": "architecture/agent-bus.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
       "reasons": []
     },
     {
@@ -684,7 +692,7 @@
   "limitations": [
     {
       "code": "unresolved-edges-present",
-      "detail": "63 of 4386 graph edges (1.4%) are unresolved imports, so propagation could not follow every dependency. Judge whether that share matters before acting on it.",
+      "detail": "63 of 4834 graph edges (1.3%) are unresolved imports, so propagation could not follow every dependency. Judge whether that share matters before acting on it.",
       "affectedCount": 63
     }
   ]

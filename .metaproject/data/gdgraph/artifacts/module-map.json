@@ -1323,6 +1323,8 @@
     "src/sac/wiki-owner-writer.test.ts",
     "src/sac/wiki-owner-writer.ts",
     "src/sac/workspace-forgetting.test.ts",
+    "src/sac/workspace-reference.test.ts",
+    "src/sac/workspace-reference.ts",
     "src/sac/workspace-resolve.test.ts",
     "src/sac/workspace-resolve.ts",
     "src/sac/workspace-service.test.ts",

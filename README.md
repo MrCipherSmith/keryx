@@ -248,6 +248,16 @@ What is in it today:
   session that keeps its ancestry, without editing a transcript by hand.
   `/status` is the session inspector (identity, context window and limits when
   the provider reported them); `/session-info` and `/info` are not aliases.
+- **Plans that survive the turn.** For multi-step work, the agent can keep a
+  structured execution plan in the session. The TUI shows pending, active,
+  completed, blocked, and skipped steps in the sidebar, and restored sessions
+  continue from the same plan instead of rebuilding it from transcript text.
+- **Theme-aware rich transcripts.** Assistant prose, headings, emphasis,
+  inline code, fenced code, diffs, and GFM pipe tables use semantic colors
+  derived from the selected `/theme`. Use a language fence such as
+  ```` ```typescript ```` for syntax color, ```` ```diff ```` for addition and
+  deletion rows, or ```` ```text ````/```` ```txt ```` when content must remain
+  literal, including terminal output and ASCII diagrams.
 - **Responsive busy-turn UX.** A running main turn can be interrupted with
   `/interrupt`; additional prompts are queued and answered as read-only side workers
   (`side-1`) in the TUI so the shell stays usable under long-running turns.
