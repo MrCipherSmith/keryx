@@ -202,8 +202,9 @@ otuiTest("AC1: mounting the chrome renders header, transcript, composer and foot
   expect(rowOf("transcript line one")).toBeGreaterThan(rowOf(TITLE));
   expect(rowOf(PLACEHOLDER)).toBeGreaterThan(rowOf("transcript line one"));
   expect(lines[lines.length - 1]).toContain(FOOTER_HINT);
-  expect(lines[lines.length - 2]?.startsWith("╰")).toBe(true); // bordered composer, bottom row
-  expect(lines[lines.length - 4]?.startsWith("╭")).toBe(true); // …and top row
+  expect(lineWith(frame, "transcript line one").startsWith("  ")).toBe(true); // workspace + transcript inset
+  expect(lines[lines.length - 2]?.startsWith(" ╰")).toBe(true); // inset bordered composer, bottom row
+  expect(lines[lines.length - 4]?.startsWith(" ╭")).toBe(true); // …and top row
 
   // The `/`-menu starts closed; the sidebar is mounted and carries the chrome's
   // right-hand column (its left border runs the full height).
@@ -786,8 +787,8 @@ otuiTest("AC5: resize keeps the composer and footer on screen at four terminal s
     // footer is the last row and the composer's rounded box owns exactly the
     // three rows directly above it.
     expect(`${at}: ${lines[lines.length - 1]?.includes(FOOTER_HINT)}`).toBe(`${at}: true`);
-    expect(`${at}: ${lines[lines.length - 2]?.startsWith("╰")}`).toBe(`${at}: true`);
-    expect(`${at}: ${lines[lines.length - 4]?.startsWith("╭")}`).toBe(`${at}: true`);
+    expect(`${at}: ${lines[lines.length - 2]?.startsWith(" ╰")}`).toBe(`${at}: true`);
+    expect(`${at}: ${lines[lines.length - 4]?.startsWith(" ╭")}`).toBe(`${at}: true`);
     // The draft survives every resize and stays rendered.
     expect(`${at}: ${h.chrome.input.value}`).toBe(`${at}: draft prompt`);
     expect(`${at}: ${frame.includes("draft prompt")}`).toBe(`${at}: true`);
@@ -952,6 +953,10 @@ otuiTest("a theme switch repaints every theme-colored renderable in place, not j
     // groknight's hexes, and a switch to grokday must move every one of them.
     applyThemeId("groknight");
     await h.flush();
+    expect(themeColorToHex(h.chrome.sidebar.borderColor)).toBe(resolveTheme("groknight").border);
+    expect(themeColorToHex(h.chrome.composer.borderColor)).toBe(resolveTheme("groknight").border);
+    expect(themeColorToHex(h.chrome.header.backgroundColor)).toBe(resolveTheme("groknight").bg);
+    expect(themeColorToHex(h.chrome.footer.backgroundColor)).toBe(resolveTheme("groknight").bg);
 
     // Content painted at creation with the CURRENT palette: a user echo frame,
     // an assistant code-segment frame and a red-toned tool block header.
@@ -1024,6 +1029,10 @@ otuiTest("a theme switch repaints every theme-colored renderable in place, not j
     // assignments in `applyTheme`).
     applyThemeId("grokday");
     await h.flush();
+    expect(themeColorToHex(h.chrome.sidebar.borderColor)).toBe(resolveTheme("grokday").border);
+    expect(themeColorToHex(h.chrome.composer.borderColor)).toBe(resolveTheme("grokday").border);
+    expect(themeColorToHex(h.chrome.header.backgroundColor)).toBe(resolveTheme("grokday").bg);
+    expect(themeColorToHex(h.chrome.footer.backgroundColor)).toBe(resolveTheme("grokday").bg);
 
     const after: string[] = [];
     collect(h.chrome.transcript, after);

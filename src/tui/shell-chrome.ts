@@ -98,6 +98,8 @@ export const SIDEBAR_WIDTH = 30;
 const SIDEBAR_BORDER_LEFT = 1;
 const SIDEBAR_PADDING_LEFT = 2;
 const SIDEBAR_PADDING_RIGHT = 1;
+const WORKSPACE_GUTTER_X = 1;
+const TRANSCRIPT_PADDING_X = 1;
 /**
  * Columns a sidebar panel's TEXT actually gets: the fixed width less the left
  * border and the horizontal padding (30 - 1 - 2 - 1 = 26). Derived from the very
@@ -499,7 +501,15 @@ export async function createShellChrome(
   // Keryx workspace: a calm transcript canvas with a persistent telemetry rail.
   const rootRow = new otui.BoxRenderable(r, { id: "root-row", flexGrow: 1, flexDirection: "row" });
   r.root.add(rootRow);
-  const main = new otui.BoxRenderable(r, { id: "main", flexGrow: 1, minWidth: 0, flexDirection: "column" });
+  const main = new otui.BoxRenderable(r, {
+    id: "main",
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    flexDirection: "column",
+    paddingLeft: WORKSPACE_GUTTER_X,
+    paddingRight: WORKSPACE_GUTTER_X,
+  });
   rootRow.add(main);
   const sidebar = new otui.BoxRenderable(r, {
     id: "sidebar",
@@ -507,7 +517,7 @@ export async function createShellChrome(
     flexShrink: 0,
     flexDirection: "column",
     border: ["left"],
-    borderColor: getTheme().highlight,
+    borderColor: getTheme().border,
     backgroundColor: getTheme().panel,
     paddingLeft: SIDEBAR_PADDING_LEFT,
     paddingRight: SIDEBAR_PADDING_RIGHT,
@@ -605,7 +615,7 @@ export async function createShellChrome(
     flexShrink: 0,
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: getTheme().panel,
+    backgroundColor: getTheme().bg,
     paddingLeft: 1,
     paddingRight: 1,
   });
@@ -632,7 +642,12 @@ export async function createShellChrome(
     scrollY: true,
     stickyScroll: true,
     stickyStart: "bottom",
-    contentOptions: { flexDirection: "column", paddingLeft: 1, paddingRight: 1 },
+    contentOptions: {
+      flexDirection: "column",
+      paddingLeft: TRANSCRIPT_PADDING_X,
+      paddingRight: TRANSCRIPT_PADDING_X,
+      paddingTop: 1,
+    },
   });
   main.add(scroll);
   const transcript = scroll.content;
@@ -768,7 +783,7 @@ export async function createShellChrome(
     flexDirection: "column",
     borderStyle: "rounded",
     border: true,
-    borderColor: getTheme().highlight,
+    borderColor: getTheme().border,
     backgroundColor: getTheme().panel,
     paddingLeft: 1,
     paddingRight: 1,
@@ -903,7 +918,7 @@ export async function createShellChrome(
     flexShrink: 0,
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: getTheme().panel,
+    backgroundColor: getTheme().bg,
     paddingLeft: 1,
     paddingRight: 1,
   });
@@ -1225,15 +1240,15 @@ export async function createShellChrome(
     } catch {
       // renderer may not expose the setter in tests
     }
-    sidebar.borderColor = theme.highlight;
+    sidebar.borderColor = theme.border;
     sidebar.backgroundColor = theme.panel;
-    header.backgroundColor = theme.panel;
-    footer.backgroundColor = theme.panel;
+    header.backgroundColor = theme.bg;
+    footer.backgroundColor = theme.bg;
     dock.backgroundColor = theme.panel;
     dock.borderColor = theme.border;
     queueDock.backgroundColor = theme.panel;
     queueDock.borderColor = theme.border;
-    composer.borderColor = theme.highlight;
+    composer.borderColor = theme.border;
     composer.backgroundColor = theme.panel;
     menu.backgroundColor = theme.panel;
     menu.focusedBackgroundColor = theme.panel;
