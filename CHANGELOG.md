@@ -3,6 +3,25 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.133] — 2026-09-21
+`keryx gdgraph build` records the freshness of what it just built, in a
+scaffolded project too.
+
+### Fixed
+
+- **A delegated `gdgraph build` records provenance.** In any project carrying
+  `.metaproject/core/gdgraph/cli.ts` — every project `keryx init` or `keryx
+  update` has touched — the command hands `build` to that copied runner, which
+  never wrote `.metaproject/data/gdgraph/.provenance.json`. The build rebuilt
+  the artifacts and left the freshness record untouched; only `keryx sync
+  --apply`, which records provenance itself, kept it moving. The command now
+  records it after a delegated build that exited cleanly: a failed build records
+  nothing, and the delegated and in-process paths stay mutually exclusive, so
+  nothing is written twice. The copied runner is deliberately left as it is —
+  it has no access to the HEAD-resolution logic, and a template change would
+  only reach a project on its next `keryx update`, while this fix reaches every
+  project on its next keryx upgrade.
+
 ## [0.2.132] — 2026-09-21
 A commit that changes no code no longer freezes the freshness record, so the
 wiki baseline stops being unreachable in a project whose recent commits were
