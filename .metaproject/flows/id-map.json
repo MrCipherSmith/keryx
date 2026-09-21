@@ -222,5 +222,21 @@
     "toDir": "264-2026-09-16-acceptance-criteria-should-cite-ci-on-th",
     "at": "2026-09-16T10:26:03.529Z",
     "reason": "main carries two flows with id 263: the closed background-task-execution P0 flow (created 2026-09-15, merged in PR 563) and this one, allocated later the same day by another session. The not-yet-started flow moves, per the precedent already recorded in id-map.json; this one is still initializing, with no frozen criteria, no confirmations and no PR, so the move costs nothing."
+  },
+  {
+    "from": "265",
+    "to": "282",
+    "fromDir": "265-2026-09-16-background-task-execution-p1-a-finished-",
+    "toDir": "282-2026-09-16-background-task-execution-p1-a-finished-",
+    "at": "2026-09-21T11:10:04.458Z",
+    "reason": "duplicate id 265 from parallel merges: move the finished package, keep the in-progress package's documented id"
+  },
+  {
+    "from": "266",
+    "to": "283",
+    "fromDir": "266-2026-09-16-background-task-execution-p2-task-tools-",
+    "toDir": "283-2026-09-16-background-task-execution-p2-task-tools-",
+    "at": "2026-09-21T11:10:04.692Z",
+    "reason": "duplicate id 266 from parallel merges: move the finished package, keep the in-progress package's documented id"
   }
 ]

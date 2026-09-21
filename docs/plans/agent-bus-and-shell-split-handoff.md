@@ -75,12 +75,24 @@ change. Both are mechanical now that the audits are behavioural.
 ## 3. Open items, with their next step
 
 1. **Flow 278 not closed.** See above. `keryx flow status 278`.
-2. **Duplicate flow ids 265 and 266.** Each number is taken by two different
-   packages: `265-…-background-task-execution-p1` and
-   `265-…-read-only-plan-toggle`; `266-…-background-task-execution-p2` and
-   `266-…-tui-boot-animation`. `keryx flow list` reports the collision on every
-   run. Repair with
-   `keryx flow renumber <dir> --to <free id> --reason "<why>"`.
+2. **Duplicate flow ids 265 and 266 — REPAIRED 2026-09-21.** The finished
+   packages were renumbered: `265-…-background-task-execution-p1` → **282** and
+   `266-…-background-task-execution-p2` → **283**, with the pre-move references
+   recorded in `.metaproject/flows/id-map.json` (8 and 4 review records
+   re-pointed by the move). The in-progress packages keep their numbers, because
+   `docs/requirements/keryx-plan-mode-toggle` and `keryx-boot-animation` cite
+   their directories by name. `keryx flow check` reports no duplicate ids now,
+   and the agent `flow_status` tool marks a collision too — `keryx flow list`
+   has done so since flow 120 (its AC5) and the tool did not, which is how the
+   collision reached an agent as two ordinary-looking rows.
+   Two residuals, both DELIBERATE and named here rather than left silent:
+   (a) `282-…/reviews/*/blast-radius.json` and `283-…/reviews/*/blast-radius.json`
+   still name the PRE-move directories in `changedFiles`; that is the evidence of
+   what those rounds actually scanned, not a broken link, and rewriting it would
+   make the record claim a path that did not exist then;
+   (b) the move and `id-map.json` are NOT committed, so the instruction
+   `keryx flow renumber` prints — commit the move together with `id-map.json`,
+   which is what keeps PR titles and commit messages traceable — is still owed.
    Cause and prevention are recorded in the memory note about pre-creating flow
    packages in a PR branch: the ids were taken on `main` while the branches
    were open.

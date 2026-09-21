@@ -4,12 +4,12 @@
     "tasks": true,
     "review": true
   },
-  "id": "266",
+  "id": "283",
   "slug": "background-task-execution-p2-task-tools-",
   "title": "Background task execution P2: task tools, cancellation, operator demote and side-worker rules",
   "status": "done",
   "createdAt": "2026-09-16T13:03:29.197Z",
-  "updatedAt": "2026-09-16T14:33:32.903Z",
+  "updatedAt": "2026-09-21T11:10:04.692Z",
   "source": {
     "type": "description",
     "ref": null
@@ -617,6 +617,11 @@
       "at": "2026-09-16T14:33:32.903Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-09-21T11:10:04.692Z",
+      "event": "renumbered",
+      "detail": "266 -> 283: duplicate id 266 from parallel merges: move the finished package, keep the in-progress package's documented id"
     }
   ],
   "baseBranch": "main"

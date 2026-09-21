@@ -152,3 +152,5 @@ while the read alias still accepts both) instead of by staging the coincidence.
 - 2026-09-16T14:32:21.829Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/571 (warning: PR is not a draft)
 - 2026-09-16T14:33:21.148Z - completing
 - 2026-09-16T14:33:32.903Z - done: all gates passed
+- 2026-09-21T11:10:04.692Z - renumbered: 266 -> 283: duplicate id 266 from parallel merges: move the finished package, keep the in-progress package's documented id
+- 2026-09-21T11:15:00Z - flow renumbered 266 -> 283 by keryx flow renumber: id 266 was shared with the in-progress tui-boot-animation package after parallel merges. reviews/*/blast-radius.json still name the PRE-move directory on purpose - that is what those rounds scanned at the time, not a broken link, and the record is deliberately not rewritten.

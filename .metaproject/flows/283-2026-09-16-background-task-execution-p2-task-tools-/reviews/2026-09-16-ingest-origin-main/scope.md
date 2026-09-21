@@ -3,8 +3,8 @@
 target: report
 ref: origin/main
 mode: ingest
-flow: 266 (explicit-flow-id)
-created_at: 2026-09-16T14:32:45.449Z
+flow: 283 (explicit-flow-id)
+created_at: 2026-09-16T14:22:18.032Z
 context_mode: light
 
 ## Stage counts

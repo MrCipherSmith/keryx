@@ -3,8 +3,8 @@
 target: report
 ref: main
 mode: ingest
-flow: 265 (explicit-flow-id)
-created_at: 2026-09-16T12:13:29.835Z
+flow: 282 (explicit-flow-id)
+created_at: 2026-09-16T12:38:31.931Z
 context_mode: light
 
 ## Stage counts
@@ -30,13 +30,13 @@ _the pre-filter ran and dropped nothing_
 
 verification_mode: annotate
 claims_received: 2
-claims_applied: 0
-claims_rejected: 2
+claims_applied: 2
+claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
 confirmed: 0
-refuted: 0
+refuted: 2
 unverifiable: 0
-unverified: 2
+unverified: 0
 
 ### Retained
 
@@ -44,14 +44,11 @@ findings_in: 2
 findings_removed_by_verifier: 0
 findings_retained: 2
 
+`annotate` records verdicts and removes nothing: 2 finding(s) are marked refuted and still reported.
+
 ### Verification claims discarded
 
-| finding | reason | why |
-|---|---|---|
-| 2026-09-16-ingest-main#F-001 | unknown-finding | this round reported no such finding. A verifier cannot introduce one. |
-| 2026-09-16-ingest-main#F-002 | unknown-finding | this round reported no such finding. A verifier cannot introduce one. |
-
-Every discarded claim leaves its finding in place: a claim can cost a verdict, never a finding.
+_none_
 
 
 ## Caps

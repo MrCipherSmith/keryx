@@ -305,3 +305,5 @@ for its wiring pin.
 - 2026-09-16T12:40:02.031Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/568 (warning: PR is not a draft)
 - 2026-09-16T12:40:19.107Z - completing
 - 2026-09-16T12:40:27.393Z - done: all gates passed
+- 2026-09-21T11:10:04.458Z - renumbered: 265 -> 282: duplicate id 265 from parallel merges: move the finished package, keep the in-progress package's documented id
+- 2026-09-21T11:15:00Z - flow renumbered 265 -> 282 by keryx flow renumber: id 265 was shared with the in-progress read-only-plan-toggle package after parallel merges. reviews/*/blast-radius.json still name the PRE-move directory on purpose - that is what those rounds scanned at the time, not a broken link, and the record is deliberately not rewritten.

@@ -4,12 +4,12 @@
     "tasks": true,
     "review": true
   },
-  "id": "265",
+  "id": "282",
   "slug": "background-task-execution-p1-a-finished-",
   "title": "Background task execution P1: a finished task wakes the agent without polling",
   "status": "done",
   "createdAt": "2026-09-16T10:47:30.558Z",
-  "updatedAt": "2026-09-16T12:40:27.393Z",
+  "updatedAt": "2026-09-21T11:10:04.458Z",
   "source": {
     "type": "description",
     "ref": null
@@ -540,6 +540,11 @@
       "at": "2026-09-16T12:40:27.393Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-09-21T11:10:04.458Z",
+      "event": "renumbered",
+      "detail": "265 -> 282: duplicate id 265 from parallel merges: move the finished package, keep the in-progress package's documented id"
     }
   ]
 }

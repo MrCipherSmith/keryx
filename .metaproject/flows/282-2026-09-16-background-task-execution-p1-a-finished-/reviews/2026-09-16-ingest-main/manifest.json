@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-09-16-ingest-main-r04",
+  "reviewId": "2026-09-16-ingest-main",
   "mode": "ingest",
-  "status": "closed",
+  "status": "draft",
   "target": {
     "kind": "report",
     "ref": "main",
-    "head": "c42d4a309cd1e0356858f5fa58dfe8a7a24e4d3e"
+    "head": "50d12cfcc6e1999d1ccaa6421f7c4a9acad19307"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/265-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main-r04/scope.md",
-    "coverage": ".metaproject/flows/265-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main-r04/coverage.md",
-    "report": ".metaproject/flows/265-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main-r04/report.md",
-    "findings": ".metaproject/flows/265-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main-r04/findings.json",
-    "learning": ".metaproject/flows/265-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main-r04/learning.md",
-    "decisions": ".metaproject/flows/265-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main-r04/decisions.md"
+    "scope": ".metaproject/flows/282-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main/scope.md",
+    "coverage": ".metaproject/flows/282-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main/coverage.md",
+    "report": ".metaproject/flows/282-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main/report.md",
+    "findings": ".metaproject/flows/282-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main/findings.json",
+    "learning": ".metaproject/flows/282-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main/learning.md",
+    "decisions": ".metaproject/flows/282-2026-09-16-background-task-execution-p1-a-finished-/reviews/2026-09-16-ingest-main/decisions.md"
   },
   "coverage": [
     {
@@ -45,10 +45,10 @@
       }
     ]
   },
-  "createdAt": "2026-09-16T12:38:31.931Z",
-  "updatedAt": "2026-09-16T12:39:30.100Z",
+  "createdAt": "2026-09-16T12:12:17.050Z",
+  "updatedAt": "2026-09-16T12:12:17.050Z",
   "flow": {
-    "id": "265",
-    "path": ".metaproject/flows/265-2026-09-16-background-task-execution-p1-a-finished-"
+    "id": "282",
+    "path": ".metaproject/flows/282-2026-09-16-background-task-execution-p1-a-finished-"
   }
 }
