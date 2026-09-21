@@ -112,7 +112,45 @@ export async function syncCommand(args: string[]): Promise<void> {
 
     const code = codeOnly(diff);
     if (totalChanges(code) === 0) {
-      console.log(`  up to date (built at ${provenance.commit.slice(0, 8)})`);
+      // Flow 280 (the graph-provenance stall): a commit that touches no code
+      // file — a `.metaproject/`-only bookkeeping commit is the case that
+      // exposed this, but any non-code commit qualifies — leaves the derived
+      // artifact just as valid at the NEW HEAD as it was at the old one: the
+      // diff that would trigger a rebuild is empty. Before this, provenance
+      // stayed pinned to the old commit forever (nothing here ever advanced
+      // it, and there is no other path that does for a report/apply that
+      // finds nothing to rebuild), while `checkGraphStaleness`
+      // (`../gdgraph/staleness.ts`) independently compares that SAME
+      // provenance commit against current HEAD and — correctly, given what it
+      // was told — reports "HEAD moved since the graph was built". The two
+      // mechanisms disagreed forever: this stage said "nothing to rebuild",
+      // the staleness check said "stale", and no command ever moved the
+      // record that would resolve it. `resolveWikiSourceGate`
+      // (`../wiki/staleness.ts`) then refused the gdwiki baseline on exactly
+      // that "stale" verdict.
+      //
+      // The fix belongs here, not in `checkGraphStaleness`/the wiki gate: the
+      // diff stage is the one place that already computed the fact that
+      // settles it — the code file set is IDENTICAL between the old
+      // provenance commit and HEAD — so advancing provenance to HEAD here
+      // asserts nothing the check above did not just establish. Doing it in
+      // `checkGraphStaleness` instead would mean re-deriving (or trusting a
+      // second, undiffed signal for) the same fact the diff stage already
+      // has, in a module that has no notion of "since provenance was
+      // recorded" today. Gated on `apply`, matching every other mutating
+      // branch in this loop: a plain `keryx sync` report never writes.
+      if (apply && provenance.commit !== head.commit) {
+        await recordProvenance(cwd, module, at);
+        console.log(
+          `  up to date (built at ${provenance.commit.slice(0, 8)}); no code changed — provenance advanced to ${head.commit.slice(0, 8)}`,
+        );
+      } else if (provenance.commit !== head.commit) {
+        console.log(
+          `  up to date (built at ${provenance.commit.slice(0, 8)}); HEAD moved to ${head.commit.slice(0, 8)} with no code changes — run \`keryx sync --apply\` to advance provenance`,
+        );
+      } else {
+        console.log(`  up to date (built at ${provenance.commit.slice(0, 8)})`);
+      }
       console.log("");
       continue;
     }

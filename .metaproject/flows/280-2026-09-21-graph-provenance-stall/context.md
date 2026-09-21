@@ -61,3 +61,65 @@ Use `keryx gdgraph affected <file>` for blast radius.
 ## Agent Findings
 
 _(flow-init skill appends here)_
+
+### T5 reproduction (280-T5-T8 implementer, 2026-09-21)
+
+Reproduced on a throwaway repo under scratch space, using THIS branch's CLI
+(`bun /home/altsay/keryx/src/cli.ts ...`), not the globally installed 0.2.131:
+
+1. `git init` + one commit with `src/index.ts`.
+2. `bun cli.ts init --yes` — scaffolds `.metaproject/`, including
+   `.metaproject/core/gdgraph/cli.ts` (the standalone copied runner every
+   `keryx init`/`keryx update` project gets — `src/lib/templates.ts`).
+3. `bun cli.ts gdgraph build` — before ANY provenance exists. Result:
+   `.metaproject/data/gdgraph/.provenance.json` is not even CREATED. Root
+   cause: `gdgraphCommand` (`src/commands/gdgraph.ts`) delegates `build` to
+   the copied local runner (`.metaproject/core/gdgraph/cli.ts`) whenever it
+   exists and treesitter is off (`delegateToLocalRunner`), and that copied
+   runner's own `build` handler never calls `recordProvenance` — the
+   in-process `recordProvenance` call right after `buildGraph()` in
+   `gdgraph.ts` is unreachable in a normal scaffolded project.
+4. `bun cli.ts sync --apply` — establishes the gdgraph baseline anyway,
+   because `sync.ts`'s `applyModule` calls `recordProvenance` a SECOND time,
+   unconditionally, right after `gdgraphCommand(["build"])`, independent of
+   whatever the delegated build did or didn't record. Provenance commit after
+   this: `7859d359` (the `src/index.ts` commit).
+5. `git add -A && git commit` — commits the scaffolded `.metaproject/` tree
+   (no `src/` changes). HEAD moves to `c8d07b7b`. This is the
+   ".metaproject-only commit" the flow is about.
+6. `bun cli.ts sync` (report only):
+   ```
+   ## gdgraph
+     up to date (built at 7859d359)
+   ## gdwiki
+     no provenance — run `keryx sync --apply` to build + record a baseline
+   ```
+   Diff stage: `codeOnly(diffSince(cwd, "7859d359"))` is empty (the commit
+   touched no `.ts`/`.tsx`/etc. file), so it reports "up to date" and never
+   calls `recordProvenance`. Provenance stays at `7859d359`.
+7. `bun cli.ts gdgraph build` (manual, after the commit):
+   ```
+   gdgraph build complete: 1 nodes, 0 edges
+   summary: …/artifacts/summary.md
+   ```
+   `.provenance.json` STILL reads `{"commit": "7859d359...", ...}` afterward —
+   confirms point 3: the delegated runner rebuilt the artifact (mtime moved)
+   but never touched provenance.
+8. `bun cli.ts sync --apply`:
+   ```
+   ## gdgraph
+     up to date (built at 7859d359)
+   ## gdwiki
+     → built; provenance NOT recorded (baseline) — the code graph is stale:
+       HEAD moved since the graph was built (built at 7859d359b8b6, now
+       c8d07b7bddae)
+   ```
+   Confirms AC1 exactly: gdgraph provenance never advances (diff stage says
+   "nothing to rebuild"), and the SAME stale commit then makes
+   `checkGraphStaleness`/`resolveWikiSourceGate` refuse the wiki baseline —
+   the two mechanisms disagree forever, with no command that resolves it.
+
+Full commands/output are reproducible from this sequence; not re-pasted here
+in full to keep this file scannable.
+
+### T6 ownership decision — see `journal.md` (`- note (implementer): ...`).

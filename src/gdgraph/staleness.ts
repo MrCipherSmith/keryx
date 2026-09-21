@@ -128,6 +128,27 @@ export async function checkGraphStaleness(cwd: string): Promise<StalenessCheck> 
   let gitFailed = false;
 
   // --- new commit -----------------------------------------------------------
+  //
+  // Flow 280 (the graph-provenance stall): this comparison is intentionally a
+  // bare commit-hash check, and it stays one. The disagreement that flow
+  // fixed — a `.metaproject/`-only commit left `keryx sync` saying "nothing
+  // to rebuild" while THIS check said "stale" forever, because nothing ever
+  // advanced the provenance commit this reads — was not a defect in this
+  // comparison. `checkGraphStaleness` has no notion of "since provenance was
+  // last recorded" and no per-commit diff to reason from; it only ever sees
+  // the two endpoints (`provenance.commit`, `head.commit`). Rederiving "did
+  // any code file change between them" here would mean re-running the same
+  // diff `../sync/diff.ts` already computes, in a module whose contract is a
+  // cheap, dependency-light freshness probe (staleness.test.ts, AFC-10) —
+  // and would leave that diff computed twice, once here and once in sync's
+  // own loop, with the two free to drift. The fix instead makes the ONE place
+  // that already has the diff (`../commands/sync.ts`'s per-module loop)
+  // advance provenance to HEAD when that diff is empty, so this check's
+  // simple "did the commit move" question starts answering "no" again — which
+  // is also why it is correct for this to stay a hard equality check: once
+  // provenance is honestly advanced, an ADVANCING mismatch here really does
+  // mean the graph predates HEAD, and this is exactly the check the wiki gate
+  // (`../wiki/staleness.ts`) needs to keep trusting for that.
   const head = await gitHead(cwd);
   if (head === null) {
     gitFailed = true;

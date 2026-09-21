@@ -7,14 +7,14 @@
   "id": "280",
   "slug": "graph-provenance-stall",
   "title": "gdgraph provenance never advances after a metaproject-only commit, so the wiki baseline can never be recorded",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-21T06:30:04.347Z",
-  "updatedAt": "2026-09-21T06:30:44.681Z",
+  "updatedAt": "2026-09-21T06:37:08.404Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:4ced5886fc4979b72f43e6bd069cd21da0345d8818832152569341479c6b7e8d",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -88,8 +88,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T06:37:08.095Z",
+            "outcome": "started",
+            "detail": "280-T5 sonnet implementer"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -104,8 +110,14 @@
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T06:37:08.198Z",
+            "outcome": "started",
+            "detail": "280-T6 sonnet implementer"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -120,8 +132,14 @@
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T06:37:08.303Z",
+            "outcome": "started",
+            "detail": "280-T7 sonnet implementer"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -136,8 +154,14 @@
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T06:37:08.404Z",
+            "outcome": "started",
+            "detail": "280-T8 sonnet implementer"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -189,6 +213,35 @@
       "at": "2026-09-21T06:30:44.681Z",
       "event": "task-added",
       "detail": "T9: Full verification: bun run check and keryx health run"
+    },
+    {
+      "at": "2026-09-21T06:37:07.882Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-21T06:37:07.987Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-21T06:37:08.095Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 280-T5 sonnet implementer"
+    },
+    {
+      "at": "2026-09-21T06:37:08.198Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 280-T6 sonnet implementer"
+    },
+    {
+      "at": "2026-09-21T06:37:08.303Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 280-T7 sonnet implementer"
+    },
+    {
+      "at": "2026-09-21T06:37:08.404Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 280-T8 sonnet implementer"
     }
   ]
 }

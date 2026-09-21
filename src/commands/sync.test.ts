@@ -100,6 +100,127 @@ async function wikiOnlyStaleGraphFixture(): Promise<{ root: string; commit: stri
   return { root, commit };
 }
 
+/**
+ * Flow 280 (the graph-provenance stall). Two commits: `commit1` establishes
+ * gdgraph/memory provenance with a matching `nodes.jsonl` and a CLEAN working
+ * tree (no untracked file, unlike `wikiOnlyStaleGraphFixture` above — this
+ * fixture isolates the "HEAD moved, no code changed" trigger from the
+ * separate untracked-file trigger). `commit2` then touches only bookkeeping
+ * under `.metaproject/` (a notes file, plus the graph/provenance files this
+ * fixture itself just wrote, none of which are source code) — no `src/` file
+ * — so `codeOnly(diffSince(commit1))` for `commit2` is empty, but HEAD has
+ * genuinely moved from `commit1` to `commit2`.
+ */
+async function metaprojectOnlyCommitFixture(): Promise<{ root: string; commit1: string; commit2: string }> {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sync-metaproject-only-"));
+  await git(root, ["init", "-q"]);
+  await git(root, ["config", "user.email", "fixture@example.invalid"]);
+  await git(root, ["config", "user.name", "fixture"]);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n", "utf8");
+  await git(root, ["add", "-A"]);
+  await git(root, ["commit", "-q", "-m", "fixture"]);
+  const commit1 = await headCommit(root);
+
+  const graphDir = path.join(root, ".metaproject", "data", "gdgraph", "storage");
+  await mkdir(graphDir, { recursive: true });
+  await writeFile(
+    path.join(graphDir, "nodes.jsonl"),
+    jsonl([{ id: "src/a.ts", kind: "file", path: "src/a.ts" }]),
+    "utf8",
+  );
+  await writeFile(path.join(graphDir, "edges.jsonl"), "", "utf8");
+
+  for (const module of ["gdgraph", "memory"]) {
+    const file = provenancePath(root, module);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(
+      file,
+      `${JSON.stringify({ commit: commit1, branch: "main", builtAt: new Date().toISOString() }, null, 2)}\n`,
+      "utf8",
+    );
+  }
+
+  // Bookkeeping-only second commit: a notes file under `.metaproject/`, plus
+  // the graph/provenance files just written above — none of it a source file
+  // `isCodeFile` recognizes.
+  await mkdir(path.join(root, ".metaproject", "notes"), { recursive: true });
+  await writeFile(path.join(root, ".metaproject", "notes", "log.md"), "# notes\n", "utf8");
+  await git(root, ["add", "-A"]);
+  await git(root, ["commit", "-q", "-m", "metaproject bookkeeping only"]);
+  const commit2 = await headCommit(root);
+
+  return { root, commit1, commit2 };
+}
+
+describe("keryx sync — a metaproject-only commit no longer stalls provenance (flow 280)", () => {
+  test("AC1/AC2: report mode never mutates provenance; --apply advances it to HEAD and unblocks the gdwiki baseline", async () => {
+    const { root, commit1, commit2 } = await metaprojectOnlyCommitFixture();
+    try {
+      // Report-only `keryx sync`: AC1's stall, still true for a plain report —
+      // provenance must not move without `--apply`, and the message must say
+      // why (HEAD moved, no code changed).
+      logged = [];
+      await withCwd(root, () => syncCommand([]));
+      const reportOutput = logged.join("\n");
+      expect(reportOutput).toContain(`up to date (built at ${commit1.slice(0, 8)})`);
+      expect(reportOutput).toContain("HEAD moved");
+      expect(reportOutput).toContain("run `keryx sync --apply` to advance provenance");
+      const afterReport = await readProvenance(root, "gdgraph");
+      expect(afterReport?.commit).toBe(commit1);
+
+      // `keryx sync --apply`: AC2 — provenance advances to HEAD with no
+      // rebuild, and the gdwiki baseline (never recorded before this run) is
+      // now recordable in the SAME invocation, because gdgraph's provenance
+      // (processed first in `SYNCED_MODULES`) is already fresh by the time
+      // gdwiki's turn runs.
+      logged = [];
+      await withCwd(root, () => syncCommand(["--apply"]));
+      const applyOutput = logged.join("\n");
+      expect(applyOutput).toContain(`provenance advanced to ${commit2.slice(0, 8)}`);
+      // Never claims a rebuilt artifact — no code changed, so nothing was
+      // rebuilt, only the record moved.
+      expect(applyOutput).not.toContain("updated + provenance advanced");
+
+      const gdgraphProvenance = await readProvenance(root, "gdgraph");
+      expect(gdgraphProvenance?.commit).toBe(commit2);
+
+      expect(applyOutput).not.toContain("the code graph is stale");
+      expect(applyOutput).toContain("provenance recorded (baseline)");
+      const wikiProvenance = await readProvenance(root, "gdwiki");
+      expect(wikiProvenance?.commit).toBe(commit2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("AC3 (regression): a commit that changes a tracked code file still rebuilds and advances provenance", async () => {
+    const { root, commit1 } = await metaprojectOnlyCommitFixture();
+    try {
+      // A REAL code change this time: a new tracked source file.
+      await writeFile(path.join(root, "src", "b.ts"), "export const b = 2;\n", "utf8");
+      await git(root, ["add", "-A"]);
+      await git(root, ["commit", "-q", "-m", "add src/b.ts"]);
+      const commit3 = await headCommit(root);
+
+      logged = [];
+      await withCwd(root, () => syncCommand(["--apply"]));
+      const output = logged.join("\n");
+
+      // Unchanged from today: the ordinary rebuild path, not the new
+      // no-rebuild advance this flow added.
+      expect(output).toContain("updated + provenance advanced");
+      expect(output).not.toContain("no code changed — provenance advanced");
+
+      const gdgraphProvenance = await readProvenance(root, "gdgraph");
+      expect(gdgraphProvenance?.commit).toBe(commit3);
+      expect(gdgraphProvenance?.commit).not.toBe(commit1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("keryx sync --apply, wiki-only path honors resolveWikiSourceGate (flow 236 T9)", () => {
   test("does not stamp gdwiki provenance as current when only wiki applies over a stale graph", async () => {
     const { root } = await wikiOnlyStaleGraphFixture();

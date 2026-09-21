@@ -47,6 +47,35 @@ export async function gdgraphCommand(args: string[]): Promise<void> {
     console.log(`summary: ${result.summaryPath}`);
     const { recordProvenance } = await import("../sync/provenance");
     await recordProvenance(process.cwd(), "gdgraph", new Date().toISOString());
+    // Flow 280 (the graph-provenance stall): this in-process path already
+    // stamps what it built, and that is NOT the chosen fix for the stall —
+    // the fix is `../commands/sync.ts`'s per-module loop advancing provenance
+    // on an empty diff, so `keryx sync --apply` alone reaches a recordable
+    // wiki baseline without requiring a manual build at all.
+    //
+    // Separately discovered while reproducing this flow's defect (not fixed
+    // here — a distinct bug, out of this flow's scope): the delegation just
+    // above (`delegateToLocalRunner`) means this `recordProvenance` call is
+    // UNREACHABLE for a normal project. Any project scaffolded by `keryx
+    // init`/`keryx update` carries `.metaproject/core/gdgraph/cli.ts`
+    // (`src/lib/templates.ts`), and `gdgraphCommand`'s top of function hands
+    // `build` off to that copied runner (`.metaproject/core/gdgraph/cli.ts`)
+    // whenever it exists and the treesitter capability is off — which returns
+    // before this line is ever reached. Measured directly: `keryx gdgraph
+    // build` in a scaffolded project rewrites the graph artifacts but never
+    // even CREATES `.metaproject/data/gdgraph/.provenance.json`, because the
+    // copied runner's own `build` handler (`.metaproject/core/gdgraph/cli.ts`,
+    // mirrored from a template) never calls `recordProvenance` at all. This is
+    // exactly the "keryx gdgraph build ... leaves .provenance.json on the old
+    // commit" symptom this flow's description names — but it is caused by the
+    // delegation bypass, not by anything the diff stage or the wiki gate
+    // decide, and `keryx sync --apply` is unaffected (it calls
+    // `recordProvenance` a second time, unconditionally, right after
+    // `applyModule`'s `gdgraphCommand(["build"])`, so the delegated build's
+    // own omission never surfaces there). Filing this as a follow-up rather
+    // than fixing it inline: the real fix lives in the template source that
+    // `src/lib/templates.ts` copies, which is a different, more invasive
+    // surface than this flow's diff-stage fix.
     return;
   }
 
