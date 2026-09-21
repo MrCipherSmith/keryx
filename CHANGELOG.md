@@ -3,6 +3,17 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.139] — 2026-09-21
+
+This release republishes the sticky-prompt interface after updating the
+release audit for the refactored user-message call site.
+
+### Fixed
+
+- **Release verification now accepts the full-width user prompt layout.** The
+  held-turn source audit follows the multiline prompt construction introduced
+  with sticky prompts, allowing the complete TUI suite to pass in CI.
+
 ## [0.2.138] — 2026-09-21
 Long agent answers keep the operator's active request visible while the
 transcript moves beneath it.
