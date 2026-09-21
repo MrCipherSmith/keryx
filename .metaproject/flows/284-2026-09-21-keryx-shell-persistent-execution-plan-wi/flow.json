@@ -7,14 +7,14 @@
   "id": "284",
   "slug": "keryx-shell-persistent-execution-plan-wi",
   "title": "Keryx Shell persistent execution plan with agent-followed sidebar progress",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-21T21:01:22.900Z",
-  "updatedAt": "2026-09-21T21:07:19.167Z",
+  "updatedAt": "2026-09-21T21:56:43.610Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:07887e7acf05b5f63d056745fe7e4a1f76bc2ba018e03afa504115939c4e7278",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,7 +26,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -34,58 +34,90 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T3"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T21:20:17.147Z",
+            "outcome": "started",
+            "detail": "284-T2 task-implementer GREEN phase"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T21:11:33.326Z",
+            "outcome": "started",
+            "detail": "284-T3 tests-creator RED phase"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
-        "T2"
+        "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-21T21:35:29.395Z",
+            "outcome": "started",
+            "detail": "284-T4 review-orchestrator"
+          },
+          {
+            "at": "2026-09-21T21:43:12.250Z",
+            "outcome": "failed",
+            "detail": "Static review found 4 major and 2 minor findings; fix task required"
+          },
+          {
+            "at": "2026-09-21T21:53:51.792Z",
+            "outcome": "started",
+            "detail": "284-T4 static re-review after fixes"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -93,11 +125,22 @@
       "kind": "verify",
       "status": "todo",
       "dependsOn": [
-        "T2"
+        "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-21T21:35:29.639Z",
+            "outcome": "started",
+            "detail": "284-T5 code-verifier and live TUI verification"
+          },
+          {
+            "at": "2026-09-21T21:43:12.490Z",
+            "outcome": "blocked",
+            "detail": "Operator deferred executable verification to GitHub CI"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -119,6 +162,29 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Fix static review findings for execution plan lifecycle",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T2"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T21:43:19.100Z",
+            "outcome": "started",
+            "detail": "284-T7 fix 4 major and 2 minor static findings"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -160,6 +226,100 @@
       "at": "2026-09-21T21:07:19.167Z",
       "event": "task-depends-set",
       "detail": "T6: dependsOn T4, T5 (was empty) — Change report records reviewed and verified behavior"
+    },
+    {
+      "at": "2026-09-21T21:11:21.240Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-21T21:11:21.495Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-21T21:11:21.743Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-21T21:11:33.326Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — 284-T3 tests-creator RED phase"
+    },
+    {
+      "at": "2026-09-21T21:20:15.937Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-21T21:20:17.147Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — 284-T2 task-implementer GREEN phase"
+    },
+    {
+      "at": "2026-09-21T21:35:28.663Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-21T21:35:29.395Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — 284-T4 review-orchestrator"
+    },
+    {
+      "at": "2026-09-21T21:35:29.640Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 284-T5 code-verifier and live TUI verification"
+    },
+    {
+      "at": "2026-09-21T21:43:12.250Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — Static review found 4 major and 2 minor findings; fix task required"
+    },
+    {
+      "at": "2026-09-21T21:43:12.490Z",
+      "event": "task-attempt",
+      "detail": "T5: blocked (attempt 2) — Operator deferred executable verification to GitHub CI"
+    },
+    {
+      "at": "2026-09-21T21:43:12.722Z",
+      "event": "task-added",
+      "detail": "T7: Fix static review findings for execution plan lifecycle"
+    },
+    {
+      "at": "2026-09-21T21:43:12.954Z",
+      "event": "task-depends-set",
+      "detail": "T7: dependsOn T2 (was empty) — Fixes apply to the initial implementation"
+    },
+    {
+      "at": "2026-09-21T21:43:13.194Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T7 (was T2) — Review must rerun after static findings are fixed"
+    },
+    {
+      "at": "2026-09-21T21:43:13.441Z",
+      "event": "task-depends-set",
+      "detail": "T5: dependsOn T7 (was T2) — GitHub CI must verify the reviewed fix revision"
+    },
+    {
+      "at": "2026-09-21T21:43:19.100Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 284-T7 fix 4 major and 2 minor static findings"
+    },
+    {
+      "at": "2026-09-21T21:53:51.313Z",
+      "event": "task-done",
+      "detail": "T7: Fix static review findings for execution plan lifecycle"
+    },
+    {
+      "at": "2026-09-21T21:53:51.792Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — 284-T4 static re-review after fixes"
+    },
+    {
+      "at": "2026-09-21T21:56:43.610Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
