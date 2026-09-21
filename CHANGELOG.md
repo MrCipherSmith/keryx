@@ -3,6 +3,32 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.132] — 2026-09-21
+A commit that changes no code no longer freezes the freshness record, so the
+wiki baseline stops being unreachable in a project whose recent commits were
+bookkeeping.
+
+### Fixed
+
+- **`keryx sync --apply` advances provenance when a commit changed no code.**
+  A commit touching only `.metaproject/` — or anything else outside the code
+  file set — left the derived artifacts valid and their provenance pinned to the
+  older commit forever: the diff stage found nothing to rebuild, the graph
+  staleness check read that same record and reported "HEAD moved since the graph
+  was built", and the gdwiki baseline was refused on that verdict. Nothing moved
+  the record that would settle the disagreement. The diff stage now records the
+  new commit without a rebuild, because it is the one place that already knows
+  the tracked code file set is identical; a plain `keryx sync` prints an advisory
+  and writes nothing. The wiki keeps its own freshness gate on that path: a
+  committed-history diff cannot see an untracked file, so `gdwiki` asks
+  `resolveWikiSourceGate` exactly as the apply step does and refuses to advance
+  when the gate is not fresh. gdgraph and memory advance unconditionally —
+  gdgraph carries its own untracked-file signal, memory publishes no
+  code-freshness claim.
+- **`.mts` and `.cts` count as code when deciding whether a commit changed any.**
+  They were missing from the code-file set, which on the new path would have read
+  a real code change as "nothing changed".
+
 ## [0.2.131] — 2026-09-20
 Two SAC friction points fixed: a workspace reference no longer needs a "./"
 prefix to be accepted, and an "unknown" review item says why it is unknown.
