@@ -3,6 +3,25 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.140] — 2026-09-21
+
+The shell theme picker now offers a broader set of accessible dark and light
+palettes.
+
+### Added
+
+- **Eight new TUI themes.** `midnight`, `nord`, `ember`, and `violet` add dark
+  choices; `paper`, `frost`, `sand`, and `mint` add light choices marked with
+  `☀` in the picker.
+- **Palette contrast checks.** Theme tests enforce readable text, muted text,
+  status, focus, and tool colors across every palette.
+
+### Fixed
+
+- **Light themes keep modal chrome readable.** Modal titles, tabs, close hints,
+  and footers now use explicit semantic colors instead of inheriting the
+  terminal's usually-white foreground.
+
 ## [0.2.139] — 2026-09-21
 
 This release republishes the sticky-prompt interface after updating the
