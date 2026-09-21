@@ -3,6 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readSlate, writeSlate, type Slate } from "./slate";
+import { openSlate } from "./slate-lifecycle";
 import {
   getExecutionPlan,
   setExecutionPlan,
@@ -38,6 +39,14 @@ test("a Slate written before execution plans existed remains readable and has no
   const dir = await sessionDir();
   expect(await getExecutionPlan(dir)).toBeUndefined();
   expect(await readSlate(dir)).toEqual(baseSlate());
+});
+
+test("an existing execution plan is restored when the Slate is reopened on resume", async () => {
+  const dir = await sessionDir();
+  const created = await setExecutionPlan(dir, { expectedRevision: 0, items });
+  const reopened = await openSlate({ dir, cwd: dir, mintAttemptId: () => "resume-1" });
+  expect(reopened.executionPlan).toEqual(created);
+  expect(await getExecutionPlan(dir)).toEqual(created);
 });
 
 test("setExecutionPlan rejects duplicate ids, invalid statuses, and multiple in-progress items", async () => {

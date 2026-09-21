@@ -41,6 +41,12 @@ import { estimateRequestTokens, needsCompaction } from "../harness/provider/cont
 import { compactMessages } from "../session/compact";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
+import {
+  getExecutionPlan,
+  hasActionableExecutionPlanItems,
+  renderExecutionPlanSnapshot,
+  type ExecutionPlan,
+} from "../session/execution-plan";
 import { courseFromSlate } from "../session/slate-course";
 import { runWrapUp, type RunWrapUpInput, type WrapUpOutcome } from "../sac/machine-wrap-up";
 import {
@@ -1401,6 +1407,10 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "of issuing them one at a time, get a command's arguments right the first time instead of trying variants, and " +
     "for any check covered by a read tool above, use that tool instead of shelling out to the equivalent `keryx …` " +
     "CLI command.\n" +
+    "- For multi-step work, use **plan_set** to publish a structured plan, **plan_update** after each real status " +
+    "change, and **plan_get** before resolving a revision conflict. Keep stable item ids, at most one " +
+    "`in_progress` item, and do not mark work complete before verification. These tools update session metadata " +
+    "only; `/plan` remains the operator's separate read-only permission mode.\n" +
     "- This session has its own Slate (working-set scratch, not project knowledge): " +
     "**slate_read** shows the Course (if a Flow is bound) and Seeds recorded so far — nothing " +
     "here is auto-injected, so call it if you want to see it. **slate_write_seed** with " +
@@ -2028,6 +2038,7 @@ async function runAgentTurnCore(
   // Loop: request → stream → (execute tool calls, re-request) until a text-only
   // finish or an independent model-round/tool-call guard trips.
   let toollessReprompts = 0;
+  let planFollowThroughUsed = false;
   // The previous toolless reply, normalized. A model that answers the reprompt
   // with the SAME sentence is not going to produce a tool call on the next one,
   // so the remaining budget is abandoned rather than spent (see below).
@@ -2040,12 +2051,23 @@ async function runAgentTurnCore(
       return { finishReason: "budget" };
     }
     roundState.round += 1;
+    let currentPlan: ExecutionPlan | undefined;
+    if (options.slateSession?.opened === true) {
+      try {
+        currentPlan = await getExecutionPlan(options.slateSession.dir);
+      } catch (cause) {
+        io.onSystem?.(`execution plan read failed (ignored): ${cause instanceof Error ? cause.message : String(cause)}\n`);
+      }
+    }
+    const planSnapshot = renderExecutionPlanSnapshot(currentPlan);
+    const roundSystemInstruction =
+      planSnapshot === undefined ? deps.systemInstruction : `${deps.systemInstruction}\n\n${planSnapshot}`;
     // Flow 267: compact BEFORE building the request, not after — once the
     // estimate crosses 85% of a KNOWN window (`deps.contextWindow`), splice a
     // shrunk `history` in place so this round's own request cannot 400 on
     // input-token overflow. `deps.contextWindow === undefined` (the default)
     // makes `needsCompaction` always `false` (AC2): byte-identical behavior.
-    const preRequestEstimate = estimateRequestTokens(history, deps.systemInstruction, toolDefs);
+    const preRequestEstimate = estimateRequestTokens(history, roundSystemInstruction, toolDefs);
     if (needsCompaction(preRequestEstimate, deps.contextWindow)) {
       const compacted = compactMessages(history, { keepLastUserTurns: 3 });
       if (!compacted.noop) {
@@ -2063,7 +2085,7 @@ async function runAgentTurnCore(
     const baseRequest: Omit<NormalizedRequest, "signal"> = {
       providerId: deps.providerId,
       modelId: deps.modelId,
-      systemInstruction: deps.systemInstruction,
+      systemInstruction: roundSystemInstruction,
       messages: [...history],
       tools: toolDefs,
       budget: { maxOutputTokens, runReservation: maxOutputTokens },
@@ -2374,6 +2396,20 @@ async function runAgentTurnCore(
           history.push({ role: "user", content: buildTaskNotification(held), provenance: "tool", ts: now() });
           io.onHistoryChange?.("tool");
         }
+        continue;
+      }
+
+      if (!planFollowThroughUsed && hasActionableExecutionPlanItems(currentPlan)) {
+        planFollowThroughUsed = true;
+        history.push({
+          role: "user",
+          content:
+            "[system] The current execution plan still has actionable items remaining. Continue the work now. " +
+            "Do not give another final reply until the plan is complete or genuinely blocked.",
+          provenance: "project",
+          ts: now(),
+        });
+        io.onHistoryChange?.("tool");
         continue;
       }
 

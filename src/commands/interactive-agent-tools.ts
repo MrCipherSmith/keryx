@@ -19,6 +19,7 @@ import {
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { builtinMetaprojectTools, makeKeryxRunner } from "../harness/tool/builtin/metaproject-tools";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
+import { executionPlanTools } from "../harness/tool/builtin/execution-plan-tool";
 import { slateReadTool, slateWriteSeedTool } from "../harness/tool/builtin/slate-tool";
 import { webFetchTool } from "../harness/tool/builtin/web-fetch-tool";
 import { webSearchTool } from "../harness/tool/builtin/web-search-tool";
@@ -235,6 +236,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     createAskUserTool(invokeAskUserHost),
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
+    ...executionPlanTools(getSessionDir),
     // Flow 274 T6: main-agent-only bus tools (specification §7.1). Never
     // reached by a subagent or external child — neither tool-build path calls
     // this factory (see `spawn-subagent-tool.ts`, which builds its own child

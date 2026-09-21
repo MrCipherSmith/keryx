@@ -2,6 +2,7 @@ import { expect, test, describe } from "bun:test";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { writeSlate } from "../session/slate";
 import { createDefaultSearchProviderController } from "../harness/search";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
@@ -144,6 +145,9 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
     "health_status",
     "list_dir",
     "memory_search",
+    "plan_get",
+    "plan_set",
+    "plan_update",
     "read_file",
     "read_wiki",
     "repomap",
@@ -181,6 +185,33 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
     "workspace_read",
     "workspace_show",
   ]);
+});
+
+test("plan metadata tools are typed, main-factory scoped, and preserve /plan read-only safety", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-plan-tools-"));
+  const sessionDir = await mkdtemp(join(tmpdir(), "keryx-plan-session-"));
+  await writeSlate(sessionDir, () => ({ anchors: { root: cwd, touched: [] }, course: {}, seeds: [] }));
+  const tools = buildInteractiveAgentTools({
+    cwd,
+    metaprojectPort: createMetaprojectAdapter(cwd),
+    searchController: createDefaultSearchProviderController(),
+    spawnTool: stubSpawn,
+    getSessionDir: () => sessionDir,
+  });
+
+  const planTools = tools.filter((tool) => tool.definition.name.startsWith("plan_"));
+  expect(planTools.map((tool) => tool.definition.name).sort()).toEqual(["plan_get", "plan_set", "plan_update"]);
+  expect(planTools.every((tool) => tool.definition.risk === "read")).toBe(true);
+  expect(planTools.every((tool) => tool.definition.inputSchema.additionalProperties === false)).toBe(true);
+
+  const set = planTools.find((tool) => tool.definition.name === "plan_set");
+  const update = planTools.find((tool) => tool.definition.name === "plan_update");
+  const get = planTools.find((tool) => tool.definition.name === "plan_get");
+  expect((await set?.invoke({ expectedRevision: 0, items: [{ id: "one", title: "One", status: "in_progress" }] }))?.isError).toBe(false);
+  expect((await update?.invoke({ expectedRevision: 1, itemId: "one", status: "completed" }))?.isError).toBe(false);
+  const result = await get?.invoke({});
+  expect(result?.isError).toBe(false);
+  expect(JSON.parse(result?.output ?? "null").items[0].status).toBe("completed");
 });
 
 // --- SLATE-3a: slate_read / slate_write_seed wiring (flow 161, AC5) ------

@@ -21,6 +21,7 @@ import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { assembleContext, type ContextCandidate } from "../ctx/assembly";
 import { estimateTokens } from "../gdgraph/repomap";
 import { redactSensitiveText } from "../security/redact";
+import type { ExecutionPlan } from "./execution-plan";
 
 /**
  * Mirrors `ProposalKind` from `src/sac/proposal-lifecycle.ts`. Duplicated
@@ -129,6 +130,7 @@ export type Slate = {
   course: SlateCourse;
   seeds: SlateSeed[];
   childDispatches?: Record<string, SlateChildDispatch>;
+  executionPlan?: ExecutionPlan;
 };
 
 function slatePath(dir: string): string {
@@ -252,14 +254,14 @@ async function archiveIfExistsLocked(dir: string, attemptId: string): Promise<vo
  * the removal a no-op when no `terminal-state.json` exists, which is the
  * common case (most opens follow a clean close, never a blocked stop).
  */
-export async function openSlateAtomic(dir: string, mintAttemptId: () => string, build: () => Slate): Promise<Slate> {
+export async function openSlateAtomic(dir: string, mintAttemptId: () => string, build: (existing?: Slate) => Slate): Promise<Slate> {
   await mkdir(dir, { recursive: true });
   return withFileLock(slateLockPath(dir), async () => {
     const existing = await readSlate(dir);
     if (existing !== undefined) {
       await archiveIfExistsLocked(dir, mintAttemptId());
     }
-    const next = build();
+    const next = build(existing);
     await writeFileAtomic(slatePath(dir), `${JSON.stringify(next, null, 2)}\n`);
     await rm(path.join(dir, "terminal-state.json"), { force: true });
     return next;

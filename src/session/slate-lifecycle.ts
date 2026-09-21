@@ -119,7 +119,12 @@ export async function openSlate(opts: OpenSlateOptions): Promise<Slate> {
     cwd: opts.cwd,
     ...(opts.runtime !== undefined ? { runtime: opts.runtime } : {}),
   });
-  return openSlateAtomic(opts.dir, opts.mintAttemptId, () => ({ anchors, course: {}, seeds: [] }));
+  return openSlateAtomic(opts.dir, opts.mintAttemptId, (existing) => ({
+    anchors,
+    course: {},
+    seeds: [],
+    ...(existing?.executionPlan === undefined ? {} : { executionPlan: existing.executionPlan }),
+  }));
 }
 
 /**
@@ -267,7 +272,12 @@ export async function ensureSlateOpened(
   if (isSlateSessionDetached(ref)) {
     return;
   }
-  await openSlateAtomic(ref.dir, mintAttemptId, () => ({ anchors, course: {}, seeds: [] }));
+  await openSlateAtomic(ref.dir, mintAttemptId, (existing) => ({
+    anchors,
+    course: {},
+    seeds: [],
+    ...(existing?.executionPlan === undefined ? {} : { executionPlan: existing.executionPlan }),
+  }));
   ref.opened = true;
 }
 
