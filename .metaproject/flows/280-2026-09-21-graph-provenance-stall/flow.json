@@ -7,17 +7,42 @@
   "id": "280",
   "slug": "graph-provenance-stall",
   "title": "gdgraph provenance never advances after a metaproject-only commit, so the wiki baseline can never be recorded",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-21T06:30:04.347Z",
-  "updatedAt": "2026-09-21T07:10:29.547Z",
+  "updatedAt": "2026-09-21T07:35:36.035Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:4ced5886fc4979b72f43e6bd069cd21da0345d8818832152569341479c6b7e8d",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-21T07:35:22.524Z",
+      "note": "sync.test.ts flow-280 block: report mode leaves provenance on the old commit while the gdwiki baseline is refused; the test fails without the fix (verified by the implementer and by the second reviewer's construction check)"
+    },
+    "AC2": {
+      "at": "2026-09-21T07:35:22.629Z",
+      "note": "sync.test.ts AC1/AC2 test: one keryx sync --apply advances gdgraph provenance to HEAD and records the gdwiki baseline in the same invocation"
+    },
+    "AC3": {
+      "at": "2026-09-21T07:35:22.733Z",
+      "note": "sync.test.ts AC3 regression: a commit touching a tracked code file still takes the rebuild path with 'updated + provenance advanced'; plus the .mts-only regression added after review"
+    },
+    "AC4": {
+      "at": "2026-09-21T07:35:22.838Z",
+      "note": "sync.test.ts fastPathUntrackedFileFixture: with an untracked src/new.ts the wiki baseline is still refused with the existing wording, gdwiki provenance unchanged"
+    },
+    "AC5": {
+      "at": "2026-09-21T07:35:22.940Z",
+      "note": "Comments naming the decision: src/gdgraph/staleness.ts (commit-hash check stays), src/wiki/staleness.ts (gate unchanged, corrected after review), src/commands/gdgraph.ts (manual build path, plus the template delegation gap filed as flow 281)"
+    },
+    "AC6": {
+      "at": "2026-09-21T07:35:23.041Z",
+      "note": "bun run check on the merged branch: 11641 pass, 0 fail; keryx health run: PASS"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/636"
   },
   "baseBranch": "main",
   "tasks": [
@@ -76,7 +101,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +109,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "review ran as two dispatched rounds recorded in the managed review package; no separate draft-PR task"
     },
     {
       "id": "T5",
@@ -197,7 +224,7 @@
       "id": "T10",
       "title": "Review fixes: honour the wiki gate in the fast path; widen the code-extension set",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9"
       ],
@@ -213,7 +240,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -324,6 +352,75 @@
       "at": "2026-09-21T07:10:29.547Z",
       "event": "task-attempt",
       "detail": "T10: started (attempt 1) — review round 1 fixes"
+    },
+    {
+      "at": "2026-09-21T07:26:42.546Z",
+      "event": "task-done",
+      "detail": "T10: Review fixes: honour the wiki gate in the fast path; widen the code-extension set"
+    },
+    {
+      "at": "2026-09-21T07:35:22.414Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/636 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-21T07:35:22.524Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: sync.test.ts flow-280 block: report mode leaves provenance on the old commit while the gdwiki baseline is refused; the test fails without the fix (verified by the implementer and by the second reviewer's construction check)"
+    },
+    {
+      "at": "2026-09-21T07:35:22.629Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: sync.test.ts AC1/AC2 test: one keryx sync --apply advances gdgraph provenance to HEAD and records the gdwiki baseline in the same invocation"
+    },
+    {
+      "at": "2026-09-21T07:35:22.733Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: sync.test.ts AC3 regression: a commit touching a tracked code file still takes the rebuild path with 'updated + provenance advanced'; plus the .mts-only regression added after review"
+    },
+    {
+      "at": "2026-09-21T07:35:22.838Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: sync.test.ts fastPathUntrackedFileFixture: with an untracked src/new.ts the wiki baseline is still refused with the existing wording, gdwiki provenance unchanged"
+    },
+    {
+      "at": "2026-09-21T07:35:22.940Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Comments naming the decision: src/gdgraph/staleness.ts (commit-hash check stays), src/wiki/staleness.ts (gate unchanged, corrected after review), src/commands/gdgraph.ts (manual build path, plus the template delegation gap filed as flow 281)"
+    },
+    {
+      "at": "2026-09-21T07:35:23.041Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: bun run check on the merged branch: 11641 pass, 0 fail; keryx health run: PASS"
+    },
+    {
+      "at": "2026-09-21T07:35:23.151Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-21T07:35:27.025Z",
+      "event": "completion-failed",
+      "detail": "tasks: not done: T4; never started since `flow init` generated them: T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 280 T4 --disposition skipped --reason \"<why this flow did not need it>\")"
+    },
+    {
+      "at": "2026-09-21T07:35:32.246Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-21T07:35:32.352Z",
+      "event": "completing",
+      "detail": "merged commit: f5b90d2c"
+    },
+    {
+      "at": "2026-09-21T07:35:36.035Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "f5b90d2c",
+    "ref": "origin/main",
+    "at": "2026-09-21T07:35:36.035Z"
+  }
 }
