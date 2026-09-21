@@ -3,6 +3,26 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.136] — 2026-09-21
+The interactive shell has a clearer Keryx identity and keeps its command
+surfaces compact across both full-screen and short terminal layouts.
+
+### Changed
+
+- **The shared shell chrome now reads as one Keryx workspace.** The header uses
+  the `◆ keryx` identity, while the header, telemetry rail, composer and footer
+  share the active theme's panel surface and accent treatment. Live theme
+  switching repaints all of the new surfaces in place.
+- **`/help` opens in a scrollable modal.** Command help starts at its heading
+  and remains navigable in short terminal panes instead of being appended to a
+  sticky-bottom transcript with its first rows clipped.
+- **`/status` and `/theme` size themselves to their content.** Both dialogs
+  keep their controls visible without occupying nearly the entire terminal
+  when the information fits in a smaller panel.
+- **The Session Switcher puts the task title before the session id.** Its detail
+  row now shows updated/created times and message count without repeating the
+  project path on every project-scoped result.
+
 ## [0.2.135] — 2026-09-21
 The agent view of the flow registry marks a duplicated flow id, the way `keryx
 flow list` has since flow 120.
