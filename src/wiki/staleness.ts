@@ -229,10 +229,18 @@ export interface WikiSourceGate {
 // commits — a diff `../sync/diff.ts` already computes and that belongs to
 // the stage that reads it, not to a gate whose whole job is to trust the
 // tri-state check it is handed and refuse when that check is not "fresh".
-// The fix is upstream: `../commands/sync.ts`'s per-module loop now advances
-// gdgraph's provenance to HEAD itself whenever its own diff against that
-// provenance is code-empty, so this gate sees a genuinely fresh
-// `checkGraphStaleness` result and needs no change to accept it.
+// The fix is upstream, in `../commands/sync.ts`'s per-module loop: whenever a
+// module's own diff against its recorded provenance is code-empty, that loop
+// now advances the module's provenance to HEAD itself — every entry in
+// `SYNCED_MODULES` (gdgraph, gdwiki, memory), not gdgraph alone. For gdwiki
+// specifically, that same loop re-checks THIS gate before advancing (finding
+// 1 of the same review, `../commands/sync.ts`), because a code-empty diff
+// only proves the TRACKED file set is unchanged and this gate additionally
+// cares about the untracked-file signal `checkGraphStaleness` carries via
+// `git status`, which that diff cannot see. So gdgraph's provenance advancing
+// upstream is what lets THIS gate observe a genuinely fresh
+// `checkGraphStaleness` result and needs no change here to accept it — the
+// gate itself never advances anything and never gained new logic.
 export async function resolveWikiSourceGate(
   cwd: string,
   head: WikiHeadInput,

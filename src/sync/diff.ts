@@ -9,7 +9,29 @@ export interface SyncDiff {
   deleted: string[];
 }
 
-const CODE_EXT = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|php|c|h|cc|cpp|hpp|cs|swift|kt|scala|sh|vue|svelte)$/;
+// Flow 280 finding 2 (review of ce309d58): before ce309d58 a missing
+// extension here only left an artifact stale (the per-module rebuild branch
+// never fired, but nothing else claimed otherwise either). Since ce309d58,
+// `codeOnly(diff)` also feeds `syncCommand`'s `totalChanges(code) === 0` fast
+// path (`../commands/sync.ts`), so a missing extension now makes THAT path
+// assert "no code changed" and advance provenance for a commit that DID
+// change code — the opposite of stale. `.mts`/`.cts` (TypeScript's module-
+// scoped variants — same syntax as `.ts`, just ESM/CJS-pinned) were missing
+// and are added here.
+//
+// This list is deliberately broader than gdgraph's own `SOURCE_EXTENSIONS`
+// (`../gdgraph/build.ts`): that one gates which files gdgraph's import-graph
+// PARSER understands (currently TS/JS/Java/Python only) and staying narrow
+// there is correct — claiming to parse imports out of a language the parser
+// cannot read would be worse than skipping the file. `CODE_EXT` answers a
+// different, looser question for every `SYNCED_MODULES` entry (gdgraph,
+// gdwiki, memory): "is this file source code at all, such that a commit
+// touching only files outside this set is safe to treat as a no-op for
+// provenance purposes". A `.go`/`.rs`/`.vue` change is real code gdwiki and
+// memory both care about even though gdgraph's parser does not walk it, so
+// this set stays the wider one rather than being narrowed to match.
+const CODE_EXT =
+  /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|py|go|rs|java|rb|php|c|h|cc|cpp|hpp|cs|swift|kt|scala|sh|vue|svelte)$/;
 
 export function isCodeFile(file: string): boolean {
   return CODE_EXT.test(file);
