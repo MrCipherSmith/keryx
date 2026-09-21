@@ -89,6 +89,8 @@ function fakeOtui(): Record<string, unknown> {
     StyledText: FakeStyledText,
     TextRenderable: FakeTextRenderable,
     TextTableRenderable: FakeTextTableRenderable,
+    fg: (color: string) => (value: string | FakeChunk) => fakeStyle(value, { fg: color }),
+    bg: (color: string) => (value: string | FakeChunk) => fakeStyle(value, { bg: color }),
     bold: (value: string | FakeChunk) => fakeStyle(value, { bold: true }),
     dim: (value: string | FakeChunk) => fakeStyle(value, { dim: true }),
     cyan: (value: string | FakeChunk) => fakeStyle(value, { fg: "#00ffff" }),

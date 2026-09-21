@@ -12,6 +12,14 @@ export type PayloadKind = "markdown" | "diff" | "code";
 
 export type BlockLabelInput = { kind: string; lineCount: number; collapsed: boolean; hint?: string };
 
+export type MarkdownTableAlignment = "left" | "center" | "right";
+export type MarkdownTable = {
+  headers: string[];
+  alignments: MarkdownTableAlignment[];
+  rows: string[][];
+};
+export type MarkdownPart = { kind: "prose"; text: string } | { kind: "table"; table: MarkdownTable };
+
 // A fence opens the line, allowing CommonMark's up-to-3 characters of leading
 // indentation so a fence nested in a list item still opens a block (4+ would be
 // an indented code block). `~~~` behaves exactly like ```` ``` ````. Inline
@@ -27,7 +35,7 @@ const FENCE_LINE = /^[ \t]{0,3}(```|~~~)(.*)\r?$/;
 // its own. A bare `-`/`+` line is far more likely to be a markdown bullet.
 const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/;
 
-const MARKDOWN_LANGS = new Set(["md", "markdown", "prompt", "txt", "text"]);
+const MARKDOWN_LANGS = new Set(["md", "markdown", "prompt"]);
 const DIFF_LANGS = new Set(["diff", "patch"]);
 
 /**
@@ -43,6 +51,124 @@ export function stripTrailingCr(line: string): string {
 /** Split on LF and normalize CRLF away. The line splitter for both shells. */
 export function splitLines(text: string): string[] {
   return text.split("\n").map(stripTrailingCr);
+}
+
+/** Split a pipe row while keeping escaped and inline-code pipes inside cells. */
+function markdownTableCells(line: string): string[] | undefined {
+  const source = line.trim();
+  if (!source.includes("|")) {
+    return undefined;
+  }
+  const cells: string[] = [];
+  let cell = "";
+  let inCode = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index] ?? "";
+    if (char === "\\" && source[index + 1] === "|") {
+      cell += "|";
+      index += 1;
+      continue;
+    }
+    if (char === "`") {
+      inCode = !inCode;
+      cell += char;
+      continue;
+    }
+    if (char === "|" && !inCode) {
+      cells.push(cell.trim());
+      cell = "";
+      continue;
+    }
+    cell += char;
+  }
+  cells.push(cell.trim());
+  if (source.startsWith("|")) {
+    cells.shift();
+  }
+  if (source.endsWith("|")) {
+    cells.pop();
+  }
+  return cells.length >= 2 ? cells : undefined;
+}
+
+function tableAlignments(line: string, columns: number): MarkdownTableAlignment[] | undefined {
+  const cells = markdownTableCells(line);
+  if (cells === undefined || cells.length !== columns) {
+    return undefined;
+  }
+  const alignments: MarkdownTableAlignment[] = [];
+  for (const cell of cells) {
+    const marker = cell.trim();
+    if (!/^:?-{3,}:?$/.test(marker)) {
+      return undefined;
+    }
+    alignments.push(marker.startsWith(":") && marker.endsWith(":") ? "center" : marker.endsWith(":") ? "right" : "left");
+  }
+  return alignments;
+}
+
+/** Parse GFM-style pipe tables while leaving all other prose intact. */
+export function parseMarkdownTables(text: string): MarkdownPart[] {
+  if (text.length === 0) {
+    return [];
+  }
+  const lines = splitLines(text);
+  const parts: MarkdownPart[] = [];
+  let proseStart = 0;
+  const flushProse = (end: number): void => {
+    if (end <= proseStart) {
+      return;
+    }
+    const prose = lines.slice(proseStart, end).join("\n");
+    if (prose.length > 0) {
+      parts.push({ kind: "prose", text: prose });
+    }
+  };
+
+  for (let index = 0; index + 1 < lines.length; index += 1) {
+    const headers = markdownTableCells(lines[index] ?? "");
+    if (headers === undefined) {
+      continue;
+    }
+    const alignments = tableAlignments(lines[index + 1] ?? "", headers.length);
+    if (alignments === undefined) {
+      continue;
+    }
+    flushProse(index);
+    const rows: string[][] = [];
+    let cursor = index + 2;
+    while (cursor < lines.length) {
+      const row = markdownTableCells(lines[cursor] ?? "");
+      if (row === undefined || row.length !== headers.length) {
+        break;
+      }
+      rows.push(row);
+      cursor += 1;
+    }
+    parts.push({ kind: "table", table: { headers, alignments, rows } });
+    proseStart = cursor;
+    index = cursor - 1;
+  }
+  flushProse(lines.length);
+  return parts.length > 0 ? parts : [{ kind: "prose", text }];
+}
+
+/** Balanced content widths for a bordered table at a constrained terminal width. */
+export function tableColumnWidths(table: MarkdownTable, availableWidth: number): number[] {
+  const columns = table.headers.length;
+  if (columns === 0) {
+    return [];
+  }
+  const minimum = 3;
+  const borderColumns = columns + 1;
+  const usable = Math.max(columns * minimum, Math.floor(availableWidth) - borderColumns);
+  const base = Math.max(minimum, Math.floor(usable / columns));
+  let remainder = Math.max(0, usable - base * columns);
+  return Array.from({ length: columns }, () => {
+    const width = base + (remainder > 0 ? 1 : 0);
+    remainder = Math.max(0, remainder - 1);
+    return width;
+  });
 }
 
 /**
