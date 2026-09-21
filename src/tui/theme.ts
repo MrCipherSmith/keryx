@@ -5,7 +5,20 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "../lib/config-dir";
 
-export type ThemeId = "auto" | "groknight" | "grokday" | "tokyonight" | "keryx";
+export type ThemeId =
+  | "auto"
+  | "groknight"
+  | "grokday"
+  | "tokyonight"
+  | "keryx"
+  | "midnight"
+  | "nord"
+  | "ember"
+  | "violet"
+  | "paper"
+  | "frost"
+  | "sand"
+  | "mint";
 export type ThemeMode = "dark" | "light";
 
 /** Concrete palette (never `auto`). */
@@ -28,9 +41,24 @@ export type Theme = {
   ok: string;
 };
 
-export const THEME_NAMES: readonly ThemeName[] = ["groknight", "grokday", "tokyonight", "keryx"];
+export const THEME_NAMES: readonly ThemeName[] = [
+  "groknight",
+  "tokyonight",
+  "keryx",
+  "midnight",
+  "nord",
+  "ember",
+  "violet",
+  "grokday",
+  "paper",
+  "frost",
+  "sand",
+  "mint",
+];
 export const THEME_IDS: readonly ThemeId[] = ["auto", ...THEME_NAMES];
 export const DEFAULT_THEME_ID: ThemeId = "groknight";
+
+const LIGHT_THEME_NAMES = new Set<ThemeName>(["grokday", "paper", "frost", "sand", "mint"]);
 
 const THEMES: Record<ThemeName, Theme> = {
   groknight: {
@@ -72,7 +100,7 @@ const THEMES: Record<ThemeName, Theme> = {
     highlight: "#292e42",
     border: "#3b4261",
     text: "#c0caf5",
-    muted: "#565f89",
+    muted: "#737da8",
     user: "#a9b1d6",
     assistant: "#bb9af7",
     tool: "#7aa2f7",
@@ -96,6 +124,134 @@ const THEMES: Record<ThemeName, Theme> = {
     focus: "#ffd166",
     error: "#e05a5a",
     ok: "#6bcf6b",
+  },
+  midnight: {
+    name: "midnight",
+    bg: "#080d18",
+    panel: "#101827",
+    highlight: "#17233a",
+    border: "#40577a",
+    text: "#dbe7ff",
+    muted: "#8292ad",
+    user: "#a9c7ff",
+    assistant: "#8bd5ca",
+    tool: "#7aa2f7",
+    side: "#c6a0f6",
+    focus: "#f5c26b",
+    error: "#ff7a90",
+    ok: "#83d17f",
+  },
+  nord: {
+    name: "nord",
+    bg: "#242933",
+    panel: "#2e3440",
+    highlight: "#3b4252",
+    border: "#5e6b80",
+    text: "#eceff4",
+    muted: "#929db0",
+    user: "#d8dee9",
+    assistant: "#88c0d0",
+    tool: "#81a1c1",
+    side: "#b48ead",
+    focus: "#ebcb8b",
+    error: "#f0808b",
+    ok: "#a3be8c",
+  },
+  ember: {
+    name: "ember",
+    bg: "#17100d",
+    panel: "#211713",
+    highlight: "#30201a",
+    border: "#6a4d3d",
+    text: "#f2e3d5",
+    muted: "#a48672",
+    user: "#ffd2ad",
+    assistant: "#ff9f68",
+    tool: "#e1b274",
+    side: "#d89b72",
+    focus: "#ffd166",
+    error: "#ff7676",
+    ok: "#a6d27a",
+  },
+  violet: {
+    name: "violet",
+    bg: "#100b1b",
+    panel: "#1a1227",
+    highlight: "#281b3c",
+    border: "#61497d",
+    text: "#eee8ff",
+    muted: "#9f8db8",
+    user: "#d6c4ff",
+    assistant: "#c099ff",
+    tool: "#76b7ff",
+    side: "#ff8cc6",
+    focus: "#ffd166",
+    error: "#ff7699",
+    ok: "#7bdba5",
+  },
+  paper: {
+    name: "paper",
+    bg: "#faf7f0",
+    panel: "#f1ece1",
+    highlight: "#e5ddcf",
+    border: "#9d9280",
+    text: "#29251f",
+    muted: "#746d62",
+    user: "#4b4033",
+    assistant: "#6b4bbc",
+    tool: "#1f62a8",
+    side: "#8a4f72",
+    focus: "#815500",
+    error: "#b4233c",
+    ok: "#2e7d32",
+  },
+  frost: {
+    name: "frost",
+    bg: "#f4f8fb",
+    panel: "#eaf1f6",
+    highlight: "#dbe8f0",
+    border: "#93a8b7",
+    text: "#1f2d3a",
+    muted: "#627483",
+    user: "#314c65",
+    assistant: "#5b4bb7",
+    tool: "#1769aa",
+    side: "#794ca8",
+    focus: "#805400",
+    error: "#b32642",
+    ok: "#2d7544",
+  },
+  sand: {
+    name: "sand",
+    bg: "#fff7e8",
+    panel: "#f6ead5",
+    highlight: "#ead9bb",
+    border: "#ad936d",
+    text: "#33291d",
+    muted: "#776751",
+    user: "#5b4630",
+    assistant: "#744494",
+    tool: "#176b75",
+    side: "#91483b",
+    focus: "#805400",
+    error: "#b3263b",
+    ok: "#347536",
+  },
+  mint: {
+    name: "mint",
+    bg: "#f2faf7",
+    panel: "#e4f3ed",
+    highlight: "#d3e9e0",
+    border: "#8fafa3",
+    text: "#19332a",
+    muted: "#5d776d",
+    user: "#285548",
+    assistant: "#6745a6",
+    tool: "#176b72",
+    side: "#86506b",
+    focus: "#805400",
+    error: "#b32643",
+    ok: "#217343",
   },
 };
 
@@ -141,14 +297,8 @@ export function themeLabel(id: ThemeId): string {
   switch (id) {
     case "auto":
       return "auto (follow terminal)";
-    case "groknight":
-      return "groknight";
-    case "grokday":
-      return "grokday";
-    case "tokyonight":
-      return "tokyonight";
-    case "keryx":
-      return "keryx";
+    default:
+      return LIGHT_THEME_NAMES.has(id) ? `${id} ☀` : id;
   }
 }
 

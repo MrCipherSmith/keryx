@@ -10,7 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
-import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
+import { createShellChrome, themeColorToHex, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 import {
   MODAL_BODY_SCROLLBAR_COLS,
   MODAL_PANEL_CHROME_X,
@@ -27,7 +27,7 @@ import {
   resolveModalPanelSize,
   type ModalTabContext,
 } from "./modal-host";
-import { applyThemeId, getThemeId } from "./theme";
+import { applyThemeId, getThemeId, resolveTheme } from "./theme";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -438,6 +438,33 @@ otuiTest("review finding: destroyModalHost unregisters the theme listener — a 
   }
 });
 
+otuiTest("light themes repaint modal text that would otherwise inherit the terminal's white foreground", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const previousThemeId = getThemeId();
+  try {
+    applyThemeId("groknight");
+    openModal(otui.core, h.chrome, {
+      title: "Inspector",
+      tabs: [{ id: "info", label: "Info" }],
+      footer: [{ key: "esc", label: "close" }],
+      renderTab: () => {},
+    });
+    applyThemeId("paper");
+    await h.flush();
+
+    const title = h.renderer.root.findDescendantById("modal-title") as unknown as { fg: unknown };
+    const tab = h.renderer.root.findDescendantById("modal-tab-info") as unknown as { fg: unknown };
+    const footer = h.renderer.root.findDescendantById("modal-footer-text") as unknown as { fg: unknown };
+    expect(themeColorToHex(title.fg)).toBe(resolveTheme("paper").text);
+    expect(themeColorToHex(tab.fg)).toBe(resolveTheme("paper").focus);
+    expect(themeColorToHex(footer.fg)).toBe(resolveTheme("paper").text);
+  } finally {
+    applyThemeId(previousThemeId);
+    h.destroy();
+  }
+});
+
 otuiTest("clicking [x] closes the modal", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 24 });
@@ -628,4 +655,3 @@ otuiTest("AC7: openModal applies adaptive panel height from input.contentRows", 
   handle?.close();
   h.destroy();
 });
-

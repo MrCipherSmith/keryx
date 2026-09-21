@@ -257,6 +257,7 @@ function innerWidthOf(state: HostState): number {
 
 function paintTabs(state: HostState): void {
   clearTranscriptChildren(state.tabStrip);
+  const theme = getTheme();
   for (const [index, tab] of state.tabs.entries()) {
     const active = tab.id === state.active;
     const label = active ? `[${tab.label}]` : ` ${tab.label} `;
@@ -267,6 +268,7 @@ function paintTabs(state: HostState): void {
         content: active
           ? state.otui.t`${prefix}${state.otui.bold(label)}`
           : state.otui.t`${prefix}${state.otui.dim(label)}`,
+        fg: active ? theme.focus : theme.muted,
         onMouseDown: () => {
           if (!state.open || state.input === undefined || tab.id === state.active) {
             return;
@@ -408,11 +410,13 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     id: "modal-title",
     content: "",
     flexGrow: 1,
+    fg: getTheme().text,
   });
   const closeText = new otui.TextRenderable(r, {
     id: "modal-close",
     content: "",
     flexShrink: 0,
+    fg: getTheme().muted,
     onMouseDown: () => {
       const current = hosts.get(r);
       if (current !== undefined && current.open) {
@@ -450,6 +454,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
   const footerText = new otui.TextRenderable(r, {
     id: "modal-footer-text",
     content: "",
+    fg: getTheme().text,
   });
   footer.add(footerText);
   panel.add(header);
@@ -569,6 +574,10 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     state.backdrop.backgroundColor = theme.bg;
     state.panel.backgroundColor = theme.panel;
     state.panel.borderColor = theme.border;
+    state.titleText.fg = theme.text;
+    state.closeText.fg = theme.muted;
+    state.footerText.fg = theme.text;
+    paintTabs(state);
   });
   return state;
 }

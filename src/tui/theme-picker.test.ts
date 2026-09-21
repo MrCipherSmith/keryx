@@ -32,8 +32,8 @@ test("formatThemePickerRows marks the cursor and the applied theme", () => {
 test("moveThemeSelection clamps at the ends", () => {
   expect(moveThemeSelection("auto", -1)).toBe("auto");
   expect(moveThemeSelection("auto", 1)).toBe("groknight");
-  expect(moveThemeSelection("keryx", 1)).toBe("keryx");
-  expect(moveThemeSelection("keryx", -1)).toBe("tokyonight");
+  expect(moveThemeSelection("mint", 1)).toBe("mint");
+  expect(moveThemeSelection("mint", -1)).toBe("sand");
 });
 
 test("preview sample includes markdown and a code fence body", () => {
@@ -90,7 +90,7 @@ test("presentThemePicker opens a compact 1-tab modal and applies only on Enter",
   expect(closed).toBe(false);
 
   keyHandler?.({ name: "enter", sequence: "\r" });
-  expect(applied).toEqual(["grokday"]);
+  expect(applied).toEqual(["tokyonight"]);
   expect(closed).toBe(true);
 });
 
