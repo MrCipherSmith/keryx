@@ -20,6 +20,7 @@ import {
   acPath,
   appendJournal,
   assertAcIntact,
+  duplicateFlowIds,
   flowIdOf,
   flowsRoot,
   groupFlowDirsById,
@@ -229,7 +230,9 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
 
     async list({ cwd }): Promise<FlowSummary[]> {
       const dirs = await listFlowDirs(cwd);
-      const summaries: FlowSummary[] = [];
+      // Deliberately NOT `FlowSummary[]`: the collision flag is computed from
+      // the WHOLE listing on the way out, which a row cannot state as it is built.
+      const summaries: Omit<FlowSummary, "duplicateId">[] = [];
       for (const dir of dirs) {
         try {
           const flow = await readFlow(cwd, dir);
@@ -246,7 +249,19 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           // surfaced by `flow check`
         }
       }
-      return summaries;
+      // A number shared by two packages makes every bare-id reference to it
+      // ambiguous — `resolveFlowDir` refuses it, `flow check` fails on it and
+      // `keryx flow list` marks it. That answer is computed HERE, in the owner
+      // of the registry, so the CLI, the agent tool and MCP read one answer
+      // instead of each re-deriving it from the bare ids: the predicate is
+      // `duplicateFlowIds`, and a second spelling of it is a second answer
+      // waiting to disagree.
+      //
+      // Both rows of a collision are flagged, including the one that kept the
+      // number: the ambiguity belongs to the ID, and a row that looks ordinary
+      // while its id is refused everywhere else is the defect this closes.
+      const shared = duplicateFlowIds(summaries.map((summary) => summary.id));
+      return summaries.map((summary) => ({ ...summary, duplicateId: shared.has(summary.id) }));
     },
 
     async get({ cwd, id }): Promise<FlowState> {

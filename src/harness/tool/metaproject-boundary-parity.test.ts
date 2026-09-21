@@ -491,6 +491,25 @@ test("flow_status: the slug survives to the tool boundary", async () => {
   expect(result.flows[0]?.slug).toBe("agent-first-core-phase-3");
 });
 
+// `flowStatus` re-lists the owner's fields by hand (that is why the slug has
+// its own test above). `duplicateId` is the next field through that door, and
+// its loss is silent: an unflagged collision reads as a clean registry.
+test("flow_status: the owner's duplicate-id answer survives the adapter's re-map", async () => {
+  const port = createMetaprojectAdapter(CWD, {
+    createFlowService: () =>
+      ({
+        async list() {
+          return [
+            { id: "265", slug: "a", title: "A", status: "done", dir: "265-2026-09-16-a", tasksDone: 1, tasksTotal: 1, duplicateId: true },
+            { id: "266", slug: "b", title: "B", status: "done", dir: "266-2026-09-16-b", tasksDone: 1, tasksTotal: 1, duplicateId: false },
+          ];
+        },
+      }) as never,
+  });
+  const result = await port.flowStatus!({});
+  expect(result.flows.map((flow) => flow.duplicateId)).toEqual([true, false]);
+});
+
 // --- unreported: memory_search drops the filters the port already accepts ----
 
 test("memory_search: module / class / limit reach the port", async () => {

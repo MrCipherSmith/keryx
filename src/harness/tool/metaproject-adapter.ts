@@ -1088,6 +1088,12 @@ export function createMetaprojectAdapter(
             tasksDone: f.tasksDone,
             tasksTotal: f.tasksTotal,
             dir: f.dir,
+            // Carried across explicitly: this map is hand-written, so a field
+            // the facade starts returning is dropped here unless it is named
+            // (the slug was). Spread, not assigned: under
+            // `exactOptionalPropertyTypes` an explicit `undefined` would be a
+            // claim this adapter never read.
+            ...(f.duplicateId !== undefined ? { duplicateId: f.duplicateId } : {}),
           })),
         };
       } catch (cause) {

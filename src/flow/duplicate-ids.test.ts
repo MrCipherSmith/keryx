@@ -7,7 +7,7 @@ import { createFlowService } from "./service";
 import { duplicateFlowIds, resolveFlowDir } from "./store";
 import type { FlowServiceDeps, FlowState } from "./types";
 
-// Flow 116 / AC3, AC5-AC7: once two flows share a number, nothing may resolve
+// Flow 120 / AC3, AC5-AC7: once two flows share a number, nothing may resolve
 // that number silently — the CLI, the gate and the repair path all have to be
 // explicit about the collision.
 
@@ -141,6 +141,32 @@ test("flow list marks exactly the ids that are shared", () => {
   // The listing is where a collision usually gets noticed — it must say so.
   expect(duplicateFlowIds(["001", "002", "003"]).size).toBe(0);
   expect([...duplicateFlowIds(["001", "002", "001", "003", "003"])].sort()).toEqual(["001", "003"]);
+});
+
+// The CLI's marker and the tool's marker can only be the SAME answer if the
+// owner computes it once. This is that computation: `list()` states, per row,
+// whether the id is shared — and it flags BOTH rows, because the ambiguity
+// belongs to the id, not to the package that happened to keep the number.
+test("flow list's own answer: list() flags every row whose id is shared, and clears it after a renumber", async () => {
+  const root = await freshRoot();
+  const { kept, clashing } = await collidingPair(root);
+  const service = createFlowService(makeDeps());
+
+  const summaries = await service.list({ cwd: root });
+  expect(summaries).toHaveLength(2);
+  expect(summaries.map((summary) => summary.duplicateId)).toEqual([true, true]);
+  expect(new Set(summaries.map((summary) => path.basename(summary.dir)))).toEqual(
+    new Set([kept, clashing]),
+  );
+
+  await service.renumber({
+    cwd: root,
+    ref: clashing,
+    to: "007",
+    reason: "collision introduced by merging a parallel branch",
+  });
+  const after = await service.list({ cwd: root });
+  expect(after.map((summary) => summary.duplicateId)).toEqual([false, false]);
 });
 
 test("renumber moves the package, rewrites the id, and records the mapping", async () => {

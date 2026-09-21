@@ -405,6 +405,14 @@ export interface FlowSummaryResult {
   tasksTotal: number;
   /** Flow directory (relative to `.metaproject/flows`). */
   dir: string;
+  /**
+   * `true` when another flow in this result carries the same id. Optional at
+   * the TYPE level only, so a hand-written port stub still compiles; the
+   * reference adapter always sets it, because `flow.list()` computes it.
+   * `undefined` means "this source did not say" — never "checked, clean". The
+   * repair needs `dir`: `keryx flow renumber` refuses a bare ambiguous id.
+   */
+  duplicateId?: boolean;
 }
 
 /** Structured result of `flowStatus` — Task Manager flows and their progress. */

@@ -585,7 +585,19 @@ export function formatHealth(result: HealthStatusResult): InteractiveToolResult 
   return { output: `Code health — ${parts.join(", ")}.`, isError: false };
 }
 
-/** Render a `flowStatus` result as readable text. */
+/**
+ * Render a `flowStatus` result as readable text.
+ *
+ * The `✗ duplicate id` marker and its note are the signal `keryx flow list`
+ * has printed since flow 120 (`src/commands/flow.ts`, its AC5). The tool did not, and
+ * that was not cosmetic: two rows carrying one id arrived with nothing to
+ * distinguish them from two ordinary flows, so an agent could not see a
+ * collision that every bare-id command refuses on.
+ *
+ * The note names the DIRECTORIES because `keryx flow renumber` takes one and
+ * a bare ambiguous id is refused — a note that only said "<dir>" would leave
+ * the caller holding a reference the repair command will not accept.
+ */
 export function formatFlowStatus(result: FlowStatusResult): InteractiveToolResult {
   if (result.error !== undefined) {
     return { output: `flow_status failed: ${result.error}`, isError: true };
@@ -593,12 +605,28 @@ export function formatFlowStatus(result: FlowStatusResult): InteractiveToolResul
   if (result.flows.length === 0) {
     return { output: "No matching flows.", isError: false };
   }
+  // Only `true` is marked, never `undefined`: an absent flag means the source
+  // did not report a collision, and turning that absence into a note would be
+  // inventing a finding.
   const lines = result.flows.map(
     (f) =>
-      `  - ${f.id}${f.slug !== undefined ? ` (${f.slug})` : ""} [${f.status}] ${f.title} ` +
+      `  - ${f.id}${f.duplicateId === true ? " ✗ duplicate id" : ""}` +
+      `${f.slug !== undefined ? ` (${f.slug})` : ""} [${f.status}] ${f.title} ` +
       `(${f.tasksDone}/${f.tasksTotal} tasks)`,
   );
-  return { output: [`Flows (${result.flows.length}):`, ...lines].join("\n"), isError: false };
+  const output = [`Flows (${result.flows.length}):`, ...lines];
+  const duplicated = result.flows.filter((f) => f.duplicateId === true);
+  if (duplicated.length > 0) {
+    const ids = [...new Set(duplicated.map((f) => f.id))].sort();
+    output.push(
+      "",
+      `${ids.length} duplicated id(s) — every bare-id command on these is refused as ambiguous, ` +
+        "so the repair has to name the directory:",
+      ...duplicated.map((f) => `  - ${f.id}: ${f.dir}`),
+      'Repair with: keryx flow renumber <dir> --to <free id> --reason "<why>"',
+    );
+  }
+  return { output: output.join("\n"), isError: false };
 }
 
 /**

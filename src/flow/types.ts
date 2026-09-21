@@ -182,6 +182,14 @@ export type FlowSummary = {
   dir: string; // relative flow dir
   tasksDone: number;
   tasksTotal: number;
+  /**
+   * Whether ANOTHER flow in the same listing carries this id — the post-merge
+   * collision `flow check` fails on and `flow renumber` repairs. Computed by
+   * `list()` from `duplicateFlowIds`, so the CLI, the agent tool and MCP state
+   * one answer; REQUIRED so a future producer cannot leave it absent, where
+   * "no collision" and "did not look" would arrive as the same `undefined`.
+   */
+  duplicateId: boolean;
 };
 
 // --- Tracker adapter (D5) ---

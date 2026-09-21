@@ -408,6 +408,47 @@ test("flow_status formats the structured port result when the method is present"
   expect(filtered.output).toContain("2 [done] Do Y (2/2 tasks)");
 });
 
+// `keryx flow list` marks a shared id and the tool did not, so one registry
+// produced two answers — and silence here is worst, because the id is unusable
+// as a reference everywhere else.
+test("flow_status marks a shared id and names the directories, like `keryx flow list`", async () => {
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    flowStatus: async () => ({
+      flows: [
+        { id: "265", status: "done", title: "P1", tasksDone: 12, tasksTotal: 12, dir: ".metaproject/flows/265-2026-09-16-p1", duplicateId: true },
+        { id: "265", status: "in-progress", title: "Plan toggle", tasksDone: 5, tasksTotal: 5, dir: ".metaproject/flows/265-2026-09-16-read-only-plan-toggle", duplicateId: true },
+        { id: "266", status: "done", title: "Unaffected", tasksDone: 1, tasksTotal: 1, dir: ".metaproject/flows/266-2026-09-16-unaffected", duplicateId: false },
+      ],
+    }),
+  };
+  const result = await op("flow_status").invoke(port, {});
+  expect(result.isError).toBe(false);
+  expect(result.output.match(/✗ duplicate id/g)).toHaveLength(2);
+  expect(result.output).toContain("265 ✗ duplicate id");
+  // A row whose id is unique keeps the old line exactly: no marker, no note.
+  expect(result.output).toContain("266 [done] Unaffected (1/1 tasks)");
+  expect(result.output).toContain("1 duplicated id(s)");
+  // The repair takes a DIRECTORY: `renumber 265` is refused as ambiguous.
+  expect(result.output).toContain(".metaproject/flows/265-2026-09-16-read-only-plan-toggle");
+  expect(result.output).toContain('keryx flow renumber <dir> --to <free id> --reason "<why>"');
+});
+
+test("flow_status adds no collision note when the source reports none", async () => {
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    flowStatus: async () => ({
+      flows: [
+        { id: "1", status: "done", title: "Do X", tasksDone: 1, tasksTotal: 1, dir: ".metaproject/flows/1-do-x", duplicateId: false },
+      ],
+    }),
+  };
+  const result = await op("flow_status").invoke(port, {});
+  expect(result.isError).toBe(false);
+  expect(result.output).not.toContain("duplicate");
+  expect(result.output).toContain("1 [done] Do X (1/1 tasks)");
+});
+
 test("flow_status reports 'not available' when the port omits the method (never throws)", async () => {
   const { port } = recordingPort();
   const result = await op("flow_status").invoke(port, {});
