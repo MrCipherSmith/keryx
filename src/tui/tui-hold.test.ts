@@ -19,7 +19,7 @@ const source = readFileSync(path.join(import.meta.dir, "tui-shell.ts"), "utf8");
 
 describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
   test("the idle-path operator line is gated right before appendUserEcho, and only an operator line is queued", () => {
-    const echoIdx = source.indexOf("appendUserEcho(otui, r, transcript, { id: `ub${uid++}`, line: displayLine });");
+    const echoIdx = source.indexOf("const userEcho = appendUserEcho(otui, r, transcript, {");
     expect(echoIdx).toBeGreaterThan(0);
     // The gate must appear textually BEFORE the echo/turn-start point, and
     // close enough that nothing else could start a turn in between.
