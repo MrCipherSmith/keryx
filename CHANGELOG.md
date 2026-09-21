@@ -3,6 +3,21 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.138] — 2026-09-21
+Long agent answers keep the operator's active request visible while the
+transcript moves beneath it.
+
+### Added
+- **The active user prompt sticks above the transcript while scrolling.** Once
+  its original row leaves the viewport, a compact one-line context strip pins
+  the request at the top; reaching the next user message replaces it, and
+  scrolling back to the original row removes the duplicate.
+
+### Changed
+- **Main-turn user messages use the full transcript width.** A tinted surface
+  and left accent replace the content-width rounded bubble in both agent and
+  chat shells, making turn boundaries easier to scan without adding height.
+
 ## [0.2.137] — 2026-09-21
 The shell workspace now has visible breathing room and clearer surface edges,
 especially in the Tokyo Night palette.
