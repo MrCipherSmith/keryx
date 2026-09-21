@@ -280,9 +280,10 @@ export function recolorThemeTree(
       }
     }
   }
-  if (target.content !== undefined && recolorContent(target.content, remap, color)) {
+  const content = target.content;
+  if (content !== undefined && recolorContent(content, remap, color)) {
     // Reassign through OpenTUI's setter so its backing text buffer is rebuilt.
-    target.content = target.content;
+    target.content = content;
   }
   if (typeof target.getChildren === "function") {
     for (const child of target.getChildren()) {
