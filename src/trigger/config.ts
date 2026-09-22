@@ -123,7 +123,10 @@ export interface TriggerDispatch {
   readonly maxSeconds: number;
   /** A task whose attempt count has reached this is not dispatched again. */
   readonly maxAttempts: number;
+  /** Loopback only (see `dispatchProblems`). */
   readonly baseUrl?: string;
+  /** Flow 290 T13 (AC13): network inside the unattended sandbox. Default false — off. */
+  readonly network: boolean;
 }
 
 export const UNATTENDED_PERMISSION_MODES = ["ask", "trust"] as const;
@@ -256,11 +259,13 @@ function dispatchProblems(value: unknown): string[] {
     problems.push("action.dispatch.rates: must be an object {inputUsdPerMTok, outputUsdPerMTok}");
   } else {
     const r = rates as Record<string, unknown>;
-    if (!isNonNegativeFinite(r.inputUsdPerMTok)) {
-      problems.push("action.dispatch.rates.inputUsdPerMTok: required, a non-negative number (USD per million input tokens)");
+    // Flow 290 T13 (AC14): a zero rate prices every run at $0, so neither
+    // ceiling could ever stop it — the same hole as having no rates at all.
+    if (!(isNonNegativeFinite(r.inputUsdPerMTok) && r.inputUsdPerMTok > 0)) {
+      problems.push("action.dispatch.rates.inputUsdPerMTok: required, a positive number (USD per million input tokens) — a zero rate would make every run free to the ceiling");
     }
-    if (!isNonNegativeFinite(r.outputUsdPerMTok)) {
-      problems.push("action.dispatch.rates.outputUsdPerMTok: required, a non-negative number (USD per million output tokens)");
+    if (!(isNonNegativeFinite(r.outputUsdPerMTok) && r.outputUsdPerMTok > 0)) {
+      problems.push("action.dispatch.rates.outputUsdPerMTok: required, a positive number (USD per million output tokens) — a zero rate would make every run free to the ceiling");
     }
   }
   if (raw.ceilingUsd === undefined) {
@@ -276,10 +281,38 @@ function dispatchProblems(value: unknown): string[] {
   if (raw.maxAttempts !== undefined && !(Number.isSafeInteger(raw.maxAttempts) && (raw.maxAttempts as number) > 0)) {
     problems.push("action.dispatch.maxAttempts: must be a positive integer when present");
   }
-  if (raw.baseUrl !== undefined && (typeof raw.baseUrl !== "string" || raw.baseUrl.length === 0)) {
-    problems.push("action.dispatch.baseUrl: must be a non-empty string when present");
+  if (raw.baseUrl !== undefined) {
+    // Flow 290 T13 (review item 8): `triggers.json` is a committed file, and a
+    // dispatch sends the operator's SAVED key for `provider` to `baseUrl`. A
+    // merged edit pointing it at another host would hand that key over. So a
+    // base URL is accepted only when it is loopback (a local model server).
+    if (typeof raw.baseUrl !== "string" || raw.baseUrl.length === 0) {
+      problems.push("action.dispatch.baseUrl: must be a non-empty string when present");
+    } else if (!isLoopbackUrl(raw.baseUrl)) {
+      problems.push(
+        `action.dispatch.baseUrl: "${raw.baseUrl}" is not loopback — triggers.json is a committed file, and a non-loopback ` +
+          "base URL would send the operator's saved provider key to whatever host it names. Only http(s)://localhost, " +
+          "127.0.0.0/8 or [::1] is accepted.",
+      );
+    }
+  }
+  if (raw.network !== undefined && typeof raw.network !== "boolean") {
+    problems.push("action.dispatch.network: must be a boolean when present");
   }
   return problems;
+}
+
+/** True for http(s) URLs whose host is localhost, 127.0.0.0/8 or ::1. */
+export function isLoopbackUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  return host === "localhost" || host === "::1" || /^127(?:\.\d{1,3}){3}$/.test(host);
 }
 
 /** Normalize a validated action: fills a dispatch block's defaults. */
@@ -294,6 +327,7 @@ function normalizeAction(action: TriggerAction): TriggerAction {
     ceilingUsd: raw.ceilingUsd,
     maxSeconds: raw.maxSeconds ?? DEFAULT_DISPATCH_MAX_SECONDS,
     maxAttempts: raw.maxAttempts ?? DEFAULT_DISPATCH_MAX_ATTEMPTS,
+    network: raw.network ?? false,
     ...(raw.baseUrl !== undefined ? { baseUrl: raw.baseUrl } : {}),
   };
   return { kind: "flow-next", flow: action.flow, dispatch };

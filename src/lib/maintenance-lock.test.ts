@@ -6,11 +6,13 @@
 // and hoping two things overlapped.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   holdsMaintenanceLock,
+  keryxLocksDir,
   MAINTENANCE_LOCK_BUSY_EXIT_CODE,
   MaintenanceLockBusyError,
   maintenanceLockPath,
@@ -169,4 +171,81 @@ test("AC9: an interactive caller that finds the lock held past its wait says who
   expect(lines.join("\n")).toContain(`pid ${process.pid}`);
   expect(lines.join("\n")).toContain(maintenanceLockPath(root));
   expect(lines.join("\n")).not.toContain("failed");
+});
+
+// ---------------------------------------------------------------------------
+// Flow 290 T13 (review item 7)
+// ---------------------------------------------------------------------------
+
+test("the held lock is never committed: `git add -A` while it is held stages nothing under .locks", async () => {
+  execFileSync("git", ["init", "-q"], { cwd: root });
+  await writeFile(path.join(root, "a.txt"), "a\n");
+  const inside = deferred();
+  const release = deferred();
+  const holder = withMaintenanceLock(
+    root,
+    async () => {
+      inside.resolve();
+      await release.promise;
+    },
+    { waitMs: 0 },
+  );
+  await inside.promise;
+  try {
+    expect(maintenanceLockPath(root).startsWith(keryxLocksDir(root))).toBe(true);
+    // The lock directory really exists right now…
+    expect(await readFile(path.join(maintenanceLockPath(root), "owner.json"), "utf8")).toContain(String(process.pid));
+    execFileSync("git", ["add", "-A"], { cwd: root });
+    const staged = execFileSync("git", ["diff", "--cached", "--name-only"], { cwd: root }).toString();
+    // …and still nothing of it is staged.
+    expect(staged.trim()).toBe("a.txt");
+  } finally {
+    release.resolve();
+    await holder;
+  }
+});
+
+test("work scheduled inside the locked callback that runs after release is not treated as holding the lock", async () => {
+  const fired = deferred();
+  const released = deferred();
+  let heldInTimer: boolean | undefined;
+  let staleReentry: string | undefined;
+  await withMaintenanceLock(
+    root,
+    async () => {
+      // Registered INSIDE the callback (so it carries this async context) and
+      // run only once the lock has been released — an event, not a delay.
+      void released.promise.then(() => {
+        heldInTimer = holdsMaintenanceLock(root);
+        // A stale context must go to the file lock, not straight through: with
+        // another holder present it is refused.
+        const other = deferred();
+        const otherRelease = deferred();
+        const otherHolder = withMaintenanceLock(
+          root,
+          async () => {
+            other.resolve();
+            await otherRelease.promise;
+          },
+          { waitMs: 0 },
+        );
+        void other.promise.then(async () => {
+          try {
+            await withMaintenanceLock(root, async () => undefined, { waitMs: 0 });
+            staleReentry = "ran straight through";
+          } catch (error) {
+            staleReentry = error instanceof MaintenanceLockBusyError ? "refused" : String(error);
+          }
+          otherRelease.resolve();
+          await otherHolder;
+          fired.resolve();
+        });
+      });
+    },
+    { waitMs: 0 },
+  );
+  released.resolve();
+  await fired.promise;
+  expect(heldInTimer).toBe(false);
+  expect(staleReentry).toBe("refused");
 });

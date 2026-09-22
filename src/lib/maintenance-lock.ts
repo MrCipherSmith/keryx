@@ -32,53 +32,49 @@
 // holds this lock across the agent run.
 
 import { AsyncLocalStorage } from "node:async_hooks";
-import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock } from "./fs";
 
-const lockPathCache = new Map<string, string>();
-
 /**
- * The one maintenance lock directory for a project root.
+ * Where keryx keeps its lock directories: `<root>/.metaproject/data/.locks/`.
  *
- * Inside the repository's git directory (`git rev-parse --git-path`), NOT in
- * the working tree: a lock directory under `.metaproject/data/` is untracked
- * content, and a `git add -A` that runs while a build holds it — the
- * post-commit hook's own rebuild is exactly such a window — commits the lock's
- * `owner.json` (observed while verifying this change). `--git-path` is
- * per-worktree, which matches the per-worktree graph/wiki artifacts the lock
- * protects. Outside a git repository it falls back to
- * `.metaproject/data/.maintenance.lock`.
+ * Flow 290 T13 (security review, item 7): two constraints decide this.
+ *
+ *   1. Never committed. A lock directory is untracked content while it is
+ *      held, and the post-commit hook's own rebuild is a window in which a
+ *      `git add -A` runs — that committed the first version's `owner.json`.
+ *      The directory therefore carries its own `.gitignore` (`*`), written
+ *      before any lock is created in it, so git ignores every entry in it
+ *      including the `.gitignore` itself.
+ *   2. Writable inside the unattended sandbox. The second version put the lock
+ *      in the git directory (`git rev-parse --git-path`), which for a linked
+ *      worktree is `<main>/.git/worktrees/<wt>/` — read-only inside bwrap
+ *      (EROFS), so a sandboxed agent's `keryx gdgraph build` could never take
+ *      it. The worktree itself is writable there.
  */
+export function keryxLocksDir(projectRoot: string): string {
+  return path.join(path.resolve(projectRoot), ".metaproject", "data", ".locks");
+}
+
+/** The one maintenance lock directory for a project root. */
 export function maintenanceLockPath(projectRoot: string): string {
-  return gitScopedLockPath(projectRoot, "keryx-maintenance.lock", path.join(".metaproject", "data", ".maintenance.lock"));
+  return path.join(keryxLocksDir(projectRoot), "maintenance.lock");
 }
 
 /**
- * A lock directory named `name` inside the checkout's git directory, or
- * `<root>/<fallbackRelative>` outside a repository. Shared by every keryx lock
- * that is held long enough for a `git add -A` to catch it in the working tree.
+ * Make sure the locks directory exists and ignores itself. Idempotent; a
+ * concurrent writer racing on the `.gitignore` is harmless (same content).
  */
-export function gitScopedLockPath(projectRoot: string, name: string, fallbackRelative: string): string {
-  const root = path.resolve(projectRoot);
-  const key = `${root}\0${name}`;
-  const cached = lockPathCache.get(key);
-  if (cached !== undefined) return cached;
-  let resolved: string;
-  try {
-    const out = execFileSync("git", ["rev-parse", "--git-path", name], {
-      cwd: root,
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-      .toString()
-      .trim();
-    resolved = out.length > 0 ? path.resolve(root, out) : path.join(root, fallbackRelative);
-  } catch {
-    resolved = path.join(root, fallbackRelative);
-  }
-  lockPathCache.set(key, resolved);
-  return resolved;
+export async function ensureLocksDir(projectRoot: string): Promise<string> {
+  const dir = keryxLocksDir(projectRoot);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, ".gitignore"), "# keryx lock directories — never commit\n*\n", { flag: "wx" }).catch(
+    (error: unknown) => {
+      if (!(typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST")) throw error;
+    },
+  );
+  return dir;
 }
 
 /** Default bounded wait for an interactive caller. */
@@ -89,7 +85,14 @@ export const MAINTENANCE_LOCK_BUSY_EXIT_CODE = 75;
 
 const LOCK_TIMEOUT_PREFIX = "Timed out waiting for lock:";
 
-const heldPaths = new AsyncLocalStorage<ReadonlySet<string>>();
+/**
+ * What the current async context holds. Each entry carries a mutable `live`
+ * flag cleared when the lock is released: `AsyncLocalStorage` hands its store
+ * to every timer and promise created inside the locked callback, including one
+ * that outlives the release. Without the flag such a straggler would be taken
+ * for "already holding" and skip the file lock entirely (review item 7).
+ */
+const heldPaths = new AsyncLocalStorage<ReadonlyMap<string, { live: boolean }>>();
 
 /** The lock was held by someone else for the whole allowed wait. */
 export class MaintenanceLockBusyError extends Error {
@@ -119,7 +122,7 @@ export function interactiveLockWaitMs(env: Record<string, string | undefined> = 
 
 /** True when the current async context already holds this project's maintenance lock. */
 export function holdsMaintenanceLock(projectRoot: string): boolean {
-  return heldPaths.getStore()?.has(maintenanceLockPath(projectRoot)) === true;
+  return heldPaths.getStore()?.get(maintenanceLockPath(projectRoot))?.live === true;
 }
 
 /**
@@ -135,19 +138,25 @@ export async function withMaintenanceLock<T>(
 ): Promise<T> {
   const lockPath = maintenanceLockPath(projectRoot);
   const current = heldPaths.getStore();
-  if (current?.has(lockPath) === true) {
+  if (current?.get(lockPath)?.live === true) {
     return fn();
   }
-  const next = new Set(current ?? []);
-  next.add(lockPath);
+  const token = { live: true };
+  const next = new Map(current ?? []);
+  next.set(lockPath, token);
   let entered = false;
+  await ensureLocksDir(projectRoot);
   try {
     return await withFileLock(
       lockPath,
       async () => {
         entered = true;
-        await holdSeam(lockPath);
-        return heldPaths.run(next, fn);
+        try {
+          await holdSeam(lockPath);
+          return await heldPaths.run(next, fn);
+        } finally {
+          token.live = false;
+        }
       },
       { timeoutMs: options.waitMs },
     );

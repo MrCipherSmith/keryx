@@ -313,7 +313,7 @@ describe("flow-next dispatch block (flow 290)", () => {
     const action = result.triggers[0]!.action;
     expect(action.kind).toBe("flow-next");
     if (action.kind === "flow-next") {
-      expect(action.dispatch).toEqual({ ...VALID_DISPATCH, permissionMode: "trust", maxAttempts: 3 } as never);
+      expect(action.dispatch).toEqual({ ...VALID_DISPATCH, permissionMode: "trust", maxAttempts: 3, network: false } as never);
     }
   });
 
@@ -377,5 +377,37 @@ describe("flow-next dispatch block (flow 290)", () => {
     );
     const action = loadTriggersConfig(root).triggers[0]!.action;
     expect(action).toEqual({ kind: "flow-next", flow: "290" });
+  });
+});
+
+describe("flow 290 T13: dispatch hardening at load (AC14, review item 8)", () => {
+  test.each([
+    ["input", { inputUsdPerMTok: 0, outputUsdPerMTok: 15 }, "inputUsdPerMTok"],
+    ["output", { inputUsdPerMTok: 3, outputUsdPerMTok: 0 }, "outputUsdPerMTok"],
+  ])("AC14: a zero %s rate is rejected — it would make every run free to the ceiling", (_label, rates, field) => {
+    const problems = triggerEntryProblems(flowNextWith({ ...VALID_DISPATCH, rates }));
+    expect(problems.some((p) => p.includes(`rates.${field}`) && p.includes("zero rate"))).toBe(true);
+  });
+
+  test.each(["http://localhost:11434", "http://127.0.0.1:8080/v1", "https://[::1]:9000"])("a loopback baseUrl is accepted: %s", (baseUrl) => {
+    expect(triggerEntryProblems(flowNextWith({ ...VALID_DISPATCH, baseUrl }))).toEqual([]);
+  });
+
+  test.each(["https://api.evil.example", "http://10.0.0.5:8080", "http://localhost.evil.example", "file:///tmp/x"])(
+    "a non-loopback baseUrl is rejected — a committed triggers.json must not redirect the saved key: %s",
+    (baseUrl) => {
+      const problems = triggerEntryProblems(flowNextWith({ ...VALID_DISPATCH, baseUrl }));
+      expect(problems.some((p) => p.startsWith("action.dispatch.baseUrl") && p.includes("not loopback"))).toBe(true);
+    },
+  );
+
+  test("network defaults to false and must be a boolean", async () => {
+    expect(triggerEntryProblems(flowNextWith({ ...VALID_DISPATCH, network: "yes" }))).toContain(
+      "action.dispatch.network: must be a boolean when present",
+    );
+    const root = await projectWith(JSON.stringify({ schemaVersion: 1, triggers: [flowNextWith({ ...VALID_DISPATCH, network: true })] }));
+    const action = loadTriggersConfig(root).triggers[0]!.action;
+    if (action.kind !== "flow-next" || action.dispatch === undefined) throw new Error("expected a dispatch");
+    expect(action.dispatch.network).toBe(true);
   });
 });

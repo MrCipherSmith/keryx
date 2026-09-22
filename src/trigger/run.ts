@@ -11,14 +11,23 @@
 // decides WHICH entry to run and WHETHER the caller may proceed (lock); it
 // never performs an action itself.
 
-import { maintenanceLockPath, MaintenanceLockBusyError, withMaintenanceLock } from "../lib/maintenance-lock";
+import {
+  ensureLocksDir,
+  keryxLocksDir,
+  maintenanceLockPath,
+  MaintenanceLockBusyError,
+  withMaintenanceLock,
+} from "../lib/maintenance-lock";
 import { evaluateSpendCap, type SpendCapEvaluation, type SpendCapOptions } from "../review/caps";
 import {
   loadTriggersConfig,
   type TriggerEntry,
   type TriggersFileProblem,
 } from "./config";
-import { readTriggerRuns } from "./record";
+import { appendTriggerRunRecord, openReservations, readTriggerRuns } from "./record";
+import type { TriggerAction, TriggerFire } from "./config";
+import { withFileLock } from "../lib/fs";
+import path from "node:path";
 
 // ---------------------------------------------------------------------------
 // Resolution — "which entry does `<name>` mean, and can a run proceed at all"
@@ -252,12 +261,75 @@ async function recordedTriggerSpend(projectRoot: string): Promise<RecordedTrigge
   if (read.state === "unreadable") return { known: false, reason: read.reason };
   const byTrigger = new Map<string, number>();
   let usd = 0;
-  for (const record of read.records) {
-    const spent = recordedUsd(record.cost);
+  const add = (trigger: string, spent: number): void => {
     usd += spent;
-    byTrigger.set(record.trigger, (byTrigger.get(record.trigger) ?? 0) + spent);
-  }
+    byTrigger.set(trigger, (byTrigger.get(trigger) ?? 0) + spent);
+  };
+  for (const record of read.records) add(record.trigger, recordedUsd(record.cost));
+  // Flow 290 T13 (AC14): a reservation no final record has closed — a run in
+  // flight, or one that was killed — counts at its full reserved amount.
+  for (const open of openReservations(read.records)) add(open.trigger, open.usd);
   return { known: true, usd, byTrigger };
+}
+
+/** The project-wide spend lock: every reservation is decided under it. */
+function spendLockPath(projectRoot: string): string {
+  return path.join(keryxLocksDir(projectRoot), "spend.lock");
+}
+
+export type SpendReservation =
+  | { readonly reserved: true; readonly usd: number }
+  | { readonly reserved: false; readonly reason: string };
+
+/**
+ * Flow 290 T13 (AC14): reserve spend for one dispatch BEFORE its first model
+ * call, under a project-wide lock, so two triggers firing together cannot both
+ * be told the full allowance. The reservation is the whole remaining allowance
+ * (the smaller of the project-wide and the trigger's own), written to the
+ * ledger as a `reserved` record; the run's own final record closes it. A
+ * killed run's reservation stays counted until `keryx trigger resolve`.
+ */
+export async function reserveTriggerSpend(
+  projectRoot: string,
+  input: {
+    readonly runId: string;
+    readonly trigger: string;
+    readonly firedBy: TriggerFire;
+    readonly action: TriggerAction;
+    readonly perTrigger: PerTriggerCeiling;
+    readonly options?: SpendCapOptions;
+    readonly now?: () => Date;
+  },
+): Promise<SpendReservation> {
+  await ensureLocksDir(projectRoot);
+  return withFileLock(
+    spendLockPath(projectRoot),
+    async (): Promise<SpendReservation> => {
+      const budget = await evaluateTriggerBudget(projectRoot, "flow-next", input.options ?? {}, input.perTrigger);
+      if (!budget.allowed) return { reserved: false, reason: budget.reason };
+      if (!(budget.remainingUsd > 0)) {
+        return {
+          reserved: false,
+          reason: `nothing left to reserve for trigger "${input.trigger}" — every dollar under its ceilings is already spent or reserved by another run.`,
+        };
+      }
+      const append = await appendTriggerRunRecord(projectRoot, {
+        at: (input.now ?? (() => new Date()))().toISOString(),
+        trigger: input.trigger,
+        firedBy: input.firedBy,
+        action: input.action,
+        outcome: "reserved",
+        detail: `reserved $${roundUsd(budget.remainingUsd)} for dispatch run ${input.runId} before its first model call`,
+        cost: { recorded: false, reason: "a reservation — the run's own record carries what it spent" },
+        reservation: { runId: input.runId, usd: budget.remainingUsd },
+      });
+      if (append.status === "failed") {
+        return { reserved: false, reason: `the spend reservation could not be written, so no model call is made: ${append.reason}` };
+      }
+      return { reserved: true, usd: budget.remainingUsd };
+    },
+    { timeoutMs: 30_000 },
+  );
 }
 
 /** A record's USD, or 0 when it records none. A non-finite number counts as 0 rather than poisoning the sum. */

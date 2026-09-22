@@ -99,7 +99,7 @@ describe("resolveTriggerForRun", () => {
 
 describe("triggerRunLockPath", () => {
   test("flow 290: the project's shared maintenance lock, the same one interactive sync/build take", () => {
-    expect(triggerRunLockPath("/repo")).toBe(path.join("/repo", ".metaproject", "data", ".maintenance.lock"));
+    expect(triggerRunLockPath("/repo")).toBe(path.join("/repo", ".metaproject", "data", ".locks", "maintenance.lock"));
   });
 });
 

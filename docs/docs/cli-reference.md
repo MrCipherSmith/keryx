@@ -1084,13 +1084,14 @@ nobody present, and records what happened.
 
 | Field | Required | Meaning |
 |---|---|---|
-| `provider`, `model` | yes | The model the agent runs on. A provider with no usable credential is refused before anything is written (it would otherwise fall back to the offline fake and "succeed" at nothing). |
-| `permissionMode` | no (`ask`) | `ask` — every non-read call is denied (in effect read-only). `trust` — non-destructive `shell_exec`/`apply_patch` run; everything below still applies. `auto` is **rejected at load**. |
-| `rates` | yes | `{ inputUsdPerMTok, outputUsdPerMTok }` — USD per million tokens. Without rates a run cannot be priced, so no ceiling could stop it; the entry is rejected at load. |
+| `provider`, `model` | yes | The model the agent runs on. Only providers known to report token usage on every response are accepted: `anthropic`, `openai`, `gemini`, and an OpenAI-compatible provider whose registry entry sets `streamUsage` (today: `grok`). Anything else is refused (`provider-usage-unknown`). A provider with no usable credential is refused before anything is written. |
+| `permissionMode` | no (`ask`) | `ask` — every non-read call is denied (read-only by construction). `trust` — non-destructive `shell_exec`/`apply_patch` run, **inside the hardened sandbox, which is then mandatory**. `auto` is **rejected at load**. |
+| `rates` | yes | `{ inputUsdPerMTok, outputUsdPerMTok }` — USD per million tokens, both **greater than zero**. Without rates, or with a zero rate, a run is free to the ceiling; the entry is rejected at load. |
 | `ceilingUsd` | yes | This trigger's own spend ceiling, on top of the project-wide one. Rejected at load when absent. |
 | `maxSeconds` | no (1800) | Wall-clock limit for one agent run. |
 | `maxAttempts` | no (3) | A task whose attempt count has reached this is not dispatched again. |
-| `baseUrl` | no | Provider base URL override. |
+| `baseUrl` | no | Provider base URL override — **loopback only** (`localhost`, `127.0.0.0/8`, `[::1]`). `triggers.json` is a committed file and the run sends the operator's saved key for `provider` to this URL, so a non-loopback URL is rejected at load. |
+| `network` | no (`false`) | Network inside the sandbox. Off unless set to `true`. |
 
 **One fire, in order** — every refusal happens before any model call:
 
@@ -1102,22 +1103,54 @@ nobody present, and records what happened.
    count must be under `maxAttempts`. Otherwise `dispatch-refused` with the
    cause (`flow-not-in-progress`, `flow-not-frozen`, `nothing-ready`,
    `blocked`, `open-attempt`, `attempt-cap`), exit `0`.
-3. The per-trigger and project-wide ceilings: at or over either → `budget-refused`, exit `0`.
-4. A throwaway git worktree on branch `trigger/<flow>-<task>` (reused when it
-   exists). Never your checkout; the branch is never pushed.
-5. `flow task attempt <flow> <task> --outcome started` with the run id —
+3. Containment: `trust` refuses (`sandbox-unavailable`, exit `0`, reason
+   recorded) unless the hardened sandbox below can be built — no launcher, a
+   launcher that cannot create namespaces, a non-Linux host,
+   `KERYX_DANGEROUSLY_DISABLE_SANDBOX=1` or `KERYX_SANDBOX_SHELL=off` all refuse.
+   `ask` may run without one: every command and patch is an approval request,
+   every approval request is denied, and its shell runner refuses every command
+   as well.
+4. The spend reservation: under a project-wide spend lock, the remaining
+   allowance (the smaller of the trigger's and the project's) is written to the
+   ledger as a `reserved` record **before the first model call**. At or over
+   either ceiling, or with nothing left to reserve → `budget-refused`, exit `0`.
+   Two triggers firing together cannot both get the full allowance.
+5. A throwaway git worktree on branch `trigger/<flow>-<task>` (reused when it
+   exists). Never your checkout; the branch is never pushed. A worktree a
+   killed run left registered to that branch is recovered first — removed when
+   it is under the dispatcher's own worktree directory, pruned when its
+   directory is gone; a branch checked out anywhere else refuses
+   (`worktree-conflict`) and is never touched.
+6. `flow task attempt <flow> <task> --outcome started` with the run id —
    before the model is called.
-6. One agent turn in the worktree (see **Unattended posture**), stopped by
-   `maxSeconds` or when its priced cost reaches the remaining allowance (the
-   smaller of the trigger's and the project's).
-7. Whatever changed is committed on the trigger branch; then `keryx health run`
-   and `keryx health gate` run in the worktree.
-8. Exactly one closing fact: `flow task done --disposition completed` with a
+7. One agent turn in the worktree (see **Unattended posture**), stopped by
+   `maxSeconds`, when its priced cost reaches the reservation, or when a
+   response arrives without token usage (that run is charged its whole
+   reservation).
+8. Whatever changed is committed on the trigger branch; then `keryx health run`
+   and `keryx health gate` run in the worktree **inside the same sandbox** —
+   they execute code the agent wrote.
+9. Exactly one closing fact: `flow task done --disposition completed` with a
    `runLink` **only** when the turn ended normally, the branch has a new commit
    and the health gate passed; otherwise `flow task attempt --outcome
    failed|blocked` with the reason (`blocked` when the run was stopped by
    denials or by `ask_user`). The worktree is removed; the branch stays for you
    to review and merge.
+
+**The unattended sandbox (Linux, bubblewrap).** Every `shell_exec` of a
+dispatched run, and its health gate, run inside a profile built from allow
+lists: `/` read-only; your home directory, `/run/user/<uid>` and
+`$XDG_RUNTIME_DIR` (where ssh-agent and gpg-agent sockets live) hidden behind an
+empty tmpfs; bound back read-only only the toolchain roots found on `PATH` under
+your home (`~/.bun`, an nvm node version — detected, not hard-coded), the
+repository's git directory, the keryx package and `node_modules`; the worktree
+and a scratch `HOME` read-write; a private `/tmp`; the Docker socket masked;
+network off unless `dispatch.network: true`. The environment is an allowlist —
+`PATH`, locale, `TERM`, `TZ`, colour flags — with `HOME`, the XDG directories
+and `TMPDIR` pointed at the scratch home: no exported token, no
+`SSH_AUTH_SOCK`. The known-secret deny list (`~/.ssh`, `~/.config/gh`, …) is
+still applied inside anything bound back. macOS `sandbox-exec` is not
+implemented for this profile, so `trust` refuses on macOS.
 
 **Unattended posture — fail closed.** The agent runs with `unattended: true`.
 Its permission mode is the entry's — never the project's stored default
@@ -1126,25 +1159,40 @@ write or command under `ask`, a destructive one under `trust`, anything
 touching credentials or the SAC confirm flow, anything after untrusted
 content, `ask_user` — is **denied and written to the run record** with the
 tool and the reason; nothing is ever approved on your behalf. On top of the
-mode, a floor no mode lifts denies: `git push` (any form), `git merge`, `git
-tag`, `gh pr merge`, `gh release`, `npm publish`, `bun publish`; `keryx flow
-freeze`, `flow ac update|reseal|confirm`, `flow implemented`, `flow complete`,
-`flow renumber`, `flow block|unblock`, `flow task add|depends|done|attempt`;
-and any write — by `apply_patch` or by a command that names them — to
+mode, a text floor denies: `git push` (any form), `git merge`, `git tag`, `git
+update-ref`, `git branch -f|-D|-m|…`, `gh pr merge`, `gh release`, `gh api`
+with a mutating method or a body, `npm publish`, `bun publish`; `keryx flow
+freeze`, `flow start`, `flow ac update|reseal|confirm`, `flow implemented`,
+`flow complete`, `flow renumber`, `flow block|unblock`, `flow task
+add|depends|done|attempt|skip`, `keryx trigger run` (no nested dispatch); and
+any write — by `apply_patch` or by a command that names them — to
 `flow.json`, `acceptance-criteria.md`, `.metaproject/triggers.json` or
-`.metaproject/data/trigger/**`. The tool roster is `get_cwd`, `list_dir`,
-`read_file`, `shell_exec`, `apply_patch` — no `web_fetch`, `web_search`,
-`search_tool`/`use_tool`, `spawn_subagent` or `ask_user`. When the OS shell
-sandbox is available and you have not set `KERYX_SANDBOX_SHELL` yourself, the
-run forces the `workspace` sandbox; the run record's detail says which applied.
-The floor is string analysis and deliberately over-broad (a commit message
-containing "tag" is refused); the containment is the throwaway worktree, the
-never-pushed branch, and the dispatcher owning every flow-state write.
+`.metaproject/data/trigger/**`. **The floor is defence in depth, not the
+boundary**: it is text matching, a shell can spell a command in ways it does
+not see (quoting, `$(…)`, aliases, `bun -e`/`python3 -c`), and it is
+deliberately over-broad (a commit message containing "tag" is refused). The
+boundary is the sandbox — with the network off and credentials hidden, a push
+or an API call that slips past the text has nothing to authenticate with and
+nowhere to go. The tool roster is `get_cwd`, `list_dir`, `read_file` (confined
+to the worktree), `shell_exec`, `apply_patch` — no `web_fetch`, `web_search`,
+`search_tool`/`use_tool`, `spawn_subagent` or `ask_user`.
 
 **Cost.** Every dispatched run records `cost: { recorded: true, usd, tokens:
 { input, output } }` — tokens as the provider reported them, USD from the
-entry's `rates` — including a run that failed, timed out or was stopped. That
-figure is what both ceilings sum.
+entry's `rates` — including a run that failed, timed out, was stopped, or hit
+an error while writing its closing fact. That record also closes the run's
+`reserved` record. Both ceilings sum recorded costs **plus every reservation
+no record has closed yet**, so a run in flight — or one whose process was
+killed — keeps its whole reservation counted. `keryx trigger status` lists
+open reservations; once you know the killed run is gone, close its
+reservation with what it really spent (from your provider's console):
+
+```
+keryx trigger resolve <runId> --spent <usd>
+```
+
+There is no default for `--spent`: guessing would be the fail-open this
+exists to prevent.
 
 ### The run record
 
@@ -1168,11 +1216,11 @@ keryx trigger status (reading /path/to/project/.metaproject/data/trigger/runs.js
       last: 2026-09-22T19:33:15.623Z — ok — action "reconcile" completed. [cost: n/a (this action does not call a model — reconcile/rebuild are deterministic, no spend to record)]
 ```
 
-**Locking.** One project maintenance lock — a directory inside the git
-directory (`git rev-parse --git-path keryx-maintenance.lock`, so
-`.git/keryx-maintenance.lock`, or the linked worktree's own git dir; outside a
-repository `.metaproject/data/.maintenance.lock`), never in the working tree
-where a `git add -A` could commit it — is shared by `keryx sync --apply`,
+**Locking.** One project maintenance lock —
+`.metaproject/data/.locks/maintenance.lock`; the `.locks` directory carries its
+own `.gitignore` (`*`), so a `git add -A` that runs while a build holds the
+lock (the post-commit hook's own rebuild is such a moment) never commits it,
+and it stays writable inside the unattended sandbox — is shared by `keryx sync --apply`,
 `keryx gdgraph build`, and the triggered `reconcile`, `rebuild` and
 `open-flow`. A triggered run that finds it held refuses at once
 (`lock-refused`, exit `0`, the holder's pid named) — one run stays exactly one
@@ -1216,11 +1264,14 @@ regenerate-and-reinstall of the line.
   and `keryx health gate` passed in the worktree. Nobody has read the diff; the
   branch waits for you. A fresh worktree has no dependencies of its own — the
   project's `node_modules`, when present, is linked in for the gate.
-- **The unattended floor is text analysis.** It is over-broad by design and
-  still incomplete by construction (a shell can spell a command many ways);
-  the containment is the worktree, the unpushed branch and the OS sandbox when
-  available — without a sandbox launcher, `shell_exec` runs uncontained, and
-  the run record says so.
+- **The unattended text floor is defence in depth.** It is over-broad by
+  design and still incomplete by construction (a shell can spell a command
+  many ways). The boundary is the hardened sandbox, which `trust` requires —
+  Linux with a working bubblewrap only in this version.
+- **The sandbox hides your home, not the host.** `/` stays readable (read-only)
+  outside the hidden directories, so a secret kept outside `$HOME` and outside
+  the known deny list — `/etc/some-token`, another user's readable file — is
+  visible to the agent's commands, and through them to the model provider.
 - **Cost is priced from your rates.** keryx has no price table; if `rates` are
   wrong, both ceilings are wrong by the same factor. Token counts are summed
   from every usage event the provider emits.

@@ -49,6 +49,7 @@ import {
   appendTriggerRunRecord,
   latestRunByTrigger,
   NO_MODEL_COST,
+  openReservations,
   readTriggerRuns,
   type TriggerRunCost,
   type TriggerRunOutcomeKind,
@@ -111,6 +112,8 @@ export async function triggerCommand(args: string[]): Promise<void> {
       return statusSubcommand(args);
     case "schedule":
       return scheduleSubcommand(args);
+    case "resolve":
+      return resolveSubcommand(args);
     default:
       console.error(`Unknown trigger command: ${sub}. See \`keryx trigger --help\`.`);
       printHelp();
@@ -465,7 +468,10 @@ async function runFlowNext(
     // Flow 290: a `dispatch` block turns the report into real work.
     let result: DispatchResult;
     try {
-      result = await runFlowNextDispatch(projectRoot, name, action.flow, dispatch, budget.remainingUsd, {
+      // `budget` above is the fast, lock-free refusal; the authoritative
+      // decision is the spend RESERVATION the dispatch takes under the
+      // project-wide spend lock before its first model call (AC14).
+      result = await runFlowNextDispatch(projectRoot, entry, action.flow, dispatch, {
         ...overrides.dispatch,
         service,
       });
@@ -690,6 +696,15 @@ async function statusSubcommand(args: string[]): Promise<void> {
   }
 
   console.log(`keryx trigger status (reading ${runsRead.state === "present" ? runsRead.path : "no run record yet"}):`);
+  // Flow 290 T13 (AC14): a reservation no run has closed — in flight, or left
+  // by a killed run — still counts against both ceilings.
+  const open = openReservations(runsRead.state === "present" ? runsRead.records : []);
+  for (const reservation of open) {
+    console.log(
+      `  ! open spend reservation: run ${reservation.runId} (trigger ${reservation.trigger}) holds $${reservation.usd.toFixed(4)} ` +
+        `since ${reservation.at} — if that run is no longer alive, close it with \`keryx trigger resolve ${reservation.runId} --spent <usd>\``,
+    );
+  }
   for (const entry of entries) {
     console.log(`  - ${entry.name}  [${entry.enabled ? "enabled" : "disabled"}]  ${describeFire(entry.fire)}  -> ${describeAction(entry.action)}`);
     const record = latest.get(entry.name);
@@ -717,6 +732,64 @@ function describeAction(action: TriggerAction): string {
     );
   }
   return action.kind;
+}
+
+// ---------------------------------------------------------------------------
+// resolve (flow 290 T13, AC14)
+// ---------------------------------------------------------------------------
+
+/**
+ * Close a spend reservation whose run will never close it itself (the process
+ * was killed). The operator states what the run actually spent — read it from
+ * the provider's console — and that figure replaces the reservation in both
+ * ceilings. There is no default: guessing would be the fail-open this exists
+ * to prevent.
+ */
+async function resolveSubcommand(args: string[]): Promise<void> {
+  const runId = args[1];
+  const spentAt = args.indexOf("--spent");
+  const spentRaw = spentAt >= 0 ? args[spentAt + 1] : undefined;
+  if (runId === undefined || runId.startsWith("--") || spentRaw === undefined) {
+    console.error("Usage: keryx trigger resolve <runId> --spent <usd>");
+    process.exitCode = 1;
+    return;
+  }
+  const spent = Number(spentRaw);
+  if (!Number.isFinite(spent) || spent < 0) {
+    console.error(`keryx trigger resolve: --spent must be a non-negative number of USD, got "${spentRaw}"`);
+    process.exitCode = 1;
+    return;
+  }
+  const cwd = process.cwd();
+  const read = await readTriggerRuns(cwd);
+  if (read.state !== "present") {
+    console.error(`keryx trigger resolve: no readable run record (${read.state === "unreadable" ? read.reason : "none yet"})`);
+    process.exitCode = 1;
+    return;
+  }
+  const open = openReservations(read.records).find((r) => r.runId === runId);
+  if (open === undefined) {
+    console.error(`keryx trigger resolve: run ${runId} has no open spend reservation`);
+    process.exitCode = 1;
+    return;
+  }
+  const reservedRecord = read.records.find((r) => r.outcome === "reserved" && r.reservation?.runId === runId)!;
+  const append = await appendTriggerRunRecord(cwd, {
+    at: new Date().toISOString(),
+    trigger: reservedRecord.trigger,
+    firedBy: reservedRecord.firedBy,
+    action: reservedRecord.action,
+    outcome: "reservation-resolved",
+    detail: `operator closed run ${runId}'s $${open.usd.toFixed(4)} reservation, stating it spent $${spent}`,
+    cost: { recorded: true, usd: spent },
+    resolves: runId,
+  });
+  if (append.status === "failed") {
+    console.error(`keryx trigger resolve: ${append.reason}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`keryx trigger resolve: run ${runId}'s reservation ($${open.usd.toFixed(4)}) closed at $${spent}.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -795,6 +868,8 @@ Usage:
   keryx trigger list              List declared entries: enabled state, fire, action, hook status
   keryx trigger status [<name>]   Show the last recorded outcome for one or every entry
   keryx trigger schedule <name>   Print the cron line / systemd timer unit for a schedule entry
+  keryx trigger resolve <runId> --spent <usd>
+                                  Close a killed dispatch's spend reservation with what it really spent
 
 Triggers are declared by hand in .metaproject/triggers.json (keryx never
 writes it) and loaded by name. \`run\`:
@@ -818,8 +893,11 @@ Actions:
               work that task, unattended:
                 dispatch: { provider, model, permissionMode ("ask" default |
                 "trust"; "auto" is rejected), rates: { inputUsdPerMTok,
-                outputUsdPerMTok }, ceilingUsd, maxSeconds (1800),
-                maxAttempts (3), baseUrl? }
+                outputUsdPerMTok } (both > 0), ceilingUsd, maxSeconds (1800),
+                maxAttempts (3), network (false), baseUrl? (loopback only) }
+              "trust" runs commands only inside the hardened Linux sandbox
+              (bwrap: network off, home hidden, allow-listed env) and refuses
+              to start without it; "ask" is read-only.
               The agent works in a throwaway git worktree on branch
               trigger/<flow>-<task> (committed, never pushed). The dispatcher
               records "task attempt started" before the model, then exactly one
@@ -832,11 +910,14 @@ Actions:
               Unattended means: every call that would ask is DENIED and
               recorded; the saved shell allowlist and the project's stored
               permission mode are ignored; no web, MCP, subagent or ask_user
-              tools; never git push/merge/tag, publish, keryx flow
-              freeze/ac/complete/…, or writes to flow.json,
-              acceptance-criteria.md, triggers.json or the trigger record.
-              Cost: tokens always, USD from the declared rates; the run is
-              stopped when it reaches the remaining allowance.
+              tools; a text floor (defence in depth, not the boundary) refuses
+              git push/merge/tag/update-ref, publishing, mutating gh api,
+              keryx flow state changes, nested trigger runs, and writes to
+              flow.json, acceptance-criteria.md, triggers.json or the record.
+              Cost: spend is RESERVED before the first model call; tokens
+              always, USD from the declared rates; the run stops at its
+              reservation. A killed run's reservation stays counted until
+              \`keryx trigger resolve <runId> --spent <usd>\`.
 
 \`install\` writes hooks for event-fired entries only; a schedule entry's line
 comes from \`trigger schedule\`, and keryx never runs a daemon of its own.

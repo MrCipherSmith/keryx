@@ -9,12 +9,12 @@
   "title": "Triggers wave 2: flow-next dispatches an agent, per-trigger spend ceiling, shared lock with manual commands",
   "status": "in-progress",
   "createdAt": "2026-09-22T22:30:55.848Z",
-  "updatedAt": "2026-09-22T23:06:02.046Z",
+  "updatedAt": "2026-09-22T23:37:22.068Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:335bfcbe3065368f107bdf960a3ade40c08fff1efc1b026c9403256442a246be",
+  "acChecksum": "sha256:0900772432f0eb9007ba8221d92529f9f854eb784c5f23845a63340ee704ed1f",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -203,6 +203,26 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Security review fixes: mandatory hardened sandbox for trust, sandboxed health gate, reserved spend, stale worktree recovery, floor gaps",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T23:15:29.906Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -298,6 +318,46 @@
       "at": "2026-09-22T23:06:02.046Z",
       "event": "task-done",
       "detail": "T11: Docs: trigger help, CLI reference, README; correct the 286 lock claim"
+    },
+    {
+      "at": "2026-09-22T23:14:39.553Z",
+      "event": "ac-updated",
+      "detail": "Security review of PR 650 showed the text floor is bypassable (sh -c quoting, gh api, curl, update-ref) and that containment was not real: the sandbox allowed network, passed exported tokens, exposed ~/.config/gh-work, shared a writable /tmp, was skipped silently when no launcher existed, and the health gate ran agent-written code with no sandbox at all. The floor stays as defence in depth; the boundary moves to a mandatory, hardened sandbox."
+    },
+    {
+      "at": "2026-09-22T23:14:56.559Z",
+      "event": "ac-updated",
+      "detail": "Security review of PR 650: containment was not real (network on, exported tokens and ~/.config/gh-work visible, shared writable /tmp, sandbox skipped silently without a launcher, health gate ran agent code unsandboxed) and spend could go unrecorded (killed runs, providers without streamed usage, concurrent triggers each seeing the full allowance, zero rates). These criteria make the boundary and the budget contractual."
+    },
+    {
+      "at": "2026-09-22T23:14:56.743Z",
+      "event": "ac-updated",
+      "detail": "Security review of PR 650: containment was not real (network on, exported tokens and ~/.config/gh-work visible, shared writable /tmp, sandbox skipped silently without a launcher, health gate ran agent code unsandboxed) and spend could go unrecorded (killed runs, providers without streamed usage, concurrent triggers each seeing the full allowance, zero rates). These criteria make the boundary and the budget contractual."
+    },
+    {
+      "at": "2026-09-22T23:14:56.985Z",
+      "event": "ac-updated",
+      "detail": "Security review of PR 650: a killed run left its worktree registered to the trigger branch, so every later fire failed at git worktree add with exit 1 forever."
+    },
+    {
+      "at": "2026-09-22T23:15:03.096Z",
+      "event": "task-added",
+      "detail": "T13: Security review fixes: mandatory hardened sandbox for trust, sandboxed health gate, reserved spend, stale worktree recovery, floor gaps"
+    },
+    {
+      "at": "2026-09-22T23:15:29.906Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-22T23:35:37.441Z",
+      "event": "ac-updated",
+      "detail": "Apply the amendments recorded earlier as ac-updated history entries: the CLI's ac update takes no criterion or text and had silently re-frozen the unchanged file. AC5 now names the floor as defence in depth; AC13 (mandatory hardened sandbox, sandboxed health gate), AC14 (reserved spend, usage-reporting providers only, no zero rates) and AC15 (stale worktree recovery) come from the security review of PR 650."
+    },
+    {
+      "at": "2026-09-22T23:37:22.068Z",
+      "event": "task-done",
+      "detail": "T13: Security review fixes: mandatory hardened sandbox for trust, sandboxed health gate, reserved spend, stale worktree recovery, floor gaps"
     }
   ]
 }

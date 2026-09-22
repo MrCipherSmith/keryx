@@ -400,10 +400,11 @@ Grouped by what you are trying to do, not by internal module layout.
   graph and wiki current, `open-flow` opens Task Manager work, and `flow-next`
   either reports a flow's next task or — with a `dispatch` block — dispatches a
   keryx agent to work it unattended: in a throwaway worktree on a
-  `trigger/<flow>-<task>` branch that is never pushed, with every
-  would-be-approval denied and recorded, a floor no permission mode lifts (no
-  push/merge/tag/publish, no AC or flow-completion changes), tokens and USD
-  recorded, and a per-trigger spend ceiling on top of the project-wide one.
+  `trigger/<flow>-<task>` branch that is never pushed, its commands and its
+  health gate inside a mandatory hardened sandbox (network off, home and
+  credentials hidden, allow-listed environment), every would-be-approval
+  denied and recorded, spend reserved before the first model call, tokens and
+  USD recorded, and a per-trigger spend ceiling on top of the project-wide one.
   `keryx trigger install` extends the same hook files `sync install-hooks` and
   `update` already write into; `keryx trigger schedule` prints a cron line or
   systemd unit pair and runs no daemon of its own. Triggered runs and a manual
@@ -587,7 +588,9 @@ graph falls back to its deterministic resolver when a grammar is absent.
 | Model commands need a credential | Four of the five commands above exit non-zero without one; `wiki enrich` exits `0` and marks the affected pages skipped | Everything else runs deterministically offline |
 | External agents are read-only, and unproven against a live vendor process | A delegated CLI can read and search but never write; `worktree-write` is refused with a named reason. The parent gets the child's result and nothing before it — supervision of a running external child is not implemented. Everything is verified offline against recorded transcripts | Use keryx's own child agents for work that must mutate the tree |
 | A dispatched `flow-next` task is "done" by checks, not review | `task done` means normal end + a commit on the trigger branch + `keryx health gate` passing in the worktree; nobody has read the diff | Review and merge the `trigger/<flow>-<task>` branch yourself |
-| The unattended floor is text analysis | Over-broad and still incomplete by construction; without an OS sandbox launcher `shell_exec` runs uncontained (the run record says so) | Keep `permissionMode: "ask"` unless the worktree containment is enough for you |
+| `trust` dispatch needs Linux + a working bubblewrap | The hardened unattended sandbox (network off, home hidden, allow-listed env) is bwrap-only; without it — or on macOS — a `trust` dispatch refuses before starting | Use `permissionMode: "ask"` (read-only), or run triggers on a Linux host with bwrap |
+| The unattended text floor is defence in depth | It can be spelled around (quoting, `$(…)`, interpreters); the boundary is the sandbox, not the floor | Keep `dispatch.network` off unless the task truly needs it |
+| A killed dispatch keeps its spend reserved | Its reservation counts against both ceilings until closed | `keryx trigger status`, then `keryx trigger resolve <runId> --spent <usd>` |
 | Dispatch cost is priced from your declared rates | keryx has no price table; wrong `rates` make both ceilings wrong by the same factor | Set `rates` from your provider's price list |
 
 Full detail, including known defects and platform caveats:

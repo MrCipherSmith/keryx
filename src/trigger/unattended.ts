@@ -9,6 +9,16 @@
 // lift: `agent.ts` asks it about every non-read call BEFORE resolving the
 // mode, and a non-undefined answer is a denial, recorded, never a prompt.
 //
+// DEFENCE IN DEPTH, NOT THE BOUNDARY (flow 290 T13). A security review
+// bypassed this floor several ways (`sh -c "git pu""sh"`, `git $(printf …)`,
+// git aliases, `bun -e`/`node -e`/`python3 -c`, globbed filenames). It is not
+// meant to win that race. The boundary is the hardened unattended sandbox
+// (`../harness/process/sandbox/unattended.ts`): network off, credentials and
+// $HOME hidden, an allow-listed environment — so a push or an API call that
+// slips past this text check still has nothing to authenticate with and no
+// network to use. What this floor adds is a clear, early, RECORDED refusal for
+// the obvious spellings, which is what an operator reads afterwards.
+//
 // HONESTY ABOUT WHAT THIS IS. Like `../lib/command-risk.ts`, this is string
 // analysis of a command a shell will re-interpret, so it is incomplete by
 // construction and is NOT the containment. It is deliberately OVER-broad —
@@ -47,11 +57,20 @@ const FORBIDDEN_FLOW_VERBS: readonly RegExp[] = [
   /\bflow\s+complete\b/,
   /\bflow\s+renumber\b/,
   /\bflow\s+(?:block|unblock)\b/,
-  /\bflow\s+task\s+(?:add|depends|done|attempt)\b/,
+  /\bflow\s+task\s+(?:add|depends|done|attempt|skip)\b/,
+  /\bflow\s+start\b/,
+  // A nested dispatch would run outside this run's spend reservation.
+  /\btrigger\s+run\b/,
 ];
 
-/** Git subcommands that move shared history or publish. */
-const FORBIDDEN_GIT_VERBS = new Set(["push", "merge", "tag"]);
+/** Git subcommands that move shared history, rewrite refs directly, or publish. */
+const FORBIDDEN_GIT_VERBS = new Set(["push", "merge", "tag", "update-ref"]);
+
+/** `git branch` flags that move or delete an existing branch. */
+const FORBIDDEN_GIT_BRANCH_FLAGS = new Set(["-f", "--force", "-D", "-M", "--delete", "-d", "-m", "--move"]);
+
+/** `gh api` flags that make the request mutating (a method other than GET, or a body). */
+const GH_API_BODY_FLAGS = new Set(["-f", "-F", "--field", "--raw-field", "--input"]);
 
 /** Raw-text fallbacks for a verb hidden inside `sh -c '…'`, `eval`, a subshell, … */
 const RAW_GIT = /\bgit\b[^\n]*?\b(push|merge|tag)(?![\w-])/;
@@ -94,10 +113,23 @@ export function unattendedShellRefusal(command: string): string | undefined {
 
   for (const segment of splitSegments(text)) {
     const words = stripAssignments(segment.words);
-    if (commandWord(words) !== "git") continue;
-    const verb = words.slice(1).find((word) => FORBIDDEN_GIT_VERBS.has(word));
-    if (verb !== undefined) {
-      return `\`git ${verb}\` is never run unattended — the run's work stays on its own trigger branch for the operator`;
+    const cmd = commandWord(words);
+    const rest = words.slice(1);
+    if (cmd === "git") {
+      const verb = rest.find((word) => FORBIDDEN_GIT_VERBS.has(word));
+      if (verb !== undefined) {
+        return `\`git ${verb}\` is never run unattended — the run's work stays on its own trigger branch for the operator`;
+      }
+      if (rest.includes("branch") && rest.some((word) => FORBIDDEN_GIT_BRANCH_FLAGS.has(word))) {
+        return "`git branch` that moves, renames or deletes a branch is never run unattended";
+      }
+    }
+    if (cmd === "gh" && rest.includes("api")) {
+      const methodAt = rest.findIndex((word) => word === "-X" || word === "--method");
+      const method = methodAt >= 0 ? rest[methodAt + 1]?.toUpperCase() : rest.find((w) => w.startsWith("--method="))?.slice(9).toUpperCase();
+      if ((method !== undefined && method !== "GET") || rest.some((word) => GH_API_BODY_FLAGS.has(word))) {
+        return "`gh api` with a mutating method or a request body is never run unattended";
+      }
     }
   }
   const rawGit = RAW_GIT.exec(text);

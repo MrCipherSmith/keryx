@@ -129,6 +129,16 @@ const FORBIDDEN_SHELL: readonly [string, string][] = [
   ["flow unblock", "keryx flow unblock 290"],
   ["flow task add", "keryx flow task add 290 --title x --kind implement"],
   ["flow task depends", "keryx flow task depends 290 T2 --on T1 --reason x"],
+  // Flow 290 T13 — plain omissions the security review listed.
+  ["flow start", "keryx flow start 290"],
+  ["flow task skip", "keryx flow task skip 290 T3"],
+  ["a nested trigger run", "keryx trigger run other-trigger"],
+  ["git update-ref", "git update-ref refs/heads/main HEAD"],
+  ["git branch -f", "git branch -f main HEAD"],
+  ["git branch -D", "git branch -D main"],
+  ["gh api with -X POST", "gh api -X POST repos/o/r/pulls"],
+  ["gh api with --method=DELETE", "gh api --method=DELETE repos/o/r/git/refs/heads/x"],
+  ["gh api with a body field", "gh api repos/o/r/issues -f title=x"],
   ["shell write to flow.json", "echo '{}' > .metaproject/flows/290-x/flow.json"],
   ["shell write to acceptance-criteria.md", "sed -i 's/a/b/' .metaproject/flows/290-x/acceptance-criteria.md"],
   ["shell write to triggers.json", "cp /tmp/x .metaproject/triggers.json"],
@@ -159,6 +169,11 @@ describe("AC5: the unattended floor is checked before the mode — `trust` canno
     expect(denials).toHaveLength(1);
     expect(denials[0]!.tool).toBe("apply_patch");
     expect(denials[0]!.reason).toContain(file);
+  });
+
+  test("controls: read-only `gh api` and `git branch` listing are not refused", async () => {
+    expect((await runUnattended("shell_exec", { command: "gh api repos/o/r/pulls" })).denials).toEqual([]);
+    expect((await runUnattended("shell_exec", { command: "git branch --list" })).denials).toEqual([]);
   });
 
   test("controls: ordinary work still runs under trust (the floor is not a blanket deny)", async () => {

@@ -150,14 +150,23 @@ export async function resolveSandboxedSpawn(
  * bounded stdout/stderr. Never throws — a non-zero exit or a spawn failure becomes
  * `{ isError: ... }`. OS-contained when `KERYX_SANDBOX_SHELL` opts in.
  */
-export function makeCommandRunner(root: string): CommandRunner {
+export function makeCommandRunner(
+  root: string,
+  /**
+   * Flow 290 T13: replace how the command is spawned — env and containment —
+   * while keeping this runner's deadline and output bounding. The unattended
+   * trigger dispatcher passes its hardened sandbox here. Absent: the
+   * interactive resolution (`resolveShellEnv` + `resolveShellSpawn`).
+   */
+  spawnPlan?: (command: string) => Promise<{ ok: true; plan: SandboxSpawnPlan } | { ok: false; error: string }>,
+): CommandRunner {
   return async (command) => {
     // Closes the restricted-network proxy worker (no-op unless restricted). Run
     // exactly once in the finally, after success or failure.
     let netClose: () => Promise<void> = async () => {};
     try {
-      const baseEnv = await resolveShellEnv();
-      const resolved = await resolveShellSpawn(root, command, baseEnv);
+      const resolved =
+        spawnPlan !== undefined ? await spawnPlan(command) : await resolveShellSpawn(root, command, await resolveShellEnv());
       if (!resolved.ok) {
         return { output: resolved.error, isError: true };
       }

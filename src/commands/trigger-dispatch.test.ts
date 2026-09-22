@@ -10,7 +10,11 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runTriggerOnce, triggerCommand } from "./trigger";
-import { dispatchLockPath, type HealthGateResult } from "./trigger-dispatch";
+import { dispatchLockPath, providerReportsUsage, sandboxedHealthGate, type HealthGateResult } from "./trigger-dispatch";
+import { planUnattendedSandbox, type UnattendedSandboxPlan } from "../harness/process/sandbox/unattended";
+import { evaluateTriggerBudget, reserveTriggerSpend } from "../trigger/run";
+import { openReservations } from "../trigger/record";
+import { homedir } from "node:os";
 import { flowServiceDeps } from "./flow";
 import { createFlowService } from "../flow/service";
 import type { FlowService } from "../flow/types";
@@ -51,7 +55,7 @@ function scripted(rounds: Round[]): ProviderPort & { calls: () => number } {
     calls: () => call,
     describe: () => DESCRIPTION,
     stream: (request, opts) => {
-      const round = rounds[call] ?? [{ kind: "text_delta", text: "done" }, { kind: "model_end" }];
+      const round = rounds[call] ?? [USAGE_NONE, { kind: "text_delta", text: "done" }, { kind: "model_end" }];
       call += 1;
       return (async function* (): AsyncGenerator<NormalizedEvent> {
         const events = typeof round === "function" ? await round(request, opts) : round;
@@ -74,10 +78,21 @@ function toolCall(tool: string, input: Record<string, unknown>, id = "c1"): Part
 }
 
 const USAGE_ROUND_1: Partial<NormalizedEvent> = { kind: "usage_update", usage: { inputTokens: 1000, outputTokens: 200 } };
+/** A response that reports usage of zero — every scripted response reports usage (AC14's guard). */
+const USAGE_NONE: Partial<NormalizedEvent> = { kind: "usage_update", usage: { inputTokens: 0, outputTokens: 0 } };
 
 const RATES = { inputUsdPerMTok: 3, outputUsdPerMTok: 15 };
 /** 1000 in + 200 out at the rates above. */
 const ROUND_1_USD = (1000 * 3 + 200 * 15) / 1_000_000;
+
+/** A "sandbox" that wraps nothing — for tests whose subject is not containment. */
+const UNWRAPPED_SANDBOX: UnattendedSandboxPlan = {
+  ok: true,
+  launcher: "none",
+  args: [],
+  env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined)),
+  wrap: (argv) => [...argv],
+};
 
 let root = "";
 let service: FlowService;
@@ -129,7 +144,9 @@ async function run(provider: ProviderPort, extra: Record<string, unknown> = {}, 
       makeProvider: () => provider,
       healthGate: passGate(),
       worktreeParent: path.join(root, "..", `${path.basename(root)}-wt`),
-      sandbox: "leave",
+      // Tests not about containment run commands unwrapped; the sandbox has its
+      // own tests below, run against the real launcher where one works.
+      planSandbox: () => UNWRAPPED_SANDBOX,
       ...extra,
     },
   });
@@ -189,7 +206,7 @@ describe("AC1/AC2/AC5/AC6: a dispatch drives the next task from never-started to
         attemptsWhenModelCalled = tasks.find((t) => t.id === "T1")?.attempts?.log.length ?? 0;
         return [USAGE_ROUND_1, ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }];
       },
-      [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+      [USAGE_NONE, { kind: "text_delta", text: "done" }, { kind: "model_end" }],
     ]);
 
     await run(provider, { healthGate: passGate(gateSeen) });
@@ -397,7 +414,7 @@ describe("AC4: fail closed — the entry's mode only; stored `auto` and a saved 
           ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }, "c2"),
           { kind: "model_end" },
         ],
-        [{ kind: "text_delta", text: "could not proceed" }, { kind: "model_end" }],
+        [USAGE_NONE, { kind: "text_delta", text: "could not proceed" }, { kind: "model_end" }],
       ]);
       await run(provider);
 
@@ -501,5 +518,286 @@ describe("AC1: list/status say report-only for an entry without a dispatch block
     expect(out).toContain(`flow-next(${flowId}, report-only)`);
     expect(out).toContain(`flow-next(${flowId}, dispatch: scripted/m, mode trust`);
     expect(out.split("report-only").length - 1).toBeGreaterThanOrEqual(2); // once in list, once in status
+  });
+});
+
+// ===========================================================================
+// Flow 290 T13 — security review fixes (AC13, AC14, AC15, AC10 under the sandbox)
+// ===========================================================================
+
+async function records(): Promise<TriggerRunRecord[]> {
+  const read = await readTriggerRuns(root);
+  return read.state === "present" ? [...read.records] : [];
+}
+
+const NO_SANDBOX: UnattendedSandboxPlan = { ok: false, reason: "no sandbox launcher: test host" };
+
+describe("AC13: trust never runs uncontained; ask is read-only", () => {
+  test("trust with no sandbox refuses before any model call, reservation, worktree or attempt — reason recorded", async () => {
+    await writeTriggers([dispatchEntry({ permissionMode: "trust" })]);
+    const provider = scripted([]);
+    await run(provider, { planSandbox: () => NO_SANDBOX });
+    expect(provider.calls()).toBe(0);
+    const record = await lastRecord();
+    expect(record.outcome).toBe("dispatch-refused");
+    expect(record.dispatch?.refusal).toBe("sandbox-unavailable");
+    expect(record.detail).toContain("no sandbox launcher: test host");
+    expect((await records()).some((r) => r.outcome === "reserved")).toBe(false);
+    const t1 = ((await flowJson())["tasks"] as { id: string; attempts?: { count: number } }[]).find((t) => t.id === "T1")!;
+    expect(t1.attempts?.count ?? 0).toBe(0);
+    expect(git(root, ["worktree", "list"]).split("\n")).toHaveLength(1);
+  });
+
+  test("ask with no sandbox runs, but every command and patch is refused — nothing lands", async () => {
+    await writeTriggers([dispatchEntry({ permissionMode: "ask" })]);
+    const provider = scripted([
+      [
+        USAGE_NONE,
+        ...toolCall("shell_exec", { command: "echo hi > proof.txt" }, "c1"),
+        ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }, "c2"),
+        { kind: "model_end" },
+      ],
+    ]);
+    await run(provider, { planSandbox: () => NO_SANDBOX });
+    const record = await lastRecord();
+    expect(record.dispatch?.closing).toBe("blocked");
+    expect(record.detail).toContain('"ask" mode, every shell_exec refused');
+    expect(git(root, ["rev-parse", `trigger/${flowId}-T1`])).toBe(git(root, ["rev-parse", "main"]));
+  });
+
+  test("the default health gate runs `keryx health run` and `health gate` INSIDE the sandbox, with its env", async () => {
+    const plan: UnattendedSandboxPlan = {
+      ok: true,
+      launcher: "bwrap",
+      args: ["--marker"],
+      env: { PATH: "/usr/bin", HOME: "/scratch" },
+      wrap: (argv) => ["bwrap", "--marker", "--", ...argv],
+    };
+    const seen: { argv: readonly string[]; env: Record<string, string> }[] = [];
+    const result = await sandboxedHealthGate(root, plan, async (argv, env) => {
+      seen.push({ argv, env });
+      return { code: 0, out: "gate: pass" };
+    });
+    expect(result.pass).toBe(true);
+    expect(seen).toHaveLength(2);
+    for (const call of seen) {
+      expect(call.argv.slice(0, 3)).toEqual(["bwrap", "--marker", "--"]);
+      expect(call.env).toEqual(plan.env);
+    }
+    expect(seen[0]!.argv.slice(-2)).toEqual(["health", "run"]);
+    expect(seen[1]!.argv.slice(-2)).toEqual(["health", "gate"]);
+  });
+
+  test("with no sandbox the health gate does not run the worktree's code at all", async () => {
+    let ran = false;
+    const result = await sandboxedHealthGate(root, NO_SANDBOX, async () => {
+      ran = true;
+      return { code: 0, out: "" };
+    });
+    expect(ran).toBe(false);
+    expect(result.pass).toBe(false);
+  });
+});
+
+const liveSandbox = planUnattendedSandbox({
+  worktree: tmpdir(),
+  scratchHome: tmpdir(),
+  network: false,
+  readOnly: [],
+  env: process.env,
+  home: homedir(),
+});
+
+describe.skipIf(!liveSandbox.ok)("AC10/AC13 (live bwrap): a dispatched agent's command runs sandboxed and can take the maintenance lock", () => {
+  test("shell_exec under the real sandbox takes the worktree's maintenance lock; the lock dir is never committed", async () => {
+    await writeTriggers([dispatchEntry({ permissionMode: "trust" })]);
+    const lockModule = path.join(REPO_ROOT, "src", "lib", "maintenance-lock.ts");
+    const script =
+      `import { withMaintenanceLock } from ${JSON.stringify(lockModule)}; ` +
+      `await withMaintenanceLock(process.cwd(), async () => { await Bun.write("lock-proof.txt", "acquired " + (process.env.GITHUB_TOKEN ?? "no-token") + "\\n"); }, { waitMs: 0 });`;
+    const provider = scripted([
+      [USAGE_ROUND_1, ...toolCall("shell_exec", { command: `bun -e '${script}'` }), { kind: "model_end" }],
+      [USAGE_NONE, { kind: "text_delta", text: "done" }, { kind: "model_end" }],
+    ]);
+    const savedToken = process.env["GITHUB_TOKEN"];
+    process.env["GITHUB_TOKEN"] = "ghp_must_not_reach_the_agent";
+    try {
+      await runTriggerOnce(root, "overnight", {
+        service,
+        dispatch: {
+          makeProvider: () => provider,
+          healthGate: passGate(),
+          worktreeParent: path.join(root, "..", `${path.basename(root)}-wt`),
+          // the real planner, against this host
+        },
+      });
+    } finally {
+      if (savedToken === undefined) delete process.env["GITHUB_TOKEN"];
+      else process.env["GITHUB_TOKEN"] = savedToken;
+    }
+    const record = await lastRecord();
+    expect(record.detail).toContain("hardened bwrap sandbox, network off");
+    expect(record.outcome).toBe("ok");
+    expect(git(root, ["show", `trigger/${flowId}-T1:lock-proof.txt`])).toBe("acquired no-token");
+    expect(git(root, ["ls-tree", "-r", "--name-only", `trigger/${flowId}-T1`])).not.toContain(".locks");
+  });
+});
+
+describe("AC14: spend is reserved before the first model call and never fails open", () => {
+  const entryBits = {
+    firedBy: { kind: "schedule", cron: "0 2 * * *" } as const,
+    action: { kind: "flow-next", flow: "001" } as const,
+  };
+
+  test("two concurrent reservations for one trigger: exactly one gets the allowance (real overlap under the spend lock)", async () => {
+    const results = await Promise.all(
+      ["run-a", "run-b"].map((runId) =>
+        reserveTriggerSpend(root, { runId, trigger: "overnight", ...entryBits, perTrigger: { name: "overnight", ceilingUsd: 1 } }),
+      ),
+    );
+    const granted = results.filter((r) => r.reserved);
+    const refused = results.filter((r) => !r.reserved);
+    expect(granted).toHaveLength(1);
+    expect(refused).toHaveLength(1);
+    if (granted[0]!.reserved) expect(granted[0]!.usd).toBe(1);
+  });
+
+  test("a killed run's reservation keeps counting until an operator resolves it with the real spend", async () => {
+    await writeTriggers([dispatchEntry({ ceilingUsd: 1 })]);
+    const reserved = await reserveTriggerSpend(root, {
+      runId: "killed-run",
+      trigger: "overnight",
+      ...entryBits,
+      perTrigger: { name: "overnight", ceilingUsd: 1 },
+    });
+    expect(reserved.reserved).toBe(true);
+    // No final record — the process died. The trigger is at its ceiling.
+    const blocked = await evaluateTriggerBudget(root, "flow-next", {}, { name: "overnight", ceilingUsd: 1 });
+    expect(blocked.allowed).toBe(false);
+
+    await acquireCwd(root);
+    try {
+      await triggerCommand(["status"]);
+      expect(logged.join("\n")).toContain("open spend reservation: run killed-run");
+      await triggerCommand(["resolve", "killed-run", "--spent", "0.25"]);
+    } finally {
+      releaseCwd();
+    }
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(openReservations(await records())).toEqual([]);
+    const after = await evaluateTriggerBudget(root, "flow-next", {}, { name: "overnight", ceilingUsd: 1 });
+    expect(after.allowed).toBe(true);
+    if (after.allowed) expect(after.remainingUsd).toBeCloseTo(0.75, 10);
+  });
+
+  test("a response with no usage stops the run, fails the attempt, and charges the whole reservation", async () => {
+    await writeTriggers([dispatchEntry({ ceilingUsd: 0.4 })]);
+    const provider = scripted([[...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }]]);
+    await run(provider);
+    const record = await lastRecord();
+    expect(record.outcome).toBe("failed");
+    expect(record.detail).toContain("without token usage");
+    expect(record.cost.recorded).toBe(true);
+    if (record.cost.recorded) expect(record.cost.usd).toBe(0.4);
+    expect(openReservations(await records())).toEqual([]);
+  });
+
+  test("a throw while writing the closing attempt still records the cost and closes the reservation", async () => {
+    await writeTriggers([dispatchEntry()]);
+    const throwing: FlowService = {
+      ...service,
+      taskAttempt: async (input) => {
+        if (input.outcome !== "started") throw new Error("disk full");
+        return service.taskAttempt(input);
+      },
+    };
+    const provider = scripted([[USAGE_ROUND_1, { kind: "provider_error", error: { kind: "unavailable", retryable: false, message: "down" } }]]);
+    await runTriggerOnce(root, "overnight", {
+      service: throwing,
+      dispatch: {
+        makeProvider: () => provider,
+        healthGate: passGate(),
+        worktreeParent: path.join(root, "..", `${path.basename(root)}-wt`),
+        planSandbox: () => UNWRAPPED_SANDBOX,
+      },
+    });
+    const record = await lastRecord();
+    expect(record.cost).toEqual({ recorded: true, usd: ROUND_1_USD, tokens: { input: 1000, output: 200 } });
+    expect(record.detail).toContain("disk full");
+    expect(openReservations(await records())).toEqual([]);
+  });
+
+  test("only providers known to report usage are accepted", () => {
+    expect(providerReportsUsage("anthropic")).toBe(true);
+    expect(providerReportsUsage("openai")).toBe(true);
+    expect(providerReportsUsage("gemini")).toBe(true);
+    expect(providerReportsUsage("grok")).toBe(true); // registry: streamUsage
+    expect(providerReportsUsage("ollama")).toBe(false);
+    expect(providerReportsUsage("deepseek")).toBe(false);
+    expect(providerReportsUsage("no-such-provider")).toBe(false);
+  });
+});
+
+describe("AC15: a killed run's worktree does not wedge the trigger branch", () => {
+  const parent = (): string => path.join(root, "..", `${path.basename(root)}-wt`);
+
+  test("a live stale worktree left on trigger/<flow>-<task> under the dispatcher's parent is recovered", async () => {
+    await writeTriggers([dispatchEntry()]);
+    await mkdir(parent(), { recursive: true });
+    git(root, ["worktree", "add", "--quiet", "-b", `trigger/${flowId}-T1`, path.join(parent(), `${flowId}-T1-killed`), "HEAD"]);
+    const provider = scripted([[USAGE_ROUND_1, ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }]]);
+    await run(provider);
+    const record = await lastRecord();
+    expect(record.outcome).toBe("ok");
+    expect(record.detail).toContain("recovered a stale worktree");
+  });
+
+  test("a registration whose directory is already gone is pruned", async () => {
+    await writeTriggers([dispatchEntry()]);
+    await mkdir(parent(), { recursive: true });
+    const dead = path.join(parent(), `${flowId}-T1-dead`);
+    git(root, ["worktree", "add", "--quiet", "-b", `trigger/${flowId}-T1`, dead, "HEAD"]);
+    await rm(dead, { recursive: true, force: true });
+    const provider = scripted([[USAGE_ROUND_1, ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }]]);
+    await run(provider);
+    expect((await lastRecord()).outcome).toBe("ok");
+  });
+
+  test("the branch checked out somewhere the dispatcher did not create is never touched — refused as a conflict", async () => {
+    await writeTriggers([dispatchEntry()]);
+    const operators = await mkdtemp(path.join(tmpdir(), "keryx-operator-wt-"));
+    await rm(operators, { recursive: true, force: true });
+    git(root, ["worktree", "add", "--quiet", "-b", `trigger/${flowId}-T1`, operators, "HEAD"]);
+    try {
+      const provider = scripted([]);
+      await run(provider);
+      const record = await lastRecord();
+      expect(record.dispatch?.refusal).toBe("worktree-conflict");
+      expect(provider.calls()).toBe(0);
+      expect(git(root, ["worktree", "list"])).toContain(operators);
+    } finally {
+      git(root, ["worktree", "remove", "--force", operators]);
+    }
+  });
+});
+
+describe("T13: the dispatcher's own commit never runs repository hooks the agent could have written", () => {
+  test("a tracked hooks dir (core.hooksPath) with a pre-commit hook does not run when the dispatcher commits", async () => {
+    await writeTriggers([dispatchEntry()]);
+    const marker = path.join(root, "..", `${path.basename(root)}-hook-ran`);
+    await mkdir(path.join(root, ".githooks"), { recursive: true });
+    await writeFile(path.join(root, ".githooks", "pre-commit"), `#!/bin/sh\necho ran > ${JSON.stringify(marker)}\n`, { mode: 0o755 });
+    await writeFile(path.join(root, ".githooks", "post-commit"), `#!/bin/sh\necho ran > ${JSON.stringify(marker)}\n`, { mode: 0o755 });
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "--no-verify", "-m", "hooks"]);
+    git(root, ["config", "core.hooksPath", ".githooks"]);
+    try {
+      const provider = scripted([[USAGE_ROUND_1, ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }]]);
+      await run(provider);
+      expect((await lastRecord()).outcome).toBe("ok");
+      await expect(readFile(marker, "utf8")).rejects.toThrow();
+    } finally {
+      await rm(marker, { force: true });
+    }
   });
 });

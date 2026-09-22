@@ -77,7 +77,23 @@ export function triggerRunsPath(projectRoot: string): string {
 // `no-op` so an operator can tell "there was nothing to do" from "there was
 // work and the dispatcher would not touch it"; the precise cause is in
 // `dispatch.refusal`.
-export const TRIGGER_RUN_OUTCOME_KINDS = ["ok", "no-op", "lock-refused", "failed", "budget-refused", "dispatch-refused"] as const;
+//
+// Flow 290 T13 (AC14): `reserved` — a dispatch's spend reservation, written
+// under the project-wide spend lock BEFORE its first model call and closed by
+// the run's own final record (same `dispatch.runId`). A reservation with no
+// closing record — a killed run — keeps counting against both ceilings until an
+// operator closes it with `keryx trigger resolve <runId> --spent <usd>`, which
+// writes `reservation-resolved`.
+export const TRIGGER_RUN_OUTCOME_KINDS = [
+  "ok",
+  "no-op",
+  "lock-refused",
+  "failed",
+  "budget-refused",
+  "dispatch-refused",
+  "reserved",
+  "reservation-resolved",
+] as const;
 export type TriggerRunOutcomeKind = (typeof TRIGGER_RUN_OUTCOME_KINDS)[number];
 
 /**
@@ -112,6 +128,9 @@ export const DISPATCH_REFUSAL_CODES = [
   "open-attempt",
   "attempt-cap",
   "dispatch-locked",
+  "sandbox-unavailable",
+  "provider-usage-unknown",
+  "worktree-conflict",
 ] as const;
 export type DispatchRefusalCode = (typeof DISPATCH_REFUSAL_CODES)[number];
 
@@ -156,6 +175,37 @@ export interface TriggerRunRecord {
   readonly cost: TriggerRunCost;
   /** Flow 290: present only on a dispatching `flow-next` run. */
   readonly dispatch?: TriggerDispatchRecord;
+  /** Flow 290 T13: on a `reserved` record — the amount held back for run `runId`. */
+  readonly reservation?: { readonly runId: string; readonly usd: number };
+  /** Flow 290 T13: on a `reservation-resolved` record — the run whose reservation an operator closed. */
+  readonly resolves?: string;
+}
+
+/** A reservation no final record has closed yet. */
+export interface OpenReservation {
+  readonly runId: string;
+  readonly trigger: string;
+  readonly usd: number;
+  readonly at: string;
+}
+
+/** Every reservation in `records` that neither the run's own record nor an operator resolution has closed. */
+export function openReservations(records: readonly TriggerRunRecord[]): OpenReservation[] {
+  const open = new Map<string, OpenReservation>();
+  for (const record of records) {
+    if (record.outcome === "reserved" && record.reservation !== undefined) {
+      open.set(record.reservation.runId, {
+        runId: record.reservation.runId,
+        trigger: record.trigger,
+        usd: record.reservation.usd,
+        at: record.at,
+      });
+      continue;
+    }
+    const closes = record.resolves ?? record.dispatch?.runId;
+    if (closes !== undefined) open.delete(closes);
+  }
+  return [...open.values()];
 }
 
 export type TriggerRunAppend =
