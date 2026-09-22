@@ -446,6 +446,22 @@ between a plan somebody changed and a plan that quietly shrank.
 
 **If `plan_approval: false`** (automation setting) → skip this display and proceed directly.
 
+### 1.4 Publish this plan to the session, so the operator can watch it
+
+The plan above is the operator's main window into a running job, and until it is
+published the only sign a job exists is prose in this conversation. Publish it
+here, once, with `plan_set` and the SAME step ids `keryx job status` reports —
+then mirror every status change with `plan_update` in the same breath as
+`keryx job step …`.
+
+- While this phase is waiting for the approval above, the items are `proposed`:
+  that is what makes the sidebar show `◇ awaiting approval` rather than a running
+  step, and it is the one status that will not make the agent continue on its own.
+- A conditional step that will not run is set `skipped`, never omitted.
+
+Full contract (ids, the status translation, when to publish, what not to put in a
+plan item): the `session-plan-bridge` rule. Read it before the first publish.
+
 ---
 
 ## Phase 2: EXECUTION

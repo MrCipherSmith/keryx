@@ -298,6 +298,17 @@ keryx flow start <id>
 ```
 
 ## Phase 2: Execute Tasks
+### Publish the task list to the session plan
+
+The Flow package owns the tasks; the session plan is how the operator watches
+them without asking. Once the task list exists, publish it with `plan_set` under
+the SAME ids (`T1`…`Tn`) and the same titles, then update each item with
+`plan_update` in the same breath as `keryx flow task done …`. A task whose disposition is `blocked` or
+`failed` becomes `blocked` in the plan — it needs a human — and Phase 4's
+completion choice is published as `proposed` until the operator answers, so that
+"the flow is waiting for you" is visible in the sidebar itself.
+
+Full contract: the `session-plan-bridge` rule.
 
 Use existing gdskills as workers. Do not duplicate their internal workflows.
 

@@ -54,6 +54,18 @@ two commands for that reason: a caller that already runs collection per round
 would carry the posting along with it, and the reviewer would get six replies to
 one comment.
 
+### The session plan is how the operator watches this round
+
+Publish this checklist to the session plan (`plan_set`) as soon as the scope and
+the dispatch are fixed — Step 6 — using the ids `step-0` … `step-14` and one item
+per step, then move each item with `plan_update` as its step completes. A round runs long, and the
+sidebar is the only place an operator can see which wave is running without
+asking in the middle of it. `review-verifier`'s Wave C and the managed feedback
+loop are steps like any other in this projection; the finding counts and
+severities stay in the report, not in a plan item.
+
+Full contract: the `session-plan-bridge` rule.
+
 ### Step 6 — the model is computed, not chosen
 
 Before dispatching each reviewer, run `keryx review tier` with the signals you

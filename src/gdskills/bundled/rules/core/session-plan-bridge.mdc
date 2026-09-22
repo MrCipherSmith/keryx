@@ -1,0 +1,96 @@
+---
+description: "Bridge between an orchestrator's own CLI-owned plan and the session execution plan the operator watches in the sidebar and the /plan modal: publish the orchestrator's steps as plan items under the SAME ids, mirror every status change at the moment the orchestrator updates its own state, and use `proposed` for a plan awaiting a human. Use when a skill orchestrates multi-step work (job-orchestrator, flow-orchestrator, review-orchestrator)."
+alwaysApply: false
+---
+
+# Session Plan Bridge
+
+## Purpose
+
+An orchestrator already has a plan. `job-orchestrator` has fifteen steps in a job
+package that `keryx job status` prints; `flow-orchestrator` has tasks `T1..Tn`
+with dependencies in the Flow package; `review-orchestrator` has a fifteen-step
+checklist. Until this rule existed, every one of those plans was invisible while
+it ran: the operator saw phases announced in prose, and had to ask.
+
+The session execution plan is the surface that fixes that. It is not a second
+plan — it is a PROJECTION of the orchestrator's own plan into the one place the
+operator is already looking (the sidebar's Plan section, and `/plan` for the
+whole list). The orchestrator's own state stays the only source of truth for
+what the work is.
+
+## The mechanism, in one paragraph
+
+`plan_set` publishes the whole plan (replace-all, optimistic `expectedRevision`);
+`plan_update` moves one item (`{expectedRevision, itemId, status}`); `plan_get`
+reads it back before a write when a conflict is possible. Statuses are
+`proposed | pending | in_progress | completed | blocked | skipped`, item ids are
+stable strings, and at most one item may be `in_progress` — the mechanism refuses
+a second one. `proposed` means "published for a human to approve": it is NOT work
+in progress, so it never makes the agent continue on its own, which is what makes
+"publish the plan, then stop and wait for the operator" a real stopping point.
+
+## Item ids are the orchestrator's own ids — never invented
+
+| Orchestrator | Item ids | Where they come from |
+|---|---|---|
+| `job-orchestrator` | the step ids `keryx job status <name> --json` reports — `analyze`, `context`, `prepare`, `tests-creator`, `implement`, `sanity-check`, `verify`, `review`, `security`, `fix`, `verify-post-fix`, `perf-check`, `report`, `pr`, `deploy` | `keryx job status <name>` (read it, never retype it) |
+| `flow-orchestrator` | the Flow's task ids `T1..Tn` | `keryx flow status <id>` / the Flow's `tasks.md` |
+| `review-orchestrator` | `step-0` … `step-14`, from its own numbered checklist | its Workflow section |
+
+An id that exists only in the session plan is drift by construction: the operator
+cannot reconcile it with the CLI, and a resumed run cannot match it. If a
+conditional step never runs, it is `skipped` — never absent.
+
+## Status mapping — the vocabularies disagree, this is the translation
+
+| Orchestrator's own status | Session plan status |
+|---|---|
+| `pending` (job) | `pending` |
+| `in-progress` (job, hyphenated) | `in_progress` |
+| `completed` | `completed` |
+| `skipped` | `skipped` |
+| `failed` (job / flow task) | `blocked` — it needs a human, and the failure reason goes in the item's title |
+| `blocked` (flow task) | `blocked` |
+
+## When to publish, and when to update
+
+1. **Publish once, as soon as the plan exists** — after `job-orchestrator`'s 1.1
+   plan build, after the Flow's task list exists in Phase 1, after
+   `review-orchestrator` fixes its scope and dispatch in Step 6. Not at the end.
+2. **`proposed` for a plan that is awaiting the operator.** Where an orchestrator
+   stops to ask — `job-orchestrator` 1.3's "Proceed? (yes / adjust …)" and
+   `flow-orchestrator` Phase 4's completion choice — the items are `proposed`
+   until the answer arrives, then become `pending`/`in_progress`. This is the
+   whole point of the status: the sidebar says `◇ awaiting approval` at exactly
+   the moment the orchestrator is waiting for the human.
+3. **Mirror every status change in the same breath as your own.** The call that
+   marks a step in `keryx job step …` / `keryx flow task done …` is the call that
+   updates the session plan. A batch of `plan_update`s after the work is done is
+   not progress reporting, it is a summary.
+4. **One `in_progress`** — the step being executed right now. Progress the
+   operator can see is a moving marker, not a growing list of ticks.
+5. **`blocked` when the run needs the operator** — an approval, a credential, a
+   failure that needs a decision.
+6. **`plan_get` before a write when a conflict is possible** (a resumed session, a
+   second shell on the same checkout) and re-apply against the revision you read.
+
+## What the bridge is NOT
+
+- Not a journal. Dispatch details, subagent names, token budgets and reasoning
+  belong in `journal.md` / the job's `man/` documents, not in plan items.
+- Not authoritative. If the session plan and `keryx job status` / `keryx flow
+  status` disagree, the CLI state wins and the session plan is corrected on the
+  next update — the projection follows the plan, never the other way round.
+- Not a completion signal. A plan whose items are all `completed` does not mean
+  the job is done: verification, review and the completion report are the
+  orchestrator's own gates.
+
+## Red Flags — stop and re-read this rule if you are thinking:
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "I'll publish the plan when the work is finished and I know all the statuses" | That is a report, not a plan. The sidebar exists so the operator can watch WHILE it runs — a plan published at the end has nothing to show. |
+| "The ids are mine to choose, as long as the titles match" | Then the session plan and `keryx job status` cannot be reconciled by a human or by a resumed run, and the projection has become a second plan. |
+| "`proposed` is the same as `pending`, I'll just use `pending`" | `pending` is actionable work, so the agent continues on its own and the "wait for approval" gate disappears. |
+| "Skipping the plan is fine when the job is short" | Then the operator's single progress surface is empty for exactly the runs where watching matters most. |
