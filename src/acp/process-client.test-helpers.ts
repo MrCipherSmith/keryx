@@ -34,7 +34,13 @@ export interface WireMessage {
 export interface AcpProcessClientOptions {
   /** Defaults to `ACP_CLI`; override only for a test that needs a different build. */
   readonly cli?: string;
-  readonly fixture: string;
+  /**
+   * The `--fixture` scripted provider. Omitted ONLY by a test of provider
+   * resolution itself (flow 287): without it `keryx acp` resolves a real
+   * provider the way `keryx shell` does, so such a test must also point
+   * `homeRoot` at a config directory it controls.
+   */
+  readonly fixture?: string;
   /** The subprocess's cwd — normally the sandboxed project directory. */
   readonly cwd: string;
   readonly dataDir: string;
@@ -52,11 +58,21 @@ export class AcpProcessClient {
   private readonly seen: WireMessage[] = [];
   private readonly waiters: { match: (m: WireMessage) => boolean; settle: (m: WireMessage) => void }[] = [];
   private readonly stderr: string[] = [];
+  private readonly stderrDone: Promise<void>;
   private nextId = 1;
 
   constructor(options: AcpProcessClientOptions) {
     const cli = options.cli ?? ACP_CLI;
-    const args = ["bun", "run", cli, "acp", "--fixture", options.fixture, "--data-dir", options.dataDir, ...(options.extraArgs ?? [])];
+    const args = [
+      "bun",
+      "run",
+      cli,
+      "acp",
+      ...(options.fixture !== undefined ? ["--fixture", options.fixture] : []),
+      "--data-dir",
+      options.dataDir,
+      ...(options.extraArgs ?? []),
+    ];
     this.proc = Bun.spawn(args, {
       cwd: options.cwd,
       env: {
@@ -70,7 +86,7 @@ export class AcpProcessClient {
       stderr: "pipe",
     });
     void this.pump();
-    void this.pumpStderr();
+    this.stderrDone = this.pumpStderr();
   }
 
   private async pump(): Promise<void> {
@@ -160,6 +176,21 @@ export class AcpProcessClient {
   /** Every `session/request_permission` request seen so far. */
   permissionRequests(): WireMessage[] {
     return this.seen.filter((m) => m.method === ACP_CLIENT_METHODS.sessionRequestPermission);
+  }
+
+  /** Everything the process has written to stderr so far. */
+  stderrText(): string {
+    return this.stderr.join("");
+  }
+
+  /** Resolves once stderr has reached EOF — after this, `stderrText()` is complete. */
+  stderrClosed(): Promise<void> {
+    return this.stderrDone;
+  }
+
+  /** Resolves when the process exits — a real event, not a timer. */
+  exited(): Promise<number> {
+    return this.proc.exited;
   }
 
   transcript(): string {

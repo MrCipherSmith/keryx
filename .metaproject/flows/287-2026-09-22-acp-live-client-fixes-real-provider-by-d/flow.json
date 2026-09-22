@@ -1,0 +1,308 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "287",
+  "slug": "acp-live-client-fixes-real-provider-by-d",
+  "title": "ACP live-client fixes: real provider by default, accept client MCP servers",
+  "status": "in-progress",
+  "createdAt": "2026-09-22T22:20:42.968Z",
+  "updatedAt": "2026-09-22T22:38:21.032Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2c612d84e63fa371f71fe6b00337e81d9a64de1ab8134fa4907125423a51b10f",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Resolve the acp provider and model through keryx shell's resolution; fixture provider only via --fixture",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T22:21:41.052Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Refuse session/new and session/load with a named error when no provider is configured",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Start client-supplied stdio MCP servers per session, offer their tools behind the permission ask, stop them on connection close",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Per-entry refusal for http/sse and per-server start-failure reporting",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Keep mcpServers env and header values out of transcripts, records, logs and stdio",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Process test with a real stdio MCP server fixture over a real pipe",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Docs: CLI reference and README for provider resolution and mcpServers",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-22T22:20:42.968Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-22T22:21:35.179Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-22T22:21:35.404Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-22T22:21:35.613Z",
+      "event": "task-added",
+      "detail": "T5: Resolve the acp provider and model through keryx shell's resolution; fixture provider only via --fixture"
+    },
+    {
+      "at": "2026-09-22T22:21:35.834Z",
+      "event": "task-added",
+      "detail": "T6: Refuse session/new and session/load with a named error when no provider is configured"
+    },
+    {
+      "at": "2026-09-22T22:21:36.066Z",
+      "event": "task-added",
+      "detail": "T7: Start client-supplied stdio MCP servers per session, offer their tools behind the permission ask, stop them on connection close"
+    },
+    {
+      "at": "2026-09-22T22:21:36.241Z",
+      "event": "task-added",
+      "detail": "T8: Per-entry refusal for http/sse and per-server start-failure reporting"
+    },
+    {
+      "at": "2026-09-22T22:21:36.391Z",
+      "event": "task-added",
+      "detail": "T9: Keep mcpServers env and header values out of transcripts, records, logs and stdio"
+    },
+    {
+      "at": "2026-09-22T22:21:36.599Z",
+      "event": "task-added",
+      "detail": "T10: Process test with a real stdio MCP server fixture over a real pipe"
+    },
+    {
+      "at": "2026-09-22T22:21:36.812Z",
+      "event": "task-added",
+      "detail": "T11: Docs: CLI reference and README for provider resolution and mcpServers"
+    },
+    {
+      "at": "2026-09-22T22:21:37.019Z",
+      "event": "task-added",
+      "detail": "T12: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-22T22:21:41.052Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-22T22:38:14.419Z",
+      "event": "ac-updated",
+      "detail": "The shell's own makeProvider returns an empty FakeProvider when a provider has no credential; keryx acp discards it at once and reports the provider unconfigured. Avoiding the construction itself would mean copying makeProvider's credential logic, which the first half of this criterion forbids. The property the operator needs — no turn ever runs against a fake — is what is now asserted."
+    },
+    {
+      "at": "2026-09-22T22:38:20.418Z",
+      "event": "task-done",
+      "detail": "T5: Resolve the acp provider and model through keryx shell's resolution; fixture provider only via --fixture"
+    },
+    {
+      "at": "2026-09-22T22:38:20.522Z",
+      "event": "task-done",
+      "detail": "T6: Refuse session/new and session/load with a named error when no provider is configured"
+    },
+    {
+      "at": "2026-09-22T22:38:20.626Z",
+      "event": "task-done",
+      "detail": "T7: Start client-supplied stdio MCP servers per session, offer their tools behind the permission ask, stop them on connection close"
+    },
+    {
+      "at": "2026-09-22T22:38:20.725Z",
+      "event": "task-done",
+      "detail": "T8: Per-entry refusal for http/sse and per-server start-failure reporting"
+    },
+    {
+      "at": "2026-09-22T22:38:20.829Z",
+      "event": "task-done",
+      "detail": "T9: Keep mcpServers env and header values out of transcripts, records, logs and stdio"
+    },
+    {
+      "at": "2026-09-22T22:38:20.932Z",
+      "event": "task-done",
+      "detail": "T10: Process test with a real stdio MCP server fixture over a real pipe"
+    },
+    {
+      "at": "2026-09-22T22:38:21.032Z",
+      "event": "task-done",
+      "detail": "T11: Docs: CLI reference and README for provider resolution and mcpServers"
+    }
+  ]
+}

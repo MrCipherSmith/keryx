@@ -60,17 +60,38 @@ import {
 } from "./protocol";
 import { renderAcpPromptContent } from "./prompt-content";
 import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError } from "./session";
+import {
+  parseAcpMcpServers,
+  startAcpSessionMcp,
+  type AcpMcpServerProblem,
+  type AcpSessionMcp,
+  type ParsedAcpMcpServers,
+} from "./session-mcp";
+import type { ConnectFn } from "../mcp-servers/manager";
+import type { JsonRpcId } from "./jsonrpc";
 
 export interface AcpServerOptions {
   readonly input: AsyncIterable<Uint8Array | string>;
   readonly write: (chunk: string) => void;
   readonly logError: (line: string) => void;
-  readonly provider: ProviderPort;
+  /**
+   * The provider every turn runs against. Absent only together with
+   * `providerUnavailable` (flow 287, AC2): the connection still initialises,
+   * and every `session/new`/`session/load` is refused with that message —
+   * never answered by a stand-in.
+   */
+  readonly provider?: ProviderPort;
+  /** Why there is no provider, naming what to configure and how. Sent as the refusal. */
+  readonly providerUnavailable?: string;
   readonly providerId: string;
   readonly modelId: string;
   readonly agentInfo?: AcpImplementation;
   readonly dataDir?: string;
   readonly idSeq?: () => string;
+  /** Test seam: how a client-supplied MCP server is dialled. The shared dial procedure otherwise. */
+  readonly mcpConnect?: ConnectFn;
+  /** Parent environment for client-supplied MCP servers (secrets stripped). `process.env` otherwise. */
+  readonly mcpEnv?: Record<string, string | undefined>;
 }
 
 const DEFAULT_AGENT_INFO: AcpImplementation = { name: "keryx", version: "0" };
@@ -107,6 +128,27 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const writeMessage = (message: JsonRpcResponseMessage | JsonRpcNotificationMessage): void => {
     options.write(encodeAcpMessage(message));
   };
+
+  /**
+   * Work to run right AFTER the reply to one request id has been written.
+   *
+   * A `session/update` for a session is only meaningful to a client that has
+   * been told the session exists, i.e. after `session/new`'s response. The
+   * MCP start-up report below is the one notification keryx emits outside a
+   * turn, so it is ordered by this hook rather than by a timer.
+   */
+  const afterReply = new Map<string, () => void>();
+  const replyKey = (id: JsonRpcId): string => JSON.stringify(id);
+
+  /**
+   * Client-supplied MCP servers, per session (flow 287, AC3). One entry per
+   * session that was created or loaded with any; replaced (and the old one
+   * stopped) when `session/load` rebinds the id. Every entry is stopped when
+   * the connection closes.
+   */
+  const sessionMcp = new Map<string, AcpSessionMcp>();
+  /** Closes started by a replacement, awaited at connection close with the rest. */
+  const retiring: Promise<void>[] = [];
 
   const sendUpdate = (sessionId: string, update: AcpSessionUpdate): void => {
     const notification: AcpSessionNotification = { sessionId, update };
@@ -265,6 +307,82 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     };
   };
 
+  /**
+   * Flow 287, AC2: with no usable provider, a session is refused — with the
+   * message that says what to configure — rather than created and then
+   * answered by a stand-in. `initialize` is untouched: a client that cannot
+   * initialise shows the operator nothing at all, not even this message.
+   */
+  function requireProvider(method: string): ProviderPort {
+    if (options.provider === undefined) {
+      // The remedy goes in `message`, not only in `data`: `message` is the
+      // field every client shows a person (Zed prints it in the thread), and
+      // `invalidRequest`'s own message is a fixed "Invalid request".
+      refuse({
+        code: JSON_RPC_ERROR_CODES.invalidRequest,
+        message: options.providerUnavailable ?? `${method}: keryx acp has no provider configured`,
+        data: { method, condition: "provider-not-configured" },
+      });
+    }
+    return options.provider;
+  }
+
+  /**
+   * Tell the client which of this session's MCP servers are not running, and
+   * why (flow 287, AC5).
+   *
+   * THE CHANNEL: an `agent_message_chunk` `session/update`, plus a stderr line.
+   * ACP v1 has no notification for MCP server status and no field for it in
+   * the `session/new`/`session/load` response (only `_meta`, which no client
+   * shows a person). An agent message is the one channel every client renders
+   * in the thread the operator is looking at — Zed included — so it is the
+   * most visible honest answer: the operator reads "server X was not started:
+   * reason" where they would otherwise wonder why its tools never appear.
+   * stderr carries the same line for the client's agent log.
+   */
+  function reportMcpProblems(sessionId: string, problems: readonly AcpMcpServerProblem[]): void {
+    for (const problem of problems) {
+      options.logError(`acp: MCP server "${problem.name}" for session ${sessionId}: ${problem.reason}`);
+      sendUpdate(sessionId, {
+        sessionUpdate: "agent_message_chunk",
+        content: textBlock(`keryx: MCP server "${problem.name}" ${problem.reason}\n`),
+      });
+    }
+  }
+
+  /**
+   * Start `mcp` for `sessionId`, replacing (and stopping) any earlier set, and
+   * report its problems once the reply to `requestId` is on the wire.
+   */
+  function bindSessionMcp(sessionId: string, requestId: JsonRpcId, mcp: AcpSessionMcp): void {
+    const previous = sessionMcp.get(sessionId);
+    if (previous !== undefined) {
+      retiring.push(previous.close());
+    }
+    sessionMcp.set(sessionId, mcp);
+    if (mcp.refused.length === 0 && mcp.tools.length === 0) {
+      return;
+    }
+    afterReply.set(replyKey(requestId), () => {
+      reportMcpProblems(sessionId, mcp.refused);
+      void mcp.ready.then(() => {
+        // A session replaced before its servers settled reports nothing: the
+        // client has already been told about the set that replaced it.
+        if (sessionMcp.get(sessionId) === mcp) {
+          reportMcpProblems(sessionId, mcp.failed());
+        }
+      });
+    });
+  }
+
+  /** Starts a validated list, each server running in the session's resolved project root. */
+  function startMcpFor(parsed: ParsedAcpMcpServers, resolvedRoot: string): AcpSessionMcp {
+    return startAcpSessionMcp({ ...parsed, stdio: parsed.stdio.map((server) => ({ ...server, cwd: resolvedRoot })) }, {
+      ...(options.mcpEnv !== undefined ? { env: options.mcpEnv } : {}),
+      ...(options.mcpConnect !== undefined ? { connect: options.mcpConnect } : {}),
+    });
+  }
+
   /** AC1 / spec: a request before `initialize` is refused, not served. */
   function requireInitialized(method: string): void {
     if (!initialized) {
@@ -292,28 +410,20 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     };
   }
 
-  function handleSessionNew(params: unknown): AcpNewSessionResponse {
+  function handleSessionNew(params: unknown, requestId: JsonRpcId): AcpNewSessionResponse {
     requireInitialized(ACP_AGENT_METHODS.sessionNew);
+    requireProvider(ACP_AGENT_METHODS.sessionNew);
     const obj = requireObjectParams(params, ACP_AGENT_METHODS.sessionNew);
     const cwd = requireStringField(obj, "cwd", ACP_AGENT_METHODS.sessionNew);
-    const mcpServers = obj["mcpServers"];
-    if (mcpServers !== undefined && !Array.isArray(mcpServers)) {
-      refuse(invalidParams(`${ACP_AGENT_METHODS.sessionNew}: mcpServers must be an array`, { received: mcpServers }));
-    }
-    if (Array.isArray(mcpServers) && mcpServers.length > 0) {
-      // F-8 (context.md §5): no in-memory MCP registration seam exists for a
-      // single session — an honest refusal, not a silent drop that would
-      // leave the client believing tools are connected that are not.
-      refuse(
-        invalidParams(
-          `${ACP_AGENT_METHODS.sessionNew}: keryx has no in-memory MCP server registration seam for a single ` +
-            "session; configure servers with `keryx mcp`/`keryx integrate` (project-wide) and omit mcpServers, " +
-            "or send an empty list",
-          { requestedServers: mcpServers.length },
-        ),
-      );
-    }
+    // Validated BEFORE the session exists, so a malformed list creates nothing.
+    // Well-formed entries keryx will not start are refused per entry and
+    // reported, not refused for the whole call (see `parseAcpMcpServers`).
+    const parsed = parseAcpMcpServers(ACP_AGENT_METHODS.sessionNew, obj["mcpServers"]);
     const state = registry.create(cwd, clientCapabilities);
+    // Started in the background: `session/new` stays synchronous end to end
+    // (the read loop relies on it, see `dispatch` below) and answers at once;
+    // the session's first prompt waits for the dials to settle instead.
+    bindSessionMcp(state.sessionId, requestId, startMcpFor(parsed, state.resolvedRoot));
     return { sessionId: state.sessionId };
   }
 
@@ -341,6 +451,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // before the first `await`, so no second prompt can slip between the check
     // and the registration.
     refuseIfBusy(ACP_AGENT_METHODS.sessionPrompt, sessionId);
+    const provider = requireProvider(ACP_AGENT_METHODS.sessionPrompt);
 
     const userLine = renderAcpPromptContent(promptField);
     // THE ROSTER IS EXACTLY WHAT THE PERMISSION PATH COVERS (context.md F-4).
@@ -362,8 +473,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // explicit allow from the client for that exact call: the fingerprint is
     // bound (`isApprovalFor`), a rejection, a `cancelled`, an unknown option
     // id, a client that cannot be asked and a closed connection are all
-    // denials. Nothing else is added: `spawn_subagent`, the metaproject tools,
-    // MCP and bus tools need ports this server does not construct, and
+    // denials. Beyond the client's own MCP servers (flow 287, last entry
+    // below), nothing else is added: `spawn_subagent`, the metaproject tools,
+    // keryx's configured MCP servers and bus tools need ports this server does
+    // not construct, and
     // `ask_user` needs an interactive host seam that does not exist over this
     // wire — offering any of them would put back exactly the unreachable-call
     // state this widening removes.
@@ -399,10 +512,17 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       ),
       shellExecTool(state.resolvedRoot),
       applyPatchTool(state.resolvedRoot),
+      // Flow 287 (AC3/AC4): the client's own MCP servers for THIS session,
+      // through the shell's `search_tool`/`use_tool` pair — offered only when
+      // the session has any. `use_tool` is `risk: "destructive"`, so every
+      // call is asked through `session/request_permission` below and a denial
+      // ends it exactly as a local one does. Never auto-approved: this server
+      // sets no permission mode, so the agent's default (`ask`) applies.
+      ...(sessionMcp.get(sessionId)?.tools ?? []),
     ];
     const toolNames = tools.map((tool) => tool.definition.name);
     const deps: AgentDeps = {
-      provider: options.provider,
+      provider,
       providerId: options.providerId,
       modelId: options.modelId,
       tools,
@@ -440,6 +560,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     };
     activeTurns.set(sessionId, turn);
     try {
+      // The dials `session/new`/`session/load` started — bounded by each
+      // server's handshake budget — must have settled before the turn, or the
+      // first turn would search an empty catalog. Awaited only AFTER the slot
+      // is taken, so the busy guard above still holds while this waits.
+      await sessionMcp.get(sessionId)?.ready;
       const io = createAcpAgentIo(sessionId, sendUpdate, askPermissionFor(sessionId, turn));
       const result = await runAgentTurn(io, deps, state.history, userLine, { signal: turn.controller.signal });
       const updatedHandle = persistHistory(state.handle, state.history, {
@@ -637,27 +762,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * through ANY entry point into that store (`keryx shell`, `keryx sessions`,
    * an earlier `session/new`) and replays it before responding.
    */
-  function handleSessionLoad(params: unknown): AcpLoadSessionResponse {
+  function handleSessionLoad(params: unknown, requestId: JsonRpcId): AcpLoadSessionResponse {
     requireInitialized(ACP_AGENT_METHODS.sessionLoad);
+    requireProvider(ACP_AGENT_METHODS.sessionLoad);
     const obj = requireObjectParams(params, ACP_AGENT_METHODS.sessionLoad);
     const sessionId = requireStringField(obj, "sessionId", ACP_AGENT_METHODS.sessionLoad);
     const cwd = requireStringField(obj, "cwd", ACP_AGENT_METHODS.sessionLoad);
-    const mcpServers = obj["mcpServers"];
-    if (mcpServers !== undefined && !Array.isArray(mcpServers)) {
-      refuse(invalidParams(`${ACP_AGENT_METHODS.sessionLoad}: mcpServers must be an array`, { received: mcpServers }));
-    }
-    if (Array.isArray(mcpServers) && mcpServers.length > 0) {
-      // Same F-8 reasoning as `session/new`: no in-memory MCP registration
-      // seam exists for a single session.
-      refuse(
-        invalidParams(
-          `${ACP_AGENT_METHODS.sessionLoad}: keryx has no in-memory MCP server registration seam for a single ` +
-            "session; configure servers with `keryx mcp`/`keryx integrate` (project-wide) and omit mcpServers, " +
-            "or send an empty list",
-          { requestedServers: mcpServers.length },
-        ),
-      );
-    }
+    // Validated up front (same split as `session/new`); nothing is STARTED
+    // until the load has succeeded, so a refused load spawns nothing.
+    const parsedMcp = parseAcpMcpServers(ACP_AGENT_METHODS.sessionLoad, obj["mcpServers"]);
     // A load REPLACES the registry entry, and with it the `history` array a
     // turn in flight is still writing into — refused for the same reason a
     // second prompt is (`refuseIfBusy`), and before `registry.load` does any
@@ -689,6 +802,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
     // Replay BEFORE responding — the spec's own ordering requirement.
     replayHistory(sessionId, state.history);
+    // The load REPLACES the session's entry, so it replaces its MCP servers
+    // too: whatever an earlier `session/new`/`session/load` on this connection
+    // started for this id is stopped, and this request's list is started.
+    bindSessionMcp(sessionId, requestId, startMcpFor(parsedMcp, state.resolvedRoot));
     return {};
   }
 
@@ -696,10 +813,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     {
       requests: {
         [ACP_AGENT_METHODS.initialize]: (params) => handleInitialize(params),
-        [ACP_AGENT_METHODS.sessionNew]: (params) => handleSessionNew(params),
+        [ACP_AGENT_METHODS.sessionNew]: (params, context) => handleSessionNew(params, context.id),
         [ACP_AGENT_METHODS.sessionPrompt]: (params) => handleSessionPrompt(params),
         [ACP_AGENT_METHODS.sessionList]: (params) => handleSessionList(params),
-        [ACP_AGENT_METHODS.sessionLoad]: (params) => handleSessionLoad(params),
+        [ACP_AGENT_METHODS.sessionLoad]: (params, context) => handleSessionLoad(params, context.id),
       },
       notifications: {
         [ACP_AGENT_METHODS.sessionCancel]: (params) => handleSessionCancel(params),
@@ -715,6 +832,16 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const handleOutcome = (outcome: AcpDispatchOutcome): void => {
     if (outcome.kind === "reply") {
       writeMessage(outcome.message);
+      const key = replyKey(outcome.message.id);
+      const after = afterReply.get(key);
+      if (after !== undefined) {
+        afterReply.delete(key);
+        // Only a SUCCESS reply has a session to report on. (The hook is
+        // registered only once a handler has succeeded, so this is a floor.)
+        if (!("error" in outcome.message)) {
+          after();
+        }
+      }
       return;
     }
     if (outcome.kind === "incoming-response") {
@@ -785,4 +912,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   while (inflight.size > 0) {
     await Promise.allSettled([...inflight]);
   }
+  // Flow 287, AC3: every MCP server process this connection started is
+  // stopped, and AWAITED — a client closing the pipe is keryx's cue to exit,
+  // and returning first would orphan the children to init.
+  await Promise.allSettled([...[...sessionMcp.values()].map((mcp) => mcp.close()), ...retiring]);
+  sessionMcp.clear();
 }

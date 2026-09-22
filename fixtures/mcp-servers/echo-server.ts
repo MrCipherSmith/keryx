@@ -17,7 +17,26 @@
 //   big         — returns more bytes than the truncation cap, for AC6
 //   boom        — returns an MCP error, so the error path has a real source
 
+//
+// Two OPTIONAL environment hooks, for the ACP process tests (flow 287), which
+// need to see the server from outside without the server echoing anything:
+//   ECHO_SERVER_PID_FILE  — on start, write `{pid, probeSha256}` there, so a
+//                           test can prove the process is gone after close.
+//   ECHO_SERVER_PROBE     — hashed (never written in clear) into that file, so
+//                           a test can prove an `env` value reached the child
+//                           while it planted that very value as a secret that
+//                           must appear in no artifact.
+
+import { createHash } from "node:crypto";
+import { writeFileSync } from "node:fs";
+
 type Request = { jsonrpc: "2.0"; id?: number | string; method: string; params?: Record<string, unknown> };
+
+const pidFile = process.env.ECHO_SERVER_PID_FILE;
+if (pidFile !== undefined && pidFile.length > 0) {
+  const probeSha256 = createHash("sha256").update(process.env.ECHO_SERVER_PROBE ?? "").digest("hex");
+  writeFileSync(pidFile, JSON.stringify({ pid: process.pid, probeSha256 }));
+}
 
 const TOOLS = [
   {
