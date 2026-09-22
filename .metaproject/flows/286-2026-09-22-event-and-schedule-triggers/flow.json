@@ -1,0 +1,300 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "286",
+  "slug": "event-and-schedule-triggers",
+  "title": "Start a flow from a repository event or a schedule, not only from a person at a prompt",
+  "status": "initializing",
+  "createdAt": "2026-09-22T18:18:39.374Z",
+  "updatedAt": "2026-09-22T18:19:56.770Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Survey what already fires: hooks, background tasks, serve, bus; decide where triggers live",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Trigger config: schema, validation, per-entry refusal",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "keryx trigger run: one pass, locking, exit codes",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "The fired-trigger record and keryx trigger status",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "keryx trigger install extending the existing hook installer; list",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Schedule output: cron line or systemd timer, no daemon",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Flow-opening action with the do-not-duplicate rule and the budget refusal outcome",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Concurrency test: two triggered runs at once leave the artifacts intact",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Docs: README and CLI reference for triggers",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T12",
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-22T18:18:39.374Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-22T18:19:55.871Z",
+      "event": "task-added",
+      "detail": "T5: Survey what already fires: hooks, background tasks, serve, bus; decide where triggers live"
+    },
+    {
+      "at": "2026-09-22T18:19:55.969Z",
+      "event": "task-added",
+      "detail": "T6: Trigger config: schema, validation, per-entry refusal"
+    },
+    {
+      "at": "2026-09-22T18:19:56.069Z",
+      "event": "task-added",
+      "detail": "T7: keryx trigger run: one pass, locking, exit codes"
+    },
+    {
+      "at": "2026-09-22T18:19:56.170Z",
+      "event": "task-added",
+      "detail": "T8: The fired-trigger record and keryx trigger status"
+    },
+    {
+      "at": "2026-09-22T18:19:56.270Z",
+      "event": "task-added",
+      "detail": "T9: keryx trigger install extending the existing hook installer; list"
+    },
+    {
+      "at": "2026-09-22T18:19:56.370Z",
+      "event": "task-added",
+      "detail": "T10: Schedule output: cron line or systemd timer, no daemon"
+    },
+    {
+      "at": "2026-09-22T18:19:56.472Z",
+      "event": "task-added",
+      "detail": "T11: Flow-opening action with the do-not-duplicate rule and the budget refusal outcome"
+    },
+    {
+      "at": "2026-09-22T18:19:56.569Z",
+      "event": "task-added",
+      "detail": "T12: Concurrency test: two triggered runs at once leave the artifacts intact"
+    },
+    {
+      "at": "2026-09-22T18:19:56.671Z",
+      "event": "task-added",
+      "detail": "T13: Docs: README and CLI reference for triggers"
+    },
+    {
+      "at": "2026-09-22T18:19:56.770Z",
+      "event": "task-added",
+      "detail": "T14: Verification: CI green, keryx health run"
+    }
+  ]
+}
