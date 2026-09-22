@@ -483,6 +483,39 @@ function errorReasonFromParsed(parsed: unknown): string | undefined {
  * OpenAI-Chat-Completions-compatible gateway (Ollama, OpenRouter, DeepSeek,
  * Z.AI, Cerebras, Groq, Moonshot, Grok, …) — only `identity` differs.
  */
+/**
+ * One extra sentence for a gateway refusal whose CAUSE an operator cannot read
+ * off the status line. Two such refusals have actually cost someone an afternoon:
+ *
+ * - a free-tier model id the vendor serves only to its own client (OpenCode Zen's
+ *   `*-free`, `big-pickle`, …): the status is a bare 403 and the body's reason is
+ *   a POLICY sentence, so the operator reasonably reads it as "my key or config is
+ *   wrong" and starts debugging the one thing that was fine. The hint names the
+ *   remedy instead.
+ * - an empty account (`Insufficient account funds`): a 402 that looks like a
+ *   malformed request until you know the gateway bills per token.
+ *
+ * Deliberately narrow: it fires on the provider's own machine-readable error type
+ * or an exact phrase in its reason — NEVER on the status alone — so a generic
+ * 402/403 keeps the short message it always had (pinned by the K-005 tests).
+ */
+export function gatewayOperatorHint(parsed: unknown, reason: string | undefined): string | undefined {
+  const error = asRecord(asRecord(parsed).error);
+  const type = asString(error.type);
+  const haystack = `${type ?? ""} ${reason ?? ""}`.toLowerCase();
+  if (type === "FreeTierError" || haystack.includes("free tier")) {
+    return (
+      "this is a free-tier model that the gateway serves only to its own client, so nothing on this " +
+      "side (key, base URL, model params) can make it work — pick a paid model id instead (free-tier " +
+      "ids typically end in `-free`)"
+    );
+  }
+  if (haystack.includes("insufficient") && (haystack.includes("fund") || haystack.includes("credit"))) {
+    return "the provider account has no credit left — top it up before retrying; the model, key and request are all fine";
+  }
+  return undefined;
+}
+
 export class OpenAiCompatEngine implements ProviderPort {
   private readonly deps: OpenAiCompatProviderDeps;
   private readonly identity: OpenAiCompatIdentity;
@@ -762,7 +795,13 @@ export class OpenAiCompatEngine implements ProviderPort {
       // The status stays in the message even when the server gave a reason: a
       // reason alone ("balance exhausted") does not say which provider or which
       // class of failure, and the label is what names the gateway.
-      error.message = `${this.label} API returned HTTP ${response.status}${reason === undefined ? "" : `: ${reason}`}`;
+      // The provider's own reason stays first and verbatim; the hint (when there
+      // is one) follows it, so a reader gets the status, the gateway's sentence,
+      // and only then keryx's reading of what to do about it.
+      const hint = gatewayOperatorHint(parsedBody, reason);
+      error.message =
+        `${this.label} API returned HTTP ${response.status}${reason === undefined ? "" : `: ${reason}`}` +
+        (hint === undefined ? "" : ` — ${hint}`);
       yield stamp({ kind: "provider_error", error });
       return;
     }

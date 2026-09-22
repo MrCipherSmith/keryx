@@ -160,6 +160,48 @@ test("K-005: 401/403 are authentication, 429 is a retryable rate limit that hono
   expect((await errorFor(new Response("", { status: 502 }))).kind).toBe("unavailable");
 });
 
+test("a free-tier refusal explains that no keryx-side configuration can fix it", async () => {
+  // Exactly what OpenCode Zen answers for `*-free`/`big-pickle`, which the live
+  // /models list offers first and the picker therefore surfaces first.
+  const error = await errorFor(
+    json(
+      {
+        type: "error",
+        error: {
+          type: "FreeTierError",
+          message: "OpenCode's free tier can only be used from within OpenCode",
+        },
+      },
+      403,
+    ),
+  );
+  // The gateway's own reason is still there, verbatim, beside the status…
+  expect(error.message).toContain("HTTP 403");
+  expect(error.message).toContain("free tier can only be used from within OpenCode");
+  // …and the hint says what to actually do, instead of leaving the operator to
+  // re-check a key that was never the problem.
+  expect(error.message).toContain("free-tier model");
+  expect(error.message).toContain("pick a paid model id");
+  expect(error.kind).toBe("authentication");
+  expect(error.retryable).toBe(false);
+});
+
+test("an exhausted account is named as such, not left looking like a bad request", async () => {
+  const error = await errorFor(
+    json({ error: { type: "server_error", message: "Upstream request failed: Insufficient account funds" } }, 402),
+  );
+  expect(error.message).toContain("HTTP 402");
+  expect(error.message).toContain("Insufficient account funds");
+  expect(error.message).toContain("no credit left");
+});
+
+test("the hint is narrow: a generic 402/403 keeps the short message it always had", async () => {
+  const generic402 = await errorFor(json({ error: { message: "balance exhausted" } }, 402));
+  expect(generic402.message).toBe("Compat fixture API returned HTTP 402: balance exhausted");
+  const generic403 = await errorFor(json({ error: "model not permitted for this key" }, 403));
+  expect(generic403.message).toBe("Compat fixture API returned HTTP 403: model not permitted for this key");
+});
+
 test("flow 267 / AC4: a 400 body with error.code 'context_length_exceeded' classifies as context_overflow", async () => {
   const overflow = await errorFor(
     json(
