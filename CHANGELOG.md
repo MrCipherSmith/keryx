@@ -3,6 +3,26 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.149] — 2026-09-22
+A patch release carrying the same feature set as 0.2.148 — a call that follows
+untrusted content is put to the operator instead of being refused for the rest of
+the turn — with the two fixes its own verification caught.
+
+### Fixed
+- **The usage-banner coverage test reads the banner, not a slice of the source.**
+  `022a11f3` hoisted `USAGE_BODY` above `printHelp` — "hoisted rather than
+  duplicated", so the two surfaces cannot drift — while the test took its banner
+  from `source.slice(source.indexOf("function printHelp"))`. That slice begins
+  after the constant and contains no verb line at all, so the test reported 39
+  verbs "missing" from a banner that names every one of them, `check:core` went
+  red on `main`, and 0.2.148's release verification stopped before publishing.
+  The test now asserts on the exported constant — the text `printHelp` actually
+  prints — and the `orient` property it was written for is unchanged.
+- **The untrusted-content gate carries no dead initializer.** `taintApproved` was
+  initialised to `false` and never read before its assignment, because every
+  refusing path leaves through `continue`; `eslint`'s `no-useless-assignment`
+  said so, and `check:core` was red on that commit.
+
 ## [0.2.148] — 2026-09-22
 A call that follows untrusted content is put to the operator instead of being
 refused for the rest of the turn — that content still cannot authorize it, but a
