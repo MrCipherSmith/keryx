@@ -42,6 +42,12 @@ export interface AcpSessionState {
    * only record it — nothing in this dispatch reads it yet.
    */
   readonly clientCapabilities: AcpClientCapabilities | undefined;
+  /**
+   * Set by `load()` only: the provider/model the durable session last ran, as
+   * its summary recorded it BEFORE this load reopened it (flow 288, T14) — so
+   * a restarted agent can continue the session on it.
+   */
+  readonly recordedModel?: { readonly providerId: string; readonly modelId: string };
 }
 
 /**
@@ -123,10 +129,15 @@ export class AcpSessionRegistry {
    */
   load(sessionId: string, cwd: string, clientCapabilities: AcpClientCapabilities | undefined): AcpSessionState | undefined {
     const resolvedRoot = resolveProjectRoot(cwd);
-    const known = listSessions(cwd, this.options.dataDir).some((summary) => summary.id === sessionId);
-    if (!known) {
+    const summary = listSessions(cwd, this.options.dataDir).find((entry) => entry.id === sessionId);
+    if (summary === undefined) {
       return undefined;
     }
+    // Read before `openSession`, which records this connection's launch model.
+    const recordedModel =
+      typeof summary.provider === "string" && summary.provider.length > 0 && typeof summary.model === "string" && summary.model.length > 0
+        ? { providerId: summary.provider, modelId: summary.model }
+        : undefined;
     let opened: ReturnType<typeof openSession>;
     try {
       opened = openSession({
@@ -157,6 +168,7 @@ export class AcpSessionRegistry {
       // this exact array, not a fresh empty one.
       history: opened.history,
       clientCapabilities,
+      ...(recordedModel !== undefined ? { recordedModel } : {}),
     };
     this.sessions.set(state.sessionId, state);
     return state;

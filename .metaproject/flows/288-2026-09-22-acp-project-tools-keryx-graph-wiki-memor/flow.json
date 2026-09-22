@@ -9,7 +9,7 @@
   "title": "ACP project tools: keryx graph, wiki, memory and flow tools, slash commands and model switching in the editor",
   "status": "in-progress",
   "createdAt": "2026-09-22T22:22:26.709Z",
-  "updatedAt": "2026-09-22T23:34:07.525Z",
+  "updatedAt": "2026-09-22T23:52:54.313Z",
   "source": {
     "type": "description",
     "ref": null
@@ -218,6 +218,26 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Review fixes: bounded model probe on the shell's base URL, saved per-provider endpoints, literal roster pin, stricter command parsing, cancel-aware switch, load restores the switched model",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T23:42:17.385Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -323,6 +343,21 @@
       "at": "2026-09-22T23:34:07.525Z",
       "event": "task-done",
       "detail": "T12: Docs: CLI reference and README for the ACP roster, commands and model switching; README positioning line"
+    },
+    {
+      "at": "2026-09-22T23:41:56.253Z",
+      "event": "task-added",
+      "detail": "T14: Review fixes: bounded model probe on the shell's base URL, saved per-provider endpoints, literal roster pin, stricter command parsing, cancel-aware switch, load restores the switched model"
+    },
+    {
+      "at": "2026-09-22T23:42:17.385Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-22T23:52:54.313Z",
+      "event": "task-done",
+      "detail": "T14: Review fixes: bounded model probe on the shell's base URL, saved per-provider endpoints, literal roster pin, stricter command parsing, cancel-aware switch, load restores the switched model"
     }
   ]
 }

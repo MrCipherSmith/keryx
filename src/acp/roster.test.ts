@@ -14,7 +14,7 @@ import { join } from "node:path";
 import type { BusClient } from "../bus/client";
 import { buildInteractiveAgentTools } from "../commands/interactive-agent-tools";
 import { createDefaultSearchProviderController } from "../harness/search";
-import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { METAPROJECT_OPERATIONS } from "../harness/tool/metaproject-operations";
 import { ACP_TOOL_KIND_OTHER_EXCEPTIONS, toolKindFor } from "./agent-io";
@@ -129,17 +129,62 @@ describe("AC2 — every roster tool has a meaningful ACP kind", () => {
 
 describe("AC3 — the roster is pinned", () => {
   /**
-   * keryx's OWN roster, in a project with a metaproject. Changing it means
-   * editing this list — and deciding, here, that the new tool is safe over ACP.
+   * keryx's OWN roster, in a project with a metaproject — a LITERAL list, not
+   * derived from `METAPROJECT_OPERATIONS` (T14): a new metaproject operation
+   * would otherwise join the ACP roster silently. Adding a tool to ACP means
+   * editing this list, and deciding here that it is safe over this wire.
+   *
+   * Why a list rather than a property check: "untrusted" is a property of a
+   * tool's RESULT (`InteractiveToolResult.untrusted`), set per call by
+   * `web_fetch` and the MCP bridge; no tool DEFINITION or registry entry
+   * declares it, so there is nothing static to assert against. The check
+   * below pins what can be pinned: every read-risk tool here is a known
+   * read-only builtin or metaproject operation, and the two others are the
+   * gated `shell_exec`/`apply_patch`.
    */
   const PINNED = [
-    "get_cwd",
-    "list_dir",
-    "read_file",
-    ...[...PROJECT_TOOL_NAMES],
-    "shell_exec",
     "apply_patch",
-  ].sort();
+    "flow_status",
+    "get_cwd",
+    "graph_affected",
+    "graph_find",
+    "graph_path",
+    "graph_query",
+    "graph_symbol",
+    "health_status",
+    "list_dir",
+    "memory_search",
+    "read_file",
+    "read_wiki",
+    "repomap",
+    "search_code",
+    "shell_exec",
+    "skill_load",
+    "skills_catalog",
+    "test_related",
+    "wiki_ask",
+    "wiki_backlinks",
+    "wiki_evidence",
+    "wiki_freshness",
+    "wiki_resolve",
+  ];
+
+  test("every pinned tool is a known read-only builtin or metaproject operation, or one of the two gated tools", async () => {
+    const cwd = await projectWithMetaproject();
+    const readOnly = new Set([
+      ...builtinReadOnlyTools(cwd).map((tool) => tool.definition.name),
+      ...METAPROJECT_OPERATIONS.filter((op) => op.risk === "read").map((op) => op.name),
+    ]);
+    const gated: Record<string, string> = { shell_exec: "shell", apply_patch: "write" };
+    for (const tool of acpRoster(cwd)) {
+      const name = tool.definition.name;
+      if (name in gated) {
+        expect({ name, risk: tool.definition.risk }).toEqual({ name, risk: gated[name] });
+      } else {
+        expect({ name, known: readOnly.has(name), risk: tool.definition.risk }).toEqual({ name, known: true, risk: "read" });
+      }
+    }
+  });
 
   test("keryx's own roster is exactly the pinned set", async () => {
     expect(acpRoster(await projectWithMetaproject()).map((tool) => tool.definition.name).sort()).toEqual(PINNED);

@@ -2911,14 +2911,26 @@ export async function resolveTuiStartup(opts: {
   }
   const detected = await opts.detect();
   return {
-    detected: detected.map((provider) => {
-      const savedBaseUrl = savedCfg.baseUrls?.[provider.name];
-      return typeof savedBaseUrl === "string" && savedBaseUrl.length > 0
-        ? { ...provider, baseUrl: savedBaseUrl }
-        : provider;
-    }),
+    detected: withSavedBaseUrls(detected, savedCfg),
     appliedKeys,
   };
+}
+
+/**
+ * Overlay the per-provider endpoints `keryx shell` saved (`baseUrls` in
+ * `auth.json` — written by the TUI endpoint picker and by logins that carry a
+ * plan-specific endpoint, e.g. github-copilot's `apiBaseUrl`) onto detected
+ * providers. Exported so `keryx acp`'s model list builds each provider against
+ * the endpoint the shell would use (flow 288), rather than a copy of this rule.
+ */
+export function withSavedBaseUrls<T extends { name: string; baseUrl?: string }>(
+  detected: readonly T[],
+  savedCfg: { readonly baseUrls?: Readonly<Record<string, string>> | undefined },
+): T[] {
+  return detected.map((provider) => {
+    const savedBaseUrl = savedCfg.baseUrls?.[provider.name];
+    return typeof savedBaseUrl === "string" && savedBaseUrl.length > 0 ? { ...provider, baseUrl: savedBaseUrl } : provider;
+  });
 }
 
 /** Parsed flags for the interactive shell entrypoint. */

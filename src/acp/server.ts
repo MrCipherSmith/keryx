@@ -25,11 +25,18 @@ import type { NormalizedMessage, ProviderPort } from "../harness/provider/types"
 import { listSessions, persistHistory } from "../session";
 import { createAcpAgentIo, toolKindFor, tryParseJson, type AcpPermissionAsker } from "./agent-io";
 import type { AcpFsReader } from "./capability-tools";
-import { acpAvailableCommands, acpCommandHelpText, parseAcpSlashCommand, unknownAcpCommandText } from "./commands";
+import {
+  acpAvailableCommands,
+  acpCommandHelpText,
+  acpCommandInputProblem,
+  parseAcpSlashPrompt,
+  unknownAcpCommandText,
+} from "./commands";
 import {
   ACP_MODEL_CONFIG_ID,
   acpModelChoice,
   acpModelConfigOption,
+  acpModelValue,
   findAcpModelChoice,
   type AcpModelBinding,
   type AcpModelChoice,
@@ -126,6 +133,11 @@ export interface AcpServerOptions {
    */
   readonly models?: AcpModelSource;
   /**
+   * The longest a `session/new`/`session/load` waits for the model list
+   * (flow 288, T14). `DEFAULT_MODEL_LIST_TIMEOUT_MS` otherwise.
+   */
+  readonly modelListTimeoutMs?: number;
+  /**
    * Aborted to stop the connection now (SIGTERM/SIGINT in the CLI): input is
    * no longer awaited, running turns are aborted, and every client MCP server
    * is stopped before `runAcpServer` resolves.
@@ -136,6 +148,9 @@ export interface AcpServerOptions {
 export type { AcpTurnSettings } from "./models";
 
 const DEFAULT_AGENT_INFO: AcpImplementation = { name: "keryx", version: "0" };
+
+/** How long a new or loaded session waits for the model list before answering with the launch model only. */
+export const DEFAULT_MODEL_LIST_TIMEOUT_MS = 8_000;
 
 function finishReasonToStopReason(
   finishReason: "budget" | "tool-call-budget" | "no-progress" | undefined,
@@ -421,8 +436,26 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     readonly binding: AcpModelBinding;
   }
   const sessionModels = new Map<string, SessionModel>();
-  /** Per-session switch counter: of two overlapping switches, the later REQUEST wins, not the later build. */
-  const switchSeq = new Map<string, number>();
+  /**
+   * Overlapping switches (flow 288, T14). Every switch — and a load's restore
+   * — takes a number when it starts; a finished one is applied only if no
+   * LATER-started one has been applied already. So the later request wins when
+   * both succeed, and a later one that FAILS leaves the earlier one in effect
+   * instead of discarding it.
+   */
+  const switchIssued = new Map<string, number>();
+  const switchApplied = new Map<string, number>();
+  function beginSwitch(sessionId: string): number {
+    const seq = (switchIssued.get(sessionId) ?? 0) + 1;
+    switchIssued.set(sessionId, seq);
+    return seq;
+  }
+  function applySwitch(sessionId: string, seq: number, next: SessionModel): void {
+    if (seq > (switchApplied.get(sessionId) ?? 0)) {
+      switchApplied.set(sessionId, seq);
+      sessionModels.set(sessionId, next);
+    }
+  }
   /** `/reasoning <level>` for one session — the shell's session override, never saved. */
   const reasoningOverrides = new Map<string, ReasoningEffortLevel>();
   const launchChoice = acpModelChoice(options.providerId, options.modelId);
@@ -444,28 +477,64 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   }
 
   /**
-   * Every model a session can switch to, resolved ONCE per connection and
-   * started as soon as there is a provider — the shell's source probes the
-   * network, and `session/new` should not pay for that on every thread. The
-   * launch model is always a choice, whatever the source answered.
+   * Every model a session can switch to (flow 288, AC5; bounded in T14).
+   *
+   * The source probes the network, so it is started as soon as there is a
+   * provider and a SUCCESSFUL answer is kept for the connection. What a
+   * session waits for it is bounded by `modelListTimeoutMs`: a list that has
+   * not arrived by then is not waited for — that session is offered the launch
+   * model only, stderr says so, and the next session asks again (the same
+   * in-flight request, or a fresh one if it failed). A slow or hung source can
+   * therefore never hold `session/new` beyond the bound, and one bad moment is
+   * not cached for the process lifetime. The launch model is always a choice.
    */
-  let choicesOnce: Promise<readonly AcpModelChoice[]> | undefined;
-  const modelChoices = (): Promise<readonly AcpModelChoice[]> =>
-    (choicesOnce ??= (async () => {
-      let listed: readonly AcpModelChoice[] = [];
-      if (options.models !== undefined) {
-        try {
-          listed = await options.models.choices();
-        } catch (error) {
-          options.logError(
-            `acp: listing models failed (${error instanceof Error ? error.message : String(error)}); only the launch model is offered`,
-          );
-        }
+  const withLaunch = (listed: readonly AcpModelChoice[]): readonly AcpModelChoice[] =>
+    listed.some((choice) => choice.value === launchChoice.value) ? listed : [launchChoice, ...listed];
+  const modelListTimeoutMs = options.modelListTimeoutMs ?? DEFAULT_MODEL_LIST_TIMEOUT_MS;
+  let listedChoices: readonly AcpModelChoice[] | undefined;
+  let listing: Promise<readonly AcpModelChoice[]> | undefined;
+  const startListing = (source: AcpModelSource): Promise<readonly AcpModelChoice[]> =>
+    (listing ??= source.choices().then(
+      (listed) => (listedChoices = withLaunch(listed)),
+      (error: unknown) => {
+        listing = undefined;
+        throw error;
+      },
+    ));
+  async function modelChoices(): Promise<readonly AcpModelChoice[]> {
+    if (listedChoices !== undefined) return listedChoices;
+    const source = options.models;
+    if (source === undefined) return [launchChoice];
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<"timeout">((resolve) => {
+      timer = setTimeout(() => resolve("timeout"), modelListTimeoutMs);
+    });
+    try {
+      const outcome = await Promise.race([startListing(source).catch((error: unknown) => ({ error })), timedOut]);
+      if (outcome === "timeout") {
+        options.logError(
+          `acp: the model list did not arrive within ${modelListTimeoutMs}ms; this session is offered only the launch ` +
+            `model (${launchChoice.value}), and the next session asks again`,
+        );
+        return [launchChoice];
       }
-      return listed.some((choice) => choice.value === launchChoice.value) ? listed : [launchChoice, ...listed];
-    })());
-  if (options.provider !== undefined) {
-    void modelChoices();
+      if ("error" in outcome) {
+        const error = outcome.error;
+        options.logError(
+          `acp: listing models failed (${error instanceof Error ? error.message : String(error)}); ` +
+            "only the launch model is offered, and the next session asks again",
+        );
+        return [launchChoice];
+      }
+      return outcome;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  if (options.provider !== undefined && options.models !== undefined) {
+    void startListing(options.models).catch(() => {
+      // Reported when a session asks for the list.
+    });
   }
 
   async function configOptionsFor(sessionId: string, method: string): Promise<AcpSessionConfigOption[]> {
@@ -473,54 +542,86 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     return [acpModelConfigOption(choices, sessionModel(sessionId, method).choice)];
   }
 
+  /** Build the binding for `choice`, or the reason it cannot run. */
+  async function bindChoice(choice: AcpModelChoice, method: string, signal?: AbortSignal): Promise<AcpModelBinding | string> {
+    if (choice.value === launchChoice.value) {
+      return launchModel(method).binding;
+    }
+    try {
+      return options.models === undefined ? "keryx acp has no model source" : await options.models.bind(choice, signal);
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }
+
   /**
    * Switch `sessionId` to the model `requested` names, from its next turn on.
    * Refused — with the reason, and the session left on its current model —
    * when `requested` is not a choice or its provider cannot be built. Never
    * writes `keryx shell`'s saved selection: the choice lives in this map.
+   * `"cancelled"` when `signal` (a `/model` command's turn slot) was aborted
+   * while the provider was being built: nothing is applied.
    */
   async function switchSessionModel(
     sessionId: string,
     requested: string,
     method: string,
     allowBareModelId: boolean,
-  ): Promise<SessionModel> {
+    signal?: AbortSignal,
+  ): Promise<SessionModel | "cancelled"> {
     const choices = await modelChoices();
     const choice = findAcpModelChoice(choices, requested, allowBareModelId);
     const available = choices.map((entry) => entry.value);
     if (choice === undefined) {
       refuse(
         invalidParams(
-          `${method}: "${requested}" is not a model this session can run; choose one of: ${available.join(", ")}`,
+          `${method}: "${requested.length > 80 ? `${requested.slice(0, 80)}…` : requested}" is not a model this session can run; ` +
+            `choose one of: ${available.join(", ")}`,
           { value: requested, available },
         ),
       );
     }
-    const seq = (switchSeq.get(sessionId) ?? 0) + 1;
-    switchSeq.set(sessionId, seq);
+    const seq = beginSwitch(sessionId);
     const current = sessionModel(sessionId, method);
-    let binding: AcpModelBinding;
-    if (choice.value === current.choice.value) {
-      binding = current.binding;
-    } else if (choice.value === launchChoice.value) {
-      binding = launchModel(method).binding;
-    } else {
-      let built: AcpModelBinding | string;
-      try {
-        built = options.models === undefined ? "keryx acp has no model source" : await options.models.bind(choice);
-      } catch (error) {
-        built = error instanceof Error ? error.message : String(error);
-      }
-      if (typeof built === "string") {
-        refuse(invalidParams(`${method}: cannot switch to ${choice.value}: ${built}`, { value: choice.value, reason: built }));
-      }
-      binding = built;
+    const built = choice.value === current.choice.value ? current.binding : await bindChoice(choice, method, signal);
+    if (signal?.aborted === true) {
+      return "cancelled";
     }
-    const next: SessionModel = { choice, binding };
-    if (switchSeq.get(sessionId) === seq) {
-      sessionModels.set(sessionId, next);
+    if (typeof built === "string") {
+      refuse(invalidParams(`${method}: cannot switch to ${choice.value}: ${built}`, { value: choice.value, reason: built }));
     }
+    const next: SessionModel = { choice, binding: built };
+    applySwitch(sessionId, seq, next);
     return sessionModels.get(sessionId) ?? next;
+  }
+
+  /**
+   * `session/load` in a connection that has not run this session yet: continue
+   * on the model the session last ran (its transcript records it) when that is
+   * still a choice here, else on the launch model — and say which, and why,
+   * once the reply is out. A session already known to this connection keeps
+   * whatever it runs now.
+   */
+  async function restoreRecordedModel(state: AcpSessionState, requestId: JsonRpcId, method: string): Promise<void> {
+    const sessionId = state.sessionId;
+    const recorded = state.recordedModel;
+    if (sessionModels.has(sessionId) || recorded === undefined) return;
+    const value = acpModelValue(recorded.providerId, recorded.modelId);
+    if (value === launchChoice.value) return;
+    const seq = beginSwitch(sessionId);
+    const choice = findAcpModelChoice(await modelChoices(), value, false);
+    const built = choice === undefined ? "it is not among the models keryx can run here" : await bindChoice(choice, method);
+    if (choice !== undefined && typeof built !== "string") {
+      applySwitch(sessionId, seq, { choice, binding: built });
+      return;
+    }
+    const reason = typeof built === "string" ? built : "it could not be restored";
+    onReplied(requestId, () => {
+      sendUpdate(sessionId, {
+        sessionUpdate: "agent_message_chunk",
+        content: textBlock(`keryx: this session last ran ${value}, but ${reason}; it continues on ${launchChoice.value}.\n`),
+      });
+    });
   }
 
   /** The reasoning effort a turn of `sessionId` runs with: the session's `/reasoning`, else the shell's resolution. */
@@ -725,7 +826,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * answers with. An unlisted command is answered with the list — it is not
    * passed to the model as if it were a question.
    */
-  async function runSlashCommand(sessionId: string, state: AcpSessionState, name: string, args: string): Promise<string> {
+  async function runSlashCommand(
+    sessionId: string,
+    state: AcpSessionState,
+    name: string,
+    args: string,
+    signal: AbortSignal,
+  ): Promise<string> {
     const method = ACP_AGENT_METHODS.sessionPrompt;
     switch (name) {
       case "help":
@@ -739,14 +846,17 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           );
           return `Model: ${current.choice.value}\nThis session can run:\n${lines.join("\n")}\nSwitch with /model <model>; it applies from the next turn.`;
         }
-        let switched: SessionModel;
+        let switched: SessionModel | "cancelled";
         try {
-          switched = await switchSessionModel(sessionId, args, "/model", true);
+          switched = await switchSessionModel(sessionId, args, "/model", true, signal);
         } catch (error) {
           if (error instanceof AcpError) {
             return error.message;
           }
           throw error;
+        }
+        if (switched === "cancelled") {
+          return "";
         }
         sendUpdate(sessionId, {
           sessionUpdate: "config_option_update",
@@ -823,19 +933,22 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // `session/set_config_option` arriving meanwhile does (flow 288, AC6).
     const model = sessionModel(sessionId, ACP_AGENT_METHODS.sessionPrompt);
 
-    const userLine = renderAcpPromptContent(promptField);
-
     // A slash command (flow 288, AC4) is keryx's to answer; it never reaches
     // the model and adds nothing to the transcript. It holds the session's
     // turn slot while it runs, like a turn: `/model` builds a provider, and a
     // prompt slipping in beside it would race the switch.
-    const command = parseAcpSlashCommand(userLine);
+    const command = parseAcpSlashPrompt(promptField);
     if (command !== undefined) {
       const slot: AcpActiveTurn = { controller: new AbortController(), cancelled: false, permissionRequestIds: new Set() };
       activeTurns.set(sessionId, slot);
       try {
-        const reply = await runSlashCommand(sessionId, state, command.name, command.args);
-        sendUpdate(sessionId, { sessionUpdate: "agent_message_chunk", content: textBlock(`${reply}\n`) });
+        const problem = acpCommandInputProblem(command);
+        const reply =
+          problem ?? (await runSlashCommand(sessionId, state, command.name, command.args, slot.controller.signal));
+        // A cancelled command says nothing more, like a cancelled turn.
+        if (!slot.cancelled && reply.length > 0) {
+          sendUpdate(sessionId, { sessionUpdate: "agent_message_chunk", content: textBlock(`${reply}\n`) });
+        }
         return { stopReason: slot.cancelled ? "cancelled" : "end_turn" };
       } finally {
         if (activeTurns.get(sessionId) === slot) {
@@ -844,6 +957,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       }
     }
 
+    const userLine = renderAcpPromptContent(promptField);
     // The roster, and why it is exactly what it is: `roster.ts`.
     const tools = sessionTools(sessionId, state);
     const toolNames = tools.map((tool) => tool.definition.name);
@@ -1138,6 +1252,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // started for this id is stopped, and this request's list is started.
     bindSessionMcp(sessionId, requestId, parsedMcp, state.resolvedRoot);
     announceCommands(sessionId, requestId);
+    // After a restart this connection has never run the session: continue on
+    // the model its transcript records, when it can run here (flow 288, T14).
+    await restoreRecordedModel(state, requestId, ACP_AGENT_METHODS.sessionLoad);
     return { configOptions: await configOptionsFor(sessionId, ACP_AGENT_METHODS.sessionLoad) };
   }
 
@@ -1234,8 +1351,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * Not awaiting does not reorder anything that matters. `handleLine` runs
    * synchronously into the handler body (through `handleMessage` ->
    * `handleRequest` -> `handler(...)`), so handlers still START in wire order,
-   * and `session/new` — which is synchronous end to end — has finished
-   * registering its session before the next line is even decoded. What changes
+   * and `session/new` — whose only `await` (the model list) comes AFTER the
+   * session is registered — has finished registering it before the next line
+   * is even decoded; its reply may then wait on that list. What changes
    * is only that a handler which SUSPENDS no longer suspends the reader with
    * it. JSON-RPC ids carry the correlation, so replies may land in completion
    * order.

@@ -9,7 +9,9 @@ import {
   ACP_SLASH_COMMANDS,
   ACP_TUI_ONLY_COMMANDS,
   acpAvailableCommands,
+  acpCommandInputProblem,
   parseAcpSlashCommand,
+  parseAcpSlashPrompt,
   unknownAcpCommandText,
 } from "./commands";
 
@@ -52,7 +54,15 @@ describe("reading a prompt as a command", () => {
       name: "model",
       args: "anthropic/claude-sonnet-5",
     });
-    expect(parseAcpSlashCommand("  /help  ")).toEqual({ name: "help", args: "" });
+    expect(parseAcpSlashCommand("/help  ")).toEqual({ name: "help", args: "" });
+  });
+
+  test("a leading space sends slash-led text to the model — the documented escape", () => {
+    expect(parseAcpSlashCommand(" /explain this")).toBeUndefined();
+  });
+
+  test("text with a second line is not a command, so nothing after the command is dropped (T14)", () => {
+    expect(parseAcpSlashCommand("/status\n\nalso fix X")).toBeUndefined();
   });
 
   test("a prompt that only starts with a path is not a command", () => {
@@ -66,5 +76,29 @@ describe("reading a prompt as a command", () => {
     for (const command of ACP_SLASH_COMMANDS) {
       expect(text).toContain(`/${command.name}`);
     }
+  });
+});
+
+describe("a command sent with more than it takes (flow 288, T14)", () => {
+  test("the argument comes from the first block alone — an attachment never becomes part of it", () => {
+    const parsed = parseAcpSlashPrompt([
+      { type: "text", text: "/model foo" },
+      { type: "resource", resource: { uri: "file:///secret.txt", text: "SECRET-CONTENT" } },
+    ]);
+    expect(parsed).toEqual({ name: "model", args: "foo", extraBlocks: true });
+    const problem = acpCommandInputProblem(parsed!);
+    expect(problem).toContain("takes no attachments");
+    expect(problem).not.toContain("SECRET");
+  });
+
+  test("a command that takes no argument refuses extra text instead of dropping it", () => {
+    const parsed = parseAcpSlashPrompt([{ type: "text", text: "/status please" }]);
+    expect(acpCommandInputProblem(parsed!)).toContain("/status takes no arguments; nothing was done");
+    expect(acpCommandInputProblem(parseAcpSlashPrompt([{ type: "text", text: "/status" }])!)).toBeUndefined();
+    expect(acpCommandInputProblem(parseAcpSlashPrompt([{ type: "text", text: "/model a/b" }])!)).toBeUndefined();
+  });
+
+  test("a first block that is not text is not a command", () => {
+    expect(parseAcpSlashPrompt([{ type: "image", data: "", mimeType: "image/png" }, { type: "text", text: "/help" }])).toBeUndefined();
   });
 });

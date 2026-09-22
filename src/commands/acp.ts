@@ -19,7 +19,7 @@ import { envWithSavedApiKeys, loadShellConfig, shellConfigPath } from "../lib/sh
 import { resolveAgentMaxOutputTokens, resolveReasoningEffort } from "./agent";
 import { resolveModelsForPicker, resolveProviderModelParamsByName } from "./providers";
 import { detectProviders, type DetectedProvider } from "./select";
-import { GRANT_REFRESH_TIMEOUT_MS, realMakeProvider, resolveTuiStartup } from "./shell";
+import { GRANT_REFRESH_TIMEOUT_MS, realMakeProvider, resolveTuiStartup, withSavedBaseUrls } from "./shell";
 import packageJson from "../../package.json" with { type: "json" };
 
 export interface ParsedAcpArgs {
@@ -244,7 +244,11 @@ export async function resolveAcpProvider(
     turnSettings: resolveAcpTurnSettings(initial.provider, deps.configDir),
     models: shellModelSource(
       { providerId: initial.provider, modelId: initial.model, ...(initial.baseUrl !== undefined ? { baseUrl: initial.baseUrl } : {}) },
-      { ...deps, makeProvider: make },
+      {
+        ...deps,
+        makeProvider: make,
+        ...(parsed.baseUrl !== undefined ? { probeBaseUrl: parsed.baseUrl } : {}),
+      },
     ),
   };
 }
@@ -254,9 +258,20 @@ export interface ShellModelSourceDeps extends ResolveAcpProviderDeps {
   readonly detect?: () => Promise<readonly DetectedProvider[]>;
   /** `keryx shell`'s picker model listing (`resolveModelsForPicker`) otherwise. */
   readonly modelsFor?: (provider: DetectedProvider) => Promise<readonly string[]>;
+  /**
+   * The `--base-url` FLAG, and only the flag: the shell's picker probes Ollama
+   * at exactly that (`realSelectProviderModel`, `redetect`). Never the saved
+   * launch provider's endpoint — that is a gateway's URL, not an Ollama.
+   */
+  readonly probeBaseUrl?: string;
 }
 
-/** How long one provider's live model list may hold the choice list (the picker's own probe is bounded too). */
+/**
+ * How long one network call behind the choice list may take — the Ollama
+ * probe and each provider's live model list. The WHOLE list is bounded again
+ * by the server (`AcpServerOptions.modelListTimeoutMs`), so a session is never
+ * held by it for longer than that.
+ */
 const MODEL_LIST_TIMEOUT_MS = 5_000;
 
 /**
@@ -288,11 +303,12 @@ export function shellModelSource(
     deps.detect ??
     (() =>
       detectProviders({
-        fetch: globalThis.fetch,
+        // `detectProviders`' Ollama probe has no timeout of its own.
+        fetch: ((input: string | URL | Request, init?: RequestInit) =>
+          globalThis.fetch(input, { ...init, signal: AbortSignal.timeout(MODEL_LIST_TIMEOUT_MS) })) as typeof fetch,
         env: envWithSavedApiKeys(process.env, deps.configDir),
         platform: process.platform,
-        // The Ollama probe base, as the shell's `redetect` passes its `--base-url`.
-        ...(launch.baseUrl !== undefined ? { baseUrl: launch.baseUrl } : {}),
+        ...(deps.probeBaseUrl !== undefined ? { baseUrl: deps.probeBaseUrl } : {}),
       }));
   const modelsFor =
     deps.modelsFor ??
@@ -310,7 +326,8 @@ export function shellModelSource(
   };
   return {
     choices: async () => {
-      const detected = await detect();
+      // The endpoints the shell saved per provider, overlaid by the shell's own rule.
+      const detected = withSavedBaseUrls(await detect(), loadShellConfig(deps.configDir));
       const launchEntry: DetectedProvider = detected.find((entry) => entry.name === launch.providerId) ?? {
         name: launch.providerId,
         models: [launch.modelId],

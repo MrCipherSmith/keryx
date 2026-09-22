@@ -60,19 +60,68 @@ export interface ParsedAcpSlashCommand {
 }
 
 /**
- * The command a prompt carries, or `undefined` when it is an ordinary prompt.
+ * The command one line of text carries, or `undefined` when it is not one.
  *
- * A command is a `/` followed by a word and then whitespace or the end. A prompt
- * that merely STARTS with a slash — a pasted path such as `/src/cli.ts fails` —
- * is not one: the token after the slash contains another `/`, so it goes to the
- * model like any other text instead of being answered "unknown command".
+ * A command is a `/`, a word, and optionally an argument ON THE SAME LINE —
+ * nothing else. Three things are deliberately NOT commands, and go to the
+ * model as ordinary text (flow 288, T14):
+ *   - text with a second line (`/status\n\nalso fix X`): answering `/status`
+ *     would silently drop the rest;
+ *   - text starting with whitespace (` /explain this`): the documented way to
+ *     send a slash-led prompt to the model, as Zed itself suggests;
+ *   - text whose first token contains another `/` (`/src/cli.ts fails`): a path.
  */
-export function parseAcpSlashCommand(prompt: string): ParsedAcpSlashCommand | undefined {
-  const match = /^\/([A-Za-z][\w-]*)(?:\s+([\s\S]*))?$/.exec(prompt.trim());
+export function parseAcpSlashCommand(text: string): ParsedAcpSlashCommand | undefined {
+  const line = text.trimEnd();
+  if (line.includes("\n") || line.includes("\r")) {
+    return undefined;
+  }
+  const match = /^\/([A-Za-z][\w-]*)(?:[ \t]+(.*))?$/.exec(line);
   if (match === null) {
     return undefined;
   }
   return { name: (match[1] ?? "").toLowerCase(), args: (match[2] ?? "").trim() };
+}
+
+export interface ParsedAcpSlashPrompt extends ParsedAcpSlashCommand {
+  /** The prompt carried more blocks (an attachment, an image) after the command line. */
+  readonly extraBlocks: boolean;
+}
+
+/**
+ * The command a `session/prompt`'s blocks carry: only when the FIRST block is
+ * text that is a command by {@link parseAcpSlashCommand}. The argument is
+ * taken from that line alone, so an attachment's content never becomes — or is
+ * echoed back as — part of it.
+ */
+export function parseAcpSlashPrompt(blocks: readonly unknown[]): ParsedAcpSlashPrompt | undefined {
+  const first = blocks[0] as { type?: unknown; text?: unknown } | undefined;
+  if (first === undefined || first.type !== "text" || typeof first.text !== "string") {
+    return undefined;
+  }
+  const command = parseAcpSlashCommand(first.text);
+  return command === undefined ? undefined : { ...command, extraBlocks: blocks.length > 1 };
+}
+
+/**
+ * Why a recognised command cannot run as sent, or `undefined` when it can.
+ * Refused rather than half-run: a command never drops what came with it.
+ */
+export function acpCommandInputProblem(command: ParsedAcpSlashPrompt): string | undefined {
+  const spec = ACP_SLASH_COMMANDS.find((entry) => entry.name === command.name);
+  if (spec === undefined) {
+    return undefined;
+  }
+  if (command.extraBlocks) {
+    return `/${command.name} takes no attachments; nothing was done. Send the command on its own.`;
+  }
+  if (spec.hint === undefined && command.args.length > 0) {
+    return (
+      `/${command.name} takes no arguments; nothing was done. ` +
+      "To send text that starts with a slash to the model, begin it with a space."
+    );
+  }
+  return undefined;
 }
 
 /** The line an unlisted command is answered with. */

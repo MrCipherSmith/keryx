@@ -42,8 +42,10 @@ export interface AcpModelSource {
   /**
    * Build the provider for `choice` through the shell's path. A string is the
    * reason it cannot run — shown to the operator, never replaced by a stand-in.
+   * `signal` aborts when the `/model` command asking for it is cancelled; the
+   * server applies nothing after that either way.
    */
-  readonly bind: (choice: AcpModelChoice) => Promise<AcpModelBinding | string>;
+  readonly bind: (choice: AcpModelChoice, signal?: AbortSignal) => Promise<AcpModelBinding | string>;
 }
 
 /** The config option id keryx uses for the model. */

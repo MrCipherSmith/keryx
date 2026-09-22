@@ -37,3 +37,16 @@ One release after BOTH flow 287 (A) and flow 288 (B) are done: flow 287 merges t
 - 2026-09-22T23:34:07.321Z - task-done: T10: Type AvailableCommand and config options in protocol.ts; unrefuse session/set_config_option
 - 2026-09-22T23:34:07.424Z - task-done: T11: Process tests over a real pipe for tools, commands and model switching
 - 2026-09-22T23:34:07.525Z - task-done: T12: Docs: CLI reference and README for the ACP roster, commands and model switching; README positioning line
+- 2026-09-22T23:41:56.253Z - task-added: T14: Review fixes: bounded model probe on the shell's base URL, saved per-provider endpoints, literal roster pin, stricter command parsing, cancel-aware switch, load restores the switched model
+- 2026-09-22T23:42:17.385Z - task-attempt: T14: started (attempt 1)
+
+## 2026-09-22 — T14 review fixes (subagent)
+
+1. Model list bounded: server waits at most `modelListTimeoutMs` (default 8 s) for the list; on timeout/failure the session gets the launch model only, stderr says so, and the next session asks again (a failure is not cached; a success is). The Ollama probe now uses the `--base-url` flag only (as the shell) and every probe fetch carries `AbortSignal.timeout`. Tests: `server-models.test.ts` "1 — …" (2), `acp.test.ts` "the Ollama probe uses the --base-url flag only…".
+2. Saved per-provider endpoints: the overlay is now `withSavedBaseUrls` in `shell.ts` (extracted from `resolveTuiStartup`, which calls it) and `shellModelSource` calls it. Test: `acp.test.ts` "a saved per-provider endpoint (auth.json baseUrls)…".
+3. AC3 pin is a literal list in `roster.test.ts`; plus a check that every pinned read-risk tool is a known read-only builtin/metaproject op and the gated two keep their risks. No registry-level untrusted marker exists (it is a per-result flag) — the comment says so.
+4. Commands: only a single-line first text block, not starting with whitespace, is a command; args from that line only; extra text on a no-arg command and any attachment are refused without echo; `session/cancel` during `/model` aborts the switch (signal reaches `bind`, nothing applied, nothing more sent). Documented the `/word` rule and the leading-space escape.
+5. `session/load` restores the recorded provider/model (read from the summary before `openSession` overwrites it) when it is still a choice; otherwise launch model + an agent message saying why.
+6. Overlapping switches: issued/applied sequence numbers — a later failure no longer discards an earlier success.
+7. Stale "synchronous end to end" comment corrected.
+- 2026-09-22T23:52:54.313Z - task-done: T14: Review fixes: bounded model probe on the shell's base URL, saved per-provider endpoints, literal roster pin, stricter command parsing, cancel-aware switch, load restores the switched model

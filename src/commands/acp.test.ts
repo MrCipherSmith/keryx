@@ -341,3 +341,55 @@ describe("flow 288 — model choices and switching come from keryx shell's sourc
     expect(resolution.kind === "ready" && resolution.models !== undefined).toBe(true);
   });
 });
+
+// Flow 288, T14 — the review's two endpoint findings.
+describe("flow 288 T14 — model choices use the endpoints keryx shell would", () => {
+  const make: NonNullable<ResolveAcpProviderDeps["makeProvider"]> = () =>
+    ({ describe: () => ({}) } as unknown as ProviderPort);
+
+  test("a saved per-provider endpoint (auth.json baseUrls) is what a switch is built against", async () => {
+    const dir = configDir({ provider: "ollama", model: "qwen3:8b", baseUrls: { deepseek: "https://deepseek.internal.example" } });
+    const built: (string | undefined)[] = [];
+    const source = shellModelSource(
+      { providerId: "ollama", modelId: "qwen3:8b" },
+      {
+        configDir: dir,
+        makeProvider: (name, model, baseUrl) => {
+          if (name === "deepseek") built.push(baseUrl);
+          return make(name, model, baseUrl);
+        },
+        detect: async () => [{ name: "deepseek", models: ["deepseek-chat"], baseUrl: "https://api.deepseek.com" }],
+        modelsFor: async (provider) => provider.models,
+      },
+    );
+    const choice = (await source.choices()).find((entry) => entry.value === "deepseek/deepseek-chat");
+    expect(choice?.baseUrl).toBe("https://deepseek.internal.example");
+    built.length = 0;
+    await source.bind(choice!);
+    expect(built).toEqual(["https://deepseek.internal.example"]);
+  });
+
+  test("the Ollama probe uses the --base-url flag only — never the saved launch provider's endpoint — and is bounded", async () => {
+    const dir = configDir({});
+    const probed: string[] = [];
+    const signals: (AbortSignal | undefined)[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      probed.push(String(input));
+      signals.push(init?.signal ?? undefined);
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    try {
+      const launch = { providerId: "deepseek", modelId: "deepseek-chat", baseUrl: "https://gateway.example" };
+      const deps = { configDir: dir, makeProvider: make, modelsFor: async () => [] as string[] };
+      await shellModelSource(launch, deps).choices();
+      expect(probed.filter((url) => url.endsWith("/api/tags"))).toEqual(["http://localhost:11434/api/tags"]);
+      expect(signals[0]).toBeInstanceOf(AbortSignal);
+      probed.length = 0;
+      await shellModelSource(launch, { ...deps, probeBaseUrl: "http://127.0.0.1:9" }).choices();
+      expect(probed.filter((url) => url.endsWith("/api/tags"))).toEqual(["http://127.0.0.1:9/api/tags"]);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+});

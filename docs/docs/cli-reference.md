@@ -206,7 +206,13 @@ can run here, from the same source `keryx shell`'s picker uses: the providers
 it detects (with your saved API keys) and each one's model list, narrowed to
 providers that have a usable credential — the shell's picker also lists
 providers you have not configured yet so you can enter a key, and an editor
-has nowhere to enter one. The launch model is always in the list. Choose one
+has nowhere to enter one. Each provider is reached at the endpoint the shell
+would use (a per-provider endpoint you saved in the shell wins), and Ollama is
+probed at `--base-url` only, as in the shell. The launch model is always in
+the list. Building the list touches the network, so it is started at launch
+and a new session waits for it at most 8 seconds: a list not ready by then is
+not waited for — that session offers only the launch model, stderr says so,
+and the next session asks again. Choose one
 in the editor (`session/set_config_option`, answered with the complete,
 updated `configOptions`) or type `/model <value>` (a bare model id works when
 only one provider has it; keryx then sends `config_option_update`). The
@@ -215,8 +221,15 @@ running finishes on the model it started with — and builds the provider the
 way the launch did: saved logins refreshed first, the shell's own provider
 factory, the new provider's saved settings. A value that is not in the list,
 or a provider that turns out to have no usable credential, is refused with
-the reason and the session stays on its model. Nothing is saved: `keryx
-shell`'s selection is left as it was.
+the reason and the session stays on its model; of two switches in flight,
+the one requested later wins, and one that fails leaves the other in effect.
+Nothing is saved: `keryx shell`'s selection is left as it was.
+
+A **loaded** session continues on the model it last ran — the session record
+names it — when that model is still in the list here; otherwise it continues
+on the launch model, and keryx says so in the session (`keryx: this session
+last ran …, but …; it continues on …`). A session this connection has already
+run keeps the model it has now.
 
 **When nothing is configured** — no flags, nothing saved, or a provider with
 no usable credential — `keryx acp` still starts and still answers
@@ -294,6 +307,19 @@ argument). A command arrives as ordinary prompt text beginning with `/`;
 keryx answers it itself — it never reaches the model and adds nothing to the
 conversation's history.
 
+**What counts as a command:** a prompt whose first block is ONE line of
+text starting with `/` and a word — `/model x`, `/status`, but also `/tmp is
+full` or `/explain this`, which are answered with the command list rather
+than sent to the model. To send text like that to the model, start it with a
+space (` /explain this`), as Zed itself suggests, or put it on more than one
+line: a prompt with a second line is never a command, so nothing typed after
+a command is silently dropped. A path (`/src/cli.ts fails`) is not a command
+either. A command that takes no argument refuses extra text, and any command
+sent with an attachment refuses it — in both cases saying so and doing
+nothing, and never repeating the attachment back. `session/cancel` while
+`/model` is building the new provider cancels the switch: the session keeps
+its model.
+
 | Command | What it does |
 |---|---|
 | `/help` | Lists these commands. |
@@ -304,8 +330,7 @@ conversation's history.
 Every other shell command is left out because it needs the terminal UI —
 `/workspace`, `/review`, `/integrations`, `/mcp`, `/game` and the pickers — or
 a session feature this wire does not carry. One typed anyway is answered with
-the list above rather than sent to the model. A prompt that merely starts with
-a path (`/src/cli.ts fails`) is not a command.
+the list above rather than sent to the model.
 
 ### MCP servers from the client
 
