@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "285",
+  "slug": "acp-agent-server",
+  "title": "Expose the keryx harness over the Agent Client Protocol so any ACP client can drive it",
+  "status": "initializing",
+  "createdAt": "2026-09-22T18:18:38.900Z",
+  "updatedAt": "2026-09-22T18:19:19.269Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Pin the ACP surface: read the schema, write down the exact methods, capability fields and version keryx will implement",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "JSON-RPC over stdio framing plus the wire types in one adapter module",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "initialize and capability negotiation, including refusal of an unsupported version",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "session/new and session/prompt over a real harness turn, streaming session/update",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "session/request_permission wired to the policy ask path, denial honoured",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "session/cancel, session/list, session/load over durable project sessions",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Client capabilities: fs and terminal used when advertised, fallback when not",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T9",
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Conformance test over a real stdio pipe against the built CLI with a fake provider",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Docs: README and CLI reference for keryx acp",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T12",
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-22T18:18:38.900Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-22T18:19:18.366Z",
+      "event": "task-added",
+      "detail": "T5: Pin the ACP surface: read the schema, write down the exact methods, capability fields and version keryx will implement"
+    },
+    {
+      "at": "2026-09-22T18:19:18.465Z",
+      "event": "task-added",
+      "detail": "T6: JSON-RPC over stdio framing plus the wire types in one adapter module"
+    },
+    {
+      "at": "2026-09-22T18:19:18.565Z",
+      "event": "task-added",
+      "detail": "T7: initialize and capability negotiation, including refusal of an unsupported version"
+    },
+    {
+      "at": "2026-09-22T18:19:18.665Z",
+      "event": "task-added",
+      "detail": "T8: session/new and session/prompt over a real harness turn, streaming session/update"
+    },
+    {
+      "at": "2026-09-22T18:19:18.764Z",
+      "event": "task-added",
+      "detail": "T9: session/request_permission wired to the policy ask path, denial honoured"
+    },
+    {
+      "at": "2026-09-22T18:19:18.862Z",
+      "event": "task-added",
+      "detail": "T10: session/cancel, session/list, session/load over durable project sessions"
+    },
+    {
+      "at": "2026-09-22T18:19:18.963Z",
+      "event": "task-added",
+      "detail": "T11: Client capabilities: fs and terminal used when advertised, fallback when not"
+    },
+    {
+      "at": "2026-09-22T18:19:19.065Z",
+      "event": "task-added",
+      "detail": "T12: Conformance test over a real stdio pipe against the built CLI with a fake provider"
+    },
+    {
+      "at": "2026-09-22T18:19:19.166Z",
+      "event": "task-added",
+      "detail": "T13: Docs: README and CLI reference for keryx acp"
+    },
+    {
+      "at": "2026-09-22T18:19:19.269Z",
+      "event": "task-added",
+      "detail": "T14: Verification: CI green, keryx health run"
+    }
+  ]
+}
