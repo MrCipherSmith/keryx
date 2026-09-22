@@ -1,0 +1,128 @@
+# Review — flow 286, event and schedule triggers (PR #645)
+
+Two review rounds ran on the trigger surface (`src/trigger/*`, `src/commands/trigger.ts`,
+`src/lib/managed-hook.ts`) against `origin/main`. Round 1 raised three findings; the fix for
+one of them introduced a fourth, which round 2 caught. All four were acted on before merge and
+re-verified on the fixed tree. PR #645 merged as `fc15334a` with 18/18 checks green.
+
+```keryx:findings
+[
+  {
+    "id": "F-001",
+    "reviewer": "code-reviewer (trigger)",
+    "severity": "major",
+    "file": "src/trigger/run.ts",
+    "quote": "skipIfOpen",
+    "problem": "The do-not-duplicate check for a flow-opening trigger read the open-flow list outside the run lock, so two triggered runs could both observe no open flow and both open one.",
+    "impact": "A repository event that fires twice in quick succession would open two equivalent flows, which is exactly the outcome the option exists to prevent.",
+    "suggested_fix": "Move the open-flow check inside withTriggerRunLock so the decision and the action share one critical section.",
+    "evidence": "The check ran before the lock was acquired in the run path; a concurrency test that interleaved two runs opened two flows.",
+    "class_scope": {
+      "sites": ["src/trigger/run.ts runTrigger open-flow check"],
+      "enumeration_method": "Listed every read of the open-flow set in the trigger surface (keryx ctx rg over src/trigger and src/commands/trigger.ts); the run path was the only caller that decided on it, and it was the only one outside the lock."
+    },
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At fix commit 9293ab67 the check is inside the lock, and the open-flow e2e test drives two runs concurrently and asserts the second is a no-op with its reason recorded. src/commands/trigger-run-open-flow.e2e.test.ts green; merged in fc15334a with CI 18/18.",
+      "verifier": "orchestrator re-review of 9293ab67 plus the flow's own tests"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 9293ab67 serializes the open-flow check under the run lock; merged to main in fc15334a via PR #645."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "code-reviewer (trigger)",
+    "severity": "major",
+    "file": "src/trigger/schedule.ts",
+    "quote": "cron",
+    "problem": "The printed cron line and systemd unit passed project paths and command arguments through unescaped, including the % character, which cron rewrites to a newline and systemd treats as a specifier.",
+    "impact": "A project path or argument containing % produced a schedule entry that silently ran a different command than the one printed — the operator installs what keryx told them to install.",
+    "suggested_fix": "Escape % for both targets and quote the values that the target actually unquotes.",
+    "evidence": "The cron and unit renderers interpolated raw strings; a path with % round-tripped to a truncated command.",
+    "class_scope": {
+      "sites": ["src/trigger/schedule.ts cron line renderer", "src/trigger/schedule.ts systemd unit renderer"],
+      "enumeration_method": "Enumerated every place the trigger surface emits text an external scheduler will parse: the two renderers in schedule.ts. No other command prints a schedule entry."
+    },
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 05fd7a5f both renderers escape %, and src/commands/trigger-schedule.e2e.test.ts executes the printed line the way the scheduler would and compares the effective command. Green; merged in fc15334a.",
+      "verifier": "orchestrator re-review of 9293ab67 and 05fd7a5f"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commits 9293ab67 and 05fd7a5f escape the schedule output; merged to main in fc15334a via PR #645."
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "code-reviewer (trigger)",
+    "severity": "major",
+    "file": "src/trigger/run.ts",
+    "quote": "evaluateTriggerBudget",
+    "problem": "An unreadable or malformed spend ledger made the budget gate fail open: the recorded spend was treated as zero and the run proceeded.",
+    "impact": "The one condition under which a spend ceiling matters most — a ledger the process cannot read — was the condition under which it stopped applying.",
+    "suggested_fix": "Make the recorded spend a tagged value: known with an amount, or unknown with a reason, and refuse the run when it is unknown.",
+    "evidence": "The ledger reader returned 0 on a parse failure and the caller could not tell that from a genuine zero.",
+    "class_scope": {
+      "sites": ["src/trigger/run.ts evaluateTriggerBudget", "src/trigger/record.ts ledger reader"],
+      "enumeration_method": "Traced every consumer of the run ledger; the budget gate is the only one that makes a go/no-go decision from it, and the reader it calls was the single place a read failure could be flattened to zero."
+    },
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 9293ab67 RecordedTriggerSpend is a tagged known/unknown value and an unreadable ledger produces a budget-refused outcome with the reason recorded. src/trigger/run.test.ts covers both branches; green and merged in fc15334a.",
+      "verifier": "orchestrator re-review of 9293ab67"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 9293ab67 makes the budget gate fail closed on an unreadable ledger; merged to main in fc15334a via PR #645."
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "code-reviewer (trigger, round 2)",
+    "severity": "major",
+    "file": "src/trigger/schedule.ts",
+    "quote": "WorkingDirectory",
+    "problem": "The F-002 escaping fix over-quoted the systemd directives that take their value verbatim: WorkingDirectory, StandardOutput and StandardError.",
+    "impact": "The printed unit was invalid — systemd-analyze verify reported that the path is not absolute — so the operator's installed timer would not start. The fix for one wrong schedule produced another.",
+    "suggested_fix": "Quote only the directives systemd itself unquotes (ExecStart, ExecStartPre, Environment) and emit the rest raw.",
+    "evidence": "Every directive went through the same quoting helper regardless of how systemd parses it.",
+    "class_scope": {
+      "sites": ["src/trigger/schedule.ts systemd unit renderer, directives WorkingDirectory, StandardOutput, StandardError"],
+      "enumeration_method": "Checked each directive the unit renderer emits against how systemd parses that directive; the three above take their value verbatim, the quoted ones (ExecStart, ExecStartPre, Environment) do not."
+    },
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 05fd7a5f the quoting is per-directive and a test runs systemd-analyze verify on the generated unit, skipping cleanly when the tool is absent rather than passing vacuously. src/trigger/schedule.test.ts green; CI 18/18 on PR #645, merged as fc15334a.",
+      "verifier": "orchestrator re-review of 05fd7a5f plus systemd-analyze verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 05fd7a5f restricts quoting to the directives systemd unquotes; merged to main in fc15334a via PR #645."
+    }
+  }
+]
+```
+
+## Coverage
+
+Reviewed: the trigger config loader and its per-entry refusal, the run path and its lock,
+the append-only run ledger and `trigger status`, hook installation beside the existing managed
+block, the schedule renderers, the flow-opening action, and the docs. Not reviewed: the rest of
+the repository, unchanged by this flow.
+
+## Outcome
+
+Four findings, all major, all acted on and re-verified on the fixed tree. No finding was
+dismissed. Round 2 exists because round 1's own fix regressed the schedule output — recorded
+here so the pair reads as one story rather than two unrelated rounds.

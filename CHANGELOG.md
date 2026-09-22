@@ -3,6 +3,39 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.154] — 2026-09-22
+Two ways to start work without a person typing the first line: an editor can
+now drive the keryx harness over the Agent Client Protocol, and a repository
+event or a schedule can run a keryx action on its own.
+### Added
+- **`keryx acp` — the harness as an ACP agent over stdio.** A client launches it
+  as a subprocess and speaks newline-delimited JSON-RPC; stdout carries frames
+  and nothing else. `initialize`, `session/new`, `session/prompt`,
+  `session/cancel`, `session/list` and `session/load` are implemented, and the
+  other seven v1 agent methods are refused with `-32601` and a reason. A turn
+  streams as `session/update` while it runs; a gated call is announced, then
+  asked through `session/request_permission`, and only an explicit allow runs
+  it. `list` and `load` speak for the project's own durable sessions, so a
+  session started in `keryx shell` opens in the editor with its history
+  replayed. Reads route through `fs/read_text_file` when the client advertises
+  it. Writes and shell execution stay local, for reasons recorded in the code:
+  `apply_patch` applies a multi-file diff atomically, which
+  `fs/write_text_file`'s one-file-whole-content shape cannot express, and
+  `shell_exec`'s streaming and approval gate have no `terminal/*` equivalent.
+- **`keryx trigger` — start work from a repository event or a schedule.** A
+  project declares triggers in a validated config; a malformed entry is refused
+  on load with its reason while the others still work. `keryx trigger run` does
+  exactly one pass under the same project lock the interactive commands take,
+  records what fired it, when, what it did and what it cost, and
+  `keryx trigger status` reads that record rather than re-deriving it. A trigger
+  whose action opens a flow can refuse to open a second one while an equivalent
+  flow is already open. For a schedule, keryx prints the cron line or the
+  systemd timer unit to install and runs no daemon of its own.
+### Fixed
+- **A triggered run that cannot read its own spend ledger refuses instead of
+  proceeding.** The recorded spend is now a tagged known/unknown value, so the
+  one condition under which a ceiling matters most no longer reads as zero.
+
 ## [0.2.153] — 2026-09-22
 External children of `claude-cli` run again on 2.1.278. Every external run died
 on the command line before the agent was asked anything, and was reported as a
