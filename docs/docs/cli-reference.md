@@ -259,10 +259,15 @@ Refusals print their code and exit non-zero (except where noted):
   tables render as responsive bordered tables; escape a literal separator as
   `\|` or place it inside inline code.
 - Structured execution plans need no operator command. During multi-step work,
-  the agent can create and update a session-backed plan with `pending`,
-  `in_progress`, `completed`, `blocked`, and `skipped` states. When present,
-  its current window appears automatically under **Plan** in the TUI sidebar
-  and returns after session resume. This is separate from `/plan`, whose name
+  the agent can create and update a session-backed plan with `proposed`,
+  `pending`, `in_progress`, `completed`, `blocked`, and `skipped` states. When
+  present, its current window appears automatically under **Plan** in the TUI
+  sidebar and returns after session resume; clicking the section opens the whole
+  plan in a modal (`Plan` and `Meta` tabs). `proposed` means the item is
+  awaiting YOUR approval and is not work in progress: it never makes the agent
+  continue on its own, so a plan published for approval is a legitimate place for
+  a turn to end. Approving is the operator turning those items into
+  `pending`/`in_progress` work. This is separate from `/plan`, whose name
   predates the panel and still means the operator-controlled read-only mode.
 - `/search-provider` configures and tests web search providers for `web_search`
   (DuckDuckGo is the default and needs no setup): run with no arguments to open

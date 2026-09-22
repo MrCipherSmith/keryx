@@ -3,6 +3,48 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.145] — 2026-09-22
+A plan can now be published FOR APPROVAL. The plan vocabulary had no way to say
+"here is the plan, your call": a published plan necessarily contained `pending`
+items, and the shell's own continuation nudge fires on exactly that, so
+publishing a plan and then stopping was impossible by construction — the only
+sign a plan existed was prose in the reply.
+
+### Added
+- **`proposed` — a plan can be published for approval.** The sixth plan status is
+  deliberately NOT work: an item awaiting a human is not something the agent may
+  simply continue, so `proposed` never triggers the continuation nudge, and
+  `plan_set` followed by a reply is a real stopping point. When nothing is in
+  progress and something awaits approval, the turn says so — `[plan] Published
+  for your approval — nothing is in progress, so this turn ends here` — and ends
+  rather than continuing. The instruction teaches the vocabulary: mark items
+  `proposed`, state the plan, end the turn; use `pending` only when the plan will
+  be executed in the same turn.
+- **The sidebar and the `/plan` modal render that state as what it is.** The
+  sidebar gives it a `◇` glyph, and when nothing is in progress it anchors its
+  window on the first thing still to do rather than the head of the list — a long
+  plan used to show items 1–7 while everything moved at the far end. The modal
+  spells the status out as "awaiting approval" in yellow, counts it in the
+  summary, adds an `Approval` line to Meta, and aligns its status column, so a
+  mixed plan reads as a table.
+
+### Fixed
+- **The plan modal's tab is `Plan`, not `Steps`.** The README and the 0.2.144
+  changelog named a tab that never existed.
+- **Three release-gate tests now carry budgets derived from what they cost.**
+  `bun run check` was red on `main` for reasons that were budgets, not behaviour.
+  The serve-turn-store bound test wrote ~3 000 events of 400 bytes to build a log
+  1.5 × past the config bound, and every append is a synchronous write PLUS an
+  unconditional chmod: 9.1 s alone, 10.3 s inside the suite, against bun's 5 s
+  default. The retired-spellings scan walks ~1000 markdown files (17.4 s inside
+  the suite). The global-install fixture clones this repository itself and
+  installs into a temp prefix (131 s), which exceeded its 120 s hook cap — that
+  failure reads `(fail) (unnamed) 120006ms`, naming no test and looking like
+  infrastructure. The first test now proves the same premise with 300 large events
+  instead of 3 000 small ones (1.6 s) and asserts the log stays under
+  `MAX_TURN_FILE_BYTES`; the other two carry 60 s and 600 s budgets, an order of
+  magnitude over their contended measurements. No product behaviour changed.
+
 ## [0.2.144] — 2026-09-22
 Work state in the shell no longer depends on a lifecycle it does not belong to:
 the execution plan survives a Slate close, a security-flagged proposal can be

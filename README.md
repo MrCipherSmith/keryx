@@ -255,9 +255,12 @@ What is in it today:
   completed, blocked, and skipped steps in the sidebar, and restored sessions
   continue from the same plan instead of rebuilding it from transcript text.
   Clicking the sidebar's Plan section (its header or any row) opens the whole
-  plan in a modal: a Steps tab grouped and coloured by state, a Meta tab with the
-  revision, per-status counts, the active item, the blocked ids, and the plan
-  file it lives in.
+  plan in a modal: a Plan tab that spells each item's status out and colours it
+  by state, a Meta tab with the revision, per-status counts, the active item, the
+  blocked ids, and the plan file it lives in. A plan can also be published FOR
+  APPROVAL — items marked `proposed` await a human, never force the agent to
+  continue, and are shown as `◇ awaiting approval` in both the sidebar and the
+  modal.
 - **Theme-aware rich transcripts.** Assistant prose, headings, emphasis,
   inline code, fenced code, diffs, and GFM pipe tables use semantic colors
   derived from the selected `/theme`. Use a language fence such as
