@@ -164,7 +164,7 @@ export async function main(): Promise<void> {
  * reads a group's own lines from. Hoisted rather than duplicated: a second copy
  * of this text would drift from the one operators actually read.
  */
-const USAGE_BODY = `Usage:
+export const USAGE_BODY = `Usage:
   keryx                                        Show CLI usage
   keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
                                                Start TUI agent shell (sessions are per-project)

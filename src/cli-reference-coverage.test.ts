@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { expect, test } from "bun:test";
-import { CLI_ROUTES } from "./cli";
+import { CLI_ROUTES, USAGE_BODY } from "./cli";
 
 // Documentation drift is invisible to every check this repository already
 // runs. `check:doc-links` proves a relative link resolves; `mkdocs build
@@ -57,16 +57,16 @@ test("every top-level CLI verb has a section in the CLI reference", async () => 
 // The reference documented `orient` at length while `keryx` with no arguments
 // listed it nowhere — neither in the usage block nor in the Commands
 // descriptions — so a user could only find it by already knowing it existed.
-// The banner is a separate surface from the reference and needs its own check;
-// `printHelp` is a template literal, so this reads the source rather than
-// capturing stdout.
+// The banner is a separate surface from the reference and needs its own check.
+// It asserts on `USAGE_BODY` — the exact text `printHelp` prints — rather than
+// on a slice of the source: `022a11f3` hoisted that constant ABOVE `printHelp`
+// ("hoisted rather than duplicated", so the two surfaces cannot drift), and a
+// slice anchored on the function then read a region containing no verb lines at
+// all, reporting 39 verbs "missing" from a banner that names every one of them.
 test("the top-level usage banner names every verb the CLI reference documents", async () => {
-  const [source, reference] = await Promise.all([
-    readFile(new URL("./cli.ts", import.meta.url), "utf8"),
-    readFile(CLI_REFERENCE, "utf8"),
-  ]);
+  const reference = await readFile(CLI_REFERENCE, "utf8");
 
-  const banner = source.slice(source.indexOf("function printHelp"));
+  const banner = USAGE_BODY;
   expect(banner.length).toBeGreaterThan(1000);
 
   const documented = Object.keys(CLI_ROUTES).filter(
