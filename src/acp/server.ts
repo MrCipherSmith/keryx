@@ -59,7 +59,7 @@ import {
   type AcpStopReason,
 } from "./protocol";
 import { renderAcpPromptContent } from "./prompt-content";
-import { AcpSessionRegistry } from "./session";
+import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError } from "./session";
 
 export interface AcpServerOptions {
   readonly input: AsyncIterable<Uint8Array | string>;
@@ -159,6 +159,43 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     readonly permissionRequestIds: Set<string>;
   }
   const activeTurns = new Map<string, AcpActiveTurn>();
+
+  /**
+   * ONE turn per session, at a time (flow 285, T16).
+   *
+   * A session's `history` array is mutated IN PLACE by `runAgentTurn` for the
+   * session's whole lifetime (`session.ts`, `AcpSessionState.history`), so two
+   * overlapping turns on one session id do not run "in parallel": they
+   * interleave writes into the same transcript, persist each other's partial
+   * state, and leave `activeTurns` holding one `AcpActiveTurn` where two are
+   * live — which `session/cancel` could then only ever reach the newer of
+   * (and whose `finally` would delete the other turn's slot). `session/load`
+   * is the same hazard from the other side: it REPLACES the registry entry,
+   * and therefore the history array a turn already running against the old
+   * entry keeps writing to.
+   *
+   * Refused rather than queued: a client that sent a second prompt has not
+   * been told the first one finished, and silently serialising would look like
+   * a hung request. `invalidRequest` is the code this file already uses for a
+   * request that is well-formed but not legal in the connection's current
+   * state (`requireInitialized`), as opposed to `invalidParams` for a
+   * malformed field or `resourceNotFound` for a session that does not exist.
+   */
+  function refuseIfBusy(method: string, sessionId: string): void {
+    if (!activeTurns.has(sessionId)) {
+      return;
+    }
+    refuse(
+      invalidRequest({
+        reason:
+          `${method}: a turn is already running for session ${sessionId}; ` +
+          "wait for its session/prompt response, or send session/cancel first",
+        method,
+        sessionId,
+        condition: "session-busy",
+      }),
+    );
+  }
 
   /** Shapes, sends and interprets one `session/request_permission`. `undefined` = could not be asked. */
   const askPermissionFor = (sessionId: string, turn: AcpActiveTurn): AcpPermissionAsker => {
@@ -292,6 +329,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         data: { sessionId },
       });
     }
+    // Before anything mutates `state.history` (see `refuseIfBusy`). Safe to
+    // check synchronously here: `dispatch` starts every handler in wire order
+    // and this whole prologue — including the `activeTurns.set` below — runs
+    // before the first `await`, so no second prompt can slip between the check
+    // and the registration.
+    refuseIfBusy(ACP_AGENT_METHODS.sessionPrompt, sessionId);
 
     const userLine = renderAcpPromptContent(promptField);
     // THE ROSTER IS EXACTLY WHAT THE PERMISSION PATH COVERS (context.md F-4).
@@ -405,11 +448,19 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // `finishReasonToStopReason` alone would read as `end_turn`.
       return { stopReason: turn.cancelled ? "cancelled" : finishReasonToStopReason(result.finishReason) };
     } finally {
+      // Released on EVERY exit path — a normal finish, a thrown error, and a
+      // cancelled turn alike — or the session would stay "busy" for the rest
+      // of the connection and every later prompt would be refused.
+      //
       // No further `session/cancel` for this turn is meaningful once it has
       // finished (there is nothing left running to stop, and nothing left
       // pending to settle — `askPermissionFor` already removes its own
       // request id from `turn.permissionRequestIds` as each ask settles).
-      activeTurns.delete(sessionId);
+      // Only THIS turn's own slot is released: deleting by id alone would, if
+      // the busy guard above ever regressed, hand a later turn's slot away.
+      if (activeTurns.get(sessionId) === turn) {
+        activeTurns.delete(sessionId);
+      }
     }
   }
 
@@ -601,7 +652,28 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         ),
       );
     }
-    const state = registry.load(sessionId, cwd, clientCapabilities);
+    // A load REPLACES the registry entry, and with it the `history` array a
+    // turn in flight is still writing into — refused for the same reason a
+    // second prompt is (`refuseIfBusy`), and before `registry.load` does any
+    // work.
+    refuseIfBusy(ACP_AGENT_METHODS.sessionLoad, sessionId);
+    let state: ReturnType<typeof registry.load>;
+    try {
+      state = registry.load(sessionId, cwd, clientCapabilities);
+    } catch (cause) {
+      if (!(cause instanceof AcpSessionTranscriptUnreadableError)) {
+        throw cause;
+      }
+      // The session exists but its transcript could not be read — a distinct,
+      // actionable answer, not `resourceNotFound` (that would say "no such
+      // session", which is false) and not a silent resume into an empty
+      // history (the one thing `TranscriptUnreadableError` exists to prevent).
+      refuse({
+        code: JSON_RPC_ERROR_CODES.internalError,
+        message: `Cannot load session ${sessionId}: ${cause.cause.message}`,
+        data: { sessionId, cwd, file: cause.cause.file, reason: cause.cause.reason },
+      });
+    }
     if (state === undefined) {
       refuse({
         code: JSON_RPC_ERROR_CODES.resourceNotFound,

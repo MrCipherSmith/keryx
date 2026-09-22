@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { closeSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { AcpSessionRegistry } from "./session";
+import { createSession, TranscriptUnreadableError } from "../session";
+import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError } from "./session";
 
 const dirs: string[] = [];
 
@@ -62,5 +63,41 @@ describe("AcpSessionRegistry", () => {
 
     // updateHandle() on an unknown id is a no-op, not a throw.
     registry.updateHandle("unknown-id", updated);
+  });
+
+  test("load() answers with a distinct, named error when the transcript cannot be read, rather than resuming into an empty history", () => {
+    const root = tempDir("keryx-acp-session-");
+    Bun.spawnSync(["git", "init", "-q", "."], { cwd: root });
+    const dataDir = tempDir("keryx-acp-session-data-");
+    const created = createSession({ cwd: root, dataDir, provider: "fake", model: "fake-model" });
+
+    // Same trigger the flow 130 readers guard against: a 3 GiB sparse
+    // `context.jsonl` (`ftruncateSync` on a hole — no real disk used) is over
+    // `MAX_TRANSCRIPT_FILE_BYTES`, so `loadContext` refuses it with a typed
+    // throw instead of reading back an empty conversation.
+    const contextFile = path.join(created.dir, "context.jsonl");
+    const handle = openSync(contextFile, "w", 0o600);
+    try {
+      ftruncateSync(handle, 3 * 1024 * 1024 * 1024);
+    } finally {
+      closeSync(handle);
+    }
+
+    const registry = new AcpSessionRegistry({ providerId: "fake", modelId: "fake-model", dataDir });
+    let thrown: unknown;
+    try {
+      registry.load(created.summary.id, root, undefined);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(AcpSessionTranscriptUnreadableError);
+    const error = thrown as AcpSessionTranscriptUnreadableError;
+    expect(error.sessionId).toBe(created.summary.id);
+    expect(error.cause).toBeInstanceOf(TranscriptUnreadableError);
+    expect(error.cause.file).toBe(contextFile);
+
+    // No half-registered session for an id whose load failed.
+    expect(registry.get(created.summary.id)).toBeUndefined();
   });
 });

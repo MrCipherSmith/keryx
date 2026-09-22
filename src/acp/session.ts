@@ -10,7 +10,14 @@
 // operator needs `requestedCwd` too.
 
 import type { NormalizedMessage } from "../harness/provider/types";
-import { createSession, listSessions, openSession, resolveProjectRoot, type SessionHandle } from "../session";
+import {
+  createSession,
+  listSessions,
+  openSession,
+  resolveProjectRoot,
+  TranscriptUnreadableError,
+  type SessionHandle,
+} from "../session";
 import type { AcpClientCapabilities } from "./protocol";
 
 export interface AcpSessionState {
@@ -35,6 +42,26 @@ export interface AcpSessionState {
    * only record it — nothing in this dispatch reads it yet.
    */
   readonly clientCapabilities: AcpClientCapabilities | undefined;
+}
+
+/**
+ * `load()`'s durable session exists (it is in `listSessions()`) but its
+ * transcript could not be read — `openSession` -> `loadContext` raised
+ * `TranscriptUnreadableError` rather than reading back an empty conversation
+ * (flow 130, `session/store.ts`). Kept distinct from `load()` returning
+ * `undefined` ("no such session") so `handleSessionLoad` can answer the ACP
+ * client with a specific, actionable JSON-RPC error naming the file and
+ * reason, instead of the dispatcher's generic `internalError` fallback or —
+ * worse — a `session/load` that silently reports a session with no messages.
+ */
+export class AcpSessionTranscriptUnreadableError extends Error {
+  constructor(
+    readonly sessionId: string,
+    override readonly cause: TranscriptUnreadableError,
+  ) {
+    super(`session ${sessionId}: ${cause.message}`);
+    this.name = "AcpSessionTranscriptUnreadableError";
+  }
 }
 
 export interface AcpSessionRegistryOptions {
@@ -100,13 +127,26 @@ export class AcpSessionRegistry {
     if (!known) {
       return undefined;
     }
-    const opened = openSession({
-      cwd,
-      resumeId: sessionId,
-      ...(this.options.dataDir !== undefined ? { dataDir: this.options.dataDir } : {}),
-      provider: this.options.providerId,
-      model: this.options.modelId,
-    });
+    let opened: ReturnType<typeof openSession>;
+    try {
+      opened = openSession({
+        cwd,
+        resumeId: sessionId,
+        ...(this.options.dataDir !== undefined ? { dataDir: this.options.dataDir } : {}),
+        provider: this.options.providerId,
+        model: this.options.modelId,
+      });
+    } catch (cause) {
+      // `openSession` -> `loadContext` throws rather than returning `[]` for a
+      // transcript it cannot read (session/store.ts). Rethrown as a distinct,
+      // ACP-domain type so `handleSessionLoad` can tell "unreadable" apart
+      // from "unknown session" and answer with a specific error instead of
+      // resuming into a history that looks empty.
+      if (cause instanceof TranscriptUnreadableError) {
+        throw new AcpSessionTranscriptUnreadableError(sessionId, cause);
+      }
+      throw cause;
+    }
     const state: AcpSessionState = {
       sessionId: opened.handle.summary.id,
       requestedCwd: cwd,

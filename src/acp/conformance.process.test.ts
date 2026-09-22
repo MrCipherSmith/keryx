@@ -59,6 +59,16 @@ afterEach(() => {
 });
 
 /**
+ * The streamed turn's model text, ONE `text_delta` per entry.
+ *
+ * Shared between the fixture and the AC2 assertion on purpose (flow 285,
+ * T16): the test asserts one `agent_message_chunk` PER delta, in order, so a
+ * regression that buffered the turn's text and flushed it once at the end
+ * fails here even though the concatenation would still read correctly.
+ */
+const STREAMED_TEXT_DELTAS = ["Your directory is ", "ready."] as const;
+
+/**
  * One fixture covering every `stream()` call this test's single session
  * makes, IN CALL ORDER (the fixture provider replays `turns[N]` on the
  * (N+1)th call, across the whole process's lifetime — see
@@ -80,11 +90,7 @@ function buildFixture(): string {
       { kind: "tool_call_end", toolCallId: "c0", input: "{}" },
       { kind: "model_end" },
     ],
-    [
-      { kind: "text_delta", text: "Your directory is " },
-      { kind: "text_delta", text: "ready." },
-      { kind: "model_end" },
-    ],
+    [...STREAMED_TEXT_DELTAS.map((text) => ({ kind: "text_delta", text })), { kind: "model_end" }],
     [
       { kind: "tool_call_start", toolCallId: "c1", toolName: "shell_exec" },
       { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ command: "echo would-run" }) },
@@ -181,6 +187,17 @@ describe("AC8 — one conformance run drives the whole ACP surface, in order", (
           expect(kinds).toContain("tool_call");
           expect(kinds).toContain("tool_call_update");
           expect(kinds).toContain("agent_message_chunk");
+
+          // AC2, the part "they arrived before the reply" alone does NOT
+          // prove: the text arrived INCREMENTALLY. One chunk per fixture
+          // `text_delta`, carrying that delta's own text, in order — so a
+          // regression to a single buffered flush at end of turn (whose
+          // concatenation would still be "Your directory is ready.", and
+          // which would still land before this reply) fails right here.
+          const chunkTexts = midTurn
+            .filter((m) => (m.params?.["update"] as { sessionUpdate?: string }).sessionUpdate === "agent_message_chunk")
+            .map((m) => (m.params?.["update"] as { content?: { text?: string } }).content?.text);
+          expect(chunkTexts).toEqual([...STREAMED_TEXT_DELTAS]);
         }
 
         // --- 4. session/prompt: a gated call, DENIED -----------------------

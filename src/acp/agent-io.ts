@@ -81,9 +81,11 @@ export function tryParseJson(text: string): unknown {
  *
  * F-3 (context.md §5): `onToolCall(name, input)` / `onToolResult(name,
  * result)` carry no id — ACP's `tool_call`/`tool_call_update` need one. This
- * mints a `toolCallId` per `onToolCall` and correlates the matching
- * `onToolResult` to the OLDEST still-open call of the SAME NAME (a per-name
- * FIFO queue) — the closest approximation available without threading an id
+ * mints exactly ONE `toolCallId` per actual tool call — whichever of
+ * `onToolCall` and the approval gate reaches the adapter first announces it,
+ * the other adopts it — and correlates the matching `onToolResult` to the
+ * OLDEST still-open call of the SAME NAME (a per-name FIFO queue) — the
+ * closest approximation available without threading an id
  * through `AgentIO` itself. Two concurrent calls to the same tool with the
  * same input are indistinguishable and resolve in start order; that
  * limitation is inherent to the hook shape (documented in `context.md` F-3),
@@ -105,19 +107,33 @@ export function createAcpAgentIo(
   send: AcpUpdateSink,
   askPermission?: AcpPermissionAsker,
 ): AgentIO {
-  const pendingByName = new Map<string, string[]>();
+  /**
+   * One entry per ACP tool call that has been ANNOUNCED and not yet closed.
+   *
+   * `claimed` is what makes "exactly one id per call" hold when the approval
+   * gate runs BEFORE `onToolCall` (see {@link requestApproval}): an entry the
+   * permission path announced ahead of time is `claimed: false` until the
+   * matching `onToolCall` adopts it, and an adopted entry never mints a second
+   * id for the same call.
+   */
+  interface PendingToolCall {
+    readonly toolCallId: string;
+    /** The exact argument string both `requestApproval` and `onToolCall` are handed for this call. */
+    readonly input: string;
+    claimed: boolean;
+  }
+  const pendingByName = new Map<string, PendingToolCall[]>();
 
   const emit = (update: AcpSessionUpdate): void => send(sessionId, update);
 
   /** Mints an id for a call, announces it as `tool_call`, and opens it in the per-name FIFO. */
-  const openToolCall = (name: string, input: string, front = false): string => {
+  const openToolCall = (name: string, input: string, claimed: boolean): string => {
     const toolCallId = randomUUID();
     const queue = pendingByName.get(name) ?? [];
-    if (front) {
-      queue.unshift(toolCallId);
-    } else {
-      queue.push(toolCallId);
-    }
+    // ALWAYS in announcement order. The client sees these ids in this order,
+    // and `onToolCall`/`onToolResult` below resolve within that order rather
+    // than against it.
+    queue.push({ toolCallId, input, claimed });
     pendingByName.set(name, queue);
     emit({
       sessionUpdate: "tool_call",
@@ -135,15 +151,20 @@ export function createAcpAgentIo(
    * ACP's ask, built on keryx's gate.
    *
    * ORDER IS THE POINT (F-3): the client must already have been shown the call
-   * it is being asked to authorise. `runAgentTurn` calls `onToolCall` before
-   * `executeCall` reaches the approval gate, so the `tool_call` update is
-   * already on the wire and its id is the head of this tool's FIFO — the same
-   * id `onToolResult` will later close. The fallback covers the one path where
-   * a gate runs without a preceding `onToolCall` (the concurrent
-   * `spawn_subagent` pre-pass, which approves before the batch loop announces):
-   * it announces the call FIRST and puts its id at the head of the queue, so
-   * the client still sees what it is approving and the result still lands on
-   * that id. Never ask about a call the client has not been shown.
+   * it is being asked to authorise, under the id that will later report the
+   * outcome — ONE id per actual tool call, never two.
+   *
+   * `runAgentTurn` reaches this gate from two directions. Usually `onToolCall`
+   * has already announced the call (`commands/agent.ts`, the per-call loop),
+   * and the entry with this exact `input` is reused. But two paths approve
+   * BEFORE that announcement: the untrusted-content taint gate (which asks,
+   * then falls through to `io.onToolCall`) and the concurrent
+   * `spawn_subagent` pre-pass (which approves inside `executeCall` before the
+   * batch loop announces). Both used to produce a SECOND `tool_call` id for
+   * the same call, and since `onToolResult` closes only one of them, the other
+   * stayed "running" in the client forever. So this announces the call itself
+   * when nothing matches, and marks the entry unclaimed — the `onToolCall`
+   * that follows adopts it instead of minting another id.
    */
   const requestApproval = async (
     tool: string,
@@ -153,7 +174,12 @@ export function createAcpAgentIo(
     if (askPermission === undefined) {
       return false;
     }
-    const toolCallId = pendingByName.get(tool)?.[0] ?? openToolCall(tool, input, true);
+    // Matched on the argument string, which every approval site in
+    // `commands/agent.ts` passes verbatim from the same `call.input` that
+    // reaches `onToolCall` — precise enough to pair the right call even when
+    // several calls to the same tool are open at once.
+    const pending = pendingByName.get(tool)?.find((entry) => entry.input === input);
+    const toolCallId = pending?.toolCallId ?? openToolCall(tool, input, false);
     const options = permissionOptionsFor(meta);
     const response = await askPermission({
       toolCall: {
@@ -191,11 +217,28 @@ export function createAcpAgentIo(
       emit({ sessionUpdate: "agent_thought_chunk", content: textBlock(delta.text) });
     },
     onToolCall: (name, input) => {
-      openToolCall(name, input);
+      // A call the permission path already announced (see `requestApproval`)
+      // is ADOPTED here, not announced again: the client keeps the one id it
+      // was shown, and that id is the one `onToolResult` closes below.
+      const announcedAhead = pendingByName.get(name)?.find((entry) => !entry.claimed && entry.input === input);
+      if (announcedAhead !== undefined) {
+        announcedAhead.claimed = true;
+        return;
+      }
+      openToolCall(name, input, true);
     },
     onToolResult: (name, result: InteractiveToolResult) => {
       const queue = pendingByName.get(name);
-      const toolCallId = queue?.shift();
+      // The oldest call this adapter has actually SEEN start (F-3's per-name
+      // FIFO). Preferring a claimed entry keeps the pairing right when the
+      // permission path announced a call whose `onToolCall` has not arrived
+      // yet — that entry belongs to a later result, not this one. With none
+      // claimed, the head is the call being closed: the gate refused it before
+      // `onToolCall` was ever reached, and its announced id is still the one
+      // to report against.
+      const index = queue?.findIndex((entry) => entry.claimed) ?? -1;
+      const pending = queue?.splice(index >= 0 ? index : 0, 1)[0];
+      const toolCallId = pending?.toolCallId;
       emit({
         sessionUpdate: "tool_call_update",
         // A result with no matching start (should not happen — `onToolCall`

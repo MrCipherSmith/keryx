@@ -9,7 +9,7 @@
   "title": "Expose the keryx harness over the Agent Client Protocol so any ACP client can drive it",
   "status": "in-progress",
   "createdAt": "2026-09-22T18:18:38.900Z",
-  "updatedAt": "2026-09-22T19:47:19.011Z",
+  "updatedAt": "2026-09-22T20:19:08.899Z",
   "source": {
     "type": "description",
     "ref": null
@@ -233,7 +233,7 @@
       "id": "T12",
       "title": "Conformance test over a real stdio pipe against the built CLI with a fake provider",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -243,13 +243,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Docs: README and CLI reference for keryx acp",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -259,7 +260,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
@@ -267,12 +269,55 @@
       "kind": "verify",
       "status": "todo",
       "dependsOn": [
-        "T12",
-        "T13"
+        "T16"
       ],
       "attempts": {
         "count": 0,
         "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Fix the CI guard: a transcript reader called outside a try in the ACP session path",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T20:05:44.961Z",
+            "outcome": "started",
+            "detail": "sonnet: CI guard fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Review fixes: one announcement per tool call, refuse a concurrent prompt or load for a busy session, strengthen the streaming assertion",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T15"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T20:19:08.899Z",
+            "outcome": "started"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -412,6 +457,46 @@
       "at": "2026-09-22T19:47:19.011Z",
       "event": "task-done",
       "detail": "T11: Client capabilities: fs and terminal used when advertised, fallback when not"
+    },
+    {
+      "at": "2026-09-22T20:00:55.471Z",
+      "event": "task-done",
+      "detail": "T12: Conformance test over a real stdio pipe against the built CLI with a fake provider"
+    },
+    {
+      "at": "2026-09-22T20:00:55.571Z",
+      "event": "task-done",
+      "detail": "T13: Docs: README and CLI reference for keryx acp"
+    },
+    {
+      "at": "2026-09-22T20:05:44.857Z",
+      "event": "task-added",
+      "detail": "T15: Fix the CI guard: a transcript reader called outside a try in the ACP session path"
+    },
+    {
+      "at": "2026-09-22T20:05:44.961Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — sonnet: CI guard fix"
+    },
+    {
+      "at": "2026-09-22T20:09:10.395Z",
+      "event": "task-added",
+      "detail": "T16: Review fixes: one announcement per tool call, refuse a concurrent prompt or load for a busy session, strengthen the streaming assertion"
+    },
+    {
+      "at": "2026-09-22T20:09:10.494Z",
+      "event": "task-depends-set",
+      "detail": "T14: dependsOn T16 (was T12, T13) — verification runs after the review fixes"
+    },
+    {
+      "at": "2026-09-22T20:11:48.871Z",
+      "event": "task-done",
+      "detail": "T15: Fix the CI guard: a transcript reader called outside a try in the ACP session path"
+    },
+    {
+      "at": "2026-09-22T20:19:08.899Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1)"
     }
   ]
 }

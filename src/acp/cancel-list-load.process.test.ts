@@ -12,7 +12,7 @@
 // no network call and no model is involved.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ACP_PERMISSION_OPTION_IDS } from "./permission";
@@ -273,6 +273,54 @@ describe("AC5 — session/list and session/load", () => {
       const reply = await client.waitFor((m) => m.id === loadId, "the session/load reply");
       expect(reply.error).toBeDefined();
       expect(reply.result).toBeUndefined();
+    } finally {
+      await client.kill();
+    }
+  }, TIMEOUT_MS);
+
+  test("session/load whose transcript cannot be read is refused with the reason, and the connection keeps serving requests", async () => {
+    const created = createSession({ cwd: projectDir, dataDir, provider: "fake", model: "fake-model" });
+    // Same trigger flow 130's readers guard against (session/store.ts): an
+    // oversized `context.jsonl` (sparse via `ftruncateSync` — no real disk
+    // used) makes `loadContext` refuse it with a typed throw instead of
+    // reading back an empty conversation.
+    const contextFile = path.join(created.dir, "context.jsonl");
+    const fd = openSync(contextFile, "w", 0o600);
+    try {
+      ftruncateSync(fd, 3 * 1024 * 1024 * 1024);
+    } finally {
+      closeSync(fd);
+    }
+
+    const client = new AcpProcessClient({ fixture: shellFixture([]), cwd: projectDir, dataDir, homeRoot: root });
+    try {
+      const initId = client.request("initialize", {
+        protocolVersion: ACP_PROTOCOL_VERSION,
+        clientCapabilities: {},
+        clientInfo: { name: "list-load-unreadable-test", version: "0" },
+      });
+      await client.waitFor((m) => m.id === initId, "the initialize reply");
+
+      const loadId = client.request("session/load", { sessionId: created.summary.id, cwd: projectDir, mcpServers: [] });
+      const reply = await client.waitFor((m) => m.id === loadId, "the session/load reply");
+
+      // A specific, actionable refusal — not a hang, not a crash, and not a
+      // result that would read as "a session with no messages".
+      expect(reply.result).toBeUndefined();
+      expect(reply.error).toBeDefined();
+      expect(String(reply.error?.message)).toContain(created.summary.id);
+      expect(String(reply.error?.message)).toContain("context.jsonl");
+      const data = reply.error?.data as { sessionId?: string; cwd?: string; file?: string; reason?: string } | undefined;
+      expect(data?.sessionId).toBe(created.summary.id);
+      expect(data?.file).toBe(contextFile);
+      expect(typeof data?.reason).toBe("string");
+
+      // The connection is still alive: an unrelated session works fine on the
+      // very next request over the same pipe.
+      const sessionId = await openSession(client);
+      const promptId = client.request("session/prompt", { sessionId, prompt: [{ type: "text", text: "hi" }] });
+      const promptReply = await client.waitFor((m) => m.id === promptId, "the session/prompt reply");
+      expect(promptReply.result).toEqual({ stopReason: "end_turn" });
     } finally {
       await client.kill();
     }
