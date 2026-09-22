@@ -3,6 +3,34 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.152] — 2026-09-22
+A bare `.metaproject/` no longer passes for an initialized metaproject:
+the tools that can only read it are no longer offered where there is
+nothing to read, and the turn-start orientation block no longer tells
+the model to build an index that does not exist.
+
+### Fixed
+- **The agent roster stops offering eighteen unusable tools.** The index
+  tools were gated on `existsSync(".metaproject")`, and a project holding
+  only `.metaproject/workspaces/` — the state `keryx status` had always
+  called `incomplete` — was handed `graph_*`, `wiki_*`, `memory_search`,
+  `health_status`, `flow_status` and the rest, every call answering
+  `index-incomplete`. The gate is now one manifest-based detection,
+  shared with `keryx status` (`src/lib/metaproject-state.ts`), so the
+  report and the roster cannot disagree again. A project that built its
+  graph or wiki but lost its manifest keeps its tools: `keryx update`
+  restores the manifest, and the artifacts on disk are readable until it
+  runs.
+- **The orientation block is dropped where there was nothing to read
+  from.** `buildOrientation` always emitted something: with no graph it
+  degraded to `_not built — run keryx gdgraph build_`, so a session whose
+  roster deliberately carried no tool to run it with was told to run it.
+  It is now empty, and the instruction says plainly that an
+  `index-incomplete` or empty answer is not a finding about the project.
+- **An incomplete metaproject says so once, to the operator.** The
+  readline agent session prints why the index tools are missing and which
+  command creates the workspace they read.
+
 ## [0.2.151] — 2026-09-22
 The interactive shell paints from the active theme's own roles, so a light
 palette is readable — including the `❯` command echo in the feed that used to be
