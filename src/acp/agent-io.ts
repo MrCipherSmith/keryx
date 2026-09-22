@@ -236,6 +236,15 @@ export function createAcpAgentIo(
       // claimed, the head is the call being closed: the gate refused it before
       // `onToolCall` was ever reached, and its announced id is still the one
       // to report against.
+      //
+      // "Oldest claimed" is correct because the queue is never MIXED in a way
+      // that would defeat it, not because it is correct in general: the batch
+      // loop in `commands/agent.ts` runs calls for one tool name strictly in
+      // sequence (at most one entry open at a time), and the only concurrent
+      // path — the `spawn_subagent` pre-pass — leaves every entry unclaimed
+      // while it runs. A future caller that can hold a claimed entry open
+      // AHEAD of an unclaimed one would close the wrong call here, and would
+      // need a real per-call token rather than this ordering argument.
       const index = queue?.findIndex((entry) => entry.claimed) ?? -1;
       const pending = queue?.splice(index >= 0 ? index : 0, 1)[0];
       const toolCallId = pending?.toolCallId;

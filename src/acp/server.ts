@@ -187,9 +187,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
     refuse(
       invalidRequest({
+        // The remedy names WAITING, not just cancelling: `session/cancel`
+        // aborts the turn but does not free the slot by itself — the turn's own
+        // `finally` does that once it observes the abort, which for a turn
+        // parked in a long tool call is not immediate. A client told merely to
+        // "cancel first" would re-prompt straight away and be refused again.
         reason:
           `${method}: a turn is already running for session ${sessionId}; ` +
-          "wait for its session/prompt response, or send session/cancel first",
+          "wait for its session/prompt response — send session/cancel first if you do not want to wait for it to finish, " +
+          "then prompt again once the cancelled turn has replied",
         method,
         sessionId,
         condition: "session-busy",
