@@ -197,6 +197,27 @@ flags in the arguments your client launches `keryx acp` with. `--base-url`
 overrides the endpoint, as in the shell; `--data-dir` overrides where sessions
 are stored (mainly useful for a sandboxed client integration test).
 
+**Switching model from the editor.** That launch model is where a session
+starts, not where it has to stay. Every `session/new` and `session/load`
+response carries `configOptions` with one `select` option of category
+`model` — the editor's model picker — whose `currentValue` is the model the
+session is running. Its values are `<provider>/<model>` for every model keryx
+can run here, from the same source `keryx shell`'s picker uses: the providers
+it detects (with your saved API keys) and each one's model list, narrowed to
+providers that have a usable credential — the shell's picker also lists
+providers you have not configured yet so you can enter a key, and an editor
+has nowhere to enter one. The launch model is always in the list. Choose one
+in the editor (`session/set_config_option`, answered with the complete,
+updated `configOptions`) or type `/model <value>` (a bare model id works when
+only one provider has it; keryx then sends `config_option_update`). The
+switch is per session, applies **from the next turn** — a turn already
+running finishes on the model it started with — and builds the provider the
+way the launch did: saved logins refreshed first, the shell's own provider
+factory, the new provider's saved settings. A value that is not in the list,
+or a provider that turns out to have no usable credential, is refused with
+the reason and the session stays on its model. Nothing is saved: `keryx
+shell`'s selection is left as it was.
+
 **When nothing is configured** — no flags, nothing saved, or a provider with
 no usable credential — `keryx acp` still starts and still answers
 `initialize`, writes one line to stderr saying what is missing, and refuses
@@ -225,11 +246,66 @@ promised here.
 | Method | What it does |
 |---|---|
 | `initialize` | Negotiates the protocol version and returns keryx's `agentCapabilities`/`agentInfo`. Requesting the version keryx serves gets it back unchanged; requesting a newer one gets keryx's latest supported version — not an error, the spec requires this, and the client then decides whether to proceed or close the connection; a malformed or out-of-range version (not an integer, or outside `uint16`) is refused with a JSON-RPC error. Any other request before `initialize` succeeds is refused, not served. |
-| `session/new` | Creates a keryx session bound to `resolveProjectRoot(cwd)` — the git toplevel above the requested `cwd`, or the requested `cwd` itself outside a repository. `session/list`/`session/load` report this resolved root back, not the `cwd` you sent, so a session opened at `/repo/packages/web` is later listed with `cwd: /repo`. `mcpServers` is accepted: its stdio entries are started (or, when another session on this connection already runs the same list, shared) and the others are reported — see [MCP servers from the client](#mcp-servers-from-the-client). Only a list that does not match the schema (not an array, or an entry with no `name`) is refused, with `-32602`. Refused with the configured message when no provider is configured (see above). |
+| `session/new` | Creates a keryx session bound to `resolveProjectRoot(cwd)` — the git toplevel above the requested `cwd`, or the requested `cwd` itself outside a repository. `session/list`/`session/load` report this resolved root back, not the `cwd` you sent, so a session opened at `/repo/packages/web` is later listed with `cwd: /repo`. `mcpServers` is accepted: its stdio entries are started (or, when another session on this connection already runs the same list, shared) and the others are reported — see [MCP servers from the client](#mcp-servers-from-the-client). Only a list that does not match the schema (not an array, or an entry with no `name`) is refused, with `-32602`. Refused with the configured message when no provider is configured (see above). The response carries `configOptions` (the model option, see *Switching model from the editor* above), and right after it keryx sends one `available_commands_update` (see [Slash commands](#slash-commands)). |
+| `session/set_config_option` | Switches the session's model from its next turn (`configId: "model"`, `value` one of the option's values) and answers with the complete `configOptions`. Not refused while a turn runs — that turn keeps its model. An unknown option id or value, or a provider that cannot be built, is refused with `-32602` and the reason. |
 | `session/prompt` | Runs a real harness turn in that session and streams `session/update` notifications (assistant text, reasoning, tool calls and their results) as the turn runs — not buffered to the end — resolving with the spec's `stopReason` (`end_turn`, `max_tokens`, `max_turn_requests`, or `cancelled`) once it finishes. One turn per session at a time: a second `session/prompt` for a session whose turn is still running is refused with `-32600` and `data.condition: "session-busy"` rather than interleaved into the same transcript. Wait for the first turn's response before prompting again; `session/cancel` shortens that wait but does not end it, because the slot is freed by the cancelled turn itself once it observes the abort — a turn parked in a long tool call frees it a moment later, not instantly. |
 | `session/cancel` | A notification (no reply). Aborts the running turn — the same abort path a local hard-stop uses — and settles any `session/request_permission` the turn had open as a local denial, so a pending ask never leaves the client hanging. The turn's `session/prompt` response resolves `stopReason: "cancelled"`, and no further `session/update` for that turn is sent afterwards. Cancelling an unknown or already-finished session is a harmless no-op. |
 | `session/list` | Lists the project's durable sessions — the same store `keryx sessions` and `keryx shell --resume` read. An omitted `cwd` lists the sessions of the ACP process's own project root (refusing an optional parameter would itself be a conformance break); a provided `cwd` filters to that project. One page per call; there is no pagination (`nextCursor`) today. |
-| `session/load` | Loads a session created anywhere — including one created outside any ACP connection, such as with `keryx shell` — and replays its history as `session/update` notifications **before** responding, as the spec requires. `user`/`assistant` messages become `user_message_chunk`/`agent_message_chunk`; a stored tool call/result pair becomes a `tool_call` + `tool_call_update` sharing one id; `system` messages are dropped (there is no ACP chunk for them). A replayed tool call's status is always reported `completed` — the persisted transcript keeps only the final content, not a separate success/failure marker, so that is the honest approximation available, not a claim that the original call actually succeeded. Loading a session that has a turn in flight is refused the same way `session/prompt` is (`-32600`, `data.condition: "session-busy"`): the load would replace the history the running turn is still writing to. A session whose transcript exists but cannot be read is answered `-32603` with the session id, the transcript's path and the reason in `error.data` — not `resourceNotFound` (the session does exist) and not an empty replay (which would tell the client the conversation had no messages). This is the one error on this wire that names a path on the agent's filesystem; it is the transcript under the data directory the client itself launched the agent with, and it is there because "which file, and why" is what makes the failure fixable. `mcpServers` is handled as for `session/new`, and the list a load carries **replaces** the session's servers: the session is rebound to the set for its new list, a set no session uses any more is stopped, and nothing is started if the load itself is refused. |
+| `session/load` | Loads a session created anywhere — including one created outside any ACP connection, such as with `keryx shell` — and replays its history as `session/update` notifications **before** responding, as the spec requires. `user`/`assistant` messages become `user_message_chunk`/`agent_message_chunk`; a stored tool call/result pair becomes a `tool_call` + `tool_call_update` sharing one id; `system` messages are dropped (there is no ACP chunk for them). A replayed tool call's status is always reported `completed` — the persisted transcript keeps only the final content, not a separate success/failure marker, so that is the honest approximation available, not a claim that the original call actually succeeded. Loading a session that has a turn in flight is refused the same way `session/prompt` is (`-32600`, `data.condition: "session-busy"`): the load would replace the history the running turn is still writing to. A session whose transcript exists but cannot be read is answered `-32603` with the session id, the transcript's path and the reason in `error.data` — not `resourceNotFound` (the session does exist) and not an empty replay (which would tell the client the conversation had no messages). This is the one error on this wire that names a path on the agent's filesystem; it is the transcript under the data directory the client itself launched the agent with, and it is there because "which file, and why" is what makes the failure fixable. `mcpServers` is handled as for `session/new`, and the list a load carries **replaces** the session's servers: the session is rebound to the set for its new list, a set no session uses any more is stopped, and nothing is started if the load itself is refused. Like `session/new`, the response carries `configOptions` and is followed by one `available_commands_update`. |
+
+### Tools a session offers
+
+A turn in an ACP session is offered:
+
+- **keryx's project tools** — `search_code`, `graph_find`, `graph_query`,
+  `graph_symbol`, `graph_path`, `graph_affected`, `repomap`, `memory_search`,
+  `read_wiki`, `wiki_ask`, `wiki_resolve`, `wiki_evidence`, `wiki_backlinks`,
+  `wiki_freshness`, `flow_status`, `health_status`, `skills_catalog`,
+  `skill_load` and `test_related` — in exactly the projects where `keryx
+  shell` offers them. They come from the same assembly the shell uses, gate
+  included: in a project with no usable metaproject (no manifest and nothing
+  built under `.metaproject/`) only `search_code` is offered, because every
+  other one could only answer "never built here". All are read-only.
+- `get_cwd`, `list_dir`, `read_file` (through the client's `fs/read_text_file`
+  when it advertises it, see below), `shell_exec` and `apply_patch` — the last
+  two always asked through `session/request_permission`.
+- `search_tool`/`use_tool`, only when the client sent MCP servers (above).
+
+Each is reported to the client with an ACP tool `kind`: the search tools as
+`search`, the read tools as `read`, `shell_exec` and `use_tool` as `execute`,
+`apply_patch` as `edit` — so an editor shows what kind of call it is looking
+at rather than a generic one.
+
+Not offered, on purpose: `web_fetch` and `web_search`, and keryx's own
+configured MCP servers — their results are untrusted content, which switches
+on an approve-before-announce path this wire has no live test for yet;
+`spawn_subagent`, because delegation needs a process port the ACP server does
+not build; the agent-bus tools, a shell surface; and `ask_user`, workspace,
+Slate, execution-plan and background-task tools, which need a host or a
+session store this wire does not carry. `/status` lists what a session is
+actually offered.
+
+### Slash commands
+
+After every `session/new` and `session/load` keryx sends one
+`available_commands_update` listing the commands it handles over ACP, in the
+published shape (`name`, `description`, and `input.hint` for one that takes an
+argument). A command arrives as ordinary prompt text beginning with `/`;
+keryx answers it itself — it never reaches the model and adds nothing to the
+conversation's history.
+
+| Command | What it does |
+|---|---|
+| `/help` | Lists these commands. |
+| `/model [<model>]` | Without an argument, lists the models the session can run and marks the current one. With one, switches to it from the next turn — the same switch as the editor's model picker — and sends `config_option_update`. |
+| `/reasoning [<level>]` | Shows or sets this session's reasoning effort (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) from the next turn. Not saved, as in the shell. |
+| `/status` | The session id, project root, model, reasoning effort, the tools the session's turns are offered, and whether the client's MCP servers are running. |
+
+Every other shell command is left out because it needs the terminal UI —
+`/workspace`, `/review`, `/integrations`, `/mcp`, `/game` and the pickers — or
+a session feature this wire does not carry. One typed anyway is answered with
+the list above rather than sent to the model. A prompt that merely starts with
+a path (`/src/cli.ts fails`) is not a command.
 
 ### MCP servers from the client
 
@@ -318,8 +394,7 @@ these; the refusal exists for the client that does anyway.
 | `session/resume` | `sessionCapabilities.resume` is not advertised; use `session/load`, which replays history instead. |
 | `session/close` | `sessionCapabilities.close` is not advertised; keryx sessions are durable on disk and have no open/closed state to leave. |
 | `session/delete` | `sessionCapabilities.delete` is not advertised; session retention is an operator decision, not a client one. |
-| `session/set_mode` | `session/new` returns no `modes`, so there is no mode to set. |
-| `session/set_config_option` | `session/new` returns no `configOptions`, so there is no option to set. |
+| `session/set_mode` | `session/new` returns no `modes`, so there is no mode to set. (The model is a config option — see `session/set_config_option` above.) |
 
 ### Client capabilities
 
@@ -400,8 +475,8 @@ to run".
   atomicity or `shell_exec`'s streaming/approval behaviour for a capability
   keryx does not need on a machine it already shares with the client.
 - **Not implemented at all:** `session/resume`, `session/close`,
-  `session/delete`, `session/set_mode`, `session/set_config_option` — see the
-  refusal table above for why each one specifically.
+  `session/delete`, `session/set_mode` — see the refusal table above for why
+  each one specifically.
 - **No cross-project `session/list`.** Only the ACP process's own project
   (or a `cwd` you pass) is listed; there is no "every session on this
   machine" view.

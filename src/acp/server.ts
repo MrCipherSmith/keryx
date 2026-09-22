@@ -12,14 +12,31 @@
 // launches of the CLI) never see each other's state.
 
 import { randomUUID } from "node:crypto";
-import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps } from "../commands/agent";
-import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
-import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
-import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import {
+  buildAgentSystemInstruction,
+  isReasoningEffortLevel,
+  REASONING_EFFORT_LEVELS,
+  runAgentTurn,
+  type AgentDeps,
+  type ReasoningEffortLevel,
+} from "../commands/agent";
+import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
 import { listSessions, persistHistory } from "../session";
 import { createAcpAgentIo, toolKindFor, tryParseJson, type AcpPermissionAsker } from "./agent-io";
-import { acpAwareReadFileTool, type AcpFsReader } from "./capability-tools";
+import type { AcpFsReader } from "./capability-tools";
+import { acpAvailableCommands, acpCommandHelpText, parseAcpSlashCommand, unknownAcpCommandText } from "./commands";
+import {
+  ACP_MODEL_CONFIG_ID,
+  acpModelChoice,
+  acpModelConfigOption,
+  findAcpModelChoice,
+  type AcpModelBinding,
+  type AcpModelChoice,
+  type AcpModelSource,
+  type AcpTurnSettings,
+} from "./models";
+import { buildAcpSessionTools } from "./roster";
 import { AcpClientRequests } from "./client-requests";
 import { AcpDispatcher, type AcpDispatchOutcome } from "./dispatch";
 import { AcpLineFramer, encodeAcpMessage } from "./framing";
@@ -55,11 +72,13 @@ import {
   type AcpRequestPermissionResponse,
   type AcpSessionInfo,
   type AcpSessionNotification,
+  type AcpSessionConfigOption,
   type AcpSessionUpdate,
+  type AcpSetSessionConfigOptionResponse,
   type AcpStopReason,
 } from "./protocol";
 import { renderAcpPromptContent } from "./prompt-content";
-import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError } from "./session";
+import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError, type AcpSessionState } from "./session";
 import {
   acpMcpSetKey,
   parseAcpMcpServers,
@@ -100,6 +119,13 @@ export interface AcpServerOptions {
    */
   readonly turnSettings?: AcpTurnSettings;
   /**
+   * Where the models a session can switch to come from, and how one is built
+   * (flow 288, AC5/AC6) — `shellModelSource` in `../commands/acp.ts`, which is
+   * `keryx shell`'s picker source and provider factory. Absent: the launch
+   * model is the only choice.
+   */
+  readonly models?: AcpModelSource;
+  /**
    * Aborted to stop the connection now (SIGTERM/SIGINT in the CLI): input is
    * no longer awaited, running turns are aborted, and every client MCP server
    * is stopped before `runAcpServer` resolves.
@@ -107,8 +133,7 @@ export interface AcpServerOptions {
   readonly shutdown?: AbortSignal;
 }
 
-/** The subset of `AgentDeps` `keryx shell` resolves per provider at launch. */
-export type AcpTurnSettings = Pick<AgentDeps, "modelParams" | "maxOutputTokens" | "reasoningEffort">;
+export type { AcpTurnSettings } from "./models";
 
 const DEFAULT_AGENT_INFO: AcpImplementation = { name: "keryx", version: "0" };
 
@@ -153,8 +178,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * MCP start-up report below is the one notification keryx emits outside a
    * turn, so it is ordered by this hook rather than by a timer.
    */
-  const afterReply = new Map<string, () => void>();
+  const afterReply = new Map<string, (() => void)[]>();
   const replyKey = (id: JsonRpcId): string => JSON.stringify(id);
+  const onReplied = (id: JsonRpcId, work: () => void): void => {
+    const key = replyKey(id);
+    afterReply.set(key, [...(afterReply.get(key) ?? []), work]);
+  };
 
   /**
    * Client-supplied MCP servers (flow 287, AC3), SHARED per connection.
@@ -378,6 +407,135 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   }
 
   /**
+   * The model each session runs (flow 288, AC5/AC6).
+   *
+   * Per SESSION, because ACP's config options are: two threads in one editor
+   * may run two models. A session that never switched runs the launch model.
+   * A turn reads its session's entry ONCE, before it starts, and runs to the
+   * end with that binding — so a switch that lands mid-turn (through
+   * `session/set_config_option`, which is not refused while a turn runs)
+   * changes the next turn, never the running one.
+   */
+  interface SessionModel {
+    readonly choice: AcpModelChoice;
+    readonly binding: AcpModelBinding;
+  }
+  const sessionModels = new Map<string, SessionModel>();
+  /** Per-session switch counter: of two overlapping switches, the later REQUEST wins, not the later build. */
+  const switchSeq = new Map<string, number>();
+  /** `/reasoning <level>` for one session — the shell's session override, never saved. */
+  const reasoningOverrides = new Map<string, ReasoningEffortLevel>();
+  const launchChoice = acpModelChoice(options.providerId, options.modelId);
+
+  function launchModel(method: string): SessionModel {
+    return {
+      choice: launchChoice,
+      binding: {
+        provider: requireProvider(method),
+        providerId: options.providerId,
+        modelId: options.modelId,
+        turnSettings: options.turnSettings ?? {},
+      },
+    };
+  }
+
+  function sessionModel(sessionId: string, method: string): SessionModel {
+    return sessionModels.get(sessionId) ?? launchModel(method);
+  }
+
+  /**
+   * Every model a session can switch to, resolved ONCE per connection and
+   * started as soon as there is a provider — the shell's source probes the
+   * network, and `session/new` should not pay for that on every thread. The
+   * launch model is always a choice, whatever the source answered.
+   */
+  let choicesOnce: Promise<readonly AcpModelChoice[]> | undefined;
+  const modelChoices = (): Promise<readonly AcpModelChoice[]> =>
+    (choicesOnce ??= (async () => {
+      let listed: readonly AcpModelChoice[] = [];
+      if (options.models !== undefined) {
+        try {
+          listed = await options.models.choices();
+        } catch (error) {
+          options.logError(
+            `acp: listing models failed (${error instanceof Error ? error.message : String(error)}); only the launch model is offered`,
+          );
+        }
+      }
+      return listed.some((choice) => choice.value === launchChoice.value) ? listed : [launchChoice, ...listed];
+    })());
+  if (options.provider !== undefined) {
+    void modelChoices();
+  }
+
+  async function configOptionsFor(sessionId: string, method: string): Promise<AcpSessionConfigOption[]> {
+    const choices = await modelChoices();
+    return [acpModelConfigOption(choices, sessionModel(sessionId, method).choice)];
+  }
+
+  /**
+   * Switch `sessionId` to the model `requested` names, from its next turn on.
+   * Refused — with the reason, and the session left on its current model —
+   * when `requested` is not a choice or its provider cannot be built. Never
+   * writes `keryx shell`'s saved selection: the choice lives in this map.
+   */
+  async function switchSessionModel(
+    sessionId: string,
+    requested: string,
+    method: string,
+    allowBareModelId: boolean,
+  ): Promise<SessionModel> {
+    const choices = await modelChoices();
+    const choice = findAcpModelChoice(choices, requested, allowBareModelId);
+    const available = choices.map((entry) => entry.value);
+    if (choice === undefined) {
+      refuse(
+        invalidParams(
+          `${method}: "${requested}" is not a model this session can run; choose one of: ${available.join(", ")}`,
+          { value: requested, available },
+        ),
+      );
+    }
+    const seq = (switchSeq.get(sessionId) ?? 0) + 1;
+    switchSeq.set(sessionId, seq);
+    const current = sessionModel(sessionId, method);
+    let binding: AcpModelBinding;
+    if (choice.value === current.choice.value) {
+      binding = current.binding;
+    } else if (choice.value === launchChoice.value) {
+      binding = launchModel(method).binding;
+    } else {
+      let built: AcpModelBinding | string;
+      try {
+        built = options.models === undefined ? "keryx acp has no model source" : await options.models.bind(choice);
+      } catch (error) {
+        built = error instanceof Error ? error.message : String(error);
+      }
+      if (typeof built === "string") {
+        refuse(invalidParams(`${method}: cannot switch to ${choice.value}: ${built}`, { value: choice.value, reason: built }));
+      }
+      binding = built;
+    }
+    const next: SessionModel = { choice, binding };
+    if (switchSeq.get(sessionId) === seq) {
+      sessionModels.set(sessionId, next);
+    }
+    return sessionModels.get(sessionId) ?? next;
+  }
+
+  /** The reasoning effort a turn of `sessionId` runs with: the session's `/reasoning`, else the shell's resolution. */
+  function reasoningFor(sessionId: string, model: SessionModel): string | undefined {
+    return reasoningOverrides.get(sessionId) ?? model.binding.turnSettings.reasoningEffort;
+  }
+
+  /** Tell the client which commands keryx handles, once the reply creating/loading the session is out. */
+  function announceCommands(sessionId: string, requestId: JsonRpcId): void {
+    onReplied(requestId, () => {
+      sendUpdate(sessionId, { sessionUpdate: "available_commands_update", availableCommands: acpAvailableCommands() });
+    });
+  }
+
+  /**
    * Tell the client which of this session's MCP servers are not running, and
    * why (flow 287, AC5).
    *
@@ -455,7 +613,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       sessionMcp.set(sessionId, set);
     }
     const bound = set;
-    afterReply.set(replyKey(requestId), () => {
+    onReplied(requestId, () => {
       reportMcpProblems(sessionId, bound.mcp.refused);
       void bound.mcp.ready.then(() => {
         // A session rebound before its servers settled reports nothing: the
@@ -507,7 +665,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     };
   }
 
-  function handleSessionNew(params: unknown, requestId: JsonRpcId): AcpNewSessionResponse {
+  async function handleSessionNew(params: unknown, requestId: JsonRpcId): Promise<AcpNewSessionResponse> {
     requireInitialized(ACP_AGENT_METHODS.sessionNew);
     refuseIfStopping(ACP_AGENT_METHODS.sessionNew);
     requireProvider(ACP_AGENT_METHODS.sessionNew);
@@ -518,11 +676,121 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // reported, not refused for the whole call (see `parseAcpMcpServers`).
     const parsed = parseAcpMcpServers(ACP_AGENT_METHODS.sessionNew, obj["mcpServers"]);
     const state = registry.create(cwd, clientCapabilities);
-    // Started in the background: `session/new` stays synchronous end to end
-    // (the read loop relies on it, see `dispatch` below) and answers at once;
-    // the session's first prompt waits for the dials to settle instead.
+    // Started in the background: everything up to here is synchronous — the
+    // session is registered before the next line is even decoded (see
+    // `dispatch` below) — and the session's first prompt waits for the dials
+    // to settle instead.
     bindSessionMcp(state.sessionId, requestId, parsed, state.resolvedRoot);
-    return { sessionId: state.sessionId };
+    announceCommands(state.sessionId, requestId);
+    // The one await: the model list, which the connection started resolving
+    // at launch (flow 288, AC5).
+    return { sessionId: state.sessionId, configOptions: await configOptionsFor(state.sessionId, ACP_AGENT_METHODS.sessionNew) };
+  }
+
+  /**
+   * The tools one turn of `sessionId` is offered (`roster.ts`). `read_file`
+   * goes through the client's `fs/read_text_file` when — and only when — this
+   * session's client advertised `fs.readTextFile` (T11, AC6).
+   */
+  function sessionTools(sessionId: string, state: AcpSessionState): InteractiveTool[] {
+    const readViaClient: AcpFsReader = async (path, line) => {
+      const params: AcpReadTextFileRequest = {
+        sessionId,
+        path,
+        ...(line !== undefined ? { line } : {}),
+      };
+      const outcome = await clientRequests.request(ACP_CLIENT_METHODS.fsReadTextFile, params);
+      if (outcome.kind !== "result") {
+        return undefined;
+      }
+      const result = outcome.result;
+      if (typeof result !== "object" || result === null) {
+        return undefined;
+      }
+      const content = (result as Partial<AcpReadTextFileResponse>).content;
+      return typeof content === "string" ? content : undefined;
+    };
+    return buildAcpSessionTools({
+      root: state.resolvedRoot,
+      clientCapabilities: state.clientCapabilities,
+      readViaClient,
+      // Flow 287 (AC3/AC4): the client's own MCP servers for THIS session —
+      // offered only when the session has any.
+      clientMcpTools: sessionMcp.get(sessionId)?.mcp.tools ?? [],
+    });
+  }
+
+  /**
+   * Run one advertised slash command (flow 288, AC4) and return the text keryx
+   * answers with. An unlisted command is answered with the list — it is not
+   * passed to the model as if it were a question.
+   */
+  async function runSlashCommand(sessionId: string, state: AcpSessionState, name: string, args: string): Promise<string> {
+    const method = ACP_AGENT_METHODS.sessionPrompt;
+    switch (name) {
+      case "help":
+        return `Commands keryx handles in this editor:\n${acpCommandHelpText()}`;
+      case "model": {
+        const current = sessionModel(sessionId, method);
+        if (args.length === 0) {
+          const choices = await modelChoices();
+          const lines = choices.map(
+            (choice) => `  ${choice.value === current.choice.value ? "*" : " "} ${choice.value}`,
+          );
+          return `Model: ${current.choice.value}\nThis session can run:\n${lines.join("\n")}\nSwitch with /model <model>; it applies from the next turn.`;
+        }
+        let switched: SessionModel;
+        try {
+          switched = await switchSessionModel(sessionId, args, "/model", true);
+        } catch (error) {
+          if (error instanceof AcpError) {
+            return error.message;
+          }
+          throw error;
+        }
+        sendUpdate(sessionId, {
+          sessionUpdate: "config_option_update",
+          configOptions: await configOptionsFor(sessionId, method),
+        });
+        return `Model: ${switched.choice.value}, from the next turn.`;
+      }
+      case "reasoning": {
+        const model = sessionModel(sessionId, method);
+        if (args.length === 0) {
+          const override = reasoningOverrides.get(sessionId);
+          const effort = reasoningFor(sessionId, model) ?? "off";
+          const source = override !== undefined ? "set for this session" : "keryx shell's saved setting or KERYX_REASONING_EFFORT";
+          return `Reasoning effort: ${effort} (${source}). Set with /reasoning <${REASONING_EFFORT_LEVELS.join("|")}>.`;
+        }
+        if (!isReasoningEffortLevel(args)) {
+          return `Unknown reasoning effort "${args}"; choose one of: ${REASONING_EFFORT_LEVELS.join(", ")}.`;
+        }
+        reasoningOverrides.set(sessionId, args);
+        return `Reasoning effort: ${args}, from the next turn (this session only).`;
+      }
+      case "status": {
+        const model = sessionModel(sessionId, method);
+        const tools = sessionTools(sessionId, state).map((tool) => tool.definition.name);
+        const mcp = sessionMcp.get(sessionId)?.mcp;
+        const problems = mcp === undefined ? [] : [...mcp.refused, ...mcp.failed()];
+        return [
+          `Session: ${sessionId}`,
+          `Project: ${state.resolvedRoot}`,
+          `Model: ${model.choice.value}`,
+          `Reasoning effort: ${reasoningFor(sessionId, model) ?? "off"}`,
+          `Tools (${tools.length}): ${tools.join(", ")}`,
+          `Client MCP servers: ${
+            mcp === undefined
+              ? "none"
+              : problems.length === 0
+                ? "running"
+                : `not running: ${problems.map((problem) => `${problem.name} (${problem.reason})`).join("; ")}`
+          }`,
+        ].join("\n");
+      }
+      default:
+        return unknownAcpCommandText(name);
+    }
   }
 
   async function handleSessionPrompt(params: unknown): Promise<AcpPromptResponse> {
@@ -550,85 +818,47 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // and the registration.
     refuseIfBusy(ACP_AGENT_METHODS.sessionPrompt, sessionId);
     refuseIfStopping(ACP_AGENT_METHODS.sessionPrompt);
-    const provider = requireProvider(ACP_AGENT_METHODS.sessionPrompt);
+    requireProvider(ACP_AGENT_METHODS.sessionPrompt);
+    // Read ONCE, here: this turn runs with this model to its end, whatever a
+    // `session/set_config_option` arriving meanwhile does (flow 288, AC6).
+    const model = sessionModel(sessionId, ACP_AGENT_METHODS.sessionPrompt);
 
     const userLine = renderAcpPromptContent(promptField);
-    // THE ROSTER IS EXACTLY WHAT THE PERMISSION PATH COVERS (context.md F-4).
-    //
-    // T7/T8 offered `builtinReadOnlyTools` alone, because a tool that needs
-    // approval with no approver wired is not "safe", it is UNREACHABLE — every
-    // call silently refused by `AgentIO`'s default-deny floor. T9 wires the
-    // approver, so the two tools whose entire gate is that approver join:
-    //
-    //   `shell_exec`  risk `shell`  — `executeCall`'s shell branch, which asks
-    //                 before every command and escalates a destructive one
-    //                 (never offered an "always" answer, see
-    //                 `permissionOptionsFor`).
-    //   `apply_patch` risk `write`  — ADR-0010's branch, same shape; every
-    //                 target path is confined to the project root before git
-    //                 ever runs.
-    //
-    // Both are bound to `state.resolvedRoot`, and NEITHER can run without an
-    // explicit allow from the client for that exact call: the fingerprint is
-    // bound (`isApprovalFor`), a rejection, a `cancelled`, an unknown option
-    // id, a client that cannot be asked and a closed connection are all
-    // denials. Beyond the client's own MCP servers (flow 287, last entry
-    // below), nothing else is added: `spawn_subagent`, the metaproject tools,
-    // keryx's configured MCP servers and bus tools need ports this server does
-    // not construct, and
-    // `ask_user` needs an interactive host seam that does not exist over this
-    // wire — offering any of them would put back exactly the unreachable-call
-    // state this widening removes.
-    // Capability-aware read (T11, AC6): `read_file` routes through the
-    // client's `fs/read_text_file` when — and only when — THIS session's
-    // client advertised `fs.readTextFile`. See `capability-tools.ts` for the
-    // read/write/terminal decisions in full; the write and terminal halves of
-    // that decision are simpler still — `apply_patch` and `shell_exec` below
-    // are handed through unwrapped, and never call `fs/write_text_file` or
-    // any `terminal/*` method regardless of what the client advertised.
-    const readViaClient: AcpFsReader = async (path, line) => {
-      const params: AcpReadTextFileRequest = {
-        sessionId,
-        path,
-        ...(line !== undefined ? { line } : {}),
-      };
-      const outcome = await clientRequests.request(ACP_CLIENT_METHODS.fsReadTextFile, params);
-      if (outcome.kind !== "result") {
-        return undefined;
+
+    // A slash command (flow 288, AC4) is keryx's to answer; it never reaches
+    // the model and adds nothing to the transcript. It holds the session's
+    // turn slot while it runs, like a turn: `/model` builds a provider, and a
+    // prompt slipping in beside it would race the switch.
+    const command = parseAcpSlashCommand(userLine);
+    if (command !== undefined) {
+      const slot: AcpActiveTurn = { controller: new AbortController(), cancelled: false, permissionRequestIds: new Set() };
+      activeTurns.set(sessionId, slot);
+      try {
+        const reply = await runSlashCommand(sessionId, state, command.name, command.args);
+        sendUpdate(sessionId, { sessionUpdate: "agent_message_chunk", content: textBlock(`${reply}\n`) });
+        return { stopReason: slot.cancelled ? "cancelled" : "end_turn" };
+      } finally {
+        if (activeTurns.get(sessionId) === slot) {
+          activeTurns.delete(sessionId);
+        }
       }
-      const result = outcome.result;
-      if (typeof result !== "object" || result === null) {
-        return undefined;
-      }
-      const content = (result as Partial<AcpReadTextFileResponse>).content;
-      return typeof content === "string" ? content : undefined;
-    };
-    const tools: InteractiveTool[] = [
-      ...builtinReadOnlyTools(state.resolvedRoot).map((tool) =>
-        tool.definition.name === "read_file"
-          ? acpAwareReadFileTool(tool, state.resolvedRoot, state.clientCapabilities, readViaClient)
-          : tool,
-      ),
-      shellExecTool(state.resolvedRoot),
-      applyPatchTool(state.resolvedRoot),
-      // Flow 287 (AC3/AC4): the client's own MCP servers for THIS session,
-      // through the shell's `search_tool`/`use_tool` pair — offered only when
-      // the session has any. `use_tool` is `risk: "destructive"`, so every
-      // call is asked through `session/request_permission` below and a denial
-      // ends it exactly as a local one does. Never auto-approved: this server
-      // sets no permission mode, so the agent's default (`ask`) applies.
-      ...(sessionMcp.get(sessionId)?.mcp.tools ?? []),
-    ];
+    }
+
+    // The roster, and why it is exactly what it is: `roster.ts`.
+    const tools = sessionTools(sessionId, state);
     const toolNames = tools.map((tool) => tool.definition.name);
+    const { provider, providerId, modelId, turnSettings } = model.binding;
+    const reasoningEffort = reasoningFor(sessionId, model);
     const deps: AgentDeps = {
-      ...options.turnSettings,
+      ...turnSettings,
+      ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
       provider,
-      providerId: options.providerId,
-      modelId: options.modelId,
+      providerId,
+      modelId,
       tools,
       systemInstruction: buildAgentSystemInstruction(undefined, {
-        providerId: options.providerId,
-        modelId: options.modelId,
+        providerId,
+        modelId,
         toolNames,
       }),
       idSeq,
@@ -668,8 +898,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       const io = createAcpAgentIo(sessionId, sendUpdate, askPermissionFor(sessionId, turn));
       const result = await runAgentTurn(io, deps, state.history, userLine, { signal: turn.controller.signal });
       const updatedHandle = persistHistory(state.handle, state.history, {
-        provider: options.providerId,
-        model: options.modelId,
+        provider: providerId,
+        model: modelId,
       });
       registry.updateHandle(sessionId, updatedHandle);
       // `turn.cancelled` wins over whatever `finishReason` came back: a turn
@@ -862,7 +1092,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * through ANY entry point into that store (`keryx shell`, `keryx sessions`,
    * an earlier `session/new`) and replays it before responding.
    */
-  function handleSessionLoad(params: unknown, requestId: JsonRpcId): AcpLoadSessionResponse {
+  async function handleSessionLoad(params: unknown, requestId: JsonRpcId): Promise<AcpLoadSessionResponse> {
     requireInitialized(ACP_AGENT_METHODS.sessionLoad);
     refuseIfStopping(ACP_AGENT_METHODS.sessionLoad);
     requireProvider(ACP_AGENT_METHODS.sessionLoad);
@@ -907,7 +1137,42 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // too: whatever an earlier `session/new`/`session/load` on this connection
     // started for this id is stopped, and this request's list is started.
     bindSessionMcp(sessionId, requestId, parsedMcp, state.resolvedRoot);
-    return {};
+    announceCommands(sessionId, requestId);
+    return { configOptions: await configOptionsFor(sessionId, ACP_AGENT_METHODS.sessionLoad) };
+  }
+
+  /**
+   * `session/set_config_option` (flow 288, AC6). keryx has one option, the
+   * model. Answered with the COMPLETE option list, as the spec requires. Not
+   * refused while a turn runs: that turn keeps the model it started with.
+   */
+  async function handleSetConfigOption(params: unknown): Promise<AcpSetSessionConfigOptionResponse> {
+    const method = ACP_AGENT_METHODS.sessionSetConfigOption;
+    requireInitialized(method);
+    refuseIfStopping(method);
+    const obj = requireObjectParams(params, method);
+    const sessionId = requireStringField(obj, "sessionId", method);
+    const configId = requireStringField(obj, "configId", method);
+    const value = obj["value"];
+    if (typeof value !== "string" || value.length === 0) {
+      refuse(invalidParams(`${method}: value must be a non-empty string`, { received: value }));
+    }
+    if (registry.get(sessionId) === undefined) {
+      refuse({
+        code: JSON_RPC_ERROR_CODES.resourceNotFound,
+        message: `Unknown ACP session: ${sessionId}`,
+        data: { sessionId },
+      });
+    }
+    if (configId !== ACP_MODEL_CONFIG_ID) {
+      refuse(
+        invalidParams(`${method}: keryx has no config option "${configId}"; the only one is "${ACP_MODEL_CONFIG_ID}"`, {
+          configId,
+        }),
+      );
+    }
+    await switchSessionModel(sessionId, value, method, false);
+    return { configOptions: await configOptionsFor(sessionId, method) };
   }
 
   const dispatcher = new AcpDispatcher(
@@ -918,6 +1183,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         [ACP_AGENT_METHODS.sessionPrompt]: (params) => handleSessionPrompt(params),
         [ACP_AGENT_METHODS.sessionList]: (params) => handleSessionList(params),
         [ACP_AGENT_METHODS.sessionLoad]: (params, context) => handleSessionLoad(params, context.id),
+        [ACP_AGENT_METHODS.sessionSetConfigOption]: (params) => handleSetConfigOption(params),
       },
       notifications: {
         [ACP_AGENT_METHODS.sessionCancel]: (params) => handleSessionCancel(params),
@@ -937,10 +1203,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       const after = afterReply.get(key);
       if (after !== undefined) {
         afterReply.delete(key);
-        // Only a SUCCESS reply has a session to report on. (The hook is
-        // registered only once a handler has succeeded, so this is a floor.)
+        // Only a SUCCESS reply has a session to report on. (A handler that
+        // registers work and then fails — `session/new` awaiting its model
+        // list, say — must not announce a session the client was refused.)
         if (!("error" in outcome.message)) {
-          after();
+          for (const work of after) work();
         }
       }
       return;

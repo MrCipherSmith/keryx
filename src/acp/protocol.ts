@@ -109,6 +109,8 @@ export const ACP_IMPLEMENTED_AGENT_METHODS: readonly string[] = [
   ACP_AGENT_METHODS.sessionList,
   ACP_AGENT_METHODS.sessionPrompt,
   ACP_AGENT_METHODS.sessionCancel,
+  // Flow 288: the model option `session/new`/`session/load` return.
+  ACP_AGENT_METHODS.sessionSetConfigOption,
 ];
 
 export interface AcpMethodRefusal {
@@ -172,13 +174,6 @@ export const ACP_REFUSED_AGENT_METHODS: ReadonlyMap<string, AcpMethodRefusal> = 
     {
       code: JSON_RPC_ERROR_CODES.methodNotFound,
       reason: "keryx returns no modes from session/new, so there is no mode to set",
-    },
-  ],
-  [
-    ACP_AGENT_METHODS.sessionSetConfigOption,
-    {
-      code: JSON_RPC_ERROR_CODES.methodNotFound,
-      reason: "keryx returns no configOptions from session/new, so there is no option to set",
     },
   ],
 ]);
@@ -585,10 +580,89 @@ export interface AcpSessionModeState {
   readonly _meta?: AcpMeta;
 }
 
+// ---------------------------------------------------------------------------
+// Session config options (flow 288, AC7)
+//
+// Pinned against the published ACP documentation ("Session Config Options",
+// agentclientprotocol.com): an option is a `select` with a `currentValue` and
+// its `options`, optionally grouped; `category` is a UX hint, and `"model"` is
+// the one keryx uses. Returned on `session/new`/`session/load`, answered in
+// full by `session/set_config_option`, and pushed in full by
+// `config_option_update`.
+// ---------------------------------------------------------------------------
+
+export type AcpSessionConfigId = string;
+export type AcpSessionConfigValueId = string;
+
+/**
+ * `mode`, `model` and `thought_level` are the spec's reserved categories; a
+ * custom one starts with `_`. A client MUST tolerate one it does not know.
+ */
+export type AcpSessionConfigOptionCategory = "mode" | "model" | "thought_level" | `_${string}`;
+
+export interface AcpSessionConfigSelectOption {
+  readonly value: AcpSessionConfigValueId;
+  readonly name: string;
+  readonly description?: string | null;
+  readonly _meta?: AcpMeta;
+}
+
+export interface AcpSessionConfigSelectGroup {
+  readonly group: string;
+  readonly name: string;
+  readonly options: readonly AcpSessionConfigSelectOption[];
+  readonly _meta?: AcpMeta;
+}
+
+export interface AcpSessionConfigOption {
+  readonly id: AcpSessionConfigId;
+  readonly name: string;
+  readonly description?: string | null;
+  readonly category?: AcpSessionConfigOptionCategory | null;
+  readonly type: "select";
+  readonly currentValue: AcpSessionConfigValueId;
+  readonly options: readonly AcpSessionConfigSelectOption[] | readonly AcpSessionConfigSelectGroup[];
+  readonly _meta?: AcpMeta;
+}
+
+export interface AcpSetSessionConfigOptionRequest {
+  readonly sessionId: AcpSessionId;
+  readonly configId: AcpSessionConfigId;
+  readonly value: AcpSessionConfigValueId;
+  readonly _meta?: AcpMeta;
+}
+
+/** The COMPLETE list, not just the option that changed — a change may move others. */
+export interface AcpSetSessionConfigOptionResponse {
+  readonly configOptions: readonly AcpSessionConfigOption[];
+  readonly _meta?: AcpMeta;
+}
+
+// ---------------------------------------------------------------------------
+// Slash commands (flow 288, AC7)
+//
+// Pinned against "Slash Commands" (agentclientprotocol.com): advertised through
+// `available_commands_update`; a command then arrives as ordinary
+// `session/prompt` text beginning with `/`. `name` carries no slash.
+// ---------------------------------------------------------------------------
+
+export interface AcpAvailableCommandInput {
+  /** Shown while the user has not typed the argument yet. */
+  readonly hint: string;
+  readonly _meta?: AcpMeta;
+}
+
+export interface AcpAvailableCommand {
+  readonly name: string;
+  readonly description: string;
+  readonly input?: AcpAvailableCommandInput | null;
+  readonly _meta?: AcpMeta;
+}
+
 export interface AcpNewSessionResponse {
   readonly sessionId: AcpSessionId;
   readonly modes?: AcpSessionModeState | null;
-  readonly configOptions?: readonly unknown[] | null;
+  readonly configOptions?: readonly AcpSessionConfigOption[] | null;
   readonly _meta?: AcpMeta;
 }
 
@@ -602,7 +676,7 @@ export interface AcpLoadSessionRequest {
 
 export interface AcpLoadSessionResponse {
   readonly modes?: AcpSessionModeState | null;
-  readonly configOptions?: readonly unknown[] | null;
+  readonly configOptions?: readonly AcpSessionConfigOption[] | null;
   readonly _meta?: AcpMeta;
 }
 
@@ -828,7 +902,7 @@ export type AcpSessionUpdate =
   | { readonly sessionUpdate: "plan"; readonly entries: readonly AcpPlanEntry[]; readonly _meta?: AcpMeta }
   | {
       readonly sessionUpdate: "available_commands_update";
-      readonly availableCommands: readonly unknown[];
+      readonly availableCommands: readonly AcpAvailableCommand[];
       readonly _meta?: AcpMeta;
     }
   | {
@@ -836,7 +910,11 @@ export type AcpSessionUpdate =
       readonly currentModeId: AcpSessionModeId;
       readonly _meta?: AcpMeta;
     }
-  | { readonly sessionUpdate: "config_option_update"; readonly _meta?: AcpMeta }
+  | {
+      readonly sessionUpdate: "config_option_update";
+      readonly configOptions: readonly AcpSessionConfigOption[];
+      readonly _meta?: AcpMeta;
+    }
   | {
       readonly sessionUpdate: "session_info_update";
       readonly title?: string | null;

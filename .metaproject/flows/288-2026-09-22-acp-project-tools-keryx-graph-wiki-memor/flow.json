@@ -1,0 +1,328 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "288",
+  "slug": "acp-project-tools-keryx-graph-wiki-memor",
+  "title": "ACP project tools: keryx graph, wiki, memory and flow tools, slash commands and model switching in the editor",
+  "status": "in-progress",
+  "createdAt": "2026-09-22T22:22:26.709Z",
+  "updatedAt": "2026-09-22T23:34:07.525Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b009ea3d89176a09f02a26f4475deb8e43b0eddcbc3ed48103598dbc011fb7b5",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Offer the shell's read-only project tools in ACP sessions through the same gate and definitions",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T23:16:11.326Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Map every ACP roster tool to a meaningful ACP tool kind, with a test against 'other' fallbacks",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Pin the roster: no untrusted-result, delegation or bus tools, enforced by a test",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Advertise and handle slash commands over ACP (available_commands_update, / prompts)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Model selection via configOptions category model, session/set_config_option and /model",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Type AvailableCommand and config options in protocol.ts; unrefuse session/set_config_option",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Process tests over a real pipe for tools, commands and model switching",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Docs: CLI reference and README for the ACP roster, commands and model switching; README positioning line",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-22T22:22:26.709Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-22T22:28:48.543Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-22T22:28:48.787Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-22T22:28:49.028Z",
+      "event": "task-added",
+      "detail": "T5: Offer the shell's read-only project tools in ACP sessions through the same gate and definitions"
+    },
+    {
+      "at": "2026-09-22T22:28:49.273Z",
+      "event": "task-added",
+      "detail": "T6: Map every ACP roster tool to a meaningful ACP tool kind, with a test against 'other' fallbacks"
+    },
+    {
+      "at": "2026-09-22T22:28:49.538Z",
+      "event": "task-added",
+      "detail": "T7: Pin the roster: no untrusted-result, delegation or bus tools, enforced by a test"
+    },
+    {
+      "at": "2026-09-22T22:28:49.763Z",
+      "event": "task-added",
+      "detail": "T8: Advertise and handle slash commands over ACP (available_commands_update, / prompts)"
+    },
+    {
+      "at": "2026-09-22T22:28:49.996Z",
+      "event": "task-added",
+      "detail": "T9: Model selection via configOptions category model, session/set_config_option and /model"
+    },
+    {
+      "at": "2026-09-22T22:28:50.216Z",
+      "event": "task-added",
+      "detail": "T10: Type AvailableCommand and config options in protocol.ts; unrefuse session/set_config_option"
+    },
+    {
+      "at": "2026-09-22T22:28:50.446Z",
+      "event": "task-added",
+      "detail": "T11: Process tests over a real pipe for tools, commands and model switching"
+    },
+    {
+      "at": "2026-09-22T22:28:50.661Z",
+      "event": "task-added",
+      "detail": "T12: Docs: CLI reference and README for the ACP roster, commands and model switching; README positioning line"
+    },
+    {
+      "at": "2026-09-22T22:28:50.865Z",
+      "event": "task-added",
+      "detail": "T13: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-22T23:16:11.326Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-22T23:34:06.806Z",
+      "event": "task-done",
+      "detail": "T5: Offer the shell's read-only project tools in ACP sessions through the same gate and definitions"
+    },
+    {
+      "at": "2026-09-22T23:34:06.907Z",
+      "event": "task-done",
+      "detail": "T6: Map every ACP roster tool to a meaningful ACP tool kind, with a test against 'other' fallbacks"
+    },
+    {
+      "at": "2026-09-22T23:34:07.009Z",
+      "event": "task-done",
+      "detail": "T7: Pin the roster: no untrusted-result, delegation or bus tools, enforced by a test"
+    },
+    {
+      "at": "2026-09-22T23:34:07.112Z",
+      "event": "task-done",
+      "detail": "T8: Advertise and handle slash commands over ACP (available_commands_update, / prompts)"
+    },
+    {
+      "at": "2026-09-22T23:34:07.215Z",
+      "event": "task-done",
+      "detail": "T9: Model selection via configOptions category model, session/set_config_option and /model"
+    },
+    {
+      "at": "2026-09-22T23:34:07.321Z",
+      "event": "task-done",
+      "detail": "T10: Type AvailableCommand and config options in protocol.ts; unrefuse session/set_config_option"
+    },
+    {
+      "at": "2026-09-22T23:34:07.424Z",
+      "event": "task-done",
+      "detail": "T11: Process tests over a real pipe for tools, commands and model switching"
+    },
+    {
+      "at": "2026-09-22T23:34:07.525Z",
+      "event": "task-done",
+      "detail": "T12: Docs: CLI reference and README for the ACP roster, commands and model switching; README positioning line"
+    }
+  ]
+}

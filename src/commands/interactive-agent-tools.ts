@@ -15,7 +15,6 @@ import {
   type JobRegistry,
 } from "../harness/tool/builtin/background-job-registry";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
-import { builtinMetaprojectTools, makeKeryxRunner } from "../harness/tool/builtin/metaproject-tools";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { executionPlanTools } from "../harness/tool/builtin/execution-plan-tool";
 import { slateReadTool, slateWriteSeedTool } from "../harness/tool/builtin/slate-tool";
@@ -25,11 +24,11 @@ import { workspaceOverviewTool, workspaceReadTool } from "../harness/tool/builti
 import { workspaceCreateTool, workspaceListTool, workspaceProposeTool, workspaceShowTool } from "../harness/tool/builtin/workspace-lifecycle-tool";
 import type { SearchProviderController } from "../harness/search";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
-import { offersIndexTools } from "../lib/metaproject-state";
 import type { ServerCatalog } from "../mcp-servers/catalog";
 import type { ServerState } from "../mcp-servers/manager";
 import { createMcpInteractiveTools } from "../mcp-servers/tools";
 import { invokeAskUserHost } from "../tui/ask-user-bridge";
+import { buildProjectTools } from "./project-tools";
 
 export type InteractiveAgentToolsInput = {
   cwd: string;
@@ -186,36 +185,18 @@ export function assertDeniableTools(tools: readonly InteractiveTool[], denied: r
   }
 }
 
-/**
- * The metaproject tools that work in a project with no USABLE metaproject.
- *
- * Every other metaproject operation reads an artifact under `.metaproject/` — the
- * graph database, the wiki, memory, flows, health and testing reports, the skill
- * tree — and in a project without one it can only fail. The arena's control arm
- * was offered all of them, called `graph_find`, and got `index-incomplete … never
- * built here`; each was also a description the model re-read every round.
- * `search_code` runs ripgrep over the tree and needs nothing.
- *
- * "Without one" is `offersIndexTools`' question: a manifest-less project that still has
- * a built graph or wiki KEEPS its tools (`keryx update` restores the manifest), and a
- * bare `.metaproject/` with nothing under it does not get them merely by existing. What
- * must never happen is offering them to a session whose every call can only answer
- * `index-incomplete` — an empty answer that reads like an empty project.
- */
-export const METAPROJECT_FREE_TOOLS: ReadonlySet<string> = new Set(["search_code"]);
+// Re-exported: the set moved to `./project-tools.ts` with the gate it belongs to.
+export { METAPROJECT_FREE_TOOLS } from "./project-tools";
 
 export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): InteractiveTool[] {
   const getSessionDir = input.getSessionDir ?? (() => undefined);
   const idSeq = input.idSeq ?? (() => randomUUID());
   const clock = input.clock ?? (() => new Date().toISOString());
   const jobRegistry = input.jobRegistry;
-  const metaprojectTools = builtinMetaprojectTools(input.cwd, makeKeryxRunner(input.cwd), input.metaprojectPort);
-  // K-009's project filter, re-based on "is this a metaproject these tools can read"
-  // rather than "does a `.metaproject` directory exist". The directory alone is what a
-  // not-quite-initialized project has, and offering eighteen tools that can only answer
-  // `index-incomplete` — in a session whose operator reads emptiness as a finding — is
-  // the defect this filter exists to close.
-  const indexToolsOffered = offersIndexTools(input.cwd);
+  // The project tools and their gate (K-009), assembled by the one function
+  // `keryx acp` also calls — so the two rosters cannot drift (flow 288, AC1).
+  const project = buildProjectTools(input.cwd, input.metaprojectPort);
+  const metaprojectTools = project.all;
   const built: InteractiveTool[] = [
     ...builtinReadOnlyTools(input.cwd),
     ...metaprojectTools,
@@ -273,9 +254,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
   // "unknown" in a plain repository would make the same command line fail in one
   // directory and pass in the next.
   assertDeniableTools(built, denied);
-  const offered = indexToolsOffered
-    ? built
-    : built.filter((tool) => !metaprojectTools.includes(tool) || METAPROJECT_FREE_TOOLS.has(tool.definition.name));
+  const offered = built.filter((tool) => !metaprojectTools.includes(tool) || project.offered.includes(tool));
   return denyInteractiveTools(offered, denied);
 }
 

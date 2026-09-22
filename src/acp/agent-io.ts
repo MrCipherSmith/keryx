@@ -37,16 +37,58 @@ export type AcpPermissionAsker = (
   request: AcpPermissionRequest,
 ) => Promise<AcpRequestPermissionResponse | undefined>;
 
+/**
+ * ACP `kind` per tool name — what the client uses to pick an icon and a
+ * rendering. Every tool an ACP session can be offered is listed (flow 288,
+ * AC2; `roster.test.ts` fails on a roster tool that falls back to `other`):
+ *
+ *   `search`  answers a query over many things — code, the graph, memory, the
+ *             wiki's claims, related tests, an MCP catalog.
+ *   `read`    fetches one named thing, or a fixed report — a file, a wiki
+ *             page, flow or health status, a skill, the repo map.
+ *   `execute` runs something outside keryx — a shell command, or a tool on one
+ *             of the client's MCP servers.
+ *   `edit`    changes files.
+ */
 const TOOL_KIND_BY_NAME: Readonly<Record<string, AcpToolKind>> = {
   get_cwd: "read",
   list_dir: "read",
   read_file: "read",
-  search_code: "search",
   apply_patch: "edit",
   shell_exec: "execute",
   web_fetch: "fetch",
   web_search: "search",
+  // keryx's project tools (flow 288).
+  search_code: "search",
+  graph_find: "search",
+  graph_query: "search",
+  graph_symbol: "search",
+  graph_path: "search",
+  graph_affected: "search",
+  memory_search: "search",
+  wiki_ask: "search",
+  wiki_resolve: "search",
+  wiki_backlinks: "search",
+  wiki_evidence: "search",
+  test_related: "search",
+  read_wiki: "read",
+  wiki_freshness: "read",
+  flow_status: "read",
+  health_status: "read",
+  skills_catalog: "read",
+  skill_load: "read",
+  repomap: "read",
+  // The client's own MCP servers (flow 287).
+  search_tool: "search",
+  use_tool: "execute",
 };
+
+/**
+ * Tools that are allowed to render as `other` on purpose. Empty: every tool an
+ * ACP session is offered has a kind above. A name added here is a decision
+ * someone made, which is the point of keeping the list.
+ */
+export const ACP_TOOL_KIND_OTHER_EXCEPTIONS: ReadonlySet<string> = new Set<string>();
 
 /**
  * The ACP `kind` for a tool by name, for a `tool_call`/`tool_call_update`.

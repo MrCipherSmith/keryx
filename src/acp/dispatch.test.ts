@@ -70,6 +70,7 @@ test("an unknown method answers -32601 and says what this agent does implement",
       "session/list",
       "session/prompt",
       "session/cancel",
+      "session/set_config_option",
     ],
   });
 });
