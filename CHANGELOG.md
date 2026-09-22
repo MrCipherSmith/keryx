@@ -3,6 +3,31 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.150] — 2026-09-22
+The sidebar is four columns wider, so the working directory and the workspace
+titles stop being cut mid-segment.
+
+### Changed
+- **The sidebar column is 34 columns, not 30.** Every panel fits its label to
+  `SIDEBAR_TEXT_WIDTH`, and at 30 columns that budget was 26 — narrow enough that
+  `shortenCwd` dropped a whole leading segment of an ordinary working directory in
+  a column that already carries the branch, the PR url and the slate titles. The
+  panels now get 30 columns of text.
+- **The width lives in `sidebar-metrics.ts`.** `shell-chrome.ts` imports
+  `destroyModalHost` from `modal-host.ts`, so a value import back the other way
+  would be a cycle — and `modal-host.ts` kept its own copy of the number for its
+  pre-layout fallback, the duplicate PR #591's F-013 named. `shell-chrome.ts`
+  re-exports the constant, so every existing importer is unchanged and the modal
+  host's fallback reads the same one number.
+
+### Fixed
+- **Three width-sensitive tests follow the new geometry instead of pinning the
+  old one.** The sidebar's G-2 boundary path now sits where 30 columns is an
+  exact fill and 33 is the next segment out, so a budget that forgot the border
+  and padding still fails; the modal host's main-pane expectation is derived from
+  the constant; and the version-advisory assertion checks the two halves the
+  advisory deliberately splits the install command into.
+
 ## [0.2.149] — 2026-09-22
 A patch release carrying the same feature set as 0.2.148 — a call that follows
 untrusted content is put to the operator instead of being refused for the rest of
