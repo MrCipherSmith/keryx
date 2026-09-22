@@ -2704,7 +2704,7 @@ async function runAgentTurnCore(
           continue;
         }
         const taintFingerprint = toolCallHash(call.name, call.input);
-        let taintApproved = false;
+        let taintApproved: boolean;
         try {
           const response = await approver(call.name, call.input, {
             fingerprint: taintFingerprint,
