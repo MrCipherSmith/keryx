@@ -89,6 +89,16 @@ function recordAttempt(
   return attempts;
 }
 
+/**
+ * Shared by `init`'s `--owner` and `ownerSet`'s `--owner`, so a blank value is
+ * refused identically in both places — the same wording, not two guards that
+ * could quietly drift apart. Before this, `flow init --owner "   "` silently
+ * fell through to "no owner set" (an absent-key state indistinguishable from
+ * never naming one) while `flow owner set --owner "   "` rejected the same
+ * input outright; the same blank name deserved the same answer from both.
+ */
+const BLANK_OWNER_MESSAGE = '--owner requires a non-blank name, e.g. --owner "Alex Smith"';
+
 export function createFlowService(deps: FlowServiceDeps): FlowService {
   const now = () => deps.now().toISOString();
 
@@ -150,6 +160,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
     async init(input: FlowInitInput): Promise<FlowInitResult> {
       if (!input.title && !input.issue) {
         throw new Error('flow init requires --title "<problem>" or --issue <url>');
+      }
+      // A blank `--owner` is a mistake, not "no owner" (AC1/AC3): the flag was
+      // given, so silently falling through to the absent-key "not set" state
+      // would hide the typo. Only an OMITTED flag (input.owner === undefined)
+      // means "nobody named an owner" — that is not an error.
+      if (input.owner !== undefined && !input.owner.trim()) {
+        throw new Error(BLANK_OWNER_MESSAGE);
       }
 
       const trackerReady = deps.tracker ? await deps.tracker.detect() : false;
@@ -303,7 +320,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
      */
     async ownerSet({ cwd, id, owner, reason }): Promise<FlowState> {
       if (!owner?.trim()) {
-        throw new Error('flow owner set requires --owner "<name>"');
+        throw new Error(BLANK_OWNER_MESSAGE);
       }
       if (!reason?.trim()) {
         throw new Error('flow owner set requires --reason "<why>"');
@@ -677,11 +694,19 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         gates.push(unevaluableGate("acceptance-criteria"));
       }
 
-      // The commit the gates evaluated, when one is known — captured here
-      // (not re-fetched) so a completion signature can name it (AC4) without
-      // an extra tracker call. `mergedCommit` is the direct-merge case;
-      // otherwise it is filled in below from the PR's own head SHA, if the
-      // pull-request gate observes one.
+      // The commit the PULL-REQUEST GATE observed, when one is known —
+      // captured here from that gate's own `prStatus()` call (not re-fetched)
+      // so a completion signature can name it (AC4) without an extra tracker
+      // call. `mergedCommit` is the direct-merge case; otherwise it is filled
+      // in below from the PR's own head SHA, if the pull-request gate
+      // observes one.
+      //
+      // This is NOT a claim that every gate below saw the same head: the
+      // base-branch gate and the review gate each read the PR head (or the
+      // round's recorded head) independently, via their own calls. A push
+      // landing mid-`complete()` can make them observe a different commit
+      // than the one recorded here. `headCommit` on the signature names only
+      // what the pull-request gate saw.
       let evaluatedHeadCommit: string | undefined = mergedCommit ?? undefined;
 
       // Gate 2: pull request, or an explicit proof that the implementation

@@ -37,9 +37,11 @@ Each `FlowSignature` records:
 | `identity` | Who signed — an `Identity` (§4). |
 | `criterion` | The AC id, for `kind: "ac-confirm"` only. |
 | `acChecksum` | The acceptance-criteria checksum in force at signing time (`null` if not yet frozen). |
-| `headCommit` | The commit the completion gates evaluated, for `kind: "complete"`, when one was observed (the direct-merge `--merged` commit, or the pull request's head SHA) — never guessed when unobserved. |
+| `headCommit` | For `kind: "complete"`: the direct-merge `--merged` commit, or **the head commit the pull-request gate observed** via its own `prStatus()` call — never guessed when unobserved, and never a second, independent fetch (`src/flow/service.ts`, `evaluatedHeadCommit`, captured from the pull-request gate's own call). |
 
 A completion signature is appended **unconditionally** on a passing `complete()` — independent of whether the package opted into the owner gate (§5). A pre-existing package with no `owner` still gets a `kind: "complete"` signature; it simply never claims an owner that was never set.
+
+**`headCommit` names one gate's observation, not a cross-gate guarantee.** `complete()` runs several gates that each read the PR head independently — the pull-request gate, the base-branch gate (§5 of the specification), and the review gate — each via its own call (`prStatus()`, or the review round's recorded head). Nothing re-runs those calls to reconcile them, and nothing blocks on them disagreeing. A push landing on the PR in the window between two of those calls, mid-`complete()`, can make them observe different commits; `headCommit` on the signature records only what the **pull-request gate** saw, not that every gate agreed on that commit. This is a real, if narrow, observation window — deliberately not closed here (closing it would mean re-architecting the gates to share one fetch, out of scope for this document) but the field's name and every description of it are written to not overclaim past what was actually observed.
 
 ## 4. `Identity`: a claim, not a proof
 

@@ -129,6 +129,47 @@ test("AC4: a git-derived signer is recorded with basis derived, never promoted t
   expect(confirmed.signatures?.[0]?.identity.value).toBe("someone@example.com");
 });
 
+test("`flow ac update` clears acConfirmed but leaves signatures and the owner (and its history) untouched", async () => {
+  const service = await fresh();
+  const { flow, dir: created } = await service.init({
+    cwd: ROOT,
+    title: "ac update leaves owner/signatures alone",
+    owner: "Aleks",
+  });
+  const dir = path.basename(created);
+  await writeAc(dir, ["First criterion"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+  await service.ownerSet({ cwd: ROOT, id: flow.id, owner: "Priya", reason: "handoff" });
+  const confirmed = await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1", signedBy: "Priya" });
+
+  expect(Object.keys(confirmed.acConfirmed)).toEqual(["AC1"]);
+  expect(confirmed.signatures).toHaveLength(1);
+  const ownerBeforeUpdate = confirmed.owner;
+  const ownerHistoryBeforeUpdate = confirmed.history.filter(
+    (event) => event.event === "owner-set" || event.event === "owner-changed",
+  );
+  expect(ownerHistoryBeforeUpdate).toHaveLength(1);
+
+  // The AC file changes (a new criterion added), so the checksum is stale and
+  // every prior confirmation is void — that is exactly what `ac update` is
+  // for. What it must NOT touch is the owner, the owner's change history, or
+  // the append-only signature record: those are a different kind of fact
+  // (who is accountable, who signed) from "which criteria are confirmed".
+  await writeAc(dir, ["First criterion", "Second criterion"]);
+  const updated = await service.acUpdate({ cwd: ROOT, id: flow.id, reason: "scope grew" });
+
+  expect(updated.acConfirmed).toEqual({}); // cleared, as documented
+  expect(updated.acChecksum).not.toBe(confirmed.acChecksum); // re-sealed over the new file
+
+  // Unaffected by the update:
+  expect(updated.owner).toEqual(ownerBeforeUpdate);
+  expect(updated.signatures).toEqual(confirmed.signatures);
+  const ownerHistoryAfterUpdate = updated.history.filter(
+    (event) => event.event === "owner-set" || event.event === "owner-changed",
+  );
+  expect(ownerHistoryAfterUpdate).toEqual(ownerHistoryBeforeUpdate);
+});
+
 // --- complete -----------------------------------------------------------------
 
 /** Drive a fresh flow to a passing `complete()`. */

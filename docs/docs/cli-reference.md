@@ -1787,9 +1787,15 @@ or `flow owner set`).
 A flow can name an **owner** — the human accountable for it — and `ac confirm`/
 `complete` each record a **signature**: who acted, when, and what exactly was
 signed (the AC id and the frozen acceptance-criteria checksum for a confirmation;
-that checksum plus the observed commit for a completion). Signatures are
-append-only: reconfirming a criterion, or completing a flow more than once,
-adds a new signature rather than replacing the last one.
+that checksum plus, for a completion, **the head commit the pull-request gate
+observed** — read from that gate's own `prStatus()` call, not re-fetched for
+the signature). `complete()` runs several gates that each read the PR head
+independently (the pull-request gate, the base-branch gate, the review gate);
+a push landing mid-`complete()` can make them observe different commits, and
+the signature names only the one the pull-request gate saw — not a guarantee
+that every gate agreed on the same head. Signatures are append-only:
+reconfirming a criterion, or completing a flow more than once, adds a new
+signature rather than replacing the last one.
 
 **The owner is never inferred.** It is set only by an explicit `--owner "<name>"`
 on `flow init` or `flow owner set <id> --owner "<name>" --reason "<why>"` — never

@@ -165,9 +165,17 @@ export type FlowSignature = {
    */
   acChecksum: string | null;
   /**
-   * The commit the completion gates evaluated, when one was known (the
-   * direct-merge `mergedCommit`, or the pull request's head SHA). Present
-   * only for `kind: "complete"`, and only when observed — never guessed.
+   * The direct-merge `mergedCommit`, or — for a PR-backed completion — the
+   * head commit the pull-request gate observed via its own `prStatus()` call
+   * (`src/flow/service.ts`, captured into `evaluatedHeadCommit` without a
+   * second fetch). Present only for `kind: "complete"`, and only when
+   * observed — never guessed.
+   *
+   * Not a guarantee every gate saw the same head: `complete()` also runs a
+   * base-branch gate and a review gate, each of which reads the PR head
+   * independently (its own `prStatus()`/round-head call). A push landing
+   * mid-`complete()` can make them observe a different commit than the one
+   * recorded here — this field names only what the pull-request gate saw.
    */
   headCommit?: string | undefined;
 };

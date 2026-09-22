@@ -1331,7 +1331,7 @@ test("`flow init` opts every new package into both the task and the review gate"
   expect(flow.gates).toEqual({ tasks: true, review: true, owner: true });
 });
 
-test("the gate runs where the specification puts it: sixth, after tasks", async () => {
+test("the gate runs where the specification puts it: seventh, after owner", async () => {
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
@@ -1354,6 +1354,7 @@ test("the gate runs where the specification puts it: sixth, after tasks", async 
     "health",
   ]);
   expect(names.indexOf("review")).toBeGreaterThan(names.indexOf("tasks"));
+  expect(names.indexOf("review")).toBeGreaterThan(names.indexOf("owner"));
 });
 
 // --- configuration ---------------------------------------------------------

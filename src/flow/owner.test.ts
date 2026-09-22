@@ -78,6 +78,39 @@ test("AC1: `flow owner set` refuses an empty owner", async () => {
   );
 });
 
+test("AC1/AC3: `flow init --owner \"   \"` is rejected, not silently treated as `not set`", async () => {
+  // Before this fix, a blank --owner fell through the truthy-string check in
+  // `init` and produced an owner-less flow indistinguishable from one where
+  // `--owner` was never passed at all — the exact silent-typo failure mode
+  // `ownerSet`'s own blank-owner guard already refused.
+  const service = await fresh();
+  await expect(
+    service.init({ cwd: ROOT, title: "Blank owner flag", owner: "   " }),
+  ).rejects.toThrow(/--owner/);
+});
+
+test("AC1: `flow init` and `flow owner set` reject a blank --owner with the SAME message", async () => {
+  const service = await fresh();
+  const { flow } = await service.init({ cwd: ROOT, title: "Same blank-owner message" });
+
+  let initMessage: string | undefined;
+  try {
+    await service.init({ cwd: ROOT, title: "Second flow, blank owner", owner: "  " });
+  } catch (error) {
+    initMessage = error instanceof Error ? error.message : String(error);
+  }
+
+  let ownerSetMessage: string | undefined;
+  try {
+    await service.ownerSet({ cwd: ROOT, id: flow.id, owner: "  ", reason: "because" });
+  } catch (error) {
+    ownerSetMessage = error instanceof Error ? error.message : String(error);
+  }
+
+  expect(initMessage).toBeDefined();
+  expect(initMessage).toBe(ownerSetMessage);
+});
+
 test("AC1: `flow owner set` refuses an empty reason", async () => {
   const service = await fresh();
   const { flow } = await service.init({ cwd: ROOT, title: "Needs a reason" });

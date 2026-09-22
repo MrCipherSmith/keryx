@@ -158,3 +158,30 @@ test("AC5: a flow created before the owner gate reports it skipped, and complete
   expect(result.passed).toBe(true);
   expect(result.flow.status).toBe("done");
 });
+
+test("AC5: the REAL flow-201/204 legacy shape — `gates: { tasks: true, review: true }`, no `owner` key at all — skips the owner gate too", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service, "Real pre-owner-gate shape");
+
+  // The shape every package written between flow 201 (task gate) and this
+  // change actually carries on disk: `gates` is PRESENT, with `tasks` and
+  // `review` both `true`, and simply no `owner` key — not the coarser
+  // "gates absent entirely" fixture the other test in this file uses. The
+  // gate must read this as "not opted in" via `!flow.gates?.owner`, not via
+  // `!flow.gates`.
+  const raw = await readRawFlow(dir);
+  expect(raw.gates).toEqual({ tasks: true, review: true, owner: true });
+  raw.gates = { tasks: true, review: true };
+  expect(raw.gates).not.toHaveProperty("owner");
+  delete raw.owner;
+  await writeRawFlow(dir, raw);
+
+  const result = await service.complete({ cwd: ROOT, id });
+
+  const owner = result.gates.find((gate) => gate.name === "owner");
+  expect(owner?.status).toBe("skipped");
+  expect(owner?.detail).toContain("created before the gate");
+  expect(result.passed).toBe(true);
+  expect(result.flow.status).toBe("done");
+});
