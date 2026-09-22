@@ -258,12 +258,22 @@ What is in it today:
   answer is remembered by the client, never persisted by keryx — and
   `session/cancel`, `session/list`, and `session/load` (replaying a session
   created anywhere, including one from `keryx shell`) are all implemented.
-  Writes and shell execution stay local unconditionally (no `fs/write_text_file`
+  With no `--provider`/`--model` it uses the provider and model `keryx shell`
+  saved (run `keryx shell` once and pick one); with nothing configured it
+  still answers `initialize` and refuses `session/new` with a message saying
+  what to configure — it never answers with a test stand-in. The client's own
+  stdio MCP servers from `mcpServers` are started for that session, their
+  tools offered through `search_tool`/`use_tool` with every call asked, one
+  running set shared by the threads that send the same list, and stopped when
+  the connection ends or `keryx acp` is sent SIGTERM/SIGINT; `http`/`sse` entries and a server that
+  fails to start are reported to the client by name, and the session still
+  opens. Writes and shell execution stay local unconditionally (no `fs/write_text_file`
   or `terminal/*` calls, whatever the client advertises), and there is no
   HTTP/WebSocket transport, no authentication over this wire, and no
   `session/resume`/`close`/`delete`/`set_mode`/`set_config_option`. Verified
-  against the published v1 schema and this repo's own scripted test client,
-  not yet against a shipping IDE. See [the CLI
+  against the published v1 schema and this repo's own scripted test client;
+  Zed has been driven against it by hand, and no shipping IDE is part of the
+  automated tests. See [the CLI
   reference](docs/docs/cli-reference.md#acp) for the full method table and
   what keryx does when a capability is absent.
 - **Plans that survive the turn.** For multi-step work, the agent can keep a

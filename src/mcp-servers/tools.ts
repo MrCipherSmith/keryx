@@ -180,6 +180,14 @@ export type McpToolDeps = {
   readonly servers: () => readonly ServerState[];
   /** Per-tool timeout from config, in seconds. */
   readonly toolTimeoutSec?: (server: string, rawName: string) => number | undefined;
+  /**
+   * Applied to every piece of server-supplied text AFTER it is serialised and
+   * BEFORE it is sanitised or truncated. `keryx acp` passes its secret scrub
+   * here (flow 287): scrubbing the finished output instead missed a secret
+   * the JSON encoding had escaped, and one the truncation cap had cut in two.
+   * Identity when absent — `keryx shell` passes nothing.
+   */
+  readonly redact?: (text: string) => string;
 };
 
 /**
@@ -190,6 +198,7 @@ export type McpToolDeps = {
  * catalog forever if it happened to be constructed first.
  */
 export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] {
+  const redact = deps.redact ?? ((text: string) => text);
   const searchTool: InteractiveTool = {
     definition: {
       name: "search_tool",
@@ -229,7 +238,7 @@ export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] 
       // Capped like `use_tool`'s. Twenty hits with long descriptions
       // measured at twice the cap `use_tool` enforces, and the
       // descriptions are the server's own text.
-      const { text } = truncateResult(JSON.stringify(hits, null, 2));
+      const { text } = truncateResult(redact(JSON.stringify(hits, null, 2)));
       return { output: text, isError: false, untrusted: true };
     },
   };
@@ -308,11 +317,11 @@ export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] 
         // output — uncapped, because only the success branch was capped.
         // And an error is not a reason to stop treating it as
         // third-party content.
-        const { text } = truncateResult(sanitiseForDisplay(outcome.message));
+        const { text } = truncateResult(sanitiseForDisplay(redact(outcome.message)));
         return { output: `MCP tool "${fqn}" failed: ${text}`, isError: true, untrusted: true };
       }
 
-      const { text } = truncateResult(JSON.stringify(outcome.result.content ?? [], null, 2));
+      const { text } = truncateResult(redact(JSON.stringify(outcome.result.content ?? [], null, 2)));
       return {
         output: text,
         isError: outcome.result.isError,

@@ -476,12 +476,12 @@ export type AcpAuthMethod =
  *     `session/load` can replay one (AC5).
  *   - `sessionCapabilities: { list: {} }` and nothing else — listing is a
  *     surface over `listSessions()`; resume/close/delete are refused above.
- *   - `mcpCapabilities: { http: false, sse: false }` — keryx dials MCP servers
- *     from its own config files and has no seam for connecting a server for one
- *     session, so it does not invite a client to send URL-based ones. The stdio
- *     variant needs no capability flag, which is why a client may still send
- *     stdio entries in `session/new` and why the handler has to answer them
- *     honestly rather than drop them silently.
+ *   - `mcpCapabilities: { http: false, sse: false }` — keryx starts a client's
+ *     STDIO servers for the session that names them (flow 287,
+ *     `./session-mcp.ts`) and does not connect URL-based ones, so it does not
+ *     invite a client to send them. The stdio variant needs no capability
+ *     flag; an http/sse entry a client sends anyway is not started and is
+ *     reported to it by name, never dropped silently.
  *   - `promptCapabilities` without `image`/`audio` — the prompt path takes text
  *     and embedded text resources; accepting a base64 image it would then throw
  *     away is worse than declining it.

@@ -1166,7 +1166,9 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
  * item B); the shell adds ONLY its own UX note when anthropic is selected
  * without a credential (before falling back to the offline provider).
  */
-function realMakeProvider(write: (s: string) => void): ShellDeps["makeProvider"] {
+// Exported for `keryx acp` (flow 287, AC1): it builds its provider through this
+// same factory — the saved OAuth grant hand-off included — rather than a copy.
+export function realMakeProvider(write: (s: string) => void): ShellDeps["makeProvider"] {
   return (name: string, model: string, baseUrl?: string): ProviderPort => {
     if (name === "anthropic") {
       const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -1253,7 +1255,7 @@ function realSelectProviderModel(
 }
 
 /** How long the start-up grant refresh may hold the shell before it gives up (K-013). */
-const GRANT_REFRESH_TIMEOUT_MS = 5_000;
+export const GRANT_REFRESH_TIMEOUT_MS = 5_000;
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const PROMPT_MARK = "❯ ";

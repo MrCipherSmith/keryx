@@ -60,7 +60,7 @@ export const KILL_GRACE_MS = 4_500;
  * `unref`'d, because an unref'd bound lets the process exit in the middle of the
  * `finally` that awaits it, before the terminal is restored or the exit code set.
  */
-async function within(work: Promise<unknown>, ms: number): Promise<void> {
+export async function within(work: Promise<unknown>, ms: number): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([

@@ -175,33 +175,132 @@ its stdin/stdout — newline-delimited JSON-RPC 2.0 in both directions, no
 interactively; the client owns the process's lifetime and the conversation.
 
 ```
-keryx acp [--provider <p>] [--model <m>] [--base-url <url>] [--data-dir <dir>]
+keryx acp [--provider <p> --model <m>] [--base-url <url>] [--data-dir <dir>]
 ```
 
-`--provider`/`--model`/`--base-url` select the model backend the same way
-`keryx shell` does; `--data-dir` overrides where sessions are stored (mainly
-useful for a sandboxed client integration test). Nothing but protocol frames
-ever reaches stdout — every diagnostic goes to stderr, which the client may
-capture, forward, or ignore; a stray log line on stdout would otherwise
-corrupt the stream.
+**Provider and model.** With no flags, `keryx acp` uses the provider and model
+`keryx shell` would start with in the same place — it calls the shell's own
+start-up resolution, not a copy of it: the selection `keryx shell` saved the
+last time you picked one (in `auth.json` under keryx's config directory,
+`~/.local/share/keryx/` on Linux and macOS), with saved logins refreshed first
+and your saved API keys applied the same way. `--provider` and `--model`
+override that, and must be given together. The per-provider settings the shell
+applies at launch come along through the same resolvers: saved `modelParams`
+(`temperature`, `maxOutputTokens`, `timeoutMs`), the output-token budget, and
+the saved reasoning effort (each still overridable by its environment
+variable). What has no ACP equivalent is the shell's in-session state — a
+`/reasoning` or `/model` change made inside a running shell applies to that
+shell only. What `keryx shell` does beyond that — detecting
+providers and asking you to pick — has no equivalent here, because there is
+no one to ask over this wire; so run `keryx shell` once and pick, or put both
+flags in the arguments your client launches `keryx acp` with. `--base-url`
+overrides the endpoint, as in the shell; `--data-dir` overrides where sessions
+are stored (mainly useful for a sandboxed client integration test).
 
-**Honesty note:** this has been verified against the published v1 JSON
-Schema and against this repository's own scripted test client, driving a
-real `keryx acp` subprocess over a real pipe (`src/acp/*.process.test.ts`).
-It has not been verified against a shipping IDE (Zed, a JetBrains IDE, or
-similar) — if you wire one up and hit a mismatch, that is new information,
-not a contradiction of something promised here.
+**When nothing is configured** — no flags, nothing saved, or a provider with
+no usable credential — `keryx acp` still starts and still answers
+`initialize`, writes one line to stderr saying what is missing, and refuses
+every `session/new` and `session/load` with a JSON-RPC error (`-32600`,
+`data.condition: "provider-not-configured"`) whose message names what to
+configure and how. It never answers a turn with a stand-in: the offline test
+provider is reachable only through the test-only `--fixture` flag, and
+`--provider fake` is refused like any other missing provider.
+
+Nothing but protocol frames ever reaches stdout — every diagnostic goes to
+stderr, which the client may capture, forward, or ignore; a stray log line on
+stdout would otherwise corrupt the stream.
+
+**Honesty note:** this is verified against the published v1 JSON Schema and
+against this repository's own scripted test client, driving a real
+`keryx acp` subprocess over a real pipe (`src/acp/*.process.test.ts`). The
+first shipping client driven against it by hand — Zed, right after 0.2.154 —
+found two defects the scripted client could not (a test provider as the
+default, and every `session/new` carrying MCP servers refused); both are
+fixed. No shipping IDE is part of the automated tests — if you wire one up and
+hit a mismatch, that is new information, not a contradiction of something
+promised here.
 
 ### Methods implemented
 
 | Method | What it does |
 |---|---|
 | `initialize` | Negotiates the protocol version and returns keryx's `agentCapabilities`/`agentInfo`. Requesting the version keryx serves gets it back unchanged; requesting a newer one gets keryx's latest supported version — not an error, the spec requires this, and the client then decides whether to proceed or close the connection; a malformed or out-of-range version (not an integer, or outside `uint16`) is refused with a JSON-RPC error. Any other request before `initialize` succeeds is refused, not served. |
-| `session/new` | Creates a keryx session bound to `resolveProjectRoot(cwd)` — the git toplevel above the requested `cwd`, or the requested `cwd` itself outside a repository. `session/list`/`session/load` report this resolved root back, not the `cwd` you sent, so a session opened at `/repo/packages/web` is later listed with `cwd: /repo`. A non-empty `mcpServers` is refused honestly (`-32602`) rather than silently ignored: there is no per-session MCP registration seam yet; configure servers project-wide with `keryx mcp`/`keryx integrate` instead. |
+| `session/new` | Creates a keryx session bound to `resolveProjectRoot(cwd)` — the git toplevel above the requested `cwd`, or the requested `cwd` itself outside a repository. `session/list`/`session/load` report this resolved root back, not the `cwd` you sent, so a session opened at `/repo/packages/web` is later listed with `cwd: /repo`. `mcpServers` is accepted: its stdio entries are started (or, when another session on this connection already runs the same list, shared) and the others are reported — see [MCP servers from the client](#mcp-servers-from-the-client). Only a list that does not match the schema (not an array, or an entry with no `name`) is refused, with `-32602`. Refused with the configured message when no provider is configured (see above). |
 | `session/prompt` | Runs a real harness turn in that session and streams `session/update` notifications (assistant text, reasoning, tool calls and their results) as the turn runs — not buffered to the end — resolving with the spec's `stopReason` (`end_turn`, `max_tokens`, `max_turn_requests`, or `cancelled`) once it finishes. One turn per session at a time: a second `session/prompt` for a session whose turn is still running is refused with `-32600` and `data.condition: "session-busy"` rather than interleaved into the same transcript. Wait for the first turn's response before prompting again; `session/cancel` shortens that wait but does not end it, because the slot is freed by the cancelled turn itself once it observes the abort — a turn parked in a long tool call frees it a moment later, not instantly. |
 | `session/cancel` | A notification (no reply). Aborts the running turn — the same abort path a local hard-stop uses — and settles any `session/request_permission` the turn had open as a local denial, so a pending ask never leaves the client hanging. The turn's `session/prompt` response resolves `stopReason: "cancelled"`, and no further `session/update` for that turn is sent afterwards. Cancelling an unknown or already-finished session is a harmless no-op. |
 | `session/list` | Lists the project's durable sessions — the same store `keryx sessions` and `keryx shell --resume` read. An omitted `cwd` lists the sessions of the ACP process's own project root (refusing an optional parameter would itself be a conformance break); a provided `cwd` filters to that project. One page per call; there is no pagination (`nextCursor`) today. |
-| `session/load` | Loads a session created anywhere — including one created outside any ACP connection, such as with `keryx shell` — and replays its history as `session/update` notifications **before** responding, as the spec requires. `user`/`assistant` messages become `user_message_chunk`/`agent_message_chunk`; a stored tool call/result pair becomes a `tool_call` + `tool_call_update` sharing one id; `system` messages are dropped (there is no ACP chunk for them). A replayed tool call's status is always reported `completed` — the persisted transcript keeps only the final content, not a separate success/failure marker, so that is the honest approximation available, not a claim that the original call actually succeeded. Loading a session that has a turn in flight is refused the same way `session/prompt` is (`-32600`, `data.condition: "session-busy"`): the load would replace the history the running turn is still writing to. A session whose transcript exists but cannot be read is answered `-32603` with the session id, the transcript's path and the reason in `error.data` — not `resourceNotFound` (the session does exist) and not an empty replay (which would tell the client the conversation had no messages). This is the one error on this wire that names a path on the agent's filesystem; it is the transcript under the data directory the client itself launched the agent with, and it is there because "which file, and why" is what makes the failure fixable. |
+| `session/load` | Loads a session created anywhere — including one created outside any ACP connection, such as with `keryx shell` — and replays its history as `session/update` notifications **before** responding, as the spec requires. `user`/`assistant` messages become `user_message_chunk`/`agent_message_chunk`; a stored tool call/result pair becomes a `tool_call` + `tool_call_update` sharing one id; `system` messages are dropped (there is no ACP chunk for them). A replayed tool call's status is always reported `completed` — the persisted transcript keeps only the final content, not a separate success/failure marker, so that is the honest approximation available, not a claim that the original call actually succeeded. Loading a session that has a turn in flight is refused the same way `session/prompt` is (`-32600`, `data.condition: "session-busy"`): the load would replace the history the running turn is still writing to. A session whose transcript exists but cannot be read is answered `-32603` with the session id, the transcript's path and the reason in `error.data` — not `resourceNotFound` (the session does exist) and not an empty replay (which would tell the client the conversation had no messages). This is the one error on this wire that names a path on the agent's filesystem; it is the transcript under the data directory the client itself launched the agent with, and it is there because "which file, and why" is what makes the failure fixable. `mcpServers` is handled as for `session/new`, and the list a load carries **replaces** the session's servers: the session is rebound to the set for its new list, a set no session uses any more is stopped, and nothing is started if the load itself is refused. |
+
+### MCP servers from the client
+
+An ACP client may send the MCP servers configured in its own settings with
+every `session/new` and `session/load` — Zed does. keryx handles each entry on
+its own:
+
+- **stdio** entries (`{name, command, args, env: [{name, value}]}`) are
+  started with their `command`, `args` and `env`, through the same MCP client
+  and dial procedure `keryx shell` uses for its configured servers. The child
+  gets the entry's `env` on top of keryx's own environment, with keryx's
+  credentials stripped from it — credential-shaped names, and every variable
+  keryx loaded from its own saved keys, by name; its stderr is discarded. The
+  session is answered at once; its first `session/prompt` waits for the
+  servers to finish starting.
+- **One running set per distinct list.** Zed sends its whole list with every
+  new thread; sessions on one connection that send the same list (same
+  entries, same project root) share one set of server processes rather than
+  starting a copy each. **Threads therefore share each server process** — a
+  stateful server (one holding an open browser, a login, a cache) shares that
+  state across them. When a thread binds to a running set, any server in it
+  known to be dead — it failed to start, or its process has exited — is
+  redialled, so a new thread recovers a broken server without restarting the
+  agent. A server that is merely slow (busy in another thread's long call) is
+  left alone: slowness is not taken as death. A server that hangs without
+  exiting is therefore not recovered until the agent restarts. A set
+  stops when no session uses it any more (a `session/load` rebinding the last
+  one to a different list) or when the connection ends. Once `keryx acp` has
+  begun shutting down, new `session/new`, `session/load` and `session/prompt`
+  requests are refused (`-32600`, `data.condition: "shutting-down"`).
+- Their tools reach the model the way they do in `keryx shell`: through
+  `search_tool` (find a tool) and `use_tool` (call one), offered only in a
+  session that has client servers. **Every `use_tool` call is asked** through
+  `session/request_permission` and runs only on an explicit allow; a denial
+  ends it exactly as a local denial does. A server's output is treated as
+  untrusted content, so a later gated call in the same turn is asked about
+  too, even under a mode that would otherwise allow it.
+- **`http` and `sse`** entries are not started — keryx advertises
+  `mcpCapabilities: {http: false, sse: false}` — and a server that fails to
+  start (a missing command, a failed handshake) does not fail the session.
+  Either way the session is created, every other server still starts, and
+  the client is told, per server, by name and with the reason: as an agent
+  message in that session (`keryx: MCP server "<name>" …`), sent right after
+  the `session/new`/`session/load` response — ACP has no dedicated channel for
+  server status, and an agent message is the one every client shows — plus the
+  same line on stderr.
+- Every server keryx started is **stopped when the connection ends** — stdin
+  closing, or `keryx acp` receiving SIGTERM or SIGINT (it then exits 143 or
+  130) — and when no session uses its set any more. keryx closes each
+  server's stdin and escalates to SIGTERM, then SIGKILL, if it does not exit,
+  within the same bounded grace `keryx shell` uses. **SIGKILL to `keryx acp`
+  cannot be handled:** its servers run in keryx's process group, so a client
+  that kills the group takes them down too; one that kills only keryx closes
+  their stdin, which a conforming stdio server treats as the end — a server
+  that ignores end of input outlives it.
+- **Secrets.** The `env` values and header values in these entries are
+  passed to the server process. What keryx itself writes is scrubbed of them
+  — replaced with `<redacted>` — in these places: every text a client
+  server produces through `search_tool` and `use_tool` (results, error
+  messages and tool descriptions), matched both as written and in its
+  JSON-escaped form (a value containing `"` or `\` appears escaped once
+  serialised) and before the 20,000-byte result cap is applied, so a value
+  the cap would cut in two is still removed; and every start-up failure
+  reason reported to the client or stderr. keryx never logs an entry or
+  writes it to the session record. The limits: a value shorter than 8
+  characters (`DEBUG=1`, a port) is not treated as a secret, since replacing
+  every `1` in a message would make it unreadable and protect nothing; and
+  a server that transforms its credential before returning it — base64 or
+  otherwise re-encoded, split across fields, reversed — is not recognised.
+  Anything the model then writes itself (for example, copying such a
+  transformed value into a later tool call) is not scrubbed either.
 
 ### Methods refused, and why
 

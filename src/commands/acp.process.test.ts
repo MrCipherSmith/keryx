@@ -4,7 +4,8 @@
 // TTY, no `FakeProvider` request-hash authoring.
 //
 // Covers: initialize (exact / offer / refuse), a request before initialize,
-// session/new (including the honest mcpServers refusal, F-8), session/prompt
+// session/new (including a client-supplied mcpServers entry, which flow 287
+// accepts — the old F-8 refusal made keryx unusable from Zed), session/prompt
 // with streaming `session/update`s arriving before the final response, and a
 // stdout-purity check (every stdout line parses as a JSON-RPC frame).
 
@@ -205,7 +206,11 @@ describe("keryx acp (real stdio process)", () => {
     expect(reply.error?.code).toBe(JSON_RPC_ERROR_CODES.invalidRequest);
   });
 
-  test("session/new refuses a non-empty mcpServers honestly rather than silently dropping it (F-8)", async () => {
+  test("session/new accepts a non-empty mcpServers and reports a server that cannot start, rather than refusing the session (flow 287)", async () => {
+    // Was the F-8 refusal: any non-empty list failed `session/new` with
+    // -32602. Zed forwards its own MCP servers on every session/new, so that
+    // refusal locked out everyone with one configured. Now the session is
+    // created and the entry that cannot start is reported by name.
     const { cwd, env } = makeSandbox();
     const conn = startAcp(cwd, env, writeFixture([]));
     await conn.send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: ACP_PROTOCOL_VERSION } });
@@ -214,12 +219,21 @@ describe("keryx acp (real stdio process)", () => {
       jsonrpc: "2.0",
       id: 2,
       method: "session/new",
-      params: { cwd, mcpServers: [{ type: "stdio", name: "x", command: "x", args: [], env: [] }] },
+      params: { cwd, mcpServers: [{ type: "stdio", name: "x", command: "keryx-no-such-mcp-server-binary", args: [], env: [] }] },
     });
     const reply = await conn.replyTo(2);
-    expect(reply.result).toBeUndefined();
-    expect(reply.error?.code).toBe(JSON_RPC_ERROR_CODES.invalidParams);
-    expect(String(reply.error?.message ?? "") + JSON.stringify(reply.error?.data ?? "")).toMatch(/mcp/i);
+    expect(reply.error).toBeUndefined();
+    expect(typeof (reply.result as { sessionId?: unknown }).sessionId).toBe("string");
+    // The report follows the reply: an agent message naming the server.
+    const frames = await conn.waitForFrameCount(3);
+    const report = frames.find(
+      (f) =>
+        f.method === "session/update" &&
+        ((f.params as { update?: { content?: { text?: string } } }).update?.content?.text ?? "").includes(
+          'MCP server "x" failed to start',
+        ),
+    );
+    expect(report).toBeDefined();
   });
 
   test("session/new + session/prompt: streams session/update notifications before the final response, and stdout is pure protocol frames", async () => {
