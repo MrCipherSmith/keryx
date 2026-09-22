@@ -401,6 +401,7 @@ describe("no duplicate coordinator — completeFromGate calls exactly one state-
       taskDone,
       taskAttempt: notImplemented("taskAttempt", calls),
       next: notImplemented("next", calls),
+      ownerSet: notImplemented("ownerSet", calls),
       acConfirm: notImplemented("acConfirm", calls),
       acUpdate: notImplemented("acUpdate", calls),
       acReseal: notImplemented("acReseal", calls),

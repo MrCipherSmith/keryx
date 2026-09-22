@@ -108,7 +108,22 @@
         "review": {
           "type": "boolean",
           "description": "Written by `flow init`. When true, `flow complete` fails unless the flow's latest ingested review round is clean: every finding at or above the severity floor carries a terminal disposition with the evidence that disposition requires, the round ran against the PR head, no external PR comment is unanswered, and the verifier's stats are recorded."
+        },
+        "owner": {
+          "type": "boolean",
+          "description": "Written by `flow init`. When true, `flow complete` fails the owner gate with a named reason while no owner is set, and passes it once one is. Absent on packages created before the gate existed, which report the gate `skipped` rather than `fail`."
         }
+      }
+    },
+    "owner": {
+      "$ref": "#/definitions/identity",
+      "description": "The human accountable for this flow, or absent if one was never set. Never inferred: only ever written by an explicit `--owner` on `flow init` or `flow owner set`, so `basis` is always `stated`."
+    },
+    "signatures": {
+      "type": "array",
+      "description": "Append-only signing record for `flow ac confirm` and a passing `flow complete`. Absent means never signed under this field's existence.",
+      "items": {
+        "$ref": "#/definitions/flowSignature"
       }
     },
     "acConfirmed": {
@@ -357,6 +372,77 @@
               "type": "string"
             }
           }
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "description": "flow 289: a claim about who is behind a value, and how it was obtained — never a proof. `basis` is `stated` (given explicitly by a flag or environment variable), `derived` (read from something like the local git configuration; NEVER promoted to stated), or `unknown` (nothing was available; `value` is then null).",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "basis",
+        "source"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "basis": {
+          "type": "string",
+          "enum": [
+            "stated",
+            "derived",
+            "unknown"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "description": "Exactly where this value came from, or why there is none."
+        }
+      }
+    },
+    "flowSignature": {
+      "type": "object",
+      "description": "flow 289: one append-only signature on an AC confirmation or a passing completion. Never mutated once written.",
+      "additionalProperties": true,
+      "required": [
+        "at",
+        "kind",
+        "identity",
+        "acChecksum"
+      ],
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ac-confirm",
+            "complete"
+          ]
+        },
+        "identity": {
+          "$ref": "#/definitions/identity"
+        },
+        "criterion": {
+          "type": "string",
+          "description": "The AC id signed. Present only for kind ac-confirm."
+        },
+        "acChecksum": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The acceptance-criteria checksum in force at signing time."
+        },
+        "headCommit": {
+          "type": "string",
+          "description": "The commit the completion gates evaluated, when known. Present only for kind complete."
         }
       }
     }

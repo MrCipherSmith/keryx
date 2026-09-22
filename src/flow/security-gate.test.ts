@@ -60,7 +60,7 @@ async function writeAc(dir: string, criteria: string[]): Promise<void> {
 // Drive a flow to the point where `complete` runs its gates.
 async function driveToComplete(deps: FlowServiceDeps): Promise<ReturnType<ReturnType<typeof createFlowService>["complete"]>> {
   const service = createFlowService(deps);
-  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Security gate flow" });
+  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Security gate flow", owner: "Test Owner" });
   await writeAc(path.basename(created), ["Criterion one"]);
   await service.freeze({ cwd: ROOT, id: flow.id });
   await service.start({ cwd: ROOT, id: flow.id });
@@ -95,6 +95,7 @@ test("no securityGate dep: no security gate runs (no regression)", async () => {
     "pull-request",
     "base-branch",
     "tasks",
+    "owner",
     "review",
     "health",
   ]);

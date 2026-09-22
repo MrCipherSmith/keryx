@@ -394,7 +394,12 @@ Grouped by what you are trying to do, not by internal module layout.
 **Operate agents**
 
 - **tasks** — an agent-first Task Manager driven by `keryx flow`, with frozen
-  acceptance criteria and status gates.
+  acceptance criteria and status gates. Each flow can name an accountable
+  human **owner** (`flow init --owner`/`flow owner set`, never inferred), and
+  `ac confirm`/`complete` append an honest, append-only **signature** — who
+  acted, when, and what was signed, with its basis (`stated`/`derived`/
+  `unknown`) stated rather than assumed. See
+  [TM-02](docs/decisions/keryx-harness/TM-02-flow-owner-and-signed-completion.md).
 - **triggers** — declared automation over `.metaproject/triggers.json` (a
   repository event or a cron/systemd schedule): `reconcile`/`rebuild` keep the
   graph and wiki current, `open-flow`/`flow-next` open or report on Task

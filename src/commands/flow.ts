@@ -168,6 +168,42 @@ function getService(): FlowService {
   return service;
 }
 
+/**
+ * The local git identity, or undefined (flow 289, AC3).
+ *
+ * Mirrors `gitUserEmail` in `src/commands/sync.ts` exactly, colocated here
+ * rather than imported: read at the command layer (never inside
+ * `FlowService`, which stays free of process spawning and stays testable
+ * without mocking git), and passed in as `gitIdentity` — the weakest, always
+ * `derived`, never-promoted-to-`stated` input to `resolveSignerIdentity`.
+ * Undefined is a real answer here and is passed through as such: it becomes
+ * an `unknown` signer, never a blank or a fabricated one.
+ */
+async function readGitUserEmail(cwd: string): Promise<string | undefined> {
+  try {
+    const proc = Bun.spawn(["git", "config", "user.email"], { cwd, stdout: "pipe", stderr: "ignore" });
+    if ((await proc.exited) !== 0) {
+      return undefined;
+    }
+    const value = (await new Response(proc.stdout).text()).trim();
+    return value.length > 0 ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Signer identity inputs shared by `flow ac confirm` and `flow complete` (AC3, AC4). */
+async function signerIdentityArgs(
+  cwd: string,
+  args: string[],
+): Promise<{ signedBy: string | undefined; signedByEnv: string | undefined; gitIdentity: string | undefined }> {
+  return {
+    signedBy: optionValue(args, "--signed-by"),
+    signedByEnv: process.env["KERYX_ACTOR"],
+    gitIdentity: await readGitUserEmail(cwd),
+  };
+}
+
 export async function flowCommand(args: string[]): Promise<void> {
   const command = args[0];
 
@@ -194,6 +230,8 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runTask(args.slice(1));
       case "ac":
         return await runAc(args.slice(1));
+      case "owner":
+        return await runOwner(args.slice(1));
       case "implemented":
         return await runImplemented(args.slice(1));
       case "complete":
@@ -234,6 +272,8 @@ async function runInit(args: string[]): Promise<void> {
     // request's base when the gate runs asks where it points today, which a
     // retargeted PR answers in its own favour.
     baseBranch: optionValue(args, "--base"),
+    // Never inferred (AC1): only an explicit --owner populates it.
+    owner: optionValue(args, "--owner"),
   });
   banner("flow init", `Created flow ${result.flow.id}`);
   console.log(`  ${style.green(symbols.ok)} ${style.bold(result.flow.title)}`);
@@ -242,6 +282,7 @@ async function runInit(args: string[]): Promise<void> {
   if (result.flow.baseBranch !== undefined) {
     console.log(`  base:   ${result.flow.baseBranch}`);
   }
+  console.log(`  owner:  ${result.flow.owner?.value ?? style.dim("not set")}`);
   if (result.contextNotes.length > 0) {
     heading("Context collected");
     for (const contextNote of result.contextNotes) {
@@ -350,6 +391,20 @@ async function runStatus(args: string[]): Promise<void> {
   const acLabel = flow.acChecksum ? style.green("frozen") : style.yellow("not frozen");
   console.log(`  AC:      ${acLabel}, ${Object.keys(flow.acConfirmed).length} confirmed`);
   console.log(`  PR:      ${flow.pr.url ? style.cyan(flow.pr.url) : style.dim("none")}`);
+  // Flow 289, AC7: owner and the latest signature, in the same line style as
+  // the rows above — no reader should have to open flow.json by hand to
+  // learn who owns or last signed this flow.
+  console.log(
+    `  owner:   ${flow.owner?.value ? `${flow.owner.value} ${style.dim(`[${flow.owner.basis}]`)}` : style.dim("not set")}`,
+  );
+  const latestSignature = flow.signatures?.at(-1);
+  console.log(
+    `  signed:  ${
+      latestSignature
+        ? `${latestSignature.identity.value ?? "unknown"} ${style.dim(`[${latestSignature.identity.basis}]`)} ${style.dim(`(${latestSignature.kind}, ${latestSignature.at})`)}`
+        : style.dim("no signatures yet")
+    }`,
+  );
 
   const doneCount = flow.tasks.filter((task) => task.status === "done").length;
   const unresolvedTasks: string[] = [];
@@ -641,21 +696,45 @@ async function runTask(args: string[]): Promise<void> {
   throw new Error("Usage: keryx flow task <add|depends|done|attempt> ...");
 }
 
+async function runOwner(args: string[]): Promise<void> {
+  const sub = args[0];
+  if (sub === "set") {
+    const id = requireId(args.slice(1));
+    const owner = optionValue(args, "--owner");
+    const reason = optionValue(args, "--reason");
+    if (!owner || !reason) {
+      throw new Error('Usage: keryx flow owner set <id> --owner "<name>" --reason "<why>"');
+    }
+    const flow = await getService().ownerSet({ cwd: process.cwd(), id, owner, reason });
+    console.log(
+      `  ${style.green(symbols.ok)} Owner ${style.cyan(symbols.arrow)} ${style.bold(flow.owner?.value ?? owner)}`,
+    );
+    return;
+  }
+  throw new Error('Usage: keryx flow owner set <id> --owner "<name>" --reason "<why>"');
+}
+
 async function runAc(args: string[]): Promise<void> {
   const sub = args[0];
   if (sub === "confirm") {
     const id = args[1];
     const criterion = args[2];
     if (!id || !criterion) {
-      throw new Error('Usage: keryx flow ac confirm <id> <ACn> [--note "<evidence>"]');
+      throw new Error('Usage: keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]');
     }
+    const cwd = process.cwd();
     const flow = await getService().acConfirm({
-      cwd: process.cwd(),
+      cwd,
       id,
       criterion,
       note: optionValue(args, "--note"),
+      ...(await signerIdentityArgs(cwd, args)),
     });
     console.log(`  ${style.green(symbols.ok)} Confirmed ${style.bold(criterion.toUpperCase())} ${style.dim(`(${Object.keys(flow.acConfirmed).length} total)`)}`);
+    const signature = flow.signatures?.at(-1);
+    if (signature) {
+      note(`Signed: ${signature.identity.value ?? "unknown"} [${signature.identity.basis}] — ${signature.identity.source}`);
+    }
     return;
   }
   if (sub === "update") {
@@ -698,11 +777,13 @@ async function runImplemented(args: string[]): Promise<void> {
 
 async function runComplete(args: string[]): Promise<void> {
   const id = requireId(args);
+  const cwd = process.cwd();
   const result = await getService().complete({
-    cwd: process.cwd(),
+    cwd,
     id,
     comment: args.includes("--comment"),
     mergedCommit: optionValue(args, "--merged"),
+    ...(await signerIdentityArgs(cwd, args)),
   });
 
   heading(
@@ -724,6 +805,19 @@ async function runComplete(args: string[]): Promise<void> {
     console.log(`  ${mark} ${gate.name} ${style.dim(`(${first}${rest.length === 0 ? ")" : ""}`)}`);
     for (const [index, line] of rest.entries()) {
       console.log(`      ${style.dim(`${line}${index === rest.length - 1 ? ")" : ""}`)}`);
+    }
+  }
+  if (result.passed) {
+    const signature = result.flow.signatures?.at(-1);
+    if (signature) {
+      // AC8: never present a stated/derived identity as proof of a human —
+      // only `stated` says so much as "explicitly claimed", and `derived`
+      // says outright that it is a weaker guess.
+      const caveat =
+        signature.identity.basis === "unknown"
+          ? "no identity was available; this completion is signed as unknown."
+          : `this is a ${signature.identity.basis} claim (${signature.identity.source}), not proof a human signed.`;
+      note(`Signed by: ${signature.identity.value ?? "unknown"} [${signature.identity.basis}] — ${caveat}`);
     }
   }
   if (result.passed && result.issueComment) {
@@ -839,7 +933,7 @@ function requireId(args: string[]): string {
 function printHelp(): void {
   helpTitle("keryx flow", "agent-first managed work (flows)");
   helpUsage([
-    'keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>]',
+    'keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"]',
     "keryx flow list",
     "keryx flow status <id>",
     "keryx flow freeze <id>",
@@ -849,11 +943,12 @@ function printHelp(): void {
     'keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"]',
     'keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what happened>"]',
     'keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"   (repair an unsatisfiable dependsOn)',
-    'keryx flow ac confirm <id> <ACn> [--note "<evidence>"]',
+    'keryx flow owner set <id> --owner "<name>" --reason "<why>"   (the human accountable; never inferred)',
+    'keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]',
     'keryx flow ac update <id> --reason "<why>"   (criteria changed; VOIDS prior confirmations)',
     'keryx flow ac reseal <id> --reason "<why>"   (checksum stale, file unchanged; KEEPS confirmations)',
     "keryx flow implemented <id> --pr <url>",
-    "keryx flow complete <id> [--comment] [--merged <commit>]",
+    'keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"]',
     'keryx flow block <id> --reason "<why>"   /   flow unblock <id>',
     "keryx flow check",
     'keryx flow renumber <dir> --to <id> --reason "<why>"   (repair a duplicate id)',
@@ -861,4 +956,11 @@ function printHelp(): void {
     "keryx flow plan <id> [--provider <p>] [--json]   (model-suggested task breakdown)",
     "keryx flow schema [--out <path>]",
   ]);
+  note(
+    "`--signed-by` names the signer explicitly (stated). Falls back to KERYX_ACTOR (also " +
+      "stated), then to `git config user.email` in this checkout (derived — the person who " +
+      "RAN the command, not necessarily who signed), then to `unknown`. None of these is proof " +
+      "a human signed: a flag, an environment variable, and a local git identity can all be set " +
+      "by an agent. `--owner` is never inferred at all — see docs/decisions/keryx-harness/.",
+  );
 }
