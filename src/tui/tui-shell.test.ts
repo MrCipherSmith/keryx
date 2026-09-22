@@ -686,6 +686,45 @@ otuiTest("G-1: wrapping preserves the base hook's report-only-what-you-got guard
   setup.renderer.destroy();
 });
 
+// `/clear`|`/new` reset the session surface through `resetSessionSurface`, whose
+// ONLY usage-side call is `resetUsage` — so a sink it forgets stays populated
+// with the PREVIOUS session's numbers. The sidebar's `Usage` row
+// (`sb-usage-v`) is driven by `chrome.setUsage` and nothing else, and had no
+// reset at all: after `/clear` the header read `↑0 ↓0` and Context read
+// `0 tokens` while the row below still showed the old session's `↑1.2K ↓34`,
+// until the new session's first `onUsage` overwrote it.
+//
+// A plain `test`, not an `otuiTest`: the defect is a MISSING CALL, so recording
+// sinks on the real wrapper prove it — a rendered frame would only prove it
+// again, more slowly.
+test("G-1b: resetUsage zeroes ALL THREE sinks, including the sidebar Usage row", () => {
+  const sinks = {
+    header: [] as string[],
+    context: [] as number[],
+    usage: [] as Array<[number, number]>,
+  };
+  const io = attachUsageIo({ write: () => {} }, {
+    setHeaderMeta: (text) => sinks.header.push(text),
+    setContextTotal: (total) => sinks.context.push(total),
+    setUsage: (input, output) => sinks.usage.push([input, output]),
+  });
+
+  io.onUsage?.({ inputTokens: 1200, outputTokens: 34 });
+  // The row really was painted — otherwise the assertion below would pass on a
+  // sink nothing ever wrote to.
+  expect(sinks.usage).toEqual([[1200, 34]]);
+
+  io.resetUsage();
+  expect(sinks.header.at(-1)).toBe("↑0 ↓0");
+  expect(sinks.context.at(-1)).toBe(0);
+  // BOUNDARY: without the `chrome.setUsage?.(0, 0)` call this stays
+  // `[[1200, 34]]` — exactly the stale row this test exists to catch.
+  expect(sinks.usage.at(-1)).toEqual([0, 0]);
+  // And the counter itself restarted: the next report is the NEW session's.
+  io.onUsage?.({ inputTokens: 7, outputTokens: 3 });
+  expect(sinks.usage.at(-1)).toEqual([7, 3]);
+});
+
 otuiTest("ScrollBox transcript renders appended content (headless)", async () => {
   const otui = requireOtui();
   const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 60, height: 10 });

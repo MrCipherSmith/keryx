@@ -1147,6 +1147,15 @@ export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO & { res
       totalOut = 0;
       chrome.setHeaderMeta("↑0 ↓0");
       chrome.setContextTotal(0);
+      // The sidebar's `Usage` row is the THIRD sink, and it has no other
+      // writer: `/clear`|`/new` reset the session surface through
+      // `resetSessionSurface`, whose only usage-side call is this one — so a
+      // sink skipped here keeps showing the PREVIOUS session's cumulative
+      // `↑in ↓out` while the header (`↑0 ↓0`) and the Context row
+      // (`0 tokens`) have already gone to zero. Optional chaining, matching
+      // the `setUsage` call above: a caller that renders no such row
+      // (`--chat`, the headless tests) is unaffected.
+      chrome.setUsage?.(0, 0);
     },
   });
 }
