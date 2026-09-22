@@ -11,6 +11,7 @@ import {
 import {
   PLAN_EMPTY_TEXT,
   formatPlanLegend,
+  formatPlanMeta,
   formatPlanRow,
   formatPlanSummary,
   planCounts,
@@ -119,16 +120,33 @@ test("the progress bar fills by completed items only and never overflows its wid
 });
 
 test("a row spells the status out and keeps the agent's own title", () => {
-  expect(formatPlanRow(item("t2", "in_progress", "Implement the change"))).toBe("▶ in progress  Implement the change");
-  expect(formatPlanRow(item("t4", "blocked", "Wait"))).toBe("! blocked      Wait");
+  expect(formatPlanRow(item("t2", "in_progress", "Implement the change"))).toBe("▶ in progress       Implement the change");
+  expect(formatPlanRow(item("t4", "blocked", "Wait"))).toBe("! blocked           Wait");
 });
 
 test("counts and the legend cover all five states", () => {
   const counts = planCounts(mixedPlan());
-  expect(counts).toEqual({ completed: 1, in_progress: 1, pending: 1, blocked: 1, skipped: 1 });
+  expect(counts).toEqual({ proposed: 0, completed: 1, in_progress: 1, pending: 1, blocked: 1, skipped: 1 });
   for (const word of ["completed", "in progress", "pending", "blocked", "skipped"]) {
     expect(formatPlanLegend()).toContain(word);
   }
+});
+
+test("a plan published for approval says so in its own words, and is not counted as worked on", () => {
+  const awaiting: ExecutionPlan = {
+    revision: 1,
+    items: [item("t1", "proposed", "Add the audit log"), item("t2", "proposed", "Backfill the entries")],
+  };
+  // The row spells out what the operator has to do — this is the state the old
+  // five-status vocabulary could not express at all.
+  expect(formatPlanRow(awaiting.items[0]!)).toBe("◇ awaiting approval Add the audit log");
+  expect(formatPlanSummary(awaiting)).toBe("Plan · revision 1 · 0/2 done · 2 awaiting approval");
+  expect(formatPlanLegend()).toContain("awaiting approval");
+
+  const meta = formatPlanMeta(awaiting, "/tmp/session");
+  expect(meta).toContain("2 awaiting approval");
+  expect(meta).toContain("Approval  2 item(s) published for your approval");
+  expect(meta).toContain("(none — no item is in_progress)");
 });
 
 test("the modal paints the summary, the bar, the legend and one row per item", () => {
@@ -148,8 +166,8 @@ test("the modal paints the summary, the bar, the legend and one row per item", (
     "plan-item-t4",
     "plan-item-t5",
   ]);
-  expect(textOf(nodes, "plan-item-t2")).toBe("▶ in progress  Implement the change");
-  expect(textOf(nodes, "plan-item-t4")).toBe("! blocked      Wait for the credential");
+  expect(textOf(nodes, "plan-item-t2")).toBe("▶ in progress       Implement the change");
+  expect(textOf(nodes, "plan-item-t4")).toBe("! blocked           Wait for the credential");
   expect(host.input().title).toBe("/plan");
 });
 
@@ -184,7 +202,7 @@ test("a live plan_set/update repaints an OPEN modal — the sidebar's subscripti
   });
 
   expect(host.nodes().some((node) => node.id === "plan-item-t3")).toBe(true);
-  expect(textOf(host.nodes(), "plan-item-t1")).toBe("✓ completed    First");
+  expect(textOf(host.nodes(), "plan-item-t1")).toBe("✓ completed         First");
   expect(textOf(host.nodes(), "plan-summary")).toContain("revision 2");
 });
 

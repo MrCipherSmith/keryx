@@ -6,6 +6,12 @@ import { join } from "node:path";
 import { setExecutionPlan, type ExecutionPlan } from "../session/execution-plan";
 import { mountExecutionPlanPanel, projectExecutionPlanPanel } from "./execution-plan-panel";
 
+const item_row = (id: string, status: ExecutionPlan["items"][number]["status"]): ExecutionPlan["items"][number] => ({
+  id,
+  title: `${id} title`,
+  status,
+});
+
 const plan = (active: number, count = 10): ExecutionPlan => ({
   revision: 4,
   items: Array.from({ length: count }, (_, index) => ({
@@ -66,6 +72,28 @@ test("tui-shell mounts the conditional Plan panel immediately before Background 
 
   expect(planMount).toBeGreaterThanOrEqual(0);
   expect(jobsMount).toBeGreaterThan(planMount);
+});
+
+test("a proposed plan gets its own glyph, and the window follows the first thing still to do", () => {
+  const awaiting: ExecutionPlan = {
+    revision: 2,
+    items: [item_row("a", "proposed"), item_row("b", "proposed")],
+  };
+  expect(projectExecutionPlanPanel(awaiting, { width: 26, maxRows: 7 }).rows.map((row) => row.glyph)).toEqual([
+    "◇",
+    "◇",
+  ]);
+
+  // Nothing in progress, work at the far end: the window must NOT sit on the
+  // head of the list (the "sidebar looks frozen" cause), it follows the first
+  // `pending` item.
+  const long: ExecutionPlan = {
+    revision: 3,
+    items: Array.from({ length: 12 }, (_, index) => item_row(`i${index}`, index < 9 ? "completed" : "pending")),
+  };
+  const rows = projectExecutionPlanPanel(long, { width: 26, maxRows: 7 }).rows;
+  expect(rows.map((row) => row.id)).toContain("i9");
+  expect(rows.map((row) => row.id)).not.toContain("i0");
 });
 
 test("the Plan section is ONE click target: the header carries the revision and every row opens the inspector", async () => {

@@ -7,6 +7,7 @@ import {
 import { displayWidth } from "../lib/live-render";
 
 const GLYPHS: Readonly<Record<ExecutionPlanStatus, string>> = {
+  proposed: "◇",
   completed: "✓",
   in_progress: "▶",
   pending: "○",
@@ -47,8 +48,17 @@ export function projectExecutionPlanPanel(
     return { visible: false, rows: [], revision: undefined };
   }
   const size = Math.max(1, Math.min(options.maxRows ?? 7, 7, plan.items.length));
-  const active = Math.max(0, plan.items.findIndex((item) => item.status === "in_progress"));
-  const start = Math.max(0, Math.min(active - Math.floor(size / 2), plan.items.length - size));
+  // The window follows the work: the running item first, else the first thing
+  // still to do, else the first item awaiting approval. Anchoring on the TOP of
+  // the list whenever nothing was `in_progress` was how a long plan showed
+  // "item 1..7" while everything actually moved at the far end — the same
+  // complaint as "the sidebar was frozen", one cause further down.
+  const firstOf = (status: ExecutionPlanStatus): number => plan.items.findIndex((i) => i.status === status);
+  const anchorIndex = firstOf("in_progress");
+  const pendingIndex = firstOf("pending");
+  const proposedIndex = firstOf("proposed");
+  const anchor = anchorIndex >= 0 ? anchorIndex : pendingIndex >= 0 ? pendingIndex : Math.max(0, proposedIndex);
+  const start = Math.max(0, Math.min(anchor - Math.floor(size / 2), plan.items.length - size));
   const rows = plan.items.slice(start, start + size).map((item) => {
     const glyph = GLYPHS[item.status];
     return { id: item.id, status: item.status, glyph, text: truncate(`${glyph} ${item.title}`, options.width) };

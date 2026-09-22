@@ -29,6 +29,7 @@ export const PLAN_INSPECTOR_FOOTER = [
 
 /** The same five glyphs the sidebar panel uses — one vocabulary, two sizes. */
 export const PLAN_STATUS_GLYPH: Readonly<Record<ExecutionPlanStatus, string>> = {
+  proposed: "◇",
   completed: "✓",
   in_progress: "▶",
   pending: "○",
@@ -38,6 +39,7 @@ export const PLAN_STATUS_GLYPH: Readonly<Record<ExecutionPlanStatus, string>> = 
 
 /** Spelled out here because the modal has the width the sidebar never had. */
 export const PLAN_STATUS_LABEL: Readonly<Record<ExecutionPlanStatus, string>> = {
+  proposed: "awaiting approval",
   completed: "completed",
   in_progress: "in progress",
   pending: "pending",
@@ -46,6 +48,7 @@ export const PLAN_STATUS_LABEL: Readonly<Record<ExecutionPlanStatus, string>> = 
 };
 
 const PLAN_STATUS_ORDER: readonly ExecutionPlanStatus[] = [
+  "proposed",
   "in_progress",
   "pending",
   "blocked",
@@ -59,6 +62,7 @@ export const PLAN_EMPTY_TEXT =
 /** Count per status, every status present (never a partial record). */
 export function planCounts(plan: ExecutionPlan): Record<ExecutionPlanStatus, number> {
   const counts: Record<ExecutionPlanStatus, number> = {
+    proposed: 0,
     completed: 0,
     in_progress: 0,
     pending: 0,
@@ -91,6 +95,7 @@ export function formatPlanSummary(plan: ExecutionPlan | undefined): string {
   const parts = [
     `revision ${plan.revision}`,
     `${counts.completed}/${plan.items.length} done`,
+    ...(counts.proposed > 0 ? [`${counts.proposed} awaiting approval`] : []),
     ...(counts.in_progress > 0 ? [`${counts.in_progress} in progress`] : []),
     ...(counts.blocked > 0 ? [`${counts.blocked} blocked`] : []),
     ...(counts.pending > 0 ? [`${counts.pending} pending`] : []),
@@ -99,9 +104,16 @@ export function formatPlanSummary(plan: ExecutionPlan | undefined): string {
   return `Plan · ${parts.join(" · ")}`;
 }
 
+/**
+ * The status column is as wide as the LONGEST label, so a mixed plan reads as
+ * one aligned table instead of a ragged one — "awaiting approval" (17) is what
+ * sets the width, and a row whose status needs no padding simply runs on.
+ */
+const PLAN_LABEL_WIDTH = Math.max(...Object.values(PLAN_STATUS_LABEL).map((label) => label.length));
+
 /** One row: glyph + the status in words + the title the agent gave it. */
 export function formatPlanRow(item: ExecutionPlanItem): string {
-  return `${PLAN_STATUS_GLYPH[item.status]} ${PLAN_STATUS_LABEL[item.status].padEnd(12)} ${item.title}`;
+  return `${PLAN_STATUS_GLYPH[item.status]} ${PLAN_STATUS_LABEL[item.status].padEnd(PLAN_LABEL_WIDTH)} ${item.title}`;
 }
 
 /** The glyph→word key, so a reader never has to guess what `!` meant. */
@@ -126,9 +138,12 @@ export function formatPlanMeta(plan: ExecutionPlan | undefined, dir: string | un
   const blocked = plan.items.filter((item) => item.status === "blocked").map((item) => item.id);
   return [
     `Revision  ${plan.revision}`,
-    `Items     ${plan.items.length} — ${counts.completed} completed, ${counts.in_progress} in progress, ${counts.pending} pending, ${counts.blocked} blocked, ${counts.skipped} skipped`,
+    `Items     ${plan.items.length} — ${counts.completed} completed, ${counts.in_progress} in progress, ${counts.pending} pending, ${counts.blocked} blocked, ${counts.skipped} skipped, ${counts.proposed} awaiting approval`,
     `Active    ${active === undefined ? "(none — no item is in_progress)" : `${active.id} — ${active.title}`}`,
     ...(blocked.length > 0 ? [`Blocked   ${blocked.join(", ")}`] : []),
+    ...(counts.proposed > 0
+      ? [`Approval  ${counts.proposed} item(s) published for your approval — nothing is running; they start once you approve`]
+      : []),
     "",
     "Storage   <session>/plan.json — a sibling of slate.json, so a completed",
     "          Flow closing its slate can no longer take the plan with it.",
@@ -180,12 +195,16 @@ type StyleHelpers = {
   dim?: (text: string) => unknown;
   cyan?: (text: string) => unknown;
   red?: (text: string) => unknown;
+  yellow?: (text: string) => unknown;
 };
 
-type Tone = "bold" | "dim" | "cyan" | "red" | "plain";
+type Tone = "bold" | "dim" | "cyan" | "red" | "yellow" | "plain";
 
 function toneFor(status: ExecutionPlanStatus): Tone {
   switch (status) {
+    case "proposed":
+      // Yellow, not red: nothing failed — a human is being asked.
+      return "yellow";
     case "in_progress":
       return "cyan";
     case "blocked":

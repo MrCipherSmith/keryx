@@ -3,7 +3,14 @@ import path from "node:path";
 import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { readSlate } from "./slate";
 
-export const EXECUTION_PLAN_STATUSES = ["pending", "in_progress", "completed", "blocked", "skipped"] as const;
+/**
+ * `proposed` is the status this vocabulary was missing (report item 1): a plan
+ * PUBLISHED FOR THE OPERATOR'S APPROVAL. Without it, "here is my plan, your
+ * call" was indistinguishable from "I am executing this", both for the operator
+ * reading the sidebar and for the continuation nudge below — which is why
+ * "make a plan and stop" was inexpressible.
+ */
+export const EXECUTION_PLAN_STATUSES = ["proposed", "pending", "in_progress", "completed", "blocked", "skipped"] as const;
 export type ExecutionPlanStatus = (typeof EXECUTION_PLAN_STATUSES)[number];
 
 export type ExecutionPlanItem = {
@@ -200,8 +207,20 @@ export async function updateExecutionPlan(
   });
 }
 
+/**
+ * Work the agent still owes. `proposed` is deliberately NOT actionable: an item
+ * awaiting the operator's approval is not work the agent may simply continue,
+ * and counting it here is exactly what made "publish a plan, then stop and let
+ * the human decide" impossible — the shell's own continuation nudge fired on
+ * any `pending`, and a plan that had just been published necessarily had some.
+ */
 export function hasActionableExecutionPlanItems(plan: ExecutionPlan | undefined): boolean {
   return plan?.items.some((item) => item.status === "pending" || item.status === "in_progress") ?? false;
+}
+
+/** Items published for operator approval (never work in progress). */
+export function executionPlanApprovalItems(plan: ExecutionPlan | undefined): ExecutionPlanItem[] {
+  return plan?.items.filter((item) => item.status === "proposed") ?? [];
 }
 
 export function renderExecutionPlanSnapshot(plan: ExecutionPlan | undefined, maxItems = 7): string | undefined {

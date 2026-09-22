@@ -5,8 +5,10 @@ import { join } from "node:path";
 import { archiveSlate, readSlate, writeSlate, type Slate } from "./slate";
 import { openSlate } from "./slate-lifecycle";
 import {
+  executionPlanApprovalItems,
   executionPlanPath,
   getExecutionPlan,
+  hasActionableExecutionPlanItems,
   setExecutionPlan,
   updateExecutionPlan,
   type ExecutionPlanItem,
@@ -119,6 +121,44 @@ test("a plan survives a slate reopen (resume) without the Slate having to carry 
   const reopened = await openSlate({ dir, cwd: dir, mintAttemptId: () => "resume-1" });
   expect((reopened as unknown as { executionPlan?: unknown }).executionPlan).toBeUndefined();
   expect(await getExecutionPlan(dir)).toEqual(created);
+});
+
+test("`proposed` is a real status, and a plan published for approval is NOT actionable work", async () => {
+  const dir = await sessionDir();
+  const awaiting = await setExecutionPlan(dir, {
+    expectedRevision: 0,
+    items: [
+      { id: "t1", title: "Add the audit log", status: "proposed" },
+      { id: "t2", title: "Backfill the entries", status: "proposed" },
+    ],
+  });
+  expect(await getExecutionPlan(dir)).toEqual(awaiting);
+  // The whole point: this is where the agent may STOP and wait for a human.
+  expect(hasActionableExecutionPlanItems(awaiting)).toBe(false);
+  expect(executionPlanApprovalItems(awaiting).map((item) => item.id)).toEqual(["t1", "t2"]);
+
+  // An approved item becomes real work again.
+  const approved = await updateExecutionPlan(dir, {
+    expectedRevision: awaiting.revision,
+    itemId: "t1",
+    status: "pending",
+  });
+  expect(hasActionableExecutionPlanItems(approved)).toBe(true);
+  expect(executionPlanApprovalItems(approved).map((item) => item.id)).toEqual(["t2"]);
+
+  // …and work in progress always was.
+  expect(hasActionableExecutionPlanItems({ revision: 9, items: [{ id: "x", title: "x", status: "in_progress" }] })).toBe(true);
+  expect(hasActionableExecutionPlanItems(undefined)).toBe(false);
+});
+
+test("an unknown status is still rejected — the new member did not loosen validation", async () => {
+  const dir = await sessionDir();
+  await expect(
+    setExecutionPlan(dir, {
+      expectedRevision: 0,
+      items: [{ id: "bad", title: "Bad", status: "awaiting-approval" as ExecutionPlanItem["status"] }],
+    }),
+  ).rejects.toThrow(/status/i);
 });
 
 test("a corrupt plan.json degrades to 'no plan' instead of wedging every plan tool call", async () => {

@@ -3771,3 +3771,77 @@ test("flow 271 R3-1: a lease lost between two tool calls of one turn stops that 
   expect(await readFile(path.join(dir, "slate.json"), "utf8")).toBe(slateAtLoss as string);
   expect((await readSlate(dir))?.anchors.touched).not.toContain("src/after.ts");
 });
+
+// --- the `proposed` status: "publish a plan and stop" is a real stopping point ---
+
+test("REGRESSION: a plan published FOR APPROVAL ends the turn — the continuation nudge must not force another round", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  await setExecutionPlan(dir, {
+    expectedRevision: 0,
+    items: [
+      { id: "t1", title: "Add the audit log", status: "proposed" },
+      { id: "t2", title: "Backfill the entries", status: "proposed" },
+    ],
+  });
+  const { provider, requests } = scriptedProvider([
+    [{ kind: "text_delta", text: "Plan published for your approval." }, { kind: "model_end" }],
+    [{ kind: "text_delta", text: "a second round the nudge would have caused" }, { kind: "model_end" }],
+  ]);
+  const { io, system } = collectingIo();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+
+  await runAgentTurn(io, deps, [], "hello", { slateSession: { dir, cwd, opened: true } });
+
+  // ONE request: `proposed` is not actionable, so nothing forced a follow-up.
+  expect(requests).toHaveLength(1);
+  const said = system.join("");
+  expect(said).toContain("Published for your approval");
+  expect(said).not.toContain("still has actionable items");
+});
+
+test("the control: a plan with real work left still gets the single follow-through round", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  await setExecutionPlan(dir, {
+    expectedRevision: 0,
+    items: [
+      { id: "t1", title: "Already done", status: "completed" },
+      { id: "t2", title: "Still to do", status: "pending" },
+    ],
+  });
+  const { provider, requests } = scriptedProvider([
+    [{ kind: "text_delta", text: "Still working." }, { kind: "model_end" }],
+    [{ kind: "text_delta", text: "After the nudge." }, { kind: "model_end" }],
+  ]);
+  const { io, system } = collectingIo();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+
+  await runAgentTurn(io, deps, [], "hello", { slateSession: { dir, cwd, opened: true } });
+
+  expect(requests).toHaveLength(2);
+  expect(system.join("")).toContain("Actionable items remain after the single follow-through");
+});
+
+test("the instruction teaches the agent the `proposed` vocabulary, or the status is unusable in practice", () => {
+  const instruction = buildAgentSystemInstruction();
+  expect(instruction).toContain("`proposed`");
+  expect(instruction).toContain("END THE TURN");
+  expect(instruction).toContain("FOR APPROVAL");
+});

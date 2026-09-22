@@ -43,6 +43,7 @@ import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../
 import { renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
 import {
   getExecutionPlan,
+  executionPlanApprovalItems,
   hasActionableExecutionPlanItems,
   renderExecutionPlanSnapshot,
   type ExecutionPlan,
@@ -1411,6 +1412,10 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "change, and **plan_get** before resolving a revision conflict. Keep stable item ids, at most one " +
     "`in_progress` item, and do not mark work complete before verification. These tools update session metadata " +
     "only; `/plan` remains the operator's separate read-only permission mode.\n" +
+    "- **Publishing a plan FOR APPROVAL is a real, supported stopping point.** Mark the items `proposed`, " +
+    "state the plan in your reply, and END THE TURN: `proposed` is not work in progress, so it never forces " +
+    "another round on its own. When the operator approves, move those items to `pending`/`in_progress` and " +
+    "continue. Use `pending` (not `proposed`) only when you are going to execute the plan in this same turn.\n" +
     "- This session has its own Slate (working-set scratch, not project knowledge): " +
     "**slate_read** shows the Course (if a Flow is bound) and Seeds recorded so far — nothing " +
     "here is auto-injected, so call it if you want to see it. **slate_write_seed** with " +
@@ -2406,6 +2411,25 @@ async function runAgentTurnCore(
           io.onHistoryChange?.("tool");
         }
         continue;
+      }
+
+      // A plan published for approval is a legitimate place to STOP, so this
+      // says so out loud — and, crucially, does NOT `continue`. The turn ends
+      // here: the operator has something to answer, which is the whole point of
+      // the `proposed` status. It is emitted only when nothing is actionable,
+      // so a half-executed plan still gets the follow-through nudge below.
+      const approvalItems = executionPlanApprovalItems(currentPlan);
+      if (approvalItems.length > 0 && !hasActionableExecutionPlanItems(currentPlan)) {
+        const shown = approvalItems
+          .slice(0, 7)
+          .map((item) => `- ${item.id}: ${item.title.length > 120 ? `${item.title.slice(0, 119)}…` : item.title}`);
+        if (approvalItems.length > shown.length) {
+          shown.push(`- … ${approvalItems.length - shown.length} more`);
+        }
+        system(
+          `\n[plan] Published for your approval — nothing is in progress, so this turn ends here:\n${shown.join("\n")}\n` +
+            `Approve by continuing (the agent moves them to pending/in_progress), or ask for changes.\n`,
+        );
       }
 
       if (!planFollowThroughUsed && hasActionableExecutionPlanItems(currentPlan)) {
