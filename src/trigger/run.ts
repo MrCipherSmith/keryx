@@ -13,11 +13,13 @@
 
 import path from "node:path";
 import { withFileLock } from "../lib/fs";
+import { evaluateSpendCap, type SpendCapEvaluation, type SpendCapOptions } from "../review/caps";
 import {
   loadTriggersConfig,
   type TriggerEntry,
   type TriggersFileProblem,
 } from "./config";
+import { readTriggerRuns } from "./record";
 
 // ---------------------------------------------------------------------------
 // Resolution — "which entry does `<name>` mean, and can a run proceed at all"
@@ -152,4 +154,89 @@ export async function withTriggerRunLock<T>(
     }
     throw error;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Budget refusal (AC8, T11)
+// ---------------------------------------------------------------------------
+//
+// DECISION (recorded in the flow's journal.md as `- note (implementer):`
+// under T11): only the two action kinds that can lead to future model spend —
+// `open-flow` (starts a flow that will go on to be worked) and `flow-next`
+// (reports work on an already-open flow) — are gated here. `reconcile`
+// (`sync --apply`) and `rebuild` (`gdgraph build`) are deterministic
+// bookkeeping that never calls a model (T8's `NO_MODEL_COST`), so gating them
+// on a spend ceiling would be checking a number that can never move because of
+// them; that gate stays scoped to the two action kinds the T5 survey named.
+//
+// "The configured spend ceiling" (AC8) is `evaluateSpendCap`'s own ceiling
+// (`../review/caps.ts`, `DEFAULT_SPEND_CEILING_USD = 3`) — the same one
+// `keryx review budget` refuses against. There is no separate trigger-level
+// ceiling setting; `.metaproject/triggers.json` (T6) declares WHAT fires and
+// WHAT it does, not a budget, and inventing a second ceiling knob here would
+// be a second place to configure the same fact.
+//
+// "Spent" is read from THIS project's own fired-trigger record
+// (`./record.ts`, `runs.jsonl`) — the one durable ledger of what triggered
+// runs have cost, summed over every record whose `cost.recorded` is `true`,
+// across every trigger name and action kind (a project-wide ceiling, not a
+// per-trigger one — `keryx review budget`'s own ceiling is per REVIEW ROUND,
+// but nothing here is scoped narrower than "this project" the way a round is
+// scoped to one PR). A run record file that has never been written (`state:
+// "absent"`) means zero fired triggers have ever recorded a cost, which is a
+// DEMONSTRATED `0`, not an unknown — `evaluateSpendCap(0, ...)` reports
+// `"under"`. A run record file that exists but cannot be READ (`state:
+// "unreadable"`) is the one case this reports as `spent: undefined`
+// ("not-recorded"): the ledger might say anything, and reporting a guessed `0`
+// would be exactly the "coerced to 0" mistake `evaluateSpendCap`'s own doc
+// comment refuses to make.
+export interface TriggerBudgetAllowed {
+  readonly allowed: true;
+  readonly evaluation: SpendCapEvaluation;
+}
+export interface TriggerBudgetRefused {
+  readonly allowed: false;
+  readonly reason: string;
+  readonly evaluation: SpendCapEvaluation;
+}
+export type TriggerBudgetOutcome = TriggerBudgetAllowed | TriggerBudgetRefused;
+
+/**
+ * How much this project's fired-trigger record demonstrates has been spent —
+ * `undefined` only when the record exists but could not be read (see the file
+ * header note above for why an ABSENT record is a demonstrated `0`, not an
+ * unknown).
+ */
+async function recordedTriggerSpend(projectRoot: string): Promise<number | undefined> {
+  const read = await readTriggerRuns(projectRoot);
+  if (read.state === "absent") return 0;
+  if (read.state === "unreadable") return undefined;
+  return read.records.reduce((sum, record) => sum + (record.cost.recorded ? record.cost.usd : 0), 0);
+}
+
+/**
+ * Whether an `open-flow`/`flow-next` run may proceed under the project's
+ * spend ceiling (AC8). Never throws for the ceiling decision itself — every
+ * shape `evaluateSpendCap` can report (`under`, `over`, `not-recorded`) maps
+ * to `allowed: true` except `over`, mirroring `withTriggerRunLock`'s own
+ * "only the specific refusal condition is caught here" discipline.
+ */
+export async function evaluateTriggerBudget(
+  projectRoot: string,
+  actionKind: string,
+  options: SpendCapOptions = {},
+): Promise<TriggerBudgetOutcome> {
+  const spent = await recordedTriggerSpend(projectRoot);
+  const evaluation = evaluateSpendCap(spent, options);
+  if (!evaluation.stop) {
+    return { allowed: true, evaluation };
+  }
+  return {
+    allowed: false,
+    evaluation,
+    reason:
+      `this project has $${evaluation.spent} ${evaluation.currency} recorded against a $${evaluation.ceiling} ` +
+      `${evaluation.currency} spend ceiling (over by $${evaluation.overBy}) — refusing to start "${actionKind}" ` +
+      "rather than risk spending further. Raise the ceiling, or review `keryx trigger status`'s recorded cost, before retrying.",
+  };
 }

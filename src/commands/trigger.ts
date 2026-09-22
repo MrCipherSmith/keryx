@@ -1,4 +1,4 @@
-// Flow 286 T7-T10: `keryx trigger` — the single entry point every hook, cron
+// Flow 286 T7-T11: `keryx trigger` — the single entry point every hook, cron
 // line, systemd timer and CI job calls to fire, inspect, install and
 // schedule a project's declared triggers.
 //
@@ -20,15 +20,31 @@
 // runner provenance for `gdgraph build`, the forgetting-stage reconcile for
 // `sync --apply`).
 //
-// `open-flow` and `flow-next` are flow 286 T11's scope. Declaring one of them
-// loads and validates fine (`../trigger/config.ts`, T6); RUNNING one here
-// refuses cleanly rather than half-implementing flow-opening / do-not-
-// duplicate / budget-refusal semantics that belong to that task.
+// `open-flow` and `flow-next` are flow 286 T11: they dispatch to
+// `../flow/service.ts` (core) through the SAME composition root
+// `../commands/flow.ts` builds for `keryx flow` itself
+// (`flowServiceDeps()`) — reused rather than re-declared, so a triggered
+// `open-flow`/`flow-next` opens flows through the identical tracker/health/
+// security-gate wiring an operator's own `keryx flow init`/`next` uses, not a
+// second, drifting composition. `../flow/service.ts` is CORE zone (like
+// `../trigger/*`), so it could not have been called from `../trigger/run.ts`
+// directly: `flowServiceDeps()` itself pulls in the GitHub tracker adapter,
+// the health service and the security guard, all ADAPTER-zone dependencies
+// core may never import. This file is the one place both zones meet, exactly
+// as it already is for `reconcile`/`rebuild`.
 
 import { gdgraphCommand } from "./gdgraph";
 import { syncCommand } from "./sync";
-import { resolveTriggerForRun, withTriggerRunLock, type TriggerResolution } from "../trigger/run";
-import { loadTriggersConfig, triggersConfigPath, type TriggerAction, type TriggerEntry, type TriggerFire } from "../trigger/config";
+import { flowServiceDeps } from "./flow";
+import { createFlowService } from "../flow/service";
+import { resolveTriggerForRun, withTriggerRunLock, evaluateTriggerBudget, type TriggerResolution } from "../trigger/run";
+import {
+  loadTriggersConfig,
+  triggersConfigPath,
+  type TriggerAction,
+  type TriggerEntry,
+  type TriggerFire,
+} from "../trigger/config";
 import {
   appendTriggerRunRecord,
   latestRunByTrigger,
@@ -40,6 +56,22 @@ import {
 } from "../trigger/record";
 import { hasGitHooksRoot, installTriggerHooks, isTriggerHookInstalled, uninstallTriggerHooks } from "../trigger/hooks";
 import { renderScheduleLines, resolveKeryxInvocation, resolveScheduleEntry } from "../trigger/schedule";
+import type { FlowService } from "../flow/types";
+import type { NextTaskDecision } from "../flow/machine";
+
+/**
+ * Same lazy-singleton shape `../commands/flow.ts` uses for `keryx flow`
+ * itself (`getService`/`service` there) — a second, independent singleton
+ * rather than importing that module's, because that one is not exported (by
+ * design: `flowServiceDeps()` IS exported, precisely so a second composition
+ * root like this one can build its own instance from the identical deps
+ * without reaching into another command file's private module state).
+ */
+let flowService: FlowService | null = null;
+function getFlowService(): FlowService {
+  flowService ??= createFlowService(flowServiceDeps());
+  return flowService;
+}
 
 export async function triggerCommand(args: string[]): Promise<void> {
   const sub = args[0];
@@ -155,16 +187,12 @@ async function runReadyTrigger(
   const { entry } = resolution;
   const { action } = entry;
 
-  if (action.kind === "open-flow" || action.kind === "flow-next") {
-    console.log(
-      `keryx trigger run ${name}: action "${action.kind}" is not implemented in this build — refusing cleanly ` +
-        "(flow 286 T11).",
-    );
-    await recordRun(projectRoot, entry, {
-      outcome: "no-op",
-      detail: `action "${action.kind}" is not implemented in this build — it never ran.`,
-      cost: { recorded: false, reason: `action "${action.kind}" is not implemented in this build — it never ran` },
-    });
+  if (action.kind === "open-flow") {
+    await runOpenFlow(projectRoot, name, entry, action);
+    return;
+  }
+  if (action.kind === "flow-next") {
+    await runFlowNext(projectRoot, name, entry, action);
     return;
   }
 
@@ -198,9 +226,13 @@ async function runReadyTrigger(
 
   // Neither `reconcile` (`sync --apply`) nor `rebuild` (`gdgraph build`) call
   // a model — both are deterministic bookkeeping over the graph/wiki/memory
-  // layers. `NO_MODEL_COST` is honest for both outcomes below; T11's
-  // `open-flow`/`flow-next` is what will eventually record a real
-  // `{ recorded: true, usd }` here (AC8).
+  // layers. `NO_MODEL_COST` is honest for both outcomes below. `open-flow` and
+  // `flow-next` (T11) never reach this branch at all — see `runOpenFlow`/
+  // `runFlowNext` above, which record their own outcomes; neither of those
+  // calls a model either (this build scopes `flow-next` to REPORTING the next
+  // task, not dispatching an agent turn — see `runFlowNext`'s own comment for
+  // why), so `NO_MODEL_COST` stays accurate everywhere a cost is recorded
+  // today. A real `{ recorded: true, usd }` has no producer yet.
   if (outcome.result.failed) {
     console.error(`keryx trigger run ${name}: action "${action.kind}" failed (see output above).`);
     process.exitCode = 1;
@@ -217,6 +249,183 @@ async function runReadyTrigger(
     outcome: "ok",
     detail: `action "${action.kind}" completed.`,
     cost: NO_MODEL_COST,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// open-flow (T11, AC7 + AC8)
+// ---------------------------------------------------------------------------
+
+/**
+ * "Equivalent", for the do-not-duplicate rule (AC7): another flow whose
+ * `title` is EXACTLY this entry's `action.template` and whose `status` is not
+ * `"done"`. Chosen deliberately narrow, over the two looser readings that were
+ * available and rejected:
+ *
+ *   - Matching on `slug` instead of `title` would tie equivalence to
+ *     `slugify()`'s behaviour (lossy — two different templates can slugify to
+ *     the same string), when `title` is set from `action.template` verbatim
+ *     by `runOpenFlow` below and is therefore an exact, lossless key.
+ *   - Treating every non-`"done"` status as equally "open" is what this DOES
+ *     do (a `"blocked"` flow still counts — it has not finished, and opening
+ *     a second one for the same template while the first is blocked is
+ *     exactly the noise AC7 exists to prevent); the narrower alternative
+ *     (`"in-progress"` only) was rejected because a freshly-`init`ed flow
+ *     that has not yet been `start`ed (`status: "initializing"`) is just as
+ *     much "already open for this template" as one mid-task, and letting a
+ *     trigger fire again before a human/agent even looks at the first one
+ *     would defeat the rule's own purpose.
+ *
+ * A test (`trigger.test.ts`) pins this exact reading: two `open-flow` fires
+ * for the same template, the second a no-op while the first flow is still
+ * `"initializing"` (not yet started).
+ */
+function findEquivalentOpenFlow(
+  flows: readonly { id: string; title: string; status: string }[],
+  template: string,
+): { id: string; title: string; status: string } | undefined {
+  return flows.find((flow) => flow.title === template && flow.status !== "done");
+}
+
+/**
+ * `../trigger/record.ts`'s `NO_MODEL_COST` names "reconcile/rebuild" by name
+ * in its own reason string — accurate for those two, but wrong to reuse
+ * verbatim for `open-flow`/`flow-next`, which are neither. Each action kind
+ * gets its own, honest reason instead.
+ */
+function noModelCost(reason: string): TriggerRunCost {
+  return { recorded: false, reason };
+}
+
+const OPEN_FLOW_NO_MODEL_COST = noModelCost(
+  'action "open-flow" does not call a model — opening a flow is deterministic bookkeeping (a new flow.json plus scaffold ' +
+    "files), no spend to record.",
+);
+const FLOW_NEXT_NO_MODEL_COST = noModelCost(
+  'action "flow-next" does not call a model in this build — it only reports the next task into this record; it never ' +
+    "dispatches an agent turn, so there is nothing to record a cost for.",
+);
+
+async function runOpenFlow(
+  projectRoot: string,
+  name: string,
+  entry: TriggerEntry,
+  action: Extract<TriggerAction, { kind: "open-flow" }>,
+): Promise<void> {
+  const budget = await evaluateTriggerBudget(projectRoot, "open-flow");
+  if (!budget.allowed) {
+    await refuseOnBudget(projectRoot, name, entry, budget.reason);
+    return;
+  }
+
+  const service = getFlowService();
+
+  if (action.skipIfOpen) {
+    const flows = await service.list({ cwd: projectRoot });
+    const equivalent = findEquivalentOpenFlow(flows, action.template);
+    if (equivalent) {
+      const detail =
+        `flow ${equivalent.id} ("${equivalent.title}", status: ${equivalent.status}) is already open for ` +
+        `template "${action.template}" and \`skipIfOpen\` is set — not opening a second one.`;
+      console.log(`keryx trigger run ${name}: ${detail}`);
+      await recordRun(projectRoot, entry, { outcome: "no-op", detail, cost: OPEN_FLOW_NO_MODEL_COST });
+      return;
+    }
+  }
+
+  try {
+    const result = await service.init({ cwd: projectRoot, title: action.template });
+    const detail = `opened flow ${result.flow.id} ("${action.template}") at ${result.dir}.`;
+    console.log(`keryx trigger run ${name}: ok — ${detail}`);
+    await recordRun(projectRoot, entry, { outcome: "ok", detail, cost: OPEN_FLOW_NO_MODEL_COST });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`keryx trigger run ${name}: action "open-flow" failed: ${message}`);
+    process.exitCode = 1;
+    await recordRun(projectRoot, entry, {
+      outcome: "failed",
+      detail: `action "open-flow" failed: ${message}`,
+      cost: OPEN_FLOW_NO_MODEL_COST,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// flow-next (T11, AC8)
+// ---------------------------------------------------------------------------
+//
+// SCOPE DECISION, recorded here and in the flow's journal.md: `flow-next`
+// REPORTS `keryx flow next <flow>`'s own decision (ready/blocked/none, plus
+// unresolved tasks) into the fired-trigger record; it does not dispatch an
+// agent to work the task. "Running" a task honestly means handing it to an
+// agent for a real turn, which costs money and needs a human or an
+// orchestrator to actually own the dispatch (model choice, tool access,
+// review afterward) — none of which a `keryx trigger run` firing unattended
+// from a git hook or cron line has any way to supply safely. Reporting is the
+// scope this build can do HONESTLY: it turns "an event happened" into "here
+// is what a person or an orchestrator should do next", which is exactly the
+// gap description.md names ("no record that a triggered run happened"),
+// without pretending to a dispatch capability this command does not have. A
+// future dispatching `flow-next` is a real, larger feature (choosing a
+// runner, a model tier, capturing its own review) — not a difference in how
+// this function reads `NextTaskDecision`.
+async function runFlowNext(
+  projectRoot: string,
+  name: string,
+  entry: TriggerEntry,
+  action: Extract<TriggerAction, { kind: "flow-next" }>,
+): Promise<void> {
+  const budget = await evaluateTriggerBudget(projectRoot, "flow-next");
+  if (!budget.allowed) {
+    await refuseOnBudget(projectRoot, name, entry, budget.reason);
+    return;
+  }
+
+  const service = getFlowService();
+  try {
+    const decision = await service.next({ cwd: projectRoot, id: action.flow });
+    const detail = describeNextTaskDecision(action.flow, decision);
+    console.log(`keryx trigger run ${name}: ok — ${detail}`);
+    await recordRun(projectRoot, entry, { outcome: "ok", detail, cost: FLOW_NEXT_NO_MODEL_COST });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`keryx trigger run ${name}: action "flow-next" failed: ${message}`);
+    process.exitCode = 1;
+    await recordRun(projectRoot, entry, {
+      outcome: "failed",
+      detail: `action "flow-next" failed: ${message}`,
+      cost: FLOW_NEXT_NO_MODEL_COST,
+    });
+  }
+}
+
+function describeNextTaskDecision(flowId: string, decision: NextTaskDecision): string {
+  const unresolvedNote =
+    decision.unresolved.length > 0
+      ? ` (${decision.unresolved.length} other not-done task(s) carry an open, unresolved attempt.)`
+      : "";
+  if (decision.kind === "ready") {
+    return (
+      `flow ${flowId}'s next task is ${decision.task.id} ("${decision.task.title}"), resume: ${decision.resume.kind}.` +
+      unresolvedNote
+    );
+  }
+  if (decision.kind === "blocked") {
+    const waiting = decision.blocked
+      .map((entry) => `${entry.task.id} (waiting on ${entry.waitingOn.join(", ")})`)
+      .join("; ");
+    return `flow ${flowId} has work remaining but nothing startable — blocked: ${waiting}.${unresolvedNote}`;
+  }
+  return `flow ${flowId} has no undone task — nothing to report.${unresolvedNote}`;
+}
+
+/** Shared by `runOpenFlow`/`runFlowNext`: AC8's budget refusal — exit 0, recorded, never a crash. */
+async function refuseOnBudget(projectRoot: string, name: string, entry: TriggerEntry, reason: string): Promise<void> {
+  console.log(`keryx trigger run ${name}: ${reason}`);
+  await recordRun(projectRoot, entry, {
+    outcome: "budget-refused",
+    detail: reason,
+    cost: { recorded: false, reason: "run was refused on the spend ceiling before the action could start" },
   });
 }
 
@@ -476,12 +685,18 @@ writes it) and loaded by name. \`run\`:
   - exits non-zero when the name is unknown, the matching entry is malformed,
     or the action itself fails;
   - refuses cleanly (exit 0) when another \`trigger run\` already holds this
-    project's trigger lock, or when the action is "open-flow"/"flow-next"
-    (not implemented in this build).
+    project's trigger lock ("reconcile"/"rebuild" only), or when the
+    project's recorded trigger spend is at or over its spend ceiling
+    ("open-flow"/"flow-next" only — see \`keryx trigger status\` for the
+    recorded cost).
 
-Only the "reconcile" (-> \`keryx sync --apply\`) and "rebuild" (->
-\`keryx gdgraph build\`) actions run today. \`install\` writes hooks for
-event-fired entries only; a schedule entry's line comes from \`trigger
-schedule\`, and keryx never runs a daemon of its own for it.
+Four actions run today: "reconcile" (-> \`keryx sync --apply\`), "rebuild"
+(-> \`keryx gdgraph build\`), "open-flow" (opens a flow from
+\`action.template\`, skipping a second one while an equivalent flow is
+already open when \`action.skipIfOpen\` is set), and "flow-next" (reports
+\`action.flow\`'s next task into the record — it does not dispatch an agent
+to work it). \`install\` writes hooks for event-fired entries only; a
+schedule entry's line comes from \`trigger schedule\`, and keryx never runs a
+daemon of its own for it.
 `);
 }

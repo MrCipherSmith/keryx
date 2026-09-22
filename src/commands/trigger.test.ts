@@ -7,11 +7,13 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { triggerCommand } from "./trigger";
 import { triggersConfigPath } from "../trigger/config";
+import { appendTriggerRunRecord, readTriggerRuns } from "../trigger/record";
+import { DEFAULT_SPEND_CEILING_USD } from "../review/caps";
 import { readProvenance } from "../sync/provenance";
 import { acquireCwd, releaseCwd } from "../lib/test-cwd";
 
@@ -140,26 +142,136 @@ describe("keryx trigger run — AC2: exactly one pass, exit code reflects only t
     expect((await readProvenance(root, "memory"))?.commit).toBe(commit);
   });
 
-  test("'open-flow' — refuses cleanly as not implemented in this build, exit 0", async () => {
+  test("'open-flow' — opens a flow from the entry's template, exit 0, recorded ok", async () => {
     await writeTriggers(root, [
-      { name: "open-bugfix", on: { kind: "event", event: "ci" }, action: { kind: "open-flow", template: "bugfix" } },
+      { name: "open-bugfix", on: { kind: "event", event: "ci" }, action: { kind: "open-flow", template: "bugfix sweep" } },
     ]);
 
     await triggerCommand(["run", "open-bugfix"]);
 
     expect(process.exitCode ?? 0).toBe(0);
-    expect(logged.join("\n")).toContain("not implemented in this build");
+    expect(logged.join("\n")).toContain('ok — opened flow');
+    expect(logged.join("\n")).toContain('"bugfix sweep"');
+
+    const flowDirs = (await readdir(path.join(root, ".metaproject", "flows"))).filter((d) => d.includes("bugfix-sweep"));
+    expect(flowDirs.length).toBe(1);
+
+    const runsRead = await readTriggerRuns(root);
+    expect(runsRead.state).toBe("present");
+    if (runsRead.state === "present") {
+      expect(runsRead.records).toHaveLength(1);
+      expect(runsRead.records[0]?.outcome).toBe("ok");
+      expect(runsRead.records[0]?.action).toEqual({ kind: "open-flow", template: "bugfix sweep" });
+    }
   });
 
-  test("'flow-next' — refuses cleanly as not implemented in this build, exit 0", async () => {
+  test("'open-flow' with skipIfOpen — a second firing while an equivalent flow is already open is a no-op with a stated reason (AC7)", async () => {
     await writeTriggers(root, [
-      { name: "advance-flow", on: { kind: "event", event: "post-commit" }, action: { kind: "flow-next", flow: "286" } },
+      {
+        name: "open-nightly-sweep",
+        on: { kind: "schedule", cron: "0 3 * * *" },
+        action: { kind: "open-flow", template: "nightly sweep", skipIfOpen: true },
+      },
     ]);
 
+    await triggerCommand(["run", "open-nightly-sweep"]);
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(logged.join("\n")).toContain("ok — opened flow");
+
+    logged = [];
+    await triggerCommand(["run", "open-nightly-sweep"]);
+
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(logged.join("\n")).toContain("already open for template");
+    expect(logged.join("\n")).toContain("skipIfOpen");
+
+    // Equivalence is on template + still-open status: still exactly one flow
+    // directory on disk, not two.
+    const flowDirs = (await readdir(path.join(root, ".metaproject", "flows"))).filter((d) => d.includes("nightly-sweep"));
+    expect(flowDirs.length).toBe(1);
+
+    const runsRead = await readTriggerRuns(root);
+    expect(runsRead.state).toBe("present");
+    if (runsRead.state === "present") {
+      expect(runsRead.records).toHaveLength(2);
+      expect(runsRead.records[0]?.outcome).toBe("ok");
+      expect(runsRead.records[1]?.outcome).toBe("no-op");
+      expect(runsRead.records[1]?.detail).toContain("already open for template");
+    }
+  });
+
+  test("'flow-next' — reports the flow's next task into the record; it does not dispatch anything", async () => {
+    await writeTriggers(root, [
+      { name: "open-it", on: { kind: "event", event: "ci" }, action: { kind: "open-flow", template: "reported flow" } },
+    ]);
+    await triggerCommand(["run", "open-it"]);
+    expect(process.exitCode ?? 0).toBe(0);
+    const opened = await readTriggerRuns(root);
+    if (opened.state !== "present") throw new Error("expected the open-flow run to be recorded");
+    const openRecord = opened.records[0];
+    if (!openRecord || openRecord.action.kind !== "open-flow") throw new Error("expected an open-flow record");
+    const match = /opened flow (\S+) /.exec(openRecord.detail);
+    const flowId = match?.[1];
+    if (!flowId) throw new Error(`could not read the opened flow's id from: ${openRecord.detail}`);
+
+    await writeTriggers(root, [
+      { name: "open-it", on: { kind: "event", event: "ci" }, action: { kind: "open-flow", template: "reported flow" } },
+      { name: "advance-flow", on: { kind: "event", event: "post-commit" }, action: { kind: "flow-next", flow: flowId } },
+    ]);
+    logged = [];
     await triggerCommand(["run", "advance-flow"]);
 
     expect(process.exitCode ?? 0).toBe(0);
-    expect(logged.join("\n")).toContain("not implemented in this build");
+    expect(logged.join("\n")).toContain(`flow ${flowId}'s next task is T1`);
+    expect(logged.join("\n")).toContain("resume: never-started");
+
+    const runsRead = await readTriggerRuns(root);
+    expect(runsRead.state).toBe("present");
+    if (runsRead.state === "present") {
+      const record = runsRead.records.at(-1);
+      if (!record) throw new Error("expected a flow-next record");
+      expect(record.outcome).toBe("ok");
+      expect(record.action).toEqual({ kind: "flow-next", flow: flowId });
+      expect(record.detail).toContain("T1");
+      expect(record.cost.recorded).toBe(false);
+      if (!record.cost.recorded) {
+        expect(record.cost.reason).toContain('"flow-next" does not call a model');
+      }
+    }
+  });
+
+  test("budget-refused (AC8) — a run whose recorded trigger spend is at the ceiling exits 0, opens nothing, and is recorded as budget-refused", async () => {
+    await writeTriggers(root, [
+      { name: "open-over-budget", on: { kind: "event", event: "ci" }, action: { kind: "open-flow", template: "should not open" } },
+    ]);
+    // Seed the ledger `evaluateTriggerBudget` reads from: this project's own
+    // fired-trigger record, at (not past) the default ceiling.
+    await appendTriggerRunRecord(root, {
+      at: new Date().toISOString(),
+      trigger: "some-earlier-trigger",
+      firedBy: { kind: "event", event: "ci" },
+      action: { kind: "open-flow", template: "earlier work" },
+      outcome: "ok",
+      detail: "seeded for the budget test",
+      cost: { recorded: true, usd: DEFAULT_SPEND_CEILING_USD },
+    });
+
+    await triggerCommand(["run", "open-over-budget"]);
+
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(logged.join("\n")).toContain("spend ceiling");
+    expect(logged.join("\n")).toContain("refusing to start");
+
+    const flowDirs = await readdir(path.join(root, ".metaproject", "flows")).catch(() => []);
+    expect(flowDirs.filter((d) => d.includes("should-not-open")).length).toBe(0);
+
+    const runsRead = await readTriggerRuns(root);
+    expect(runsRead.state).toBe("present");
+    if (runsRead.state === "present") {
+      const record = runsRead.records.at(-1);
+      expect(record?.outcome).toBe("budget-refused");
+      expect(record?.trigger).toBe("open-over-budget");
+    }
   });
 
   // Delegated-runner failure path (`delegateToLocalRunner` in `./gdgraph.ts`):
