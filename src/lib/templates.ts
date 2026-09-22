@@ -2119,8 +2119,15 @@ export function renderGdgraphPostCommitHook(): string {
   fi
 
   echo "keryx post-commit: rebuilding gdgraph after a graph-relevant commit"
-  if "$gdm" gdgraph build >/dev/null 2>&1; then
+  # Exit 75 is not a failed build: another keryx run (a trigger, or a manual
+  # sync/build) held the project's maintenance lock for the whole bounded wait,
+  # so this rebuild did not start. Reported as what it is.
+  gdm_rc=0
+  "$gdm" gdgraph build >/dev/null 2>&1 || gdm_rc=$?
+  if [ "$gdm_rc" -eq 0 ]; then
     echo "keryx post-commit: gdgraph rebuilt; versioned graph artifacts may now differ from the commit"
+  elif [ "$gdm_rc" -eq 75 ]; then
+    echo "keryx post-commit: gdgraph rebuild skipped — another keryx run holds the maintenance lock; run 'keryx gdgraph build' once it finishes" >&2
   else
     echo "keryx post-commit: gdgraph build failed; graph may be stale, run 'keryx gdgraph build'" >&2
   fi
