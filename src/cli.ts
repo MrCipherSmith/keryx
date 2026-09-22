@@ -142,6 +142,14 @@ export async function main(): Promise<void> {
 
   const route = CLI_ROUTES[command];
   if (route) {
+    // Ask for usage, do not DO anything. The guard sits here, in front of every
+    // group, so a future subcommand cannot forget it — and it is skipped for
+    // tokens after `--`, which are the child process's own.
+    if (shouldInterceptHelp(command, args.slice(1))) {
+      const usage = groupUsage(command);
+      console.log(usage === undefined ? `keryx ${VERSION}\n\n${USAGE_BODY}` : `keryx ${command} — usage:\n\n${usage}\n`);
+      return;
+    }
     await route(args.slice(1));
     return;
   }
@@ -151,10 +159,12 @@ export async function main(): Promise<void> {
   process.exitCode = 1;
 }
 
-function printHelp(): void {
-  console.log(`keryx ${VERSION}
-
-Usage:
+/**
+ * The usage body `printHelp` prints — and the single source {@link groupUsage}
+ * reads a group's own lines from. Hoisted rather than duplicated: a second copy
+ * of this text would drift from the one operators actually read.
+ */
+const USAGE_BODY = `Usage:
   keryx                                        Show CLI usage
   keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
                                                Start TUI agent shell (sessions are per-project)
@@ -318,7 +328,79 @@ Commands:
   workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
   retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
   forgetting Read the deletion trail — was this removed, or did it never exist?
-`);
+`;
+
+function printHelp(): void {
+  console.log(`keryx ${VERSION}\n\n${USAGE_BODY}`);
+}
+
+/**
+ * Does this argument list ask for help?
+ *
+ * `--help`/`-h` is recognized only as the FIRST argv token, so
+ * `keryx skills install --help` used to RUN the install — which is how a
+ * read-only question about a subcommand's usage installed 52 skills. Tokens
+ * after a bare `--` belong to a CHILD process (`harness exec -- <cmd>`,
+ * `ctx run -- <cmd>`), where `--help` is the child's own flag and must pass
+ * through untouched. Pure.
+ */
+export function helpRequestedFor(rest: readonly string[]): boolean {
+  const separator = rest.indexOf("--");
+  const head = separator === -1 ? rest : rest.slice(0, separator);
+  return head.some((token) => token === "--help" || token === "-h");
+}
+
+/**
+ * The `Usage:` lines for one command group, or `undefined` when the group has
+ * none. A group's block is its `keryx <group> …` line plus the indented
+ * continuation lines that describe it — `sessions` has five of them, `skills`
+ * thirteen — and never the next group's line. Pure.
+ */
+/**
+ * Groups that implement their OWN `--help` (`args.includes("--help")`) instead
+ * of treating a leading `--help` as the group's help. For those the guard below
+ * must stay out of the way: their handler prints richer usage than this group's
+ * block — `keryx shell` prints its full flag list, `keryx agents bootstrap`
+ * prints the runtime list — and replacing that with two summary lines would be a
+ * regression dressed as a safety fix. Every entry is pinned by a test that
+ * drives it (`shell-cli-validation.test.ts`, `cli.test.ts`'s agents case).
+ *
+ * The list is a list of EXCEPTIONS on purpose: the default is to intercept, so a
+ * mutating subcommand cannot inherit `--help` and run. A group that starts
+ * answering help itself belongs here, and its own help test will say so.
+ */
+const DEEP_HELP_GROUPS: ReadonlySet<string> = new Set(["agents", "shell"]);
+
+/**
+ * Should the group's own usage be printed instead of running anything? Pure, so
+ * the property is testable without a terminal: `skills install --help` is a
+ * question, `agents bootstrap --help` is answered deeper, and `harness exec --
+ * cmd --help` is the CHILD's question.
+ */
+export function shouldInterceptHelp(command: string, rest: readonly string[]): boolean {
+  return !DEEP_HELP_GROUPS.has(command) && helpRequestedFor(rest);
+}
+
+export function groupUsage(command: string, usage: string = USAGE_BODY): string | undefined {
+  const lines = usage.split("\n");
+  const startsGroup = new RegExp(`^ {2,}keryx ${command}(?:\\s|$)`);
+  const isContinuation = /^ {4,}\S/;
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] ?? "";
+    if (!startsGroup.test(line)) {
+      continue;
+    }
+    out.push(line);
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const next = lines[j] ?? "";
+      if (!isContinuation.test(next) || startsGroup.test(next) || /keryx\s/.test(next)) {
+        break;
+      }
+      out.push(next);
+    }
+  }
+  return out.length === 0 ? undefined : out.join("\n");
 }
 
 /**
