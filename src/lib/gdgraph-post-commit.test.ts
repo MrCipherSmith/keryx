@@ -208,6 +208,22 @@ test("a failing build warns but never fails the commit", async () => {
   });
 });
 
+// Flow 290 (AC9): `keryx gdgraph build` now waits on the project's shared
+// maintenance lock and exits 75 when another run held it for the whole wait.
+// That is "did not start", not "failed", and the hook must say which.
+test("exit 75 (maintenance lock held elsewhere) is reported as skipped, not as a failed build", async () => {
+  await withRepo(async ({ root, git, runHook }) => {
+    await commitFile(root, git, "src/a.ts", "export const a = 1;\n");
+
+    const result = await runHook({ FAKE_KERYX_EXIT: "75" });
+
+    expect(result.calls.trim()).toBe("gdgraph build");
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toContain("rebuild skipped — another keryx run holds the maintenance lock");
+    expect(result.stderr).not.toContain("gdgraph build failed");
+  });
+});
+
 test("a missing keryx prints the manual command instead of failing", async () => {
   await withRepo(async ({ root, git, runHook }) => {
     await commitFile(root, git, "src/a.ts", "export const a = 1;\n");

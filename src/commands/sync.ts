@@ -2,6 +2,7 @@ import { gitHead, readProvenance, recordProvenance, SYNCED_MODULES, type SyncedM
 import { codeOnly, diffSince, totalChanges } from "../sync/diff";
 import { describeSourceGate, HEAD_NOT_REQUESTED, resolveWikiSourceGate, type WikiSourceGate } from "../wiki/staleness";
 import type { DeletionWindow, RemovalAttribution } from "../forgetting/service";
+import { runInteractiveUnderMaintenanceLock } from "../lib/maintenance-lock";
 
 // `keryx sync` — reconcile the derived artifacts (graph, wiki, memory) with the
 // current code. Each artifact records the commit it was built from (provenance);
@@ -31,6 +32,19 @@ export async function syncCommand(args: string[]): Promise<void> {
   }
   const cwd = process.cwd();
   const apply = args.includes("--apply");
+  if (apply) {
+    // Flow 290 (AC9/AC10): `--apply` rebuilds graph/wiki/memory, so it takes
+    // the project's maintenance lock — the SAME one a triggered `reconcile`/
+    // `rebuild` takes. Re-entrant: `applyModule` calls `gdgraph build`
+    // in-process, and a triggered `reconcile` already holds the lock when it
+    // calls this; both run straight through. A plain report takes no lock.
+    await runInteractiveUnderMaintenanceLock(cwd, "sync --apply", () => runSync(cwd, args, apply));
+    return;
+  }
+  await runSync(cwd, args, apply);
+}
+
+async function runSync(cwd: string, args: string[], apply: boolean): Promise<void> {
   const at = new Date().toISOString();
 
   console.log("# keryx sync");

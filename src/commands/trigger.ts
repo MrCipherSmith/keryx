@@ -58,6 +58,23 @@ import { hasGitHooksRoot, installTriggerHooks, isTriggerHookInstalled, uninstall
 import { renderScheduleLines, resolveKeryxInvocation, resolveScheduleEntry } from "../trigger/schedule";
 import type { FlowService } from "../flow/types";
 import type { NextTaskDecision } from "../flow/machine";
+import type { TriggerDispatchRecord } from "../trigger/record";
+import { runFlowNextDispatch, type DispatchDeps, type DispatchResult } from "./trigger-dispatch";
+
+/**
+ * Flow 290: in-process seams for `keryx trigger run` — the flow service and
+ * the dispatch's model/gate/clock. Production passes none; tests drive a real
+ * dispatch with a scripted provider through here.
+ */
+export interface TriggerRunOverrides {
+  readonly service?: FlowService;
+  readonly dispatch?: Omit<DispatchDeps, "service">;
+}
+
+/** One `keryx trigger run <name>` pass against `projectRoot`, with optional seams (tests). */
+export async function runTriggerOnce(projectRoot: string, name: string, overrides: TriggerRunOverrides = {}): Promise<void> {
+  await runTrigger(projectRoot, name, overrides);
+}
 
 /**
  * Same lazy-singleton shape `../commands/flow.ts` uses for `keryx flow`
@@ -130,7 +147,7 @@ async function runSubcommand(args: string[]): Promise<void> {
  * runner path on a failed child) is left to produce a non-zero exit, which is
  * exactly the line AC2 draws.
  */
-async function runTrigger(projectRoot: string, name: string): Promise<void> {
+async function runTrigger(projectRoot: string, name: string, overrides: TriggerRunOverrides = {}): Promise<void> {
   const resolution = resolveTriggerForRun(projectRoot, name);
 
   switch (resolution.kind) {
@@ -173,7 +190,7 @@ async function runTrigger(projectRoot: string, name: string): Promise<void> {
       return;
     }
     case "ready": {
-      await runReadyTrigger(projectRoot, name, resolution);
+      await runReadyTrigger(projectRoot, name, resolution, overrides);
       return;
     }
   }
@@ -183,6 +200,7 @@ async function runReadyTrigger(
   projectRoot: string,
   name: string,
   resolution: Extract<TriggerResolution, { kind: "ready" }>,
+  overrides: TriggerRunOverrides = {},
 ): Promise<void> {
   const { entry } = resolution;
   const { action } = entry;
@@ -192,7 +210,7 @@ async function runReadyTrigger(
     return;
   }
   if (action.kind === "flow-next") {
-    await runFlowNext(projectRoot, name, entry, action);
+    await runFlowNext(projectRoot, name, entry, action, overrides);
     return;
   }
 
@@ -227,12 +245,9 @@ async function runReadyTrigger(
   // Neither `reconcile` (`sync --apply`) nor `rebuild` (`gdgraph build`) call
   // a model — both are deterministic bookkeeping over the graph/wiki/memory
   // layers. `NO_MODEL_COST` is honest for both outcomes below. `open-flow` and
-  // `flow-next` (T11) never reach this branch at all — see `runOpenFlow`/
-  // `runFlowNext` above, which record their own outcomes; neither of those
-  // calls a model either (this build scopes `flow-next` to REPORTING the next
-  // task, not dispatching an agent turn — see `runFlowNext`'s own comment for
-  // why), so `NO_MODEL_COST` stays accurate everywhere a cost is recorded
-  // today. A real `{ recorded: true, usd }` has no producer yet.
+  // `flow-next` never reach this branch — see `runOpenFlow`/`runFlowNext`,
+  // which record their own outcomes. Since flow 290 a `flow-next` with a
+  // `dispatch` block is the one producer of `{ recorded: true, usd, tokens }`.
   if (outcome.result.failed) {
     console.error(`keryx trigger run ${name}: action "${action.kind}" failed (see output above).`);
     process.exitCode = 1;
@@ -302,8 +317,8 @@ const OPEN_FLOW_NO_MODEL_COST = noModelCost(
     "files), no spend to record.",
 );
 const FLOW_NEXT_NO_MODEL_COST = noModelCost(
-  'action "flow-next" does not call a model in this build — it only reports the next task into this record; it never ' +
-    "dispatches an agent turn, so there is nothing to record a cost for.",
+  'action "flow-next" does not call a model when it is report-only (no `dispatch` block) — it only reports the next ' +
+    "task into this record, so there is nothing to record a cost for.",
 );
 
 /**
@@ -419,34 +434,64 @@ async function runOpenFlow(
 // flow-next (T11, AC8)
 // ---------------------------------------------------------------------------
 //
-// SCOPE DECISION, recorded here and in the flow's journal.md: `flow-next`
-// REPORTS `keryx flow next <flow>`'s own decision (ready/blocked/none, plus
-// unresolved tasks) into the fired-trigger record; it does not dispatch an
-// agent to work the task. "Running" a task honestly means handing it to an
-// agent for a real turn, which costs money and needs a human or an
-// orchestrator to actually own the dispatch (model choice, tool access,
-// review afterward) — none of which a `keryx trigger run` firing unattended
-// from a git hook or cron line has any way to supply safely. Reporting is the
-// scope this build can do HONESTLY: it turns "an event happened" into "here
-// is what a person or an orchestrator should do next", which is exactly the
-// gap description.md names ("no record that a triggered run happened"),
-// without pretending to a dispatch capability this command does not have. A
-// future dispatching `flow-next` is a real, larger feature (choosing a
-// runner, a model tier, capturing its own review) — not a difference in how
-// this function reads `NextTaskDecision`.
+// Flow 286 scoped `flow-next` to REPORTING the next task. Flow 290 keeps that
+// as the behaviour of an entry WITHOUT a `dispatch` block ("report-only", so
+// the 0.2.154 shape keeps working), and adds the dispatching path: with a
+// `dispatch` block the entry names the runner (provider/model), its
+// permission mode, its rates and its own spend ceiling — the things 286 said
+// an unattended fire could not supply — and `./trigger-dispatch.ts` works the
+// task in a throwaway worktree under the unattended posture.
 async function runFlowNext(
   projectRoot: string,
   name: string,
   entry: TriggerEntry,
   action: Extract<TriggerAction, { kind: "flow-next" }>,
+  overrides: TriggerRunOverrides = {},
 ): Promise<void> {
-  const budget = await evaluateTriggerBudget(projectRoot, "flow-next");
+  const dispatch = action.dispatch;
+  const budget = await evaluateTriggerBudget(
+    projectRoot,
+    "flow-next",
+    {},
+    dispatch === undefined ? undefined : { name: entry.name, ceilingUsd: dispatch.ceilingUsd },
+  );
   if (!budget.allowed) {
     await refuseOnBudget(projectRoot, name, entry, budget.reason);
     return;
   }
 
-  const service = getFlowService();
+  const service = overrides.service ?? getFlowService();
+  if (dispatch !== undefined) {
+    // Flow 290: a `dispatch` block turns the report into real work.
+    let result: DispatchResult;
+    try {
+      result = await runFlowNextDispatch(projectRoot, name, action.flow, dispatch, budget.remainingUsd, {
+        ...overrides.dispatch,
+        service,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`keryx trigger run ${name}: dispatch for flow ${action.flow} failed: ${message}`);
+      process.exitCode = 1;
+      await recordRun(projectRoot, entry, {
+        outcome: "failed",
+        detail: `dispatch for flow ${action.flow} failed: ${message}`,
+        cost: { recorded: false, reason: "the dispatch failed before its cost could be measured" },
+      });
+      return;
+    }
+    const line = `keryx trigger run ${name}: ${result.outcome} — ${result.detail}`;
+    if (result.exitCode === 0) console.log(line);
+    else console.error(line);
+    if (result.exitCode !== 0) process.exitCode = result.exitCode;
+    await recordRun(projectRoot, entry, {
+      outcome: result.outcome,
+      detail: result.detail,
+      cost: result.cost,
+      dispatch: result.dispatch,
+    });
+    return;
+  }
   try {
     const decision = await service.next({ cwd: projectRoot, id: action.flow });
     const detail = describeNextTaskDecision(action.flow, decision);
@@ -504,7 +549,7 @@ async function refuseOnBudget(projectRoot: string, name: string, entry: TriggerE
 async function recordRun(
   projectRoot: string,
   entry: TriggerEntry,
-  outcome: { outcome: TriggerRunOutcomeKind; detail: string; cost: TriggerRunCost },
+  outcome: { outcome: TriggerRunOutcomeKind; detail: string; cost: TriggerRunCost; dispatch?: TriggerDispatchRecord },
 ): Promise<void> {
   const append = await appendTriggerRunRecord(projectRoot, {
     at: new Date().toISOString(),
@@ -514,6 +559,7 @@ async function recordRun(
     outcome: outcome.outcome,
     detail: outcome.detail,
     cost: outcome.cost,
+    ...(outcome.dispatch !== undefined ? { dispatch: outcome.dispatch } : {}),
   });
   if (append.status === "failed") {
     console.error(`keryx trigger run ${entry.name}: ! ${append.reason}`);
@@ -662,7 +708,14 @@ function describeFire(fire: TriggerFire): string {
 
 function describeAction(action: TriggerAction): string {
   if (action.kind === "open-flow") return `open-flow(${action.template}${action.skipIfOpen ? ", skipIfOpen" : ""})`;
-  if (action.kind === "flow-next") return `flow-next(${action.flow})`;
+  if (action.kind === "flow-next") {
+    if (action.dispatch === undefined) return `flow-next(${action.flow}, report-only)`;
+    const d = action.dispatch;
+    return (
+      `flow-next(${action.flow}, dispatch: ${d.provider}/${d.model}, mode ${d.permissionMode}, ` +
+      `ceiling $${d.ceilingUsd}, max ${d.maxSeconds}s, ${d.maxAttempts} attempts)`
+    );
+  }
   return action.kind;
 }
 
@@ -740,7 +793,7 @@ Usage:
   keryx trigger install           Install a git hook block for every event-fired entry
   keryx trigger uninstall         Remove those hook blocks (other managed blocks are untouched)
   keryx trigger list              List declared entries: enabled state, fire, action, hook status
-  keryx trigger status [<name>]   Show the last recorded outcome for one or every entry (AC4)
+  keryx trigger status [<name>]   Show the last recorded outcome for one or every entry
   keryx trigger schedule <name>   Print the cron line / systemd timer unit for a schedule entry
 
 Triggers are declared by hand in .metaproject/triggers.json (keryx never
@@ -749,19 +802,43 @@ writes it) and loaded by name. \`run\`:
     named trigger is disabled;
   - exits non-zero when the name is unknown, the matching entry is malformed,
     or the action itself fails;
-  - refuses cleanly (exit 0) when another \`trigger run\` already holds this
-    project's trigger lock ("reconcile"/"rebuild" only), or when the
-    project's recorded trigger spend is at or over its spend ceiling
-    ("open-flow"/"flow-next" only — see \`keryx trigger status\` for the
-    recorded cost).
+  - refuses cleanly (exit 0, recorded) when another keryx run holds this
+    project's maintenance lock — the same lock a manual \`keryx sync --apply\`
+    or \`keryx gdgraph build\` takes (those WAIT for it, bounded; a triggered
+    run refuses at once) — or when a spend ceiling (project-wide, or the
+    trigger's own dispatch.ceilingUsd) is already reached.
 
-Four actions run today: "reconcile" (-> \`keryx sync --apply\`), "rebuild"
-(-> \`keryx gdgraph build\`), "open-flow" (opens a flow from
-\`action.template\`, skipping a second one while an equivalent flow is
-already open when \`action.skipIfOpen\` is set), and "flow-next" (reports
-\`action.flow\`'s next task into the record — it does not dispatch an agent
-to work it). \`install\` writes hooks for event-fired entries only; a
-schedule entry's line comes from \`trigger schedule\`, and keryx never runs a
-daemon of its own for it.
+Actions:
+  reconcile   -> \`keryx sync --apply\`
+  rebuild     -> \`keryx gdgraph build\`
+  open-flow   opens a flow from action.template (skipIfOpen: no second one while
+              an equivalent flow is open)
+  flow-next   without a "dispatch" block: REPORT-ONLY — records action.flow's
+              next task. With a "dispatch" block: DISPATCHES a keryx agent to
+              work that task, unattended:
+                dispatch: { provider, model, permissionMode ("ask" default |
+                "trust"; "auto" is rejected), rates: { inputUsdPerMTok,
+                outputUsdPerMTok }, ceilingUsd, maxSeconds (1800),
+                maxAttempts (3), baseUrl? }
+              The agent works in a throwaway git worktree on branch
+              trigger/<flow>-<task> (committed, never pushed). The dispatcher
+              records "task attempt started" before the model, then exactly one
+              closing fact: "task done" only when the turn ended normally, the
+              branch has a commit and \`keryx health gate\` passes there;
+              otherwise "attempt failed|blocked" with the reason. It refuses
+              (exit 0, "dispatch-refused") when the flow is not in progress or
+              not frozen, nothing is ready, the task has an open attempt or hit
+              maxAttempts, or another dispatch is on the same flow.
+              Unattended means: every call that would ask is DENIED and
+              recorded; the saved shell allowlist and the project's stored
+              permission mode are ignored; no web, MCP, subagent or ask_user
+              tools; never git push/merge/tag, publish, keryx flow
+              freeze/ac/complete/…, or writes to flow.json,
+              acceptance-criteria.md, triggers.json or the trigger record.
+              Cost: tokens always, USD from the declared rates; the run is
+              stopped when it reaches the remaining allowance.
+
+\`install\` writes hooks for event-fired entries only; a schedule entry's line
+comes from \`trigger schedule\`, and keryx never runs a daemon of its own.
 `);
 }

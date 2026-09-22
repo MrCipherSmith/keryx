@@ -1,0 +1,22 @@
+# Flow Journal
+
+- 2026-09-22T22:30:55.848Z - flow created
+- 2026-09-22T22:39:50.182Z - frozen: 12 criteria; checksum recorded
+- 2026-09-22T22:39:50.284Z - started
+- 2026-09-22T22:39:50.385Z - task-added: T5: Shared maintenance lock, re-entrant per async context, on sync --apply, gdgraph build and triggered actions
+- 2026-09-22T22:39:50.486Z - task-added: T6: Dispatch config block with rates and ceiling; reject unpriced or auto-mode entries at load
+- 2026-09-22T22:39:50.592Z - task-added: T7: Unattended posture: entry-only permission mode, denials recorded, forbidden floor, restricted roster
+- 2026-09-22T22:39:50.698Z - task-added: T8: Dispatching flow-next: worktree, attempt recording, closing fact, refusals
+- 2026-09-22T22:39:50.800Z - task-added: T9: Cost recording in tokens and USD; per-trigger ceiling; in-run spend stop
+- 2026-09-22T22:39:50.902Z - task-added: T10: Concurrency and re-entrancy tests across real processes
+- 2026-09-22T22:39:51.002Z - task-added: T11: Docs: trigger help, CLI reference, README; correct the 286 lock claim
+- 2026-09-22T22:39:51.104Z - task-added: T12: Verification: CI green, keryx health run
+- 2026-09-22T22:39:51.207Z - task-attempt: T5: started (attempt 1)
+- note (implementer): T5-T11 implemented in one pass, with no commits. Decisions and deviations: (1) The shared maintenance lock lives in the GIT DIRECTORY (`git rev-parse --git-path keryx-maintenance.lock`; outside a repo it falls back to `.metaproject/data/.maintenance.lock`), not under `.metaproject/data/`. While verifying the post-commit hook against the dev CLI, a `git add -A` committed the lock's `owner.json`: the directory is untracked working-tree content while a build holds it. The per-flow dispatch lock uses the same `gitScopedLockPath`. Flow 286's `.metaproject/data/trigger/.run.lock` had the same exposure. (2) Interactive `sync --apply`/`gdgraph build` wait up to `KERYX_MAINTENANCE_LOCK_WAIT_MS` (default 120s), then exit 75 naming the holder pid. The post-commit hook template maps 75 to "rebuild skipped", not "build failed". Hooks already installed by 0.2.154 still say "build failed" for 75 until `keryx update` re-renders them. (3) Re-entrancy uses `AsyncLocalStorage`, so a nested acquire in the holder's own chain runs straight through and a sibling async context is still excluded. (4) The unattended floor is the new `AgentDeps.hardDeny`, checked in `executeCall` before `resolveApprovalDecision`. Beyond the AC list it also denies `flow task done|attempt`, because the dispatcher owns the closing fact. The floor is text analysis and deliberately over-broad: a commit message containing "tag" is refused. (5) The runner composes `runAgentTurn` in-process, like the ACP server. Roster: get_cwd, list_dir, read_file, shell_exec, apply_patch. (6) Shell sandbox: `KERYX_SANDBOX_SHELL=workspace` is set for the run's duration when a launcher is available and the operator has not set it; otherwise the run detail says "unavailable". (7) Health gate: `keryx health run`, then `keryx health gate`, in the worktree. The main checkout's `node_modules` is symlinked in and excluded from the commit. (8) A dispatch that does not end `done` exits 1 with outcome `failed`. Refusals exit 0 with outcome `dispatch-refused` and a `refusal` code. Post-commit hook verified with a scratch script that installs the rendered hook in a temp repo, with a `keryx` shim on PATH running this worktree's `src/cli.ts`: an uncontended commit rebuilds; a commit while a triggered rebuild holds the lock (wait 300ms) prints "rebuild skipped"; a commit whose hook waits and is then released rebuilds; every commit exits 0.
+- 2026-09-22T23:06:01.427Z - task-done: T5: Shared maintenance lock, re-entrant per async context, on sync --apply, gdgraph build and triggered actions
+- 2026-09-22T23:06:01.531Z - task-done: T6: Dispatch config block with rates and ceiling; reject unpriced or auto-mode entries at load
+- 2026-09-22T23:06:01.637Z - task-done: T7: Unattended posture: entry-only permission mode, denials recorded, forbidden floor, restricted roster
+- 2026-09-22T23:06:01.740Z - task-done: T8: Dispatching flow-next: worktree, attempt recording, closing fact, refusals
+- 2026-09-22T23:06:01.841Z - task-done: T9: Cost recording in tokens and USD; per-trigger ceiling; in-run spend stop
+- 2026-09-22T23:06:01.943Z - task-done: T10: Concurrency and re-entrancy tests across real processes
+- 2026-09-22T23:06:02.046Z - task-done: T11: Docs: trigger help, CLI reference, README; correct the 286 lock claim

@@ -98,8 +98,8 @@ describe("resolveTriggerForRun", () => {
 });
 
 describe("triggerRunLockPath", () => {
-  test("one project-scoped path, under .metaproject/data/trigger", () => {
-    expect(triggerRunLockPath("/repo")).toBe(path.join("/repo", ".metaproject", "data", "trigger", ".run.lock"));
+  test("flow 290: the project's shared maintenance lock, the same one interactive sync/build take", () => {
+    expect(triggerRunLockPath("/repo")).toBe(path.join("/repo", ".metaproject", "data", ".maintenance.lock"));
   });
 });
 
@@ -150,7 +150,7 @@ describe("withTriggerRunLock (AC3 decision: refuse immediately, do not wait)", (
     expect(firstOutcome).toEqual({ acquired: true, result: "first" });
     expect(secondOutcome.acquired).toBe(false);
     if (!secondOutcome.acquired) {
-      expect(secondOutcome.reason).toContain("holds this project's trigger lock");
+      expect(secondOutcome.reason).toContain("holds this project's maintenance lock");
     }
     // Released cleanly afterward — a refused caller must never leave the
     // winner's lock directory behind, or every future run would refuse forever.
@@ -223,5 +223,86 @@ describe("evaluateTriggerBudget (AC8, review finding 3, T15: an unreadable ledge
     const outcome = await evaluateTriggerBudget(root, "open-flow");
     expect(outcome.allowed).toBe(false);
     if (!outcome.allowed) expect(outcome.reason).toContain("could not be read");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow 290 (AC7, AC8): the per-trigger ceiling on top of the project-wide one.
+// Every case seeds a REAL runs.jsonl through the real appender.
+// ---------------------------------------------------------------------------
+
+async function seedSpend(root: string, trigger: string, usd: number): Promise<void> {
+  await appendTriggerRunRecord(root, {
+    at: "2026-09-22T00:00:00.000Z",
+    trigger,
+    firedBy: { kind: "schedule", cron: "0 2 * * *" },
+    action: { kind: "flow-next", flow: "290" },
+    outcome: "ok",
+    detail: "seeded",
+    cost: { recorded: true, usd, tokens: { input: 1000, output: 100 } },
+  });
+}
+
+describe("evaluateTriggerBudget: per-trigger ceiling (flow 290)", () => {
+  test("AC7: a trigger at its own ceiling is refused, naming the per-trigger ceiling, while the project is under", async () => {
+    const root = await projectWith(undefined);
+    await seedSpend(root, "overnight", 0.5);
+    const outcome = await evaluateTriggerBudget(root, "flow-next", {}, { name: "overnight", ceilingUsd: 0.5 });
+    expect(outcome.allowed).toBe(false);
+    if (!outcome.allowed) {
+      expect(outcome.reason).toContain('trigger "overnight"');
+      expect(outcome.reason).toContain("per-trigger ceiling");
+      expect(outcome.reason).toContain("dispatch.ceilingUsd");
+    }
+  });
+
+  test("AC7: another trigger under its own ceiling still runs, and its allowance is the tighter of the two", async () => {
+    const root = await projectWith(undefined);
+    await seedSpend(root, "overnight", 0.5);
+    await seedSpend(root, "weekly", 0.25);
+    const outcome = await evaluateTriggerBudget(root, "flow-next", {}, { name: "weekly", ceilingUsd: 1 });
+    expect(outcome.allowed).toBe(true);
+    if (outcome.allowed) {
+      // Project-wide: 3 - 0.75 = 2.25; per-trigger: 1 - 0.25 = 0.75. The tighter wins.
+      expect(outcome.remainingUsd).toBeCloseTo(0.75, 10);
+    }
+  });
+
+  test("AC8: the project-wide remaining allowance wins when it is the tighter one", async () => {
+    const root = await projectWith(undefined);
+    await seedSpend(root, "other", 2.9);
+    const outcome = await evaluateTriggerBudget(root, "flow-next", {}, { name: "weekly", ceilingUsd: 1 });
+    expect(outcome.allowed).toBe(true);
+    if (outcome.allowed) expect(outcome.remainingUsd).toBeCloseTo(0.1, 10);
+  });
+
+  test("AC7: the project-wide refusal still applies even when the trigger is under its own ceiling", async () => {
+    const root = await projectWith(undefined);
+    await seedSpend(root, "other", 3);
+    const outcome = await evaluateTriggerBudget(root, "flow-next", {}, { name: "weekly", ceilingUsd: 100 });
+    expect(outcome.allowed).toBe(false);
+    if (!outcome.allowed) expect(outcome.reason).toContain("this project has $3");
+  });
+
+  test("AC7: an unreadable ledger still refuses, with or without a per-trigger ceiling", async () => {
+    const root = await projectWith(undefined);
+    await mkdir(path.dirname(triggerRunsPath(root)), { recursive: true });
+    await appendFile(triggerRunsPath(root), "{not json\n", "utf8");
+    const withCeiling = await evaluateTriggerBudget(root, "flow-next", {}, { name: "weekly", ceilingUsd: 100 });
+    const without = await evaluateTriggerBudget(root, "flow-next");
+    expect(withCeiling.allowed).toBe(false);
+    expect(without.allowed).toBe(false);
+  });
+
+  test("AC6: a pre-flow-290 record without tokens still reads and counts", async () => {
+    const root = await projectWith(undefined);
+    await mkdir(path.dirname(triggerRunsPath(root)), { recursive: true });
+    await appendFile(
+      triggerRunsPath(root),
+      `${JSON.stringify({ v: 1, at: "2026-09-01T00:00:00.000Z", trigger: "old", firedBy: { kind: "event", event: "ci" }, action: { kind: "rebuild" }, outcome: "ok", detail: "old", cost: { recorded: true, usd: 1 } })}\n`,
+      "utf8",
+    );
+    const outcome = await evaluateTriggerBudget(root, "flow-next", {}, { name: "old", ceilingUsd: 1 });
+    expect(outcome.allowed).toBe(false);
   });
 });

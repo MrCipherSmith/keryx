@@ -974,7 +974,7 @@ keryx sync uninstall-hooks
 | Subcommand / flag | Description |
 |---|---|
 | *(none)* | Advisory report per module. Prints `HEAD`, then per artifact either "up to date" or the change counts with the first few paths. Always exits `0` — the hooks decide what to do with the report. |
-| `--apply` | Rebuild each stale artifact incrementally and record the new provenance. An artifact with no provenance yet is built as a baseline. |
+| `--apply` | Rebuild each stale artifact incrementally and record the new provenance. An artifact with no provenance yet is built as a baseline. Takes the project's maintenance lock (see [trigger](#trigger) → **Locking**): when another keryx run holds it, waits up to `KERYX_MAINTENANCE_LOCK_WAIT_MS` (default 120 s), then exits `75` naming the holder's pid. |
 | `install-hooks` | Install `post-merge` and `post-checkout` git hooks that run the advisory report. Prints that nothing was installed when there is no `.git`. |
 | `uninstall-hooks` | Remove them. |
 | `--help`, `-h` | Print `sync` usage and exit. |
@@ -1010,7 +1010,12 @@ naming what fires it (a repository event or a schedule) and what it does
     { "name": "nightly-maintenance", "on": { "kind": "schedule", "cron": "0 2 * * *" },
       "action": { "kind": "open-flow", "template": "Nightly graph/wiki maintenance", "skipIfOpen": true } },
     { "name": "report-next-task", "on": { "kind": "event", "event": "ci" },
-      "action": { "kind": "flow-next", "flow": "142-2026-08-01-nightly-maintenance" } }
+      "action": { "kind": "flow-next", "flow": "142-2026-08-01-nightly-maintenance" } },
+    { "name": "overnight-next-task", "on": { "kind": "schedule", "cron": "0 1 * * *" },
+      "action": { "kind": "flow-next", "flow": "142",
+        "dispatch": { "provider": "anthropic", "model": "claude-sonnet-4-5", "permissionMode": "trust",
+                      "rates": { "inputUsdPerMTok": 3, "outputUsdPerMTok": 15 },
+                      "ceilingUsd": 2, "maxSeconds": 1800, "maxAttempts": 3 } } }
   ]
 }
 ```
@@ -1031,8 +1036,12 @@ Four action kinds:
   `keryx flow init --title "<template>"`. With `skipIfOpen`, a fire is a no-op
   when another flow's title is exactly `template` and that flow's status is
   not `done` (an `initializing`, not-yet-`start`ed flow still counts as open).
-- `{ "kind": "flow-next", "flow": "<flow id>" }` — reports `keryx flow next
-  <flow>`'s decision into the run record; see **Honest limits** below.
+- `{ "kind": "flow-next", "flow": "<flow id>" }` — **report-only**: records
+  `keryx flow next <flow>`'s decision into the run record. `list`/`status` show
+  it as `flow-next(<flow>, report-only)`.
+- `{ "kind": "flow-next", "flow": "<flow id>", "dispatch": { … } }` —
+  **dispatches** a keryx agent to work the flow's next task, unattended. See
+  **Dispatching `flow-next`** below.
 
 An entry that fails validation is refused on load with the reason, and its
 neighbours still load; a later entry re-using an already-used `name` is
@@ -1060,21 +1069,94 @@ keryx trigger schedule <name>   # print the cron line / systemd timer unit for a
 | `schedule <name>` | Print the cron line and the systemd service/timer pair for a schedule-fired entry. Installs nothing. |
 | `--help`, `-h` | Print `trigger` usage and exit. |
 
-**Exit codes.** Non-zero only when the action itself failed, the name is
-unknown, or the matching entry is malformed. Every other outcome exits `0`:
-nothing declared, a disabled entry, a lock refusal, and a budget refusal are
-all "nothing done this pass", not an error — which is also how each is
-classified in the run record.
+**Exit codes.** Non-zero only when the action itself failed (for a dispatch:
+the task did not end `done`), the name is unknown, or the matching entry is
+malformed. Every other outcome exits `0`: nothing declared, a disabled entry,
+a lock refusal, a budget refusal and a dispatch refusal are all "nothing done
+this pass", not an error — which is also how each is classified in the run
+record.
+
+### Dispatching `flow-next`
+
+A `dispatch` block turns `flow-next` from a report into real work: one fire
+starts one keryx agent on the flow's next ready task, with no terminal and
+nobody present, and records what happened.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `provider`, `model` | yes | The model the agent runs on. A provider with no usable credential is refused before anything is written (it would otherwise fall back to the offline fake and "succeed" at nothing). |
+| `permissionMode` | no (`ask`) | `ask` — every non-read call is denied (in effect read-only). `trust` — non-destructive `shell_exec`/`apply_patch` run; everything below still applies. `auto` is **rejected at load**. |
+| `rates` | yes | `{ inputUsdPerMTok, outputUsdPerMTok }` — USD per million tokens. Without rates a run cannot be priced, so no ceiling could stop it; the entry is rejected at load. |
+| `ceilingUsd` | yes | This trigger's own spend ceiling, on top of the project-wide one. Rejected at load when absent. |
+| `maxSeconds` | no (1800) | Wall-clock limit for one agent run. |
+| `maxAttempts` | no (3) | A task whose attempt count has reached this is not dispatched again. |
+| `baseUrl` | no | Provider base URL override. |
+
+**One fire, in order** — every refusal happens before any model call:
+
+1. A per-flow dispatch lock: a second dispatch on the same flow refuses
+   (`dispatch-refused`, `dispatch-locked`); different flows do not wait on
+   each other.
+2. The flow must be `in-progress` with frozen acceptance criteria, `flow next`
+   must be `ready`, the ready task must have no open attempt, and its attempt
+   count must be under `maxAttempts`. Otherwise `dispatch-refused` with the
+   cause (`flow-not-in-progress`, `flow-not-frozen`, `nothing-ready`,
+   `blocked`, `open-attempt`, `attempt-cap`), exit `0`.
+3. The per-trigger and project-wide ceilings: at or over either → `budget-refused`, exit `0`.
+4. A throwaway git worktree on branch `trigger/<flow>-<task>` (reused when it
+   exists). Never your checkout; the branch is never pushed.
+5. `flow task attempt <flow> <task> --outcome started` with the run id —
+   before the model is called.
+6. One agent turn in the worktree (see **Unattended posture**), stopped by
+   `maxSeconds` or when its priced cost reaches the remaining allowance (the
+   smaller of the trigger's and the project's).
+7. Whatever changed is committed on the trigger branch; then `keryx health run`
+   and `keryx health gate` run in the worktree.
+8. Exactly one closing fact: `flow task done --disposition completed` with a
+   `runLink` **only** when the turn ended normally, the branch has a new commit
+   and the health gate passed; otherwise `flow task attempt --outcome
+   failed|blocked` with the reason (`blocked` when the run was stopped by
+   denials or by `ask_user`). The worktree is removed; the branch stays for you
+   to review and merge.
+
+**Unattended posture — fail closed.** The agent runs with `unattended: true`.
+Its permission mode is the entry's — never the project's stored default
+(`/mode`), never the saved shell allowlist. Every call that would ask — a
+write or command under `ask`, a destructive one under `trust`, anything
+touching credentials or the SAC confirm flow, anything after untrusted
+content, `ask_user` — is **denied and written to the run record** with the
+tool and the reason; nothing is ever approved on your behalf. On top of the
+mode, a floor no mode lifts denies: `git push` (any form), `git merge`, `git
+tag`, `gh pr merge`, `gh release`, `npm publish`, `bun publish`; `keryx flow
+freeze`, `flow ac update|reseal|confirm`, `flow implemented`, `flow complete`,
+`flow renumber`, `flow block|unblock`, `flow task add|depends|done|attempt`;
+and any write — by `apply_patch` or by a command that names them — to
+`flow.json`, `acceptance-criteria.md`, `.metaproject/triggers.json` or
+`.metaproject/data/trigger/**`. The tool roster is `get_cwd`, `list_dir`,
+`read_file`, `shell_exec`, `apply_patch` — no `web_fetch`, `web_search`,
+`search_tool`/`use_tool`, `spawn_subagent` or `ask_user`. When the OS shell
+sandbox is available and you have not set `KERYX_SANDBOX_SHELL` yourself, the
+run forces the `workspace` sandbox; the run record's detail says which applied.
+The floor is string analysis and deliberately over-broad (a commit message
+containing "tag" is refused); the containment is the throwaway worktree, the
+never-pushed branch, and the dispatcher owning every flow-state write.
+
+**Cost.** Every dispatched run records `cost: { recorded: true, usd, tokens:
+{ input, output } }` — tokens as the provider reported them, USD from the
+entry's `rates` — including a run that failed, timed out or was stopped. That
+figure is what both ceilings sum.
 
 ### The run record
 
 Every `run` that resolves to a real, declared entry (`disabled` or `ready`)
 appends one line to `.metaproject/data/trigger/runs.jsonl` — when it fired,
 what fired it (`on`, verbatim), what it did (`action`, verbatim), the outcome
-(`ok`, `no-op`, `lock-refused`, `budget-refused`, or `failed`), a human-readable
-detail, and its cost (`{ recorded: false, reason }` for every action kind
-today — none of the four calls a model yet, so there is nothing to record a
-real `usd` figure for). A run that never reaches a concrete entry (no config,
+(`ok`, `no-op`, `lock-refused`, `budget-refused`, `dispatch-refused`, or
+`failed`), a human-readable detail, and its cost — `{ recorded: false, reason }`
+for every action that calls no model, `{ recorded: true, usd, tokens }` for a
+dispatched `flow-next`. A dispatch also records `dispatch: { runId, flow,
+task, attempt, branch, closing, refusal?, denials? }`. Lines written before
+`tokens`/`dispatch` existed still read. A run that never reaches a concrete entry (no config,
 unknown name, malformed entry) is not recorded — that stays a stderr line and
 an exit code. `status` reads this file; it never resolves or re-runs anything.
 Taken from a real run:
@@ -1086,11 +1168,24 @@ keryx trigger status (reading /path/to/project/.metaproject/data/trigger/runs.js
       last: 2026-09-22T19:33:15.623Z — ok — action "reconcile" completed. [cost: n/a (this action does not call a model — reconcile/rebuild are deterministic, no spend to record)]
 ```
 
-**Locking.** A second `trigger run` for the same project, started while the
-first is still running, refuses immediately rather than waiting — this keeps
-one run at exactly one pass instead of blocking on another run's schedule.
-Retry on the next fire. This lock is taken by `trigger run` only (`reconcile`/
-`rebuild` actions); see **Honest limits** below for what it does not cover.
+**Locking.** One project maintenance lock — a directory inside the git
+directory (`git rev-parse --git-path keryx-maintenance.lock`, so
+`.git/keryx-maintenance.lock`, or the linked worktree's own git dir; outside a
+repository `.metaproject/data/.maintenance.lock`), never in the working tree
+where a `git add -A` could commit it — is shared by `keryx sync --apply`,
+`keryx gdgraph build`, and the triggered `reconcile`, `rebuild` and
+`open-flow`. A triggered run that finds it held refuses at once
+(`lock-refused`, exit `0`, the holder's pid named) — one run stays exactly one
+pass. An interactive `sync --apply` or `gdgraph build` waits instead, up to
+`KERYX_MAINTENANCE_LOCK_WAIT_MS` (default 120 s), then exits `75` naming the
+holder's pid — "not run", not "build failed"; the `post-commit` hook reports
+exit `75` as a skipped rebuild. The lock is re-entrant within one process's
+call chain, so `sync --apply` building the graph, or a triggered `reconcile`
+running `sync --apply`, never waits on itself. A dispatching `flow-next` does
+**not** hold it while the agent runs — the agent's own `keryx gdgraph build`
+must be able to take it — and uses its own per-flow dispatch lock instead.
+(Flow 286 described its trigger lock as the one the interactive commands take;
+until this change they took none.)
 
 **Installing hooks.** `install`'s blocks live beside the ones `keryx sync
 install-hooks` (its `keryx-sync` block) and `keryx update` (its
@@ -1116,21 +1211,19 @@ regenerate-and-reinstall of the line.
 
 ### Honest limits
 
-- **`flow-next` reports, it does not dispatch.** It records `keryx flow next
-  <flow>`'s own decision (ready/blocked/none, plus unresolved tasks) into the
-  run record. It never starts an agent turn to work the task — an unattended
-  fire (a git hook, cron, CI) has no safe way to own a model dispatch (model
-  choice, tool access, reviewing the result), so this build turns "an event
-  happened" into "here is what should happen next" and stops there.
-- **The spend ceiling is project-wide, with no per-trigger override.**
-  `open-flow` and `flow-next` (the only two action kinds that could ever lead
-  to model spend) are gated on the same default ceiling `keryx review budget`
-  uses, evaluated against every recorded trigger cost across every trigger
-  name and action kind in this project — not a ceiling scoped to one entry.
-- **The trigger-run lock is not taken by the interactive commands.** It
-  serializes `trigger run` invocations against each other, not against a
-  person typing `keryx sync --apply` or `keryx gdgraph build` directly — the
-  two can still race.
+- **A dispatched task is "done" by the dispatcher's checks, not by review.**
+  `task done` means: the turn ended normally, the trigger branch got a commit,
+  and `keryx health gate` passed in the worktree. Nobody has read the diff; the
+  branch waits for you. A fresh worktree has no dependencies of its own — the
+  project's `node_modules`, when present, is linked in for the gate.
+- **The unattended floor is text analysis.** It is over-broad by design and
+  still incomplete by construction (a shell can spell a command many ways);
+  the containment is the worktree, the unpushed branch and the OS sandbox when
+  available — without a sandbox launcher, `shell_exec` runs uncontained, and
+  the run record says so.
+- **Cost is priced from your rates.** keryx has no price table; if `rates` are
+  wrong, both ceilings are wrong by the same factor. Token counts are summed
+  from every usage event the provider emits.
 
 ---
 
@@ -1230,7 +1323,7 @@ keryx gdgraph assets list | verify [<id>] | pull <id>
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `build` | — | Scan the tree, build the graph, write JSONL storage + `summary.md`/`module-map.json`, print node/edge counts. |
+| `build` | — | Scan the tree, build the graph, write JSONL storage + `summary.md`/`module-map.json`, print node/edge counts. Takes the project's maintenance lock (see [trigger](#trigger) → **Locking**): waits up to `KERYX_MAINTENANCE_LOCK_WAIT_MS` (default 120 s) when another keryx run holds it, then exits `75` naming the holder's pid. |
 | `query cycles` | — | Print dependency cycles (`a -> b -> a`), or "No cycles found." |
 | `query orphans` | — | Print modules with no resolved inbound or outbound edges. |
 | `find "<terms>"` | — | Rank file paths and available symbols by concept/name match. Directs content searches to `ctx rg`. |

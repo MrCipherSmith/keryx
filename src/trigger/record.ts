@@ -70,7 +70,14 @@ export function triggerRunsPath(projectRoot: string): string {
  * from day one rather than needing a schema change to add it, per the T5
  * survey's own note that a budget refusal "must not look like a crash".
  */
-export const TRIGGER_RUN_OUTCOME_KINDS = ["ok", "no-op", "lock-refused", "failed", "budget-refused"] as const;
+//
+// Flow 290 (AC3): `dispatch-refused` — a dispatching `flow-next` declined to
+// start an agent (flow not frozen/in progress, nothing ready, an open attempt,
+// the attempt cap, or another dispatch on the same flow). Distinct from
+// `no-op` so an operator can tell "there was nothing to do" from "there was
+// work and the dispatcher would not touch it"; the precise cause is in
+// `dispatch.refusal`.
+export const TRIGGER_RUN_OUTCOME_KINDS = ["ok", "no-op", "lock-refused", "failed", "budget-refused", "dispatch-refused"] as const;
 export type TriggerRunOutcomeKind = (typeof TRIGGER_RUN_OUTCOME_KINDS)[number];
 
 /**
@@ -82,8 +89,50 @@ export type TriggerRunOutcomeKind = (typeof TRIGGER_RUN_OUTCOME_KINDS)[number];
  * reporting rather than seeing an absent cost either way.
  */
 export type TriggerRunCost =
-  | { readonly recorded: true; readonly usd: number }
-  | { readonly recorded: false; readonly reason: string };
+  | { readonly recorded: true; readonly usd: number; readonly tokens?: TriggerRunTokens }
+  | { readonly recorded: false; readonly reason: string; readonly tokens?: TriggerRunTokens };
+
+/**
+ * Flow 290 (AC6): the provider-reported token counts behind a cost. Additive
+ * and optional — every record written before flow 290 has none and still
+ * reads. A dispatched run always records these, even when it failed or was
+ * stopped, because a stopped run still consumed them.
+ */
+export interface TriggerRunTokens {
+  readonly input: number;
+  readonly output: number;
+}
+
+/** Flow 290 (AC3): why a dispatching `flow-next` declined to start an agent. */
+export const DISPATCH_REFUSAL_CODES = [
+  "flow-not-in-progress",
+  "flow-not-frozen",
+  "nothing-ready",
+  "blocked",
+  "open-attempt",
+  "attempt-cap",
+  "dispatch-locked",
+] as const;
+export type DispatchRefusalCode = (typeof DISPATCH_REFUSAL_CODES)[number];
+
+/** Flow 290 (AC4): one call the unattended run refused rather than ask about. */
+export interface UnattendedDenial {
+  readonly tool: string;
+  readonly reason: string;
+}
+
+/** Flow 290: what a dispatching `flow-next` did, beside the generic record fields. Additive. */
+export interface TriggerDispatchRecord {
+  readonly runId: string;
+  readonly flow: string;
+  readonly task?: string;
+  readonly attempt?: number;
+  readonly branch?: string;
+  readonly refusal?: DispatchRefusalCode;
+  /** The closing fact written to the flow: `done` or the attempt outcome. */
+  readonly closing?: "done" | "failed" | "blocked";
+  readonly denials?: readonly UnattendedDenial[];
+}
 
 export const NO_MODEL_COST: TriggerRunCost = {
   recorded: false,
@@ -105,6 +154,8 @@ export interface TriggerRunRecord {
   /** Human-readable explanation. Never empty — mirrors every other "never silent" convention in this codebase. */
   readonly detail: string;
   readonly cost: TriggerRunCost;
+  /** Flow 290: present only on a dispatching `flow-next` run. */
+  readonly dispatch?: TriggerDispatchRecord;
 }
 
 export type TriggerRunAppend =

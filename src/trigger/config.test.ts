@@ -287,3 +287,95 @@ describe("triggerEntryProblems", () => {
     expect(problems.some((p) => p.includes("action.kind"))).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Flow 290 (AC1, AC4, AC6): the `dispatch` block on `flow-next`.
+// ---------------------------------------------------------------------------
+
+const VALID_DISPATCH = {
+  provider: "anthropic",
+  model: "claude-sonnet",
+  permissionMode: "trust",
+  rates: { inputUsdPerMTok: 3, outputUsdPerMTok: 15 },
+  ceilingUsd: 2,
+  maxSeconds: 600,
+};
+
+function flowNextWith(dispatch: unknown): unknown {
+  return { name: "overnight", on: { kind: "schedule", cron: "0 2 * * *" }, action: { kind: "flow-next", flow: "290", dispatch } };
+}
+
+describe("flow-next dispatch block (flow 290)", () => {
+  test("a full dispatch block loads, with maxAttempts defaulted", async () => {
+    const root = await projectWith(JSON.stringify({ schemaVersion: 1, triggers: [flowNextWith(VALID_DISPATCH)] }));
+    const result = loadTriggersConfig(root);
+    expect(result.rejected).toEqual([]);
+    const action = result.triggers[0]!.action;
+    expect(action.kind).toBe("flow-next");
+    if (action.kind === "flow-next") {
+      expect(action.dispatch).toEqual({ ...VALID_DISPATCH, permissionMode: "trust", maxAttempts: 3 } as never);
+    }
+  });
+
+  test("permissionMode defaults to ask and maxSeconds to 1800", async () => {
+    const { permissionMode: _p, maxSeconds: _m, ...rest } = VALID_DISPATCH;
+    const root = await projectWith(JSON.stringify({ schemaVersion: 1, triggers: [flowNextWith(rest)] }));
+    const action = loadTriggersConfig(root).triggers[0]!.action;
+    if (action.kind !== "flow-next" || action.dispatch === undefined) throw new Error("expected a dispatch");
+    expect(action.dispatch.permissionMode).toBe("ask");
+    expect(action.dispatch.maxSeconds).toBe(1800);
+  });
+
+  test('AC4: permissionMode "auto" is rejected at load with a stated reason', () => {
+    const problems = triggerEntryProblems(flowNextWith({ ...VALID_DISPATCH, permissionMode: "auto" }));
+    expect(problems.some((p) => p.includes('"auto" is never allowed for an unattended run'))).toBe(true);
+  });
+
+  test("AC6: a dispatch without rates is rejected — an unpriced dispatch cannot be bounded", () => {
+    const { rates: _r, ...rest } = VALID_DISPATCH;
+    const problems = triggerEntryProblems(flowNextWith(rest));
+    expect(problems.some((p) => p.startsWith("action.dispatch.rates: required") && p.includes("unpriced"))).toBe(true);
+  });
+
+  test("AC6: a dispatch without ceilingUsd is rejected", () => {
+    const { ceilingUsd: _c, ...rest } = VALID_DISPATCH;
+    const problems = triggerEntryProblems(flowNextWith(rest));
+    expect(problems.some((p) => p.startsWith("action.dispatch.ceilingUsd: required"))).toBe(true);
+  });
+
+  test("malformed rates, a zero ceiling and a missing model are each named", () => {
+    const problems = triggerEntryProblems(
+      flowNextWith({ ...VALID_DISPATCH, model: "", ceilingUsd: 0, rates: { inputUsdPerMTok: -1, outputUsdPerMTok: "x" } }),
+    );
+    expect(problems).toContain("action.dispatch.model: required, non-empty string");
+    expect(problems).toContain("action.dispatch.ceilingUsd: must be a positive number of USD");
+    expect(problems.some((p) => p.startsWith("action.dispatch.rates.inputUsdPerMTok"))).toBe(true);
+    expect(problems.some((p) => p.startsWith("action.dispatch.rates.outputUsdPerMTok"))).toBe(true);
+  });
+
+  test("a rejected dispatch entry does not take the other entries down with it", async () => {
+    const root = await projectWith(
+      JSON.stringify({
+        schemaVersion: 1,
+        triggers: [
+          flowNextWith({ ...VALID_DISPATCH, permissionMode: "auto" }),
+          { name: "nightly", on: { kind: "schedule", cron: "0 3 * * *" }, action: { kind: "rebuild" } },
+        ],
+      }),
+    );
+    const result = loadTriggersConfig(root);
+    expect(result.triggers.map((t) => t.name)).toEqual(["nightly"]);
+    expect(result.rejected.map((r) => r.name)).toEqual(["overnight"]);
+  });
+
+  test("a flow-next with no dispatch block still loads as report-only", async () => {
+    const root = await projectWith(
+      JSON.stringify({
+        schemaVersion: 1,
+        triggers: [{ name: "report", on: { kind: "event", event: "post-merge" }, action: { kind: "flow-next", flow: "290" } }],
+      }),
+    );
+    const action = loadTriggersConfig(root).triggers[0]!.action;
+    expect(action).toEqual({ kind: "flow-next", flow: "290" });
+  });
+});

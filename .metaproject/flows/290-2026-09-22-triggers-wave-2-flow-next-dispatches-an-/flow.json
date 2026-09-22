@@ -1,0 +1,303 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "290",
+  "slug": "triggers-wave-2-flow-next-dispatches-an-",
+  "title": "Triggers wave 2: flow-next dispatches an agent, per-trigger spend ceiling, shared lock with manual commands",
+  "status": "in-progress",
+  "createdAt": "2026-09-22T22:30:55.848Z",
+  "updatedAt": "2026-09-22T23:06:02.046Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:335bfcbe3065368f107bdf960a3ade40c08fff1efc1b026c9403256442a246be",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Shared maintenance lock, re-entrant per async context, on sync --apply, gdgraph build and triggered actions",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T22:39:51.207Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Dispatch config block with rates and ceiling; reject unpriced or auto-mode entries at load",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Unattended posture: entry-only permission mode, denials recorded, forbidden floor, restricted roster",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Dispatching flow-next: worktree, attempt recording, closing fact, refusals",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Cost recording in tokens and USD; per-trigger ceiling; in-run spend stop",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Concurrency and re-entrancy tests across real processes",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Docs: trigger help, CLI reference, README; correct the 286 lock claim",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-22T22:30:55.848Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-22T22:39:50.182Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-22T22:39:50.284Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-22T22:39:50.385Z",
+      "event": "task-added",
+      "detail": "T5: Shared maintenance lock, re-entrant per async context, on sync --apply, gdgraph build and triggered actions"
+    },
+    {
+      "at": "2026-09-22T22:39:50.486Z",
+      "event": "task-added",
+      "detail": "T6: Dispatch config block with rates and ceiling; reject unpriced or auto-mode entries at load"
+    },
+    {
+      "at": "2026-09-22T22:39:50.592Z",
+      "event": "task-added",
+      "detail": "T7: Unattended posture: entry-only permission mode, denials recorded, forbidden floor, restricted roster"
+    },
+    {
+      "at": "2026-09-22T22:39:50.698Z",
+      "event": "task-added",
+      "detail": "T8: Dispatching flow-next: worktree, attempt recording, closing fact, refusals"
+    },
+    {
+      "at": "2026-09-22T22:39:50.800Z",
+      "event": "task-added",
+      "detail": "T9: Cost recording in tokens and USD; per-trigger ceiling; in-run spend stop"
+    },
+    {
+      "at": "2026-09-22T22:39:50.902Z",
+      "event": "task-added",
+      "detail": "T10: Concurrency and re-entrancy tests across real processes"
+    },
+    {
+      "at": "2026-09-22T22:39:51.002Z",
+      "event": "task-added",
+      "detail": "T11: Docs: trigger help, CLI reference, README; correct the 286 lock claim"
+    },
+    {
+      "at": "2026-09-22T22:39:51.104Z",
+      "event": "task-added",
+      "detail": "T12: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-22T22:39:51.207Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-22T23:06:01.427Z",
+      "event": "task-done",
+      "detail": "T5: Shared maintenance lock, re-entrant per async context, on sync --apply, gdgraph build and triggered actions"
+    },
+    {
+      "at": "2026-09-22T23:06:01.531Z",
+      "event": "task-done",
+      "detail": "T6: Dispatch config block with rates and ceiling; reject unpriced or auto-mode entries at load"
+    },
+    {
+      "at": "2026-09-22T23:06:01.637Z",
+      "event": "task-done",
+      "detail": "T7: Unattended posture: entry-only permission mode, denials recorded, forbidden floor, restricted roster"
+    },
+    {
+      "at": "2026-09-22T23:06:01.740Z",
+      "event": "task-done",
+      "detail": "T8: Dispatching flow-next: worktree, attempt recording, closing fact, refusals"
+    },
+    {
+      "at": "2026-09-22T23:06:01.841Z",
+      "event": "task-done",
+      "detail": "T9: Cost recording in tokens and USD; per-trigger ceiling; in-run spend stop"
+    },
+    {
+      "at": "2026-09-22T23:06:01.943Z",
+      "event": "task-done",
+      "detail": "T10: Concurrency and re-entrancy tests across real processes"
+    },
+    {
+      "at": "2026-09-22T23:06:02.046Z",
+      "event": "task-done",
+      "detail": "T11: Docs: trigger help, CLI reference, README; correct the 286 lock claim"
+    }
+  ]
+}
