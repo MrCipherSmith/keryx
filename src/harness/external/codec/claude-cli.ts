@@ -170,7 +170,11 @@ export function buildClaudeStreamingArgv(input: ExternalRunInput): readonly stri
 function argvOptions(input: ExternalRunInput): string[] {
   const out: string[] = [];
   if (input.maxCostUnits !== undefined) out.push(FLAG.maxBudget, String(input.maxCostUnits));
-  if (input.resultSchemaPath !== undefined) out.push(FLAG.jsonSchema, input.resultSchemaPath);
+  // INLINE, never a path: 2.1.278 parses this value AS JSON, so the file path
+  // this used to send exits 1 with `Error: --json-schema is not valid JSON` and
+  // zero stdout — the run never reaches the agent. `resultSchemaPath` is codex's
+  // `--output-schema` form and is deliberately not read here.
+  if (input.resultSchema !== undefined) out.push(FLAG.jsonSchema, input.resultSchema);
   if (input.cwd.length > 0) out.push(FLAG.addDir, input.cwd);
   if (input.model !== undefined) out.push(FLAG.model, input.model);
   return out;
@@ -184,7 +188,7 @@ function argvOptions(input: ExternalRunInput): string[] {
  * claude -p --output-format stream-json --verbose
  *        --safe-mode --tools Read Grep Glob
  *        --strict-mcp-config --mcp-config '{"mcpServers":{}}'
- *        [--max-budget-usd n] [--json-schema path] [--add-dir cwd] [--model m]
+ *        [--max-budget-usd n] [--json-schema '<inline schema>'] [--add-dir cwd] [--model m]
  *        --session-id <uuid> <prompt>
  * ```
  *
@@ -541,6 +545,15 @@ export function isRecognisedClaudeLine(line: string): boolean {
  */
 const ARGV_REJECTION = /^\s*error:\s*unknown\s+(option|argument|command)\b.*$/im;
 
+/**
+ * A startup rejection of an argument VALUE — capitalised `Error:`, not the
+ * `error: unknown option` shape {@link ARGV_REJECTION} matches. Measured on
+ * 2.1.278: `--json-schema` given a PATH exits 1 with `Error: --json-schema is
+ * not valid JSON: …` and zero bytes on stdout, so the empty transcript is a
+ * CONSEQUENCE of the rejection, not the cause of the failure.
+ */
+const ARGV_VALUE_REJECTION = /^\s*Error:\s*--[a-z0-9][a-z0-9-]*\s+(?:is not valid|must be|is required|requires)\b.*$/im;
+
 /** Wording that means quota, not a transient error. */
 const LIMIT_WORDING = /\b(usage limit|rate limit|rate_limit|quota|limit reached|too many requests|429)\b/i;
 
@@ -594,6 +607,14 @@ export function classifyClaudeFailure(outcome: ProcessOutcome): string | null {
   if (rejected !== null) {
     return (
       `claude rejected the command line: ${rejected[0].trim()} — the argv keryx sends was recorded ` +
+      `against 2.1.220, so this is a CLI version mismatch; check "claude --version"`
+    );
+  }
+
+  const valueRejected = ARGV_VALUE_REJECTION.exec(outcome.stderr);
+  if (valueRejected !== null) {
+    return (
+      `claude rejected an argument value: ${valueRejected[0].trim()} — the argv keryx sends was recorded ` +
       `against 2.1.220, so this is a CLI version mismatch; check "claude --version"`
     );
   }

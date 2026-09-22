@@ -25,7 +25,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { loadSchema, validateJson } from "../../gdskills/contracts";
+import { loadSchema, normalizeContractName, validateJson } from "../../gdskills/contracts";
 import type { WorktreePort } from "../child/worktree";
 import { validateRuntimeBlock, type RuntimeBlock } from "./dispatch";
 import { buildExternalChildEnv, canNestExternalChild } from "./env";
@@ -225,6 +225,67 @@ async function prepareResultSchema(): Promise<
 }
 
 /**
+ * The inline, self-contained form of the result schema — for a CLI whose flag
+ * takes the document as a VALUE. Bundling and dialect-stripping belong HERE
+ * rather than in a codec, because they read sibling files and a codec is pure.
+ *
+ * Measured on `claude` 2.1.278, in three layers: a PATH is refused
+ * (`--json-schema is not valid JSON`), the root `$schema` declaration fails
+ * because that validator has no dialect registry ("no schema with key or ref
+ * …draft/2020-12/schema"), and once both are fixed a sibling `$ref` still fails
+ * ("can't resolve reference review-finding.schema.json") because an inline
+ * document has no directory to resolve against.
+ */
+async function prepareInlineSchema(schema: Awaited<ReturnType<typeof loadSchema>>): Promise<string> {
+  /**
+   * Keys naming a dialect or a document identity. Dropped at EVERY level, not
+   * just the root: an inlined sibling brings its own `$id`, which re-bases
+   * fragment refs for the validator, and after bundling nothing outside this
+   * document is referenced.
+   */
+  const DROPPED_KEYS = new Set(["$schema", "$id"]);
+  const inlined = new Set<string>();
+
+  async function bundle(node: unknown): Promise<unknown> {
+    if (Array.isArray(node)) {
+      const items: unknown[] = [];
+      for (const item of node) items.push(await bundle(item));
+      return items;
+    }
+    if (typeof node !== "object" || node === null) return node;
+    const source = node as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(source)) {
+      if (key === "$ref" || DROPPED_KEYS.has(key)) continue;
+      out[key] = await bundle(value);
+    }
+    const ref = source.$ref;
+    if (typeof ref !== "string") return out;
+    const sibling =
+      !ref.startsWith("#") && !ref.includes("/") && !ref.includes("..") && !inlined.has(ref)
+        ? normalizeContractName(ref.replace(/\.schema\.json$/, ""))
+        : undefined;
+    if (sibling === undefined) {
+      out.$ref = ref;
+      return out;
+    }
+    inlined.add(ref);
+    try {
+      const target = (await bundle(await loadSchema(sibling))) as Record<string, unknown>;
+      return { ...target, ...out };
+    } catch {
+      // Unknown sibling: hand the ref over unchanged so the CLI names it, rather
+      // than shipping a document with a hole where a definition used to be.
+      inlined.delete(ref);
+      out.$ref = ref;
+      return out;
+    }
+  }
+
+  return JSON.stringify(await bundle(schema));
+}
+
+/**
  * Override a `"Completed"` outcome with a named `"Error"` when its output fails
  * `subagent-result` validation (AC13): structural fields survive, the original
  * text moves to `partial` rather than being lost, and the status can never read
@@ -307,6 +368,12 @@ export async function runExternalChild(
   if (!schemaPrep.ok) return refuse("Error", schemaPrep.reason);
   const { schema: resultSchema, schemaText: resultSchemaText, schemaPath: resultSchemaPath, schemaDir } = schemaPrep;
 
+  // Bundled and dialect-free, because `claude -p` takes the document inline and
+  // its validator resolves refs only inside what it was handed — see
+  // `prepareInlineSchema` above. `codex exec --output-schema` still gets the
+  // staged FILE, where a relative ref resolves against that file's directory.
+  const resultSchemaInline = await prepareInlineSchema(resultSchema);
+
   try {
     const assembled = buildExternalPrompt({
       taskTitle: input.taskTitle,
@@ -339,6 +406,9 @@ export async function runExternalChild(
           ? {}
           : { maxCostUnits: input.runtime.maxCostUnits }),
         resultSchemaPath,
+        // The inline form for claude, the staged file for codex — see
+        // `resultSchemaInline` above.
+        resultSchema: resultSchemaInline,
       };
 
       // Steerable when the caller asked AND this agent has a streaming shape.

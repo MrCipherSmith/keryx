@@ -560,7 +560,7 @@ export class ExternalOperator {
    * `runExternalChild` builds the real `ExternalRunInput` internally and does not
    * report it, so this rebuilds the fields both shipped `buildResumeArgv`
    * implementations actually read: `codex-cli` reads NONE of them, and
-   * `claude-cli` reads `maxCostUnits`, `resultSchemaPath`, `cwd` and `model`. The
+   * `claude-cli` reads `maxCostUnits`, `resultSchema`, `cwd` and `model`. The
    * prompt is not among them — a resume carries the operator's message, not the
    * original prompt — so an empty one here cannot produce a wrong command.
    */

@@ -96,14 +96,14 @@ describe("buildArgv — the ordering is load-bearing", () => {
     const argv = buildClaudeArgv({
       ...BASE_INPUT,
       model: "claude-opus-5",
-      resultSchemaPath: "/tmp/result.schema.json",
+      resultSchema: '{"type":"object"}',
       maxCostUnits: 2.5,
     });
     expect(argv.slice(argv.indexOf("--mcp-config") + 2)).toEqual([
       "--max-budget-usd",
       "2.5",
       "--json-schema",
-      "/tmp/result.schema.json",
+      '{"type":"object"}',
       "--add-dir",
       "/tmp/keryx-worktree",
       "--model",
@@ -129,9 +129,9 @@ describe("buildArgv — the ordering is load-bearing", () => {
     const flags: Array<Partial<ExternalRunInput>> = [
       {},
       { model: "claude-opus-5" },
-      { resultSchemaPath: "/tmp/s.json" },
+      { resultSchema: '{"type":"object"}' },
       { maxCostUnits: 1 },
-      { model: "m", resultSchemaPath: "/tmp/s.json", maxCostUnits: 1 },
+      { model: "m", resultSchema: '{"type":"object"}', maxCostUnits: 1 },
     ];
     for (const extra of flags) {
       for (const sessionId of ["9a3e7c11-0b52-4d68-a7f3-6c1e94b25d07", undefined]) {
@@ -420,6 +420,18 @@ describe("argv rejected by this CLI version", () => {
     );
     expect(cause).not.toContain("without a terminal event");
   });
+
+  test("an argument VALUE rejected at startup names the argv mismatch, not a dead transcript", () => {
+    // Live shape on 2.1.278: capitalised `Error:`, no usage block, zero bytes on
+    // stdout — so the empty transcript follows from the rejection, not from a
+    // vendor abort.
+    const stderr = "Error: --json-schema is not valid JSON: JSON Parse error: Unrecognized token '/'\n";
+    const cause = classifyClaudeFailure(outcomeFrom(undefined, { exitCode: 1, stderr }));
+    expect(cause).toContain("rejected an argument value");
+    expect(cause).toContain("--json-schema");
+    expect(cause).not.toContain("without a terminal event");
+  });
+
 });
 
 describe("usage limit (SYNTHETIC fixture — provisional)", () => {

@@ -652,6 +652,25 @@ describe("structured result validation (AC13)", () => {
     expect(observedSchema).toEqual(realSchema);
   });
 
+  test("claude's --json-schema is a self-contained inline document, not a path", async () => {
+    const CLAUDE_AGENT: RuntimeBlock = { kind: "external", agent: "claude-cli", sandbox: "read-only" };
+    const sp = fakeSpawn([
+      JSON.stringify({ type: "system", subtype: "init", session_id: "s" }),
+      JSON.stringify({ type: "result", subtype: "success", result: JSON.stringify(VALID_RESULT) }),
+    ]);
+    await runExternalChild(baseInput({ runtime: CLAUDE_AGENT }), baseDeps({ spawn: sp.port }));
+    const argv = sp.calls[0]?.argv ?? [];
+    const inline = argv[argv.indexOf("--json-schema") + 1] ?? "";
+    // A path is what 2.1.278 refuses outright, so the value must itself be JSON.
+    const parsed = JSON.parse(inline) as Record<string, unknown>;
+    // That CLI's validator has no dialect registry and resolves refs only inside
+    // the document it was handed, so neither a dialect declaration nor a sibling
+    // `$ref` may survive — the bundle is what makes the document self-contained.
+    expect(parsed.$schema).toBeUndefined();
+    expect(parsed.$id).toBeUndefined();
+    expect(inline).not.toContain("review-finding.schema.json");
+  });
+
   test("cause !== null paths (Denied/Error via classifyFailure) are unaffected by structured validation", async () => {
     // A Timeout/Denied/Error outcome never reaches the validation step: it is
     // gated on `built.status === "Completed"`, so this must be byte-identical to

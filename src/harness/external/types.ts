@@ -64,6 +64,15 @@ export interface ExternalRunInput {
   readonly sessionId?: string;
   /** Path to a JSON Schema file describing the required final response shape. */
   readonly resultSchemaPath?: string;
+  /**
+   * The CLI-ready INLINE form of the schema — bundled and dialect-free, for a
+   * CLI whose flag takes the document as a VALUE. Measured on `claude` 2.1.278:
+   * a PATH exits 1 (`--json-schema is not valid JSON`), a `$schema` declaration
+   * fails as an unknown dialect, and a sibling `$ref` cannot resolve from an
+   * inline document. `codex exec --output-schema` reads a FILE, so both fields
+   * exist and each codec reads its own CLI's form.
+   */
+  readonly resultSchema?: string;
   /** Forwarded to a native budget ceiling when the entry declares `budgetFlag`. */
   readonly maxCostUnits?: number;
 }
