@@ -81,7 +81,7 @@ async function driveToGates(
   service: FlowService,
   title: string,
 ): Promise<{ id: string; dir: string }> {
-  const { flow, dir: created } = await service.init({ cwd: ROOT, title });
+  const { flow, dir: created } = await service.init({ cwd: ROOT, title, owner: "Test Owner" });
   const dir = path.basename(created);
   await writeAc(dir, ["Only criterion"]);
   await service.freeze({ cwd: ROOT, id: flow.id });

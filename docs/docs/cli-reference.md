@@ -1699,7 +1699,7 @@ strict status state machine with hard completion gates. The CLI is the sole writ
 of flow state.
 
 ```
-keryx flow init (--issue <url> | --title "<t>") [--slug <s>]
+keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"]
 keryx flow list
 keryx flow status <id>
 keryx flow freeze <id>
@@ -1710,11 +1710,12 @@ keryx flow task add <id> --title "<t>" [--kind <k>] [--depends T1,T2]
 keryx flow task done <id> <taskId> [--disposition <d>] [--reason "<why>"]
 keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what>"]
 keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"
-keryx flow ac confirm <id> <ACn> [--note "<evidence>"]
+keryx flow owner set <id> --owner "<name>" --reason "<why>"
+keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]
 keryx flow ac update <id> --reason "<why>"
 keryx flow ac reseal <id> --reason "<why>"
 keryx flow implemented <id> --pr <url>
-keryx flow complete <id> [--comment]
+keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"]
 keryx flow block <id> --reason "<why>"
 keryx flow unblock <id>
 keryx flow check
@@ -1725,9 +1726,9 @@ keryx flow schema [--out <path>]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>` | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). |
+| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"` | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. |
 | `list` | — | List all flows with status + task counts. |
-| `status <id>` | — | Print one flow: status, source, AC state, PR, tasks, recent history. |
+| `status <id>` | — | Print one flow: status, source, AC state, PR, owner, latest signature, tasks, recent history. |
 | `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. |
 | `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
@@ -1736,11 +1737,12 @@ keryx flow schema [--out <path>]
 | `task done <id> <taskId>` | `--disposition completed\|blocked\|failed\|skipped`, `--reason "<why>"` | Mark a task `done`. A `failed` or `blocked` close **records an attempt automatically** — those two dispositions are attempts by definition, and requiring a second command is why the counter read zero across seven flows. |
 | `task attempt <id> <taskId>` | `--outcome started\|failed\|blocked` (required), `--detail "<what happened>"` | Record one execution attempt explicitly. Appends to the same append-only log `task done` writes to. |
 | `task depends <id> <taskId>` | `--on T1,T2\|none` (required), `--reason "<why>"` (required) | Rewrite one task's `dependsOn` — the repair for the three unsatisfiable shapes `flow check` reports. Until this existed, `--depends` wrote the field once at creation and nothing could rewrite it, so the only remedy was editing `flow.json` by hand; flow 178 carried a self-dependent `T10` for two weeks because the check was right and the operator had nowhere to go. Ids are normalised, so `t1`, `T1` and ` t1 ` are one edge. The change is validated against the same `dependencyIssues` the check uses and **refused if it would introduce an issue that was not already there** — deliberately narrower than "the graph must end clean", because a flow with two broken tasks has to be repairable one task at a time. A refused change leaves the record exactly as it was found. `--on none` clears the field. |
-| `ac confirm <id> <ACn>` | `--note "<evidence>"` | Confirm one acceptance criterion. |
+| `owner set <id>` | `--owner "<name>"` (required), `--reason "<why>"` (required) | Set or change the flow's owner — the human accountable for it. **Never inferred**, and a `--reason` is required even for the first assignment. Every change is kept, not overwritten: it appends a `history` event naming the previous owner, the new owner, the reason and the time, so no earlier owner is ever lost. See [the owner and completion signatures](#the-owner-and-completion-signatures). |
+| `ac confirm <id> <ACn>` | `--note "<evidence>"`, `--signed-by "<name>"` | Confirm one acceptance criterion. Appends an append-only signature recording who confirmed it (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — a repeated confirmation of the same criterion adds a new signature rather than replacing the last one. |
 | `ac update <id>` | `--reason "<why>"` (required) | Re-freeze the AC checksum **and void every prior confirmation** — right when the criteria changed, because a criterion nobody confirmed in its current wording has not been confirmed. Wrong when only the seal is stale; use `ac reseal` for that. |
 | `ac reseal <id>` | `--reason "<why>"` (required) | Re-seal a stale checksum over a file that did **not** change, keeping the confirmations. Refuses unless git reports the criteria file tracked and unchanged against HEAD, and refuses when git cannot answer at all — no evidence must not read the same as clean. It proves the file being sealed now is the file committed now; it cannot prove the old checksum was ever right. Exists because the only other repair destroys the record: flow 002 carries ten dated confirmations against a criteria file byte-identical to its first commit, with a checksum sealed against content predating the squashed `0.1.0` import. |
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
-| `complete <id>` | `--comment` | Run completion gates; on pass `→ done` (optionally comment the issue), on fail `→ in-progress`. |
+| `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. See [the owner gate](#the-owner-gate) and [the owner and completion signatures](#the-owner-and-completion-signatures). |
 | `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |
 | `unblock <id>` | — | Restore the saved previous status. |
 | `check` | — | Consistency audit across all flows: structure, checksums, schema, duplicate ids, plus every `dependsOn` that can never be satisfied (unknown id, self-reference, cycle) and every task recorded `failed`/`blocked` with no attempt behind it. |
@@ -1866,6 +1868,60 @@ Optional per-project configuration, in `.metaproject/tasks.config.json`:
 `severity_floor` is `blocker`, `major` or `minor` (default `minor`); `info`
 never blocks and is clamped to `minor` with a note. `require_clean_round: false`
 turns the gate off, and says so in the gate list rather than disappearing.
+
+### The owner gate
+
+Like `tasks` and `review`, the owner gate is **opt-in per package** (`gates.owner`,
+written by `flow init`): every flow created after this landed carries the flag;
+flows created before it report the gate `skipped` and are never retroactively
+blocked by a concept they predate.
+
+For an opted-in flow, `complete` fails the owner gate — with the reason
+`no owner set; run \`keryx flow owner set <id> --owner "<name>" --reason "<why>"\``
+— while `flow.owner` is absent, and passes it once one is set (`flow init --owner`
+or `flow owner set`).
+
+### The owner and completion signatures
+
+A flow can name an **owner** — the human accountable for it — and `ac confirm`/
+`complete` each record a **signature**: who acted, when, and what exactly was
+signed (the AC id and the frozen acceptance-criteria checksum for a confirmation;
+that checksum plus, for a completion, **the head commit the pull-request gate
+observed** — read from that gate's own `prStatus()` call, not re-fetched for
+the signature). `complete()` runs several gates that each read the PR head
+independently (the pull-request gate, the base-branch gate, the review gate);
+a push landing mid-`complete()` can make them observe different commits, and
+the signature names only the one the pull-request gate saw — not a guarantee
+that every gate agreed on the same head. Signatures are append-only:
+reconfirming a criterion, or completing a flow more than once, adds a new
+signature rather than replacing the last one.
+
+**The owner is never inferred.** It is set only by an explicit `--owner "<name>"`
+on `flow init` or `flow owner set <id> --owner "<name>" --reason "<why>"` — never
+read from git, an environment variable, or anywhere else. A flow nobody named an
+owner for reports `owner: not set` in `flow status`, never a guessed name, and
+every change is recorded as history rather than as an overwrite (`flow owner set`
+requires a reason even the first time, and each call appends the previous value,
+the new value, the reason and the time).
+
+**A signature's signer is a claim, not proof.** `--signed-by` names the signer
+explicitly. Missing that, `ac confirm`/`complete` fall back to the `KERYX_ACTOR`
+environment variable, then to `git config user.email` in the checkout, then to
+`unknown`. Every recorded identity carries a `basis` — `stated` (an explicit flag
+or environment variable), `derived` (read from something like the local git
+configuration — **never promoted to `stated`**), or `unknown` — and a `source`
+naming exactly where it came from. None of `--signed-by`, `KERYX_ACTOR`, or a
+local git identity is proof a human, rather than an agent running the same
+commands, made the assertion; `keryx flow complete` says so in its own output,
+and this reference says so here rather than overclaiming. See
+[TM-02: Flow Owner and Signed Completion](https://github.com/MrCipherSmith/keryx/blob/main/docs/decisions/keryx-harness/TM-02-flow-owner-and-signed-completion.md)
+for the full design, the JSON Schema shape, and why a stronger (structural,
+not just claimed) human-presence guarantee was considered and deferred.
+
+Every pre-existing `flow.json` with no `owner` or `signatures` field keeps
+loading, validating, passing `flow check`, and completing exactly as before —
+these fields are additive and optional, like every Task Manager v2 field, and
+reading an old file never rewrites it on disk.
 
 ---
 

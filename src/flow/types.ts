@@ -3,6 +3,8 @@
 // runtime cycle. It is declared there because it is the return of a pure
 // function over a task list, not a shape flow state carries.
 import type { NextTaskDecision } from "./machine";
+import type { Identity } from "./identity";
+export type { Identity, IdentityBasis } from "./identity";
 
 export type FlowStatus =
   | "initializing"
@@ -133,6 +135,49 @@ export type FlowGates = {
    * completion — the same opt-in shape as `tasks`, for the same reason.
    */
   review?: boolean | undefined;
+  /**
+   * Run the owner gate in `complete()` (flow 289, AC5). Set to `true` by
+   * `flow init` for every package created after the gate landed. ABSENT on
+   * pre-existing packages, where the gate reports `skipped` and never fails a
+   * completion — the same opt-in shape as `tasks`/`review`, for the same
+   * reason: 197+ packages in this repository were created with no owner
+   * concept at all, and this gate must not retroactively fail them.
+   */
+  owner?: boolean | undefined;
+};
+
+/**
+ * One append-only signature (flow 289, AC4): who signed, when, and exactly
+ * what they signed. Pushed onto `FlowState.signatures`, never mutated once
+ * written — a repeated `ac confirm`/`complete` records a NEW entry rather
+ * than replacing the last one, so the full signing history survives even
+ * when (e.g.) an AC is reconfirmed.
+ */
+export type FlowSignature = {
+  at: string;
+  kind: "ac-confirm" | "complete";
+  identity: Identity;
+  /** The AC id this signs. Present only for `kind: "ac-confirm"`. */
+  criterion?: string | undefined;
+  /**
+   * The acceptance-criteria checksum in force at signing time. Null when the
+   * criteria were not frozen yet (mirrors `FlowState.acChecksum`).
+   */
+  acChecksum: string | null;
+  /**
+   * The direct-merge `mergedCommit`, or — for a PR-backed completion — the
+   * head commit the pull-request gate observed via its own `prStatus()` call
+   * (`src/flow/service.ts`, captured into `evaluatedHeadCommit` without a
+   * second fetch). Present only for `kind: "complete"`, and only when
+   * observed — never guessed.
+   *
+   * Not a guarantee every gate saw the same head: `complete()` also runs a
+   * base-branch gate and a review gate, each of which reads the PR head
+   * independently (its own `prStatus()`/round-head call). A push landing
+   * mid-`complete()` can make them observe a different commit than the one
+   * recorded here — this field names only what the pull-request gate saw.
+   */
+  headCommit?: string | undefined;
 };
 
 export type FlowState = {
@@ -170,6 +215,24 @@ export type FlowState = {
    */
   baseBranch?: string | undefined;
   merged?: { commit: string; ref: "origin/main"; at: string } | undefined;
+  /**
+   * The human accountable for this flow, or absent if one was never set
+   * (flow 289, AC1). NEVER inferred: the only way this field is populated is
+   * an explicit `--owner "<name>"` on `flow init` or `flow owner set`, so its
+   * `identity.basis` is always `"stated"` — there is no derived/unknown
+   * owner, because an owner nobody named is simply absent, never guessed
+   * from git or the environment. Every change is additionally recorded as a
+   * `history` event (old value, new value, reason, time) so this field being
+   * the CURRENT owner never loses the earlier ones (AC2).
+   */
+  owner?: Identity | undefined;
+  /**
+   * Append-only signing record (flow 289, AC4). Absent on a flow that has
+   * never had an `ac confirm` or a passing `complete` recorded under this
+   * field's existence, and on every pre-existing flow.json (additive, like
+   * every other v2 field here).
+   */
+  signatures?: FlowSignature[] | undefined;
   tasks: FlowTask[];
   history: FlowHistoryEvent[];
 };
@@ -236,7 +299,8 @@ export type GateOutcome = {
     | "health"
     | "security"
     | "review"
-    | "base-branch";
+    | "base-branch"
+    | "owner";
   status: "pass" | "fail" | "skipped";
   detail: string;
 };
@@ -278,6 +342,8 @@ export type FlowInitInput = {
   slug?: string | undefined;
   /** The branch this flow is told to land on. See `FlowState.baseBranch`. */
   baseBranch?: string | undefined;
+  /** The human accountable for this flow. See `FlowState.owner`. Never inferred. */
+  owner?: string | undefined;
 };
 export type FlowInitResult = {
   flow: FlowState;
@@ -415,15 +481,31 @@ export interface FlowService {
     id: string;
     criterion: string;
     note?: string | undefined;
+    /** Signer identity inputs for the append-only signature (AC3, AC4). See `resolveSignerIdentity`. */
+    signedBy?: string | undefined;
+    signedByEnv?: string | undefined;
+    gitIdentity?: string | undefined;
   }): Promise<FlowState>;
   acUpdate(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
   acReseal(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
   implemented(input: { cwd: string; id: string; prUrl: string }): Promise<FlowState>;
+  /**
+   * Set or change a flow's owner (AC1, AC2). Always requires a non-empty
+   * `reason`, even for the FIRST assignment: every change — including from
+   * "not set" — is recorded as a `history` event carrying the previous value,
+   * the new value, the reason and the time, so no earlier owner is ever lost
+   * to a silent overwrite.
+   */
+  ownerSet(input: { cwd: string; id: string; owner: string; reason: string }): Promise<FlowState>;
   complete(input: {
     cwd: string;
     id: string;
     comment?: boolean | undefined;
     mergedCommit?: string | undefined;
+    /** Signer identity inputs for the completion signature (AC3, AC4). See `resolveSignerIdentity`. */
+    signedBy?: string | undefined;
+    signedByEnv?: string | undefined;
+    gitIdentity?: string | undefined;
   }): Promise<FlowCompleteResult>;
   block(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
   unblock(input: { cwd: string; id: string }): Promise<FlowState>;

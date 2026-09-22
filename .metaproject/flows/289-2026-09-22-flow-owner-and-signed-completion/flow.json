@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "289",
+  "slug": "flow-owner-and-signed-completion",
+  "title": "Flow owner and signed completion",
+  "status": "in-progress",
+  "createdAt": "2026-09-22T22:30:55.194Z",
+  "updatedAt": "2026-09-22T23:01:33.582Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:722ae18475d6e74f4e40d963fe0cd3c528d1707ec1c5a736d4799ae9465a12f1",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Owner field, flow init --owner, flow owner set with reason and history",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T22:37:35.139Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Identity with basis and source; signatures on ac confirm and complete",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Opt-in owner gate for new flows; old flows skip it",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Backward compatibility fixture: old flow.json loads, checks and completes unchanged",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "flow status shows owner and latest signature",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Docs: help, CLI reference, README, decision record, limits",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-22T22:30:55.194Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-22T22:37:33.320Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-22T22:37:33.519Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-22T22:37:33.728Z",
+      "event": "task-added",
+      "detail": "T5: Owner field, flow init --owner, flow owner set with reason and history"
+    },
+    {
+      "at": "2026-09-22T22:37:33.928Z",
+      "event": "task-added",
+      "detail": "T6: Identity with basis and source; signatures on ac confirm and complete"
+    },
+    {
+      "at": "2026-09-22T22:37:34.129Z",
+      "event": "task-added",
+      "detail": "T7: Opt-in owner gate for new flows; old flows skip it"
+    },
+    {
+      "at": "2026-09-22T22:37:34.337Z",
+      "event": "task-added",
+      "detail": "T8: Backward compatibility fixture: old flow.json loads, checks and completes unchanged"
+    },
+    {
+      "at": "2026-09-22T22:37:34.535Z",
+      "event": "task-added",
+      "detail": "T9: flow status shows owner and latest signature"
+    },
+    {
+      "at": "2026-09-22T22:37:34.733Z",
+      "event": "task-added",
+      "detail": "T10: Docs: help, CLI reference, README, decision record, limits"
+    },
+    {
+      "at": "2026-09-22T22:37:34.940Z",
+      "event": "task-added",
+      "detail": "T11: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-22T22:37:35.139Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-22T23:01:33.060Z",
+      "event": "task-done",
+      "detail": "T5: Owner field, flow init --owner, flow owner set with reason and history"
+    },
+    {
+      "at": "2026-09-22T23:01:33.168Z",
+      "event": "task-done",
+      "detail": "T6: Identity with basis and source; signatures on ac confirm and complete"
+    },
+    {
+      "at": "2026-09-22T23:01:33.270Z",
+      "event": "task-done",
+      "detail": "T7: Opt-in owner gate for new flows; old flows skip it"
+    },
+    {
+      "at": "2026-09-22T23:01:33.375Z",
+      "event": "task-done",
+      "detail": "T8: Backward compatibility fixture: old flow.json loads, checks and completes unchanged"
+    },
+    {
+      "at": "2026-09-22T23:01:33.476Z",
+      "event": "task-done",
+      "detail": "T9: flow status shows owner and latest signature"
+    },
+    {
+      "at": "2026-09-22T23:01:33.582Z",
+      "event": "task-done",
+      "detail": "T10: Docs: help, CLI reference, README, decision record, limits"
+    }
+  ]
+}

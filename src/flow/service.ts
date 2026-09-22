@@ -10,6 +10,7 @@ import {
   nextTask,
 } from "./machine";
 import { reviewGate } from "./review-gate";
+import { describeIdentity, ownerIdentity, resolveSignerIdentity } from "./identity";
 import { moveFlowDirWithReviewRecords } from "../review/flow-move";
 import { acFileUnchangedSinceHead, acRelativePathFor } from "./ac-reseal";
 import { flowStateSchema } from "./schema";
@@ -88,6 +89,16 @@ function recordAttempt(
   return attempts;
 }
 
+/**
+ * Shared by `init`'s `--owner` and `ownerSet`'s `--owner`, so a blank value is
+ * refused identically in both places — the same wording, not two guards that
+ * could quietly drift apart. Before this, `flow init --owner "   "` silently
+ * fell through to "no owner set" (an absent-key state indistinguishable from
+ * never naming one) while `flow owner set --owner "   "` rejected the same
+ * input outright; the same blank name deserved the same answer from both.
+ */
+const BLANK_OWNER_MESSAGE = '--owner requires a non-blank name, e.g. --owner "Alex Smith"';
+
 export function createFlowService(deps: FlowServiceDeps): FlowService {
   const now = () => deps.now().toISOString();
 
@@ -150,6 +161,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       if (!input.title && !input.issue) {
         throw new Error('flow init requires --title "<problem>" or --issue <url>');
       }
+      // A blank `--owner` is a mistake, not "no owner" (AC1/AC3): the flag was
+      // given, so silently falling through to the absent-key "not set" state
+      // would hide the typo. Only an OMITTED flag (input.owner === undefined)
+      // means "nobody named an owner" — that is not an error.
+      if (input.owner !== undefined && !input.owner.trim()) {
+        throw new Error(BLANK_OWNER_MESSAGE);
+      }
 
       const trackerReady = deps.tracker ? await deps.tracker.detect() : false;
       const tracker = trackerReady ? deps.tracker : null;
@@ -187,11 +205,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         const createdAt = now();
         const flow: FlowState = {
           schemaVersion: 1,
-          // Opt in this package to the task gate. Written at creation because
-          // that is the only moment that distinguishes "created under the new
-          // rules" from "created before them" — `schemaVersion` cannot, since
-          // read-time migration makes every package v2 (see FlowGates).
-          gates: { tasks: true, review: true },
+          // Opt in this package to the task/review/owner gates. Written at
+          // creation because that is the only moment that distinguishes
+          // "created under the new rules" from "created before them" —
+          // `schemaVersion` cannot, since read-time migration makes every
+          // package v2 (see FlowGates). `owner` (flow 289, AC5) follows the
+          // same shape as `tasks`/`review`.
+          gates: { tasks: true, review: true, owner: true },
           id,
           slug,
           title,
@@ -210,6 +230,12 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           // an absent key is what "no base was named" has to look like on disk
           // for the not-recorded state to stay distinguishable from a pass.
           ...(input.baseBranch === undefined ? {} : { baseBranch: input.baseBranch }),
+          // Owner is NEVER inferred (AC1): only an explicit non-empty --owner
+          // on `flow init` populates it, so `basis` is always "stated". No
+          // key at all is what "nobody named an owner yet" looks like on disk.
+          ...(input.owner?.trim()
+            ? { owner: ownerIdentity(input.owner.trim(), "`--owner` flag on `flow init`") }
+            : {}),
           tasks: DEFAULT_TASKS.map((task) => ({ ...task, status: "todo" })),
           history: [{ at: createdAt, event: "created" }],
         };
@@ -279,6 +305,34 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
      */
     async next({ cwd, id }): Promise<NextTaskDecision> {
       return nextTask((await load(cwd, id)).flow.tasks);
+    },
+
+    /**
+     * Set or change the owner (flow 289, AC1, AC2). Always requires a
+     * non-empty `reason` — including the first assignment — so every change
+     * is a deliberate, explained act rather than a silent default. The
+     * previous value, the new value, the reason and the time are appended to
+     * `flow.history` via the shared `save()` helper (same mechanism as
+     * `taskDepends`/`acUpdate`), which is append-only by construction: no
+     * code path here or elsewhere rewrites or deletes an earlier entry, so
+     * `keryx flow status` and a read of `flow.json` can both recover who
+     * owned the flow before, and when it changed.
+     */
+    async ownerSet({ cwd, id, owner, reason }): Promise<FlowState> {
+      if (!owner?.trim()) {
+        throw new Error(BLANK_OWNER_MESSAGE);
+      }
+      if (!reason?.trim()) {
+        throw new Error('flow owner set requires --reason "<why>"');
+      }
+      return mutate(cwd, id, async ({ dir, flow }) => {
+        await assertAcIntact(cwd, dir, flow);
+        const previous = flow.owner?.value ?? null;
+        const next = ownerIdentity(owner.trim(), "`--owner` flag on `flow owner set`");
+        flow.owner = next;
+        const detail = `${previous ?? "not set"} -> ${next.value} (${reason.trim()})`;
+        return save(cwd, dir, flow, previous === null ? "owner-set" : "owner-changed", detail);
+      });
     },
 
     async freeze({ cwd, id }): Promise<FlowState> {
@@ -475,7 +529,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async acConfirm({ cwd, id, criterion, note }): Promise<FlowState> {
+    async acConfirm({ cwd, id, criterion, note, signedBy, signedByEnv, gitIdentity }): Promise<FlowState> {
       return mutate(cwd, id, async ({ dir, flow }) => {
       await assertAcIntact(cwd, dir, flow);
       const known = await readAcCriteria(cwd, dir);
@@ -483,8 +537,23 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       if (!known.includes(target)) {
         throw new Error(`Unknown criterion ${target}. Known: ${known.join(", ")}`);
       }
-      flow.acConfirmed[target] = { at: now(), ...(note ? { note } : {}) };
-      return save(cwd, dir, flow, "ac-confirmed", `${target}${note ? `: ${note}` : ""}`);
+      const at = now();
+      flow.acConfirmed[target] = { at, ...(note ? { note } : {}) };
+      // Append-only signature (flow 289, AC4): a repeated confirm of the same
+      // criterion adds a NEW entry here rather than replacing the one above,
+      // so the full signing history survives a reconfirmation.
+      const identity = resolveSignerIdentity({ stated: signedBy, env: signedByEnv, gitIdentity });
+      flow.signatures = [
+        ...(flow.signatures ?? []),
+        { at, kind: "ac-confirm", identity, criterion: target, acChecksum: flow.acChecksum },
+      ];
+      return save(
+        cwd,
+        dir,
+        flow,
+        "ac-confirmed",
+        `${target}${note ? `: ${note}` : ""} (signed: ${describeIdentity(identity)})`,
+      );
       });
     },
 
@@ -580,7 +649,15 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async complete({ cwd, id, comment, mergedCommit }): Promise<FlowCompleteResult> {
+    async complete({
+      cwd,
+      id,
+      comment,
+      mergedCommit,
+      signedBy,
+      signedByEnv,
+      gitIdentity,
+    }): Promise<FlowCompleteResult> {
       const dir = await resolveFlowDir(cwd, id);
       return withFileLock(flowLockPath(cwd, dir), async () => {
       let flow = await readFlow(cwd, dir);
@@ -617,6 +694,21 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         gates.push(unevaluableGate("acceptance-criteria"));
       }
 
+      // The commit the PULL-REQUEST GATE observed, when one is known —
+      // captured here from that gate's own `prStatus()` call (not re-fetched)
+      // so a completion signature can name it (AC4) without an extra tracker
+      // call. `mergedCommit` is the direct-merge case; otherwise it is filled
+      // in below from the PR's own head SHA, if the pull-request gate
+      // observes one.
+      //
+      // This is NOT a claim that every gate below saw the same head: the
+      // base-branch gate and the review gate each read the PR head (or the
+      // round's recorded head) independently, via their own calls. A push
+      // landing mid-`complete()` can make them observe a different commit
+      // than the one recorded here. `headCommit` on the signature names only
+      // what the pull-request gate saw.
+      let evaluatedHeadCommit: string | undefined = mergedCommit ?? undefined;
+
       // Gate 2: pull request, or an explicit proof that the implementation
       // commit is already contained in origin/main (direct-merge handoff).
       if (mergedCommit) {
@@ -628,6 +720,9 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         gates.push({ name: "pull-request", status: "fail", detail: "no PR recorded" });
       } else if (deps.tracker && (await deps.tracker.detect())) {
         const pr = await deps.tracker.prStatus(flow.pr.url);
+        if (typeof pr.headSha === "string" && pr.headSha !== "") {
+          evaluatedHeadCommit ??= pr.headSha;
+        }
         gates.push(
           pr.exists && pr.checksGreen === true
             ? { name: "pull-request", status: "pass", detail: "PR exists, checks green" }
@@ -669,6 +764,12 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // task, and turning it on retroactively would invalidate them. They lack
       // the flag, so the gate reports `skipped` and never fails them.
       gates.push(taskGate(flow));
+
+      // Gate 3b: owner (flow 289, AC5). Same opt-in shape as `tasks`/`review`:
+      // `gates.owner`, set by `flow init`. A package without the flag reports
+      // `skipped`, never `fail` — no pre-existing package is retroactively
+      // blocked by a concept it predates.
+      gates.push(ownerGate(flow));
 
       // Gate 4: review (flow 204, AC5-AC7). Opt-in per package on the same
       // basis, and never allowed to pass on absence: a condition that could not
@@ -724,6 +825,22 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         if (mergedCommit) {
           flow.merged = { commit: mergedCommit, ref: "origin/main", at: now() };
         }
+        // Append-only completion signature (flow 289, AC4): who signed this
+        // completion, when, and what was evaluated (the AC checksum in force,
+        // and the commit the gates observed, when one was known). A repeated
+        // `complete` call — should this flow ever be reopened and completed
+        // again — adds a NEW entry rather than replacing this one.
+        const completionIdentity = resolveSignerIdentity({ stated: signedBy, env: signedByEnv, gitIdentity });
+        flow.signatures = [
+          ...(flow.signatures ?? []),
+          {
+            at: now(),
+            kind: "complete",
+            identity: completionIdentity,
+            acChecksum: flow.acChecksum,
+            ...(evaluatedHeadCommit ? { headCommit: evaluatedHeadCommit } : {}),
+          },
+        ];
         // T57 F-001: a `warn` health gate folds to `status: "pass"` (T56,
         // unchanged) but must stay distinguishable from a genuine pass in the
         // record a reader actually sees. `healthWarnNote` is the only place
@@ -1191,6 +1308,34 @@ function taskGate(flow: FlowState): GateOutcome {
     );
   }
   return { name: "tasks", status: "fail", detail: reasons.join("; ") };
+}
+
+/**
+ * The owner gate (flow 289, AC5). Opt-in per package: `gates.owner` is
+ * written by `flow init`, so every flow created after this change is covered
+ * and no historical package is retroactively invalidated — the same shape as
+ * `taskGate` above. A package that opted in fails with a named reason while
+ * no owner is set, and passes once one is; the owner's presence alone is what
+ * this gate checks — it makes no claim about who set it (see `Identity`).
+ */
+function ownerGate(flow: FlowState): GateOutcome {
+  if (!flow.gates?.owner) {
+    return {
+      name: "owner",
+      status: "skipped",
+      detail:
+        "owner gate not enabled for this package (created before the gate); " +
+        "flows created by this keryx version opt in automatically",
+    };
+  }
+  if (!flow.owner?.value) {
+    return {
+      name: "owner",
+      status: "fail",
+      detail: 'no owner set; run `keryx flow owner set <id> --owner "<name>" --reason "<why>"`',
+    };
+  }
+  return { name: "owner", status: "pass", detail: `owner: ${flow.owner.value}` };
 }
 
 async function isPlaceholderAc(cwd: string, dir: string): Promise<boolean> {
