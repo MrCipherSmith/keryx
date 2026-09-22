@@ -1318,7 +1318,9 @@ describe("flow 173 AC7 — shellCommand's readline jobRegistry session-scope wir
   // comment inside `buildInteractiveAgentTools({...})` — all added ahead of
   // `sweepBackgroundJobs` in the same `agentDepsBase` object — still just
   // past that field, well short of the next declaration.
-  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 6000);
+  // Widened to 6800 for the metaproject-incomplete operator notice (K-009
+  // follow-up), inserted between agentCwd and this same agentDepsBase object.
+  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 6800);
 
   test("imports createJobRegistry from the background-job-registry module", () => {
     expect(shellSourceAc7).toContain(

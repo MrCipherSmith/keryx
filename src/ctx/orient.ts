@@ -1,6 +1,7 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathExists } from "../lib/fs";
+import { offersIndexTools } from "../lib/metaproject-state";
 import { readFile } from "node:fs/promises";
 import { omissionNote } from "./lines";
 
@@ -291,6 +292,17 @@ export async function wikiContext(cwd: string): Promise<string> {
 // Combined turn-start orientation block: bounded project-root Metaproject
 // excerpt + bounded graph map and wiki index. Safe to inject on every prompt.
 export async function buildOrientation(cwd: string): Promise<string> {
+  // NOTHING at all when this is not an initialized metaproject (or nothing of it has
+  // been built yet — see `offersIndexTools`). The two producers below degrade to "not
+  // built — run `keryx gdgraph build`" / "no wiki index — run `keryx wiki index`", which
+  // is good advice in a keryx project with an empty index and actively misleading in one
+  // that was never initialized: this block used to be injected into exactly such a
+  // session, whose roster deliberately carries no graph_*/wiki_* tool, telling the model
+  // to run a workflow whose output it could then not read — and an empty answer from a
+  // tool that was never offered is not a finding about the project.
+  if (!offersIndexTools(cwd)) {
+    return "";
+  }
   const [metaprojectIndex, graph, wiki] = await Promise.all([
     metaprojectIndexContext(cwd),
     graphContext(cwd),

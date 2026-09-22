@@ -2,8 +2,6 @@
 // Adding a tool here is the only way either surface gets it.
 
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { buildBusTools } from "../bus/agent-tools";
 import type { BusClient } from "../bus/client";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
@@ -27,6 +25,7 @@ import { workspaceOverviewTool, workspaceReadTool } from "../harness/tool/builti
 import { workspaceCreateTool, workspaceListTool, workspaceProposeTool, workspaceShowTool } from "../harness/tool/builtin/workspace-lifecycle-tool";
 import type { SearchProviderController } from "../harness/search";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
+import { offersIndexTools } from "../lib/metaproject-state";
 import type { ServerCatalog } from "../mcp-servers/catalog";
 import type { ServerState } from "../mcp-servers/manager";
 import { createMcpInteractiveTools } from "../mcp-servers/tools";
@@ -188,7 +187,7 @@ export function assertDeniableTools(tools: readonly InteractiveTool[], denied: r
 }
 
 /**
- * The metaproject tools that work in a project with no `.metaproject/`.
+ * The metaproject tools that work in a project with no USABLE metaproject.
  *
  * Every other metaproject operation reads an artifact under `.metaproject/` — the
  * graph database, the wiki, memory, flows, health and testing reports, the skill
@@ -196,6 +195,12 @@ export function assertDeniableTools(tools: readonly InteractiveTool[], denied: r
  * was offered all of them, called `graph_find`, and got `index-incomplete … never
  * built here`; each was also a description the model re-read every round.
  * `search_code` runs ripgrep over the tree and needs nothing.
+ *
+ * "Without one" is `offersIndexTools`' question: a manifest-less project that still has
+ * a built graph or wiki KEEPS its tools (`keryx update` restores the manifest), and a
+ * bare `.metaproject/` with nothing under it does not get them merely by existing. What
+ * must never happen is offering them to a session whose every call can only answer
+ * `index-incomplete` — an empty answer that reads like an empty project.
  */
 export const METAPROJECT_FREE_TOOLS: ReadonlySet<string> = new Set(["search_code"]);
 
@@ -205,7 +210,12 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
   const clock = input.clock ?? (() => new Date().toISOString());
   const jobRegistry = input.jobRegistry;
   const metaprojectTools = builtinMetaprojectTools(input.cwd, makeKeryxRunner(input.cwd), input.metaprojectPort);
-  const hasMetaproject = existsSync(join(input.cwd, ".metaproject"));
+  // K-009's project filter, re-based on "is this a metaproject these tools can read"
+  // rather than "does a `.metaproject` directory exist". The directory alone is what a
+  // not-quite-initialized project has, and offering eighteen tools that can only answer
+  // `index-incomplete` — in a session whose operator reads emptiness as a finding — is
+  // the defect this filter exists to close.
+  const indexToolsOffered = offersIndexTools(input.cwd);
   const built: InteractiveTool[] = [
     ...builtinReadOnlyTools(input.cwd),
     ...metaprojectTools,
@@ -263,7 +273,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
   // "unknown" in a plain repository would make the same command line fail in one
   // directory and pass in the next.
   assertDeniableTools(built, denied);
-  const offered = hasMetaproject
+  const offered = indexToolsOffered
     ? built
     : built.filter((tool) => !metaprojectTools.includes(tool) || METAPROJECT_FREE_TOOLS.has(tool.definition.name));
   return denyInteractiveTools(offered, denied);

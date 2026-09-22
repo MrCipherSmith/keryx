@@ -1,6 +1,7 @@
-import path from "node:path";
-import { pathExists } from "../lib/fs";
-import { readJsonFile } from "../lib/json";
+import {
+  readMetaprojectManifest,
+  readMetaprojectState,
+} from "../lib/metaproject-state";
 
 type ManifestModule = {
   enabled: boolean;
@@ -23,35 +24,38 @@ export async function statusCommand(args: string[] = []): Promise<void> {
     return;
   }
 
-  const root = path.join(process.cwd(), ".metaproject");
-  const manifestPath = path.join(root, "metaproject.json");
+  // The vocabulary AND the detection live in `lib/metaproject-state` — the same module
+  // that decides whether `keryx shell` offers its index tools. Two answers to one question
+  // is how a shell came to be handed index tools in a project this report itself called
+  // "incomplete": the report read the manifest, the roster only checked the directory.
+  const cwd = process.cwd();
+  const state = readMetaprojectState(cwd);
 
-  if (!(await pathExists(root))) {
+  if (state.state === "absent") {
     console.log("Metaproject: not initialized");
     console.log("Run: keryx init");
     return;
   }
 
-  if (!(await pathExists(manifestPath))) {
+  if (state.state === "incomplete") {
     console.log("Metaproject: incomplete");
-    console.log("Missing: .metaproject/metaproject.json");
+    console.log(
+      state.reason === "missing-manifest"
+        ? "Missing: .metaproject/metaproject.json"
+        : "Invalid: .metaproject/metaproject.json",
+    );
+    if (state.reason === "unreadable-manifest") {
+      console.log(state.detail);
+    }
     return;
   }
 
-  let manifest: Manifest;
-  try {
-    manifest = await readJsonFile<Manifest>(manifestPath);
-  } catch (error) {
-    console.log("Metaproject: incomplete");
-    console.log("Invalid: .metaproject/metaproject.json");
-    console.log(error instanceof Error ? error.message : String(error));
-    return;
-  }
+  const manifest = readMetaprojectManifest<Manifest>(cwd);
   console.log("Metaproject: ready");
-  console.log(`Root: ${manifest.paths?.root ?? ".metaproject"}`);
+  console.log(`Root: ${manifest?.paths?.root ?? ".metaproject"}`);
   console.log("Modules:");
 
-  for (const [name, moduleConfig] of Object.entries(manifest.modules ?? {})) {
+  for (const [name, moduleConfig] of Object.entries(manifest?.modules ?? {})) {
     console.log(`  ${name}: ${moduleConfig.enabled ? "enabled" : "disabled"}`);
   }
 }

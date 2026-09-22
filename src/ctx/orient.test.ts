@@ -309,3 +309,21 @@ test("buildOrientation without a project-root index preserves the graph + wiki f
     },
   );
 });
+
+test("buildOrientation emits nothing for a `.metaproject` directory with nothing usable in it", async () => {
+  // The `vantage-specs` shape: `.metaproject/` exists (with an empty `workspaces/`), so
+  // nothing looks wrong — but there is no manifest and nothing built. This block used to
+  // be injected anyway, telling the model to run `keryx gdgraph build` / `keryx wiki index`
+  // in a project whose roster deliberately carries no graph_*/wiki_* tool.
+  await withProject({ ".metaproject/workspaces/.keep": "" }, async (root) => {
+    expect(await buildOrientation(root)).toBe("");
+  });
+});
+
+test("buildOrientation still emits for a manifest-less project that has a built index", async () => {
+  // `keryx update` recovers `metaproject.json` for metaprojects that predate it; until
+  // that runs, the graph on disk is readable and the orientation is honest about it.
+  await withProject({ ".metaproject/data/gdgraph/artifacts/summary.md": SUMMARY }, async (root) => {
+    expect(await buildOrientation(root)).toContain("keryx orientation");
+  });
+});

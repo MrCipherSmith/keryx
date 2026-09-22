@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeSlate } from "../session/slate";
@@ -98,11 +98,32 @@ describe("K-009: the roster follows the project it is in", () => {
     const bare = await mkdtemp(join(tmpdir(), "keryx-tools-bare-"));
     const withMeta = await mkdtemp(join(tmpdir(), "keryx-tools-meta-"));
     await mkdir(join(withMeta, ".metaproject"));
+    await writeFile(join(withMeta, ".metaproject", "metaproject.json"), "{}", "utf8");
     const full = await rosterIn(withMeta);
     const reduced = await rosterIn(bare);
     expect(full.filter((name) => !reduced.includes(name))).toEqual(METAPROJECT_BOUND);
     expect(reduced.filter((name) => !full.includes(name))).toEqual([]);
     expect(reduced).toContain("search_code");
+  });
+
+  test("an empty `.metaproject/` is not an initialized project, and withholds the same tools", async () => {
+    // The `vantage-specs` shape: `.metaproject/workspaces/` and nothing else. The
+    // `existsSync(".metaproject")` gate this replaced offered all eighteen index tools
+    // here, and every call answered `index-incomplete`.
+    const empty = await mkdtemp(join(tmpdir(), "keryx-tools-empty-meta-"));
+    await mkdir(join(empty, ".metaproject", "workspaces"), { recursive: true });
+    const bare = await mkdtemp(join(tmpdir(), "keryx-tools-bare-"));
+    expect(await rosterIn(empty)).toEqual(await rosterIn(bare));
+    expect(await rosterIn(empty)).not.toContain("graph_find");
+  });
+
+  test("a manifest-less project that has a built index keeps its tools", async () => {
+    // `keryx update` recovers `metaproject.json` for metaprojects that predate it; until
+    // then the graph on disk answers, so stripping the tools would be a regression.
+    const legacy = await mkdtemp(join(tmpdir(), "keryx-tools-legacy-"));
+    await mkdir(join(legacy, ".metaproject", "data", "gdgraph", "artifacts"), { recursive: true });
+    await writeFile(join(legacy, ".metaproject", "data", "gdgraph", "artifacts", "summary.md"), "# gdgraph Summary", "utf8");
+    expect(await rosterIn(legacy)).toContain("graph_find");
   });
 
   test("denying a metaproject tool is accepted in a project that cannot run it", async () => {
@@ -119,6 +140,7 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
   // The full roster is a project WITH a metaproject; without one, K-009 withholds
   // the tools that could only fail there (pinned in the describe block above).
   await mkdir(join(cwd, ".metaproject"));
+  await writeFile(join(cwd, ".metaproject", "metaproject.json"), "{}", "utf8");
   const tools = buildInteractiveAgentTools({
     cwd,
     metaprojectPort: createMetaprojectAdapter(cwd),

@@ -79,6 +79,7 @@ import { emitSubagentFleet } from "../tui/subagent-bridge";
 import { approveExternalSpawn, externalRunBridgeObserver } from "../tui/external-bridge";
 import { exportCallerSession } from "../lib/caller-session";
 import { collapseHome } from "../lib/statusbar";
+import { metaprojectIncompleteNotice } from "../lib/metaproject-state";
 import { LiveMarkdownBlock } from "../lib/live-render";
 import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
 import { estimateContextTokens, launchTuiAgentShell } from "../tui/tui-shell";
@@ -3936,6 +3937,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // memory in-process; search_code still falls back to the subprocess runner.
       const metaprojectPort = createMetaprojectAdapter(process.cwd());
       const agentCwd = process.cwd();
+      const metaprojectNotice = metaprojectIncompleteNotice(agentCwd);
+      if (metaprojectNotice !== undefined) {
+        console.log(metaprojectNotice);
+      }
       const jobRegistry = createJobRegistry({ cwd: agentCwd });
       // One MCP runtime per session, for the same reason as `jobRegistry`
       // above: server processes must not be re-spawned and orphaned on every

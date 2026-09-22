@@ -1499,6 +1499,9 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "dependents) — not merely an input you go on to reason over — check it against source " +
     "before presenting it as fact; do not add this check to every call, only where the " +
     "result is the answer." +
+    " A `keryx …` command that answers `index-incomplete` or nothing is not a finding about this " +
+    "project — that is what an unbuilt or uninitialized workspace looks like, and `keryx init` (or " +
+    "`keryx update`) is what creates the workspace those tools read." +
     (ctx.busJoined === true ? buildBusConductBlock() : "");
 
   const trimmed = orient?.trim() ?? "";
