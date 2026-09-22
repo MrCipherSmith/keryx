@@ -3,6 +3,22 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.147] — 2026-09-22
+A patch release carrying the same feature set as 0.2.146 — the orchestrator plan
+bridge — with the one fix that 0.2.146's own verification caught.
+
+### Fixed
+- **The plan bridge fits the skills' length ceilings again.** Every one of the nine
+  skills carries a recorded line ceiling equal to what it ships, and the bridge
+  blocks added 10-16 lines each, so `keryx skills verify --bundled` reported nine
+  `anatomy:length` findings and `check:core` failed — which is where 0.2.146's
+  release verification stopped, before publishing. Each skill now carries the
+  instruction inside an EXISTING line: a pointer, its own ids (`analyze` …
+  `deploy`, `T1` … `Tn`, `step-0` … `step-14`, `phase-0` … `phase-5`),
+  `plan_set`/`plan_update`, and `proposed` where the run stops to ask. Line counts
+  are unchanged and every ceiling is still exact. The prose that needs room lives
+  in the `session-plan-bridge` rule, which has no ceiling.
+
 ## [0.2.146] — 2026-09-22
 The orchestrators' own plans are visible while they run. Every one of them already
 owned a plan — fifteen job steps, a Flow's tasks, a review's numbered checklist —
