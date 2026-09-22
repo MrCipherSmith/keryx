@@ -44,6 +44,7 @@ import { providersCommand } from "./commands/providers";
 import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
 import { forgettingCommand } from "./commands/forgetting";
+import { triggerCommand } from "./commands/trigger";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -109,6 +110,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   workspace: workspaceCommand,
   retention: retentionCommand,
   forgetting: forgettingCommand,
+  trigger: triggerCommand,
 };
 
 export async function main(): Promise<void> {
@@ -288,6 +290,8 @@ export const USAGE_BODY = `Usage:
   keryx forgetting lookup "<ref-or-path>" [--layer <layer>] [--search] [--json]
                                                Read the deletion trail: what was removed, when, at
                                                whose request, on what basis
+  keryx trigger run <name>                      Perform exactly one pass of a declared trigger's
+                                               action (.metaproject/triggers.json)
   keryx --version
 
 Commands:
@@ -333,6 +337,7 @@ Commands:
   workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
   retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
   forgetting Read the deletion trail — was this removed, or did it never exist?
+  trigger   Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code
 `;
 
 function printHelp(): void {

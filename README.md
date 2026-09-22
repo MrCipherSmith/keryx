@@ -395,6 +395,14 @@ Grouped by what you are trying to do, not by internal module layout.
 
 - **tasks** — an agent-first Task Manager driven by `keryx flow`, with frozen
   acceptance criteria and status gates.
+- **triggers** — declared automation over `.metaproject/triggers.json` (a
+  repository event or a cron/systemd schedule): `reconcile`/`rebuild` keep the
+  graph and wiki current, `open-flow`/`flow-next` open or report on Task
+  Manager work. `keryx trigger install` extends the same hook files `sync
+  install-hooks` and `update` already write into, rather than owning its own;
+  `keryx trigger schedule` prints a cron line or systemd unit pair and runs no
+  daemon of its own. Every fired run is recorded and gated by a project-wide
+  spend ceiling and a run lock. See the [CLI reference](docs/docs/cli-reference.md#trigger).
 - **security** — deterministic secrets / PII / prompt-injection / egress
   scanning, redaction, and a policy gate at agent write seams, with a committed
   evaluation corpus.
@@ -572,6 +580,9 @@ graph falls back to its deterministic resolver when a grammar is absent.
 | ripgrep is external | `keryx ctx rg` needs `rg` on `PATH` | Install ripgrep, or let the agent read files directly |
 | Model commands need a credential | Four of the five commands above exit non-zero without one; `wiki enrich` exits `0` and marks the affected pages skipped | Everything else runs deterministically offline |
 | External agents are read-only, and unproven against a live vendor process | A delegated CLI can read and search but never write; `worktree-write` is refused with a named reason. The parent gets the child's result and nothing before it — supervision of a running external child is not implemented. Everything is verified offline against recorded transcripts | Use keryx's own child agents for work that must mutate the tree |
+| `keryx trigger`'s `flow-next` action only reports | It records the next task's status into the run record; it never dispatches an agent turn to work it | Dispatch the reported task yourself, or through a flow orchestrator |
+| Trigger spend ceiling is project-wide | `open-flow`/`flow-next` triggers share one ceiling with every other recorded trigger cost; there is no per-trigger override | Watch `keryx trigger status`'s recorded cost |
+| Trigger-run lock does not cover interactive commands | A person running `keryx sync --apply` / `keryx gdgraph build` by hand can still race a triggered `reconcile`/`rebuild` | Avoid running those by hand while triggers may be firing |
 
 Full detail, including known defects and platform caveats:
 [limitations](docs/docs/limitations.md).
