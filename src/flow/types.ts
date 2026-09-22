@@ -486,7 +486,14 @@ export interface FlowService {
     signedByEnv?: string | undefined;
     gitIdentity?: string | undefined;
   }): Promise<FlowState>;
-  acUpdate(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
+  acUpdate(input: {
+    cwd: string;
+    id: string;
+    reason: string;
+    /** Both present or both absent (flow 293, AC1/AC2/AC3): rewrites/appends that one criterion's text before re-freezing. */
+    criterion?: string | undefined;
+    text?: string | undefined;
+  }): Promise<FlowState>;
   acReseal(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
   implemented(input: { cwd: string; id: string; prUrl: string }): Promise<FlowState>;
   /**

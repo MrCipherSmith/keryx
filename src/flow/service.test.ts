@@ -152,6 +152,161 @@ test("freeze locks AC; tampering blocks transitions and is caught by check", asy
   expect(started.status).toBe("in-progress");
 });
 
+// Flow 293, AC1: `--criterion`/`--text` rewrites or appends ONE criterion's
+// text itself, re-freezes, clears confirmations, and records the criterion,
+// its previous text and its new text alongside the reason in `history` — a
+// test reads all three back, exactly as AC1 requires.
+test("AC1: `acUpdate` with --criterion/--text rewrites an existing criterion's line, re-freezes, and records old+new text in history", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps({ tracker: null }));
+  const { flow } = await service.init({ cwd: ROOT, title: "Rewrite a criterion" });
+  const dir = `001-2026-07-07-rewrite-a-criterion`;
+
+  await writeAc(dir, ["Login succeeds within 2s", "Logout clears the session"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+
+  // A real caller confirms first, so the test proves the confirmation is
+  // actually cleared by this path — not merely that it stays empty.
+  await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+  expect(Object.keys((await service.get({ cwd: ROOT, id: flow.id })).acConfirmed)).toEqual(["AC1"]);
+
+  const updated = await service.acUpdate({
+    cwd: ROOT,
+    id: flow.id,
+    criterion: "AC1",
+    text: "Login succeeds within 500ms",
+    reason: "latency budget tightened",
+  });
+
+  // The file itself was rewritten, not left for an operator to edit.
+  const acFile = await readFile(
+    path.join(ROOT, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+    "utf8",
+  );
+  expect(acFile).toContain("- AC1: Login succeeds within 500ms");
+  expect(acFile).not.toContain("Login succeeds within 2s");
+  expect(acFile).toContain("- AC2: Logout clears the session"); // untouched
+
+  // Re-frozen over the new content, exactly as plain `ac update` does.
+  expect(updated.acChecksum).toMatch(/^sha256:/);
+
+  // Confirmations voided, same as today's `--reason`-only path.
+  expect(updated.acConfirmed).toEqual({});
+
+  // history carries the criterion, the previous text, and the new text
+  // alongside the reason — a test reads all three back.
+  const entry = updated.history.at(-1);
+  expect(entry?.event).toBe("ac-updated");
+  expect(entry?.detail).toContain("AC1");
+  expect(entry?.detail).toContain("Login succeeds within 2s");
+  expect(entry?.detail).toContain("Login succeeds within 500ms");
+  expect(entry?.detail).toContain("latency budget tightened");
+});
+
+test("AC1: `acUpdate` with --criterion/--text appends when ACn is the next unused number", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps({ tracker: null }));
+  const { flow } = await service.init({ cwd: ROOT, title: "Append a criterion" });
+  const dir = `001-2026-07-07-append-a-criterion`;
+
+  await writeAc(dir, ["Login succeeds within 2s"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+
+  const updated = await service.acUpdate({
+    cwd: ROOT,
+    id: flow.id,
+    criterion: "AC2",
+    text: "Logout clears the session",
+    reason: "scope grew to cover logout",
+  });
+
+  const acFile = await readFile(
+    path.join(ROOT, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+    "utf8",
+  );
+  expect(acFile).toContain("- AC1: Login succeeds within 2s");
+  expect(acFile).toContain("- AC2: Logout clears the session");
+  expect(updated.history.at(-1)?.detail).toContain("(new)");
+});
+
+test("AC1: `acUpdate` refuses a --criterion that skips ahead of the next unused number", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps({ tracker: null }));
+  const { flow } = await service.init({ cwd: ROOT, title: "Skip ahead" });
+  const dir = `001-2026-07-07-skip-ahead`;
+
+  await writeAc(dir, ["Login succeeds within 2s"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+
+  await expect(
+    service.acUpdate({ cwd: ROOT, id: flow.id, criterion: "AC9", text: "Out of order", reason: "why" }),
+  ).rejects.toThrow(/next unused/);
+});
+
+// Flow 293, AC2: `--reason` alone keeps the pre-293 behaviour byte for byte —
+// re-freeze whatever the operator already edited on disk, nothing more.
+test("AC2: `acUpdate` with --reason alone still re-freezes the file as edited, unchanged from before flow 293", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps({ tracker: null }));
+  const { flow } = await service.init({ cwd: ROOT, title: "Reason only" });
+  const dir = `001-2026-07-07-reason-only`;
+
+  await writeAc(dir, ["Original wording"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+
+  // Operator edits the file directly, exactly as the pre-293 contract expects.
+  await writeAc(dir, ["Operator-edited wording"]);
+  const updated = await service.acUpdate({ cwd: ROOT, id: flow.id, reason: "operator edited directly" });
+
+  const acFile = await readFile(
+    path.join(ROOT, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+    "utf8",
+  );
+  expect(acFile).toContain("Operator-edited wording");
+  expect(updated.history.at(-1)?.detail).toBe("operator edited directly");
+});
+
+// Flow 293, AC4: the new text and the criterion name are validated before
+// anything is written, and each refusal names the rule it broke.
+test("AC4: `acUpdate` validates --criterion and --text before writing anything", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps({ tracker: null }));
+  const { flow } = await service.init({ cwd: ROOT, title: "Validate text" });
+  const dir = `001-2026-07-07-validate-text`;
+  await writeAc(dir, ["Original wording"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+  const originalFile = await readFile(
+    path.join(ROOT, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+    "utf8",
+  );
+
+  await expect(
+    service.acUpdate({ cwd: ROOT, id: flow.id, criterion: "AC1", text: "", reason: "why" }),
+  ).rejects.toThrow(/not be empty/);
+  await expect(
+    service.acUpdate({ cwd: ROOT, id: flow.id, criterion: "AC1", text: "line one\nline two", reason: "why" }),
+  ).rejects.toThrow(/one line/);
+  await expect(
+    service.acUpdate({ cwd: ROOT, id: flow.id, criterion: "AC1", text: "- AC1: repeats its own prefix", reason: "why" }),
+  ).rejects.toThrow(/own.*prefix|prefix/);
+  await expect(
+    service.acUpdate({ cwd: ROOT, id: flow.id, criterion: "not-a-criterion", text: "fine", reason: "why" }),
+  ).rejects.toThrow(/AC.*followed by a number|--criterion must name/);
+  await expect(
+    service.acUpdate({ cwd: ROOT, id: flow.id, criterion: "AC1", text: undefined as unknown as string, reason: "why" }),
+  ).rejects.toThrow(/together/);
+  await expect(
+    service.acUpdate({ cwd: ROOT, id: flow.id, text: "fine", reason: "why" }),
+  ).rejects.toThrow(/together/);
+
+  // None of the refusals touched the file.
+  const afterFile = await readFile(
+    path.join(ROOT, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+    "utf8",
+  );
+  expect(afterFile).toBe(originalFile);
+});
+
 test("full happy path: start -> tasks -> implemented -> confirm -> complete(done) + issue comment", async () => {
   await fresh();
   const tracker = fakeTracker();

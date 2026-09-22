@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "293",
+  "slug": "flow-ac-update-amend-a-criterion-s-text-",
+  "title": "flow ac update: amend a criterion's text, and refuse arguments it does not use",
+  "status": "in-progress",
+  "createdAt": "2026-09-22T23:36:31.506Z",
+  "updatedAt": "2026-09-22T23:49:09.878Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:5e6942a5dfa2a58b543bb2d80762ff0c1bce4e81ca73839ec2770e9e4fc7d71f",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "ac update --criterion/--text with history of old and new text",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T23:36:57.682Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Strict argument handling for every flow ac subcommand",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Docs: flow help and CLI reference",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-22T23:36:31.506Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-22T23:36:57.006Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-22T23:36:57.116Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-22T23:36:57.229Z",
+      "event": "task-added",
+      "detail": "T5: ac update --criterion/--text with history of old and new text"
+    },
+    {
+      "at": "2026-09-22T23:36:57.341Z",
+      "event": "task-added",
+      "detail": "T6: Strict argument handling for every flow ac subcommand"
+    },
+    {
+      "at": "2026-09-22T23:36:57.457Z",
+      "event": "task-added",
+      "detail": "T7: Docs: flow help and CLI reference"
+    },
+    {
+      "at": "2026-09-22T23:36:57.570Z",
+      "event": "task-added",
+      "detail": "T8: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-22T23:36:57.682Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-22T23:49:09.643Z",
+      "event": "task-done",
+      "detail": "T5: ac update --criterion/--text with history of old and new text"
+    },
+    {
+      "at": "2026-09-22T23:49:09.761Z",
+      "event": "task-done",
+      "detail": "T6: Strict argument handling for every flow ac subcommand"
+    },
+    {
+      "at": "2026-09-22T23:49:09.878Z",
+      "event": "task-done",
+      "detail": "T7: Docs: flow help and CLI reference"
+    }
+  ]
+}

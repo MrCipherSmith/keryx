@@ -638,7 +638,8 @@ entries.
 | `keryx flow task add <id> --title "<title>" --kind <kind>` | Add an atomic flow task. |
 | `keryx flow task done <id> <taskId>` | Complete a flow task. |
 | `keryx flow ac confirm <id> <ACn> --note "<evidence>"` | Confirm an acceptance criterion. |
-| `keryx flow ac update <id> --reason "<reason>"` | Re-freeze changed criteria. |
+| `keryx flow ac update <id> --reason "<reason>"` | Re-freeze changed criteria (as already edited). |
+| `keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<reason>"` | Rewrite/append one criterion's text, then re-freeze. |
 | `keryx flow implemented <id> --pr <url>` | Record implementation and PR. |
 | `keryx flow complete <id> [--comment]` | Run completion gates and finish. |
 | `keryx flow block <id> --reason "<reason>"` | Block a flow. |

@@ -247,6 +247,59 @@ export async function readAcCriteria(
   return ids;
 }
 
+const AC_LINE_PATTERN = /^(\s*)[-*]\s*(AC\d+)\s*:\s?(.*)$/i;
+
+/**
+ * Rewrite one criterion's text in `acceptance-criteria.md`, or append it as a
+ * new line when no line for that criterion exists yet (flow 293, AC1).
+ *
+ * The caller (`acUpdate` in `./service.ts`) has already decided `criterion`
+ * is either an existing `ACn` or the next unused one — this function only
+ * does the line-level edit and hands back what the line said before, so the
+ * caller can put "previous text" and "new text" side by side in `history`.
+ * Matching reuses `readAcCriteria`'s own line pattern (`- ACn:` or `* ACn:`,
+ * any case) so a replace always finds the line a read would have counted,
+ * but the line it WRITES is always the canonical `- ACn: <text>` the rules
+ * section of the file itself asks for — an update never perpetuates a
+ * `* AC1:` bullet or mixed case into the frozen record.
+ */
+export async function writeAcCriterion(
+  cwd: string,
+  dir: string,
+  criterion: string,
+  text: string,
+): Promise<{ previousText: string | undefined }> {
+  const file = acPath(cwd, dir);
+  const content = (await pathExists(file)) ? await readFile(file, "utf8") : "";
+  const lines = content.length > 0 ? content.split("\n") : [];
+  const rendered = `- ${criterion}: ${text}`;
+
+  let previousText: string | undefined;
+  let matchedIndex = -1;
+  let lastAcIndex = -1;
+  lines.forEach((line, index) => {
+    const match = line.match(AC_LINE_PATTERN);
+    if (!match?.[2]) {
+      return;
+    }
+    lastAcIndex = index;
+    if (match[2].toUpperCase() === criterion) {
+      matchedIndex = index;
+      previousText = match[3] ?? "";
+    }
+  });
+
+  if (matchedIndex >= 0) {
+    lines[matchedIndex] = rendered;
+  } else if (lastAcIndex >= 0) {
+    lines.splice(lastAcIndex + 1, 0, rendered);
+  } else {
+    lines.push(rendered);
+  }
+  await writeFileAtomic(file, lines.join("\n"));
+  return { previousText };
+}
+
 export async function acChecksum(cwd: string, dir: string): Promise<string> {
   const content = await readFile(acPath(cwd, dir), "utf8");
   const normalized = content

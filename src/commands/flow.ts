@@ -60,6 +60,86 @@ function positional(args: string[], index: number): string | undefined {
   return value === undefined || value.startsWith("--") ? undefined : value;
 }
 
+/**
+ * Split `args` into positionals and `--flag [value]` / `--flag=value` pairs,
+ * in one pass. Shared by {@link rejectUnusedAcArgs} — a flag's value is never
+ * mistaken for a second positional, matching {@link optionValue}'s own rule
+ * that the next token is a value only when it does not itself start with `--`.
+ */
+function tokenizeArgs(args: readonly string[]): {
+  positionals: string[];
+  flags: Array<{ name: string; value: string | undefined }>;
+} {
+  const positionals: string[] = [];
+  const flags: Array<{ name: string; value: string | undefined }> = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index] as string;
+    if (!token.startsWith("--")) {
+      positionals.push(token);
+      continue;
+    }
+    const equals = token.indexOf("=");
+    if (equals > 0) {
+      flags.push({ name: token.slice(0, equals), value: token.slice(equals + 1) });
+      continue;
+    }
+    const next = args[index + 1];
+    if (next !== undefined && !next.startsWith("--")) {
+      flags.push({ name: token, value: next });
+      index += 1;
+      continue;
+    }
+    flags.push({ name: token, value: undefined });
+  }
+  return { positionals, flags };
+}
+
+/**
+ * Refuse anything a `flow ac` subcommand does not use — an extra positional
+ * or an unknown flag — instead of dropping it silently (flow 293, AC3).
+ *
+ * `keryx flow ac update <id> AC1 --text "…" --reason "…"` used to be
+ * accepted: `requireId` only scans for the first non-flag token, so `AC1`
+ * fell out unnoticed, and `--text` had no consumer at all. The command
+ * printed "Acceptance criteria re-frozen" and re-sealed the checksum over
+ * whatever was already on disk — changing nothing the caller asked for while
+ * reporting success. Two real flows ended up with amendments recorded in
+ * `history` that never reached `acceptance-criteria.md`, one of them
+ * completed against the unamended wording.
+ *
+ * This is the `rejectUnknownFlags` precedent from `keryx review`
+ * (`src/commands/review.ts:363-374`) — "refused rather than ignored" —
+ * extended to the positional count: a positional silently dropped is the
+ * same failure as a flag silently dropped.
+ */
+function rejectUnusedAcArgs(
+  args: readonly string[],
+  usage: string,
+  allowedFlags: readonly string[],
+  maxPositionals: number,
+): void {
+  const { positionals, flags } = tokenizeArgs(args);
+  const problems = [
+    ...positionals.slice(maxPositionals).map((value) => `unexpected argument "${value}"`),
+    ...[...new Set(flags.map((flag) => flag.name).filter((name) => !allowedFlags.includes(name)))].map(
+      (name) => `unknown option ${name}`,
+    ),
+  ];
+  if (problems.length === 0) {
+    return;
+  }
+  const positionalNote = maxPositionals > 0 ? `, and ${maxPositionals} positional argument${maxPositionals > 1 ? "s" : ""}` : "";
+  throw new Error(
+    `Refused for \`keryx flow ac ${usage}\`: ${problems.join(", ")}. ` +
+      `Accepted: ${allowedFlags.length > 0 ? allowedFlags.join(", ") : "(no flags)"}${positionalNote}. ` +
+      "Refused rather than ignored — an argument that is silently dropped changes nothing and reports success.",
+  );
+}
+
+const AC_CONFIRM_FLAGS = ["--note", "--signed-by"] as const;
+const AC_UPDATE_FLAGS = ["--reason", "--criterion", "--text"] as const;
+const AC_RESEAL_FLAGS = ["--reason"] as const;
+
 const VALID_DISPOSITIONS = ["completed", "blocked", "failed", "skipped"] as const;
 
 /**
@@ -717,6 +797,8 @@ async function runOwner(args: string[]): Promise<void> {
 async function runAc(args: string[]): Promise<void> {
   const sub = args[0];
   if (sub === "confirm") {
+    const rest = args.slice(1);
+    rejectUnusedAcArgs(rest, "confirm", AC_CONFIRM_FLAGS, 2);
     const id = args[1];
     const criterion = args[2];
     if (!id || !criterion) {
@@ -738,17 +820,38 @@ async function runAc(args: string[]): Promise<void> {
     return;
   }
   if (sub === "update") {
-    const id = requireId(args.slice(1));
+    const rest = args.slice(1);
+    rejectUnusedAcArgs(rest, "update", AC_UPDATE_FLAGS, 1);
+    const id = requireId(rest);
     const reason = optionValue(args, "--reason");
-    if (!reason) {
-      throw new Error('Usage: keryx flow ac update <id> --reason "<why>"');
+    const criterion = optionValue(args, "--criterion");
+    const text = optionValue(args, "--text");
+    if ((criterion === undefined) !== (text === undefined)) {
+      throw new Error(
+        'Usage: keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>" ' +
+          '(both --criterion and --text together), or keryx flow ac update <id> --reason "<why>" (neither).',
+      );
     }
-    await getService().acUpdate({ cwd: process.cwd(), id, reason });
-    console.log(`  ${style.green(symbols.ok)} Acceptance criteria re-frozen; ${style.dim("prior confirmations cleared")}.`);
+    if (!reason) {
+      throw new Error(
+        'Usage: keryx flow ac update <id> --reason "<why>" [--criterion ACn --text "<criterion>"]',
+      );
+    }
+    await getService().acUpdate({ cwd: process.cwd(), id, reason, criterion, text });
+    if (criterion && text) {
+      console.log(
+        `  ${style.green(symbols.ok)} ${style.bold(criterion.toUpperCase())} rewritten; ` +
+          `${style.dim("acceptance criteria re-frozen, prior confirmations cleared")}.`,
+      );
+    } else {
+      console.log(`  ${style.green(symbols.ok)} Acceptance criteria re-frozen; ${style.dim("prior confirmations cleared")}.`);
+    }
     return;
   }
   if (sub === "reseal") {
-    const id = requireId(args.slice(1));
+    const rest = args.slice(1);
+    rejectUnusedAcArgs(rest, "reseal", AC_RESEAL_FLAGS, 1);
+    const id = requireId(rest);
     const reason = optionValue(args, "--reason");
     if (!reason) {
       throw new Error('Usage: keryx flow ac reseal <id> --reason "<why the checksum is stale>"');
@@ -760,7 +863,9 @@ async function runAc(args: string[]): Promise<void> {
     );
     return;
   }
-  throw new Error("Usage: keryx flow ac <confirm|update|reseal> ...");
+  throw new Error(
+    'Usage: keryx flow ac <confirm <id> <ACn> | update <id> --reason "<why>" [--criterion ACn --text "<criterion>"] | reseal <id> --reason "<why>"> ...',
+  );
 }
 
 async function runImplemented(args: string[]): Promise<void> {
@@ -945,8 +1050,10 @@ function printHelp(): void {
     'keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"   (repair an unsatisfiable dependsOn)',
     'keryx flow owner set <id> --owner "<name>" --reason "<why>"   (the human accountable; never inferred)',
     'keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]',
-    'keryx flow ac update <id> --reason "<why>"   (criteria changed; VOIDS prior confirmations)',
+    'keryx flow ac update <id> --reason "<why>"   (re-freeze the file as already edited; VOIDS prior confirmations)',
+    'keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"   (rewrite/append that one criterion, then re-freeze; VOIDS prior confirmations)',
     'keryx flow ac reseal <id> --reason "<why>"   (checksum stale, file unchanged; KEEPS confirmations)',
+    "  every `flow ac` subcommand refuses an argument it does not use — an extra positional, an unknown flag, or --criterion/--text given alone",
     "keryx flow implemented <id> --pr <url>",
     'keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"]',
     'keryx flow block <id> --reason "<why>"   /   flow unblock <id>',
