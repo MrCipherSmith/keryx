@@ -3,6 +3,21 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.153] — 2026-09-22
+External children of `claude-cli` run again on 2.1.278. Every external run died
+on the command line before the agent was asked anything, and was reported as a
+dead transcript.
+
+### Fixed
+
+- **`--json-schema` carries an inline, bundled document.** The flag's value is
+  parsed as JSON, so the staged file path exited 1 with zero bytes on stdout; and
+  once inline, the root `$schema` dialect and a sibling `$ref` were both refused.
+  `ExternalRunInput.resultSchema` now carries the bundled, dialect-free document
+  for `claude -p`, while `resultSchemaPath` stays for codex's `--output-schema`.
+- **A rejected argument VALUE is named as an argv mismatch.** `Error: --flag is
+  not valid JSON` no longer reads as "transcript ended without a terminal event".
+
 ## [0.2.152] — 2026-09-22
 A bare `.metaproject/` no longer passes for an initialized metaproject:
 the tools that can only read it are no longer offered where there is

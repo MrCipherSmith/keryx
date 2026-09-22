@@ -297,7 +297,7 @@ claude -p --output-format stream-json --verbose
        --safe-mode
        --tools <ALLOWED...>
        --strict-mcp-config --mcp-config '{"mcpServers":{}}'
-       [--max-budget-usd <n>] [--json-schema <result-schema>] [--add-dir <worktree>] [--model <m>]
+       [--max-budget-usd <n>] [--json-schema '<inline schema>'] [--add-dir <worktree>] [--model <m>]
        --session-id <uuid>
        <prompt>
 ```
@@ -316,6 +316,16 @@ with each stdin line being
 ```json
 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"…"}]}}
 ```
+
+**`--json-schema` takes the document INLINE (corrected in 0.2.152).** 0.4.0
+passed the staged schema FILE, which 2.1.278 refuses: it parses this flag's
+value as JSON and exits 1 with zero bytes on stdout — the same "no terminal
+event" shape a dead child produces. Three constraints, all measured, now shape
+this argument: the value must be a document; its root `$schema` must go, because
+that validator has no dialect registry; and every sibling `$ref` must be inlined,
+because an inline document has no directory to resolve one against. The runtime
+bundles the schema for exactly this flag; `codex exec --output-schema` keeps the
+FILE, where a relative ref resolves against the file's own directory.
 
 **Why the split, and why 0.1.0–0.3.0 were wrong.** Those versions prescribed
 `--input-format stream-json` *together with* a positional prompt. Measured on
