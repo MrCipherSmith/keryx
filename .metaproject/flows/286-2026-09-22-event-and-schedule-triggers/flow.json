@@ -7,14 +7,14 @@
   "id": "286",
   "slug": "event-and-schedule-triggers",
   "title": "Start a flow from a repository event or a schedule, not only from a person at a prompt",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-22T18:18:39.374Z",
-  "updatedAt": "2026-09-22T18:19:56.770Z",
+  "updatedAt": "2026-09-22T18:30:55.616Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:272ae74af5e67d68eed38de0aca651a2aa5c654cdac8f24d403dfdc8f5cd3716",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -88,8 +88,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:30:55.519Z",
+            "outcome": "started",
+            "detail": "sonnet: survey what already fires"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -104,8 +110,14 @@
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:30:55.616Z",
+            "outcome": "started",
+            "detail": "sonnet: trigger config schema"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -295,6 +307,25 @@
       "at": "2026-09-22T18:19:56.770Z",
       "event": "task-added",
       "detail": "T14: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-22T18:30:55.324Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-22T18:30:55.419Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-22T18:30:55.519Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — sonnet: survey what already fires"
+    },
+    {
+      "at": "2026-09-22T18:30:55.616Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — sonnet: trigger config schema"
     }
   ]
 }
