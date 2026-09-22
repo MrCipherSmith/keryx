@@ -93,22 +93,49 @@ function shQuote(value: string): string {
 // REVIEW FIX (finding 2, T15): the printed schedule was not escaped the way
 // `cronCommand` is.
 //
-//   1. systemd. `WorkingDirectory=`, `ExecStartPre=` and `ExecStart=` used to
-//      interpolate `projectRoot`/`logDir`/`invocation.execPath`/
-//      `invocation.scriptPath`/the trigger name RAW. `ExecStart=`/
-//      `ExecStartPre=` split their value on unquoted whitespace into argv —
-//      exactly like a shell command line — so any one of those containing a
-//      space (a project checked out under a path with a space is common)
-//      produced the wrong argv. Separately, an unescaped `%` anywhere in a
-//      systemd unit value is read as the start of a specifier (`%h`, `%n`,
-//      …), so a literal `%` must be doubled (`%%`) or it silently expands to
+//   1. systemd. `ExecStartPre=` and `ExecStart=` used to interpolate
+//      `projectRoot`/`logDir`/`invocation.execPath`/`invocation.scriptPath`/
+//      the trigger name RAW. Those two directives (plus `Environment=`) are
+//      "command line" / list-typed values: systemd word-splits them on
+//      unquoted whitespace into argv — exactly like a shell command line —
+//      so any one of those containing a space (a project checked out under a
+//      path with a space is common) produced the wrong argv.
+//      `systemdQuote` fixes that (per systemd.syntax(7)'s unified quoting:
+//      wrap in double quotes when the value contains whitespace or a
+//      quote/backslash, escaping embedded `"`/`\`) — applied, via
+//      `systemdValue`, ONLY to `ExecStartPre=`, `ExecStart=` and the
+//      `Environment=PATH=…` line, the directives systemd.syntax(7)'s
+//      quote-removal actually governs.
+//
+//      REVIEW FIX (finding, T16): that quoting was over-applied to
+//      `WorkingDirectory=`, `StandardOutput=` and `StandardError=` too.
+//      Those three take the rest of the line VERBATIM — systemd does not
+//      run syntax(7)'s quote-removal on them (they are single-value, not
+//      word-split/list-typed, unlike `Exec*=`/`Environment=`). A literal
+//      `"` there is not stripped as quoting; it becomes part of the value.
+//      For `WorkingDirectory="/srv/my project"` systemd reads the leading
+//      `"` as part of the path, decides it is not absolute, and refuses the
+//      whole unit. For `StandardOutput="append:/srv/my project/x.log"` the
+//      `append:` prefix parse fails on the leading `"` and systemd silently
+//      falls back to the journal — so the printed promise that output is
+//      appended to the log file stops being true, without any error at
+//      load time. So these three now get ONLY the `%` escaping below, never
+//      `systemdQuote` — see `systemd-analyze verify` coverage in
+//      `schedule.test.ts`, run against a project path containing a space,
+//      which turns this class of regression into a structural CI failure
+//      instead of a string-matching assertion on the intended (buggy)
+//      output.
+//
+//      Separately from quoting, an unescaped `%` anywhere in a systemd unit
+//      value is read as the start of a specifier (`%h`, `%n`, …), so a
+//      literal `%` must be doubled (`%%`) or it silently expands to
 //      something else, or systemd refuses the unit outright for an unknown
-//      specifier. `systemdQuote` fixes the first (per systemd.syntax(7)'s
-//      quoting: wrap in double quotes when the value contains whitespace or a
-//      quote/backslash, escaping embedded `"`/`\`) and `systemdEscapePercent`
-//      fixes the second, applied to every interpolated value in
-//      `Description=`, `WorkingDirectory=`, `ExecStartPre=`, `ExecStart=` and
-//      the `Environment=PATH=…` line below.
+//      specifier. `systemdEscapePercent` fixes that, and — unlike quoting —
+//      IS applied to every interpolated value below, quoted or not:
+//      `Description=`, `WorkingDirectory=`, `ExecStartPre=`, `ExecStart=`,
+//      `StandardOutput=`, `StandardError=` and the `Environment=PATH=…`
+//      line, because specifier expansion runs regardless of a directive's
+//      quoting rules.
 //   2. cron. Independently of shell quoting, cron itself treats an unescaped
 //      `%` in a crontab line as a literal newline — it splits the line there
 //      and feeds everything after it to the command as stdin — before
@@ -220,15 +247,15 @@ Description=keryx trigger "${descriptionName}" (${descriptionProjectRoot})
 
 [Service]
 Type=oneshot
-WorkingDirectory=${systemdValue(projectRoot)}
+WorkingDirectory=${systemdEscapePercent(projectRoot)}
 Environment=${systemdQuote(systemdEscapePercent(`PATH=${assumedPath}`))}
 # Same reason as the cron line's own \`mkdir -p\`: StandardOutput=append: does
 # not create a missing PARENT directory, only a missing file. The leading "-"
 # means systemd ignores this step's own exit status.
 ExecStartPre=-/bin/mkdir -p ${systemdValue(logDir)}
 ExecStart=${systemdValue(invocation.execPath)} ${systemdValue(invocation.scriptPath)} trigger run ${systemdValue(name)}
-StandardOutput=${systemdQuote(`append:${systemdEscapePercent(logPath)}`)}
-StandardError=${systemdQuote(`append:${systemdEscapePercent(logPath)}`)}
+StandardOutput=append:${systemdEscapePercent(logPath)}
+StandardError=append:${systemdEscapePercent(logPath)}
 `;
   const systemdTimer = `# ${timerUnitName} — install alongside ${serviceUnitName}
 [Unit]

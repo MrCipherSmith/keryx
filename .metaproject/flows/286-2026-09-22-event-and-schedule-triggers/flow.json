@@ -9,7 +9,7 @@
   "title": "Start a flow from a repository event or a schedule, not only from a person at a prompt",
   "status": "in-progress",
   "createdAt": "2026-09-22T18:18:39.374Z",
-  "updatedAt": "2026-09-22T19:43:13.136Z",
+  "updatedAt": "2026-09-22T20:01:40.544Z",
   "source": {
     "type": "description",
     "ref": null
@@ -294,7 +294,7 @@
       "kind": "verify",
       "status": "todo",
       "dependsOn": [
-        "T15"
+        "T16"
       ],
       "attempts": {
         "count": 1,
@@ -314,7 +314,7 @@
       "id": "T15",
       "title": "Review fixes: serialize the open-flow check, escape the schedule output, fail closed on an unreadable ledger",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13"
       ],
@@ -325,6 +325,29 @@
             "at": "2026-09-22T19:43:13.136Z",
             "outcome": "started",
             "detail": "sonnet: review fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Review round 2: unquote the systemd directives that take a raw value",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T15"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T20:01:40.543Z",
+            "outcome": "started",
+            "detail": "sonnet: systemd quoting regression"
           }
         ]
       },
@@ -496,6 +519,26 @@
       "at": "2026-09-22T19:43:13.136Z",
       "event": "task-attempt",
       "detail": "T15: started (attempt 1) — sonnet: review fixes"
+    },
+    {
+      "at": "2026-09-22T19:55:17.293Z",
+      "event": "task-done",
+      "detail": "T15: Review fixes: serialize the open-flow check, escape the schedule output, fail closed on an unreadable ledger"
+    },
+    {
+      "at": "2026-09-22T20:01:40.342Z",
+      "event": "task-added",
+      "detail": "T16: Review round 2: unquote the systemd directives that take a raw value"
+    },
+    {
+      "at": "2026-09-22T20:01:40.443Z",
+      "event": "task-depends-set",
+      "detail": "T14: dependsOn T16 (was T15) — verification runs after the second review round"
+    },
+    {
+      "at": "2026-09-22T20:01:40.544Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — sonnet: systemd quoting regression"
     }
   ]
 }

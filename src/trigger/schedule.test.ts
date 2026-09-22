@@ -6,7 +6,7 @@
 // resolution logic.
 
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { renderScheduleLines, resolveScheduleEntry, type KeryxInvocation } from "./schedule";
@@ -94,13 +94,34 @@ describe("renderScheduleLines", () => {
       invocation: FAKE_INVOCATION,
     });
 
-    test("systemd ExecStart quotes the space-containing token so it is not split into two argv words", () => {
+    test("systemd ExecStartPre quotes the space-containing token so it is not split into two argv words", () => {
       // The interpreter/script paths carry no space in this fixture, so they
       // stay unquoted (unchanged rendering); only `name` here is untouched by
       // the space (it's the project root that has one) — this asserts
-      // WorkingDirectory/ExecStartPre, which DO carry projectRoot/logDir.
-      expect(lines.systemdService).toContain('WorkingDirectory="/srv/my project"');
+      // ExecStartPre, which is word-split/list-typed and DOES carry logDir.
       expect(lines.systemdService).toContain('ExecStartPre=-/bin/mkdir -p "/srv/my project/.metaproject/data/trigger"');
+    });
+
+    // Review finding (T16): `WorkingDirectory=` takes the rest of the line
+    // VERBATIM — systemd does not run syntax(7)'s quote-removal on it (it is
+    // a single-value directive, not word-split/list-typed like `Exec*=`). A
+    // literal `"` there is not stripped as quoting; systemd reads it as part
+    // of the path, decides the value is not absolute, and refuses the whole
+    // unit. So this must stay UNQUOTED even though it contains a space.
+    test("systemd WorkingDirectory is left unquoted (systemd does not unquote it — quoting it breaks unit load)", () => {
+      expect(lines.systemdService).toContain("WorkingDirectory=/srv/my project");
+      expect(lines.systemdService).not.toContain('WorkingDirectory="/srv/my project"');
+    });
+
+    // Review finding (T16): same reasoning as WorkingDirectory= — `append:path`
+    // is a single verbatim value; systemd's `append:` prefix parser fails on
+    // a leading `"`, and the unit silently falls back to the journal instead
+    // of appending to the log path we promise.
+    test("systemd StandardOutput/StandardError are left unquoted (append: prefix parsing fails on a leading quote)", () => {
+      expect(lines.systemdService).toContain("StandardOutput=append:/srv/my project/.metaproject/data/trigger/nightly.schedule.log");
+      expect(lines.systemdService).toContain("StandardError=append:/srv/my project/.metaproject/data/trigger/nightly.schedule.log");
+      expect(lines.systemdService).not.toContain('StandardOutput="append:');
+      expect(lines.systemdService).not.toContain('StandardError="append:');
     });
 
     test("systemd ExecStart quotes a space-containing interpreter/script path", () => {
@@ -161,5 +182,65 @@ describe("renderScheduleLines", () => {
       expect(named.cronCommand).toContain("100%-nightly");
       expect(named.cronCommand).not.toContain("100\\%-nightly");
     });
+  });
+
+  // Review finding (T16): the T15 fix over-applied `systemdQuote` to
+  // `WorkingDirectory=`/`StandardOutput=`/`StandardError=`, which systemd
+  // does NOT unquote — string-matching assertions alone let that regression
+  // through once before (the T15 tests above pinned the buggy quoted form as
+  // expected). This test closes that gap structurally: it feeds the
+  // generated unit to the REAL `systemd-analyze verify` rather than asserting
+  // on the string. A quoted `WorkingDirectory=` makes systemd read the value
+  // as not-absolute and refuse the whole unit, which `verify` reports as a
+  // failure — so a future re-introduction of this bug fails the test even if
+  // nobody thinks to update a string assertion for it.
+  describe("review finding (T16): systemd-analyze verify on a project path containing a space", () => {
+    const systemdAnalyzePath = Bun.which("systemd-analyze");
+    const skipReason = systemdAnalyzePath
+      ? ""
+      : "systemd-analyze not found on PATH (only available on a systemd Linux host)";
+
+    test.skipIf(!systemdAnalyzePath)(
+      skipReason
+        ? `the generated .service unit verifies cleanly [SKIPPED: ${skipReason}]`
+        : "the generated .service unit verifies cleanly",
+      async () => {
+        // `systemd-analyze verify` resolves ExecStart='s binary on disk (it is
+        // not just a syntax check) — FAKE_INVOCATION's fabricated
+        // `/opt/node/bin/node` does not exist on this machine, which verify
+        // correctly flags. `/bin/true` is present on every POSIX box this
+        // test runs on and is executable, which is all verify checks for it.
+        const lines = renderScheduleLines({
+          projectRoot: "/srv/my project",
+          name: "nightly",
+          cron: "0 2 * * *",
+          invocation: { execPath: "/bin/true", scriptPath: "/bin/true" },
+        });
+        const dir = await mkdtemp(path.join(tmpdir(), "keryx-schedule-unit-verify-"));
+        // systemd-analyze verify requires a recognized unit suffix on the path.
+        const unitPath = path.join(dir, "keryx-trigger-nightly.service");
+        try {
+          await writeFile(unitPath, lines.systemdService, "utf8");
+          const proc = Bun.spawn([systemdAnalyzePath!, "verify", unitPath], {
+            stdout: "pipe",
+            stderr: "pipe",
+          });
+          const [stdout, stderr, exitCode] = await Promise.all([
+            new Response(proc.stdout).text(),
+            new Response(proc.stderr).text(),
+            proc.exited,
+          ]);
+          if (exitCode !== 0) {
+            throw new Error(
+              `systemd-analyze verify rejected the generated unit (exit ${exitCode})\n` +
+                `unit:\n${lines.systemdService}\nstdout: ${stdout}\nstderr: ${stderr}`,
+            );
+          }
+          expect(exitCode).toBe(0);
+        } finally {
+          await rm(dir, { recursive: true, force: true });
+        }
+      },
+    );
   });
 });
