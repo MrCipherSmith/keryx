@@ -7,14 +7,14 @@
   "id": "286",
   "slug": "event-and-schedule-triggers",
   "title": "Start a flow from a repository event or a schedule, not only from a person at a prompt",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-22T18:18:39.374Z",
-  "updatedAt": "2026-09-22T18:19:56.770Z",
+  "updatedAt": "2026-09-22T20:01:40.544Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:272ae74af5e67d68eed38de0aca651a2aa5c654cdac8f24d403dfdc8f5cd3716",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -85,117 +85,180 @@
       "id": "T5",
       "title": "Survey what already fires: hooks, background tasks, serve, bus; decide where triggers live",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:30:55.519Z",
+            "outcome": "started",
+            "detail": "sonnet: survey what already fires"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Trigger config: schema, validation, per-entry refusal",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:30:55.616Z",
+            "outcome": "started",
+            "detail": "sonnet: trigger config schema"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "keryx trigger run: one pass, locking, exit codes",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:39:44.659Z",
+            "outcome": "started",
+            "detail": "sonnet: trigger run with locking"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "The fired-trigger record and keryx trigger status",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:59:55.357Z",
+            "outcome": "started",
+            "detail": "sonnet: record, install, schedule"
+          }
+        ]
       },
       "acRefs": [],
-      "evidenceRefs": [],
-      "budget": {}
+      "evidenceRefs": [
+        "src/trigger/record.ts",
+        "src/trigger/record.test.ts"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Fired-trigger record (AC4): append-only JSONL at .metaproject/data/trigger/runs.jsonl, house-styled on forgetting/journal.ts. Outcome kinds ok|no-op|lock-refused|failed|budget-refused (reserved for T11). keryx trigger status reads it."
     },
     {
       "id": "T9",
       "title": "keryx trigger install extending the existing hook installer; list",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:59:55.456Z",
+            "outcome": "started",
+            "detail": "sonnet: record, install, schedule"
+          }
+        ]
       },
       "acRefs": [],
-      "evidenceRefs": [],
-      "budget": {}
+      "evidenceRefs": [
+        "src/lib/managed-hook.ts",
+        "src/trigger/hooks.ts",
+        "src/commands/trigger-hooks-coexist.test.ts"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "install/list extend the existing multi-block hook installer (installManagedHook pulled out to src/lib/managed-hook.ts, same # keryx:<id>:begin/end marker convention as src/sync/hooks.ts's keryx-sync block). Coexistence proven by trigger-hooks-coexist.test.ts: sync install-hooks + trigger install in both orders, both blocks survive."
     },
     {
       "id": "T10",
       "title": "Schedule output: cron line or systemd timer, no daemon",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:59:55.555Z",
+            "outcome": "started",
+            "detail": "sonnet: record, install, schedule"
+          }
+        ]
       },
       "acRefs": [],
-      "evidenceRefs": [],
-      "budget": {}
+      "evidenceRefs": [
+        "src/trigger/schedule.ts",
+        "src/trigger/schedule.test.ts",
+        "src/commands/trigger-schedule.e2e.test.ts"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "keryx trigger schedule <name> prints a cron line and a systemd service+timer pair, no daemon. Correct by construction: bakes in the resolved interpreter+script by absolute path (never bare keryx) plus an explicit PATH, and mkdir -p's the log dir before redirecting. AC6 proven by trigger-schedule.e2e.test.ts: spawns the printed cron command via sh -c with PATH=/usr/bin:/bin only and no TTY, asserts the rebuild actually ran."
     },
     {
       "id": "T11",
       "title": "Flow-opening action with the do-not-duplicate rule and the budget refusal outcome",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T19:16:55.705Z",
+            "outcome": "started",
+            "detail": "sonnet: flow actions and budget refusal"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "Concurrency test: two triggered runs at once leave the artifacts intact",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -205,13 +268,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Docs: README and CLI reference for triggers",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -221,7 +285,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
@@ -229,12 +294,62 @@
       "kind": "verify",
       "status": "todo",
       "dependsOn": [
-        "T12",
+        "T16"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T19:43:12.836Z",
+            "outcome": "failed",
+            "detail": "review round 1: open-flow skipIfOpen is a TOCTOU race; systemd unit and cron line unescaped; unreadable ledger fails the budget gate open"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Review fixes: serialize the open-flow check, escape the schedule output, fail closed on an unreadable ledger",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T19:43:13.136Z",
+            "outcome": "started",
+            "detail": "sonnet: review fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Review round 2: unquote the systemd directives that take a raw value",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T15"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T20:01:40.543Z",
+            "outcome": "started",
+            "detail": "sonnet: systemd quoting regression"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -295,6 +410,135 @@
       "at": "2026-09-22T18:19:56.770Z",
       "event": "task-added",
       "detail": "T14: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-22T18:30:55.324Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-22T18:30:55.419Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-22T18:30:55.519Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — sonnet: survey what already fires"
+    },
+    {
+      "at": "2026-09-22T18:30:55.616Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — sonnet: trigger config schema"
+    },
+    {
+      "at": "2026-09-22T18:39:44.461Z",
+      "event": "task-done",
+      "detail": "T5: Survey what already fires: hooks, background tasks, serve, bus; decide where triggers live"
+    },
+    {
+      "at": "2026-09-22T18:39:44.560Z",
+      "event": "task-done",
+      "detail": "T6: Trigger config: schema, validation, per-entry refusal"
+    },
+    {
+      "at": "2026-09-22T18:39:44.659Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — sonnet: trigger run with locking"
+    },
+    {
+      "at": "2026-09-22T18:59:55.259Z",
+      "event": "task-done",
+      "detail": "T7: keryx trigger run: one pass, locking, exit codes"
+    },
+    {
+      "at": "2026-09-22T18:59:55.357Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — sonnet: record, install, schedule"
+    },
+    {
+      "at": "2026-09-22T18:59:55.456Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — sonnet: record, install, schedule"
+    },
+    {
+      "at": "2026-09-22T18:59:55.555Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — sonnet: record, install, schedule"
+    },
+    {
+      "at": "2026-09-22T19:14:47.998Z",
+      "event": "task-done",
+      "detail": "T8: The fired-trigger record and keryx trigger status"
+    },
+    {
+      "at": "2026-09-22T19:14:52.683Z",
+      "event": "task-done",
+      "detail": "T9: keryx trigger install extending the existing hook installer; list"
+    },
+    {
+      "at": "2026-09-22T19:14:57.658Z",
+      "event": "task-done",
+      "detail": "T10: Schedule output: cron line or systemd timer, no daemon"
+    },
+    {
+      "at": "2026-09-22T19:16:55.705Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — sonnet: flow actions and budget refusal"
+    },
+    {
+      "at": "2026-09-22T19:30:12.518Z",
+      "event": "task-done",
+      "detail": "T11: Flow-opening action with the do-not-duplicate rule and the budget refusal outcome"
+    },
+    {
+      "at": "2026-09-22T19:30:12.617Z",
+      "event": "task-done",
+      "detail": "T12: Concurrency test: two triggered runs at once leave the artifacts intact"
+    },
+    {
+      "at": "2026-09-22T19:36:32.635Z",
+      "event": "task-done",
+      "detail": "T13: Docs: README and CLI reference for triggers"
+    },
+    {
+      "at": "2026-09-22T19:43:12.836Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 1) — review round 1: open-flow skipIfOpen is a TOCTOU race; systemd unit and cron line unescaped; unreadable ledger fails the budget gate open"
+    },
+    {
+      "at": "2026-09-22T19:43:12.934Z",
+      "event": "task-added",
+      "detail": "T15: Review fixes: serialize the open-flow check, escape the schedule output, fail closed on an unreadable ledger"
+    },
+    {
+      "at": "2026-09-22T19:43:13.035Z",
+      "event": "task-depends-set",
+      "detail": "T14: dependsOn T15 (was T12, T13) — verification runs after the review fixes"
+    },
+    {
+      "at": "2026-09-22T19:43:13.136Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — sonnet: review fixes"
+    },
+    {
+      "at": "2026-09-22T19:55:17.293Z",
+      "event": "task-done",
+      "detail": "T15: Review fixes: serialize the open-flow check, escape the schedule output, fail closed on an unreadable ledger"
+    },
+    {
+      "at": "2026-09-22T20:01:40.342Z",
+      "event": "task-added",
+      "detail": "T16: Review round 2: unquote the systemd directives that take a raw value"
+    },
+    {
+      "at": "2026-09-22T20:01:40.443Z",
+      "event": "task-depends-set",
+      "detail": "T14: dependsOn T16 (was T15) — verification runs after the second review round"
+    },
+    {
+      "at": "2026-09-22T20:01:40.544Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — sonnet: systemd quoting regression"
     }
   ]
 }

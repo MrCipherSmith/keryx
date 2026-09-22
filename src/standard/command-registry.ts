@@ -698,6 +698,22 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
   },
   {
+    module: "trigger",
+    command: "trigger run",
+    summary:
+      'Perform exactly one pass of a declared trigger\'s action (.metaproject/triggers.json). Only "reconcile" ' +
+      '(-> sync --apply) and "rebuild" (-> gdgraph build) run today; "open-flow"/"flow-next" refuse cleanly.',
+    intent: ["запусти триггер", "run trigger", "fire trigger", "trigger run"],
+    args: [{ name: "<name>", type: "string", required: true, desc: "the trigger's name, as declared in .metaproject/triggers.json" }],
+    json: false,
+    read: false,
+    sideEffects: [
+      'reconcile: writes graph/wiki/memory via "keryx sync --apply"',
+      'rebuild: writes the code graph via "keryx gdgraph build"',
+      "briefly writes .metaproject/data/trigger/.run.lock while the action runs",
+    ],
+  },
+  {
     module: "testing",
     command: "test analyze",
     summary: "Analyze the test suite and refresh the testing context report.",
