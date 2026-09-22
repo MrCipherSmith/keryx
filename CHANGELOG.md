@@ -3,6 +3,25 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.151] — 2026-09-22
+The interactive shell paints from the active theme's own roles, so a light
+palette is readable — including the `❯` command echo in the feed that used to be
+a fixed bright cyan.
+
+### Changed
+
+- **The shell names a semantic role instead of an OpenTUI colour helper.** `otui.cyan`, `otui.yellow`, `otui.green`, `otui.red` and `otui.magenta` are fixed, terminal-independent hexes out of OpenTUI's CSS-name table (`cyan` = #00FFFF, `yellow` = #FFFF00): 1.15:1 and 1.02:1 against a light palette's own background. `/theme` could not repair them either, because `recolorThemeTree` remaps only values matching an OLD palette slot — and 0.2.143's themed transcript could not reach them, since the lines that carried them (the command echo, the tool-call marker, the approval docks, the side-worker header, the plan inspector) are painted by the shell rather than through the transcript palette. `theme.ts` resolves a `TextRole` — `accent` (`tool`), `attention` (`focus`), `ok`, `error`, `side`, `text`, `muted` — through the active palette, and the new `theme-text.ts` turns one into a styled chunk; ~130 sites are converted.
+- **Text that named no colour of its own is given one.** ~90 bare `otui.dim`/`otui.bold` sites were drawn in the TERMINAL's default foreground — light on a dark terminal — over the light background keryx paints itself. They now carry an explicit theme colour: a dark palette keeps the DIM attribute (the rendering the shell always had), a light palette uses `muted`, because DIM lowers luminance and would make secondary text louder than the prose it sits among.
+- **`keryx`'s `side` slot is readable on its own canvas.** The side-worker header was `otui.magenta`; held to the palette audit's floor as the `side` role it measured 2.1:1, so that purple is now #b39ddb.
+
+### Added
+
+- **Two guards, so this cannot come back.** A palette audit holds `side` to the same floor as every other accent, on both surfaces it is painted on, and `src/capability/tui-theme.test.ts` refuses any fixed OpenTUI colour helper anywhere in the TUI's runtime sources. An otuiTest on the real chrome asserts exact span colours and their contrast against the colour actually painted behind them.
+
+### Known
+
+- A `/theme` switch remaps these colours in the model, but the already-painted cells keep the previous palette until that row repaints for another reason; newly painted rows are correct. Pinned in the test rather than worked around.
+
 ## [0.2.150] — 2026-09-22
 The sidebar is four columns wider, so the working directory and the workspace
 titles stop being cut mid-segment.
