@@ -517,6 +517,7 @@ describe("AC1: list/status say report-only for an entry without a dispatch block
     const out = logged.join("\n");
     expect(out).toContain(`flow-next(${flowId}, report-only)`);
     expect(out).toContain(`flow-next(${flowId}, dispatch: scripted/m, mode trust`);
+    expect(out).toContain("network off");
     expect(out.split("report-only").length - 1).toBeGreaterThanOrEqual(2); // once in list, once in status
   });
 });
@@ -799,5 +800,21 @@ describe("T13: the dispatcher's own commit never runs repository hooks the agent
     } finally {
       await rm(marker, { force: true });
     }
+  });
+});
+
+describe("T14: dispatch.network: true is named for what it is", () => {
+  test("`trigger list` prints the full-network warning for an entry that sets network: true", async () => {
+    await writeTriggers([dispatchEntry({ network: true })]);
+    await acquireCwd(root);
+    try {
+      await triggerCommand(["list"]);
+    } finally {
+      releaseCwd();
+    }
+    const out = logged.join("\n");
+    expect(out).toContain("NETWORK ON");
+    expect(out).toContain("every service on the host's loopback");
+    expect(out).toContain("The model call does not need this");
   });
 });

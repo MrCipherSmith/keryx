@@ -9,7 +9,7 @@
   "title": "Triggers wave 2: flow-next dispatches an agent, per-trigger spend ceiling, shared lock with manual commands",
   "status": "in-progress",
   "createdAt": "2026-09-22T22:30:55.848Z",
-  "updatedAt": "2026-09-22T23:37:22.068Z",
+  "updatedAt": "2026-09-22T23:50:39.116Z",
   "source": {
     "type": "description",
     "ref": null
@@ -223,6 +223,26 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Security re-review fixes: hide host /run daemon sockets, state what network:true grants",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T23:45:36.219Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -358,6 +378,21 @@
       "at": "2026-09-22T23:37:22.068Z",
       "event": "task-done",
       "detail": "T13: Security review fixes: mandatory hardened sandbox for trust, sandboxed health gate, reserved spend, stale worktree recovery, floor gaps"
+    },
+    {
+      "at": "2026-09-22T23:45:16.426Z",
+      "event": "task-added",
+      "detail": "T14: Security re-review fixes: hide host /run daemon sockets, state what network:true grants"
+    },
+    {
+      "at": "2026-09-22T23:45:36.219Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-22T23:50:39.116Z",
+      "event": "task-done",
+      "detail": "T14: Security re-review fixes: hide host /run daemon sockets, state what network:true grants"
     }
   ]
 }

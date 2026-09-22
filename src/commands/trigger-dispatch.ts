@@ -107,6 +107,17 @@ export interface DispatchDeps {
   readonly planSandbox?: (input: UnattendedSandboxInput) => UnattendedSandboxPlan;
 }
 
+/**
+ * What `dispatch.network: true` actually grants (flow 290 T14). The sandbox
+ * then shares the host's network namespace: nothing is filtered. Printed by
+ * `keryx trigger list` and in every such run's record. The MODEL call is made
+ * by the dispatcher itself, outside the sandbox, so talking to the provider —
+ * a local Ollama included — never needs this.
+ */
+export const NETWORK_ON_WARNING =
+  "the agent's shell commands get the host's FULL network: the internet, every service on the host's loopback " +
+  "(e.g. a local model server or database), and the host's abstract unix sockets. The model call does not need this.";
+
 export const UNATTENDED_ROSTER_DESCRIPTION =
   "get_cwd, list_dir, read_file, shell_exec, apply_patch — no web, no MCP, no subagents, no ask_user";
 
@@ -519,7 +530,7 @@ async function dispatchLocked(
     );
   }
   const sandboxNote = sandbox.ok
-    ? `hardened bwrap sandbox, network ${dispatch.network ? "ON (dispatch.network)" : "off"}`
+    ? `hardened bwrap sandbox, network ${dispatch.network ? `ON — ${NETWORK_ON_WARNING}` : "off"}`
     : `none (${sandbox.reason}) — "ask" mode, every shell_exec refused`;
 
   // --- 4. provider (AC14) ------------------------------------------------------

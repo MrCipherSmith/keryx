@@ -60,7 +60,7 @@ import { renderScheduleLines, resolveKeryxInvocation, resolveScheduleEntry } fro
 import type { FlowService } from "../flow/types";
 import type { NextTaskDecision } from "../flow/machine";
 import type { TriggerDispatchRecord } from "../trigger/record";
-import { runFlowNextDispatch, type DispatchDeps, type DispatchResult } from "./trigger-dispatch";
+import { NETWORK_ON_WARNING, runFlowNextDispatch, type DispatchDeps, type DispatchResult } from "./trigger-dispatch";
 
 /**
  * Flow 290: in-process seams for `keryx trigger run` — the flow service and
@@ -728,7 +728,9 @@ function describeAction(action: TriggerAction): string {
     const d = action.dispatch;
     return (
       `flow-next(${action.flow}, dispatch: ${d.provider}/${d.model}, mode ${d.permissionMode}, ` +
-      `ceiling $${d.ceilingUsd}, max ${d.maxSeconds}s, ${d.maxAttempts} attempts)`
+      `ceiling $${d.ceilingUsd}, max ${d.maxSeconds}s, ${d.maxAttempts} attempts` +
+      (d.network ? `, NETWORK ON — ${NETWORK_ON_WARNING}` : ", network off") +
+      ")"
     );
   }
   return action.kind;
@@ -895,6 +897,9 @@ Actions:
                 "trust"; "auto" is rejected), rates: { inputUsdPerMTok,
                 outputUsdPerMTok } (both > 0), ceilingUsd, maxSeconds (1800),
                 maxAttempts (3), network (false), baseUrl? (loopback only) }
+              network: true gives the agent's shell commands the host's FULL
+              network — the internet and every host loopback service. The model
+              call is made outside the sandbox and never needs it.
               "trust" runs commands only inside the hardened Linux sandbox
               (bwrap: network off, home hidden, allow-listed env) and refuses
               to start without it; "ask" is read-only.

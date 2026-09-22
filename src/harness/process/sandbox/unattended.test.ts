@@ -94,6 +94,18 @@ describe("AC13: the plan is built from allow lists", () => {
     expect(plan.args).toContain("--unshare-net");
   });
 
+  test("T14: /run is hidden wholesale (not socket-by-socket), and resolv.conf is bound back only for network: true", () => {
+    const off = planUnattendedSandbox(input());
+    if (!off.ok) throw new Error(off.reason);
+    expect(off.args.join(" ")).toContain("--tmpfs /run");
+    expect(off.args.join(" ")).not.toContain("docker.sock");
+    const on = planUnattendedSandbox(input({ network: true }));
+    if (!on.ok) throw new Error(on.reason);
+    const resolvIdx = on.args.findIndex((a, i) => a === "--ro-bind" && on.args[i + 1]?.includes("resolv"));
+    // Only when this host's /etc/resolv.conf points into a hidden dir; never a directory.
+    if (resolvIdx >= 0) expect(on.args[resolvIdx + 1]).toMatch(/resolv\.conf$/);
+  });
+
   test("dispatch.network: true is the only way to keep the network", () => {
     const plan = planUnattendedSandbox(input({ network: true }));
     if (!plan.ok) throw new Error(plan.reason);
@@ -212,5 +224,90 @@ describe.skipIf(!liveAvailable)("AC13 (live): what a command inside the unattend
     const realHomeWrite = path.join(homedir(), `.keryx-t13-should-not-exist-${process.pid}`);
     runInside(`echo x > ${JSON.stringify(realHomeWrite)}`);
     await expect(readFile(realHomeWrite, "utf8")).rejects.toThrow();
+  });
+
+  // -------------------------------------------------------------------------
+  // Flow 290 T14 (security re-review): `--unshare-net` does not isolate AF_UNIX
+  // PATH sockets. /run is where the host's services listen — it must be hidden.
+  // -------------------------------------------------------------------------
+
+  test("T14: no unix socket anywhere is visible inside the sandbox (find / -type s is empty); /run is empty", () => {
+    const control = runInside("echo alive");
+    expect(control.code).toBe(0);
+    const found = runInside("find / \\( -path /proc -o -path /sys \\) -prune -o -type s -print 2>/dev/null; echo end");
+    expect(found.out.trim()).toBe("end");
+    expect(runInside("ls -A /run").out.trim()).toBe("");
+  });
+
+  test.each([
+    ["resolvectl", "resolvectl query github.com"],
+    ["busctl", "busctl list"],
+  ])("T14: %s (systemd-resolved / system D-Bus) cannot reach its service", (tool, command) => {
+    expect(runInside("echo alive").code).toBe(0);
+    if (runInside(`command -v ${tool}`).code !== 0) return; // tool absent on this host: nothing to reach
+    expect(runInside(command).code).not.toBe(0);
+  });
+
+  test("T14: a unix socket the test itself listens on under the host /run is unreachable from inside", async () => {
+    // /run/lock is world-writable (1777) on common distros and is NOT the
+    // per-user runtime dir — so only hiding /run itself can make this
+    // unreachable (a socket in $XDG_RUNTIME_DIR would be hidden by that rule
+    // alone and prove nothing about /run).
+    const runSide = "/run/lock";
+    const { accessSync, constants } = await import("node:fs");
+    try {
+      accessSync(runSide, constants.W_OK);
+    } catch {
+      return; // no world-writable dir under /run on this host
+    }
+    const { createServer, connect } = await import("node:net");
+    const sock = path.join(runSide, `keryx-t14-${process.pid}.sock`);
+    const server = createServer((c) => c.end("hello from the host\n"));
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(sock, () => resolve());
+    });
+    try {
+      // Positive control: from the host the socket answers.
+      const greeting = await new Promise<string>((resolve, reject) => {
+        const c = connect(sock);
+        let data = "";
+        c.on("data", (d) => (data += d.toString()));
+        c.on("end", () => resolve(data));
+        c.on("error", reject);
+      });
+      expect(greeting).toContain("hello from the host");
+      expect(runInside("echo alive").code).toBe(0);
+      expect(runInside(`test -S ${JSON.stringify(sock)}`).code).not.toBe(0);
+      const bun = process.execPath;
+      const attempt = runInside(
+        `${JSON.stringify(bun)} -e 'const n = require("node:net"); const c = n.connect(${JSON.stringify(sock)}); c.on("data", d => { process.stdout.write("REACHED " + d); process.exit(0) }); c.on("error", () => { process.stdout.write("unreachable"); process.exit(3) })'`,
+      );
+      expect(attempt.out).not.toContain("REACHED");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  test("T14: abstract-namespace sockets are per network namespace — invisible with network off, visible with network on", async () => {
+    const { createServer } = await import("node:net");
+    const name = `keryx-t14-abstract-${process.pid}`;
+    const server = createServer(() => {});
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(`\0${name}`, () => resolve());
+    });
+    try {
+      // Positive control: the host sees it.
+      expect((await readFile("/proc/net/unix", "utf8")).includes(`@${name}`)).toBe(true);
+      const off = runInside(`grep -c ${JSON.stringify(`@${name}`)} /proc/net/unix`);
+      expect(off.out.trim()).toBe("0");
+      // Documented consequence of `dispatch.network: true`: the host netns is
+      // shared, and so are its abstract sockets.
+      const on = runInside(`grep -c ${JSON.stringify(`@${name}`)} /proc/net/unix`, true);
+      expect(on.out.trim()).toBe("1");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

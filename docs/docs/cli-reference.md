@@ -1091,7 +1091,7 @@ nobody present, and records what happened.
 | `maxSeconds` | no (1800) | Wall-clock limit for one agent run. |
 | `maxAttempts` | no (3) | A task whose attempt count has reached this is not dispatched again. |
 | `baseUrl` | no | Provider base URL override — **loopback only** (`localhost`, `127.0.0.0/8`, `[::1]`). `triggers.json` is a committed file and the run sends the operator's saved key for `provider` to this URL, so a non-loopback URL is rejected at load. |
-| `network` | no (`false`) | Network inside the sandbox. Off unless set to `true`. |
+| `network` | no (`false`) | Network for the agent's **shell commands**. `true` gives them the host's **full** network: the internet, every service on the host's loopback (a local model server, a database, …) and the host's abstract unix sockets — nothing is filtered, and `keryx trigger list` says so for the entry. The **model call** is made by the dispatcher itself, outside the sandbox, so talking to the provider — including a local Ollama on `127.0.0.1` — never needs this. Leave it off unless the task's own commands truly need the network (a loopback-only mode via `slirp4netns --disable-host-loopback` is possible but not built in this version). |
 
 **One fire, in order** — every refusal happens before any model call:
 
@@ -1139,13 +1139,19 @@ nobody present, and records what happened.
 
 **The unattended sandbox (Linux, bubblewrap).** Every `shell_exec` of a
 dispatched run, and its health gate, run inside a profile built from allow
-lists: `/` read-only; your home directory, `/run/user/<uid>` and
-`$XDG_RUNTIME_DIR` (where ssh-agent and gpg-agent sockets live) hidden behind an
-empty tmpfs; bound back read-only only the toolchain roots found on `PATH` under
+lists: `/` read-only; your home directory and **all of `/run`** (and
+`/var/run` where it is not a symlink to it) hidden behind an empty tmpfs.
+`/run` is where the host's services listen — the system D-Bus, systemd-resolved,
+tailscaled, libvirt, snapd, Docker, ssh-agent and gpg-agent under
+`/run/user/<uid>` — and turning the network off does **not** isolate unix
+path sockets, so the whole directory is hidden rather than known sockets masked
+by name. Nothing under `/run` is bound back; with `network: true` only the
+resolver file `/etc/resolv.conf` points to is bound back, read-only; bound back read-only only the toolchain roots found on `PATH` under
 your home (`~/.bun`, an nvm node version — detected, not hard-coded), the
 repository's git directory, the keryx package and `node_modules`; the worktree
 and a scratch `HOME` read-write; a private `/tmp`; the Docker socket masked;
-network off unless `dispatch.network: true`. The environment is an allowlist —
+network off unless `dispatch.network: true` (abstract-namespace unix sockets
+are per network namespace, so they are isolated with it). The environment is an allowlist —
 `PATH`, locale, `TERM`, `TZ`, colour flags — with `HOME`, the XDG directories
 and `TMPDIR` pointed at the scratch home: no exported token, no
 `SSH_AUTH_SOCK`. The known-secret deny list (`~/.ssh`, `~/.config/gh`, …) is
@@ -1268,6 +1274,9 @@ regenerate-and-reinstall of the line.
   design and still incomplete by construction (a shell can spell a command
   many ways). The boundary is the hardened sandbox, which `trust` requires —
   Linux with a working bubblewrap only in this version.
+- **Review the trigger branch before you install or build it.** The agent can
+  commit anything a task could — including a `package.json` script or a build
+  step that runs when you later install or build that branch on your machine.
 - **The sandbox hides your home, not the host.** `/` stays readable (read-only)
   outside the hidden directories, so a secret kept outside `$HOME` and outside
   the known deny list — `/etc/some-token`, another user's readable file — is

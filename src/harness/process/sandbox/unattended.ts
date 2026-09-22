@@ -12,8 +12,9 @@
 //
 // So this profile is built the other way round — ALLOW lists, not deny lists:
 //
-//   filesystem  `/` read-only; $HOME, /run/user/<uid> and $XDG_RUNTIME_DIR
-//               hidden WHOLESALE behind an empty tmpfs; then only what the run
+//   filesystem  `/` read-only; $HOME and /run (every host service socket:
+//               D-Bus, systemd-resolved, tailscaled, libvirt, snapd, Docker,
+//               ssh-agent…) hidden WHOLESALE behind an empty tmpfs; then only what the run
 //               needs is bound back — toolchain roots detected from PATH
 //               (read-only), the repository's git dir (read-only), the keryx
 //               package itself (read-only), the worktree and a scratch HOME
@@ -24,8 +25,8 @@
 //   env         an allowlist (PATH, locale, TERM, TZ, colour flags), HOME and
 //               the XDG dirs pointed at the scratch home, TMPDIR=/tmp. No
 //               SSH_AUTH_SOCK, no tokens — nothing the operator exported.
-//   sockets     the Docker socket masked; the runtime dir (where ssh-agent and
-//               gpg-agent live) hidden with the rest.
+//   sockets     `--unshare-net` isolates abstract sockets only, never AF_UNIX
+//               path sockets — those are unreachable because /run is hidden.
 //
 // Linux (bubblewrap) only in this version. macOS `sandbox-exec` would need the
 // same allow-list shape expressed in SBPL, and nothing here can test it, so a
@@ -177,25 +178,39 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   const home = path.resolve(input.home);
   const args: string[] = ["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"];
 
-  // Hide wholesale: the home directory and the per-user runtime dir (ssh-agent,
-  // gpg-agent, dbus, keyrings live there).
+  // Hide wholesale, the same allow-list way as $HOME:
+  //
+  //   /run (and /var/run when it is a real directory rather than the usual
+  //   symlink to /run) — the host's service sockets live there: the system
+  //   D-Bus, systemd-resolved (a DNS exfiltration channel), tailscaled (the
+  //   operator's whole tailnet, off-box), libvirt (VMs with host devices),
+  //   snapd, lxd, Docker, fail2ban, the per-user runtime dir with ssh-agent and
+  //   gpg-agent. `--unshare-net` does NOT isolate AF_UNIX path sockets — a
+  //   security re-review reached every one of these from a network-off
+  //   sandbox. Masking them by name was a deny list; hiding the directory is
+  //   the fix. Nothing under /run is bound back for a network-off run; see the
+  //   resolv.conf note below for the one file a network-on run needs.
+  //   $HOME, and $XDG_RUNTIME_DIR in case it lives outside /run.
   const hidden = new Set<string>();
+  for (const runDir of ["/run", "/var/run"]) {
+    if (isDir(runDir) && real(runDir) === path.resolve(runDir)) hidden.add(runDir);
+  }
   if (isDir(home)) hidden.add(home);
-  const runtimeDirs = [
-    input.uid !== undefined ? `/run/user/${input.uid}` : undefined,
-    input.env["XDG_RUNTIME_DIR"],
-  ].filter((p): p is string => p !== undefined && p.length > 0);
-  for (const dir of runtimeDirs) if (isDir(dir)) hidden.add(path.resolve(dir));
+  const runtimeDir = input.env["XDG_RUNTIME_DIR"];
+  if (runtimeDir !== undefined && runtimeDir.length > 0 && isDir(runtimeDir)) {
+    const resolved = real(runtimeDir);
+    if (![...hidden].some((dir) => resolved === dir || resolved.startsWith(`${dir}${path.sep}`))) hidden.add(resolved);
+  }
   for (const dir of hidden) args.push("--tmpfs", dir);
 
-  // Mask sockets that hand out more than this run should have.
-  // By real path, once: /var/run is usually a symlink to /run, and binding over
-  // the same socket through both names makes bwrap fail to start at all.
-  const sockets = new Set<string>();
-  for (const sock of ["/var/run/docker.sock", "/run/docker.sock"]) {
-    if (exists(sock) && !isDir(sock)) sockets.add(real(sock));
+  // `dispatch.network: true` only: /etc/resolv.conf is usually a symlink into
+  // /run (systemd-resolved's stub file). With /run hidden it would dangle and
+  // name resolution would fail. The FILE is bound back read-only — never the
+  // directory holding the resolver's sockets.
+  if (input.network) {
+    const resolv = real("/etc/resolv.conf");
+    if (resolv !== "/etc/resolv.conf" && exists(resolv) && !isDir(resolv)) args.push("--ro-bind", resolv, resolv);
   }
-  for (const sock of sockets) args.push("--ro-bind", "/dev/null", sock);
 
   // Bind back read-only what the run needs, then read-write the worktree and
   // the scratch home. Order matters: later mounts win.
