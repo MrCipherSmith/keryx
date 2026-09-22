@@ -99,7 +99,41 @@ export type TriggerAction =
   | { readonly kind: "reconcile" }
   | { readonly kind: "rebuild" }
   | { readonly kind: "open-flow"; readonly template: string; readonly skipIfOpen?: boolean }
-  | { readonly kind: "flow-next"; readonly flow: string };
+  | { readonly kind: "flow-next"; readonly flow: string; readonly dispatch?: TriggerDispatch };
+
+/**
+ * Flow 290 (AC1, AC4, AC6, AC7): what turns a report-only `flow-next` into
+ * one that DISPATCHES an agent to work the flow's next task, unattended.
+ *
+ * Every money-shaped field is required: a dispatch whose cost cannot be priced
+ * could never move either spend ceiling, so it is rejected at load rather than
+ * allowed to spend without bound. `permissionMode` may only be `ask` or
+ * `trust` — `auto` is refused here, because an unattended run has nobody to
+ * notice what `auto` waves through.
+ */
+export interface TriggerDispatch {
+  readonly provider: string;
+  readonly model: string;
+  /** `ask` (default): every non-read call is denied. `trust`: non-destructive calls run; the unattended floor still applies. */
+  readonly permissionMode: UnattendedPermissionMode;
+  readonly rates: { readonly inputUsdPerMTok: number; readonly outputUsdPerMTok: number };
+  /** This trigger's own spend ceiling in USD, on top of the project-wide one. */
+  readonly ceilingUsd: number;
+  /** Wall-clock limit for one agent run. */
+  readonly maxSeconds: number;
+  /** A task whose attempt count has reached this is not dispatched again. */
+  readonly maxAttempts: number;
+  /** Loopback only (see `dispatchProblems`). */
+  readonly baseUrl?: string;
+  /** Flow 290 T13 (AC13): network inside the unattended sandbox. Default false — off. */
+  readonly network: boolean;
+}
+
+export const UNATTENDED_PERMISSION_MODES = ["ask", "trust"] as const;
+export type UnattendedPermissionMode = (typeof UNATTENDED_PERMISSION_MODES)[number];
+
+export const DEFAULT_DISPATCH_MAX_SECONDS = 1800;
+export const DEFAULT_DISPATCH_MAX_ATTEMPTS = 3;
 
 /** One validated trigger config entry. */
 export interface TriggerEntry {
@@ -172,13 +206,131 @@ function actionProblems(value: unknown): string[] {
     return problems;
   }
   if (raw.kind === "flow-next") {
+    const problems: string[] = [];
     if (typeof raw.flow !== "string" || raw.flow.length === 0) {
-      return ["action.flow: required, non-empty string"];
+      problems.push("action.flow: required, non-empty string");
     }
-    return [];
+    if (raw.dispatch !== undefined) {
+      problems.push(...dispatchProblems(raw.dispatch));
+    }
+    return problems;
   }
   // "reconcile" / "rebuild" carry no extra fields.
   return [];
+}
+
+function isNonNegativeFinite(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/** Flow 290: every problem with an `action.dispatch` block; empty means valid. */
+function dispatchProblems(value: unknown): string[] {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return ["action.dispatch: must be an object"];
+  }
+  const raw = value as Record<string, unknown>;
+  const problems: string[] = [];
+  if (typeof raw.provider !== "string" || raw.provider.trim().length === 0) {
+    problems.push("action.dispatch.provider: required, non-empty string");
+  }
+  if (typeof raw.model !== "string" || raw.model.trim().length === 0) {
+    problems.push("action.dispatch.model: required, non-empty string");
+  }
+  if (raw.permissionMode !== undefined) {
+    if (raw.permissionMode === "auto") {
+      problems.push(
+        'action.dispatch.permissionMode: "auto" is never allowed for an unattended run — nobody is there to see what it ' +
+          'approves. Use "ask" (read-only in effect) or "trust" (non-destructive calls run; the unattended floor still applies).',
+      );
+    } else if (
+      typeof raw.permissionMode !== "string" ||
+      !(UNATTENDED_PERMISSION_MODES as readonly string[]).includes(raw.permissionMode)
+    ) {
+      problems.push(`action.dispatch.permissionMode: must be one of ${UNATTENDED_PERMISSION_MODES.join(", ")}`);
+    }
+  }
+  const rates = raw.rates;
+  if (rates === undefined) {
+    problems.push(
+      "action.dispatch.rates: required — {inputUsdPerMTok, outputUsdPerMTok}. Without rates a run's cost cannot be " +
+        "priced, so no spend ceiling could ever stop it; an unpriced dispatch is refused.",
+    );
+  } else if (rates === null || typeof rates !== "object" || Array.isArray(rates)) {
+    problems.push("action.dispatch.rates: must be an object {inputUsdPerMTok, outputUsdPerMTok}");
+  } else {
+    const r = rates as Record<string, unknown>;
+    // Flow 290 T13 (AC14): a zero rate prices every run at $0, so neither
+    // ceiling could ever stop it — the same hole as having no rates at all.
+    if (!(isNonNegativeFinite(r.inputUsdPerMTok) && r.inputUsdPerMTok > 0)) {
+      problems.push("action.dispatch.rates.inputUsdPerMTok: required, a positive number (USD per million input tokens) — a zero rate would make every run free to the ceiling");
+    }
+    if (!(isNonNegativeFinite(r.outputUsdPerMTok) && r.outputUsdPerMTok > 0)) {
+      problems.push("action.dispatch.rates.outputUsdPerMTok: required, a positive number (USD per million output tokens) — a zero rate would make every run free to the ceiling");
+    }
+  }
+  if (raw.ceilingUsd === undefined) {
+    problems.push(
+      "action.dispatch.ceilingUsd: required — this trigger's own spend ceiling in USD. A dispatch without one is refused.",
+    );
+  } else if (!(isNonNegativeFinite(raw.ceilingUsd) && raw.ceilingUsd > 0)) {
+    problems.push("action.dispatch.ceilingUsd: must be a positive number of USD");
+  }
+  if (raw.maxSeconds !== undefined && !(Number.isSafeInteger(raw.maxSeconds) && (raw.maxSeconds as number) > 0)) {
+    problems.push("action.dispatch.maxSeconds: must be a positive integer when present");
+  }
+  if (raw.maxAttempts !== undefined && !(Number.isSafeInteger(raw.maxAttempts) && (raw.maxAttempts as number) > 0)) {
+    problems.push("action.dispatch.maxAttempts: must be a positive integer when present");
+  }
+  if (raw.baseUrl !== undefined) {
+    // Flow 290 T13 (review item 8): `triggers.json` is a committed file, and a
+    // dispatch sends the operator's SAVED key for `provider` to `baseUrl`. A
+    // merged edit pointing it at another host would hand that key over. So a
+    // base URL is accepted only when it is loopback (a local model server).
+    if (typeof raw.baseUrl !== "string" || raw.baseUrl.length === 0) {
+      problems.push("action.dispatch.baseUrl: must be a non-empty string when present");
+    } else if (!isLoopbackUrl(raw.baseUrl)) {
+      problems.push(
+        `action.dispatch.baseUrl: "${raw.baseUrl}" is not loopback — triggers.json is a committed file, and a non-loopback ` +
+          "base URL would send the operator's saved provider key to whatever host it names. Only http(s)://localhost, " +
+          "127.0.0.0/8 or [::1] is accepted.",
+      );
+    }
+  }
+  if (raw.network !== undefined && typeof raw.network !== "boolean") {
+    problems.push("action.dispatch.network: must be a boolean when present");
+  }
+  return problems;
+}
+
+/** True for http(s) URLs whose host is localhost, 127.0.0.0/8 or ::1. */
+export function isLoopbackUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  return host === "localhost" || host === "::1" || /^127(?:\.\d{1,3}){3}$/.test(host);
+}
+
+/** Normalize a validated action: fills a dispatch block's defaults. */
+function normalizeAction(action: TriggerAction): TriggerAction {
+  if (action.kind !== "flow-next" || action.dispatch === undefined) return action;
+  const raw = action.dispatch as Partial<TriggerDispatch> & Pick<TriggerDispatch, "provider" | "model" | "rates" | "ceilingUsd">;
+  const dispatch: TriggerDispatch = {
+    provider: raw.provider,
+    model: raw.model,
+    permissionMode: raw.permissionMode ?? "ask",
+    rates: { inputUsdPerMTok: raw.rates.inputUsdPerMTok, outputUsdPerMTok: raw.rates.outputUsdPerMTok },
+    ceilingUsd: raw.ceilingUsd,
+    maxSeconds: raw.maxSeconds ?? DEFAULT_DISPATCH_MAX_SECONDS,
+    maxAttempts: raw.maxAttempts ?? DEFAULT_DISPATCH_MAX_ATTEMPTS,
+    network: raw.network ?? false,
+    ...(raw.baseUrl !== undefined ? { baseUrl: raw.baseUrl } : {}),
+  };
+  return { kind: "flow-next", flow: action.flow, dispatch };
 }
 
 /**
@@ -240,7 +392,7 @@ function parseTriggerEntry(value: unknown): TriggerEntry | undefined {
     return {
       name: raw.name,
       fire,
-      action: raw.action,
+      action: normalizeAction(raw.action),
       enabled: raw.enabled ?? true,
     };
   } catch {

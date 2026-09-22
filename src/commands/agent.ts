@@ -201,6 +201,14 @@ export interface AgentIO {
    */
   onTerminalState?: (state: TerminalState) => void;
   /**
+   * Flow 290 (AC4/AC5): an unattended run refused a call rather than ask about
+   * it — the `deps.hardDeny` floor, or the untrusted-content gate on the
+   * unattended path. Additive and optional; the dispatcher records each one in
+   * the trigger run record. (Calls that reach `requestApproval` are recorded by
+   * the dispatcher's own always-deny approver.)
+   */
+  onUnattendedDenial?: (tool: string, reason: string) => void;
+  /**
    * Approve a mutating (risk `shell`/`destructive`) tool call before it runs.
    * DEFAULT-DENY: when this is absent the driver denies the call and never
    * executes it. `input` is the raw JSON input string the model proposed.
@@ -326,6 +334,15 @@ export interface AgentDeps {
    *    (`reason: "ask_user_unanswerable"`).
    */
   unattended?: boolean;
+  /**
+   * Flow 290 (AC5): a hard floor consulted for every non-`read` tool call
+   * BEFORE the permission mode is resolved — so `trust` (or any mode) cannot
+   * lift it. A string return is the refusal reason: the call is denied, never
+   * asked about, and `io.onUnattendedDenial` is told. Absent for every
+   * interactive surface, which is unaffected. Set by the unattended trigger
+   * dispatcher (`src/trigger/unattended.ts`'s `unattendedRefusal`).
+   */
+  hardDeny?: (toolName: string, input: Record<string, unknown>) => string | undefined;
   /**
    * Injected ISO-timestamp clock for `TerminalState.occurredAt`, consulted
    * ONLY on the unattended terminal-state path. Defaults to
@@ -2700,6 +2717,9 @@ async function runAgentTurnCore(
             output: "tool blocked: external web content cannot authorize further tool calls in this turn",
             isError: true,
           };
+          if (deps.unattended === true) {
+            io.onUnattendedDenial?.(call.name, "untrusted external content in this turn cannot authorize the call");
+          }
           io.onToolResult?.(call.name, result);
           history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id, ts: now() });
           io.onHistoryChange?.("tool");
@@ -2784,6 +2804,9 @@ async function runAgentTurnCore(
           invocationBudget.maxCalls,
           signal,
           deps.busLeases,
+          deps.hardDeny === undefined
+            ? undefined
+            : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
         ));
       io.onToolResult?.(call.name, result);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
@@ -3269,6 +3292,10 @@ async function runConcurrentSpawnBatch(
       io.onAutoApproved,
       hasInvocationCapacity,
       reserveInvocation,
+      undefined,
+      undefined,
+      undefined,
+      deps.hardDeny === undefined ? undefined : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
     );
 
   const plan = planWaves(tasks, {
@@ -3385,6 +3412,11 @@ async function executeCall(
   // `isPublishCommand`, to compute the publish-lease floor. Never consulted
   // by any other risk branch — see `AgentDeps.busLeases`'s own doc comment.
   busLeases?: AgentDeps["busLeases"],
+  // Flow 290 (AC5): the unattended floor, checked below BEFORE the mode.
+  hardDeny?: {
+    check: NonNullable<AgentDeps["hardDeny"]>;
+    onDenied: AgentIO["onUnattendedDenial"];
+  },
 ): Promise<InteractiveToolResult> {
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
@@ -3422,6 +3454,16 @@ async function executeCall(
   //   command text
   // - anything else is denied
   const risk = tool.definition.risk;
+  // Flow 290 (AC5): the unattended floor runs FIRST, before any permission
+  // mode is resolved, so no mode can lift it. A refusal is a denial — never a
+  // prompt, never an auto-approval.
+  if (hardDeny !== undefined && risk !== "read") {
+    const refusal = hardDeny.check(call.name, input);
+    if (refusal !== undefined) {
+      hardDeny.onDenied?.(call.name, refusal);
+      return { output: `${call.name} refused in an unattended run: ${refusal}`, isError: true };
+    }
+  }
   const mode: PermissionMode = permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
   const isReadOnly = readOnly?.() ?? false;
   if (risk === "shell" || risk === "destructive") {

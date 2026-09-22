@@ -107,7 +107,7 @@ test(
 
       const opened = results.filter((r) => r.stdout.includes("ok — opened flow"));
       const skipped = results.filter((r) => r.stdout.includes("already open for template"));
-      const lockRefused = results.filter((r) => r.stdout.includes("holds this project's trigger lock"));
+      const lockRefused = results.filter((r) => r.stdout.includes("holds this project's maintenance lock"));
 
       // Exactly one process actually opened the flow. The other either saw
       // it already open (serialized after the winner released the lock) or
