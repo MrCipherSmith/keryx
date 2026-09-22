@@ -61,3 +61,242 @@ Use `keryx gdgraph affected <file>` for blast radius.
 ## Agent Findings
 
 _(flow-init skill appends here)_
+
+---
+
+# T5 — The pinned ACP surface
+
+Written by the T5/T6 dispatch, 2026-09-22. Source of truth for every shape
+below: the published v1 JSON Schema,
+`https://raw.githubusercontent.com/zed-industries/agent-client-protocol/main/schema/v1/schema.json`
+(247 KB, fetched 2026-09-22), cross-read against the prose pages under
+`https://agentclientprotocol.com/protocol/v1/`. The schema carries `x-method`
+and `x-side` annotations, so the method table below is the spec's own spelling
+and not a transcription from prose.
+
+## 0. Version and transport
+
+- **Pinned version: `protocolVersion: 1`** (one integer, `uint16`; bumped only
+  for breaking changes, everything else arrives as a capability). ACP v2 exists
+  but is explicitly a draft, and shipping clients speak v1.
+- **Transport: JSON-RPC 2.0 over stdio, newline-delimited.** NOT LSP framing.
+  The v1 transports page: "Messages are delimited by newlines (`\n`), and **MUST
+  NOT** contain embedded newlines." The client launches the agent as a
+  subprocess; the agent reads from `stdin` and writes to `stdout`; `stderr` is
+  the only legal place for logging and the client may capture, forward or ignore
+  it. Consequence for keryx: `keryx acp` must emit nothing but protocol frames
+  on stdout — a stray `console.log` corrupts the stream.
+- Constant: `ACP_PROTOCOL_VERSION` in `src/acp/protocol.ts`.
+
+## 1. Methods keryx implements in this flow
+
+| method | keryx surface it sits on |
+|---|---|
+| `initialize` | version negotiation + capability advertisement (T7) |
+| `session/new` | `createSession()` — `src/session/store.ts:511` |
+| `session/load` | `openSession()` / `loadContext()` — `src/session/store.ts:888`, replayed as `session/update` |
+| `session/list` | `listSessions()` — `src/session/store.ts:558` |
+| `session/prompt` | `runAgentTurn()` — `src/commands/agent.ts:1718` |
+| `session/cancel` (notification) | `RunAgentTurnOptions.signal` — `src/commands/agent.ts:519` |
+
+Client methods keryx may CALL: `session/update` (always), and
+`session/request_permission`, `fs/read_text_file`, `fs/write_text_file`,
+`terminal/*` only when the client advertised the matching capability.
+
+## 2. Methods keryx explicitly refuses, and with what
+
+Every refusal is **`-32601 Method not found`** with a `data.reason`. `-32601` is
+the spec's own answer for an unadvertised capability: a conformant client reads
+`agentCapabilities` and never calls these. The `reason` is what separates "keryx
+has not implemented it" from "your client ignored the capability" in a log.
+Table lives in `ACP_REFUSED_AGENT_METHODS`, `src/acp/protocol.ts`.
+
+| method | reason returned |
+|---|---|
+| `authenticate` | keryx advertises no `authMethods`; nothing to authenticate against |
+| `logout` | `agentCapabilities.auth.logout` not advertised |
+| `session/resume` | `sessionCapabilities.resume` not advertised; use `session/load` |
+| `session/close` | `sessionCapabilities.close` not advertised; sessions are durable on disk |
+| `session/delete` | `sessionCapabilities.delete` not advertised; retention is an operator decision |
+| `session/set_mode` | `session/new` returns no `modes` |
+| `session/set_config_option` | `session/new` returns no `configOptions` |
+
+The six implemented plus these seven are all thirteen agent methods in the v1
+schema. `src/acp/protocol.test.ts` asserts the partition is total and disjoint,
+so a method added to ACP cannot end up silently unhandled.
+
+## 3. Capabilities keryx advertises
+
+`KERYX_AGENT_CAPABILITIES` (`src/acp/protocol.ts`), pinned by test:
+
+```json
+{
+  "loadSession": true,
+  "promptCapabilities": { "image": false, "audio": false, "embeddedContext": true },
+  "mcpCapabilities": { "http": false, "sse": false },
+  "sessionCapabilities": { "list": {} },
+  "auth": {}
+}
+```
+
+with `authMethods: []`. Note the shape: ACP marks each session sub-capability by
+**presence of an empty object**, not by a boolean — `{ "list": {} }` advertises
+listing, an absent key declines it.
+
+## 4. The mapping onto keryx, with citations
+
+| ACP concept | keryx | file:line |
+|---|---|---|
+| session id (opaque string) | `SessionSummary.id` (`randomUUID`) | `src/session/store.ts:37` |
+| `SessionInfo.cwd` | `SessionSummary.projectPath` | `src/session/store.ts:37` |
+| `SessionInfo.title` / `updatedAt` | `SessionSummary.title` / `.updatedAt` | `src/session/store.ts:37` |
+| `session/new` | `createSession({ cwd, ... })` | `src/session/store.ts:511` |
+| `session/list` | `listSessions(cwd, dataDir?)`, newest-first | `src/session/store.ts:558` |
+| `session/load` replay source | `openSession()` → `NormalizedMessage[]` | `src/session/store.ts:888` |
+| history entry | `NormalizedMessage` (`role`, `content`, `toolCalls?`, `reasoning?`) | `src/harness/provider/types.ts:192` |
+| `keryx sessions` CLI (same store) | `sessionsCommand` | `src/commands/sessions.ts:16`, routed `src/cli.ts:103` |
+| policy decision | `PolicyOutcome = "allow" \| "ask" \| "deny"` | `src/harness/policy/types.ts:16` |
+| the **ask path** | `AgentIO.requestApproval?: (tool, input, meta?) => Promise<ApprovalResponse>` | `src/commands/agent.ts:210` |
+| default-deny when no asker | absent `requestApproval` ⇒ call not executed | `src/commands/agent.ts:2694` |
+| assistant text stream | `AgentIO.write` / `onAssistantText` | `src/commands/agent.ts:142`, `:155` |
+| reasoning stream | `onReasoningDelta` / `onReasoning` / `onReasoningEnd` | `src/commands/agent.ts:172`, `:161`, `:185` |
+| tool call start | `onToolCall(name, input)` | `src/commands/agent.ts:189` |
+| tool call result | `onToolResult(name, result)` (`result.isError`) | `src/commands/agent.ts:191` |
+| token usage | `onUsage(NormalizedUsage)` → `usage_update` | `src/commands/agent.ts:187` |
+| turn entry point | `runAgentTurn(io, deps, history, userLine, options)` | `src/commands/agent.ts:1718` |
+| cancellation | `RunAgentTurnOptions.signal?: AbortSignal` | `src/commands/agent.ts:519` |
+| MCP server config | `McpServerEntry` (stdio / http / sse) | `src/mcp-servers/config.ts:16` |
+| MCP runtime, one per session | `createMcpRuntime(options)` | `src/mcp-servers/runtime.ts:137` |
+
+## 5. Findings — where the spec and keryx disagree in shape
+
+These are the reason T5 exists. Each one constrains a later dispatch.
+
+**F-1 (AC1 vs the spec). Version negotiation is not a refusal.** AC1 reads "a
+request naming an unsupported protocol version is refused with a JSON-RPC error
+rather than a crash or a silent downgrade". The v1 initialization page says the
+opposite for the common case: "If the Agent supports the requested version, it
+MUST respond with the same version. Otherwise, the Agent **MUST respond with the
+latest version it supports**", and the client then decides whether to proceed or
+close the connection. A blanket JSON-RPC error would be non-conformant and would
+leave every future v2 client with no way to fall back.
+`negotiateProtocolVersion()` therefore returns three outcomes: `exact` (asked
+for 1), `offer` (asked for >1 — answer 1; spec-conformant and not silent, the
+number is in the response and the client decides), `refuse` (not an integer,
+outside `uint16`, or below the floor — `-32602` with
+`{ requested, supported, latest }`). **Decision needed from the operator: AC1 as
+written cannot be satisfied for the `offer` case without breaking conformance.
+Recommend `keryx flow ac update` to read "…is answered explicitly — the latest
+supported version where the spec requires it, a JSON-RPC error where no
+conformant version exists — never a crash and never a silent pretend-success."**
+No AC file was edited by this dispatch.
+
+**F-2. There is no `"denied"` permission outcome, and no boolean.** The prose
+example is wrong; the schema has
+`outcome: { outcome: "selected", optionId } | { outcome: "cancelled" }`, and a
+denial is a *selected* option whose `kind` is `reject_once` or `reject_always`
+(the four kinds are `allow_once`, `allow_always`, `reject_once`,
+`reject_always`). keryx's ask path returns
+`ApprovalResponse = boolean | { approved, fingerprint? }`
+(`src/commands/agent.ts:138`). The mapping T9 must implement:
+`allow_once → true`; `allow_always → { approved: true, fingerprint }` (keryx's
+remember-this-fingerprint path, and the only ACP kind that has one);
+`reject_once` / `reject_always` / `cancelled → false`. `cancelled` is not an
+answer at all and must not execute the tool. `permissionGranted()` in
+`src/acp/protocol.ts` encodes this.
+
+**F-3. `session/request_permission` carries a whole `ToolCallUpdate`, and keryx
+has no tool-call id.** The schema's `RequestPermissionRequest` is
+`{ sessionId, toolCall: ToolCallUpdate, options }` — the client is shown the call
+it is authorising. keryx's hooks are id-less: `onToolCall(name, input)` and
+`onToolResult(name, result)` (`src/commands/agent.ts:189`, `:191`), and
+`requestApproval(tool, input, meta?)` (`:210`) has no id either. So the adapter
+must **mint** a `toolCallId`, emit the `tool_call` update *before* asking, and
+correlate `onToolCall` → `requestApproval` → `onToolResult` itself. With only
+`(name, input)` to key on, two identical concurrent calls are indistinguishable.
+`ApprovalMeta.fingerprint` (`src/commands/agent.ts:76`) is the closest existing
+key. T9/T11 must either thread an id through `AgentIO` or document the
+correlation heuristic and its failure mode.
+
+**F-4. The policy engine fails closed to `deny` when it thinks it is headless.**
+`src/harness/policy/engine.ts:234` — `if (ctx.interactive === false)` turns an
+`ask` into a `deny` with "the session is non-interactive; failing closed". An
+ACP client **is** an operator. If `keryx acp` builds its policy context with
+`interactive: false` (`src/harness/policy/types.ts:86`),
+`session/request_permission` is never sent and AC3 fails silently in the *safe*
+direction — the hardest kind of failure to notice. T9 must set
+`interactive: true` **and** supply `AgentIO.requestApproval`; the two go
+together. (Absent `requestApproval` is also default-deny —
+`src/commands/agent.ts:2694` — so forgetting one of them never opens a hole,
+only leaves the client unasked.)
+
+**F-5. keryx has no "cancelled" turn outcome to report.** ACP requires
+`session/prompt` interrupted by `session/cancel` to resolve with
+`stopReason: "cancelled"` — a MUST, so the client can tell "you stopped me" from
+"I broke". `RunAgentTurnResult.finishReason` is
+`"budget" | "tool-call-budget" | "no-progress" | undefined`
+(`src/commands/agent.ts:583`), and an aborted turn returns `{}`,
+indistinguishable from a clean finish at the return value. T10 must track the
+abort itself (it owns the `AbortController`) rather than reading it off the
+result. Suggested mapping: `budget → max_tokens`,
+`tool-call-budget → max_turn_requests`, `no-progress → end_turn`,
+`undefined → end_turn`, adapter-observed abort → `cancelled`. Nothing in keryx
+currently produces ACP's `refusal`.
+
+**F-6. `session/new` binds to a project root, not to the `cwd` that was sent.**
+ACP's `cwd` is required and `SessionInfo.cwd` is "always an absolute path".
+keryx resolves it — `resolveProjectRoot(cwd)` (`src/session/paths.ts:52`) — and
+stores `projectPath`. A client that opens a session with
+`cwd: /repo/packages/web` will see `/repo` come back from `session/list`. That
+is not a bug to hide: T13 must document it, and `session/load`'s "cwd must match
+the original" check has to compare resolved roots, not raw strings.
+
+**F-7. `session/list` cannot enumerate across projects.** ACP's `cwd` parameter
+is an optional *filter*; omitting it means "all sessions". `listSessions(cwd,
+dataDir?)` is project-isolated by construction (`src/session/store.ts:558`) and
+there is no cross-project listing. Options for T10: require `cwd` and answer
+`-32602` without it, or list the sessions of the ACP process's own project root.
+The latter is recommended plus a documented note, since a `-32602` on an
+optional parameter is its own conformance break. Pagination
+(`cursor`/`nextCursor`) has no keryx equivalent either; a single page with no
+`nextCursor` is conformant.
+
+**F-8. Per-session MCP servers have no seam.** `session/new.mcpServers` is
+required (may be `[]`) and means "connect these for this session".
+`createMcpRuntime` (`src/mcp-servers/runtime.ts:137`) reads config from disk
+layers, and `addServer` (`src/mcp-servers/store.ts:166`) always *writes a config
+file*; there is no in-memory registration. keryx advertises
+`mcpCapabilities: { http: false, sse: false }`, so a conformant client sends no
+URL-based servers — but **stdio servers need no capability flag** and a client
+may still send them. T8 must answer a non-empty `mcpServers` honestly; `-32602`
+with a reason is acceptable, silently ignoring it is not, because the client
+then believes tools are available that are not.
+
+**F-9. Not every keryx history role has an ACP chunk.** `session/load` must
+replay the conversation as `session/update` notifications *before* responding.
+ACP's chunk variants are `user_message_chunk`, `agent_message_chunk`,
+`agent_thought_chunk`, plus `tool_call` / `tool_call_update`.
+`NormalizedMessage.role` is `"system" | "user" | "assistant" | "tool"`
+(`src/harness/provider/types.ts:192`). `system` has no ACP home at all, and
+`tool` must be rebuilt as a `tool_call`/`tool_call_update` pair with a
+synthesised id (see F-3). T10 must decide explicitly what happens to `system`
+messages — dropping them is defensible, dropping them silently is not.
+
+**F-10. Schema bug, noted for completeness.** `$defs.AvailableCommand` lists
+`description` in `required` but does not define it in `properties`. keryx does
+not emit `available_commands_update`, so this costs nothing today.
+
+## 6. Repository consequences already handled by T6
+
+- `src/acp/` is registered in the zone table as **adapter**
+  (`src/lib/import-zones.ts`), beside `commands`, `mcp` and `cli.ts`. Without
+  it, `unclassifiedSegments()` fails the import-policy guard.
+- `src/acp/` is added to the `test:core` filter list in `package.json`. CI runs
+  `check:core` (`.github/workflows/ci.yml:66`) and the `test:client:*` matrix
+  (`:133`), both **explicit directory lists**, and
+  `src/core-package.test.ts:575` fails on any test file matched by neither. A
+  new directory is invisible to CI until it is named.
+- Still owed when `keryx acp` becomes a verb: a route in `CLI_ROUTES`
+  (`src/cli.ts:66`), a `USAGE_BODY` line, and either a descriptor in the
+  `src/standard` command registry or an explicit exclusion — the coverage test
+  fails a new verb until one exists.

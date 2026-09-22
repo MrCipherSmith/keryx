@@ -7,14 +7,14 @@
   "id": "285",
   "slug": "acp-agent-server",
   "title": "Expose the keryx harness over the Agent Client Protocol so any ACP client can drive it",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-22T18:18:38.900Z",
-  "updatedAt": "2026-09-22T18:19:19.269Z",
+  "updatedAt": "2026-09-22T18:30:53.472Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:ba80c9f88f97aa8be8e3d3bbd693704f92cdbcd7e0865975f391be3709a53bc5",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -88,8 +88,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:30:53.370Z",
+            "outcome": "started",
+            "detail": "opus: pin the ACP surface"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -104,8 +110,14 @@
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:30:53.472Z",
+            "outcome": "started",
+            "detail": "opus: adapter framing and types"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -296,6 +308,25 @@
       "at": "2026-09-22T18:19:19.269Z",
       "event": "task-added",
       "detail": "T14: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-22T18:30:53.176Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-22T18:30:53.273Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-22T18:30:53.370Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — opus: pin the ACP surface"
+    },
+    {
+      "at": "2026-09-22T18:30:53.472Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — opus: adapter framing and types"
     }
   ]
 }

@@ -11,3 +11,9 @@
 - 2026-09-22T18:19:19.065Z - task-added: T12: Conformance test over a real stdio pipe against the built CLI with a fake provider
 - 2026-09-22T18:19:19.166Z - task-added: T13: Docs: README and CLI reference for keryx acp
 - 2026-09-22T18:19:19.269Z - task-added: T14: Verification: CI green, keryx health run
+- 2026-09-22T18:30:53.176Z - frozen: 10 criteria; checksum recorded
+- 2026-09-22T18:30:53.273Z - started
+- 2026-09-22T18:30:53.370Z - task-attempt: T5: started (attempt 1) — opus: pin the ACP surface
+- 2026-09-22T18:30:53.472Z - task-attempt: T6: started (attempt 1) — opus: adapter framing and types
+- 2026-09-22T18:55Z - T5: ACP surface pinned to protocol version 1 from the published v1 JSON Schema (fetched 2026-09-22). Six agent methods implemented in this flow (initialize, session/new, session/load, session/list, session/prompt, session/cancel), seven refused with -32601 plus a reason. Capabilities, keryx mapping with file:line, and ten spec-vs-keryx findings written to context.md §T5. F-1 needs an operator decision: AC1's "refused with a JSON-RPC error" contradicts the spec's MUST to answer a newer client with the latest supported version.
+- 2026-09-22T18:55Z - T6: adapter module created at src/acp/ — protocol.ts (version, method tables, all v1 wire types, capabilities, negotiation), jsonrpc.ts (2.0 envelopes, ACP error codes, classification), framing.ts (newline-delimited stdio framing, streaming decoder), dispatch.ts (handler registry and error shape), index.ts. No harness wiring; driven by tests alone. 41 tests pass; typecheck and eslint clean. src/acp registered as an adapter zone and added to the test:core filter, without which CI would never run these tests.

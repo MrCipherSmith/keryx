@@ -79,6 +79,13 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // Adapters — CLI and MCP transports.
   { segment: "commands", zone: "adapter" },
   { segment: "mcp", zone: "adapter" },
+  // The Agent Client Protocol server (flow 285): the third transport, beside
+  // the CLI and the MCP servers. Adapter for the same reason `mcp` is — an
+  // outside process (an IDE) drives keryx through it, it owns no project state,
+  // and it will import both core owners and the client turn loop to answer a
+  // prompt. It is not client: nothing in it selects a model or runs a turn, it
+  // only translates one.
+  { segment: "acp", zone: "adapter" },
   // The CLI entry point itself: a transport, not an owner and not the runtime.
   { segment: "cli.ts", zone: "adapter" },
 
