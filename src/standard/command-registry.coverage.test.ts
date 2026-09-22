@@ -63,6 +63,11 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
   { verb: "metrics", reason: "execution-metrics tooling aimed at maintainers and CI, not agents" },
   { verb: "commands", reason: "the registry surface itself; describing it in itself adds nothing" },
   { verb: "workspace", reason: "offline SAC registry mutation is intentionally local-CLI only in Phase 1; exposing a descriptor would make it eligible for future remote/MCP projection before that security boundary exists" },
+  {
+    verb: "acp",
+    reason:
+      "binds stdio as a JSON-RPC channel and runs until signalled, like serve-mcp and shell; it owns stdout as the protocol wire, so it has no machine-consumable result a descriptor could describe",
+  },
 ];
 
 /** Verbs that carry at least one descriptor, derived from the registry. */

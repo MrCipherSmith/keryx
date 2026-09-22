@@ -7,14 +7,14 @@
   "id": "285",
   "slug": "acp-agent-server",
   "title": "Expose the keryx harness over the Agent Client Protocol so any ACP client can drive it",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-22T18:18:38.900Z",
-  "updatedAt": "2026-09-22T18:19:19.269Z",
+  "updatedAt": "2026-09-22T20:19:08.899Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:4f943bab35869deaf6bfdd0e035885a161283ec649e0a688c7a4a1dd922c9c13",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -85,53 +85,74 @@
       "id": "T5",
       "title": "Pin the ACP surface: read the schema, write down the exact methods, capability fields and version keryx will implement",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:30:53.370Z",
+            "outcome": "started",
+            "detail": "opus: pin the ACP surface"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "JSON-RPC over stdio framing plus the wire types in one adapter module",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:30:53.472Z",
+            "outcome": "started",
+            "detail": "opus: adapter framing and types"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "initialize and capability negotiation, including refusal of an unsupported version",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:50:48.793Z",
+            "outcome": "started",
+            "detail": "sonnet: initialize and negotiation"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "session/new and session/prompt over a real harness turn, streaming session/update",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -141,45 +162,60 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "session/request_permission wired to the policy ask path, denial honoured",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T19:10:46.049Z",
+            "outcome": "started",
+            "detail": "opus: permission path"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "session/cancel, session/list, session/load over durable project sessions",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T19:30:07.076Z",
+            "outcome": "started",
+            "detail": "sonnet: cancel, list, load"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Client capabilities: fs and terminal used when advertised, fallback when not",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9",
         "T10"
@@ -190,13 +226,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "Conformance test over a real stdio pipe against the built CLI with a fake provider",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -206,13 +243,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Docs: README and CLI reference for keryx acp",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -222,7 +260,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
@@ -230,12 +269,55 @@
       "kind": "verify",
       "status": "todo",
       "dependsOn": [
-        "T12",
-        "T13"
+        "T16"
       ],
       "attempts": {
         "count": 0,
         "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Fix the CI guard: a transcript reader called outside a try in the ACP session path",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T20:05:44.961Z",
+            "outcome": "started",
+            "detail": "sonnet: CI guard fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Review fixes: one announcement per tool call, refuse a concurrent prompt or load for a busy session, strengthen the streaming assertion",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T15"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T20:19:08.899Z",
+            "outcome": "started"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -296,6 +378,125 @@
       "at": "2026-09-22T18:19:19.269Z",
       "event": "task-added",
       "detail": "T14: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-22T18:30:53.176Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-22T18:30:53.273Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-22T18:30:53.370Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — opus: pin the ACP surface"
+    },
+    {
+      "at": "2026-09-22T18:30:53.472Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — opus: adapter framing and types"
+    },
+    {
+      "at": "2026-09-22T18:50:32.460Z",
+      "event": "task-done",
+      "detail": "T5: Pin the ACP surface: read the schema, write down the exact methods, capability fields and version keryx will implement"
+    },
+    {
+      "at": "2026-09-22T18:50:32.562Z",
+      "event": "task-done",
+      "detail": "T6: JSON-RPC over stdio framing plus the wire types in one adapter module"
+    },
+    {
+      "at": "2026-09-22T18:50:44.950Z",
+      "event": "ac-updated",
+      "detail": "AC1 as frozen contradicted the ACP v1 spec: a client asking for a newer protocol version MUST be answered with the latest version the agent supports, not refused. Refusal stays for a malformed or out-of-range version. Found by the T5 surface pinning against the published schema; no criterion had been confirmed yet."
+    },
+    {
+      "at": "2026-09-22T18:50:48.793Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — sonnet: initialize and negotiation"
+    },
+    {
+      "at": "2026-09-22T19:10:45.851Z",
+      "event": "task-done",
+      "detail": "T7: initialize and capability negotiation, including refusal of an unsupported version"
+    },
+    {
+      "at": "2026-09-22T19:10:45.952Z",
+      "event": "task-done",
+      "detail": "T8: session/new and session/prompt over a real harness turn, streaming session/update"
+    },
+    {
+      "at": "2026-09-22T19:10:46.049Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — opus: permission path"
+    },
+    {
+      "at": "2026-09-22T19:30:06.974Z",
+      "event": "task-done",
+      "detail": "T9: session/request_permission wired to the policy ask path, denial honoured"
+    },
+    {
+      "at": "2026-09-22T19:30:07.076Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — sonnet: cancel, list, load"
+    },
+    {
+      "at": "2026-09-22T19:47:13.627Z",
+      "event": "ac-updated",
+      "detail": "AC6 as frozen demanded that writes route through fs/write_text_file. apply_patch applies a multi-file diff atomically through git; the ACP write method writes one file's whole content with no diff semantics and no cross-file atomicity, so routing it would be a redesign, not a capability branch. AC6 now states what the design guarantees — reads route when advertised, writes and shell stay local with the reason recorded, and no absent capability is ever called — and the routing work is left to a follow-up flow."
+    },
+    {
+      "at": "2026-09-22T19:47:18.911Z",
+      "event": "task-done",
+      "detail": "T10: session/cancel, session/list, session/load over durable project sessions"
+    },
+    {
+      "at": "2026-09-22T19:47:19.011Z",
+      "event": "task-done",
+      "detail": "T11: Client capabilities: fs and terminal used when advertised, fallback when not"
+    },
+    {
+      "at": "2026-09-22T20:00:55.471Z",
+      "event": "task-done",
+      "detail": "T12: Conformance test over a real stdio pipe against the built CLI with a fake provider"
+    },
+    {
+      "at": "2026-09-22T20:00:55.571Z",
+      "event": "task-done",
+      "detail": "T13: Docs: README and CLI reference for keryx acp"
+    },
+    {
+      "at": "2026-09-22T20:05:44.857Z",
+      "event": "task-added",
+      "detail": "T15: Fix the CI guard: a transcript reader called outside a try in the ACP session path"
+    },
+    {
+      "at": "2026-09-22T20:05:44.961Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — sonnet: CI guard fix"
+    },
+    {
+      "at": "2026-09-22T20:09:10.395Z",
+      "event": "task-added",
+      "detail": "T16: Review fixes: one announcement per tool call, refuse a concurrent prompt or load for a busy session, strengthen the streaming assertion"
+    },
+    {
+      "at": "2026-09-22T20:09:10.494Z",
+      "event": "task-depends-set",
+      "detail": "T14: dependsOn T16 (was T12, T13) — verification runs after the review fixes"
+    },
+    {
+      "at": "2026-09-22T20:11:48.871Z",
+      "event": "task-done",
+      "detail": "T15: Fix the CI guard: a transcript reader called outside a try in the ACP session path"
+    },
+    {
+      "at": "2026-09-22T20:19:08.899Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1)"
     }
   ]
 }

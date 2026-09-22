@@ -83,6 +83,7 @@ rules sync regenerates it. That index text is prompt guidance, not enforcement.
 | `orient` | Emit or install bounded Metaproject + graph + wiki startup context. |
 | `security` | Policy-based scanning, redaction, guardrails, and audit reports for agent input/output and artifacts. |
 | `mcp` | Expose Metaproject services over the Model Context Protocol (opt-in, off by default). SAC tools are stdio-only. |
+| `acp` | Serve the harness to an editor over the Agent Client Protocol (newline-delimited JSON-RPC on stdio). |
 | `workspace` | Shared Agent Context: create/list/show workspaces, FWK overview/read, propose/review, collaboration overview, policy-readiness. Not listed by `keryx commands`. |
 
 ### Optional dependencies and graceful degradation
@@ -163,6 +164,148 @@ keryx sessions list | fork <id> | export <id> | path
 git root, or by absolute cwd outside a repository — so `list` never shows another
 project's work. The [harness page](./harness.md#sessions) covers what a session
 holds and what forking copies.
+
+## acp
+
+`keryx acp` makes keryx speak the
+[Agent Client Protocol](https://agentclientprotocol.com) (ACP) v1: an editor
+or another ACP client launches it as a **subprocess** and talks to it over
+its stdin/stdout — newline-delimited JSON-RPC 2.0 in both directions, no
+`Content-Length` framing (not LSP framing). It is not something a person runs
+interactively; the client owns the process's lifetime and the conversation.
+
+```
+keryx acp [--provider <p>] [--model <m>] [--base-url <url>] [--data-dir <dir>]
+```
+
+`--provider`/`--model`/`--base-url` select the model backend the same way
+`keryx shell` does; `--data-dir` overrides where sessions are stored (mainly
+useful for a sandboxed client integration test). Nothing but protocol frames
+ever reaches stdout — every diagnostic goes to stderr, which the client may
+capture, forward, or ignore; a stray log line on stdout would otherwise
+corrupt the stream.
+
+**Honesty note:** this has been verified against the published v1 JSON
+Schema and against this repository's own scripted test client, driving a
+real `keryx acp` subprocess over a real pipe (`src/acp/*.process.test.ts`).
+It has not been verified against a shipping IDE (Zed, a JetBrains IDE, or
+similar) — if you wire one up and hit a mismatch, that is new information,
+not a contradiction of something promised here.
+
+### Methods implemented
+
+| Method | What it does |
+|---|---|
+| `initialize` | Negotiates the protocol version and returns keryx's `agentCapabilities`/`agentInfo`. Requesting the version keryx serves gets it back unchanged; requesting a newer one gets keryx's latest supported version — not an error, the spec requires this, and the client then decides whether to proceed or close the connection; a malformed or out-of-range version (not an integer, or outside `uint16`) is refused with a JSON-RPC error. Any other request before `initialize` succeeds is refused, not served. |
+| `session/new` | Creates a keryx session bound to `resolveProjectRoot(cwd)` — the git toplevel above the requested `cwd`, or the requested `cwd` itself outside a repository. `session/list`/`session/load` report this resolved root back, not the `cwd` you sent, so a session opened at `/repo/packages/web` is later listed with `cwd: /repo`. A non-empty `mcpServers` is refused honestly (`-32602`) rather than silently ignored: there is no per-session MCP registration seam yet; configure servers project-wide with `keryx mcp`/`keryx integrate` instead. |
+| `session/prompt` | Runs a real harness turn in that session and streams `session/update` notifications (assistant text, reasoning, tool calls and their results) as the turn runs — not buffered to the end — resolving with the spec's `stopReason` (`end_turn`, `max_tokens`, `max_turn_requests`, or `cancelled`) once it finishes. One turn per session at a time: a second `session/prompt` for a session whose turn is still running is refused with `-32600` and `data.condition: "session-busy"` rather than interleaved into the same transcript. Wait for the first turn's response before prompting again; `session/cancel` shortens that wait but does not end it, because the slot is freed by the cancelled turn itself once it observes the abort — a turn parked in a long tool call frees it a moment later, not instantly. |
+| `session/cancel` | A notification (no reply). Aborts the running turn — the same abort path a local hard-stop uses — and settles any `session/request_permission` the turn had open as a local denial, so a pending ask never leaves the client hanging. The turn's `session/prompt` response resolves `stopReason: "cancelled"`, and no further `session/update` for that turn is sent afterwards. Cancelling an unknown or already-finished session is a harmless no-op. |
+| `session/list` | Lists the project's durable sessions — the same store `keryx sessions` and `keryx shell --resume` read. An omitted `cwd` lists the sessions of the ACP process's own project root (refusing an optional parameter would itself be a conformance break); a provided `cwd` filters to that project. One page per call; there is no pagination (`nextCursor`) today. |
+| `session/load` | Loads a session created anywhere — including one created outside any ACP connection, such as with `keryx shell` — and replays its history as `session/update` notifications **before** responding, as the spec requires. `user`/`assistant` messages become `user_message_chunk`/`agent_message_chunk`; a stored tool call/result pair becomes a `tool_call` + `tool_call_update` sharing one id; `system` messages are dropped (there is no ACP chunk for them). A replayed tool call's status is always reported `completed` — the persisted transcript keeps only the final content, not a separate success/failure marker, so that is the honest approximation available, not a claim that the original call actually succeeded. Loading a session that has a turn in flight is refused the same way `session/prompt` is (`-32600`, `data.condition: "session-busy"`): the load would replace the history the running turn is still writing to. A session whose transcript exists but cannot be read is answered `-32603` with the session id, the transcript's path and the reason in `error.data` — not `resourceNotFound` (the session does exist) and not an empty replay (which would tell the client the conversation had no messages). This is the one error on this wire that names a path on the agent's filesystem; it is the transcript under the data directory the client itself launched the agent with, and it is there because "which file, and why" is what makes the failure fixable. |
+
+### Methods refused, and why
+
+Every method ACP defines that keryx does not implement answers
+**`-32601 Method not found`** with a `data.reason` explaining which of the
+two situations it is: "keryx has not implemented this" or "your client
+called something its own advertised capabilities say it shouldn't have". A
+conformant client reads `agentCapabilities` on `initialize` and never calls
+these; the refusal exists for the client that does anyway.
+
+| Method | Refused because |
+|---|---|
+| `authenticate` | keryx advertises no `authMethods`; there is nothing to authenticate against. |
+| `logout` | `agentCapabilities.auth.logout` is not advertised. |
+| `session/resume` | `sessionCapabilities.resume` is not advertised; use `session/load`, which replays history instead. |
+| `session/close` | `sessionCapabilities.close` is not advertised; keryx sessions are durable on disk and have no open/closed state to leave. |
+| `session/delete` | `sessionCapabilities.delete` is not advertised; session retention is an operator decision, not a client one. |
+| `session/set_mode` | `session/new` returns no `modes`, so there is no mode to set. |
+| `session/set_config_option` | `session/new` returns no `configOptions`, so there is no option to set. |
+
+### Client capabilities
+
+On `initialize`, a client advertises `clientCapabilities.fs` (with
+`readTextFile`/`writeTextFile`) and `clientCapabilities.terminal`. What keryx
+does with each is a deliberate, per-capability decision, not a uniform rule:
+
+- **Reads.** With `fs.readTextFile: true` advertised, keryx's `read_file`
+  tool calls `fs/read_text_file` on the client and returns whatever content
+  the client answers with — not necessarily what is on disk, since the
+  client's view may differ (an unsaved buffer, for instance). Without it, or
+  with it `false`, keryx reads the file itself with no wire call at all; the
+  turn completes the same way either way. This is the one half of AC6 that
+  is fully capability-routed, and it is tested both ways over a real pipe:
+  the frame is asserted present when advertised and absent — for the whole
+  connection, not just the one call — when it is not.
+- **Writes.** keryx's `apply_patch` tool always writes locally, whether or
+  not `fs.writeTextFile` is advertised. `apply_patch` applies a multi-file
+  unified diff atomically (via `git apply`) — all hunks across all files
+  land, or none do — and `fs/write_text_file`'s shape (one file, full
+  content, no diff, no cross-file atomicity) cannot express that guarantee.
+  Rerouting through it would mean giving up atomicity or reconstructing it
+  with scratch-index plumbing outside `git apply`, which is a redesign of
+  `apply_patch`, not a capability branch. `keryx acp` never calls
+  `fs/write_text_file` in this release, with or without the capability being
+  advertised.
+- **Shell.** keryx's `shell_exec` tool always runs locally too, regardless of
+  `terminal`. Its local implementation (background jobs, streaming output,
+  timeouts, and the permission gate below) has no one-for-one match in ACP's
+  `terminal/create` + `output` + `wait_for_exit` + `kill` + `release`
+  surface, and keryx does not need a remote terminal — the client and the
+  agent already share a machine, exactly as `keryx shell` does. `keryx acp`
+  calls no `terminal/*` method in **any** capability configuration, tested
+  both with and without `terminal` advertised.
+
+### Permissions
+
+A tool call the policy engine would ask a local operator about produces a
+`session/request_permission` request instead, carrying the `tool_call` the
+client has already been shown (as a `session/update`, sent before the ask) and
+four options: allow once, allow always, reject once, reject always. **Only an
+explicit allow runs the call** — a reject of either kind, a `cancelled`
+outcome (the client closing the question without deciding), an unrecognised
+option id, a malformed answer, a JSON-RPC error answer, or the client simply
+going away all deny it, and the tool call is left unexecuted. The turn then
+continues (or ends) exactly as it would after a local denial — same message,
+same history entry, same next steps — so a client cannot distinguish "the
+operator said no" from "the ACP wire said no" by the turn's behaviour.
+
+A tool call escalated for destructive effect, credentials, a publish lease,
+or an untrusted origin is offered **no "allow always" option at all** — keryx's
+own rule for those is "always prompt, never remember".
+
+**`allow_always` is remembered by the client, not by keryx.** keryx persists
+nothing from an "allow always" answer; it is the client's job to answer the
+identical next request itself, the same way an editor's own permission UI
+would. keryx does not mint a local allowlist entry from it — a
+keryx-side allowlist matched against an ACP answer it never showed a human
+would be exactly the kind of "boundary" that has already gone wrong before.
+
+If a client's very first answer to a `session/request_permission` comes back
+as a JSON-RPC error (e.g. the client does not implement the method), keryx
+remembers that for the rest of the connection and denies every later gated
+call **locally, without asking again** — it does not retry a method a client
+has already said it lacks, and it never treats "cannot ask" as "must be fine
+to run".
+
+### Limits, plainly
+
+- **No transport but stdio.** There is no HTTP or WebSocket ACP transport;
+  `keryx acp` only ever speaks newline-delimited JSON-RPC over the pipes the
+  client gave it when it spawned the process.
+- **No authentication.** `authMethods` is empty and `authenticate`/`logout`
+  are refused; keryx authenticates to model *providers* out of band, through
+  its own credential store, never over this wire.
+- **Writes and shell execution never leave the machine**, as above — not a
+  missing feature so much as a decision not to give up `apply_patch`'s
+  atomicity or `shell_exec`'s streaming/approval behaviour for a capability
+  keryx does not need on a machine it already shares with the client.
+- **Not implemented at all:** `session/resume`, `session/close`,
+  `session/delete`, `session/set_mode`, `session/set_config_option` — see the
+  refusal table above for why each one specifically.
+- **No cross-project `session/list`.** Only the ACP process's own project
+  (or a `cwd` you pass) is listed; there is no "every session on this
+  machine" view.
 
 ## bus
 
