@@ -3917,6 +3917,17 @@ export async function launchTuiAgentShell(opts: {
     // this loader — the same information the readline shell shows above its prompt.
     const approvalContext = createApprovalContextLoader(opts.session?.cwd ?? process.cwd());
     io.requestApproval = async (tool, inputJson, meta) => {
+      if (meta?.untrustedOrigin === true) {
+        // `agent.ts`'s untrusted-content gate asks the human instead of refusing
+        // the call outright — this says why the operator is being asked.
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `ap${uid++}`,
+            content: otui.t`${otui.yellow("⚠ follows untrusted external content — it cannot authorize this call; your answer does")}`,
+          }),
+        );
+      }
+
       // Multi-agent spawn: auto-allow read_only; ask for general.
       if (tool === "spawn_subagent") {
         let mode = "read_only";

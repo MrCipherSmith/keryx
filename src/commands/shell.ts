@@ -1815,6 +1815,14 @@ export async function runAgentRepl(
     },
     requestApproval: async (tool, input, meta) => {
       stopSpinner();
+      // `agent.ts`'s untrusted-content gate asks the human instead of refusing
+      // the call outright, and this line is what makes that prompt answerable:
+      // without it the operator is asked about a command the model chose right
+      // after reading a web page, with nothing on screen saying so.
+      if (meta?.untrustedOrigin === true) {
+        out(`\n${GUTTER}${style.red("⚠ this call follows untrusted external content in this turn")}\n`);
+        out(`${GUTTER}${style.dim("that content cannot authorize it — only your answer can")}\n`);
+      }
       if (tool === "apply_patch") {
         // ADR-0010/P2: render the actual diff (full, never truncated — the
         // 120-char preview below is fine for a shell command, not for a

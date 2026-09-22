@@ -495,6 +495,91 @@ test("untrusted web output cannot authorize later tools within the SAME turn", a
   expect(toolResults).toContain("shell_exec:err");
 });
 
+test("an APPROVING human runs the call that follows untrusted web output, and the prompt is told why it is asked", async () => {
+  // The relaxation (operator decision, 2026-09-22). Before it, this exact script
+  // ended with a refused `shell_exec`.
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+      { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+    ],
+    [
+      { kind: "tool_call_start", toolCallId: "s1", toolName: "shell_exec" },
+      { kind: "tool_call_end", toolCallId: "s1", input: "{}" },
+    ],
+    [{ kind: "text_delta", text: "External result acted on." }],
+  ]);
+  let shellInvoked = false;
+  const tools: InteractiveTool[] = [
+    { definition: { name: "web_fetch", description: "", inputSchema: { type: "object", properties: {} }, risk: "read" }, invoke: async () => ({ output: "external", isError: false, untrusted: true }) },
+    { definition: { name: "shell_exec", description: "", inputSchema: { type: "object", properties: {} }, risk: "shell" }, invoke: async () => { shellInvoked = true; return { output: "ran", isError: false }; } },
+  ];
+  const metas: Array<{ untrustedOrigin?: boolean } | undefined> = [];
+  const { io: baseIo, toolResults } = collectingIo();
+  const io: AgentIO = {
+    ...baseIo,
+    requestApproval: async (_tool, _input, meta) => {
+      metas.push(meta);
+      return true;
+    },
+  };
+  await runAgentTurn(
+    io,
+    { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() },
+    [],
+    "fetch it, then act on it",
+  );
+  expect(shellInvoked).toBe(true);
+  expect(toolResults).toContain("shell_exec:ok");
+  // The gate ASKED, and told the prompt why it was asking: that is the change.
+  expect(metas[0]?.untrustedOrigin).toBe(true);
+});
+
+test("unattended: the same call is still refused without ever asking — content cannot authorize itself when nobody is watching", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+      { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+    ],
+    [
+      { kind: "tool_call_start", toolCallId: "s1", toolName: "shell_exec" },
+      { kind: "tool_call_end", toolCallId: "s1", input: "{}" },
+    ],
+    [{ kind: "text_delta", text: "done" }],
+  ]);
+  let shellInvoked = false;
+  let asked = 0;
+  const tools: InteractiveTool[] = [
+    { definition: { name: "web_fetch", description: "", inputSchema: { type: "object", properties: {} }, risk: "read" }, invoke: async () => ({ output: "external", isError: false, untrusted: true }) },
+    { definition: { name: "shell_exec", description: "", inputSchema: { type: "object", properties: {} }, risk: "shell" }, invoke: async () => { shellInvoked = true; return { output: "ran", isError: false }; } },
+  ];
+  const { io: baseIo, toolResults } = collectingIo();
+  const io: AgentIO = {
+    ...baseIo,
+    requestApproval: async () => {
+      asked += 1;
+      return true;
+    },
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider,
+      providerId: "scripted",
+      modelId: "test",
+      tools,
+      systemInstruction: "test",
+      idSeq: fixedIdSeq(),
+      unattended: true,
+    },
+    [],
+    "fetch it, then act on it",
+  );
+  expect(asked).toBe(0);
+  expect(shellInvoked).toBe(false);
+  expect(toolResults).toContain("shell_exec:err");
+});
+
 test("session bffc5c57 fix: untrusted content from a PRIOR turn does NOT block an unrelated LATER turn", async () => {
   const { provider } = scriptedProvider([
     [
@@ -3488,7 +3573,7 @@ test("T9 regression (code-verifier fix): a WaveExecutionError from a LATER wave 
 // loop's gate check ever discarded the result.
 // ============================================================================
 
-test("F-001 regression (flow 171 T10): untrustedContentSeen set by an EARLIER ROUND in the SAME turn blocks concurrent spawn_subagent dispatch entirely — no real spawn ever runs", async () => {
+test("F-001 regression (flow 171 T10): untrustedContentSeen set by an EARLIER ROUND in the SAME turn still never dispatches spawns CONCURRENTLY — they fall to the sequential gate, which asks the user and honours a denial", async () => {
   let invokeCount = 0;
   const spawnTool = delegateSpawnTool(async (input) => {
     invokeCount += 1;
@@ -3514,7 +3599,17 @@ test("F-001 regression (flow 171 T10): untrustedContentSeen set by an EARLIER RO
     ],
     [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
   ]);
-  const { io, toolResultOutputs } = collectingIoForSpawnTests();
+  const { io: baseIo, toolResultOutputs } = collectingIoForSpawnTests();
+  const asked: string[] = [];
+  // The untrusted-content gate now ASKS instead of refusing silently, so "no
+  // spawn ever runs" is true only because the human answered no.
+  const io: AgentIO = {
+    ...baseIo,
+    requestApproval: async (tool) => {
+      asked.push(tool);
+      return false;
+    },
+  };
   const deps: AgentDeps = {
     provider,
     providerId: "scripted",
@@ -3531,13 +3626,15 @@ test("F-001 regression (flow 171 T10): untrustedContentSeen set by an EARLIER RO
   // `spawnConcurrencyCandidates.length` was 2, and `runConcurrentSpawnBatch`
   // ran BOTH to real completion before the per-call loop's gate check
   // discarded the (already-executed) result. After the fix: the concurrent
-  // branch is skipped entirely and both calls are blocked in the sequential
-  // loop before ever reaching `invoke()`.
+  // branch is skipped entirely, and both calls fall to the sequential gate,
+  // which ASKS the user — there is no concurrent dispatch left to un-do, and a
+  // denial still runs nothing.
+  expect(asked).toEqual(["spawn_subagent", "spawn_subagent"]);
   expect(invokeCount).toBe(0);
   expect(toolResultOutputs).toEqual([
     "external", // round 1's web_fetch result itself
-    expect.stringContaining("cannot authorize"),
-    expect.stringContaining("cannot authorize"),
+    expect.stringContaining("did not authorize"),
+    expect.stringContaining("did not authorize"),
   ]);
 });
 
@@ -3618,7 +3715,17 @@ test("F-001 regression (flow 171 T10): a same-batch untrusted web call blocks co
     ],
     [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
   ]);
-  const { io, toolResultOutputs } = collectingIoForSpawnTests();
+  const { io: baseIo, toolResultOutputs } = collectingIoForSpawnTests();
+  const asked: string[] = [];
+  // The untrusted-content gate now ASKS instead of refusing silently, so "no
+  // spawn ever runs" is true only because the human answered no.
+  const io: AgentIO = {
+    ...baseIo,
+    requestApproval: async (tool) => {
+      asked.push(tool);
+      return false;
+    },
+  };
   const deps: AgentDeps = {
     provider,
     providerId: "scripted",
@@ -3636,10 +3743,11 @@ test("F-001 regression (flow 171 T10): a same-batch untrusted web call blocks co
   // shape, not results) — this is the trade-off #2 case already disclosed in
   // the T6 journal entry, now asserting the spawn calls are genuinely NEVER
   // dispatched, not merely "executed then discarded".
+  expect(asked).toEqual(["spawn_subagent", "spawn_subagent"]);
   expect(invokeCount).toBe(0);
   expect(toolResultOutputs[0]).toBe("external");
-  expect(toolResultOutputs[1]).toContain("cannot authorize");
-  expect(toolResultOutputs[2]).toContain("cannot authorize");
+  expect(toolResultOutputs[1]).toContain("did not authorize");
+  expect(toolResultOutputs[2]).toContain("did not authorize");
 });
 
 test("F-002 regression (flow 171 T10): the `!plan.ok` sequential fallback degrades a single call's throwing requestApproval to a per-call error result instead of crashing the whole turn", async () => {

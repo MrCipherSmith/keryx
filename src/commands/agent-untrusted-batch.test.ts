@@ -55,7 +55,13 @@ function fixedIdSeq(): () => string {
   return () => `id-${id++}`;
 }
 
-function collectingIo(): { io: AgentIO; text: string[]; toolResults: string[]; system: string[] } {
+/**
+ * `approve: false` is the DENYING human — the untrusted-content gate in
+ * `agent.ts` now ASKS before a call that follows external content instead of
+ * refusing it outright, so a test that wants the old "refused" outcome has to
+ * say no rather than merely omit an approver (`shell` risk still needs one).
+ */
+function collectingIo(approve = true): { io: AgentIO; text: string[]; toolResults: string[]; system: string[] } {
   const text: string[] = [];
   const toolResults: string[] = [];
   const system: string[] = [];
@@ -69,7 +75,7 @@ function collectingIo(): { io: AgentIO; text: string[]; toolResults: string[]; s
       onSystem: (s) => system.push(s),
       // `shell` risk is DEFAULT-DENY without an approver (`executeCall`), which
       // would refuse the command for a reason unrelated to the gate under test.
-      requestApproval: async () => true,
+      requestApproval: async () => approve,
     },
   };
 }
@@ -121,7 +127,7 @@ test("same-batch fix: a mutating call placed BEFORE web_fetch is no longer refus
   expect(toolResults).toContain("shell_exec:ok");
 });
 
-test("same-batch ordering still gates: a mutating sibling AFTER a web_fetch stays refused", async () => {
+test("same-batch ordering still gates: a mutating sibling AFTER a web_fetch is ASKED, and a denial refuses it", async () => {
   const { provider } = scriptedProvider([
     [
       { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
@@ -133,7 +139,7 @@ test("same-batch ordering still gates: a mutating sibling AFTER a web_fetch stay
     [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
   ]);
   let invoked = false;
-  const { io, toolResults } = collectingIo();
+  const { io, toolResults } = collectingIo(false);
   await runAgentTurn(
     io,
     {
@@ -151,7 +157,7 @@ test("same-batch ordering still gates: a mutating sibling AFTER a web_fetch stay
   expect(toolResults).toContain("shell_exec:err");
 });
 
-test("a batch whose every call the untrusted gate refused no longer ends the turn as 'no progress'", async () => {
+test("a batch whose every call the untrusted gate refused (by the user) no longer ends the turn as 'no progress'", async () => {
   const { provider, requests } = scriptedProvider([
     [
       { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
@@ -166,7 +172,7 @@ test("a batch whose every call the untrusted gate refused no longer ends the tur
     [{ kind: "text_delta", text: "kept going" }, { kind: "model_end" }],
   ]);
   let invoked = false;
-  const { io, text, system, toolResults } = collectingIo();
+  const { io, text, system, toolResults } = collectingIo(false);
   await runAgentTurn(
     io,
     {
@@ -180,7 +186,8 @@ test("a batch whose every call the untrusted gate refused no longer ends the tur
     [],
     "fetch it, then act on what it says",
   );
-  // The call is still refused (the gate itself is untouched) …
+  // The call is still refused — the gate asked the human, and the answer was no,
+  // so the ordering property is unchanged …
   expect(invoked).toBe(false);
   expect(toolResults).toContain("shell_exec:err");
   // … but the refusal is an ANSWER, not a stall: the next model round runs with

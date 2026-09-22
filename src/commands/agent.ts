@@ -110,6 +110,20 @@ export interface ApprovalMeta {
    * attach to it.
    */
   publishLeaseDetail?: string;
+  /**
+   * Untrusted external content — a `web_fetch` / `web_search` / `search_tool` /
+   * `use_tool` result — is already in this turn's history, and the call being
+   * approved now FOLLOWS it. Set only by the untrusted-content gate in
+   * `runAgentTurn`'s batch loop, never by `executeCall`'s own risk branches.
+   *
+   * It exists so the approver can say why it is asking something no mode would
+   * otherwise ask about, and it is also why this one prompt does NOT go through
+   * `resolveApprovalDecision`: a permission mode is the operator's standing
+   * statement about THEIR OWN commands, and cannot answer "external content
+   * asked for this — do YOU authorize it?". Neither `trust` nor `auto` stands
+   * in for that answer, and no remembered grant does either.
+   */
+  untrustedOrigin?: boolean;
 }
 
 /**
@@ -2655,15 +2669,76 @@ async function runAgentTurnCore(
       // result exists, and a spawned child cannot be un-spawned by a later refusal.
       const isPureReadTool = risk === "read" && !DURABLE_READ_TOOL_NAMES.has(call.name);
       if (!isPureReadTool && untrustedContentSeen) {
-        const result: InteractiveToolResult = {
-          output: "tool blocked: external web content cannot authorize further tool calls in this turn",
-          isError: true,
-        };
-        io.onToolResult?.(call.name, result);
-        history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id, ts: now() });
-        io.onHistoryChange?.("tool");
-        gateBlockedAny = true;
-        continue;
+        // ASK, do not silently refuse (operator decision, 2026-09-22).
+        //
+        // This used to refuse every non-pure-read call outright the moment any
+        // untrusted content entered the turn — no prompt, no way to continue,
+        // which in a live session reads as "the turn is dead": `use_tool` (and
+        // therefore `search_tool`, whose tool DESCRIPTIONS are third-party
+        // prose) latches `untrustedContentSeen`, and every later `shell_exec` /
+        // `apply_patch` / `use_tool` / `slate_write_seed` in that same turn came
+        // back refused. The security property that defended is real and is KEPT:
+        // content still cannot authorize a call. What changes is who is asked —
+        // a human now is, and a human answer IS authorization.
+        //
+        // Deliberately NOT routed through `resolveApprovalDecision`. A mode
+        // (`trust`, `auto`) is standing consent for the operator's own commands;
+        // letting it answer this question would mean an unread web page could
+        // obtain a shell command with no human in the loop at all.
+        // `ApprovalMeta.untrustedOrigin` tells the prompt why it is being asked.
+        //
+        // Fail-closed where nobody can answer: an `unattended` run (SLATE-11) or
+        // any caller with no `requestApproval` wired keeps the old refusal, so
+        // the gate never becomes "content may authorize itself when nobody is
+        // watching".
+        const approver = io.requestApproval;
+        if (deps.unattended === true || approver === undefined) {
+          const result: InteractiveToolResult = {
+            output: "tool blocked: external web content cannot authorize further tool calls in this turn",
+            isError: true,
+          };
+          io.onToolResult?.(call.name, result);
+          history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id, ts: now() });
+          io.onHistoryChange?.("tool");
+          gateBlockedAny = true;
+          continue;
+        }
+        const taintFingerprint = toolCallHash(call.name, call.input);
+        let taintApproved = false;
+        try {
+          const response = await approver(call.name, call.input, {
+            fingerprint: taintFingerprint,
+            destructive: risk === "destructive",
+            untrustedOrigin: true,
+          });
+          taintApproved = isApprovalFor(response, taintFingerprint);
+        } catch (err) {
+          // Same posture as every other approval path: a throwing approver
+          // degrades to a per-call refusal, never a crashed turn (F-002).
+          const result: InteractiveToolResult = {
+            output: `${call.name} not executed: the approval prompt failed (${
+              err instanceof Error ? err.message : String(err)
+            })`,
+            isError: true,
+          };
+          io.onToolResult?.(call.name, result);
+          history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id, ts: now() });
+          io.onHistoryChange?.("tool");
+          gateBlockedAny = true;
+          continue;
+        }
+        if (!taintApproved) {
+          const result: InteractiveToolResult = {
+            output:
+              "tool blocked: external web content cannot authorize this call, and the user did not authorize it either",
+            isError: true,
+          };
+          io.onToolResult?.(call.name, result);
+          history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id, ts: now() });
+          io.onHistoryChange?.("tool");
+          gateBlockedAny = true;
+          continue;
+        }
       }
       io.onToolCall?.(call.name, call.input);
       // Look up the reservation the pre-pass above already computed for this

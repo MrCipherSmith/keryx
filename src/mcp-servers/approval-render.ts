@@ -268,7 +268,10 @@ export function describeUseToolApproval(
  */
 export function renderUseToolApprovalLines(
   description: ToolApprovalDescription,
-  meta?: { readonly destructive?: boolean | undefined },
+  meta?: {
+    readonly destructive?: boolean | undefined;
+    readonly untrustedOrigin?: boolean | undefined;
+  },
 ): string[] {
   const lines = [
     description.title,
@@ -284,6 +287,12 @@ export function renderUseToolApprovalLines(
   }
   if (meta?.destructive === true) {
     lines.push("  this tool is treated as destructive — it is a third party's code");
+  }
+  if (meta?.untrustedOrigin === true) {
+    // `agent.ts`'s untrusted-content gate asks instead of refusing; this is the
+    // line that tells the operator the call follows external content the model
+    // just read, so the prompt is answerable rather than merely prompt-shaped.
+    lines.push("  ⚠ follows untrusted external content — that content cannot authorize this call");
   }
   return lines;
 }
@@ -340,7 +349,13 @@ export function isApprovalYes(answer: string): boolean {
 export async function promptUseToolApproval(
   io: ApprovalIo,
   input: string,
-  meta: { readonly destructive?: boolean | undefined; readonly fingerprint?: string | undefined } | undefined,
+  meta:
+    | {
+        readonly destructive?: boolean | undefined;
+        readonly fingerprint?: string | undefined;
+        readonly untrustedOrigin?: boolean | undefined;
+      }
+    | undefined,
   resolve?: (fqn: string) => { server: string; tool: string } | undefined,
   style?: { yellow: (t: string) => string; dim: (t: string) => string; green: (t: string) => string; red: (t: string) => string },
   gutter = "",
