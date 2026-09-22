@@ -211,19 +211,35 @@ describe("the event log", () => {
     // body for a turn that had produced thousands.
     //
     // Sized from the real bound rather than from a round number, so the test
-    // still means something if either bound moves.
+    // still means something if either bound moves — and reached with FEW large
+    // events rather than thousands of small ones. Every `appendTurnEvent` is a
+    // synchronous append AND an unconditional chmod (see `appendOwnerOnlyLine`:
+    // the mode is re-applied because `appendFileSync`'s mode applies at creation
+    // only), so the original 400-byte filler bought ~3 000 syscall pairs and blew
+    // bun's 5 s per-test budget on a loaded machine — measured 9.1 s isolated and
+    // 10.3 s in a full run, with the assertions never reached. What this test is
+    // about is BYTES past the config bound, not the event count, so ~300 events of
+    // ~5 kB prove the same premise for a tenth of the syscalls. The per-event
+    // ceiling is nowhere near: the store's own note derives 6 569 bytes of text
+    // per event before `MAX_TURN_FILE_BYTES` is reached at 10 000 events.
     createTurnRecord(record(), configDir);
-    const filler = "x".repeat(400);
+    const targetBytes = MAX_CONFIG_FILE_BYTES * 1.5;
+    const targetEvents = 300;
+    const filler = "x".repeat(Math.max(400, Math.ceil(targetBytes / targetEvents) - 256));
     const perEvent = JSON.stringify(event(0, { text: filler })).length + 1;
-    const count = Math.ceil((MAX_CONFIG_FILE_BYTES * 1.5) / perEvent);
+    const count = Math.ceil(targetBytes / perEvent);
     for (let seq = 0; seq < count; seq += 1) {
       appendTurnEvent(event(seq, { text: filler }), configDir);
     }
 
     const log = path.join(configDir, "turns", TURN, "events.jsonl");
+    const size = statSync(log).size;
     // The premise: without this, a shorter log would satisfy the assertion below
-    // for the wrong reason.
-    expect(statSync(log).size).toBeGreaterThan(MAX_CONFIG_FILE_BYTES);
+    // for the wrong reason. The SECOND bound matters as much — past
+    // `MAX_TURN_FILE_BYTES` the reader refuses the file as `too-large`, and this
+    // would then be testing a different refusal entirely.
+    expect(size).toBeGreaterThan(MAX_CONFIG_FILE_BYTES);
+    expect(size).toBeLessThan(MAX_TURN_FILE_BYTES);
 
     const events = eventsOf(TURN, -1, configDir);
     expect({ read: events.length, appended: count }).toEqual({ read: count, appended: count });
