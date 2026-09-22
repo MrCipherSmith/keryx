@@ -72,9 +72,14 @@ describe("AC1 — no flags resolves what keryx shell would use, through its own 
     expect(resolution.kind).toBe("ready");
     if (resolution.kind !== "ready") return;
     expect(resolution.source).toBe("shell-config");
+    // Narrowed first: comparing against `shell.initial?.x` would let an
+    // absent shell selection pass as `undefined === undefined`.
+    const initial = shell.initial;
+    expect(initial).toBeDefined();
+    if (initial === undefined) return;
     expect({ provider: resolution.providerId, model: resolution.modelId }).toEqual({
-      provider: shell.initial?.provider,
-      model: shell.initial?.model,
+      provider: initial.provider,
+      model: initial.model,
     });
     expect(factory.calls).toEqual([{ name: "ollama", model: "qwen3:8b", baseUrl: "http://127.0.0.1:11434" }]);
   });
