@@ -119,7 +119,7 @@ export async function openSlate(opts: OpenSlateOptions): Promise<Slate> {
     cwd: opts.cwd,
     ...(opts.runtime !== undefined ? { runtime: opts.runtime } : {}),
   });
-  return openSlateAtomic(opts.dir, opts.mintAttemptId, (existing) => ({
+  return openSlateAtomic(opts.dir, opts.mintAttemptId, (_existing) => ({
     anchors,
     course: {},
     seeds: [],
@@ -271,7 +271,7 @@ export async function ensureSlateOpened(
   if (isSlateSessionDetached(ref)) {
     return;
   }
-  await openSlateAtomic(ref.dir, mintAttemptId, (existing) => ({
+  await openSlateAtomic(ref.dir, mintAttemptId, (_existing) => ({
     anchors,
     course: {},
     seeds: [],
