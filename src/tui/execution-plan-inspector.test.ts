@@ -11,7 +11,6 @@ import {
 import {
   PLAN_EMPTY_TEXT,
   formatPlanLegend,
-  formatPlanMeta,
   formatPlanRow,
   formatPlanSummary,
   planCounts,

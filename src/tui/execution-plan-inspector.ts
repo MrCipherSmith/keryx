@@ -220,7 +220,7 @@ export function presentExecutionPlanInspector(
   options: PresentExecutionPlanInspectorOptions,
 ): PlanModalHandle | undefined {
   let plan = options.initial;
-  let dir = options.getSessionDir();
+  const dir = options.getSessionDir();
   let body: PlanBody | undefined;
   let tab = "plan";
   const renderer = options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer;
