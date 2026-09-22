@@ -26,11 +26,28 @@ const skillPath = (root: string, skill: string): string =>
     ? path.join(REPO_ROOT, root, "skills", skill, "SKILL.md")
     : path.join(REPO_ROOT, root, "skills", "gdskills", skill, "SKILL.md");
 
+/**
+ * Main-session pipelines. `executionPlanTools` are registered ONLY in
+ * `buildInteractiveAgentTools` — the child roster is `builtinReadOnlyTools` +
+ * `builtinMetaprojectTools` — so a skill that runs as a dispatched subagent
+ * cannot call `plan_set` at all. Teaching one would be dead text, which is why
+ * the domain reviewers and the autodoc phase subagents are absent here.
+ */
+const MAIN_SESSION_PIPELINES = [
+  "orchestration/issue-analyzer",
+  "orchestration/feature-analyzer",
+  "planning/autodoc-orchestrator",
+  "planning/docpack-orchestrator",
+  "orchestration/feature-dev",
+  "review/review-pr-feedback",
+] as const;
+
 const ORCHESTRATORS = [
   "orchestration/job-orchestrator",
   "orchestration/flow-orchestrator",
   "review/review-orchestrator",
 ] as const;
+
 
 const read = (file: string): string => readFileSync(file, "utf8");
 
@@ -97,5 +114,38 @@ test("the rule is discoverable by the two orchestrators that say how to find it"
       // A bare mention is not a pointer: the rule has to be named as a rule.
       expect(read(skillPath(root, skill))).toContain("`session-plan-bridge` rule");
     }
+  }
+});
+
+test("every main-session pipeline points at the rule and uses both plan tools", () => {
+  for (const root of ROOTS) {
+    for (const skill of MAIN_SESSION_PIPELINES) {
+      const text = read(skillPath(root, skill));
+      expect({ skill, rule: text.includes("`session-plan-bridge` rule") }).toEqual({ skill, rule: true });
+      expect({ skill, publish: text.includes("plan_set") }).toEqual({ skill, publish: true });
+      expect({ skill, update: text.includes("plan_update") }).toEqual({ skill, update: true });
+    }
+  }
+});
+
+test("each pipeline names ids of its own, not a scheme invented for the plan", () => {
+  const expected: Record<string, string> = {
+    "orchestration/issue-analyzer": "`phase-1` … `phase-4`",
+    "planning/docpack-orchestrator": "`phase-0` … `phase-5`",
+    "orchestration/feature-dev": "`phase-1` … `phase-8`",
+    "review/review-pr-feedback": "`step-1`, `step-2`",
+  };
+  for (const root of ROOTS) {
+    for (const [skill, anchor] of Object.entries(expected)) {
+      expect({ skill, anchor: read(skillPath(root, skill)).includes(anchor) }).toEqual({ skill, anchor: true });
+    }
+  }
+});
+
+test("the pipelines that stop to ask publish `proposed` at exactly that gate", () => {
+  for (const root of ROOTS) {
+    // Two independent gates, named by the skill itself.
+    expect(read(skillPath(root, "orchestration/feature-dev"))).toContain("either question is open the items are `proposed`");
+    expect(read(skillPath(root, "planning/docpack-orchestrator"))).toContain("while that question is open the items are");
   }
 });

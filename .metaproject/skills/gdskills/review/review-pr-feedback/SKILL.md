@@ -89,6 +89,17 @@ output schema is what makes them worth writing.
 
 ---
 
+
+### Publish these steps to the session plan
+
+Publish one item per `Step N` this run will take — `step-1`, `step-2`, … — with
+`plan_set` before Step 1, and move each item with `plan_update` as it completes.
+With `--fix` the loop's own steps belong in the same projection, so the operator
+can see that the run is still answering comments rather than stalled. A comment
+the run cannot act on without a decision is `blocked`.
+
+Contract: the `session-plan-bridge` rule.
+
 ## Step 1: Job Context
 
 If `context_doc` is provided and the file exists, read it before collecting.

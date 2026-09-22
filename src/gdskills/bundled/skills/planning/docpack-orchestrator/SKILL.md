@@ -59,6 +59,17 @@ Phase 5  Review      -> docpack-review pass
 Phase 6  Report      -> concise summary, changed files, gaps and next steps
 ```
 
+
+### Publish the six package phases to the session plan
+
+Publish `phase-0` … `phase-5` with `plan_set` before Phase 0 starts, then move
+each item with `plan_update` as it completes. Phase 0 asks the operator for the
+target location and folder name — while that question is open the items are
+`proposed`, which is what makes the sidebar say "awaiting approval" instead of
+claiming work is under way.
+
+Contract: the `session-plan-bridge` rule.
+
 ## Phase 0: Scope
 
 Determine:

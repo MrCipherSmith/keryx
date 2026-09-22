@@ -50,6 +50,17 @@ Issue Analyzer Progress:
 - [ ] Phase 2: Analyze intent and search codebase
 - [ ] Phase 3: Decompose into atomic tasks
 - [ ] Phase 4: Formalize as JSON output
+
+### Publish these four phases to the session plan
+
+This run is four phases with a search-heavy middle, which is exactly the stretch
+an operator cannot see. Publish them with `plan_set` as `phase-1` … `phase-4`,
+titled with the same four names the checklist above uses, and move each one with
+`plan_update` as it completes — the analysis feeds job-orchestrator's first step,
+so this is the earliest progress in a pipeline that may run for hours.
+
+Contract (ids, status translation, what does not belong in a plan item): the
+`session-plan-bridge` rule.
 ```
 
 ### Phase 1: COLLECT

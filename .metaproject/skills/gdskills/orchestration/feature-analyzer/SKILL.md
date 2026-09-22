@@ -150,6 +150,16 @@ Analysis Progress - Mode B (Current State):
 
 ---
 
+
+### Publish the steps this run will take to the session plan
+
+Publish one item per `Step N` you are actually going to execute, with `plan_set`
+and ids `step-0`, `step-1`, …, titled with that step's own heading, then move each
+item with `plan_update` as it finishes. Cross-repo analysis is long and silent;
+the sidebar is the only place the operator can see which step is running.
+
+Contract: the `session-plan-bridge` rule.
+
 ## Step 0: Context Gathering (MANDATORY)
 
 **CRITICAL**: User MUST specify both Source and Target repositories.

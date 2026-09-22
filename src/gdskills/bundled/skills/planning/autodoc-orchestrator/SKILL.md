@@ -85,6 +85,17 @@ Phase 5  autodoc-assembler          → docs/README.md + docs/index.md
 
 ---
 
+
+### Publish the pipeline to the session plan
+
+`state.json` stays the source of truth for this run; the session plan is its
+projection so the operator can watch without asking. Publish `phase-0` …
+`phase-5` with `plan_set` before Phase 0 does any work, and move each item with
+`plan_update` as the phase advances. The `NEEDS_INPUT` interview is a phase that
+needs a human: that is `blocked`, not `in_progress`.
+
+Contract: the `session-plan-bridge` rule.
+
 ## Phase 0: Initialization
 
 ### Job Directory Setup
