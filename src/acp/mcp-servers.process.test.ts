@@ -13,7 +13,18 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  watch,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildFqn } from "../mcp-servers/catalog";
@@ -483,6 +494,164 @@ describe("T13 — AC6 against a server that echoes its own credential", () => {
         ...filesUnder(root).map((file): [string, string] => [file, readFileSync(file, "utf8")]),
       ];
       expect(artifacts.filter(([, text]) => text.includes(sentinel)).map(([where]) => where)).toEqual([]);
+    } finally {
+      await client.kill();
+    }
+  }, TIMEOUT_MS);
+});
+
+describe("T14 — escaped secrets, and a shared set that recovers", () => {
+  test('a credential with a quote and a backslash (db"pass\\word42…) is redacted in the JSON-escaped result and appears in no artifact', async () => {
+    const tricky = `db"pass\\word42-${sentinel}`;
+    const escaped = JSON.stringify(tricky).slice(1, -1);
+    const fixture = writeFixture([
+      toolRound("u1", "use_tool", { tool_name: ECHO_FQN, tool_input: { text: "pw" } }),
+      textRound("done."),
+    ]);
+    const client = new AcpProcessClient({ fixture, cwd: projectDir, dataDir, homeRoot: root, env: sandboxEnv() });
+    try {
+      await initialize(client);
+      const sessionId = await newSession(client, [
+        echoEntry([
+          { name: "ECHO_SERVER_LEAK_PROBE", value: "1" },
+          { name: "ECHO_SERVER_PROBE", value: tricky },
+        ]),
+      ]);
+      await driveTurn(client, sessionId, () => ACP_PERMISSION_OPTION_IDS.allowOnce);
+      expect(String(callsOf(client, "use_tool").closed[0]?.rawOutput)).toContain("pw probe=<redacted>");
+      await client.end();
+      await client.stderrClosed();
+      const artifacts: [string, string][] = [
+        ["stdout", client.transcript()],
+        ["stderr", client.stderrText()],
+        ...filesUnder(root).map((file): [string, string] => [file, readFileSync(file, "utf8")]),
+      ];
+      const leaks = artifacts.filter(([, text]) => text.includes(tricky) || text.includes(escaped) || text.includes("db\\\\\"pass"));
+      expect(leaks.map(([where]) => where)).toEqual([]);
+    } finally {
+      await client.kill();
+    }
+  }, TIMEOUT_MS);
+
+  test("a server that failed its first start is redialled when the next thread binds, and its tool works there", async () => {
+    const marker = path.join(root, "failed-once.marker");
+    const entry = echoEntry([{ name: "ECHO_SERVER_FAIL_ONCE_MARKER", value: marker }]);
+    const fixture = writeFixture([toolRound("s1", "search_tool", { query: "echo" }), textRound("found.")]);
+    const client = new AcpProcessClient({ fixture, cwd: projectDir, dataDir, homeRoot: root, env: sandboxEnv() });
+    try {
+      await initialize(client);
+      const first = await newSession(client, [entry]);
+      await client.waitFor(
+        (m) =>
+          m.method === "session/update" &&
+          m.params?.["sessionId"] === first &&
+          (updateOf(m).content?.text ?? "").includes('MCP server "echo" failed to start'),
+        "the first thread's start-up failure report",
+      );
+      expect(existsSync(marker)).toBe(true);
+
+      const second = await newSession(client, [entry]);
+      await driveTurn(client, second, () => ACP_PERMISSION_OPTION_IDS.allowOnce);
+      expect(String(callsOf(client, "search_tool").closed[0]?.rawOutput)).toContain(ECHO_FQN);
+      const { pid } = JSON.parse(readFileSync(pidFile, "utf8")) as { pid: number };
+      await client.end();
+      expect(isAlive(pid)).toBe(false);
+    } finally {
+      await client.kill();
+    }
+  }, TIMEOUT_MS);
+});
+
+/** Resolves once `file` exists — on a filesystem event, not a timer. */
+async function fileAppears(file: string): Promise<void> {
+  if (existsSync(file)) return;
+  await new Promise<void>((resolve) => {
+    const watcher = watch(path.dirname(file), () => {
+      if (existsSync(file)) {
+        watcher.close();
+        resolve();
+      }
+    });
+    // Created between the first check and the watch starting.
+    if (existsSync(file)) {
+      watcher.close();
+      resolve();
+    }
+  });
+}
+
+describe("T14 — revive redials only servers known to be dead", () => {
+  test("a server whose process exited is redialled on the next bind", async () => {
+    const fixture = writeFixture([
+      toolRound("s1", "search_tool", { query: "echo" }),
+      textRound("connected."),
+      toolRound("u1", "use_tool", { tool_name: ECHO_FQN, tool_input: { text: "after-exit" } }),
+      textRound("noticed."),
+      toolRound("s2", "search_tool", { query: "echo" }),
+      textRound("back."),
+    ]);
+    const client = new AcpProcessClient({ fixture, cwd: projectDir, dataDir, homeRoot: root, env: sandboxEnv() });
+    try {
+      await initialize(client);
+      const first = await newSession(client, [echoEntry()]);
+      await driveTurn(client, first, () => ACP_PERMISSION_OPTION_IDS.allowOnce);
+      const { pid: firstPid } = JSON.parse(readFileSync(pidFile, "utf8")) as { pid: number };
+
+      process.kill(firstPid, "SIGKILL");
+      // A call on the dead server can only come back once keryx's transport
+      // has seen the process go: that reply is the event this waits on.
+      await driveTurn(client, first, () => ACP_PERMISSION_OPTION_IDS.allowOnce);
+      expect(callsOf(client, "use_tool").closed[0]?.status).toBe("failed");
+
+      const second = await newSession(client, [echoEntry()]);
+      await driveTurn(client, second, () => ACP_PERMISSION_OPTION_IDS.allowOnce);
+      const searches = callsOf(client, "search_tool").closed;
+      expect(String(searches[searches.length - 1]?.rawOutput)).toContain(ECHO_FQN);
+      const { pid: secondPid } = JSON.parse(readFileSync(pidFile, "utf8")) as { pid: number };
+      expect(secondPid).not.toBe(firstPid);
+      await client.end();
+      expect(isAlive(secondPid)).toBe(false);
+    } finally {
+      await client.kill();
+    }
+  }, TIMEOUT_MS);
+
+  test("a server busy in a long call is NOT redialled when another thread binds; the call completes", async () => {
+    const started = path.join(root, "hold.started");
+    const release = path.join(root, "hold.release");
+    const fixture = writeFixture([
+      toolRound("h1", "use_tool", { tool_name: buildFqn("echo", "hold"), tool_input: { started, release } }),
+      // Consumed by thread B's turn while A's call is held.
+      textRound("B is here."),
+      textRound("A is done."),
+    ]);
+    const entry = echoEntry([{ name: "ECHO_SERVER_HOLD_TOOL", value: "1" }]);
+    const client = new AcpProcessClient({ fixture, cwd: projectDir, dataDir, homeRoot: root, env: sandboxEnv() });
+    try {
+      await initialize(client);
+      const a = await newSession(client, [entry]);
+      const aTurn = driveTurn(client, a, () => ACP_PERMISSION_OPTION_IDS.allowOnce);
+      // The call has reached the server and is holding it (one request at a time).
+      await fileAppears(started);
+      const { pid } = JSON.parse(readFileSync(pidFile, "utf8")) as { pid: number };
+
+      // Thread B binds to the same running set. Its turn waits for the set's
+      // `ready` — i.e. for whatever `revive()` decided to do — before it runs.
+      const b = await newSession(client, [entry]);
+      const bTurn = await driveTurn(client, b, () => ACP_PERMISSION_OPTION_IDS.allowOnce);
+      expect(bTurn.reply.result).toEqual({ stopReason: "end_turn" });
+
+      writeFileSync(release, "go\n");
+      const aDone = await aTurn;
+      expect(aDone.reply.result).toEqual({ stopReason: "end_turn" });
+      const hold = callsOf(client, "use_tool").closed[0];
+      expect(hold?.status).toBe("completed");
+      expect(String(hold?.rawOutput)).toContain("released");
+      // Same process throughout: nothing was redialled.
+      expect((JSON.parse(readFileSync(pidFile, "utf8")) as { pid: number }).pid).toBe(pid);
+      expect(isAlive(pid)).toBe(true);
+      await client.end();
+      expect(isAlive(pid)).toBe(false);
     } finally {
       await client.kill();
     }

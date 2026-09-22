@@ -210,13 +210,27 @@ export function parseAcpMcpServers(method: string, raw: unknown): ParsedAcpMcpSe
  */
 export const MIN_SCRUBBED_SECRET_LENGTH = 8;
 
-/** Replace every secret occurring in `text`. Longest first, so one secret containing another is removed whole. */
+/**
+ * Replace every secret occurring in `text`, in its raw form AND its
+ * JSON-escaped form.
+ *
+ * The tool pair serialises a server's result with `JSON.stringify` before
+ * anything sees it, so a value containing `"`, `\` or a control character
+ * appears escaped (`db"pass\word` → `db\"pass\\word`) and the raw form never
+ * matches. Scrubbing both forms covers both kinds of text this sees: the
+ * serialised tool results (escaped) and plain error and failure messages
+ * (raw). Longest first, so one secret containing another is removed whole.
+ */
 export function scrub(text: string, secrets: readonly string[]): string {
+  const forms = new Set<string>();
+  for (const secret of secrets) {
+    if (secret.length < MIN_SCRUBBED_SECRET_LENGTH) continue;
+    forms.add(secret);
+    forms.add(JSON.stringify(secret).slice(1, -1));
+  }
   let out = text;
-  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) {
-    if (secret.length >= MIN_SCRUBBED_SECRET_LENGTH) {
-      out = out.split(secret).join("<redacted>");
-    }
+  for (const form of [...forms].sort((a, b) => b.length - a.length)) {
+    out = out.split(form).join("<redacted>");
   }
   return out;
 }
@@ -262,25 +276,9 @@ export function acpMcpParentEnv(
   return out;
 }
 
-/**
- * The tool pair with every output passed through `scrub` (AC6): a server that
- * echoes its own credential back — in a result or in an error — would
- * otherwise put it into the `tool_call_update` on stdout, the persisted
- * transcript, and the next provider request.
- */
-function scrubbedTools(tools: readonly InteractiveTool[], secrets: readonly string[]): InteractiveTool[] {
-  return tools.map((tool) => ({
-    ...tool,
-    invoke: async (...args: Parameters<InteractiveTool["invoke"]>) => {
-      const result = await tool.invoke(...args);
-      return { ...result, output: scrub(result.output, secrets) };
-    },
-  }));
-}
-
 /** The running servers of one ACP session. */
 export interface AcpSessionMcp {
-  /** Settles once every dial has connected or failed. Never rejects. */
+  /** Settles once every dial (including a `revive`) has connected or failed. Never rejects. */
   readonly ready: Promise<void>;
   /** The `search_tool`/`use_tool` pair, or nothing when this session has no stdio server. */
   readonly tools: readonly InteractiveTool[];
@@ -288,6 +286,16 @@ export interface AcpSessionMcp {
   readonly refused: readonly AcpMcpServerProblem[];
   /** Servers that were dialled and did not start. Complete once `ready` has settled. Scrubbed. */
   failed(): readonly AcpMcpServerProblem[];
+  /**
+   * Redial every server KNOWN to be dead: it failed to start, or its
+   * connection reports the transport closed (the process exited). Called when
+   * another session binds to this running set, so a new thread recovers a
+   * server the way it did when every thread dialled its own. Never judged by
+   * timing: many stdio servers answer one request at a time, so a server busy
+   * in another thread's long call is slow, not dead, and redialling it would
+   * close the connection under that call.
+   */
+  revive(): void;
   /** Stops every server this session started. Idempotent. */
   close(): Promise<void>;
 }
@@ -308,6 +316,7 @@ export function startAcpSessionMcp(parsed: ParsedAcpMcpServers, options: StartAc
       tools: [],
       refused,
       failed: () => [],
+      revive: () => {},
       close: async () => {},
     };
   }
@@ -327,7 +336,7 @@ export function startAcpSessionMcp(parsed: ParsedAcpMcpServers, options: StartAc
     toolCount: 0,
   }));
   let catalog: ServerCatalog = mergeCatalogs([]);
-  const ready = startServers(parsed.stdio, connect)
+  let ready: Promise<void> = startServers(parsed.stdio, connect)
     .then((result) => {
       states = result.servers;
       catalog = result.catalog;
@@ -345,15 +354,69 @@ export function startAcpSessionMcp(parsed: ParsedAcpMcpServers, options: StartAc
     await closeServers(fresh);
   };
 
+  /**
+   * Dead by the connection's own record (`isClosed`: the transport closed),
+   * or never started. A connected server whose connection cannot tell is
+   * treated as alive.
+   */
+  const knownDead = (state: ServerState | undefined): boolean =>
+    state === undefined ||
+    state.status === "failed" ||
+    (state.status === "connected" && state.connection?.isClosed?.() === true);
+
   let closing: Promise<void> | undefined;
   return {
-    ready,
-    tools: scrubbedTools(createMcpInteractiveTools({ catalog: () => catalog, servers: () => states }), parsed.secrets),
+    get ready() {
+      return ready;
+    },
+    tools: createMcpInteractiveTools({
+      catalog: () => catalog,
+      servers: () => states,
+      // Scrubbed where the text is produced — after serialisation, before
+      // sanitising and truncation — not on the finished output: a secret the
+      // truncation cap cuts in two no longer matches afterwards.
+      redact: (text) => scrub(text, parsed.secrets),
+    }),
     refused,
     failed: () =>
       states
         .filter((state) => state.status === "failed")
         .map((state) => ({ name: state.name, reason: `failed to start: ${scrub(state.error ?? "no reason given", parsed.secrets)}` })),
+    revive: () => {
+      if (closing !== undefined) return;
+      ready = ready
+        .then(async () => {
+          if (closing !== undefined) return;
+          const stale: ResolvedMcpServer[] = [];
+          for (const server of parsed.stdio) {
+            const state = states.find((candidate) => candidate.name === server.name);
+            if (!knownDead(state)) continue;
+            stale.push(server);
+            // Release what is left of a dead connection (a no-op for the SDK
+            // once its transport has closed) so nothing holds its pipes.
+            if (state?.connection !== undefined && !closed.has(state.connection)) {
+              closed.add(state.connection);
+              void state.connection.close().catch(() => {});
+            }
+          }
+          if (stale.length === 0 || closing !== undefined) return;
+          const result = await startServers(stale, connect);
+          const names = new Set(stale.map((server) => server.name));
+          // Recorded even if a close began meanwhile: `close()` sweeps `states`
+          // after this settles, so a redial that landed late is still stopped.
+          states = [...states.filter((state) => !names.has(state.name)), ...result.servers].sort((a, b) =>
+            a.name.localeCompare(b.name),
+          );
+          catalog = mergeCatalogs([
+            {
+              entries: catalog.entries.filter((entry) => !names.has(entry.server)),
+              skipped: catalog.skipped.filter((skip) => !names.has(skip.server)),
+            },
+            result.catalog,
+          ]);
+        })
+        .catch(() => {});
+    },
     close: () =>
       (closing ??= (async () => {
         // The shell runtime's own shutdown budget (`runtime.ts` `closeNow`):

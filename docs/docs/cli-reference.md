@@ -248,9 +248,18 @@ its own:
 - **One running set per distinct list.** Zed sends its whole list with every
   new thread; sessions on one connection that send the same list (same
   entries, same project root) share one set of server processes rather than
-  starting a copy each. A set stops when no session uses it any more (a
-  `session/load` rebinding the last one to a different list) or when the
-  connection ends.
+  starting a copy each. **Threads therefore share each server process** — a
+  stateful server (one holding an open browser, a login, a cache) shares that
+  state across them. When a thread binds to a running set, any server in it
+  known to be dead — it failed to start, or its process has exited — is
+  redialled, so a new thread recovers a broken server without restarting the
+  agent. A server that is merely slow (busy in another thread's long call) is
+  left alone: slowness is not taken as death. A server that hangs without
+  exiting is therefore not recovered until the agent restarts. A set
+  stops when no session uses it any more (a `session/load` rebinding the last
+  one to a different list) or when the connection ends. Once `keryx acp` has
+  begun shutting down, new `session/new`, `session/load` and `session/prompt`
+  requests are refused (`-32600`, `data.condition: "shutting-down"`).
 - Their tools reach the model the way they do in `keryx shell`: through
   `search_tool` (find a tool) and `use_tool` (call one), offered only in a
   session that has client servers. **Every `use_tool` call is asked** through
@@ -277,13 +286,21 @@ its own:
   their stdin, which a conforming stdio server treats as the end — a server
   that ignores end of input outlives it.
 - **Secrets.** The `env` values and header values in these entries are
-  passed to the server process and nowhere else. A server's tool results and
-  errors, and every failure reason, are scrubbed of them before they reach
-  the client, the transcript or the model — so a server echoing its own
-  token back shows `<redacted>`. Values shorter than 8 characters (`DEBUG=1`,
-  a port) are not treated as secrets, because replacing every `1` in a
-  message would make it unreadable and protect nothing. The values themselves
-  are never written to the session transcript or record, and never logged.
+  passed to the server process. What keryx itself writes is scrubbed of them
+  — replaced with `<redacted>` — in these places: every text a client
+  server produces through `search_tool` and `use_tool` (results, error
+  messages and tool descriptions), matched both as written and in its
+  JSON-escaped form (a value containing `"` or `\` appears escaped once
+  serialised) and before the 20,000-byte result cap is applied, so a value
+  the cap would cut in two is still removed; and every start-up failure
+  reason reported to the client or stderr. keryx never logs an entry or
+  writes it to the session record. The limits: a value shorter than 8
+  characters (`DEBUG=1`, a port) is not treated as a secret, since replacing
+  every `1` in a message would make it unreadable and protect nothing; and
+  a server that transforms its credential before returning it — base64 or
+  otherwise re-encoded, split across fields, reversed — is not recognised.
+  Anything the model then writes itself (for example, copying such a
+  transformed value into a later tool call) is not scrubbed either.
 
 ### Methods refused, and why
 

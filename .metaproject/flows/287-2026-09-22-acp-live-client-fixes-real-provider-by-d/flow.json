@@ -9,7 +9,7 @@
   "title": "ACP live-client fixes: real provider by default, accept client MCP servers",
   "status": "in-progress",
   "createdAt": "2026-09-22T22:20:42.968Z",
-  "updatedAt": "2026-09-22T22:54:47.734Z",
+  "updatedAt": "2026-09-22T23:11:02.977Z",
   "source": {
     "type": "description",
     "ref": null
@@ -223,6 +223,26 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Re-review fixes: scrub escaped and truncated secrets, redial failed shared sets, refuse work after shutdown",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T22:59:53.496Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -338,6 +358,21 @@
       "at": "2026-09-22T22:54:47.734Z",
       "event": "task-done",
       "detail": "T13: Review fixes: refresh grants before resolution, bound server sets, stop servers on signals, scrub server output, harden the vacuous tests"
+    },
+    {
+      "at": "2026-09-22T22:59:37.030Z",
+      "event": "task-added",
+      "detail": "T14: Re-review fixes: scrub escaped and truncated secrets, redial failed shared sets, refuse work after shutdown"
+    },
+    {
+      "at": "2026-09-22T22:59:53.496Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-22T23:11:02.977Z",
+      "event": "task-done",
+      "detail": "T14: Re-review fixes: scrub escaped and truncated secrets, redial failed shared sets, refuse work after shutdown"
     }
   ]
 }

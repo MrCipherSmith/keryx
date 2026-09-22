@@ -346,6 +346,23 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * answered by a stand-in. `initialize` is untouched: a client that cannot
    * initialise shows the operator nothing at all, not even this message.
    */
+  /**
+   * Set the moment a shutdown begins (flow 287, T14). The read loop is raced,
+   * not cancelled, so a `session/new` can still be dispatched after
+   * `closeAllMcp` has run — and a set it started then would never be closed.
+   * Session work is refused from here on instead.
+   */
+  let stopping = false;
+  function refuseIfStopping(method: string): void {
+    if (stopping) {
+      refuse({
+        code: JSON_RPC_ERROR_CODES.invalidRequest,
+        message: `${method}: keryx acp is shutting down`,
+        data: { method, condition: "shutting-down" },
+      });
+    }
+  }
+
   function requireProvider(method: string): ProviderPort {
     if (options.provider === undefined) {
       // The remedy goes in `message`, not only in `data`: `message` is the
@@ -414,7 +431,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     };
     const key = acpMcpSetKey(rooted);
     let set = mcpSets.get(key);
-    if (set === undefined) {
+    if (set !== undefined) {
+      // Reusing a running set: redial what failed or stopped answering, so a
+      // new thread still recovers a server the way it did when every thread
+      // dialled its own (flow 287, T14). The report below waits for it.
+      set.mcp.revive();
+    } else {
       set = {
         key,
         mcp: startAcpSessionMcp(rooted, {
@@ -487,6 +509,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
 
   function handleSessionNew(params: unknown, requestId: JsonRpcId): AcpNewSessionResponse {
     requireInitialized(ACP_AGENT_METHODS.sessionNew);
+    refuseIfStopping(ACP_AGENT_METHODS.sessionNew);
     requireProvider(ACP_AGENT_METHODS.sessionNew);
     const obj = requireObjectParams(params, ACP_AGENT_METHODS.sessionNew);
     const cwd = requireStringField(obj, "cwd", ACP_AGENT_METHODS.sessionNew);
@@ -526,6 +549,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // before the first `await`, so no second prompt can slip between the check
     // and the registration.
     refuseIfBusy(ACP_AGENT_METHODS.sessionPrompt, sessionId);
+    refuseIfStopping(ACP_AGENT_METHODS.sessionPrompt);
     const provider = requireProvider(ACP_AGENT_METHODS.sessionPrompt);
 
     const userLine = renderAcpPromptContent(promptField);
@@ -840,6 +864,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    */
   function handleSessionLoad(params: unknown, requestId: JsonRpcId): AcpLoadSessionResponse {
     requireInitialized(ACP_AGENT_METHODS.sessionLoad);
+    refuseIfStopping(ACP_AGENT_METHODS.sessionLoad);
     requireProvider(ACP_AGENT_METHODS.sessionLoad);
     const obj = requireObjectParams(params, ACP_AGENT_METHODS.sessionLoad);
     const sessionId = requireStringField(obj, "sessionId", ACP_AGENT_METHODS.sessionLoad);
@@ -986,8 +1011,14 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const shutdown = options.shutdown;
   const shutdownRequested = new Promise<"shutdown">((resolve) => {
     if (shutdown === undefined) return;
-    if (shutdown.aborted) resolve("shutdown");
-    else shutdown.addEventListener("abort", () => resolve("shutdown"), { once: true });
+    const begin = (): void => {
+      // Synchronously, in the abort itself: no line dispatched after this
+      // point can start session work (`refuseIfStopping`).
+      stopping = true;
+      resolve("shutdown");
+    };
+    if (shutdown.aborted) begin();
+    else shutdown.addEventListener("abort", begin, { once: true });
   });
 
   try {
@@ -1014,6 +1045,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       }
     }
   } finally {
+    stopping = true;
     // Flow 287, AC3: every MCP server process this connection started is
     // stopped, and AWAITED — on a clean end of input, on a read loop that
     // throws, and on `shutdown`. Returning first would orphan the children.

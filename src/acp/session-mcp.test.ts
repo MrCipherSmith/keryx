@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import type { McpServerConnection } from "../mcp-client/client";
 import type { ConnectFn } from "../mcp-servers/manager";
+import { MAX_TOOL_RESULT_BYTES } from "../mcp-servers/tools";
 import { AcpError } from "./jsonrpc";
 import {
   acpMcpParentEnv,
@@ -197,5 +198,139 @@ describe("T13 — the set key", () => {
     expect(key([stdioEntry("gh", { command: "other-bin" })])).not.toBe(base);
     expect(key([stdioEntry("gh")], "/elsewhere")).not.toBe(base);
     expect(base).not.toContain(SECRET);
+  });
+});
+
+describe("T14 — the scrub survives JSON escaping and the truncation cap", () => {
+  /** A connection whose one tool answers with `text`. */
+  const answering = (text: string): McpServerConnection =>
+    ({
+      listTools: async () => [{ name: "say", description: "Says", inputSchema: { type: "object", properties: {} } }],
+      callTool: async () => ({ kind: "result", result: { content: [{ type: "text", text }], isError: false } }),
+      close: async () => {},
+    }) as unknown as McpServerConnection;
+
+  async function useToolOutput(secret: string, text: string): Promise<string> {
+    const mcp = startAcpSessionMcp(
+      parseAcpMcpServers("session/new", [stdioEntry("gh", { env: [{ name: "DB_PASSWORD", value: secret }] })]),
+      { connect: async () => answering(text) },
+    );
+    await mcp.ready;
+    const useTool = mcp.tools.find((tool) => tool.definition.name === "use_tool")!;
+    const result = await useTool.invoke({ tool_name: "gh__say", tool_input: {} });
+    await mcp.close();
+    return result.output;
+  }
+
+  test('a secret with a quote and a backslash (db"pass\\word42) is redacted in its escaped form', async () => {
+    const secret = 'db"pass\\word42';
+    const output = await useToolOutput(secret, `pw=${secret}`);
+    expect(output).toContain("pw=<redacted>");
+    expect(output).not.toContain(JSON.stringify(secret).slice(1, -1));
+    expect(output).not.toContain(secret);
+  });
+
+  test("a secret straddling the 20,000-byte cap leaves no prefix behind", async () => {
+    const secret = "ghp_straddle0123456789abcdef";
+    const base = JSON.stringify([{ type: "text", text: secret }], null, 2).indexOf(secret);
+    // Put the secret's first 10 characters inside the cap and the rest past it.
+    const pad = "x".repeat(MAX_TOOL_RESULT_BYTES - 10 - base);
+    const output = await useToolOutput(secret, `${pad}${secret}`);
+    expect(output).toContain("[truncated at");
+    expect(output).not.toContain(secret.slice(0, 10));
+  });
+});
+
+describe("T14 — revive: a shared set recovers a server known to be dead, and only that", () => {
+  const descriptor = [{ name: "ping", description: "Ping", inputSchema: { type: "object", properties: {} } }];
+
+  test("a server that failed its first start is redialled, and its tool becomes reachable", async () => {
+    let dials = 0;
+    const connect: ConnectFn = async () => {
+      dials += 1;
+      if (dials === 1) throw new Error("exited before the handshake");
+      return { listTools: async () => descriptor, callTool: async () => ({ kind: "result", result: { content: [], isError: false } }), close: async () => {} } as unknown as McpServerConnection;
+    };
+    const mcp = startAcpSessionMcp(parseAcpMcpServers("session/new", [stdioEntry("flaky")]), { connect });
+    await mcp.ready;
+    expect(mcp.failed().map((problem) => problem.name)).toEqual(["flaky"]);
+    mcp.revive();
+    await mcp.ready;
+    expect(dials).toBe(2);
+    expect(mcp.failed()).toEqual([]);
+    expect((await mcp.tools[0]!.invoke({ query: "ping" })).output).toContain("flaky__ping");
+    await mcp.close();
+  });
+
+  test("a connected server whose transport has closed (process exited) is redialled", async () => {
+    let dials = 0;
+    const closedConnections: number[] = [];
+    let firstExited = false;
+    const connect: ConnectFn = async () => {
+      dials += 1;
+      const id = dials;
+      return {
+        listTools: async () => descriptor,
+        callTool: async () => ({ kind: "result", result: { content: [], isError: false } }),
+        isClosed: () => id === 1 && firstExited,
+        close: async () => {
+          closedConnections.push(id);
+        },
+      } as unknown as McpServerConnection;
+    };
+    const mcp = startAcpSessionMcp(parseAcpMcpServers("session/new", [stdioEntry("crashy")]), { connect });
+    await mcp.ready;
+    firstExited = true;
+    mcp.revive();
+    await mcp.ready;
+    expect(dials).toBe(2);
+    expect(closedConnections).toEqual([1]);
+    await mcp.close();
+    expect(closedConnections).toEqual([1, 2]);
+  });
+
+  test("a live server that is slow to answer is NOT redialled — slowness is not death", async () => {
+    let dials = 0;
+    let releaseList: (() => void) | undefined;
+    let listCalls = 0;
+    const mcp = startAcpSessionMcp(parseAcpMcpServers("session/new", [stdioEntry("busy")]), {
+      connect: async () => {
+        dials += 1;
+        return {
+          // The first tools/list (start-up) answers; any later one would hang
+          // like a server busy in another thread's long call.
+          listTools: async () => {
+            listCalls += 1;
+            if (listCalls > 1) await new Promise<void>((resolve) => (releaseList = resolve));
+            return descriptor;
+          },
+          callTool: async () => ({ kind: "result", result: { content: [], isError: false } }),
+          isClosed: () => false,
+          close: async () => {},
+        } as unknown as McpServerConnection;
+      },
+    });
+    await mcp.ready;
+    mcp.revive();
+    await mcp.ready;
+    expect(dials).toBe(1);
+    expect(listCalls).toBe(1);
+    releaseList?.();
+    await mcp.close();
+  });
+
+  test("a healthy set is not redialled", async () => {
+    let dials = 0;
+    const mcp = startAcpSessionMcp(parseAcpMcpServers("session/new", [stdioEntry("fine")]), {
+      connect: async () => {
+        dials += 1;
+        return { listTools: async () => descriptor, callTool: async () => ({ kind: "result", result: { content: [], isError: false } }), close: async () => {} } as unknown as McpServerConnection;
+      },
+    });
+    await mcp.ready;
+    mcp.revive();
+    await mcp.ready;
+    expect(dials).toBe(1);
+    await mcp.close();
   });
 });

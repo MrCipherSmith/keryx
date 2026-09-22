@@ -38,3 +38,13 @@
   (6) refuted: `use_tool` always carries meta.destructive=true (executeCall and the taint gate), so allow_always is never offered; pinned in the AC7 process test.
   (7) turn settings (modelParams, maxOutputTokens, reasoningEffort) now resolved by the shell's resolvers and passed into ACP turns; docs state the in-session-override gap.
 - 2026-09-22T22:54:47.734Z - task-done: T13: Review fixes: refresh grants before resolution, bound server sets, stop servers on signals, scrub server output, harden the vacuous tests
+- 2026-09-22T22:59:37.030Z - task-added: T14: Re-review fixes: scrub escaped and truncated secrets, redial failed shared sets, refuse work after shutdown
+- 2026-09-22T22:59:53.496Z - task-attempt: T14: started (attempt 1)
+- 2026-09-22T23:06:00Z - T14 re-review fixes (subagent), uncommitted:
+  (1) scrub matches each secret raw AND JSON-escaped; (2) scrub moved into the tool pair via a `redact` hook in `src/mcp-servers/tools.ts`, applied after serialisation and before sanitise/truncate (identity for keryx shell);
+  (3) `AcpSessionMcp.revive()` redials failed or unresponsive (tools/list probe, 5s) servers when a session binds to a running set; docs state threads share server processes;
+  (4) `stopping` flag set on the shutdown abort and in the finally, refusing session/new, session/load, session/prompt (`condition: shutting-down`);
+  (5) cli-reference secrets paragraph states exactly what is scrubbed and the limits (8-char minimum, transformed values, model-authored copies).
+  Mutations M5-M7 and M8b (both stopping assignments removed) each fail their test; M8 (abort-only) survives because the finally assignment also closes the window.
+  T14 amendment: the timing-based `tools/list` probe (REVIVE_PROBE_MS) is removed. `revive()` redials only servers known dead: failed to start, or `isClosed()` true — a new optional flag on `McpServerConnection`, set by the stdio client from the SDK's `Protocol.onclose` (fires when the child's pipes close). Fixture gained `ECHO_SERVER_HOLD_TOOL` (a `hold` tool; requests handled one at a time). New tests: a server whose process exited is redialled; a server busy in a long call is not. Mutations M9 (probe restored), M10 (closed flag ignored), M11 (client never records close) each fail their tests.
+- 2026-09-22T23:11:02.977Z - task-done: T14: Re-review fixes: scrub escaped and truncated secrets, redial failed shared sets, refuse work after shutdown

@@ -214,7 +214,7 @@ describe("AC3 / AC5 — per-session servers over the connection's lifetime", () 
 });
 
 describe("T13 — one running set per distinct list, shared by the sessions that send it", () => {
-  test("two session/new with the same list start the servers once; both sessions report its failures", async () => {
+  test("two session/new with the same list start the working servers once; both sessions report its failures", async () => {
     const dial = recordingConnect();
     const h = harness({ provider: PROVIDER, mcpConnect: dial.connect });
     const init = h.request("initialize", { protocolVersion: ACP_PROTOCOL_VERSION });
@@ -235,7 +235,10 @@ describe("T13 — one running set per distinct list, shared by the sessions that
           (f.params.update?.content?.text ?? "").includes('"broken"'),
       );
     }
-    expect(dial.dialled.sort()).toEqual(["broken", "good"]);
+    // "good" is started once and shared. "broken" is dialled again when the
+    // second session binds (T14 revive) — and still fails, so both report it.
+    expect(dial.dialled.filter((name) => name === "good")).toEqual(["good"]);
+    expect(dial.dialled.filter((name) => name === "broken")).toEqual(["broken", "broken"]);
 
     await h.end();
     expect(dial.closedNames).toEqual(["good"]);
@@ -277,5 +280,23 @@ describe("T13 — shutdown stops the servers without waiting for stdin to end", 
     stop.abort();
     await h.done;
     expect(dial.closedNames).toEqual(["alpha"]);
+  });
+});
+
+describe("T14 — no session work once shutdown has begun", () => {
+  test("a session/new dispatched after the abort is refused and dials nothing", async () => {
+    const dial = recordingConnect();
+    const stop = new AbortController();
+    const h = harness({ provider: PROVIDER, mcpConnect: dial.connect, shutdown: stop.signal });
+    const init = h.request("initialize", { protocolVersion: ACP_PROTOCOL_VERSION });
+    await h.waitFor((f) => f.id === init);
+
+    stop.abort();
+    // The read loop is raced, not cancelled: this line is still dispatched.
+    const late = h.request("session/new", { cwd: h.projectDir, mcpServers: [stdio("late")] });
+    const reply = await h.waitFor((f) => f.id === late);
+    await h.done;
+    expect(reply.error?.data?.["condition"]).toBe("shutting-down");
+    expect(dial.dialled).toEqual([]);
   });
 });

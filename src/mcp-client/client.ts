@@ -129,6 +129,8 @@ interface SdkClient {
     options?: { timeout?: number },
   ): Promise<{ tools?: unknown }>;
   close(): Promise<void>;
+  /** Called by the SDK's `Protocol` once the transport has closed — for stdio, when the child's pipes close. */
+  onclose?: () => void;
 }
 
 /** The base `Protocol.prototype.setRequestHandler` this module deliberately calls unbound — see the header. */
@@ -429,6 +431,13 @@ export interface McpServerConnection {
     opts?: { readonly timeoutMs?: number },
   ): Promise<McpToolCallOutcome>;
   close(): Promise<void>;
+  /**
+   * True once the connection is known to be gone: the transport closed (for
+   * stdio, the server process exited or its pipes closed) or `close()` was
+   * called. Never inferred from timing — a slow answer is not a dead server.
+   * Optional: a connection that cannot tell leaves it undefined.
+   */
+  isClosed?(): boolean;
 }
 
 /**
@@ -830,7 +839,19 @@ export async function connectStdioMcpServer(
     throw new Error("mcp-client: connect aborted");
   }
 
+  // The SDK's `Protocol` calls `onclose` when the transport closes; the stdio
+  // transport closes when the child process's pipes close, i.e. when it exits.
+  // Recorded, not acted on: a caller reads it through `isClosed()`.
+  let transportClosed = false;
+  const previousOnClose = client.onclose;
+  client.onclose = () => {
+    transportClosed = true;
+    previousOnClose?.();
+  };
+
   return {
+    isClosed: () => transportClosed,
+
     async listTools(opts): Promise<McpToolDescriptor[]> {
       const result = await client.listTools(
         {},
