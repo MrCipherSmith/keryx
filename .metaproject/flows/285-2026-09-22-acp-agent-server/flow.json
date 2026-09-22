@@ -9,7 +9,7 @@
   "title": "Expose the keryx harness over the Agent Client Protocol so any ACP client can drive it",
   "status": "in-progress",
   "createdAt": "2026-09-22T18:18:38.900Z",
-  "updatedAt": "2026-09-22T18:50:48.793Z",
+  "updatedAt": "2026-09-22T19:10:46.049Z",
   "source": {
     "type": "description",
     "ref": null
@@ -129,7 +129,7 @@
       "id": "T7",
       "title": "initialize and capability negotiation, including refusal of an unsupported version",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -145,13 +145,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "session/new and session/prompt over a real harness turn, streaming session/update",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -161,7 +162,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -172,8 +174,14 @@
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T19:10:46.049Z",
+            "outcome": "started",
+            "detail": "opus: permission path"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -355,6 +363,21 @@
       "at": "2026-09-22T18:50:48.793Z",
       "event": "task-attempt",
       "detail": "T7: started (attempt 1) — sonnet: initialize and negotiation"
+    },
+    {
+      "at": "2026-09-22T19:10:45.851Z",
+      "event": "task-done",
+      "detail": "T7: initialize and capability negotiation, including refusal of an unsupported version"
+    },
+    {
+      "at": "2026-09-22T19:10:45.952Z",
+      "event": "task-done",
+      "detail": "T8: session/new and session/prompt over a real harness turn, streaming session/update"
+    },
+    {
+      "at": "2026-09-22T19:10:46.049Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — opus: permission path"
     }
   ]
 }

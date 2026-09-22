@@ -399,3 +399,158 @@ of those today gets the dispatcher's generic `-32601 Method not found` (not
 a crash, not silently dropped) naming `ACP_IMPLEMENTED_AGENT_METHODS`, which
 is momentarily misleading until T9-T11 land — worth knowing when reading a
 conformance run against an unfinished flow, not a bug to fix in isolation.
+
+---
+
+# T9 — the permission path
+
+Written by the T9 dispatch, 2026-09-22. AC3: a gated tool call asks the
+client, a denial leaves it unexecuted, an outright refusal never reaches the
+client.
+
+## 0. What was built
+
+- `src/acp/permission.ts` — the option set keryx offers and the outcome
+  mapping. Pure; no transport.
+- `src/acp/client-requests.ts` — `AcpClientRequests`: the pending-request
+  table for questions keryx asks the CLIENT. ACP-agnostic (it knows JSON-RPC
+  ids, not permissions). Every request settles exactly once: answered,
+  errored, or `closed`.
+- `src/acp/agent-io.ts` — `createAcpAgentIo(sessionId, send, askPermission?)`
+  now sets `AgentIO.requestApproval` when an asker is given. The FIFO that
+  already correlated `onToolCall`→`onToolResult` is reused so the ask carries
+  the id the client was already shown (F-3).
+- `src/acp/server.ts` — sends `session/request_permission`, routes the
+  incoming response into the pending table, widens the tool roster, and
+  stopped awaiting each line before reading the next (see F-12, which is the
+  finding of this dispatch).
+
+## 1. The mapping, as implemented
+
+| client answers | keryx `ApprovalResponse` | effect |
+|---|---|---|
+| `selected` `allow_once` | `true` | runs |
+| `selected` `allow_always` | `{ approved: true, fingerprint }` | runs |
+| `selected` `reject_once` / `reject_always` | `false` | denied |
+| `cancelled` | `false` | denied |
+| an `optionId` keryx never offered | `false` | denied |
+| a malformed / non-object result | `false` | denied |
+| a JSON-RPC error answer | `false` (and latches, F-11) | denied |
+| no answer, connection closed | `false` | denied |
+
+The mapping keys on the `kind` of an option **keryx sent**, never on the id's
+text, so a client echoing an invented `"allow_everything"` is denied.
+
+`allow_always` is the only kind that binds a fingerprint, because it is the
+only one that means "this decision outlives the call" (`isApprovalFor`
+rejects an answer that echoes a different action's fingerprint). keryx
+persists **nothing** from it: the "always" lives in the client, which answers
+the next identical request itself. A keryx-side allowlist entry minted from
+this wire would recreate `memory/lessons/allowlist-not-a-boundary` for an
+answer keryx never showed a human.
+
+An **escalated** call — `ApprovalMeta.destructive`, `credentials`,
+`publishLease`, or `untrustedOrigin` — is offered **no `allow_always` option
+at all**. keryx's own rule for those is "always prompt, never remember"
+(ADR-0009); an ACP client remembers an `allow_always` itself, which is the
+saved allowlist that rule forbids, so the option is withheld rather than
+offered and then ignored.
+
+## 2. Which tools became reachable, and why that is safe
+
+`session/prompt`'s roster was `builtinReadOnlyTools` only (T7/T8), because a
+tool that needs approval with no approver wired is not safe, it is
+**unreachable** — every call silently default-denied. With the approver wired
+it is now:
+
+    get_cwd, list_dir, read_file   (risk `read`, unchanged, never gated)
+    shell_exec                     (risk `shell`)
+    apply_patch                    (risk `write`, ADR-0010)
+
+Both additions are gated by exactly one thing: `executeCall`'s approval
+branch, which now calls the client. Neither can run without an explicit allow
+for that specific call (the fingerprint is bound), both are constructed
+against `state.resolvedRoot`, `apply_patch` confines every target path to
+that root before git runs, and `shell_exec`'s destructive/credential
+escalation reaches the client as a reduced option set. **Nothing else was
+added**: `spawn_subagent`, the metaproject tools, MCP, bus and workspace tools
+need ports this server does not construct, and `ask_user` needs an
+interactive host seam that does not exist over this wire — offering any of
+them would put back the unreachable-call state this widening removes.
+
+`AgentDeps.unattended` remains unset, as T7/T8 required: it intercepts the
+very questions this wire now carries.
+
+## 3. How a denial ends the turn
+
+It is not adapter behaviour at all, which is the point. A denial makes
+`requestApproval` return `false`; `executeCall` returns
+`{ output: "command not approved by the user; not executed", isError: true }`;
+`runAgentTurn` reports it through `io.onToolResult` (→ a `tool_call_update`
+with `status: "failed"` carrying that exact string), pushes it into history as
+a `role: "tool"` message and carries on to the next round. The model sees the
+refusal and answers; the turn ends `end_turn`. That is byte-for-byte the local
+path — the process test asserts the exact string rather than a
+denial-shaped one, so a future adapter-invented message would fail it.
+
+## 4. New findings
+
+**F-11. ACP v1 has no client capability for permissions, so "cannot be asked"
+is DISCOVERED, not advertised.** `ClientCapabilities` is `fs`, `terminal`,
+`session`, `auth`, `elicitation` — nothing about permissions; the spec simply
+requires every client to implement `session/request_permission`. keryx
+therefore asks by default, and learns otherwise from the first answer: a
+JSON-RPC **error** answer (e.g. `-32601`) latches
+`clientAnswersPermissions = false` for the connection, and every later gated
+call is denied **locally, without a request going out** — asking again floods
+a client that already said it has no such method. The call is denied, never
+approved-by-default. A `cancelled` answer denies that one call and does NOT
+latch (it is a live client choosing not to decide).
+
+**F-12. The read loop deadlocked the moment the agent asked anything, and
+T10 must not put that back.** `runAcpServer` used to `await
+dispatcher.handleLine(line)` before reading the next line. That is fine while
+every handler answers out of its own state, and it is fatal as soon as
+`session/prompt` blocks on `session/request_permission`: the answer is the
+NEXT LINE ON STDIN, which a loop parked inside the prompt handler will never
+read. Lines are now STARTED in order and AWAITED separately. Ordering that
+matters is preserved because `handleLine` runs synchronously into the handler
+body, so handlers still start in wire order and `session/new` (synchronous end
+to end) has finished registering before the next line is decoded. **T10's
+`session/cancel` depends on this same change** — a cancel notification that
+arrives during a running turn is exactly the same shape of problem.
+
+**F-13. Input end is a settlement event, not cleanup.** When stdin ends,
+`AcpClientRequests.close()` settles every open question as a denial and the
+server then DRAINS the turns still running before returning, so the
+`session/prompt` response and the denial updates still reach stdout (which is
+still open). Without the drain the process would exit holding an unanswered
+prompt; without the close it would wait forever on a pipe that cannot answer.
+
+**F-14 (owed to T10). A `session/cancel` while a permission request is open
+must settle that request.** Cancelling the turn does not currently cancel the
+outstanding ask — the turn would abort while `AcpClientRequests` still holds a
+promise the client may never answer (it settles at connection close, which
+may be much later). T10 should call `close`/a per-request abort on the pending
+ask as part of cancelling the turn, and note that keryx sends no
+`$/cancel_request` for its own outstanding permission request; a client that
+wants out answers `cancelled`, which is already mapped to a denial.
+
+## 5. Tests
+
+- `src/acp/permission.test.ts` — the mapping answer by answer, including
+  `cancelled`, an unknown `optionId`, a malformed answer, the fingerprint
+  binding and the escalated option set.
+- `src/acp/client-requests.test.ts` — every request settles exactly once;
+  close settles what is open; a request after close answers immediately.
+- `src/acp/permission.process.test.ts` — the whole path over a real stdio
+  pipe against the built CLI with the fixture provider: the `tool_call` update
+  precedes the ask and carries the same id; `allow_once` / `allow_always` run
+  the command; `reject_once` and `cancelled` do not; a client that never
+  answers is denied without hanging; a client that errors is asked once and
+  then denied locally; and a call the driver refuses on its own (unknown tool,
+  or a `read`-risk tool) produces **no** `session/request_permission` at all.
+
+The load-bearing test habit here, per F-4: assert the request was **sent**.
+"The denied call did not run" passes just as well against a keryx that never
+asked, which is the failure in the safe direction that is hardest to notice.

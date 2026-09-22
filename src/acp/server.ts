@@ -13,10 +13,13 @@
 
 import { randomUUID } from "node:crypto";
 import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps } from "../commands/agent";
+import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
+import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { ProviderPort } from "../harness/provider/types";
 import { persistHistory } from "../session";
-import { createAcpAgentIo } from "./agent-io";
+import { createAcpAgentIo, type AcpPermissionAsker } from "./agent-io";
+import { AcpClientRequests } from "./client-requests";
 import { AcpDispatcher, type AcpDispatchOutcome } from "./dispatch";
 import { AcpLineFramer, encodeAcpMessage } from "./framing";
 import {
@@ -42,6 +45,8 @@ import {
   type AcpInitializeResponse,
   type AcpNewSessionResponse,
   type AcpPromptResponse,
+  type AcpRequestPermissionRequest,
+  type AcpRequestPermissionResponse,
   type AcpSessionNotification,
   type AcpSessionUpdate,
   type AcpStopReason,
@@ -99,6 +104,78 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const sendUpdate = (sessionId: string, update: AcpSessionUpdate): void => {
     const notification: AcpSessionNotification = { sessionId, update };
     writeMessage(notificationMessage(ACP_CLIENT_METHODS.sessionUpdate, notification));
+  };
+
+  const clientRequests = new AcpClientRequests({
+    send: (message) => {
+      options.write(encodeAcpMessage(message));
+    },
+    idSeq,
+  });
+
+  /**
+   * Set false the first time this client proves it cannot answer a permission
+   * request (it refused the method, or answered something that is not an
+   * answer).
+   *
+   * ACP v1 has NO client capability for permissions — `ClientCapabilities` is
+   * `fs`, `terminal`, `session`, `auth`, `elicitation` and nothing else, and
+   * the spec simply requires every client to implement
+   * `session/request_permission`. So "this client cannot be asked" is not
+   * something keryx can read off `initialize`; it is something it DISCOVERS,
+   * once, from the first answer. After that every gated call is denied
+   * locally: asking again would flood a client that already said it has no
+   * such method, and — the part that matters for AC3 — a call nobody can
+   * authorise must not run. Denied, never approved-by-default.
+   */
+  let clientAnswersPermissions = true;
+
+  /** Shapes, sends and interprets one `session/request_permission`. `undefined` = could not be asked. */
+  const askPermissionFor = (sessionId: string): AcpPermissionAsker => {
+    return async (ask): Promise<AcpRequestPermissionResponse | undefined> => {
+      if (!clientAnswersPermissions) {
+        options.logError(
+          `acp: ${ACP_CLIENT_METHODS.sessionRequestPermission} not asked for ${ask.toolCall.name ?? "a tool call"}: ` +
+            "this client already refused the method; the call is denied",
+        );
+        return undefined;
+      }
+      const params: AcpRequestPermissionRequest = {
+        sessionId,
+        toolCall: ask.toolCall,
+        options: [...ask.options],
+      };
+      const outcome = await clientRequests.request(ACP_CLIENT_METHODS.sessionRequestPermission, params);
+      if (outcome.kind === "error") {
+        // `-32601` here is a client with no permission surface at all; any
+        // other error is a client that failed to answer this one. Both are
+        // "not authorised", and both latch: a client that errors on the method
+        // will error on the next one too.
+        clientAnswersPermissions = false;
+        options.logError(
+          `acp: ${ACP_CLIENT_METHODS.sessionRequestPermission} refused by the client ` +
+            `(${outcome.error.code}: ${outcome.error.message}); the call is denied`,
+        );
+        return undefined;
+      }
+      if (outcome.kind === "closed") {
+        options.logError(
+          `acp: ${ACP_CLIENT_METHODS.sessionRequestPermission} went unanswered (${outcome.reason}); the call is denied`,
+        );
+        return undefined;
+      }
+      const result = outcome.result;
+      if (typeof result !== "object" || result === null || Array.isArray(result)) {
+        options.logError(
+          `acp: ${ACP_CLIENT_METHODS.sessionRequestPermission} answered with a non-object result; the call is denied`,
+        );
+        return undefined;
+      }
+      // The outcome's own shape is validated where it is interpreted
+      // (`approvalFromPermissionResponse`), which denies anything that is not
+      // an explicit allow — including a missing or malformed `outcome`.
+      return result as AcpRequestPermissionResponse;
+    };
   };
 
   /** AC1 / spec: a request before `initialize` is refused, not served. */
@@ -173,7 +250,35 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
 
     const userLine = renderAcpPromptContent(promptField);
-    const tools: InteractiveTool[] = builtinReadOnlyTools(state.resolvedRoot);
+    // THE ROSTER IS EXACTLY WHAT THE PERMISSION PATH COVERS (context.md F-4).
+    //
+    // T7/T8 offered `builtinReadOnlyTools` alone, because a tool that needs
+    // approval with no approver wired is not "safe", it is UNREACHABLE — every
+    // call silently refused by `AgentIO`'s default-deny floor. T9 wires the
+    // approver, so the two tools whose entire gate is that approver join:
+    //
+    //   `shell_exec`  risk `shell`  — `executeCall`'s shell branch, which asks
+    //                 before every command and escalates a destructive one
+    //                 (never offered an "always" answer, see
+    //                 `permissionOptionsFor`).
+    //   `apply_patch` risk `write`  — ADR-0010's branch, same shape; every
+    //                 target path is confined to the project root before git
+    //                 ever runs.
+    //
+    // Both are bound to `state.resolvedRoot`, and NEITHER can run without an
+    // explicit allow from the client for that exact call: the fingerprint is
+    // bound (`isApprovalFor`), a rejection, a `cancelled`, an unknown option
+    // id, a client that cannot be asked and a closed connection are all
+    // denials. Nothing else is added: `spawn_subagent`, the metaproject tools,
+    // MCP and bus tools need ports this server does not construct, and
+    // `ask_user` needs an interactive host seam that does not exist over this
+    // wire — offering any of them would put back exactly the unreachable-call
+    // state this widening removes.
+    const tools: InteractiveTool[] = [
+      ...builtinReadOnlyTools(state.resolvedRoot),
+      shellExecTool(state.resolvedRoot),
+      applyPatchTool(state.resolvedRoot),
+    ];
     const toolNames = tools.map((tool) => tool.definition.name);
     const deps: AgentDeps = {
       provider: options.provider,
@@ -192,14 +297,14 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // here, just over a different transport. Setting `unattended: true`
       // would intercept `ask_user` and turn budget exhaustion into a silent
       // TerminalState instead of a question the client could ever be asked.
-      // `requestApproval` is still unset on the `AgentIO` this turn runs with
-      // (T9's scope) — until it lands, `AgentIO`'s own documented
-      // default-deny floor (independent of `unattended`) is what keeps a
-      // shell/destructive tool call from running unapproved, never a policy
-      // context this dispatch would otherwise have to fake.
+      // `requestApproval` IS now set on the `AgentIO` this turn runs with (T9,
+      // below): it forwards to `session/request_permission`. `unattended` must
+      // stay unset for that to mean anything — the two undo each other exactly
+      // as F-4 warned, since `unattended` intercepts the very questions this
+      // wire exists to carry.
     };
 
-    const io = createAcpAgentIo(sessionId, sendUpdate);
+    const io = createAcpAgentIo(sessionId, sendUpdate, askPermissionFor(sessionId));
     const result = await runAgentTurn(io, deps, state.history, userLine, {});
     const updatedHandle = persistHistory(state.handle, state.history, {
       provider: options.providerId,
@@ -230,12 +335,43 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       return;
     }
     if (outcome.kind === "incoming-response") {
-      // This connection never SENDS a request to the client in T7/T8 (no
-      // `session/request_permission`, `fs/*`, `terminal/*` calls yet — later
-      // dispatches of this flow add those), so a response arriving here is
-      // unexpected. Logged, not dropped silently.
-      options.logError(`acp: unexpected response with no pending request: ${JSON.stringify(outcome.message)}`);
+      // A `session/request_permission` answer arrives here. The pending table
+      // owns it; anything it does not claim is unsolicited or duplicate and is
+      // reported rather than dropped.
+      if (!clientRequests.resolve(outcome.message)) {
+        options.logError(`acp: unexpected response with no pending request: ${JSON.stringify(outcome.message)}`);
+      }
     }
+  };
+
+  /**
+   * Lines are STARTED in order and AWAITED separately.
+   *
+   * This loop used to `await` each line's dispatch before reading the next
+   * one, which was fine while every handler answered out of its own state. It
+   * deadlocks the moment keryx asks the client something: `session/prompt`
+   * blocks on `session/request_permission`, whose answer is the NEXT LINE ON
+   * STDIN — a line a loop parked inside the prompt handler will never read.
+   *
+   * Not awaiting does not reorder anything that matters. `handleLine` runs
+   * synchronously into the handler body (through `handleMessage` ->
+   * `handleRequest` -> `handler(...)`), so handlers still START in wire order,
+   * and `session/new` — which is synchronous end to end — has finished
+   * registering its session before the next line is even decoded. What changes
+   * is only that a handler which SUSPENDS no longer suspends the reader with
+   * it. JSON-RPC ids carry the correlation, so replies may land in completion
+   * order.
+   */
+  const inflight = new Set<Promise<unknown>>();
+  const dispatch = (line: string): void => {
+    const task = dispatcher.handleLine(line).then(handleOutcome, (error: unknown) => {
+      // `handleLine` is documented as total, so this is a floor, not a path.
+      options.logError(`acp: dispatch failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    inflight.add(task);
+    void task.finally(() => {
+      inflight.delete(task);
+    });
   };
 
   const framer = new AcpLineFramer();
@@ -248,10 +384,22 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       continue;
     }
     for (const line of lines) {
-      handleOutcome(await dispatcher.handleLine(line));
+      dispatch(line);
     }
   }
   for (const line of framer.flush()) {
-    handleOutcome(await dispatcher.handleLine(line));
+    dispatch(line);
+  }
+
+  // Input has ended: no answer can arrive any more. Every question still open
+  // settles as a denial NOW rather than waiting on a pipe that is closed —
+  // that is the difference between a turn that finishes refusing a tool call
+  // and a process that hangs holding one.
+  clientRequests.close("the client closed the connection before answering");
+  // A turn started before the close still has a response to write, and the
+  // stream it writes to is still open. Draining is what makes the denial
+  // observable to the client instead of dying with the process.
+  while (inflight.size > 0) {
+    await Promise.allSettled([...inflight]);
   }
 }
