@@ -503,6 +503,53 @@ export interface ShellChrome {
 }
 
 /**
+ * Paint the renderer's own background — the colour each frame is cleared with.
+ *
+ * `createCliRenderer({ backgroundColor })` does NOT apply it in @opentui/core
+ * 0.4.5: the constructor never reads that config key, so the renderer keeps its
+ * transparent default and every frame is cleared with it — which is why the
+ * transcript feed carried the terminal's own background until `applyTheme` ran
+ * (i.e. only AFTER a `/theme` switch).
+ */
+export function paintRendererBackground(renderer: Renderer, theme: Theme): void {
+  try {
+    renderer.setBackgroundColor(theme.bg);
+  } catch {
+    // renderer may not expose the setter in tests
+  }
+}
+
+/**
+ * Colour props every `SelectRenderable` this TUI mounts must carry.
+ *
+ * OpenTUI's own defaults are a fixed dark palette (`#FFFFFF` text, `#1a1a1a`
+ * focus, `#334455` selection, `#FFFF00` selected text), so a select built
+ * without them shows a bright blue-grey selection on every theme — light ones
+ * included. Mirrors the `/`-dropdown's own colours in `createShellChrome`.
+ */
+export function selectThemeColors(theme: Theme): {
+  backgroundColor: string;
+  focusedBackgroundColor: string;
+  selectedBackgroundColor: string;
+  textColor: string;
+  focusedTextColor: string;
+  selectedTextColor: string;
+  descriptionColor: string;
+  selectedDescriptionColor: string;
+} {
+  return {
+    backgroundColor: theme.panel,
+    focusedBackgroundColor: theme.panel,
+    selectedBackgroundColor: theme.highlight,
+    textColor: theme.text,
+    focusedTextColor: theme.text,
+    selectedTextColor: theme.focus,
+    descriptionColor: theme.muted,
+    selectedDescriptionColor: theme.muted,
+  };
+}
+
+/**
  * Create the renderer the shell chrome expects: full-screen (own the alternate
  * screen buffer so prior scrollback is cleared on launch and restored on exit)
  * with mouse tracking on, because the alternate screen would otherwise disable
@@ -530,6 +577,10 @@ export async function createShellRenderer(
     },
   });
   guards.detach = attachRendererGuards(renderer);
+  // The config field above is declarative only — see `paintRendererBackground`.
+  // THIS call is what puts the first frame, the boot animation and the startup
+  // picker on the theme's background instead of the terminal's.
+  paintRendererBackground(renderer, getTheme());
   return renderer;
 }
 
@@ -902,6 +953,11 @@ export async function createShellChrome(
   const textarea = new otui.TextareaRenderable(r, {
     id: "prompt",
     placeholder: opts.placeholder,
+    // OpenTUI's textarea defaults its text to `#FFFFFF` and its placeholder to
+    // `#666666` — theme-blind everywhere, and unreadable on the light themes.
+    textColor: getTheme().text,
+    focusedTextColor: getTheme().text,
+    placeholderColor: getTheme().muted,
     wrapMode: "word",
     minWidth: 0,
     width: "100%",
@@ -1345,13 +1401,15 @@ export async function createShellChrome(
     // sidebar panels — carried the OLD palette's hex into `borderColor` /
     // `backgroundColor` / `fg` and is moved to the new palette by the tree
     // walk below (value-matching old slot hexes, see `themeColorRemap`).
-    try {
-      r.setBackgroundColor(theme.bg);
-    } catch {
-      // renderer may not expose the setter in tests
-    }
+    // The renderer's own clear colour: the same call `createShellRenderer`
+    // makes at boot, so a switch and a fresh start cannot disagree.
+    paintRendererBackground(r, theme);
     sidebar.borderColor = theme.border;
     sidebar.backgroundColor = theme.panel;
+    // The composer's text was painted from the theme at mount; move it too.
+    textarea.textColor = theme.text;
+    textarea.focusedTextColor = theme.text;
+    textarea.placeholderColor = theme.muted;
     header.backgroundColor = theme.bg;
     promptPin.borderColor = theme.user;
     promptPin.backgroundColor = theme.highlight;

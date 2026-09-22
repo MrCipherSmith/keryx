@@ -204,7 +204,7 @@ import {
 import { setAskUserHost } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
-import { createShellChrome, createShellRenderer, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
+import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
 import {
   buildSideWorkerPrompt,
   buildSideWorkerSystemInstruction,
@@ -1818,7 +1818,7 @@ function promptSetActiveProviderStep(otui: OpenTui, target: StepTarget): Promise
         { name: "Yes", description: "select it once the test passes" },
         { name: "No", description: "leave it configured but inactive" },
       ],
-      selectedTextColor: "#ffd166",
+      ...selectThemeColors(getTheme()),
     });
     surface.body.add(select);
     select.focus();
@@ -1862,7 +1862,7 @@ export function pickSearchProviderStep(
       height: selectBoxHeight(providers.length, true),
       showScrollIndicator: true,
       options: providers.map((p) => ({ name: labelOf(p), description: p.kind })),
-      selectedTextColor: "#ffd166",
+      ...selectThemeColors(getTheme()),
     });
     surface.body.add(select);
     select.focus();
@@ -2201,7 +2201,7 @@ function pickAuthMethodStep(
       height: selectBoxHeight(methods.length, true),
       showScrollIndicator: true,
       options: methods.map((m) => ({ name: m, description: descriptions[m] })),
-      selectedTextColor: "#ffd166",
+      ...selectThemeColors(getTheme()),
     });
     surface.body.add(select);
     select.focus();
@@ -2347,7 +2347,7 @@ function pickProviderStep(otui: OpenTui, target: StepTarget, detected: DetectedP
       height: selectBoxHeight(detected.length, true),
       showScrollIndicator: true,
       options: detected.map((d) => ({ name: labelOf(d), description: d.note ?? `${d.models.length} model(s)` })),
-      selectedTextColor: "#ffd166",
+      ...selectThemeColors(getTheme()),
     });
     box.add(provSelect);
     provSelect.focus();
@@ -2752,7 +2752,7 @@ function mountFilterList<T>(
     showScrollIndicator: true,
     wrapSelection: true,
     options: [],
-    selectedTextColor: "#ffd166",
+    ...selectThemeColors(getTheme()),
   });
   parent.add(sel);
   sel.focus();

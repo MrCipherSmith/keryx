@@ -15,6 +15,7 @@
 // `src/capability/no-optional-imports` is a regex over file TEXT, so the
 // forbidden import form must not be spelled out in a comment here either.
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { commandsForMode } from "../commands/agent-commands";
 import {
   composerHeightForLines,
@@ -33,7 +34,7 @@ import {
 } from "../lib/version-check";
 import { applyThemeId, getThemeId, resolveTheme } from "./theme";
 import * as themeModule from "./theme";
-import { themeColorToHex } from "./shell-chrome";
+import { paintRendererBackground, selectThemeColors, themeColorToHex } from "./shell-chrome";
 import { appendUserEcho, createBlockView, createSegmentView } from "./transcript-blocks";
 import * as shellChromeModule from "./shell-chrome";
 
@@ -1302,4 +1303,83 @@ otuiTest("AC5: a bare Enter on an empty composer leaves a scrolled-up transcript
   expect(scroll.scrollTop).toBe(0);
   expect(scroll.stickyScroll).toBe(false);
   h.destroy();
+});
+
+// The renderer's own background — the colour every frame is cleared with — is
+// NOT set by `createCliRenderer({ backgroundColor })`: @opentui/core 0.4.5
+// never reads that config key, so the renderer keeps its transparent default
+// and clears both frame buffers with it (emitting no background SGR at all).
+// The transcript canvas is transparent by design, so the feed inherited the
+// TERMINAL's background on a fresh start and only looked right after a
+// `/theme` switch ran `setBackgroundColor` — the bug this closes.
+otuiTest("paintRendererBackground paints the renderer's own clear colour, and the default is transparent", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 40, height: 6 });
+  const clear = (): unknown => (setup.renderer as unknown as { backgroundColor: unknown }).backgroundColor;
+  // The mechanism, asserted rather than assumed: the default is not opaque, so
+  // nothing is emitted for it and the terminal's own background shows through.
+  expect(themeColorToHex(clear())).toBeUndefined();
+
+  paintRendererBackground(setup.renderer as never, resolveTheme("groknight"));
+  expect(themeColorToHex(clear())).toBe(resolveTheme("groknight").bg);
+
+  paintRendererBackground(setup.renderer as never, resolveTheme("grokday"));
+  expect(themeColorToHex(clear())).toBe(resolveTheme("grokday").bg);
+  setup.renderer.destroy();
+});
+
+test("selectThemeColors replaces OpenTUI's fixed dark select palette with the theme's own", () => {
+  const theme = resolveTheme("grokday");
+  expect(selectThemeColors(theme)).toEqual({
+    backgroundColor: theme.panel,
+    focusedBackgroundColor: theme.panel,
+    selectedBackgroundColor: theme.highlight,
+    textColor: theme.text,
+    focusedTextColor: theme.text,
+    selectedTextColor: theme.focus,
+    descriptionColor: theme.muted,
+    selectedDescriptionColor: theme.muted,
+  });
+  // The light themes are where OpenTUI's fixed defaults actually break:
+  // `#FFFFFF` text on a `#f5f5f5` canvas is invisible.
+  expect(theme.text).not.toBe("#FFFFFF");
+  expect(theme.panel).not.toBe("#1a1a1a");
+});
+
+otuiTest("the composer's own text and placeholder come from the palette and follow a switch", async () => {
+  const otui = requireOtui();
+  const previous = getThemeId();
+  let h: Awaited<ReturnType<typeof mountChrome>> | undefined;
+  try {
+    applyThemeId("groknight");
+    h = await mountChrome(otui, { width: 90, height: 20 });
+    const night = resolveTheme("groknight");
+    // OpenTUI's textarea defaults are `#FFFFFF` text and `#666666` placeholder:
+    // the first is invisible on the light themes, the second is not a palette
+    // colour on any of them.
+    expect(themeColorToHex(h.chrome.textarea.textColor)).toBe(night.text);
+    expect(themeColorToHex(h.chrome.textarea.placeholderColor)).toBe(night.muted);
+    expect(h.captureCharFrame()).toContain(PLACEHOLDER);
+
+    applyThemeId("grokday");
+    await h.flush();
+    const day = resolveTheme("grokday");
+    expect(themeColorToHex(h.chrome.textarea.textColor)).toBe(day.text);
+    expect(themeColorToHex(h.chrome.textarea.placeholderColor)).toBe(day.muted);
+    expect(day.text).not.toBe(night.text); // a real move, not a coincidence
+  } finally {
+    applyThemeId(previous);
+    h?.destroy();
+  }
+});
+
+test("the shell renderer paints the theme background at creation, not only on a switch", () => {
+  const source = readFileSync(new URL("./shell-chrome.ts", import.meta.url), "utf8");
+  const start = source.indexOf("export async function createShellRenderer(");
+  expect(start).toBeGreaterThanOrEqual(0);
+  const body = source.slice(start, source.indexOf("\nexport async function createShellChrome(", start));
+  // Without this call the renderer keeps @opentui/core's transparent default
+  // and clears every frame with it, so a fresh start shows the terminal's own
+  // background behind the transcript until a `/theme` switch repaints it.
+  expect(body).toContain("paintRendererBackground(renderer, getTheme());");
 });
