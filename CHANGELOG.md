@@ -3,6 +3,28 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.148] — 2026-09-22
+A call that follows untrusted content is put to the operator instead of being
+refused for the rest of the turn — that content still cannot authorize it, but a
+human now can.
+
+### Changed
+- **The untrusted-content gate asks instead of ending the turn.** Any untrusted
+  result — a `web_fetch`, a `use_tool` answer, and `search_tool`'s own tool
+  descriptions, which are third-party prose — latched the per-turn gate, and from
+  that moment every non-read call in the turn was refused with no prompt and no
+  way to continue: `shell_exec`, `apply_patch`, `use_tool` and
+  `slate_write_seed` alike, so a live session read as "the turn is dead". The gate
+  now puts the call to the approver with `ApprovalMeta.untrustedOrigin`,
+  disclosed in the readline prompt, the TUI dock and the shared MCP prompt. It
+  deliberately does not consult `resolveApprovalDecision`: a permission mode is
+  standing consent for the operator's own commands and cannot answer "external
+  content asked for this — do you authorize it?", so neither `trust` nor `auto`
+  stands in for that answer, and no remembered grant does either. Where nobody can
+  answer — an `unattended` run, or any caller with no approver wired — the old
+  refusal is unchanged; a throwing approver degrades to a per-call error rather
+  than a crashed turn, and read-risk tools are untouched.
+
 ## [0.2.147] — 2026-09-22
 A patch release carrying the same feature set as 0.2.146 — the orchestrator plan
 bridge — with the one fix that 0.2.146's own verification caught.
