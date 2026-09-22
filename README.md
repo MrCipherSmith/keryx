@@ -249,15 +249,25 @@ What is in it today:
   `/status` is the session inspector (identity, context window and limits when
   the provider reported them); `/session-info` and `/info` are not aliases.
 - **Plans that survive the turn.** For multi-step work, the agent can keep a
-  structured execution plan in the session. The TUI shows pending, active,
+  structured execution plan in the session's own `plan.json` — beside the
+  transcript, not inside the Slate — so closing a Slate (or a Flow reporting
+  done) no longer takes the plan with it. The TUI shows pending, active,
   completed, blocked, and skipped steps in the sidebar, and restored sessions
   continue from the same plan instead of rebuilding it from transcript text.
+  Clicking the sidebar's Plan section (its header or any row) opens the whole
+  plan in a modal: a Steps tab grouped and coloured by state, a Meta tab with the
+  revision, per-status counts, the active item, the blocked ids, and the plan
+  file it lives in.
 - **Theme-aware rich transcripts.** Assistant prose, headings, emphasis,
   inline code, fenced code, diffs, and GFM pipe tables use semantic colors
   derived from the selected `/theme`. Use a language fence such as
   ```` ```typescript ```` for syntax color, ```` ```diff ```` for addition and
   deletion rows, or ```` ```text ````/```` ```txt ```` when content must remain
   literal, including terminal output and ASCII diagrams.
+  The theme is applied from the first frame — the canvas background included —
+  so a fresh session never inherits the terminal's own background, and the
+  startup provider/model picker and the composer's own text follow the palette
+  too.
 - **Responsive busy-turn UX.** A running main turn can be interrupted with
   `/interrupt`; additional prompts are queued and answered as read-only side workers
   (`side-1`) in the TUI so the shell stays usable under long-running turns.
@@ -372,7 +382,9 @@ Grouped by what you are trying to do, not by internal module layout.
   (`keryx modules enable sac` to turn it on); accepting a proposal into real
   project knowledge always passes through a human `confirm-review`, which
   refuses a security-flagged proposal until `--acknowledge-security` records
-  that someone read the findings. See the
+  that someone read the findings. The TUI's `/review` modal offers the same
+  acknowledgement as an explicit `[s]` action, never as an automatic fallback
+  for its plain `[a]` accept. See the
   [Shared Agent Context guide](docs/docs/guides/shared-agent-context.md).
 - **slate** — the task-local scratchpad (Anchors, Course, model-written Seeds)
   a working session keeps, plus an external hand onto it: the `slate.open` /

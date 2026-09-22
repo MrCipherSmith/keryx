@@ -148,6 +148,14 @@ acknowledgement unconditionally on every call, which made the refusal unfirable
 while its error text still promised "explicit human acknowledgement": a silent
 bypass, the worse of the two. 0.2.75 made the acknowledgement real.
 
+The same acknowledgement is available inside `keryx shell`. The `/review`
+modal's Detail tab lists a proposal's actions as `[a]` accept, `[s]` accept with
+the security acknowledgement, and `[d]` decline — each armed by its key and then
+confirmed with `[y]`. `[s]` mints through the very same `confirm-review
+--acknowledge-security` path, and it is never an automatic fallback for `[a]`:
+with no acknowledgement handler wired, `[s]` reports itself unavailable instead
+of downgrading to a plain accept.
+
 Collaboration is **read-only** on the shipped adapters:
 
 ```bash

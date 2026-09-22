@@ -3,6 +3,71 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.144] — 2026-09-22
+Work state in the shell no longer depends on a lifecycle it does not belong to:
+the execution plan survives a Slate close, a security-flagged proposal can be
+accepted from the TUI itself, and the selected theme — canvas background
+included — is applied from the very first frame.
+
+### Added
+- **A security-flagged proposal can be accepted from the TUI review modal.** A
+  proposal whose evidence tripped the scanner carries `security.gate:
+  needs-approval`, and accepting it requires a token minted with
+  `--acknowledge-security` — which the modal's `[a]` accept never passed, so
+  acceptance from the modal always failed, and the refusal told the reviewer to
+  mint a token without the flag it needed. The modal now offers a third,
+  explicit action: `[s]` (the `[Accept + ack]` button) mints with the
+  acknowledgement, showing what pressing `[y]` claims to have read. It is never
+  an automatic fallback, and the refusals now name the flag and print the
+  ready-to-copy command.
+
+- **The whole plan is one click away from the sidebar.** The sidebar's Plan rows
+  are a glance — seven centred rows, 26 columns, no item names — so a plan that
+  outgrew the glance had no surface left. Clicking the section (its header or any
+  row) now opens `/plan` in the shared modal host: a Steps tab lists every item
+  grouped and coloured by state, and a Meta tab carries the revision, per-status
+  counts, the active item, the blocked ids and the plan's own
+  `<session>/plan.json`. It repaints live from the same subscription the sidebar
+  panel uses and unsubscribes on close, so a closed modal cannot be repainted by
+  a later `plan_set`.
+
+### Fixed
+- **The execution plan no longer disappears when a Flow closes its Slate.** The
+  plan lived in `slate.json`'s `executionPlan`, so the archive-on-close step took
+  it away as soon as the Flow reported done: the plan and the sidebar panel
+  rendering it vanished mid-session, and `plan_set` failed from then on. It now
+  lives in `<session>/plan.json` under its own lock, needs no Slate to exist, and
+  degrades to "no plan" when the file is corrupt instead of wedging every call
+  that touches it. A plan stored the old way is still read and migrates on the
+  first write, carrying its revision so `expectedRevision` keeps working.
+- **The first frame uses the selected theme, not the terminal's background.**
+  `createCliRenderer({ backgroundColor })` is not applied by `@opentui/core`
+  0.4.5 — the renderer keeps a transparent default and clears every frame with
+  it — so the transcript canvas inherited the terminal's own background until
+  something called `setBackgroundColor`, which only happened on a `/theme`
+  switch. The renderer's clear colour is now painted at creation, covering the
+  first frame, the boot animation and the startup picker; that picker, the other
+  pickers and the composer's own text also take their colours from the active
+  palette instead of OpenTUI's fixed dark defaults and a hardcoded highlight, so
+  a light theme is legible from the first screen.
+- **A batch containing a web call no longer blocks unrelated tools.** The
+  per-call untrusted-content gate refused every non-read tool in a batch that
+  merely contained a `web_fetch`/`web_search` call, and a zero-hit search latched
+  it too — so an unrelated `shell_exec` or `slate_write_seed` was blocked for
+  sharing a batch with a search that returned nothing, the batch read as "no
+  progress", and the turn ended in a toolless wrap-up. The gate now keys on
+  whether untrusted content was actually seen: a web call earlier in the batch
+  still latches it, a call before it cannot be affected by it, and a
+  fully-refused batch is no longer mistaken for a stalled one.
+- **Two gateway refusals say what is wrong instead of blaming the key.** OpenCode
+  Zen's `403 … free tier can only be used from within OpenCode` — returned for the
+  free model ids its `/models` list offers first — and a `402 … Insufficient
+  account funds` both read as "your configuration is wrong" and sent the operator
+  to re-check a key that was never wrong. They now name the remedy: pick a paid
+  model id, or add credit. The hint is narrow by construction — it fires on the
+  provider's own machine-readable error type or an exact phrase, never on the
+  status alone.
+
 ## [0.2.143] — 2026-09-22
 Long-running shell work now keeps its execution plan visible and persistent,
 while assistant output follows the selected theme across prose, Markdown,
