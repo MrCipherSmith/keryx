@@ -260,7 +260,12 @@ What is in it today:
   blocked ids, and the plan file it lives in. A plan can also be published FOR
   APPROVAL — items marked `proposed` await a human, never force the agent to
   continue, and are shown as `◇ awaiting approval` in both the sidebar and the
-  modal.
+  modal. Orchestrators publish into this same view — `job-orchestrator`,
+  `flow-orchestrator`, `review-orchestrator`, `issue-analyzer`,
+  `feature-analyzer`, `autodoc-orchestrator`, `docpack-orchestrator`,
+  `feature-dev` and `review-pr-feedback` project their own steps here under the
+  `session-plan-bridge` rule, so a run driven by one of them is watchable while
+  it runs instead of only after it reports.
 - **Theme-aware rich transcripts.** Assistant prose, headings, emphasis,
   inline code, fenced code, diffs, and GFM pipe tables use semantic colors
   derived from the selected `/theme`. Use a language fence such as

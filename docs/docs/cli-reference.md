@@ -266,7 +266,10 @@ Refusals print their code and exit non-zero (except where noted):
   plan in a modal (`Plan` and `Meta` tabs). `proposed` means the item is
   awaiting YOUR approval and is not work in progress: it never makes the agent
   continue on its own, so a plan published for approval is a legitimate place for
-  a turn to end. Approving is the operator turning those items into
+  a turn to end. Orchestrator pipelines publish their own steps into the same
+  plan — the `session-plan-bridge` rule holds the ids and the status translation
+  from `keryx job status` / `keryx flow status` — so a job or Flow run is
+  watchable while it runs, not only once it reports. Approving is the operator turning those items into
   `pending`/`in_progress` work. This is separate from `/plan`, whose name
   predates the panel and still means the operator-controlled read-only mode.
 - `/search-provider` configures and tests web search providers for `web_search`

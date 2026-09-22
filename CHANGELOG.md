@@ -3,6 +3,42 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.146] — 2026-09-22
+The orchestrators' own plans are visible while they run. Every one of them already
+owned a plan — fifteen job steps, a Flow's tasks, a review's numbered checklist —
+and none of it reached the surface built for exactly that purpose, so an operator
+saw phases announced in prose and had to ask what was happening.
+
+### Added
+- **`session-plan-bridge`, and nine skills that use it.** The new rule defines the
+  projection from an orchestrator's own plan into the session plan: publish once
+  as soon as the plan exists, use the orchestrator's OWN ids (`analyze` …
+  `deploy`, `T1` … `Tn`, `step-0` … `step-14`, `phase-0` … `phase-5`), translate
+  the vocabularies explicitly (job steps are hyphenated `in-progress`; our
+  vocabulary has no `failed`, so a failed step is `blocked`), and mirror every
+  status change in the same breath as the CLI call that made it. It is explicitly
+  not a journal, and not authoritative: if it disagrees with `keryx job status` or
+  `keryx flow status`, the CLI wins and the projection is corrected.
+- **The runs that stop to ask publish `proposed` at exactly that gate.**
+  `job-orchestrator`'s "Proceed? (yes / adjust …)", `flow-orchestrator`'s Phase 4
+  completion choice, `feature-dev`'s spec and plan confirmations, and
+  `docpack-orchestrator`'s target-location question. The sidebar then says
+  `◇ awaiting approval` at the moment the run is waiting for a human — and, being
+  non-actionable, that status does not make the agent continue on its own.
+- **Six more main-session pipelines joined the bridge:** `issue-analyzer`,
+  `feature-analyzer`, `autodoc-orchestrator`, `docpack-orchestrator`,
+  `feature-dev` and `review-pr-feedback`. Skills that run as dispatched
+  SUBAGENTS are deliberately excluded, and the rule says why: `plan_set` is
+  registered for the main session only, so a child cannot call it at all.
+
+### Fixed
+- **The plan modal is `Session plan`, not `/plan`.** 0.2.145 shipped it titled
+  after the read-only MODE command, so two unrelated things shared one name — and
+  a reader who opened the modal looking for the mode toggle had nothing to tell
+  them apart. The Meta tab now names the difference explicitly. `/plan` itself is
+  untouched: same registry entry, same two shells, same orthogonal hard floor,
+  still in-memory only.
+
 ## [0.2.145] — 2026-09-22
 A plan can now be published FOR APPROVAL. The plan vocabulary had no way to say
 "here is the plan, your call": a published plan necessarily contained `pending`
