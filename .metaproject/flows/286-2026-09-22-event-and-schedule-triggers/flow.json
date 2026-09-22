@@ -9,7 +9,7 @@
   "title": "Start a flow from a repository event or a schedule, not only from a person at a prompt",
   "status": "in-progress",
   "createdAt": "2026-09-22T18:18:39.374Z",
-  "updatedAt": "2026-09-22T18:39:44.659Z",
+  "updatedAt": "2026-09-22T19:14:57.658Z",
   "source": {
     "type": "description",
     "ref": null
@@ -129,7 +129,7 @@
       "id": "T7",
       "title": "keryx trigger run: one pass, locking, exit codes",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -145,55 +145,91 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "The fired-trigger record and keryx trigger status",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:59:55.357Z",
+            "outcome": "started",
+            "detail": "sonnet: record, install, schedule"
+          }
+        ]
       },
       "acRefs": [],
-      "evidenceRefs": [],
-      "budget": {}
+      "evidenceRefs": [
+        "src/trigger/record.ts",
+        "src/trigger/record.test.ts"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Fired-trigger record (AC4): append-only JSONL at .metaproject/data/trigger/runs.jsonl, house-styled on forgetting/journal.ts. Outcome kinds ok|no-op|lock-refused|failed|budget-refused (reserved for T11). keryx trigger status reads it."
     },
     {
       "id": "T9",
       "title": "keryx trigger install extending the existing hook installer; list",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:59:55.456Z",
+            "outcome": "started",
+            "detail": "sonnet: record, install, schedule"
+          }
+        ]
       },
       "acRefs": [],
-      "evidenceRefs": [],
-      "budget": {}
+      "evidenceRefs": [
+        "src/lib/managed-hook.ts",
+        "src/trigger/hooks.ts",
+        "src/commands/trigger-hooks-coexist.test.ts"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "install/list extend the existing multi-block hook installer (installManagedHook pulled out to src/lib/managed-hook.ts, same # keryx:<id>:begin/end marker convention as src/sync/hooks.ts's keryx-sync block). Coexistence proven by trigger-hooks-coexist.test.ts: sync install-hooks + trigger install in both orders, both blocks survive."
     },
     {
       "id": "T10",
       "title": "Schedule output: cron line or systemd timer, no daemon",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:59:55.555Z",
+            "outcome": "started",
+            "detail": "sonnet: record, install, schedule"
+          }
+        ]
       },
       "acRefs": [],
-      "evidenceRefs": [],
-      "budget": {}
+      "evidenceRefs": [
+        "src/trigger/schedule.ts",
+        "src/trigger/schedule.test.ts",
+        "src/commands/trigger-schedule.e2e.test.ts"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "keryx trigger schedule <name> prints a cron line and a systemd service+timer pair, no daemon. Correct by construction: bakes in the resolved interpreter+script by absolute path (never bare keryx) plus an explicit PATH, and mkdir -p's the log dir before redirecting. AC6 proven by trigger-schedule.e2e.test.ts: spawns the printed cron command via sh -c with PATH=/usr/bin:/bin only and no TTY, asserts the rebuild actually ran."
     },
     {
       "id": "T11",
@@ -349,6 +385,41 @@
       "at": "2026-09-22T18:39:44.659Z",
       "event": "task-attempt",
       "detail": "T7: started (attempt 1) — sonnet: trigger run with locking"
+    },
+    {
+      "at": "2026-09-22T18:59:55.259Z",
+      "event": "task-done",
+      "detail": "T7: keryx trigger run: one pass, locking, exit codes"
+    },
+    {
+      "at": "2026-09-22T18:59:55.357Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — sonnet: record, install, schedule"
+    },
+    {
+      "at": "2026-09-22T18:59:55.456Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — sonnet: record, install, schedule"
+    },
+    {
+      "at": "2026-09-22T18:59:55.555Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — sonnet: record, install, schedule"
+    },
+    {
+      "at": "2026-09-22T19:14:47.998Z",
+      "event": "task-done",
+      "detail": "T8: The fired-trigger record and keryx trigger status"
+    },
+    {
+      "at": "2026-09-22T19:14:52.683Z",
+      "event": "task-done",
+      "detail": "T9: keryx trigger install extending the existing hook installer; list"
+    },
+    {
+      "at": "2026-09-22T19:14:57.658Z",
+      "event": "task-done",
+      "detail": "T10: Schedule output: cron line or systemd timer, no daemon"
     }
   ]
 }

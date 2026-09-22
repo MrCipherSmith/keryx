@@ -188,8 +188,8 @@ describe("keryx trigger — CLI wiring", () => {
     expect(logged.join("\n")).toContain("keryx trigger run <name>");
   });
 
-  test("an unknown trigger subcommand (e.g. install/list/status — not this dispatch's scope) exits 1", async () => {
-    await triggerCommand(["install"]);
+  test("an unknown trigger subcommand exits 1", async () => {
+    await triggerCommand(["frobnicate"]);
     expect(process.exitCode).toBe(1);
     expect(errored.join("\n")).toContain("Unknown trigger command");
   });
