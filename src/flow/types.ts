@@ -233,6 +233,20 @@ export type FlowState = {
    * every other v2 field here).
    */
   signatures?: FlowSignature[] | undefined;
+  /**
+   * Append-only record of every `flow complete` attempt's gate outcomes
+   * (flow 291, AC4): every gate this attempt evaluated — passing, failing and
+   * skipped alike — plus whether the attempt as a whole passed and the AC
+   * checksum in force. Written on EVERY completion attempt from now on, pass
+   * or fail — not opt-in the way `gates.owner`/`gates.review`/`gates.tasks`
+   * are, because this is pure additive data (a new array field, not a new
+   * gate that could fail a flow that never asked for it). Absent entirely on
+   * a flow.json written before this field existed, and on any flow that has
+   * never had `complete` invoked since — the governance report reads that
+   * absence as "not recorded", never as "every gate passed" or "no attempt
+   * was made".
+   */
+  completionAttempts?: FlowCompletionAttempt[] | undefined;
   tasks: FlowTask[];
   history: FlowHistoryEvent[];
 };
@@ -303,6 +317,21 @@ export type GateOutcome = {
     | "owner";
   status: "pass" | "fail" | "skipped";
   detail: string;
+};
+
+/**
+ * One `flow complete` attempt, on the record (flow 291, AC4): the outcome of
+ * every gate that attempt evaluated, whether the attempt passed overall, and
+ * the AC checksum in force. Pushed onto `FlowState.completionAttempts` on
+ * every invocation of `complete()`, pass or fail — never mutated once
+ * written.
+ */
+export type FlowCompletionAttempt = {
+  at: string;
+  gates: GateOutcome[];
+  passed: boolean;
+  /** The acceptance-criteria checksum in force when this attempt ran. */
+  acChecksum: string | null;
 };
 
 export type FlowServiceDeps = {

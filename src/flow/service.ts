@@ -818,6 +818,19 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       }
 
       const passed = gates.every((gate) => gate.status !== "fail");
+
+      // Flow 291, AC4: this attempt's full gate outcomes go on the record —
+      // pass or fail, every gate evaluated, not folded into one prose
+      // `history` line. Additive and unconditional (not opt-in like
+      // `gates.owner`/`gates.review`/`gates.tasks`): a flow.json written
+      // before this field existed simply has no `completionAttempts`, and the
+      // governance report reads that absence as "not recorded" rather than
+      // inferring or backfilling anything about it.
+      flow.completionAttempts = [
+        ...(flow.completionAttempts ?? []),
+        { at: now(), gates, passed, acChecksum: flow.acChecksum },
+      ];
+
       let issueComment: string | null = null;
       let commented = false;
 

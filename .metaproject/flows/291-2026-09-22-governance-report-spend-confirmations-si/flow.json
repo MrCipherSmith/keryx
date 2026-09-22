@@ -1,0 +1,284 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "291",
+  "slug": "governance-report-spend-confirmations-si",
+  "title": "Governance report: spend, confirmations, signatures and gate outcomes across flows",
+  "status": "in-progress",
+  "createdAt": "2026-09-22T23:17:46.032Z",
+  "updatedAt": "2026-09-22T23:43:51.036Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Persist gate outcomes on every completion attempt, additively",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T23:25:05.670Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Governance aggregation: review spend, trigger spend, confirmations and signatures",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "keryx governance report command, artifacts, shape-guarded reader",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Filters and --all-projects",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Read-only and not-recorded-vs-zero tests with fixtures",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Docs: README and CLI reference",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-22T23:17:46.032Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-22T23:25:04.641Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-22T23:25:04.752Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-22T23:25:04.868Z",
+      "event": "task-added",
+      "detail": "T5: Persist gate outcomes on every completion attempt, additively"
+    },
+    {
+      "at": "2026-09-22T23:25:04.982Z",
+      "event": "task-added",
+      "detail": "T6: Governance aggregation: review spend, trigger spend, confirmations and signatures"
+    },
+    {
+      "at": "2026-09-22T23:25:05.096Z",
+      "event": "task-added",
+      "detail": "T7: keryx governance report command, artifacts, shape-guarded reader"
+    },
+    {
+      "at": "2026-09-22T23:25:05.210Z",
+      "event": "task-added",
+      "detail": "T8: Filters and --all-projects"
+    },
+    {
+      "at": "2026-09-22T23:25:05.324Z",
+      "event": "task-added",
+      "detail": "T9: Read-only and not-recorded-vs-zero tests with fixtures"
+    },
+    {
+      "at": "2026-09-22T23:25:05.442Z",
+      "event": "task-added",
+      "detail": "T10: Docs: README and CLI reference"
+    },
+    {
+      "at": "2026-09-22T23:25:05.558Z",
+      "event": "task-added",
+      "detail": "T11: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-22T23:25:05.670Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-22T23:43:50.458Z",
+      "event": "task-done",
+      "detail": "T5: Persist gate outcomes on every completion attempt, additively"
+    },
+    {
+      "at": "2026-09-22T23:43:50.568Z",
+      "event": "task-done",
+      "detail": "T6: Governance aggregation: review spend, trigger spend, confirmations and signatures"
+    },
+    {
+      "at": "2026-09-22T23:43:50.684Z",
+      "event": "task-done",
+      "detail": "T7: keryx governance report command, artifacts, shape-guarded reader"
+    },
+    {
+      "at": "2026-09-22T23:43:50.796Z",
+      "event": "task-done",
+      "detail": "T8: Filters and --all-projects"
+    },
+    {
+      "at": "2026-09-22T23:43:50.917Z",
+      "event": "task-done",
+      "detail": "T9: Read-only and not-recorded-vs-zero tests with fixtures"
+    },
+    {
+      "at": "2026-09-22T23:43:51.036Z",
+      "event": "task-done",
+      "detail": "T10: Docs: README and CLI reference"
+    }
+  ]
+}

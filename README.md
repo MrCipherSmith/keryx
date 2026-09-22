@@ -418,6 +418,17 @@ Grouped by what you are trying to do, not by internal module layout.
   `keryx trigger schedule` prints a cron line or systemd unit pair and runs no
   daemon of its own. Every fired run is recorded and gated by a project-wide
   spend ceiling and a run lock. See the [CLI reference](docs/docs/cli-reference.md#trigger).
+- **governance** — `keryx governance report`, one read-only report unifying what
+  is already recorded: review-round spend per flow (USD and tokens, with a
+  rounds-with-cost/rounds-total count for partial coverage), project-wide
+  trigger spend (never attributed to a flow — the run record carries no flow
+  reference), who confirmed each acceptance criterion and who signed
+  completion (with identity basis), and every `flow complete` attempt's gate
+  outcomes. A figure nobody recorded is reported as "not recorded", never as
+  zero. Writes `.metaproject/data/governance/artifacts/latest.{md,json}`, the
+  same convention `keryx health run` uses; `--all-projects` also covers every
+  project in the user-global registry. See the
+  [CLI reference](docs/docs/cli-reference.md#governance).
 - **security** — deterministic secrets / PII / prompt-injection / egress
   scanning, redaction, and a policy gate at agent write seams, with a committed
   evaluation corpus.

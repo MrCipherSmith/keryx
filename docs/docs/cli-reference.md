@@ -1233,6 +1233,84 @@ regenerate-and-reinstall of the line.
 
 ---
 
+## governance
+
+One report over what is already recorded — spend, confirmations, signatures
+and gate outcomes, unified across flows and (optionally) across projects.
+Read-only: it never re-runs a gate, never calls a model or a network service,
+and the only files it writes are its own report artifacts. A figure nobody
+recorded is reported as "not recorded", never as zero — the same rule
+`keryx review budget`'s `spend_status: not-recorded` and `keryx trigger
+status`'s `cost: n/a` already follow.
+
+```
+keryx governance report [--flow <id>] [--owner <name>] [--since <iso>] [--until <iso>] [--all-projects] [--json]
+keryx governance show [--json]
+```
+
+| Subcommand | Description |
+|---|---|
+| `report` | Build the report from what is on disk right now, write `.metaproject/data/governance/artifacts/latest.md` and `latest.json`, and print it. |
+| `show` | Reprint the most recently written report without regenerating it. Prints "No governance report yet" if `report` has never run. |
+| `--flow <id>` | Narrow to one flow, by its bare id (e.g. `291`). |
+| `--owner <name>` | Narrow to flows whose owner's identity value matches exactly. A flow with no owner set is excluded. |
+| `--since <iso>` / `--until <iso>` | Narrow to flows whose own `updatedAt` falls in the range, and trigger runs whose own `at` falls in the range. |
+| `--all-projects` | Also cover every project in the user-global registry (`keryx projects`), not only the current one. A registered project whose path is missing or unreadable is listed with a `state: "skipped"` reason instead of failing the whole report. |
+| `--json` | Print the report as JSON instead of markdown. |
+
+### What it reads, and what it never does
+
+Per flow (`.metaproject/flows/<id>/flow.json` and its `reviews/*/manifest.json`):
+
+- **Review-round spend** (input tokens, output tokens, USD), summed across
+  every round's `manifest.json` `cost` field. A figure is a number only when
+  at least one round reported it; a flow with partial coverage (some rounds
+  recorded cost, some did not) reports the sum together with a
+  `rounds_with_cost`/`rounds_total` count, never silently dropping the gap.
+- **Confirmations and signatures** — who confirmed each acceptance criterion
+  and who signed completion, joined from `acConfirmed` and `signatures`
+  (flow 289), with each identity's basis (`stated`, `derived`, `unknown`)
+  shown beside the name. A `derived`/`unknown` identity is never presented as
+  a verified confirmation. A flow with no `signatures` field at all — every
+  flow completed before flow 289 — reports `confirmations: not recorded
+  (predates signing)`.
+- **Gate outcomes** — every `flow complete` attempt's gate results (pass,
+  fail, skipped), from `FlowState.completionAttempts` (flow 291). Absent on
+  every completion attempt made before flow 291, which reports `gate
+  outcomes: not recorded` rather than inferring anything.
+
+Per project (`.metaproject/data/trigger/runs.jsonl`):
+
+- **Trigger spend** — USD summed over fired-trigger runs whose cost was
+  recorded, plus the count of runs whose cost was not recorded (never folded
+  into the sum as `$0`). Never attributed to any individual flow: a fired-
+  trigger record carries no flow reference, so this is always a project-wide
+  figure, stated as such. An absent ledger reports a demonstrated `$0`
+  (nothing has ever fired); an unreadable one reports `not recorded` with the
+  reason.
+- **Policy decisions** — allow/ask/deny decisions and unattended-run denials
+  have no durable project-wide record in this build, so this section always
+  reads `not recorded (no durable log exists yet)`. (Flow 290, unattended
+  denials, is a future source for this — not a dependency of this report.)
+
+The report never re-runs `flow complete`, `review ingest`/`budget`, `health
+run`, or any security scan, and never calls a model or a network service. The
+only files a run writes are its own two artifacts, below.
+
+### Artifacts
+
+`report` writes both files on every run, following the same convention
+`keryx health run` uses:
+
+- `.metaproject/data/governance/artifacts/latest.md` — the human-readable
+  report, the same text printed to the terminal.
+- `.metaproject/data/governance/artifacts/latest.json` — schema-versioned
+  (`schemaVersion: 1`), machine-readable. `show`'s reader is shape-guarded: a
+  missing or malformed stored file is treated as "no report yet", never a
+  crash and never silently read as an empty-but-valid report.
+
+---
+
 ## commands
 
 The agent-facing command registry: each described keryx command as a

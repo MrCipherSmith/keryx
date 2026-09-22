@@ -158,6 +158,12 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // the ten declared owner facades and nothing else. It is core BY
   // CONSTRUCTION, and `src/core-package.test.ts` is what proves it stays so.
   { segment: "core.ts", zone: "core" },
+  // Flow 291: the governance report's aggregation library — pure readers over
+  // flow.json, review manifests and the trigger ledger, with no provider
+  // registry, no model selection and no network call. Same shape as
+  // `sync`/`forgetting`/`trigger` above; `src/commands/governance.ts`
+  // (adapter) is what actually writes the report artifacts and prints.
+  { segment: "governance", zone: "core" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(
