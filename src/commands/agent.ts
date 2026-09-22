@@ -2548,6 +2548,12 @@ async function runAgentTurnCore(
     // between two `tool` results that answer the same parallel `tool_calls`
     // batch either. Last hint wins if more than one call trips it this batch.
     let repeatedFailureHint: string | undefined;
+    // Set when ANY call in this batch was refused by the untrusted-content gate
+    // just below. Such a batch must not be mistaken for "no progress": every call
+    // got a real, actionable result explaining the refusal, and reading the batch
+    // as stalled used to fire the toolless wrap-up (`finishWithBudgetSummary`) and
+    // END the turn on the spot.
+    let gateBlockedAny = false;
 
     for (const call of calls) {
       if (isAborted()) {
@@ -2600,8 +2606,22 @@ async function runAgentTurnCore(
       // web content entered history, EVERY later tool call for the rest of
       // the session was refused, including plain code/graph/wiki lookups
       // that have nothing to do with the tainted content.
+      // ONLY `untrustedContentSeen` (the result-based latch) — NOT
+      // `batchContainsUntrustedWeb`. The batch-shape test refused every non-read
+      // call in a batch that merely CONTAINED a web call — a search that failed or
+      // returned no hits included — where no external byte exists to authorize
+      // anything. The two false positives that removes: an unrelated
+      // `shell_exec`/`slate_write_seed` refused for sharing a batch with a search,
+      // and (because a fully-refused batch left `executedAny` false) that batch
+      // then reading as "no progress" and ending the turn.
+      // Ordering preserves the property: a web call EARLIER in the batch still
+      // latches the gate before the calls after it are reached, and a call BEFORE
+      // it cannot have been authored under this turn's external content (the
+      // bffc5c57 cross-turn scoping is unchanged). The concurrent
+      // `spawn_subagent` pre-pass above keeps the shape test: it decides before any
+      // result exists, and a spawned child cannot be un-spawned by a later refusal.
       const isPureReadTool = risk === "read" && !DURABLE_READ_TOOL_NAMES.has(call.name);
-      if (!isPureReadTool && (untrustedContentSeen || batchContainsUntrustedWeb)) {
+      if (!isPureReadTool && untrustedContentSeen) {
         const result: InteractiveToolResult = {
           output: "tool blocked: external web content cannot authorize further tool calls in this turn",
           isError: true,
@@ -2609,6 +2629,7 @@ async function runAgentTurnCore(
         io.onToolResult?.(call.name, result);
         history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id, ts: now() });
         io.onHistoryChange?.("tool");
+        gateBlockedAny = true;
         continue;
       }
       io.onToolCall?.(call.name, call.input);
@@ -2792,7 +2813,10 @@ async function runAgentTurnCore(
       return { finishReason: "tool-call-budget" };
     }
 
-    const noProgress = !executedAny && calls.length > 0;
+    // A batch refused by the untrusted-content gate is ANSWERED, not stalled: every
+    // call returned a result saying so, which the model can adapt to on the next
+    // round — treating it as no-progress ended the turn instead.
+    const noProgress = !executedAny && !gateBlockedAny && calls.length > 0;
     if (noProgress) {
       if (deps.unattended === true) {
         // T20 F-001: this stop is caused by the per-signature attempt guard,

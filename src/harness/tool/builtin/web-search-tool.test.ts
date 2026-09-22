@@ -37,6 +37,17 @@ test("web_search provenance-labels and redacts normalized results", async () => 
   expect(result.output).not.toContain(token);
 });
 
+test("web_search with zero hits does not mark its output untrusted (no external bytes entered)", async () => {
+  const tool = webSearchTool({
+    search: async () => ({ ok: true, value: { query: "keryx", providerId: "duckduckgo", results: [] } }),
+  });
+  const result = await tool.invoke({ query: "keryx" });
+  expect(result.isError).toBe(false);
+  // An empty result set carries nothing an injected instruction could ride in on,
+  // so it must not latch the untrusted-content gate for the rest of the turn.
+  expect(result.untrusted).toBe(false);
+});
+
 test("web_search blocks indirect tool-invocation instructions in results", async () => {
   const tool = webSearchTool({
     search: async () => ({ ok: true as const, value: {

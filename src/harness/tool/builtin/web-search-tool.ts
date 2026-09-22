@@ -56,7 +56,12 @@ export function webSearchTool(service: SearchToolService): InteractiveTool {
       const output = render(response.value);
       return output === undefined
         ? { output: "web_search: result was blocked because it contains a likely prompt injection", isError: true }
-        : { output, isError: false, untrusted: true };
+        : // Zero hits is an answer with no external bytes in it: nothing came back
+          // that could carry an injected instruction, so the output must not latch
+          // the untrusted-content gate for the rest of the turn — that latch is what
+          // refused the operator's own `shell_exec`/`slate_write_seed` calls after a
+          // search that simply found nothing.
+          { output, isError: false, untrusted: response.value.results.length > 0 };
     },
   };
 }
