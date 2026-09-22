@@ -28,7 +28,7 @@ End-to-end feature development workflow from idea to merge-ready PR.
 
 ## Arguments
 
-- `/feature-dev <description>` — start from a text description
+- `/feature-dev <description>` — start from a text description. Plan bridge: publish `phase-1`…`phase-8` with `plan_set`/`plan_update`; while a confirmation question is open the items are `proposed` — see the `session-plan-bridge` rule.
 - `/feature-dev #<issue>` — start from a GitHub issue
 - `/feature-dev --resume` — resume interrupted feature-dev (checks for existing worktree/branch)
 
@@ -36,18 +36,6 @@ End-to-end feature development workflow from idea to merge-ready PR.
 
 > **Rules always loaded:** `tdd-workflow.mdc`, `implementation-doc-mandate.mdc`, `error-handling.mdc`
 > **Sub-agents used:** `tests-creator` (before implement), `code-verifier` (after implement)
-
-
-### Publish these eight phases to the session plan
-
-Publish `phase-1` … `phase-8` with `plan_set` before Phase 1 starts and move each
-item with `plan_update` as the phase completes. This skill has two gates where it
-stops and asks (Phase 1's spec confirmation, Phase 2's plan confirmation): while
-either question is open the items are `proposed` — the one status that does not
-make the agent carry on by itself — so the sidebar shows that the run is waiting
-for the operator, not working.
-
-Contract: the `session-plan-bridge` rule.
 
 ### Phase 1: REQUIREMENTS + SPEC
 

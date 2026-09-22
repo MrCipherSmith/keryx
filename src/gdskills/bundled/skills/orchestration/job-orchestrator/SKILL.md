@@ -32,7 +32,7 @@ Proceed directly with your assigned task.
 
 ## Purpose
 
-Dynamic orchestrator that builds execution plans based on user intent. Unlike a fixed pipeline, the orchestrator adapts its workflow to what the user actually needs — from "just analyze this issue" to "implement, review, and create a PR". It dispatches sub-agents (`issue-analyzer`, `context-collector`, `tests-creator`, `task-implementer`, `code-verifier`, `review-orchestrator`) and persists every step, document and retry through `keryx job`, which writes `.metaproject/jobs/<job-name>/`.
+Dynamic orchestrator that builds execution plans based on user intent. Unlike a fixed pipeline, the orchestrator adapts its workflow to what the user actually needs — from "just analyze this issue" to "implement, review, and create a PR". It dispatches sub-agents (`issue-analyzer`, `context-collector`, `tests-creator`, `task-implementer`, `code-verifier`, `review-orchestrator`) and persists every step, document and retry through `keryx job`, which writes `.metaproject/jobs/<job-name>/`. Plan bridge: publish these steps with `plan_set` under the ids `keryx job status` reports, mirror each `keryx job step` with `plan_update`, and mark them `proposed` while the approval above is open — see the `session-plan-bridge` rule.
 
 **The package is the state.** `keryx job` is the only writer of `state.json`; it validates every write against the registered contract `job-orchestrator-state` and refuses one that does not conform. Never hand-write `state.json`, and never hold a step's outcome only in this session — a step recorded nowhere is a step that did not happen as far as the next session is concerned.
 
@@ -445,22 +445,6 @@ removed is `skipped` with a reason, never silently dropped — that is the diffe
 between a plan somebody changed and a plan that quietly shrank.
 
 **If `plan_approval: false`** (automation setting) → skip this display and proceed directly.
-
-### 1.4 Publish this plan to the session, so the operator can watch it
-
-The plan above is the operator's main window into a running job, and until it is
-published the only sign a job exists is prose in this conversation. Publish it
-here, once, with `plan_set` and the SAME step ids `keryx job status` reports —
-then mirror every status change with `plan_update` in the same breath as
-`keryx job step …`.
-
-- While this phase is waiting for the approval above, the items are `proposed`:
-  that is what makes the sidebar show `◇ awaiting approval` rather than a running
-  step, and it is the one status that will not make the agent continue on its own.
-- A conditional step that will not run is set `skipped`, never omitted.
-
-Full contract (ids, the status translation, when to publish, what not to put in a
-plan item): the `session-plan-bridge` rule. Read it before the first publish.
 
 ---
 

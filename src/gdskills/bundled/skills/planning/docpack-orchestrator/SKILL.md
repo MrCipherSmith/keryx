@@ -34,7 +34,7 @@ When a USER runs this orchestrator directly (not as a dispatched subagent), at
 the start ask "Collect execution statistics for this run? (yes/no)" per
 `.metaproject/rules/core/execution-metrics.md`. If yes, append the
 `## Execution Metrics` section at the end and save it under the docpack output
-dir. Never ask or emit it when dispatched as a subagent.
+dir. Never ask or emit it when dispatched as a subagent. Plan bridge: publish `phase-0`…`phase-5` with `plan_set`/`plan_update`, and hold them `proposed` while Phase 0's location question is open — see the `session-plan-bridge` rule.
 
 ## Iron Laws
 
@@ -58,17 +58,6 @@ Phase 4  Verify      -> structural/version/link/schema checks
 Phase 5  Review      -> docpack-review pass
 Phase 6  Report      -> concise summary, changed files, gaps and next steps
 ```
-
-
-### Publish the six package phases to the session plan
-
-Publish `phase-0` … `phase-5` with `plan_set` before Phase 0 starts, then move
-each item with `plan_update` as it completes. Phase 0 asks the operator for the
-target location and folder name — while that question is open the items are
-`proposed`, which is what makes the sidebar say "awaiting approval" instead of
-claiming work is under way.
-
-Contract: the `session-plan-bridge` rule.
 
 ## Phase 0: Scope
 

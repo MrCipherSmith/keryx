@@ -54,18 +54,6 @@ two commands for that reason: a caller that already runs collection per round
 would carry the posting along with it, and the reviewer would get six replies to
 one comment.
 
-### The session plan is how the operator watches this round
-
-Publish this checklist to the session plan (`plan_set`) as soon as the scope and
-the dispatch are fixed — Step 6 — using the ids `step-0` … `step-14` and one item
-per step, then move each item with `plan_update` as its step completes. A round runs long, and the
-sidebar is the only place an operator can see which wave is running without
-asking in the middle of it. `review-verifier`'s Wave C and the managed feedback
-loop are steps like any other in this projection; the finding counts and
-severities stay in the report, not in a plan item.
-
-Full contract: the `session-plan-bridge` rule.
-
 ### Step 6 — the model is computed, not chosen
 
 Before dispatching each reviewer, run `keryx review tier` with the signals you
@@ -73,7 +61,7 @@ already hold (`--scope`, `--findings`, `--diff-lines`, `--fix-attempt`,
 `--verifier`, `--security`, `--forced-strategy-change`) and paste the `model`
 block it prints into that dispatch.
 
-Do NOT assign the tier by reading the table in `rules/core/model-selection.mdc`.
+Do NOT assign the tier by reading the table in `rules/core/model-selection.mdc`. Plan bridge: publish this checklist with `plan_set` under the ids `step-0`…`step-14` and move each item with `plan_update` as its step completes — see the `session-plan-bridge` rule.
 Working it out in your head is exactly the mechanical step that rule moves into
 code — and it is the step that was documented as running for a whole release
 while nothing called it.

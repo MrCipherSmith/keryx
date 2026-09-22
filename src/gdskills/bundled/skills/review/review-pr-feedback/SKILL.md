@@ -56,7 +56,7 @@ a plan is the deliverable of analyze mode, not a preamble to one.
 
 ```
 review-pr-feedback Progress:
-- [ ] Step 1: Read job context (if CONTEXT_PATH provided)
+- [ ] Step 1: Read job context (if CONTEXT_PATH provided). Plan bridge: publish each `Step N` with `plan_set`, and move it with `plan_update` as the step completes — see the `session-plan-bridge` rule.
 - [ ] Step 2: Resolve the PR — owner, repo, number, head branch, base branch, head SHA
 - [ ] Step 3: Collect comments — `keryx review comments collect`, never by hand
 - [ ] Step 4: Group by author
@@ -88,17 +88,6 @@ contract between agents, and this skill validating its own output against the
 output schema is what makes them worth writing.
 
 ---
-
-
-### Publish these steps to the session plan
-
-Publish one item per `Step N` this run will take — `step-1`, `step-2`, … — with
-`plan_set` before Step 1, and move each item with `plan_update` as it completes.
-With `--fix` the loop's own steps belong in the same projection, so the operator
-can see that the run is still answering comments rather than stalled. A comment
-the run cannot act on without a decision is `blocked`.
-
-Contract: the `session-plan-bridge` rule.
 
 ## Step 1: Job Context
 

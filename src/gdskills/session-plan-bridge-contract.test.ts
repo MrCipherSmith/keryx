@@ -84,9 +84,9 @@ test("every orchestrator points at the rule and publishes through the plan tools
 test("the two approval gates are published as `proposed`, which is the point of the status", () => {
   for (const root of ROOTS) {
     const job = read(skillPath(root, "orchestration/job-orchestrator"));
-    expect({ root, gate: job.includes("items are `proposed`") }).toEqual({ root, gate: true });
+    expect({ root, gate: job.includes("mark them `proposed` while the approval above is open") }).toEqual({ root, gate: true });
     const flow = read(skillPath(root, "orchestration/flow-orchestrator"));
-    expect({ root, gate: flow.includes("completion choice is published as `proposed`") }).toEqual({ root, gate: true });
+    expect({ root, gate: flow.includes("Phase 4's completion choice as `proposed`") }).toEqual({ root, gate: true });
   }
 });
 
@@ -95,7 +95,7 @@ test("the job bridge uses the CLI's own step ids rather than a second naming sch
     const job = read(skillPath(root, "orchestration/job-orchestrator"));
     // The instruction to read them rather than retype them is the property that
     // keeps the projection reconcilable with `keryx job status`.
-    expect(job).toContain("the SAME step ids `keryx job status` reports");
+    expect(job).toContain("under the ids `keryx job status` reports");
     expect(job).toContain("keryx job step");
   }
 });
@@ -103,8 +103,8 @@ test("the job bridge uses the CLI's own step ids rather than a second naming sch
 test("the review bridge uses its own numbered checklist ids, and keeps findings out of plan items", () => {
   for (const root of ROOTS) {
     const review = read(skillPath(root, "review/review-orchestrator"));
-    expect(review).toContain("`step-0` … `step-14`");
-    expect(review).toContain("severities stay in the report, not in a plan item");
+    expect(review).toContain("`step-0`…`step-14`");
+    expect(review).toContain("move each item with `plan_update` as its step completes");
   }
 });
 
@@ -130,10 +130,10 @@ test("every main-session pipeline points at the rule and uses both plan tools", 
 
 test("each pipeline names ids of its own, not a scheme invented for the plan", () => {
   const expected: Record<string, string> = {
-    "orchestration/issue-analyzer": "`phase-1` … `phase-4`",
-    "planning/docpack-orchestrator": "`phase-0` … `phase-5`",
-    "orchestration/feature-dev": "`phase-1` … `phase-8`",
-    "review/review-pr-feedback": "`step-1`, `step-2`",
+    "orchestration/issue-analyzer": "`phase-1`…`phase-4`",
+    "planning/docpack-orchestrator": "`phase-0`…`phase-5`",
+    "orchestration/feature-dev": "`phase-1`…`phase-8`",
+    "review/review-pr-feedback": "publish each `Step N`",
   };
   for (const root of ROOTS) {
     for (const [skill, anchor] of Object.entries(expected)) {
@@ -145,7 +145,7 @@ test("each pipeline names ids of its own, not a scheme invented for the plan", (
 test("the pipelines that stop to ask publish `proposed` at exactly that gate", () => {
   for (const root of ROOTS) {
     // Two independent gates, named by the skill itself.
-    expect(read(skillPath(root, "orchestration/feature-dev"))).toContain("either question is open the items are `proposed`");
-    expect(read(skillPath(root, "planning/docpack-orchestrator"))).toContain("while that question is open the items are");
+    expect(read(skillPath(root, "orchestration/feature-dev"))).toContain("the items are `proposed`");
+    expect(read(skillPath(root, "planning/docpack-orchestrator"))).toContain("Phase 0's location question is open");
   }
 });

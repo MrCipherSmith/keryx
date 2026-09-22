@@ -20,7 +20,7 @@ license: "MIT"
 
 ## Purpose
 
-Analyzes a GitHub issue and decomposes it into atomic implementation tasks that can be dispatched to `task-implementer` sub-agents. Designed to run autonomously as a sub-agent — no user interaction required.
+Analyzes a GitHub issue and decomposes it into atomic implementation tasks that can be dispatched to `task-implementer` sub-agents. Designed to run autonomously as a sub-agent — no user interaction required. Plan bridge: publish these four phases with `plan_set` under the ids `phase-1`…`phase-4` and move each with `plan_update` — see the `session-plan-bridge` rule.
 
 **Input:** GitHub issue URL (or repo + number) + codebase path(s)
 **Output:** JSON analysis object with one task entry per atomic task, each containing full context for implementation
@@ -50,17 +50,6 @@ Issue Analyzer Progress:
 - [ ] Phase 2: Analyze intent and search codebase
 - [ ] Phase 3: Decompose into atomic tasks
 - [ ] Phase 4: Formalize as JSON output
-
-### Publish these four phases to the session plan
-
-This run is four phases with a search-heavy middle, which is exactly the stretch
-an operator cannot see. Publish them with `plan_set` as `phase-1` … `phase-4`,
-titled with the same four names the checklist above uses, and move each one with
-`plan_update` as it completes — the analysis feeds job-orchestrator's first step,
-so this is the earliest progress in a pipeline that may run for hours.
-
-Contract (ids, status translation, what does not belong in a plan item): the
-`session-plan-bridge` rule.
 ```
 
 ### Phase 1: COLLECT

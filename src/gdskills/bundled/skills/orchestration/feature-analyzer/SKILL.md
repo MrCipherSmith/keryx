@@ -32,7 +32,7 @@ Proceed directly with your assigned task.
 
 ## Purpose
 
-Performs deep cross-repository analysis to understand business logic, architecture, API contracts, and implementation requirements. Generates structured documentation for both human developers and AI agents.
+Performs deep cross-repository analysis to understand business logic, architecture, API contracts, and implementation requirements. Generates structured documentation for both human developers and AI agents. Plan bridge: publish each `Step N` this run will take with `plan_set`, and update it with `plan_update` as it finishes — see the `session-plan-bridge` rule.
 
 **Two Analysis Modes:**
 
@@ -149,16 +149,6 @@ Analysis Progress - Mode B (Current State):
 ```
 
 ---
-
-
-### Publish the steps this run will take to the session plan
-
-Publish one item per `Step N` you are actually going to execute, with `plan_set`
-and ids `step-0`, `step-1`, …, titled with that step's own heading, then move each
-item with `plan_update` as it finishes. Cross-repo analysis is long and silent;
-the sidebar is the only place the operator can see which step is running.
-
-Contract: the `session-plan-bridge` rule.
 
 ## Step 0: Context Gathering (MANDATORY)
 
