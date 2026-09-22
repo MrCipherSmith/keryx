@@ -248,6 +248,13 @@ What is in it today:
   session that keeps its ancestry, without editing a transcript by hand.
   `/status` is the session inspector (identity, context window and limits when
   the provider reported them); `/session-info` and `/info` are not aliases.
+- **Agent Client Protocol server.** `keryx acp` speaks
+  [ACP](https://agentclientprotocol.com) v1 — newline-delimited JSON-RPC 2.0
+  over stdio — so an ACP client (an editor, typically) can launch keryx as a
+  subprocess, open a session bound to a project, and drive a real harness turn
+  with streamed `session/update` notifications instead of one dump at the end.
+  See [the CLI reference](docs/docs/cli-reference.md#acp) for what a client
+  must advertise and what keryx does when a capability is absent.
 - **Plans that survive the turn.** For multi-step work, the agent can keep a
   structured execution plan in the session's own `plan.json` — beside the
   transcript, not inside the Slate — so closing a Slate (or a Flow reporting

@@ -9,7 +9,7 @@
   "title": "Expose the keryx harness over the Agent Client Protocol so any ACP client can drive it",
   "status": "in-progress",
   "createdAt": "2026-09-22T18:18:38.900Z",
-  "updatedAt": "2026-09-22T18:50:44.950Z",
+  "updatedAt": "2026-09-22T18:50:48.793Z",
   "source": {
     "type": "description",
     "ref": null
@@ -134,8 +134,14 @@
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:50:48.793Z",
+            "outcome": "started",
+            "detail": "sonnet: initialize and negotiation"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -344,6 +350,11 @@
       "at": "2026-09-22T18:50:44.950Z",
       "event": "ac-updated",
       "detail": "AC1 as frozen contradicted the ACP v1 spec: a client asking for a newer protocol version MUST be answered with the latest version the agent supports, not refused. Refusal stays for a malformed or out-of-range version. Found by the T5 surface pinning against the published schema; no criterion had been confirmed yet."
+    },
+    {
+      "at": "2026-09-22T18:50:48.793Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — sonnet: initialize and negotiation"
     }
   ]
 }

@@ -300,3 +300,102 @@ not emit `available_commands_update`, so this costs nothing today.
   (`src/cli.ts:66`), a `USAGE_BODY` line, and either a descriptor in the
   `src/standard` command registry or an explicit exclusion — the coverage test
   fails a new verb until one exists.
+
+---
+
+# T7/T8 — `keryx acp`, initialize, session/new, session/prompt
+
+Written by the T7/T8 dispatch, 2026-09-22. What exists now, and what the
+next dispatches (T9-T13) build on.
+
+## 0. What was built
+
+- `src/commands/acp.ts` — the CLI verb. `keryx acp [--provider <p>] [--model
+  <m>] [--base-url <url>] [--data-dir <dir>]`, wired into `CLI_ROUTES`,
+  `USAGE_BODY`, the `Commands:` list, and excluded from `src/standard`'s
+  command-registry coverage test (same reasoning as `serve-mcp`: it owns
+  stdout as the protocol wire, so it has no machine-consumable result a
+  descriptor could describe). `keryx acp` is a long-running stdio server, not
+  a one-shot command — its provider/model are fixed for the whole connection.
+- `src/acp/server.ts` — `runAcpServer(options)`: the framer→dispatcher→handler
+  loop for ONE connection (connection-scoped `initialized`/
+  `clientCapabilities`, never module globals — a real ACP client launches a
+  fresh subprocess per session, and so does every test connection here).
+  Registers `initialize`, `session/new`, `session/prompt` only; every other
+  method (`session/cancel`, `session/list`, `session/load`,
+  `session/request_permission` answers, `fs/*`, `terminal/*`) is unregistered
+  and falls through to the dispatcher's generic `-32601`, which is correct for
+  now but means `ACP_IMPLEMENTED_AGENT_METHODS` (protocol.ts) currently
+  advertises more than this dispatch actually answers — T9-T11 close that gap
+  method by method, nothing here needs to change for them to land.
+- `src/acp/session.ts` — `AcpSessionRegistry`, in-memory per-connection.
+  `create(cwd, clientCapabilities)` calls `createSession({cwd:
+  resolveProjectRoot(cwd), ...})` (F-6) and stores BOTH `requestedCwd` and
+  `resolvedRoot` on `AcpSessionState`, plus the client's capabilities
+  snapshotted at `session/new` time (unused by T7/T8; T9/T11 read it to decide
+  whether to call `fs/*`/`terminal/*` or fall back to built-in tools, per AC6).
+  `history: NormalizedMessage[]` is the SAME array reference across every
+  `session/prompt` for that session, mirroring `commands/shell.ts`'s own
+  history threading — `runAgentTurn` mutates it in place.
+- `src/acp/agent-io.ts` — `createAcpAgentIo(sessionId, send)`: the one place
+  `AgentIO` hooks become `session/update` notifications, streamed as the turn
+  runs (not buffered to the end). `onToolCall`/`onToolResult` carry no id
+  (F-3); this mints a `toolCallId` per call and resolves each result against
+  the OLDEST open call of the SAME NAME (a per-name FIFO). Two concurrent
+  identical calls are indistinguishable and resolve in start order — the
+  limitation F-3 already named, not a new one. **`requestApproval` is NOT set
+  here** — that is exactly what leaves `AgentIO`'s documented default-deny
+  floor in charge of shell/destructive tools until T9 wires it.
+- `src/acp/prompt-content.ts` — `renderAcpPromptContent(blocks)`: ACP's
+  `prompt` content-block array → the single `userLine` string
+  `runAgentTurn`/`AgentIO` take. Text and embedded text resources are
+  inlined; image/audio/resource_link/binary resources become a bracketed
+  placeholder (never silently dropped) — `promptCapabilities.image/audio:
+  false` means a conformant client should not send the first two anyway.
+- `src/acp/fixture-provider.ts` — `loadAcpFixtureProvider(path)`: a
+  deterministic, offline `ProviderPort` for the real-process conformance
+  test, selected only via `keryx acp --fixture <path>` (test-only, never a
+  production path). Replays a JSON file's `turns[N]` on the (N+1)th
+  `stream()` call — BY CALL ORDER, not `FakeProvider`'s exact-request-hash
+  matching, which is impractical to hand-author against `runAgentTurn`'s real
+  system instruction + tool list from outside the process. Mirrors
+  `commands/agent.test.ts`'s in-process `scriptedProvider` helper.
+
+## 1. Decisions later dispatches should know about
+
+**Tool roster is `builtinReadOnlyTools` only, for now.** `session/prompt`
+does not yet offer `shell_exec`, `apply_patch`, `workspace_propose`,
+metaproject tools, MCP tools, or bus tools. Not an oversight: every one of
+those needs either an approval seam that does not exist until T9
+(`requestApproval`), or a port (`metaprojectPort`, `searchController`,
+`jobRegistry`) this dispatch had no scoped reason to construct. Widening the
+roster is T9+'s call, once the tools it adds can actually be approved rather
+than silently default-denied.
+
+**`AgentDeps.unattended` is deliberately never set.** This is how F-4's "an
+ACP client counts as the operator" is satisfied at the `commands/agent.ts`
+layer today: `commands/agent.ts` has NO reference anywhere to
+`src/harness/policy/engine.ts`'s `PolicyContext`/`decide()` — that machinery
+backs `keryx harness run/exec/wave` (`src/harness/run/run.ts`,
+`src/harness/mutation/guard.ts`) and the SAC proposal-review `interactive`
+checkpoint (`src/sac/proposal-lifecycle.ts`, `SLATE-8`), NEITHER of which
+`session/prompt` calls into. The gate that actually governs a tool call
+inside `runAgentTurn` is `AgentDeps.unattended` (intercepts `ask_user`,
+degrades budget exhaustion to a silent `TerminalState`) plus `AgentIO`'s own
+default-deny-when-absent `requestApproval`. Leaving `unattended` unset and
+`requestApproval` unset (this dispatch) means every ask-shaped path is
+currently either unreachable (no shell-risk tools offered) or safely refused
+— never silently auto-approved. T9, when it adds `requestApproval` AND
+widens the tool roster, must keep `unattended` unset too, or the two
+undoes each other exactly as F-4 warned.
+
+**`session/cancel`, `session/list`, `session/load`,
+`session/request_permission`, `fs/*`, `terminal/*` are all still
+unimplemented.** `ACP_IMPLEMENTED_AGENT_METHODS` (protocol.ts, T5) already
+names `session/load`, `session/list`, `session/cancel` as agent methods this
+flow answers — that constant is the PINNED TARGET SURFACE for the whole
+flow, not a claim about what any one dispatch finished. A client calling one
+of those today gets the dispatcher's generic `-32601 Method not found` (not
+a crash, not silently dropped) naming `ACP_IMPLEMENTED_AGENT_METHODS`, which
+is momentarily misleading until T9-T11 land — worth knowing when reading a
+conformance run against an unfinished flow, not a bug to fix in isolation.

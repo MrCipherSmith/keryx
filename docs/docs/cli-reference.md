@@ -164,6 +164,34 @@ git root, or by absolute cwd outside a repository — so `list` never shows anot
 project's work. The [harness page](./harness.md#sessions) covers what a session
 holds and what forking copies.
 
+## acp
+
+Speak the [Agent Client Protocol](https://agentclientprotocol.com) (ACP) v1
+over stdio — newline-delimited JSON-RPC 2.0 in both directions, no
+`Content-Length` framing. Launch this as a subprocess from an ACP client (an
+editor, typically); it never runs interactively on its own.
+
+```
+keryx acp [--provider <p>] [--model <m>] [--base-url <url>] [--data-dir <dir>]
+```
+
+Nothing but protocol frames ever reaches stdout — every diagnostic goes to
+stderr, which the client may capture, forward, or ignore.
+
+| Method | What it does |
+|---|---|
+| `initialize` | Negotiates the protocol version and returns keryx's `agentCapabilities`/`agentInfo`. Requesting the version keryx serves gets it back unchanged; requesting a newer one gets keryx's latest supported version (not an error — the client decides whether to proceed); a malformed or out-of-range version is refused with a JSON-RPC error. Any other request before `initialize` succeeds is refused, not served. |
+| `session/new` | Creates a keryx session bound to `resolveProjectRoot(cwd)` — the git toplevel above the requested `cwd`, or the requested `cwd` itself outside a repository. A non-empty `mcpServers` is refused honestly (`-32602`): there is no per-session MCP registration seam yet; configure servers project-wide with `keryx mcp`/`keryx integrate` instead. |
+| `session/prompt` | Runs a real harness turn in that session and streams `session/update` notifications (assistant text, reasoning, tool calls and their results) as the turn runs, resolving with the spec's `stopReason` once it finishes. |
+
+A client must advertise `fs`/`terminal` capabilities to have keryx call
+`fs/read_text_file`, `fs/write_text_file` or `terminal/*` on its behalf;
+without them keryx falls back to its own built-in tools and the turn still
+completes. Permission prompts (`session/request_permission`),
+`session/cancel`, `session/list` and `session/load` are being wired
+incrementally — check `keryx --version` against the flow 285 changelog entry
+for what a given release answers.
+
 ## bus
 
 The agent bus: keryx shells in every worktree of one clone see each other and
