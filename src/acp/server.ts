@@ -61,6 +61,7 @@ import {
 import { renderAcpPromptContent } from "./prompt-content";
 import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError } from "./session";
 import {
+  acpMcpSetKey,
   parseAcpMcpServers,
   startAcpSessionMcp,
   type AcpMcpServerProblem,
@@ -92,7 +93,22 @@ export interface AcpServerOptions {
   readonly mcpConnect?: ConnectFn;
   /** Parent environment for client-supplied MCP servers (secrets stripped). `process.env` otherwise. */
   readonly mcpEnv?: Record<string, string | undefined>;
+  /**
+   * The per-turn settings `keryx shell` would apply to this provider
+   * (`resolveAcpTurnSettings` in `../commands/acp.ts`). Empty = the agent's
+   * own defaults.
+   */
+  readonly turnSettings?: AcpTurnSettings;
+  /**
+   * Aborted to stop the connection now (SIGTERM/SIGINT in the CLI): input is
+   * no longer awaited, running turns are aborted, and every client MCP server
+   * is stopped before `runAcpServer` resolves.
+   */
+  readonly shutdown?: AbortSignal;
 }
+
+/** The subset of `AgentDeps` `keryx shell` resolves per provider at launch. */
+export type AcpTurnSettings = Pick<AgentDeps, "modelParams" | "maxOutputTokens" | "reasoningEffort">;
 
 const DEFAULT_AGENT_INFO: AcpImplementation = { name: "keryx", version: "0" };
 
@@ -141,13 +157,30 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const replyKey = (id: JsonRpcId): string => JSON.stringify(id);
 
   /**
-   * Client-supplied MCP servers, per session (flow 287, AC3). One entry per
-   * session that was created or loaded with any; replaced (and the old one
-   * stopped) when `session/load` rebinds the id. Every entry is stopped when
-   * the connection closes.
+   * Client-supplied MCP servers (flow 287, AC3), SHARED per connection.
+   *
+   * Zed keeps one agent process and sends its whole `mcpServers` list with
+   * every `session/new` — every new thread. Starting a set per session would
+   * hold N threads × M servers child processes until stdin closed. So a
+   * running set is keyed by the CONTENT of the list it was started from
+   * (`acpMcpSetKey`: every entry's name, command, args, env and working
+   * directory, hashed), and every session that sends the same list binds to
+   * the one set.
+   *
+   * Reference-counted by binding rather than kept for the whole connection:
+   * ACP gives a session no end (keryx advertises no `session/close`), so the
+   * only unbind is `session/load` rebinding a session to a different list —
+   * and when that leaves a set with no session, it is stopped then instead of
+   * lingering. Everything still running is stopped when the connection ends.
    */
-  const sessionMcp = new Map<string, AcpSessionMcp>();
-  /** Closes started by a replacement, awaited at connection close with the rest. */
+  interface SharedMcpSet {
+    readonly key: string;
+    readonly mcp: AcpSessionMcp;
+    readonly sessions: Set<string>;
+  }
+  const mcpSets = new Map<string, SharedMcpSet>();
+  const sessionMcp = new Map<string, SharedMcpSet>();
+  /** Closes started by an unbind, awaited at connection close with the rest. */
   const retiring: Promise<void>[] = [];
 
   const sendUpdate = (sessionId: string, update: AcpSessionUpdate): void => {
@@ -350,38 +383,80 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
   }
 
-  /**
-   * Start `mcp` for `sessionId`, replacing (and stopping) any earlier set, and
-   * report its problems once the reply to `requestId` is on the wire.
-   */
-  function bindSessionMcp(sessionId: string, requestId: JsonRpcId, mcp: AcpSessionMcp): void {
+  /** Drop `sessionId`'s binding; stop the set if no session uses it any more. */
+  function unbindSessionMcp(sessionId: string): void {
     const previous = sessionMcp.get(sessionId);
-    if (previous !== undefined) {
-      retiring.push(previous.close());
+    if (previous === undefined) return;
+    sessionMcp.delete(sessionId);
+    previous.sessions.delete(sessionId);
+    if (previous.sessions.size === 0 && mcpSets.get(previous.key) === previous) {
+      mcpSets.delete(previous.key);
+      retiring.push(previous.mcp.close());
     }
-    sessionMcp.set(sessionId, mcp);
-    if (mcp.refused.length === 0 && mcp.tools.length === 0) {
+  }
+
+  /**
+   * Bind `sessionId` to the running set for `parsed` (starting it if no
+   * session on this connection runs that list yet), releasing whatever it was
+   * bound to before, and report the set's problems to THIS session once the
+   * reply to `requestId` is on the wire — a second thread is told about a
+   * failed server as the first was.
+   */
+  function bindSessionMcp(sessionId: string, requestId: JsonRpcId, parsed: ParsedAcpMcpServers, resolvedRoot: string): void {
+    if (parsed.stdio.length === 0 && parsed.refused.length === 0) {
+      unbindSessionMcp(sessionId);
       return;
     }
+    const rooted: ParsedAcpMcpServers = {
+      ...parsed,
+      // Each server runs in the session's resolved project root.
+      stdio: parsed.stdio.map((server) => ({ ...server, cwd: resolvedRoot })),
+    };
+    const key = acpMcpSetKey(rooted);
+    let set = mcpSets.get(key);
+    if (set === undefined) {
+      set = {
+        key,
+        mcp: startAcpSessionMcp(rooted, {
+          ...(options.mcpEnv !== undefined ? { env: options.mcpEnv } : {}),
+          ...(options.mcpConnect !== undefined ? { connect: options.mcpConnect } : {}),
+        }),
+        sessions: new Set(),
+      };
+      mcpSets.set(key, set);
+    }
+    // Take the new reference BEFORE releasing the old one, so rebinding a
+    // session to the list it already had never stops and restarts the set.
+    set.sessions.add(sessionId);
+    if (sessionMcp.get(sessionId) !== set) {
+      unbindSessionMcp(sessionId);
+      sessionMcp.set(sessionId, set);
+    }
+    const bound = set;
     afterReply.set(replyKey(requestId), () => {
-      reportMcpProblems(sessionId, mcp.refused);
-      void mcp.ready.then(() => {
-        // A session replaced before its servers settled reports nothing: the
+      reportMcpProblems(sessionId, bound.mcp.refused);
+      void bound.mcp.ready.then(() => {
+        // A session rebound before its servers settled reports nothing: the
         // client has already been told about the set that replaced it.
-        if (sessionMcp.get(sessionId) === mcp) {
-          reportMcpProblems(sessionId, mcp.failed());
+        if (sessionMcp.get(sessionId) === bound) {
+          reportMcpProblems(sessionId, bound.mcp.failed());
         }
       });
     });
   }
 
-  /** Starts a validated list, each server running in the session's resolved project root. */
-  function startMcpFor(parsed: ParsedAcpMcpServers, resolvedRoot: string): AcpSessionMcp {
-    return startAcpSessionMcp({ ...parsed, stdio: parsed.stdio.map((server) => ({ ...server, cwd: resolvedRoot })) }, {
-      ...(options.mcpEnv !== undefined ? { env: options.mcpEnv } : {}),
-      ...(options.mcpConnect !== undefined ? { connect: options.mcpConnect } : {}),
-    });
-  }
+  /**
+   * Stop every client MCP server this connection started. Idempotent; used by
+   * the normal end of input, by a read loop that throws, and by `shutdown`.
+   */
+  let closingAll: Promise<void> | undefined;
+  const closeAllMcp = (): Promise<void> =>
+    (closingAll ??= (async () => {
+      const running = [...mcpSets.values()].map((set) => set.mcp.close());
+      mcpSets.clear();
+      sessionMcp.clear();
+      await Promise.allSettled([...running, ...retiring]);
+    })());
 
   /** AC1 / spec: a request before `initialize` is refused, not served. */
   function requireInitialized(method: string): void {
@@ -423,7 +498,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // Started in the background: `session/new` stays synchronous end to end
     // (the read loop relies on it, see `dispatch` below) and answers at once;
     // the session's first prompt waits for the dials to settle instead.
-    bindSessionMcp(state.sessionId, requestId, startMcpFor(parsed, state.resolvedRoot));
+    bindSessionMcp(state.sessionId, requestId, parsed, state.resolvedRoot);
     return { sessionId: state.sessionId };
   }
 
@@ -518,10 +593,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // call is asked through `session/request_permission` below and a denial
       // ends it exactly as a local one does. Never auto-approved: this server
       // sets no permission mode, so the agent's default (`ask`) applies.
-      ...(sessionMcp.get(sessionId)?.tools ?? []),
+      ...(sessionMcp.get(sessionId)?.mcp.tools ?? []),
     ];
     const toolNames = tools.map((tool) => tool.definition.name);
     const deps: AgentDeps = {
+      ...options.turnSettings,
       provider,
       providerId: options.providerId,
       modelId: options.modelId,
@@ -564,7 +640,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // server's handshake budget — must have settled before the turn, or the
       // first turn would search an empty catalog. Awaited only AFTER the slot
       // is taken, so the busy guard above still holds while this waits.
-      await sessionMcp.get(sessionId)?.ready;
+      await sessionMcp.get(sessionId)?.mcp.ready;
       const io = createAcpAgentIo(sessionId, sendUpdate, askPermissionFor(sessionId, turn));
       const result = await runAgentTurn(io, deps, state.history, userLine, { signal: turn.controller.signal });
       const updatedHandle = persistHistory(state.handle, state.history, {
@@ -805,7 +881,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // The load REPLACES the session's entry, so it replaces its MCP servers
     // too: whatever an earlier `session/new`/`session/load` on this connection
     // started for this id is stopped, and this request's list is started.
-    bindSessionMcp(sessionId, requestId, startMcpFor(parsedMcp, state.resolvedRoot));
+    bindSessionMcp(sessionId, requestId, parsedMcp, state.resolvedRoot);
     return {};
   }
 
@@ -885,36 +961,62 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   };
 
   const framer = new AcpLineFramer();
-  for await (const chunk of options.input) {
-    let lines: string[];
-    try {
-      lines = framer.push(chunk);
-    } catch (error) {
-      options.logError(`acp: framing error: ${error instanceof Error ? error.message : String(error)}`);
-      continue;
+  const readLoop = async (): Promise<void> => {
+    for await (const chunk of options.input) {
+      let lines: string[];
+      try {
+        lines = framer.push(chunk);
+      } catch (error) {
+        options.logError(`acp: framing error: ${error instanceof Error ? error.message : String(error)}`);
+        continue;
+      }
+      for (const line of lines) {
+        dispatch(line);
+      }
     }
-    for (const line of lines) {
+    for (const line of framer.flush()) {
       dispatch(line);
     }
-  }
-  for (const line of framer.flush()) {
-    dispatch(line);
-  }
+  };
 
-  // Input has ended: no answer can arrive any more. Every question still open
-  // settles as a denial NOW rather than waiting on a pipe that is closed —
-  // that is the difference between a turn that finishes refusing a tool call
-  // and a process that hangs holding one.
-  clientRequests.close("the client closed the connection before answering");
-  // A turn started before the close still has a response to write, and the
-  // stream it writes to is still open. Draining is what makes the denial
-  // observable to the client instead of dying with the process.
-  while (inflight.size > 0) {
-    await Promise.allSettled([...inflight]);
+  // `shutdown` (flow 287): the CLI aborts it on SIGTERM/SIGINT — editors stop
+  // an agent by signalling it far more often than by closing its stdin. A
+  // pending `for await` over stdin cannot be interrupted, so the loop is RACED
+  // against the abort instead of waiting for a line that will never come.
+  const shutdown = options.shutdown;
+  const shutdownRequested = new Promise<"shutdown">((resolve) => {
+    if (shutdown === undefined) return;
+    if (shutdown.aborted) resolve("shutdown");
+    else shutdown.addEventListener("abort", () => resolve("shutdown"), { once: true });
+  });
+
+  try {
+    const ended = await Promise.race([readLoop().then(() => "eof" as const), shutdownRequested]);
+
+    // Input has ended (or the process is being stopped): no answer can arrive
+    // any more. Every question still open settles as a denial NOW rather than
+    // waiting on a pipe that is closed — that is the difference between a turn
+    // that finishes refusing a tool call and a process that hangs holding one.
+    clientRequests.close("the client closed the connection before answering");
+    if (ended === "shutdown") {
+      // Stopping: every running turn is aborted the way `session/cancel`
+      // aborts one, and not waited for — the process is about to exit.
+      for (const turn of activeTurns.values()) {
+        turn.cancelled = true;
+        turn.controller.abort();
+      }
+    } else {
+      // A turn started before the close still has a response to write, and the
+      // stream it writes to is still open. Draining is what makes the denial
+      // observable to the client instead of dying with the process.
+      while (inflight.size > 0) {
+        await Promise.allSettled([...inflight]);
+      }
+    }
+  } finally {
+    // Flow 287, AC3: every MCP server process this connection started is
+    // stopped, and AWAITED — on a clean end of input, on a read loop that
+    // throws, and on `shutdown`. Returning first would orphan the children.
+    await closeAllMcp();
   }
-  // Flow 287, AC3: every MCP server process this connection started is
-  // stopped, and AWAITED — a client closing the pipe is keryx's cue to exit,
-  // and returning first would orphan the children to init.
-  await Promise.allSettled([...[...sessionMcp.values()].map((mcp) => mcp.close()), ...retiring]);
-  sessionMcp.clear();
 }

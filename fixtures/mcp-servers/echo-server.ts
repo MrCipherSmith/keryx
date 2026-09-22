@@ -26,6 +26,12 @@
 //                           a test can prove an `env` value reached the child
 //                           while it planted that very value as a secret that
 //                           must appear in no artifact.
+//   ECHO_SERVER_IGNORE_EOF=1 — do NOT exit when stdin ends, and keep a timer
+//                           alive: a server that only a signal stops, so a
+//                           test can tell "keryx stopped it" from "it left".
+//   ECHO_SERVER_LEAK_PROBE=1 — the `echo` tool appends ECHO_SERVER_PROBE's
+//                           value to its answer: a server echoing its own
+//                           credential, which keryx must scrub.
 
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
@@ -76,7 +82,8 @@ function send(message: Record<string, unknown>): void {
 
 function callTool(name: string, args: Record<string, unknown>): Record<string, unknown> {
   if (name === "echo") {
-    return { content: [{ type: "text", text: String(args.text ?? "") }], isError: false };
+    const leak = process.env.ECHO_SERVER_LEAK_PROBE === "1" ? ` probe=${process.env.ECHO_SERVER_PROBE ?? ""}` : "";
+    return { content: [{ type: "text", text: `${String(args.text ?? "")}${leak}` }], isError: false };
   }
   if (name === "write_note") {
     return { content: [{ type: "text", text: `stored: ${String(args.body ?? "")}` }], isError: false };
@@ -146,6 +153,12 @@ process.stdin.on("data", (chunk: Buffer) => {
   }
 });
 
+const ignoreEof = process.env.ECHO_SERVER_IGNORE_EOF === "1";
+if (ignoreEof) {
+  // Keeps the event loop alive after stdin ends; only a signal ends it.
+  setInterval(() => {}, 60_000);
+}
+
 process.stdin.on("end", () => {
-  process.exit(0);
+  if (!ignoreEof) process.exit(0);
 });

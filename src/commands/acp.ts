@@ -9,11 +9,13 @@
 // own MUST NOT ("a stray console.log corrupts the stream", `context.md` §0).
 
 import { randomUUID } from "node:crypto";
-import { runAcpServer } from "../acp/server";
+import { runAcpServer, type AcpTurnSettings } from "../acp/server";
 import { loadAcpFixtureProvider } from "../acp/fixture-provider";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import type { ProviderPort } from "../harness/provider/types";
-import { shellConfigPath } from "../lib/shell-config";
+import { loadShellConfig, shellConfigPath } from "../lib/shell-config";
+import { resolveAgentMaxOutputTokens, resolveReasoningEffort } from "./agent";
+import { resolveProviderModelParamsByName } from "./providers";
 import { GRANT_REFRESH_TIMEOUT_MS, realMakeProvider, resolveTuiStartup } from "./shell";
 import packageJson from "../../package.json" with { type: "json" };
 
@@ -68,6 +70,11 @@ export type AcpProviderResolution =
       readonly modelId: string;
       /** Where the pair came from — for the stderr line and for tests. */
       readonly source: "flags" | "shell-config" | "fixture";
+      /**
+       * The per-turn settings `keryx shell` applies to this provider, resolved
+       * by the shell's own resolvers (see `resolveAcpTurnSettings`).
+       */
+      readonly turnSettings: AcpTurnSettings;
     }
   | { readonly kind: "unconfigured"; readonly message: string };
 
@@ -76,8 +83,12 @@ export interface ResolveAcpProviderDeps {
   readonly configDir?: string | undefined;
   /** Provider construction; `keryx shell`'s own factory (`realMakeProvider`) otherwise. */
   readonly makeProvider?: (name: string, model: string, baseUrl?: string) => ProviderPort;
-  /** Refreshes a saved OAuth grant for `provider` before it is used; returns warnings. */
-  readonly refreshGrants?: (provider: string) => Promise<readonly string[]>;
+  /**
+   * Refreshes saved OAuth grants BEFORE the selection is resolved; returns
+   * warnings. `provider` is the flag's provider, or `undefined` for "every
+   * grant a session refreshes" — exactly the list `keryx shell` passes.
+   */
+  readonly refreshGrants?: (provider: string | undefined, configDir: string | undefined) => Promise<readonly string[]>;
   /** Where refresh warnings go. stderr in the CLI. */
   readonly warn?: (line: string) => void;
   /** Fixture loading, for `--fixture` only. */
@@ -122,6 +133,7 @@ export async function resolveAcpProvider(
       providerId: parsed.provider ?? "fixture",
       modelId: parsed.model ?? "fixture-model",
       source: "fixture",
+      turnSettings: {},
     };
   }
 
@@ -142,6 +154,19 @@ export async function resolveAcpProvider(
       kind: "unconfigured",
       message: `keryx acp: ${given} was given without ${missing}; pass both, or neither to use keryx shell's saved selection`,
     };
+  }
+
+  // REFRESH FIRST, the shell's order (`shellCommand` refreshes before any
+  // surface resolves its selection). `resolveTuiStartup` below runs
+  // `applySavedApiKeys`, which copies a saved grok/copilot access token into
+  // `process.env` (`XAI_API_KEY`/`GITHUB_COPILOT_TOKEN`); a refresh AFTER it
+  // writes the new token only to `auth.json`, the provider factory then sees a
+  // non-empty env key and uses the stale token, and the first turn fails.
+  const refresh = deps.refreshGrants;
+  if (refresh !== undefined) {
+    for (const warning of await refresh(parsed.provider, deps.configDir)) {
+      deps.warn?.(warning);
+    }
   }
 
   const startup = await resolveTuiStartup({
@@ -171,13 +196,6 @@ export async function resolveAcpProvider(
     };
   }
 
-  const refresh = deps.refreshGrants;
-  if (refresh !== undefined) {
-    for (const warning of await refresh(initial.provider)) {
-      deps.warn?.(warning);
-    }
-  }
-
   const make = deps.makeProvider ?? realMakeProvider(() => {});
   const provider = make(initial.provider, initial.model, initial.baseUrl);
   if (provider instanceof FakeProvider) {
@@ -189,7 +207,55 @@ export async function resolveAcpProvider(
         `\`keryx auth login ${initial.provider}\`; otherwise ${remedy}`,
     };
   }
-  return { kind: "ready", provider, providerId: initial.provider, modelId: initial.model, source };
+  return {
+    kind: "ready",
+    provider,
+    providerId: initial.provider,
+    modelId: initial.model,
+    source,
+    turnSettings: resolveAcpTurnSettings(initial.provider, deps.configDir),
+  };
+}
+
+/**
+ * The per-turn settings `keryx shell` applies at launch for `provider`, by the
+ * same three resolvers its `makeAgentDeps` calls: per-provider
+ * `temperature`/`maxOutputTokens`/`timeoutMs` (`resolveProviderModelParamsByName`),
+ * the output-token budget (`resolveAgentMaxOutputTokens`: env > provider >
+ * saved global > default) and the reasoning effort (`resolveReasoningEffort`:
+ * env > saved global > off). The shell's in-session `/reasoning` override has
+ * no ACP equivalent, so it is simply absent here.
+ */
+export function resolveAcpTurnSettings(provider: string, configDir?: string): AcpTurnSettings {
+  const saved = loadShellConfig(configDir);
+  const modelParams = resolveProviderModelParamsByName(provider, saved, configDir);
+  return {
+    ...(Object.keys(modelParams).length > 0 ? { modelParams } : {}),
+    maxOutputTokens: resolveAgentMaxOutputTokens({
+      providerMaxOutputTokens: modelParams.maxOutputTokens,
+      globalMaxOutputTokens: saved.maxOutputTokens,
+    }),
+    reasoningEffort: resolveReasoningEffort({ globalEffort: saved.reasoningEffort }),
+  };
+}
+
+/**
+ * The CLI's grant refresh: `keryx shell`'s own `refreshSavedGrants`, bounded
+ * by the shell's own timeout, for the flag's provider or — with no flag — the
+ * shell's default list. `fetchImpl` is the test seam for the token endpoint.
+ */
+export function shellGrantRefresh(
+  fetchImpl: (input: string, init?: RequestInit) => Promise<Response> = (input, init) => globalThis.fetch(input, init),
+  now?: () => number,
+): NonNullable<ResolveAcpProviderDeps["refreshGrants"]> {
+  return async (provider, configDir) => {
+    const { refreshSavedGrants } = await import("../lib/oauth/login");
+    return refreshSavedGrants(
+      { fetch: fetchImpl, signal: AbortSignal.timeout(GRANT_REFRESH_TIMEOUT_MS), ...(now !== undefined ? { now } : {}) },
+      configDir,
+      ...(provider === undefined ? [] : [[provider]]),
+    );
+  };
 }
 
 export async function acpCommand(args: string[]): Promise<void> {
@@ -202,13 +268,9 @@ export async function acpCommand(args: string[]): Promise<void> {
     process.stderr.write(`${line}\n`);
   };
   const resolution = await resolveAcpProvider(parsed, {
-    refreshGrants: async (provider) => {
-      // The same bounded refresh `keryx shell` runs before any surface builds
-      // a provider from a stored grant (K-013), for the one provider in use.
-      const { refreshSavedGrants } = await import("../lib/oauth/login");
-      const oauthFetch = (input: string, init?: RequestInit) => globalThis.fetch(input, init);
-      return refreshSavedGrants({ fetch: oauthFetch, signal: AbortSignal.timeout(GRANT_REFRESH_TIMEOUT_MS) }, undefined, [provider]);
-    },
+    // The same bounded refresh `keryx shell` runs before any surface builds a
+    // provider from a stored grant (K-013).
+    refreshGrants: shellGrantRefresh(),
     warn: (line) => logError(`keryx: ${line}`),
   });
   if (resolution.kind === "unconfigured") {
@@ -217,19 +279,57 @@ export async function acpCommand(args: string[]): Promise<void> {
     logError(resolution.message);
   }
 
-  await runAcpServer({
-    input: process.stdin,
-    write: (chunk) => {
-      process.stdout.write(chunk);
-    },
-    logError,
-    ...(resolution.kind === "ready"
-      ? { provider: resolution.provider, providerId: resolution.providerId, modelId: resolution.modelId }
-      : { providerUnavailable: resolution.message, providerId: "", modelId: "" }),
-    agentInfo: { name: "keryx", version: packageJson.version },
-    ...(parsed.dataDir !== undefined ? { dataDir: parsed.dataDir } : {}),
-    idSeq: () => randomUUID(),
-  });
+  // SIGTERM/SIGINT (flow 287): an editor stops its agent by signalling it more
+  // often than by closing stdin. The default action would kill keryx at once
+  // and leave every client MCP server it started running. Instead the server
+  // is told to shut down — which stops those servers and waits for them — and
+  // the process then exits with the conventional 128+signal status. A second
+  // signal while that runs exits immediately.
+  //
+  // SIGKILL cannot be handled, and a process-group sweep is not cheap here: the
+  // SDK spawns each server in keryx's own process group (not detached), so a
+  // client that kills the GROUP takes them down too, and one that kills only
+  // keryx's pid closes their stdin — a conforming stdio MCP server exits on
+  // EOF. A server that ignores EOF outlives a SIGKILL; that limit is documented.
+  const shutdown = new AbortController();
+  let signalled: NodeJS.Signals | undefined;
+  const onSignal = (signal: NodeJS.Signals): void => {
+    if (signalled !== undefined) {
+      process.exit(signal === "SIGINT" ? 130 : 143);
+    }
+    signalled = signal;
+    shutdown.abort();
+  };
+  process.on("SIGTERM", onSignal);
+  process.on("SIGINT", onSignal);
+  try {
+    await runAcpServer({
+      shutdown: shutdown.signal,
+      input: process.stdin,
+      write: (chunk) => {
+        process.stdout.write(chunk);
+      },
+      logError,
+      ...(resolution.kind === "ready"
+        ? {
+            provider: resolution.provider,
+            providerId: resolution.providerId,
+            modelId: resolution.modelId,
+            turnSettings: resolution.turnSettings,
+          }
+        : { providerUnavailable: resolution.message, providerId: "", modelId: "" }),
+      agentInfo: { name: "keryx", version: packageJson.version },
+      ...(parsed.dataDir !== undefined ? { dataDir: parsed.dataDir } : {}),
+      idSeq: () => randomUUID(),
+    });
+  } finally {
+    process.off("SIGTERM", onSignal);
+    process.off("SIGINT", onSignal);
+  }
+  if (signalled !== undefined) {
+    // stdin is still being read by nothing that will return; exit explicitly.
+    process.exit(signalled === "SIGINT" ? 130 : 143);
+  }
 }
 
 function printHelp(): void {
@@ -244,12 +344,14 @@ session/load; every other agent method ACP defines is refused with -32601.
 
 Provider and model: --provider and --model (both, or neither) pick the
 backend. Without them keryx acp uses the provider and model keryx shell
-last saved — run keryx shell once and pick one. With nothing saved or no
+last saved, with the shell's saved per-provider settings — run keryx shell
+once and pick one. With nothing saved or no
 credential for it, initialize still works and session/new is refused with
 a message saying what to configure.
 
 MCP servers: stdio entries in session/new / session/load mcpServers are
-started for that session and stopped when the connection closes; their
+started (sessions sending the same list share one set) and stopped when
+the connection closes or keryx acp gets SIGTERM/SIGINT; their
 tools are offered through search_tool/use_tool, and every use_tool call is
 asked through session/request_permission. http/sse entries are not started
 and are reported, as is a server that fails to start.

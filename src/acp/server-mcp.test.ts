@@ -88,7 +88,7 @@ function harness(overrides: Partial<AcpServerOptions>) {
     wake?.();
     await done;
   };
-  return { request, waitFor, frames, stderr, end, projectDir: root };
+  return { request, waitFor, frames, stderr, end, done, projectDir: root };
 }
 
 /** A dial that never spawns: records which server was dialled and signals each close. */
@@ -104,7 +104,9 @@ function recordingConnect() {
     return promise;
   };
   const closedNames: string[] = [];
+  const dialled: string[] = [];
   const connect: ConnectFn = async (server) => {
+    dialled.push(server.name);
     if (server.command === "missing-binary") throw new Error("spawn missing-binary ENOENT");
     void closeOf(server.name);
     return {
@@ -116,7 +118,7 @@ function recordingConnect() {
       },
     } as unknown as McpServerConnection;
   };
-  return { connect, closeOf, closedNames };
+  return { connect, closeOf, closedNames, dialled };
 }
 
 const stdio = (name: string, command = "server-bin") => ({ name, command, args: [], env: [] });
@@ -208,5 +210,72 @@ describe("AC3 / AC5 — per-session servers over the connection's lifetime", () 
     expect(reply.error?.code).toBe(-32602);
     await h.end();
     expect(dial.closedNames).toEqual([]);
+  });
+});
+
+describe("T13 — one running set per distinct list, shared by the sessions that send it", () => {
+  test("two session/new with the same list start the servers once; both sessions report its failures", async () => {
+    const dial = recordingConnect();
+    const h = harness({ provider: PROVIDER, mcpConnect: dial.connect });
+    const init = h.request("initialize", { protocolVersion: ACP_PROTOCOL_VERSION });
+    await h.waitFor((f) => f.id === init);
+    const list = [stdio("good"), stdio("broken", "missing-binary")];
+
+    const first = h.request("session/new", { cwd: h.projectDir, mcpServers: list });
+    const firstId = (await h.waitFor((f) => f.id === first)).result?.["sessionId"] as string;
+    const second = h.request("session/new", { cwd: h.projectDir, mcpServers: list });
+    const secondId = (await h.waitFor((f) => f.id === second)).result?.["sessionId"] as string;
+    expect(secondId).not.toBe(firstId);
+
+    for (const sessionId of [firstId, secondId]) {
+      await h.waitFor(
+        (f) =>
+          f.method === "session/update" &&
+          f.params?.sessionId === sessionId &&
+          (f.params.update?.content?.text ?? "").includes('"broken"'),
+      );
+    }
+    expect(dial.dialled.sort()).toEqual(["broken", "good"]);
+
+    await h.end();
+    expect(dial.closedNames).toEqual(["good"]);
+  });
+
+  test("a set still used by another session survives one session's rebind; the last rebind stops it", async () => {
+    const dial = recordingConnect();
+    const h = harness({ provider: PROVIDER, mcpConnect: dial.connect });
+    const init = h.request("initialize", { protocolVersion: ACP_PROTOCOL_VERSION });
+    await h.waitFor((f) => f.id === init);
+    const a = h.request("session/new", { cwd: h.projectDir, mcpServers: [stdio("shared")] });
+    const aId = (await h.waitFor((f) => f.id === a)).result?.["sessionId"] as string;
+    const b = h.request("session/new", { cwd: h.projectDir, mcpServers: [stdio("shared")] });
+    const bId = (await h.waitFor((f) => f.id === b)).result?.["sessionId"] as string;
+
+    const loadA = h.request("session/load", { sessionId: aId, cwd: h.projectDir, mcpServers: [] });
+    await h.waitFor((f) => f.id === loadA);
+    expect(dial.closedNames).toEqual([]);
+
+    const loadB = h.request("session/load", { sessionId: bId, cwd: h.projectDir, mcpServers: [] });
+    await h.waitFor((f) => f.id === loadB);
+    await dial.closeOf("shared");
+    expect(dial.closedNames).toEqual(["shared"]);
+    await h.end();
+    expect(dial.dialled).toEqual(["shared"]);
+  });
+});
+
+describe("T13 — shutdown stops the servers without waiting for stdin to end", () => {
+  test("aborting `shutdown` resolves runAcpServer with every server closed, input still open", async () => {
+    const dial = recordingConnect();
+    const stop = new AbortController();
+    const h = harness({ provider: PROVIDER, mcpConnect: dial.connect, shutdown: stop.signal });
+    const init = h.request("initialize", { protocolVersion: ACP_PROTOCOL_VERSION });
+    await h.waitFor((f) => f.id === init);
+    const created = h.request("session/new", { cwd: h.projectDir, mcpServers: [stdio("alpha")] });
+    await h.waitFor((f) => f.id === created);
+
+    stop.abort();
+    await h.done;
+    expect(dial.closedNames).toEqual(["alpha"]);
   });
 });

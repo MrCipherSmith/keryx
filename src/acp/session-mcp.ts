@@ -36,11 +36,13 @@
 // that reaches the client or stderr is passed through `scrub` first — a
 // spawn error or a server's own error text could otherwise echo one back.
 
+import { createHash } from "node:crypto";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import { savedCredentialEnvKeys } from "../lib/shell-config";
 import { mergeCatalogs, type ServerCatalog } from "../mcp-servers/catalog";
 import type { ResolvedMcpServer } from "../mcp-servers/config";
 import { closeServers, startServers, type ConnectFn, type ServerState } from "../mcp-servers/manager";
-import { defaultConnect } from "../mcp-servers/runtime";
+import { CLOSE_GRACE_MS, defaultConnect, KILL_GRACE_MS, within } from "../mcp-servers/runtime";
 import { createMcpInteractiveTools } from "../mcp-servers/tools";
 import { AcpError, invalidParams } from "./jsonrpc";
 
@@ -196,15 +198,84 @@ export function parseAcpMcpServers(method: string, raw: unknown): ParsedAcpMcpSe
   return { stdio, refused, secrets };
 }
 
+/**
+ * The shortest value `scrub` treats as a secret.
+ *
+ * `env` also carries plain settings — `DEBUG=1`, `LOG_LEVEL=info`, a port —
+ * and replacing every "1" in a reason or a tool result turned "15000ms" into
+ * "<redacted>5000ms": text nobody can read, protecting nothing. Every
+ * credential format these entries realistically carry (GitHub tokens, API
+ * keys, bearer tokens) is far longer than this. The trade is explicit: a
+ * value shorter than 8 characters is not scrubbed.
+ */
+export const MIN_SCRUBBED_SECRET_LENGTH = 8;
+
 /** Replace every secret occurring in `text`. Longest first, so one secret containing another is removed whole. */
 export function scrub(text: string, secrets: readonly string[]): string {
   let out = text;
   for (const secret of [...secrets].sort((a, b) => b.length - a.length)) {
-    if (secret.length > 0) {
+    if (secret.length >= MIN_SCRUBBED_SECRET_LENGTH) {
       out = out.split(secret).join("<redacted>");
     }
   }
   return out;
+}
+
+/**
+ * Identifies a running set by what it was started from (flow 287): two
+ * `session/new` calls carrying the same list share one set of processes.
+ * Hashed so the key itself carries no env value.
+ */
+export function acpMcpSetKey(parsed: ParsedAcpMcpServers): string {
+  const canonical = {
+    stdio: parsed.stdio.map((server) => ({
+      name: server.name,
+      command: server.command,
+      args: server.args ?? [],
+      cwd: server.cwd ?? null,
+      env: Object.entries(server.env ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+    })),
+    refused: parsed.refused,
+  };
+  return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
+/**
+ * The parent environment a client server's own is derived from: keryx's,
+ * minus every variable keryx itself loaded from its saved credentials.
+ *
+ * `keryx acp` resolves its provider the shell's way, which loads saved API
+ * keys into `process.env` (`applySavedApiKeys`). `buildMcpChildEnv` strips
+ * credential-SHAPED names, but a custom `llm-providers.json` provider may keep
+ * its key under any name at all — one without KEY/TOKEN/SECRET in it would
+ * reach a client's MCP server. `savedCredentialEnvKeys()` is the exact list of
+ * what was loaded, so it is removed by name, not by shape.
+ */
+export function acpMcpParentEnv(
+  env: Readonly<Record<string, string | undefined>>,
+  saved: ReadonlySet<string> = savedCredentialEnvKeys(),
+): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (!saved.has(key)) out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * The tool pair with every output passed through `scrub` (AC6): a server that
+ * echoes its own credential back — in a result or in an error — would
+ * otherwise put it into the `tool_call_update` on stdout, the persisted
+ * transcript, and the next provider request.
+ */
+function scrubbedTools(tools: readonly InteractiveTool[], secrets: readonly string[]): InteractiveTool[] {
+  return tools.map((tool) => ({
+    ...tool,
+    invoke: async (...args: Parameters<InteractiveTool["invoke"]>) => {
+      const result = await tool.invoke(...args);
+      return { ...result, output: scrub(result.output, secrets) };
+    },
+  }));
 }
 
 /** The running servers of one ACP session. */
@@ -247,7 +318,7 @@ export function startAcpSessionMcp(parsed: ParsedAcpMcpServers, options: StartAc
   // The kills an abort starts — awaited by `close()`, so "stopped" means the
   // child is gone rather than signalled (see `runtime.ts`'s `KILL_GRACE_MS`).
   const kills: Array<Promise<void>> = [];
-  const env = options.env ?? process.env;
+  const env = acpMcpParentEnv(options.env ?? process.env);
   const connect: ConnectFn = options.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills));
 
   let states: readonly ServerState[] = parsed.stdio.map((server) => ({
@@ -266,10 +337,18 @@ export function startAcpSessionMcp(parsed: ParsedAcpMcpServers, options: StartAc
       // server stays `connecting` — visible to `search_tool`, not a crash.
     });
 
+  // Each connection closed at most once, across the prompt sweep and the late one.
+  const closed = new WeakSet<object>();
+  const closeUnclosed = async (): Promise<void> => {
+    const fresh = states.filter((state) => state.connection !== undefined && !closed.has(state.connection));
+    for (const state of fresh) closed.add(state.connection as object);
+    await closeServers(fresh);
+  };
+
   let closing: Promise<void> | undefined;
   return {
     ready,
-    tools: createMcpInteractiveTools({ catalog: () => catalog, servers: () => states }),
+    tools: scrubbedTools(createMcpInteractiveTools({ catalog: () => catalog, servers: () => states }), parsed.secrets),
     refused,
     failed: () =>
       states
@@ -277,12 +356,17 @@ export function startAcpSessionMcp(parsed: ParsedAcpMcpServers, options: StartAc
         .map((state) => ({ name: state.name, reason: `failed to start: ${scrub(state.error ?? "no reason given", parsed.secrets)}` })),
     close: () =>
       (closing ??= (async () => {
+        // The shell runtime's own shutdown budget (`runtime.ts` `closeNow`):
+        // abort the dials, give the ones about to land a short grace, close
+        // what is connected (the SDK's close is itself bounded: stdin end,
+        // then SIGTERM after 2s, then SIGKILL), and wait — bounded — for the
+        // kills the abort started. A dial landing after all that is still
+        // closed, just not awaited.
         dialling.abort();
-        // Every dial is bounded by its own handshake budget in `startServers`,
-        // and the abort above ends the ones still in flight, so this settles.
-        await ready;
-        await closeServers(states);
-        await Promise.all(kills);
+        await within(ready, CLOSE_GRACE_MS);
+        await closeUnclosed();
+        await within(Promise.all(kills), KILL_GRACE_MS);
+        void ready.then(closeUnclosed).catch(() => {});
       })()),
   };
 }

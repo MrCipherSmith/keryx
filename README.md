@@ -263,8 +263,9 @@ What is in it today:
   still answers `initialize` and refuses `session/new` with a message saying
   what to configure — it never answers with a test stand-in. The client's own
   stdio MCP servers from `mcpServers` are started for that session, their
-  tools offered through `search_tool`/`use_tool` with every call asked, and
-  stopped when the connection closes; `http`/`sse` entries and a server that
+  tools offered through `search_tool`/`use_tool` with every call asked, one
+  running set shared by the threads that send the same list, and stopped when
+  the connection ends or `keryx acp` is sent SIGTERM/SIGINT; `http`/`sse` entries and a server that
   fails to start are reported to the client by name, and the session still
   opens. Writes and shell execution stay local unconditionally (no `fs/write_text_file`
   or `terminal/*` calls, whatever the client advertises), and there is no

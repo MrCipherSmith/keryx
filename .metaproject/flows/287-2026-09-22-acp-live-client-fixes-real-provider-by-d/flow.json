@@ -9,7 +9,7 @@
   "title": "ACP live-client fixes: real provider by default, accept client MCP servers",
   "status": "in-progress",
   "createdAt": "2026-09-22T22:20:42.968Z",
-  "updatedAt": "2026-09-22T22:38:21.032Z",
+  "updatedAt": "2026-09-22T22:54:47.734Z",
   "source": {
     "type": "description",
     "ref": null
@@ -203,6 +203,26 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Review fixes: refresh grants before resolution, bound server sets, stop servers on signals, scrub server output, harden the vacuous tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T22:45:48.988Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -303,6 +323,21 @@
       "at": "2026-09-22T22:38:21.032Z",
       "event": "task-done",
       "detail": "T11: Docs: CLI reference and README for provider resolution and mcpServers"
+    },
+    {
+      "at": "2026-09-22T22:45:25.337Z",
+      "event": "task-added",
+      "detail": "T13: Review fixes: refresh grants before resolution, bound server sets, stop servers on signals, scrub server output, harden the vacuous tests"
+    },
+    {
+      "at": "2026-09-22T22:45:48.988Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-22T22:54:47.734Z",
+      "event": "task-done",
+      "detail": "T13: Review fixes: refresh grants before resolution, bound server sets, stop servers on signals, scrub server output, harden the vacuous tests"
     }
   ]
 }

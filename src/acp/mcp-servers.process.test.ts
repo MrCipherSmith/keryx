@@ -81,7 +81,7 @@ function writeFixture(rounds: readonly FixtureRound[]): string {
 }
 
 /** The echo server entry, exactly in the shape an ACP client sends it — its secret in `env`. */
-function echoEntry(): Record<string, unknown> {
+function echoEntry(extraEnv: readonly { name: string; value: string }[] = []): Record<string, unknown> {
   return {
     name: "echo",
     command: process.execPath,
@@ -89,6 +89,7 @@ function echoEntry(): Record<string, unknown> {
     env: [
       { name: "ECHO_SERVER_PROBE", value: sentinel },
       { name: "ECHO_SERVER_PID_FILE", value: pidFile },
+      ...extraEnv,
     ],
   };
 }
@@ -218,6 +219,14 @@ describe("AC3/AC5/AC6/AC7 — a client's stdio MCP server, end to end over the r
       // taint gate asks first, then use_tool's own `destructive` risk asks.
       expect(useAsks).toHaveLength(2);
       for (const ask of useAsks) expect(askedTool(ask).toolCallId).toBe(use.announced[0]?.toolCallId);
+      // T13 finding 6: every `use_tool` call shares one title, so a client
+      // remembering "always" by title would approve EVERY tool of every client
+      // server. It is never offered: `use_tool` is `destructive`, which is
+      // escalated (`permissionIsEscalated`).
+      for (const ask of useAsks) {
+        const optionIds = ((ask.params?.["options"] ?? []) as { optionId: string }[]).map((o) => o.optionId);
+        expect(optionIds).not.toContain(ACP_PERMISSION_OPTION_IDS.allowAlways);
+      }
       // …and on allow it ran, returning the server's answer.
       expect(use.closed).toHaveLength(1);
       expect(use.closed[0]?.status).toBe("completed");
@@ -404,6 +413,76 @@ describe("AC1/AC2 — provider resolution with no --fixture", () => {
       await client.end();
       await client.stderrClosed();
       expect(client.stderrText()).not.toContain("no provider is configured");
+    } finally {
+      await client.kill();
+    }
+  }, TIMEOUT_MS);
+});
+
+describe("T13 — a server that only a signal stops (ECHO_SERVER_IGNORE_EOF=1)", () => {
+  const stubborn = () => echoEntry([{ name: "ECHO_SERVER_IGNORE_EOF", value: "1" }]);
+
+  /** Starts keryx with the stubborn server and waits until it is connected (search_tool finds it). */
+  async function startWithStubbornServer(): Promise<{ client: AcpProcessClient; pid: number }> {
+    const fixture = writeFixture([toolRound("s1", "search_tool", { query: "echo" }), textRound("found.")]);
+    const client = new AcpProcessClient({ fixture, cwd: projectDir, dataDir, homeRoot: root, env: sandboxEnv() });
+    await initialize(client);
+    const sessionId = await newSession(client, [stubborn()]);
+    await driveTurn(client, sessionId, () => ACP_PERMISSION_OPTION_IDS.allowOnce);
+    expect(String(callsOf(client, "search_tool").closed[0]?.rawOutput)).toContain(ECHO_FQN);
+    const { pid } = JSON.parse(readFileSync(pidFile, "utf8")) as { pid: number };
+    expect(isAlive(pid)).toBe(true);
+    return { client, pid };
+  }
+
+  test("stdin closes: keryx stops it (EOF is not enough) before exiting", async () => {
+    const { client, pid } = await startWithStubbornServer();
+    try {
+      await client.end();
+      expect(isAlive(pid)).toBe(false);
+    } finally {
+      if (isAlive(pid)) process.kill(pid, "SIGKILL");
+      await client.kill();
+    }
+  }, TIMEOUT_MS);
+
+  test("SIGTERM to keryx: it stops the server, then exits 143", async () => {
+    const { client, pid } = await startWithStubbornServer();
+    try {
+      client.signal("SIGTERM");
+      const code = await client.exited();
+      expect(code).toBe(143);
+      expect(isAlive(pid)).toBe(false);
+    } finally {
+      if (isAlive(pid)) process.kill(pid, "SIGKILL");
+      await client.kill();
+    }
+  }, TIMEOUT_MS);
+});
+
+describe("T13 — AC6 against a server that echoes its own credential", () => {
+  test("the leaked value is redacted in the tool result, and appears in no artifact", async () => {
+    const fixture = writeFixture([
+      toolRound("u1", "use_tool", { tool_name: ECHO_FQN, tool_input: { text: "hi" } }),
+      textRound("done."),
+    ]);
+    const client = new AcpProcessClient({ fixture, cwd: projectDir, dataDir, homeRoot: root, env: sandboxEnv() });
+    try {
+      await initialize(client);
+      const sessionId = await newSession(client, [echoEntry([{ name: "ECHO_SERVER_LEAK_PROBE", value: "1" }])]);
+      const { reply } = await driveTurn(client, sessionId, () => ACP_PERMISSION_OPTION_IDS.allowOnce);
+      expect(reply.result).toEqual({ stopReason: "end_turn" });
+      const use = callsOf(client, "use_tool");
+      // The server DID answer with its credential; keryx replaced it.
+      expect(String(use.closed[0]?.rawOutput)).toContain("hi probe=<redacted>");
+      await client.end();
+      await client.stderrClosed();
+      const artifacts: [string, string][] = [
+        ["stdout", client.transcript()],
+        ["stderr", client.stderrText()],
+        ...filesUnder(root).map((file): [string, string] => [file, readFileSync(file, "utf8")]),
+      ];
+      expect(artifacts.filter(([, text]) => text.includes(sentinel)).map(([where]) => where)).toEqual([]);
     } finally {
       await client.kill();
     }

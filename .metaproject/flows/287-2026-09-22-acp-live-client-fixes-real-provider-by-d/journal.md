@@ -27,3 +27,14 @@
 - 2026-09-22T22:38:20.829Z - task-done: T9: Keep mcpServers env and header values out of transcripts, records, logs and stdio
 - 2026-09-22T22:38:20.932Z - task-done: T10: Process test with a real stdio MCP server fixture over a real pipe
 - 2026-09-22T22:38:21.032Z - task-done: T11: Docs: CLI reference and README for provider resolution and mcpServers
+- 2026-09-22T22:45:25.337Z - task-added: T13: Review fixes: refresh grants before resolution, bound server sets, stop servers on signals, scrub server output, harden the vacuous tests
+- 2026-09-22T22:45:48.988Z - task-attempt: T13: started (attempt 1)
+- 2026-09-22T22:55:00Z - T13 review fixes (subagent), uncommitted:
+  (1) verified: grants now refreshed BEFORE resolveTuiStartup, shell order (`shellGrantRefresh`); test with an expiring grok grant + stubbed token endpoint asserts the provider sees the refreshed token.
+  (2) verified: client MCP sets shared per connection by content hash (`acpMcpSetKey`), refcounted by session binding; test: two session/new with one list dial once.
+  (3) verified: read loop in try/finally, `shutdown` signal raced against stdin, SIGTERM/SIGINT handlers in `keryx acp` (exit 143/130), session-mcp close bounded like runtime.ts (`within` exported); SIGKILL limit documented (no cheap sweep).
+  (4) verified: tool results/errors scrubbed; scrub ignores values < 8 chars; saved credential env keys stripped from the MCP parent env by name.
+  (5) echo fixture gained ECHO_SERVER_IGNORE_EOF and ECHO_SERVER_LEAK_PROBE; new process tests for SIGTERM-to-keryx and a credential-echoing server. Mutation runs: each guarded fix reverted makes its test fail.
+  (6) refuted: `use_tool` always carries meta.destructive=true (executeCall and the taint gate), so allow_always is never offered; pinned in the AC7 process test.
+  (7) turn settings (modelParams, maxOutputTokens, reasoningEffort) now resolved by the shell's resolvers and passed into ACP turns; docs state the in-session-override gap.
+- 2026-09-22T22:54:47.734Z - task-done: T13: Review fixes: refresh grants before resolution, bound server sets, stop servers on signals, scrub server output, harden the vacuous tests

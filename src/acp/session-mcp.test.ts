@@ -7,7 +7,14 @@ import { describe, expect, test } from "bun:test";
 import type { McpServerConnection } from "../mcp-client/client";
 import type { ConnectFn } from "../mcp-servers/manager";
 import { AcpError } from "./jsonrpc";
-import { parseAcpMcpServers, scrub, startAcpSessionMcp } from "./session-mcp";
+import {
+  acpMcpParentEnv,
+  acpMcpSetKey,
+  MIN_SCRUBBED_SECRET_LENGTH,
+  parseAcpMcpServers,
+  scrub,
+  startAcpSessionMcp,
+} from "./session-mcp";
 
 const SECRET = "ghp_sentinel_0123456789";
 const HEADER_SECRET = "sk-header-sentinel-9876";
@@ -88,7 +95,12 @@ describe("parseAcpMcpServers — what is refused per entry, and what fails the c
 describe("scrub (AC6)", () => {
   test("every occurrence of every secret is replaced, a longer secret before a shorter one it contains", () => {
     expect(scrub(`a ${SECRET} b ${SECRET}`, [SECRET])).toBe("a <redacted> b <redacted>");
-    expect(scrub("token=abcdef", ["abc", "abcdef"])).toBe("token=<redacted>");
+    expect(scrub("token=abcdefgh-long", ["abcdefgh", "abcdefgh-long"])).toBe("token=<redacted>");
+  });
+
+  test("a value shorter than the minimum is not a secret: DEBUG=1 does not mangle '15000ms'", () => {
+    expect(MIN_SCRUBBED_SECRET_LENGTH).toBe(8);
+    expect(scrub("timed out after 15000ms", ["1", "info", "8080"])).toBe("timed out after 15000ms");
   });
 });
 
@@ -137,5 +149,53 @@ describe("startAcpSessionMcp", () => {
     const useTool = mcp.tools.find((tool) => tool.definition.name === "use_tool");
     expect(useTool?.definition.risk).toBe("destructive");
     void mcp.close();
+  });
+});
+
+describe("T13 — tool output is scrubbed too (AC6)", () => {
+  test("a server that echoes its credential in a result or an error reaches the model redacted", async () => {
+    const connection = {
+      listTools: async () => [
+        { name: "leak", description: "Leaks", inputSchema: { type: "object", properties: {} } },
+        { name: "fail", description: "Fails", inputSchema: { type: "object", properties: {} } },
+      ],
+      callTool: async (name: string) =>
+        name === "leak"
+          ? { kind: "result", result: { content: [{ type: "text", text: `token is ${SECRET}` }], isError: false } }
+          : { kind: "error", message: `bad credential ${SECRET}` },
+      close: async () => {},
+    } as unknown as McpServerConnection;
+    const mcp = startAcpSessionMcp(parseAcpMcpServers("session/new", [stdioEntry("gh")]), { connect: async () => connection });
+    await mcp.ready;
+    const useTool = mcp.tools.find((tool) => tool.definition.name === "use_tool")!;
+    for (const raw of ["leak", "fail"]) {
+      const result = await useTool.invoke({ tool_name: `gh__${raw}`, tool_input: {} });
+      expect(result.output).toContain("<redacted>");
+      expect(result.output).not.toContain(SECRET);
+      expect(result.untrusted).toBe(true);
+    }
+    await mcp.close();
+  });
+});
+
+describe("T13 — keryx's saved credentials never reach a client server's environment", () => {
+  test("every variable keryx loaded from its saved config is removed by name, whatever it is called", () => {
+    const env = { PATH: "/bin", MY_LLM_GATEWAY: "saved-value", HOME: "/h" };
+    expect(acpMcpParentEnv(env, new Set(["MY_LLM_GATEWAY"]))).toEqual({ PATH: "/bin", HOME: "/h" });
+  });
+});
+
+describe("T13 — the set key", () => {
+  test("the same list gives the same key; a different env value, command or root does not", () => {
+    const key = (entries: unknown[], cwd = "/r") => {
+      const parsed = parseAcpMcpServers("session/new", entries);
+      return acpMcpSetKey({ ...parsed, stdio: parsed.stdio.map((server) => ({ ...server, cwd })) });
+    };
+    const base = key([stdioEntry("gh")]);
+    expect(key([stdioEntry("gh")])).toBe(base);
+    expect(key([stdioEntry("gh", { env: [{ name: "GITHUB_TOKEN", value: "other-token-value" }] })])).not.toBe(base);
+    expect(key([stdioEntry("gh", { command: "other-bin" })])).not.toBe(base);
+    expect(key([stdioEntry("gh")], "/elsewhere")).not.toBe(base);
+    expect(base).not.toContain(SECRET);
   });
 });

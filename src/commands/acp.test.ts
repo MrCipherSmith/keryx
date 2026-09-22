@@ -13,7 +13,7 @@ import path from "node:path";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import { OllamaProvider } from "../harness/provider/ollama/ollama-provider";
 import type { ProviderPort } from "../harness/provider/types";
-import { parseAcpArgs, resolveAcpProvider, type ResolveAcpProviderDeps } from "./acp";
+import { parseAcpArgs, resolveAcpProvider, shellGrantRefresh, type ResolveAcpProviderDeps } from "./acp";
 import { resolveTuiStartup } from "./shell";
 
 const dirs: string[] = [];
@@ -163,5 +163,83 @@ describe("AC2 — nothing configured is an answer that says what to configure", 
     expect(resolution.kind).toBe("unconfigured");
     if (resolution.kind !== "unconfigured") return;
     expect(resolution.message).toContain("--provider was given without --model");
+  });
+});
+
+describe("T13 — the shell's order: saved grants are refreshed BEFORE the selection is resolved", () => {
+  test("an expiring grok grant: the provider is built with the REFRESHED token, not the stale one", async () => {
+    // The chain this pins: `resolveTuiStartup` runs `applySavedApiKeys`, which
+    // copies the saved grok access token into `process.env.XAI_API_KEY`. If
+    // the refresh ran after that, the new token went only to auth.json and
+    // the provider factory — reading the non-empty env key — used the stale one.
+    const previous = process.env.XAI_API_KEY;
+    delete process.env.XAI_API_KEY;
+    const now = Date.parse("2026-09-22T12:00:00Z");
+    const dir = configDir({
+      provider: "grok",
+      model: "grok-4",
+      oauthGrants: {
+        grok: { method: "device-code", access: "stale-access", refresh: "the-refresh", expires: now - 60_000, obtainedAt: "2026-09-22T00:00:00Z" },
+      },
+    });
+    const tokenCalls: string[] = [];
+    const tokenEndpoint = async (url: string): Promise<Response> => {
+      tokenCalls.push(url);
+      return new Response(JSON.stringify({ access_token: "fresh-access", refresh_token: "next", expires_in: 3600 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const seenKeys: (string | undefined)[] = [];
+    try {
+      const resolution = await resolveAcpProvider(
+        {},
+        {
+          configDir: dir,
+          refreshGrants: shellGrantRefresh(tokenEndpoint, () => now),
+          // What `makeProvider` reads for grok: `XAI_API_KEY` from the env.
+          makeProvider: () => {
+            seenKeys.push(process.env.XAI_API_KEY);
+            return { describe: () => ({}) } as unknown as ProviderPort;
+          },
+          loadFixture: neverFixture,
+        },
+      );
+      expect(resolution.kind).toBe("ready");
+      expect(tokenCalls).toHaveLength(1);
+      expect(seenKeys).toEqual(["fresh-access"]);
+    } finally {
+      if (previous === undefined) delete process.env.XAI_API_KEY;
+      else process.env.XAI_API_KEY = previous;
+    }
+  });
+});
+
+describe("T13 — per-turn settings resolved the way keryx shell resolves them", () => {
+  test("saved modelParams, maxOutputTokens and reasoningEffort reach the turn settings", async () => {
+    const envMax = process.env.KERYX_MAX_OUTPUT_TOKENS;
+    const envEffort = process.env.KERYX_REASONING_EFFORT;
+    delete process.env.KERYX_MAX_OUTPUT_TOKENS;
+    delete process.env.KERYX_REASONING_EFFORT;
+    try {
+      const dir = configDir({
+        provider: "deepseek",
+        model: "deepseek-chat",
+        modelParams: { deepseek: { temperature: 0.3, maxOutputTokens: 1234 } },
+        reasoningEffort: "high",
+      });
+      const resolution = await resolveAcpProvider(
+        {},
+        { configDir: dir, makeProvider: recordingFactory().make, loadFixture: neverFixture },
+      );
+      expect(resolution.kind).toBe("ready");
+      if (resolution.kind !== "ready") return;
+      expect(resolution.turnSettings.modelParams?.temperature).toBe(0.3);
+      expect(resolution.turnSettings.maxOutputTokens).toBe(1234);
+      expect(resolution.turnSettings.reasoningEffort).toBe("high");
+    } finally {
+      if (envMax !== undefined) process.env.KERYX_MAX_OUTPUT_TOKENS = envMax;
+      if (envEffort !== undefined) process.env.KERYX_REASONING_EFFORT = envEffort;
+    }
   });
 });

@@ -207,6 +207,11 @@ export class AcpProcessClient {
     await this.proc.exited;
   }
 
+  /** Sends `signal` to the `keryx acp` process itself (not its children). */
+  signal(signal: NodeJS.Signals): void {
+    this.proc.kill(signal);
+  }
+
   async kill(): Promise<void> {
     this.proc.kill();
     await this.proc.exited;
