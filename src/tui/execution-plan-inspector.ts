@@ -147,6 +147,10 @@ export function formatPlanMeta(plan: ExecutionPlan | undefined, dir: string | un
     "",
     "Storage   <session>/plan.json — a sibling of slate.json, so a completed",
     "          Flow closing its slate can no longer take the plan with it.",
+    "",
+    "Note      This is the agent's own plan for this session. The `/plan on|off`",
+    "          COMMAND is a different thing — the session's read-only mode, which",
+    "          this view neither shows nor changes.",
     ...(dir === undefined ? [] : [`Session   ${dir}`]),
   ].join("\n");
 }
@@ -290,7 +294,11 @@ export function presentExecutionPlanInspector(
   // eslint-disable-next-line prefer-const -- see above.
   let unsubscribe: (() => void) | undefined;
   const handle = openModalFn(otui, chrome, {
-    title: "/plan",
+    // NOT "/plan": that name belongs to the operator's read-only mode command
+    // (`/plan on|off`, `docs/docs/guides/permission-modes.md`), whose meaning
+    // predates this panel. Two different things under one name is how an
+    // operator concludes the plan view toggles their permissions.
+    title: "Session plan",
     tabs: [
       { id: "plan", label: "Plan" },
       { id: "meta", label: "Meta" },

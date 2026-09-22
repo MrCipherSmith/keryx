@@ -168,7 +168,10 @@ test("the modal paints the summary, the bar, the legend and one row per item", (
   ]);
   expect(textOf(nodes, "plan-item-t2")).toBe("▶ in progress       Implement the change");
   expect(textOf(nodes, "plan-item-t4")).toBe("! blocked           Wait for the credential");
-  expect(host.input().title).toBe("/plan");
+  // The collision this title fixes: `/plan` is the read-only MODE command, and a
+  // modal that shares its name is read as an extension of it.
+  expect(host.input().title).toBe("Session plan");
+  expect(host.input().title).not.toBe("/plan");
 });
 
 test("the Meta tab reports the revision, the active item, blocked ids and where the plan lives", () => {
@@ -182,6 +185,10 @@ test("the Meta tab reports the revision, the active item, blocked ids and where 
   expect(meta).toContain("Blocked   t4");
   expect(meta).toContain("plan.json");
   expect(meta).toContain("/tmp/session");
+  // The disambiguation lives with the storage note, so a reader who opened this
+  // looking for the mode toggle is told which view they are in.
+  expect(meta).toContain("The `/plan on|off`");
+  expect(meta).toContain("read-only mode, which");
   // Switching tabs repaints the SAME body — no stale Plan rows left behind.
   expect(host.nodes().some((node) => node.id.startsWith("plan-item-"))).toBe(false);
 });
