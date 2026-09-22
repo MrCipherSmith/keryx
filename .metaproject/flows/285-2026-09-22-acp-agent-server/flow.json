@@ -9,12 +9,12 @@
   "title": "Expose the keryx harness over the Agent Client Protocol so any ACP client can drive it",
   "status": "in-progress",
   "createdAt": "2026-09-22T18:18:38.900Z",
-  "updatedAt": "2026-09-22T18:30:53.472Z",
+  "updatedAt": "2026-09-22T18:50:44.950Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:ba80c9f88f97aa8be8e3d3bbd693704f92cdbcd7e0865975f391be3709a53bc5",
+  "acChecksum": "sha256:f888c488477de34a7eb6fcdda32541db74405d593f6d0143dfe3a01126674312",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -85,7 +85,7 @@
       "id": "T5",
       "title": "Pin the ACP surface: read the schema, write down the exact methods, capability fields and version keryx will implement",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -99,13 +99,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "JSON-RPC over stdio framing plus the wire types in one adapter module",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -121,7 +122,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -327,6 +329,21 @@
       "at": "2026-09-22T18:30:53.472Z",
       "event": "task-attempt",
       "detail": "T6: started (attempt 1) — opus: adapter framing and types"
+    },
+    {
+      "at": "2026-09-22T18:50:32.460Z",
+      "event": "task-done",
+      "detail": "T5: Pin the ACP surface: read the schema, write down the exact methods, capability fields and version keryx will implement"
+    },
+    {
+      "at": "2026-09-22T18:50:32.562Z",
+      "event": "task-done",
+      "detail": "T6: JSON-RPC over stdio framing plus the wire types in one adapter module"
+    },
+    {
+      "at": "2026-09-22T18:50:44.950Z",
+      "event": "ac-updated",
+      "detail": "AC1 as frozen contradicted the ACP v1 spec: a client asking for a newer protocol version MUST be answered with the latest version the agent supports, not refused. Refusal stays for a malformed or out-of-range version. Found by the T5 surface pinning against the published schema; no criterion had been confirmed yet."
     }
   ]
 }

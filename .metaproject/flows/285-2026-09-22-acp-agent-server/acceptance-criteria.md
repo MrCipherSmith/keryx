@@ -10,7 +10,7 @@ Rules:
 
 ## Criteria
 
-- AC1: `keryx acp` speaks JSON-RPC 2.0 over stdio and answers `initialize` with its protocol version, `agentCapabilities` and `agentInfo`; a request naming an unsupported protocol version is refused with a JSON-RPC error rather than a crash or a silent downgrade.
+- AC1: `keryx acp` speaks newline-delimited JSON-RPC 2.0 over stdio, writes nothing but frames to stdout, and answers `initialize` with its protocol version, `agentCapabilities` and `agentInfo`. A version keryx does not support is answered explicitly: the latest version keryx supports where the spec requires that (a client asking for a newer version), and a JSON-RPC error where no conformant answer exists (a malformed or out-of-range version) — never a crash, and never a silent pretend-success.
 - AC2: `session/new` creates a keryx session bound to the requested working directory, and `session/prompt` runs a real harness turn in it; the driving client receives the answer as `session/update` notifications while the turn runs, not only at the end.
 - AC3: A tool call that the policy engine would ask about produces a `session/request_permission` request; a denial from the client leaves the call unexecuted and the turn continues or ends exactly as a local denial does. A policy that denies outright never reaches the client at all.
 - AC4: `session/cancel` stops the running turn, the turn ends with the same cancelled outcome a local abort produces, and no further `session/update` for that turn is sent afterwards.
