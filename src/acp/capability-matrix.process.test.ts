@@ -15,10 +15,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { Subprocess } from "bun";
+import { AcpProcessClient } from "./process-client.test-helpers";
 import { ACP_PROTOCOL_VERSION } from "./protocol";
 
-const CLI = path.join(import.meta.dir, "..", "cli.ts");
 const TIMEOUT_MS = 60_000;
 
 let root = "";
@@ -36,112 +35,6 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
-
-interface WireMessage {
-  readonly id?: string | number | null;
-  readonly method?: string;
-  readonly params?: Record<string, unknown>;
-  readonly result?: Record<string, unknown>;
-  readonly error?: { code: number; message: string };
-}
-
-/** One `keryx acp` subprocess, driven as a client would drive it. Mirrors `permission.process.test.ts`'s helper. */
-class AcpProcessClient {
-  private readonly proc: Subprocess<"pipe", "pipe", "pipe">;
-  private readonly seen: WireMessage[] = [];
-  private readonly waiters: { match: (m: WireMessage) => boolean; settle: (m: WireMessage) => void }[] = [];
-  private readonly stderr: string[] = [];
-  private nextId = 1;
-
-  constructor(fixture: string) {
-    this.proc = Bun.spawn(["bun", "run", CLI, "acp", "--fixture", fixture, "--data-dir", dataDir], {
-      cwd: projectDir,
-      env: { ...process.env, XDG_DATA_HOME: root, APPDATA: root } as Record<string, string>,
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    void this.pump();
-    void this.pumpStderr();
-  }
-
-  private async pump(): Promise<void> {
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for await (const chunk of this.proc.stdout) {
-      buffer += decoder.decode(chunk, { stream: true });
-      let newline = buffer.indexOf("\n");
-      while (newline >= 0) {
-        const line = buffer.slice(0, newline);
-        buffer = buffer.slice(newline + 1);
-        newline = buffer.indexOf("\n");
-        if (line.trim().length === 0) {
-          continue;
-        }
-        const message = JSON.parse(line) as WireMessage;
-        this.seen.push(message);
-        for (const waiter of [...this.waiters]) {
-          if (waiter.match(message)) {
-            this.waiters.splice(this.waiters.indexOf(waiter), 1);
-            waiter.settle(message);
-          }
-        }
-      }
-    }
-  }
-
-  private async pumpStderr(): Promise<void> {
-    const decoder = new TextDecoder();
-    for await (const chunk of this.proc.stderr) {
-      this.stderr.push(decoder.decode(chunk, { stream: true }));
-    }
-  }
-
-  send(message: Record<string, unknown>): void {
-    this.proc.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
-    void this.proc.stdin.flush();
-  }
-
-  request(method: string, params: Record<string, unknown>): number {
-    const id = this.nextId++;
-    this.send({ id, method, params });
-    return id;
-  }
-
-  async waitFor(match: (m: WireMessage) => boolean, what: string): Promise<WireMessage> {
-    const already = this.seen.find(match);
-    if (already !== undefined) {
-      return already;
-    }
-    return await new Promise<WireMessage>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const index = this.waiters.findIndex((w) => w.settle === settle);
-        if (index >= 0) {
-          this.waiters.splice(index, 1);
-        }
-        reject(new Error(`timed out waiting for ${what}; saw:\n${this.transcript()}\nstderr:\n${this.stderr.join("")}`));
-      }, 30_000);
-      const settle = (message: WireMessage): void => {
-        clearTimeout(timer);
-        resolve(message);
-      };
-      this.waiters.push({ match, settle });
-    });
-  }
-
-  messages(): readonly WireMessage[] {
-    return this.seen;
-  }
-
-  transcript(): string {
-    return this.seen.map((m) => JSON.stringify(m)).join("\n");
-  }
-
-  async kill(): Promise<void> {
-    this.proc.kill();
-    await this.proc.exited;
-  }
-}
 
 /** A fixture whose one turn calls `toolName` with `input`, then answers with `finalText`. */
 function singleCallFixture(toolName: string, input: Record<string, unknown>, finalText = "done."): string {
@@ -209,7 +102,7 @@ async function resultUpdate(client: AcpProcessClient, toolCallId: string): Promi
 describe("AC6 — read_file honours the fs.readTextFile capability", () => {
   test("with fs.readTextFile advertised, read_file goes through fs/read_text_file", async () => {
     writeFileSync(path.join(projectDir, "sample.txt"), "on-disk content", "utf8");
-    const client = new AcpProcessClient(singleCallFixture("read_file", { path: "sample.txt" }));
+    const client = new AcpProcessClient({ fixture: singleCallFixture("read_file", { path: "sample.txt" }), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const sessionId = await openSession(client, { fs: { readTextFile: true, writeTextFile: true } });
       const promptId = client.request("session/prompt", { sessionId, prompt: [{ type: "text", text: "read it" }] });
@@ -240,7 +133,7 @@ describe("AC6 — read_file honours the fs.readTextFile capability", () => {
 
   test("without fs advertised, read_file never calls fs/read_text_file and still completes locally", async () => {
     writeFileSync(path.join(projectDir, "sample.txt"), "on-disk content", "utf8");
-    const client = new AcpProcessClient(singleCallFixture("read_file", { path: "sample.txt" }));
+    const client = new AcpProcessClient({ fixture: singleCallFixture("read_file", { path: "sample.txt" }), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const sessionId = await openSession(client, {});
       const promptId = client.request("session/prompt", { sessionId, prompt: [{ type: "text", text: "read it" }] });
@@ -262,7 +155,7 @@ describe("AC6 — read_file honours the fs.readTextFile capability", () => {
 
   test("fs.readTextFile advertised as false behaves exactly like the capability being absent", async () => {
     writeFileSync(path.join(projectDir, "sample.txt"), "on-disk content", "utf8");
-    const client = new AcpProcessClient(singleCallFixture("read_file", { path: "sample.txt" }));
+    const client = new AcpProcessClient({ fixture: singleCallFixture("read_file", { path: "sample.txt" }), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const sessionId = await openSession(client, { fs: { readTextFile: false } });
       const promptId = client.request("session/prompt", { sessionId, prompt: [{ type: "text", text: "read it" }] });
@@ -280,7 +173,7 @@ describe("AC6 — read_file honours the fs.readTextFile capability", () => {
 
 describe("AC6 — shell_exec never calls terminal/*, in every capability configuration", () => {
   test("with terminal advertised, shell_exec still runs locally and no terminal/* frame is ever sent", async () => {
-    const client = new AcpProcessClient(singleCallFixture("shell_exec", { command: "echo capability-matrix-ran" }));
+    const client = new AcpProcessClient({ fixture: singleCallFixture("shell_exec", { command: "echo capability-matrix-ran" }), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const sessionId = await openSession(client, { terminal: true });
       const promptId = client.request("session/prompt", { sessionId, prompt: [{ type: "text", text: "run it" }] });
@@ -307,7 +200,7 @@ describe("AC6 — shell_exec never calls terminal/*, in every capability configu
   }, TIMEOUT_MS);
 
   test("without terminal advertised, shell_exec behaves identically", async () => {
-    const client = new AcpProcessClient(singleCallFixture("shell_exec", { command: "echo capability-matrix-ran" }));
+    const client = new AcpProcessClient({ fixture: singleCallFixture("shell_exec", { command: "echo capability-matrix-ran" }), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const sessionId = await openSession(client, {});
       const promptId = client.request("session/prompt", { sessionId, prompt: [{ type: "text", text: "run it" }] });

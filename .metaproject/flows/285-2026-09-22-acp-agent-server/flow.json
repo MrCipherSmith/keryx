@@ -9,7 +9,7 @@
   "title": "Expose the keryx harness over the Agent Client Protocol so any ACP client can drive it",
   "status": "in-progress",
   "createdAt": "2026-09-22T18:18:38.900Z",
-  "updatedAt": "2026-09-22T19:47:13.627Z",
+  "updatedAt": "2026-09-22T19:47:19.011Z",
   "source": {
     "type": "description",
     "ref": null
@@ -192,7 +192,7 @@
       "id": "T10",
       "title": "session/cancel, session/list, session/load over durable project sessions",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
@@ -208,13 +208,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Client capabilities: fs and terminal used when advertised, fallback when not",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9",
         "T10"
@@ -225,7 +226,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -400,6 +402,16 @@
       "at": "2026-09-22T19:47:13.627Z",
       "event": "ac-updated",
       "detail": "AC6 as frozen demanded that writes route through fs/write_text_file. apply_patch applies a multi-file diff atomically through git; the ACP write method writes one file's whole content with no diff semantics and no cross-file atomicity, so routing it would be a redesign, not a capability branch. AC6 now states what the design guarantees — reads route when advertised, writes and shell stay local with the reason recorded, and no absent capability is ever called — and the routing work is left to a follow-up flow."
+    },
+    {
+      "at": "2026-09-22T19:47:18.911Z",
+      "event": "task-done",
+      "detail": "T10: session/cancel, session/list, session/load over durable project sessions"
+    },
+    {
+      "at": "2026-09-22T19:47:19.011Z",
+      "event": "task-done",
+      "detail": "T11: Client capabilities: fs and terminal used when advertised, fallback when not"
     }
   ]
 }

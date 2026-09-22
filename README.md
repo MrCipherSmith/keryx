@@ -253,8 +253,19 @@ What is in it today:
   over stdio — so an ACP client (an editor, typically) can launch keryx as a
   subprocess, open a session bound to a project, and drive a real harness turn
   with streamed `session/update` notifications instead of one dump at the end.
-  See [the CLI reference](docs/docs/cli-reference.md#acp) for what a client
-  must advertise and what keryx does when a capability is absent.
+  A gated tool call is asked through `session/request_permission` rather than
+  approved locally — only an explicit allow runs it, and an `allow_always`
+  answer is remembered by the client, never persisted by keryx — and
+  `session/cancel`, `session/list`, and `session/load` (replaying a session
+  created anywhere, including one from `keryx shell`) are all implemented.
+  Writes and shell execution stay local unconditionally (no `fs/write_text_file`
+  or `terminal/*` calls, whatever the client advertises), and there is no
+  HTTP/WebSocket transport, no authentication over this wire, and no
+  `session/resume`/`close`/`delete`/`set_mode`/`set_config_option`. Verified
+  against the published v1 schema and this repo's own scripted test client,
+  not yet against a shipping IDE. See [the CLI
+  reference](docs/docs/cli-reference.md#acp) for the full method table and
+  what keryx does when a capability is absent.
 - **Plans that survive the turn.** For multi-step work, the agent can keep a
   structured execution plan in the session's own `plan.json` — beside the
   transcript, not inside the Slate — so closing a Slate (or a Flow reporting

@@ -1,10 +1,12 @@
-// `keryx acp` — Agent Client Protocol agent server over stdio (flow 285, T7).
+// `keryx acp` — Agent Client Protocol agent server over stdio (flow 285).
 //
 // Speaks newline-delimited JSON-RPC 2.0 on stdin/stdout (`../acp/framing.ts`)
-// and answers `initialize`, `session/new` and `session/prompt`
-// (`../acp/server.ts`). Nothing but protocol frames may ever reach stdout —
-// every diagnostic below goes to stderr, matching the transport's own MUST
-// NOT ("a stray console.log corrupts the stream", `context.md` §0).
+// and answers `initialize`, `session/new`, `session/prompt`, `session/cancel`,
+// `session/list` and `session/load` (`../acp/server.ts`); every other agent
+// method ACP defines is refused with `-32601` (`../acp/protocol.ts`'s
+// `ACP_REFUSED_AGENT_METHODS`). Nothing but protocol frames may ever reach
+// stdout — every diagnostic below goes to stderr, matching the transport's
+// own MUST NOT ("a stray console.log corrupts the stream", `context.md` §0).
 
 import { randomUUID } from "node:crypto";
 import { runAcpServer } from "../acp/server";
@@ -88,9 +90,13 @@ function printHelp(): void {
 Speak the Agent Client Protocol (ACP) v1 over stdio: newline-delimited
 JSON-RPC 2.0 on stdin, the same framing on stdout. Launch this as a
 subprocess from an ACP client (an editor, e.g.) — it answers initialize,
-session/new and session/prompt, streaming session/update notifications as a
-turn runs rather than only at the end. Nothing but protocol frames is ever
-written to stdout; every diagnostic goes to stderr.
+session/new, session/prompt (streaming session/update notifications as a
+turn runs rather than only at the end), session/cancel, session/list and
+session/load; every other agent method ACP defines is refused with -32601.
+A gated tool call is asked through session/request_permission — only an
+explicit allow runs it. Writes and shell execution always stay local; there
+is no fs/write_text_file or terminal/* call in this release. Nothing but
+protocol frames is ever written to stdout; every diagnostic goes to stderr.
 
 Usage:
   keryx acp [--provider <p>] [--model <m>] [--base-url <url>] [--data-dir <dir>]

@@ -15,12 +15,11 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { Subprocess } from "bun";
 import { ACP_PERMISSION_OPTION_IDS } from "./permission";
+import { AcpProcessClient } from "./process-client.test-helpers";
 import { ACP_PROTOCOL_VERSION } from "./protocol";
 import { createSession, persistHistory } from "../session";
 
-const CLI = path.join(import.meta.dir, "..", "cli.ts");
 const TIMEOUT_MS = 60_000;
 const LOCAL_DENIAL = "command not approved by the user; not executed";
 
@@ -39,131 +38,6 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
-
-interface WireMessage {
-  readonly id?: string | number | null;
-  readonly method?: string;
-  readonly params?: Record<string, unknown>;
-  readonly result?: Record<string, unknown>;
-  readonly error?: { code: number; message: string };
-}
-
-/** One `keryx acp` subprocess, driven as a client would drive it. Mirrors `permission.process.test.ts`'s helper. */
-class AcpProcessClient {
-  private readonly proc: Subprocess<"pipe", "pipe", "pipe">;
-  private readonly seen: WireMessage[] = [];
-  private readonly waiters: { match: (m: WireMessage) => boolean; settle: (m: WireMessage) => void }[] = [];
-  private readonly stderr: string[] = [];
-  private nextId = 1;
-
-  constructor(fixture: string) {
-    this.proc = Bun.spawn(["bun", "run", CLI, "acp", "--fixture", fixture, "--data-dir", dataDir], {
-      cwd: projectDir,
-      env: { ...process.env, XDG_DATA_HOME: root, APPDATA: root } as Record<string, string>,
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    void this.pump();
-    void this.pumpStderr();
-  }
-
-  private async pump(): Promise<void> {
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for await (const chunk of this.proc.stdout) {
-      buffer += decoder.decode(chunk, { stream: true });
-      let newline = buffer.indexOf("\n");
-      while (newline >= 0) {
-        const line = buffer.slice(0, newline);
-        buffer = buffer.slice(newline + 1);
-        newline = buffer.indexOf("\n");
-        if (line.trim().length === 0) {
-          continue;
-        }
-        const message = JSON.parse(line) as WireMessage;
-        this.seen.push(message);
-        for (const waiter of [...this.waiters]) {
-          if (waiter.match(message)) {
-            this.waiters.splice(this.waiters.indexOf(waiter), 1);
-            waiter.settle(message);
-          }
-        }
-      }
-    }
-  }
-
-  private async pumpStderr(): Promise<void> {
-    const decoder = new TextDecoder();
-    for await (const chunk of this.proc.stderr) {
-      this.stderr.push(decoder.decode(chunk, { stream: true }));
-    }
-  }
-
-  send(message: Record<string, unknown>): void {
-    this.proc.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
-    void this.proc.stdin.flush();
-  }
-
-  request(method: string, params: Record<string, unknown>): number {
-    const id = this.nextId++;
-    this.send({ id, method, params });
-    return id;
-  }
-
-  async waitFor(match: (m: WireMessage) => boolean, what: string): Promise<WireMessage> {
-    const already = this.seen.find(match);
-    if (already !== undefined) {
-      return already;
-    }
-    return await new Promise<WireMessage>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const index = this.waiters.findIndex((w) => w.settle === settle);
-        if (index >= 0) {
-          this.waiters.splice(index, 1);
-        }
-        reject(new Error(`timed out waiting for ${what}; saw:\n${this.transcript()}\nstderr:\n${this.stderr.join("")}`));
-      }, 30_000);
-      const settle = (message: WireMessage): void => {
-        clearTimeout(timer);
-        resolve(message);
-      };
-      this.waiters.push({ match, settle });
-    });
-  }
-
-  messages(): readonly WireMessage[] {
-    return this.seen;
-  }
-
-  updates(kind: string): WireMessage[] {
-    return this.seen.filter(
-      (m) => m.method === "session/update" && (m.params?.["update"] as { sessionUpdate?: string })?.sessionUpdate === kind,
-    );
-  }
-
-  updatesForSession(sessionId: string): WireMessage[] {
-    return this.seen.filter((m) => m.method === "session/update" && m.params?.["sessionId"] === sessionId);
-  }
-
-  transcript(): string {
-    return this.seen.map((m) => JSON.stringify(m)).join("\n");
-  }
-
-  async end(): Promise<void> {
-    try {
-      this.proc.stdin.end();
-    } catch {
-      // already closed
-    }
-    await this.proc.exited;
-  }
-
-  async kill(): Promise<void> {
-    this.proc.kill();
-    await this.proc.exited;
-  }
-}
 
 /** A fixture whose Nth turn calls `shell_exec` with `commands[N]`, then answers with text. */
 function shellFixture(commands: readonly string[], finalText = "done."): string {
@@ -199,7 +73,7 @@ describe("AC4 — session/cancel", () => {
     // `sleep 0.3` gives the notification real wall-clock time to arrive while
     // the tool is still running — a synchronous fixture alone cannot race
     // anything.
-    const client = new AcpProcessClient(shellFixture(["sleep 0.3 && echo ran"]));
+    const client = new AcpProcessClient({ fixture: shellFixture(["sleep 0.3 && echo ran"]), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const sessionId = await openSession(client);
       const promptId = client.request("session/prompt", { sessionId, prompt: [{ type: "text", text: "run it" }] });
@@ -226,7 +100,7 @@ describe("AC4 — session/cancel", () => {
   }, TIMEOUT_MS);
 
   test("cancel while a permission request is open settles it as a denial and ends the turn cancelled", async () => {
-    const client = new AcpProcessClient(shellFixture(["echo keryx-ran-this"]));
+    const client = new AcpProcessClient({ fixture: shellFixture(["echo keryx-ran-this"]), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const sessionId = await openSession(client);
       const promptId = client.request("session/prompt", { sessionId, prompt: [{ type: "text", text: "run it" }] });
@@ -261,7 +135,7 @@ describe("AC4 — session/cancel", () => {
   }, TIMEOUT_MS);
 
   test("a cancel for an unknown/already-finished session is a harmless no-op", async () => {
-    const client = new AcpProcessClient(shellFixture([]));
+    const client = new AcpProcessClient({ fixture: shellFixture([]), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const sessionId = await openSession(client);
       client.send({ method: "session/cancel", params: { sessionId: "not-a-real-session" } });
@@ -286,7 +160,7 @@ describe("AC5 — session/list and session/load", () => {
     ];
     persistHistory(created, history, { provider: "fake", model: "fake-model" });
 
-    const client = new AcpProcessClient(shellFixture([]));
+    const client = new AcpProcessClient({ fixture: shellFixture([]), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const initId = client.request("initialize", {
         protocolVersion: ACP_PROTOCOL_VERSION,
@@ -349,7 +223,7 @@ describe("AC5 — session/list and session/load", () => {
     ];
     persistHistory(created, history, { provider: "fake", model: "fake-model" });
 
-    const client = new AcpProcessClient(shellFixture([]));
+    const client = new AcpProcessClient({ fixture: shellFixture([]), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const initId = client.request("initialize", {
         protocolVersion: ACP_PROTOCOL_VERSION,
@@ -386,7 +260,7 @@ describe("AC5 — session/list and session/load", () => {
   }, TIMEOUT_MS);
 
   test("session/load for an unknown session id is refused, not a hang", async () => {
-    const client = new AcpProcessClient(shellFixture([]));
+    const client = new AcpProcessClient({ fixture: shellFixture([]), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const initId = client.request("initialize", {
         protocolVersion: ACP_PROTOCOL_VERSION,
@@ -408,7 +282,7 @@ describe("AC5 — session/list and session/load", () => {
     // Sanity: list/load handlers do not disturb the connection-scoped
     // permission machinery (T9) — a permission flow still works after a
     // session/list call.
-    const client = new AcpProcessClient(shellFixture(["echo still-works"]));
+    const client = new AcpProcessClient({ fixture: shellFixture(["echo still-works"]), cwd: projectDir, dataDir, homeRoot: root });
     try {
       const sessionId = await openSession(client);
       const listId = client.request("session/list", { cwd: projectDir });
