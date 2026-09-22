@@ -58,12 +58,21 @@ export class AcpClientRequests {
    * sending anything: a connection that has ended cannot answer, and a caller
    * that treats "closed" as a denial (which every caller must) is then denied
    * without a wire round trip nobody could read.
+   *
+   * `onId`, when given, is called synchronously with the minted request id
+   * BEFORE the message is sent — a caller that needs to correlate this
+   * specific outstanding question later (flow 285 T10: `session/cancel`
+   * settling only the permission ask belonging to the turn it cancels, not
+   * every pending question on the connection) has no other way to learn the
+   * id, since it is otherwise only ever seen again inside the resolved
+   * outcome.
    */
-  request(method: string, params: unknown): Promise<AcpClientRequestOutcome> {
+  request(method: string, params: unknown, onId?: (id: string) => void): Promise<AcpClientRequestOutcome> {
     if (this.closedReason !== undefined) {
       return Promise.resolve({ kind: "closed", reason: this.closedReason });
     }
     const id = `acp-agent-${this.options.idSeq()}`;
+    onId?.(id);
     return new Promise<AcpClientRequestOutcome>((resolve) => {
       this.pending.set(id, resolve);
       try {
@@ -78,6 +87,28 @@ export class AcpClientRequests {
         });
       }
     });
+  }
+
+  /**
+   * Settles ONE outstanding request as `closed`, without touching any other
+   * pending question.
+   *
+   * The scoped counterpart to {@link close}: `close` ends the whole
+   * connection's worth of questions (stdin ended, nobody can answer
+   * anything), this ends exactly one (a `session/cancel` for the turn that
+   * asked it — every OTHER session's in-flight questions, if any, are
+   * untouched). Returns `false` when `id` names nothing pending — already
+   * answered, already cancelled, or never asked — so a caller can tell "there
+   * was nothing to cancel" from "the cancel landed".
+   */
+  cancel(id: string, reason: string): boolean {
+    const settle = this.pending.get(id);
+    if (settle === undefined) {
+      return false;
+    }
+    this.pending.delete(id);
+    settle({ kind: "closed", reason });
+    return true;
   }
 
   /**

@@ -48,11 +48,25 @@ const TOOL_KIND_BY_NAME: Readonly<Record<string, AcpToolKind>> = {
   web_search: "search",
 };
 
-function toolKindFor(name: string): AcpToolKind {
+/**
+ * The ACP `kind` for a tool by name, for a `tool_call`/`tool_call_update`.
+ *
+ * Exported (flow 285, T10): `session/load`'s history replay
+ * (`server.ts:replayHistory`) rebuilds a `tool_call` from a stored
+ * `NormalizedToolCall` the same way a LIVE turn's `onToolCall` does here — one
+ * lookup table, not two that could drift.
+ */
+export function toolKindFor(name: string): AcpToolKind {
   return TOOL_KIND_BY_NAME[name] ?? "other";
 }
 
-function tryParseJson(text: string): unknown {
+/**
+ * Parses a tool-call argument string as JSON for `rawInput`, falling back to
+ * the raw text when it is not valid JSON (a model-emitted argument string is
+ * not guaranteed to parse). Exported for the same reuse reason as
+ * {@link toolKindFor}.
+ */
+export function tryParseJson(text: string): unknown {
   try {
     return JSON.parse(text) as unknown;
   } catch {

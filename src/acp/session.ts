@@ -10,7 +10,7 @@
 // operator needs `requestedCwd` too.
 
 import type { NormalizedMessage } from "../harness/provider/types";
-import { createSession, resolveProjectRoot, type SessionHandle } from "../session";
+import { createSession, listSessions, openSession, resolveProjectRoot, type SessionHandle } from "../session";
 import type { AcpClientCapabilities } from "./protocol";
 
 export interface AcpSessionState {
@@ -79,6 +79,47 @@ export class AcpSessionRegistry {
 
   get(sessionId: string): AcpSessionState | undefined {
     return this.sessions.get(sessionId);
+  }
+
+  /**
+   * Loads an EXISTING durable session (flow 285, T10 — AC5): one created by
+   * `session/new` earlier this connection, by an earlier `keryx acp`
+   * connection, or by `keryx shell`/`keryx sessions` — the store is the same
+   * one either way (`../session/store.ts`).
+   *
+   * `undefined` means no session with this id exists FOR THIS PROJECT.
+   * `listSessions(cwd, ...)` is already project-isolated by construction (it
+   * filters by `resolveProjectRoot(cwd)` internally, matching `summary.
+   * projectPath` — F-6/F-7 of the flow's context.md): a session id that is
+   * real but belongs to a different project is reported exactly the same as
+   * one that does not exist at all, never loaded across the project boundary.
+   */
+  load(sessionId: string, cwd: string, clientCapabilities: AcpClientCapabilities | undefined): AcpSessionState | undefined {
+    const resolvedRoot = resolveProjectRoot(cwd);
+    const known = listSessions(cwd, this.options.dataDir).some((summary) => summary.id === sessionId);
+    if (!known) {
+      return undefined;
+    }
+    const opened = openSession({
+      cwd,
+      resumeId: sessionId,
+      ...(this.options.dataDir !== undefined ? { dataDir: this.options.dataDir } : {}),
+      provider: this.options.providerId,
+      model: this.options.modelId,
+    });
+    const state: AcpSessionState = {
+      sessionId: opened.handle.summary.id,
+      requestedCwd: cwd,
+      resolvedRoot,
+      handle: opened.handle,
+      // Mutated in place by `runAgentTurn` from here on, same contract as
+      // `create()` — a loaded session's later `session/prompt` calls continue
+      // this exact array, not a fresh empty one.
+      history: opened.history,
+      clientCapabilities,
+    };
+    this.sessions.set(state.sessionId, state);
+    return state;
   }
 
   /** Replaces the stored handle (e.g. after a `persistHistory` call returns an updated one). */

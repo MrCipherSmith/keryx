@@ -554,3 +554,208 @@ wants out answers `cancelled`, which is already mapped to a denial.
 The load-bearing test habit here, per F-4: assert the request was **sent**.
 "The denied call did not run" passes just as well against a keryx that never
 asked, which is the failure in the safe direction that is hardest to notice.
+
+---
+
+# T10/T11 — cancel, list, load, client capabilities
+
+Written by the T10/T11 dispatch, 2026-09-22. AC4 (`session/cancel`), AC5
+(`session/list` / `session/load`), AC6 (client capabilities).
+
+## 0. What was built
+
+- `src/acp/client-requests.ts` — `request()` grew an optional third
+  parameter, `onId(id)`, called synchronously (before the message is sent)
+  with the minted request id; and a new `cancel(id, reason)` that settles
+  ONE outstanding request as `closed`, distinct from `close()` (which settles
+  every pending request on the connection — reserved for stdin actually
+  ending). This is the seam F-14 needed and did not have: a way to answer
+  exactly the permission ask a single cancelled turn opened, without
+  disturbing any other session's live questions.
+- `src/acp/server.ts` — `AcpActiveTurn` (`controller: AbortController`,
+  `cancelled: boolean`, `permissionRequestIds: Set<string>`), one per
+  in-flight `session/prompt`, keyed by `sessionId` in a connection-scoped
+  `activeTurns` map (same connection-scoped-state discipline as
+  `initialized`/`clientCapabilities` — never a module global). `handleSessionCancel`
+  is registered as a NOTIFICATION handler (no reply, ever): it aborts the
+  turn's controller and calls `clientRequests.cancel(...)` for every id in
+  `turn.permissionRequestIds` (usually 0 or 1), then clears the set.
+  `handleSessionPrompt` computes the final `stopReason` as
+  `turn.cancelled ? "cancelled" : finishReasonToStopReason(result.finishReason)`
+  — see F-5 below for why `finishReason` alone cannot do this. Also added:
+  `handleSessionList` (`../session`'s `listSessions`), `handleSessionLoad` +
+  `replayHistory` (`../session`'s `openSession` via the registry's new
+  `load()`), and capability-aware tool wiring for `read_file` (T11).
+- `src/acp/session.ts` — `AcpSessionRegistry.load(sessionId, cwd,
+  clientCapabilities)`: finds the session in `listSessions(cwd, dataDir)`
+  (project-isolated by construction, so a real id from another project reads
+  as "not found," never crosses the boundary), then `openSession({cwd,
+  resumeId: sessionId, ...})` — the SAME store entry point `keryx shell
+  --resume` uses — and registers the resulting `AcpSessionState` exactly like
+  `create()` does, so a loaded session's later `session/prompt` calls thread
+  the same mutable `history` array `create()`'s sessions already do.
+- `src/acp/agent-io.ts` — `toolKindFor`/`tryParseJson` exported (previously
+  module-private): `replayHistory` in `server.ts` rebuilds a `tool_call` from
+  a stored `NormalizedToolCall` through the SAME lookup table a live
+  `onToolCall` uses, so a replayed call and a live one are indistinguishable
+  on the wire.
+- `src/acp/capability-tools.ts` (new) — `acpAwareReadFileTool`: wraps the
+  local `read_file` tool so it calls `fs/read_text_file` when the session's
+  `clientCapabilities.fs?.readTextFile === true`, and returns the ORIGINAL
+  unwrapped tool object otherwise (not a pass-through that checks and
+  declines every time) — the capability decision is made once, at
+  roster-construction time in `handleSessionPrompt`, so "no
+  `fs/read_text_file` frame was ever sent" is true of a tool with no code
+  path that could send one, not one that merely chose not to.
+
+## 1. How `session/cancel` ends a turn (AC4)
+
+Two effects, both from the same synchronous handler body (no `await` inside
+it — F-12 requires this: another line's dispatch must not interleave between
+"mark cancelled" and "abort/settle"):
+
+1. `turn.controller.abort()` — the SAME `AbortSignal` mechanism a local
+   hard-stop uses (`RunAgentTurnOptions.signal`). Every `isAborted()` check
+   inside `runAgentTurn` starts returning `true`, and the turn stops at its
+   next one — mid-stream, at the top of the next tool in a batch, or before
+   the next model round — exactly the shape a local abort already produces.
+2. F-14: `clientRequests.cancel(id, ...)` for each id in
+   `turn.permissionRequestIds`. `askPermissionFor` already treats a `closed`
+   outcome as "could not be asked" → denial (pre-existing T9 code, untouched)
+   — so the pending `requestApproval` call this unblocks resolves `false`,
+   the gated tool does not run, and the turn then stops via effect 1 at its
+   next check. Per F-14's own note, keryx sends NO `$/cancel_request` to the
+   client for the abandoned request — a client that wants out can itself
+   answer `cancelled`, already mapped to the identical denial.
+
+`RunAgentTurnResult.finishReason` is `undefined` on every abort path in
+`commands/agent.ts` (confirmed by reading all six `isAborted()` call sites,
+2026-09-22) — the SAME value an ordinary toolless finish produces, so it
+cannot distinguish "cancelled" from "ended" on its own (F-5, as predicted).
+`turn.cancelled`, set by `handleSessionCancel` and read only in
+`handleSessionPrompt`'s `finally`-adjacent return, is the sole record.
+
+"No further `session/update` for that turn is sent afterwards" (AC4) is read
+as: no `session/update` for that session arrives on the wire AFTER the
+`session/prompt` response that carries `stopReason: "cancelled"`. A tool
+result for a call that was ALREADY IN FLIGHT when the cancel notification
+arrived can still land as one LAST `tool_call_update` before the turn
+actually stops (the abort does not preempt a call already inside
+`executeCall`) — this is the same shape a local abort already produces
+(`agent.ts`'s own abort-checks are between calls/rounds, not inside one), so
+it is not a new gap this dispatch introduced. Tested in
+`cancel-list-load.process.test.ts`: no `session/update` for the cancelled
+session arrives after its `session/prompt` reply.
+
+## 2. What `session/list` / `session/load` report (AC5)
+
+`session/list`: an omitted `cwd` lists the sessions of the ACP PROCESS's own
+project root (`resolveProjectRoot(process.cwd())`), per F-7's recommended
+reading — refusing an optional parameter would be its own conformance break.
+A provided `cwd` is used as `listSessions`'s own filter directly (it resolves
+internally). Every `AcpSessionInfo.cwd` is the session's RESOLVED
+`projectPath` (F-6) — never a requested cwd, honest about what the session is
+actually bound to. Pagination is not implemented: every call answers one full
+page, no `nextCursor` — conformant per F-7 ("a single page with no
+`nextCursor` is conformant").
+
+`session/load`: resolves the session through `listSessions(cwd, ...)` (so
+F-6's resolved-root comparison and the project-isolation guarantee are the
+SAME code path `session/list` uses, not a second hand-written check that
+could drift), refuses `mcpServers` non-empty for the same F-8 reason
+`session/new` does, then replays history via `session/update` BEFORE
+responding (`replayHistory`, called synchronously before the handler
+returns) — required by the spec's own ordering.
+
+Role mapping (F-9), decided explicitly:
+
+- `system` → **dropped**. No ACP chunk exists for it, and forcing it into
+  `user_message_chunk` or `agent_message_chunk` would misattribute who said
+  it. Tested: a `system` message's text never appears in ANY replayed update.
+- `user` → `user_message_chunk` (skipped when empty).
+- `assistant` → `agent_message_chunk` for the text (if any), THEN one
+  `tool_call` per stored `NormalizedToolCall`, status `pending` — reusing
+  `agent-io.ts`'s `toolKindFor`/`tryParseJson`.
+- `tool` → `tool_call_update` for `toolCallId` (or a synthesised `randomUUID()`
+  when a transcript has an orphan tool message with no matching prior call),
+  status **always `completed`** — a persisted `NormalizedMessage` keeps no
+  separate success/failure marker, only text content, so `completed` is the
+  honest approximation available from what is actually stored. This is a
+  DOCUMENTED approximation, not a claim that every replayed tool round
+  actually succeeded; a caller that needs the true outcome has to read the
+  content.
+
+## 3. Capability decisions (AC6)
+
+Recorded in full in `src/acp/capability-tools.ts`'s header comment; summary:
+
+- **READ** (`read_file`): routes through `fs/read_text_file` when, and only
+  when, `clientCapabilities.fs?.readTextFile === true` for that session.
+  Absent/false → never calls it, falls straight to the local implementation.
+  Tested both ways plus the `false`-is-absent case, over the real pipe
+  (`capability-matrix.process.test.ts`).
+- **WRITE** (`apply_patch`): stays local **unconditionally**, regardless of
+  `fs.writeTextFile`. **This is a known, deliberate gap against AC6's literal
+  text** ("...and writes...go through fs/write_text_file"), not a full
+  implementation of the write half. Rationale: `apply_patch` applies a
+  multi-file unified diff atomically via `git apply` (ADR-0010) — all hunks
+  across all files land, or none do. `fs/write_text_file` writes ONE file's
+  full content with no diff semantics and no cross-file atomicity.
+  Rerouting through it would mean keryx computing each target's post-patch
+  content some other way (there is no `git apply --dry-run-and-show-result`;
+  the closest legitimate approach is scratch-index plumbing:
+  `git hash-object -w` the current file, seed a temporary `GIT_INDEX_FILE`
+  with it via `git update-index --cacheinfo`, `git apply --cached` the patch
+  into that scratch index only, then `git show :path` for the resulting
+  blob — repeated per target file, then a client round trip per file), and
+  losing ADR-0010's atomicity guarantee the moment a multi-file patch's Nth
+  client-side write fails after N-1 already landed. That is a redesign of
+  apply_patch, not a capability branch — out of scope for this dispatch.
+  `keryx acp` never calls `fs/write_text_file` in this flow, with or without
+  the capability. **Recommend a follow-up flow/task if the write half of AC6
+  is required**, scoped explicitly to that scratch-index approach (or an
+  accepted downgrade of apply_patch's atomicity when `fs` is advertised).
+- **TERMINAL** (`shell_exec`): stays local **unconditionally** too, regardless
+  of `terminal`. Its local implementation (background jobs, streaming,
+  timeouts, T9's approval gate) has no one-for-one match in
+  `terminal/create`+`output`+`wait_for_exit`+`kill`+`release`, and
+  rebuilding it against that surface risks the existing, well-tested
+  subsystem for a capability keryx does not need (same machine, same process
+  tree, exactly like `keryx shell`). Consequence: `keryx acp` calls no
+  `terminal/*` method in ANY capability configuration — AC6's "absent
+  capability ⇒ never called" bar holds unconditionally, the stronger and
+  simpler property, tested with `terminal: true` AND without it.
+
+## 4. Tests
+
+- `src/acp/cancel-list-load.process.test.ts` — real stdio pipe, fixture
+  provider: cancel mid-turn (`stopReason: "cancelled"`, no later
+  `session/update` for that session); cancel while a
+  `session/request_permission` is open (settles as the local denial, turn
+  ends `cancelled`, the client never answers the id); cancel for an
+  unknown/already-finished session is a no-op that does not break the
+  connection; a session created OUTSIDE any ACP connection (mirrors `keryx
+  shell`, via `createSession`/`persistHistory` from `../session` directly) is
+  listed by `session/list` (resolved `cwd`, correct title) and loaded by
+  `session/load` (replay precedes the response; user/assistant text
+  round-trips); a tool round replays as a `tool_call`/`tool_call_update` pair
+  sharing one id and a `system` message's text never appears; `session/load`
+  for an unknown id is refused, not a hang; `session/list` does not disturb
+  the permission machinery for a later `session/prompt` on the same
+  connection.
+- `src/acp/capability-matrix.process.test.ts` — real stdio pipe, fixture
+  provider: `fs.readTextFile: true` → `read_file` calls `fs/read_text_file`
+  (absolute, root-confined path) and returns the CLIENT's content, not the
+  disk's; absent, and explicitly `false`, both fall through to the local
+  read and NEVER send `fs/read_text_file` (asserted against the whole
+  connection's message log, not just the one call); `shell_exec` sends no
+  `terminal/*` frame with `terminal: true` advertised, or without it — same
+  outcome either way, proving the "unconditional" half of the terminal
+  decision, not just the "absent" half.
+
+The load-bearing habit `permission.process.test.ts` established (assert the
+request was SENT, not only that the outcome matches) is reused here for the
+fs read case: "the tool returned the right content" would pass identically
+against a `read_file` that always reads locally and coincidentally matches —
+the tests assert the `fs/read_text_file` frame's presence AND its absence,
+on the wire, in the matching configuration.

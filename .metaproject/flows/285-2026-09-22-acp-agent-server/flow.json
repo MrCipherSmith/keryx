@@ -9,12 +9,12 @@
   "title": "Expose the keryx harness over the Agent Client Protocol so any ACP client can drive it",
   "status": "in-progress",
   "createdAt": "2026-09-22T18:18:38.900Z",
-  "updatedAt": "2026-09-22T19:10:46.049Z",
+  "updatedAt": "2026-09-22T19:47:13.627Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:f888c488477de34a7eb6fcdda32541db74405d593f6d0143dfe3a01126674312",
+  "acChecksum": "sha256:4f943bab35869deaf6bfdd0e035885a161283ec649e0a688c7a4a1dd922c9c13",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -169,7 +169,7 @@
       "id": "T9",
       "title": "session/request_permission wired to the policy ask path, denial honoured",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
@@ -185,7 +185,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -196,8 +197,14 @@
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T19:30:07.076Z",
+            "outcome": "started",
+            "detail": "sonnet: cancel, list, load"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -378,6 +385,21 @@
       "at": "2026-09-22T19:10:46.049Z",
       "event": "task-attempt",
       "detail": "T9: started (attempt 1) — opus: permission path"
+    },
+    {
+      "at": "2026-09-22T19:30:06.974Z",
+      "event": "task-done",
+      "detail": "T9: session/request_permission wired to the policy ask path, denial honoured"
+    },
+    {
+      "at": "2026-09-22T19:30:07.076Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — sonnet: cancel, list, load"
+    },
+    {
+      "at": "2026-09-22T19:47:13.627Z",
+      "event": "ac-updated",
+      "detail": "AC6 as frozen demanded that writes route through fs/write_text_file. apply_patch applies a multi-file diff atomically through git; the ACP write method writes one file's whole content with no diff semantics and no cross-file atomicity, so routing it would be a redesign, not a capability branch. AC6 now states what the design guarantees — reads route when advertised, writes and shell stay local with the reason recorded, and no absent capability is ever called — and the routing work is left to a follow-up flow."
     }
   ]
 }
