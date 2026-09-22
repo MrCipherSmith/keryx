@@ -44,6 +44,7 @@
 import type { SlashCommandOption } from "../commands/agent-commands";
 import { formatVersionUpdateAdvisory, type VersionCheckResult } from "../lib/version-check";
 import { deriveTranscriptPalette, getTheme, onThemeChange, type Theme } from "./theme";
+import { boldChunk, dimChunk, roleChunk } from "./theme-text";
 import { destroyModalHost } from "./modal-host";
 import { currentDebugRun, debugEvent } from "./debug-log";
 import { attachRendererGuards } from "./renderer-debug";
@@ -673,7 +674,7 @@ export async function createShellChrome(
         const advisory = formatSidebarVersionUpdateAdvisory(result);
         if (!alive || advisory === undefined) return;
         try {
-          versionNotice.content = otui.t`${otui.yellow(advisory)}`;
+          versionNotice.content = otui.t`${roleChunk(otui, "attention", advisory)}`;
         } catch {
           // The renderer may have been torn down between settlement and paint.
         }
@@ -696,7 +697,7 @@ export async function createShellChrome(
     }
   };
   const showToast = (message: string): void => {
-    toastText.content = otui.t`${otui.green(`✓ ${message}`)}`;
+    toastText.content = otui.t`${roleChunk(otui, "ok", `✓ ${message}`)}`;
     clearToastTimer();
     toastTimer = setTimeout(() => {
       toastText.content = "";
@@ -734,14 +735,14 @@ export async function createShellChrome(
   });
   const headerLeft = new otui.TextRenderable(r, {
     id: "header-left",
-    content: otui.t`${otui.bold(`◆ ${opts.title}`)}`,
+    content: otui.t`${boldChunk(otui, `◆ ${opts.title}`)}`,
   });
   header.add(headerLeft);
   const headerRight = new otui.TextRenderable(r, { id: "header-right", content: "" });
   header.add(headerRight);
   main.add(header);
   const paintDim = (target: Text, text: string): void => {
-    target.content = text.length === 0 ? "" : otui.t`${otui.dim(text)}`;
+    target.content = text.length === 0 ? "" : otui.t`${dimChunk(otui, text)}`;
   };
   paintDim(headerRight, opts.headerMeta ?? "");
 
@@ -1095,9 +1096,9 @@ export async function createShellChrome(
     paddingLeft: 1,
     paddingRight: 1,
   });
-  const footerLeft = new otui.TextRenderable(r, { id: "footer-left", content: otui.t`${otui.dim(opts.footerHint)}` });
+  const footerLeft = new otui.TextRenderable(r, { id: "footer-left", content: otui.t`${dimChunk(otui, opts.footerHint)}` });
   footer.add(footerLeft);
-  const footerRight = new otui.TextRenderable(r, { id: "footer-right", content: otui.t`${otui.dim(opts.status)}` });
+  const footerRight = new otui.TextRenderable(r, { id: "footer-right", content: otui.t`${dimChunk(otui, opts.status)}` });
   footer.add(footerRight);
   main.add(footer);
 
@@ -1125,22 +1126,22 @@ export async function createShellChrome(
       return;
     }
     if (!busy) {
-      footerLeft.content = otui.t`${otui.dim(opts.footerHint)}`;
-      footerRight.content = otui.t`${otui.dim(status)}`;
+      footerLeft.content = otui.t`${dimChunk(otui, opts.footerHint)}`;
+      footerRight.content = otui.t`${dimChunk(otui, status)}`;
       return;
     }
     const frame = SPINNER[spinIdx % SPINNER.length] ?? "⠋";
     const secs = ((Date.now() - busyStartedAt) / 1000).toFixed(1);
     const line = `${frame} ${busyPhase} · ${secs}s`;
-    footerLeft.content = otui.t`${otui.yellow(line)}`;
+    footerLeft.content = otui.t`${roleChunk(otui, "attention", line)}`;
     // The footer's right slot carries the permission mode while a turn runs
     // (provider/model stays in the header title); idle restores the status.
     const perm = opts.permissionMode?.();
-    footerRight.content = otui.t`${otui.dim(
+    footerRight.content = otui.t`${dimChunk(otui, 
       perm !== undefined && perm.length > 0 ? `mode ${perm}` : status,
     )}`;
     if (liveStatus !== undefined) {
-      liveStatus.content = otui.t`${otui.dim(line)}`;
+      liveStatus.content = otui.t`${dimChunk(otui, line)}`;
     }
   };
 
@@ -1163,7 +1164,7 @@ export async function createShellChrome(
     spinIdx = 0;
     liveStatus = new otui.TextRenderable(r, {
       id: `ls${uid++}`,
-      content: otui.t`${otui.dim(`⠋ ${phase} · 0.0s`)}`,
+      content: otui.t`${dimChunk(otui, `⠋ ${phase} · 0.0s`)}`,
       marginTop: 1,
     });
     transcript.add(liveStatus);

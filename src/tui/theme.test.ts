@@ -15,6 +15,7 @@ import {
   parseThemeId,
   persistThemeId,
   resolveTheme,
+  roleColor,
   themeLabel,
 } from "./theme";
 
@@ -81,8 +82,13 @@ test("every palette keeps primary text and status colors readable", () => {
     expect(contrast(theme.text, theme.bg), `${id}: text/bg`).toBeGreaterThanOrEqual(4.5);
     expect(contrast(theme.text, theme.panel), `${id}: text/panel`).toBeGreaterThanOrEqual(4.5);
     expect(contrast(theme.muted, theme.bg), `${id}: muted/bg`).toBeGreaterThanOrEqual(3);
-    for (const slot of ["assistant", "tool", "focus", "error", "ok"] as const) {
+    // `side` belongs here since the semantic-tone change: the side-worker header
+    // used to be OpenTUI's fixed `otui.magenta` (#FF00FF, terminal-independent),
+    // which is now the `side` SLOT — so it is held to the same floor as the other
+    // accents, on both surfaces it is painted on.
+    for (const slot of ["assistant", "tool", "focus", "error", "ok", "side"] as const) {
       expect(contrast(theme[slot], theme.bg), `${id}: ${slot}/bg`).toBeGreaterThanOrEqual(3);
+      expect(contrast(theme[slot], theme.panel), `${id}: ${slot}/panel`).toBeGreaterThanOrEqual(3);
     }
   }
 });
@@ -168,4 +174,26 @@ test("formatThemeList marks the active theme", () => {
   expect(text).toContain("  groknight");
   expect(themeLabel("auto")).toContain("auto");
   expect(THEME_IDS).toHaveLength(13);
+});
+
+test("roleColor resolves every TextRole to a slot of the ACTIVE theme", () => {
+  const previous = getThemeId();
+  try {
+    applyThemeId("grokday", "light");
+    const light = resolveTheme("grokday");
+    expect(roleColor("text")).toBe(light.text);
+    expect(roleColor("muted")).toBe(light.muted);
+    expect(roleColor("accent")).toBe(light.tool);
+    expect(roleColor("attention")).toBe(light.focus);
+    expect(roleColor("ok")).toBe(light.ok);
+    expect(roleColor("error")).toBe(light.error);
+    expect(roleColor("side")).toBe(light.side);
+    // The property the fixed `otui.cyan`/`otui.yellow` hexes failed: every role
+    // a light palette can be asked to paint is readable on that palette's bg.
+    for (const role of ["text", "muted", "accent", "attention", "ok", "error", "side"] as const) {
+      expect(contrast(roleColor(role), light.bg), `grokday: ${role}/bg`).toBeGreaterThanOrEqual(3);
+    }
+  } finally {
+    applyThemeId(previous);
+  }
 });

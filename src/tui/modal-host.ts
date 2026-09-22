@@ -13,6 +13,7 @@
 import type { ShellChrome } from "./shell-chrome";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
 import { getTheme, onThemeChange } from "./theme";
+import { boldChunk, dimChunk } from "./theme-text";
 import { clearTranscriptChildren } from "./transcript-blocks";
 
 type OpenTui = typeof import("@opentui/core");
@@ -271,8 +272,8 @@ function paintTabs(state: HostState): void {
       new state.otui.TextRenderable(state.chrome.renderer, {
         id: `modal-tab-${tab.id}`,
         content: active
-          ? state.otui.t`${prefix}${state.otui.bold(label)}`
-          : state.otui.t`${prefix}${state.otui.dim(label)}`,
+          ? state.otui.t`${prefix}${boldChunk(state.otui, label)}`
+          : state.otui.t`${prefix}${dimChunk(state.otui, label)}`,
         fg: active ? theme.focus : theme.muted,
         onMouseDown: () => {
           if (!state.open || state.input === undefined || tab.id === state.active) {
@@ -288,13 +289,13 @@ function paintTabs(state: HostState): void {
 function paintHeader(state: HostState, title: string): void {
   const maxTitle = Math.max(8, innerWidthOf(state) - CLOSE_HINT.length - 1);
   const shown = title.length > maxTitle ? `${title.slice(0, Math.max(1, maxTitle - 1))}…` : title;
-  state.titleText.content = state.otui.t`${state.otui.bold(shown)}`;
-  state.closeText.content = state.otui.t`${state.otui.dim(CLOSE_HINT)}`;
+  state.titleText.content = state.otui.t`${boldChunk(state.otui, shown)}`;
+  state.closeText.content = state.otui.t`${dimChunk(state.otui, CLOSE_HINT)}`;
 }
 
 function paintFooter(state: HostState, actions: readonly ModalFooterAction[] | undefined): void {
   const items = actions !== undefined && actions.length > 0 ? actions : DEFAULT_FOOTER;
-  state.footerText.content = state.otui.t`${state.otui.dim(formatModalFooter(items))}`;
+  state.footerText.content = state.otui.t`${dimChunk(state.otui, formatModalFooter(items))}`;
 }
 
 function unmountActiveTab(state: HostState): void {

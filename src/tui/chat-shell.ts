@@ -45,6 +45,7 @@ import packageJson from "../../package.json" with { type: "json" };
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
 import { appendUserEcho, clearTranscriptChildren, createAssistantMessageStream } from "./transcript-blocks";
 import { applyThemeId, getThemeId, loadPersistedThemeId, parseThemeId, persistThemeId, themeLabel, formatThemeList } from "./theme";
+import { boldChunk, dimChunk, roleChunk } from "./theme-text";
 import { isThemeCommand, openThemePicker } from "./theme-picker";
 import { mountBalancePanel } from "./balance-panel";
 import type { VersionCheckResult } from "../lib/version-check";
@@ -369,17 +370,17 @@ export async function mountChatShell(
   // Sidebar panels go in `sidebarTop`: the chrome pins the toast to the bottom
   // with a flexGrow spacer, so anything added to `sidebar` itself lands beside it.
   const sidebar = chrome.sidebarTop;
-  sidebar.add(new otui.TextRenderable(r, { id: "sb-title", content: otui.t`${otui.bold("keryx")}` }));
-  sidebar.add(new otui.TextRenderable(r, { id: "sb-mode", content: otui.t`${otui.dim("chat · no tools")}` }));
-  sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
-  const sbModel = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(label())}` });
+  sidebar.add(new otui.TextRenderable(r, { id: "sb-title", content: otui.t`${boldChunk(otui, "keryx")}` }));
+  sidebar.add(new otui.TextRenderable(r, { id: "sb-mode", content: otui.t`${dimChunk(otui, "chat · no tools")}` }));
+  sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${dimChunk(otui, "Model")}`, marginTop: 1 }));
+  const sbModel = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${dimChunk(otui, label())}` });
   sidebar.add(sbModel);
   // Balance under Model: live for the active provider, fetched on mount/click.
   const balancePanel = mountBalancePanel(sidebar, otui, r, {
     provider: selection.provider,
   });
-  sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${otui.dim("Context")}`, marginTop: 1 }));
-  const sbContext = new otui.TextRenderable(r, { id: "sb-ctx-v", content: otui.t`${otui.dim("~0 tokens (est)")}` });
+  sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${dimChunk(otui, "Context")}`, marginTop: 1 }));
+  const sbContext = new otui.TextRenderable(r, { id: "sb-ctx-v", content: otui.t`${dimChunk(otui, "~0 tokens (est)")}` });
   sidebar.add(sbContext);
 
   const messages = createAssistantMessageStream(otui, r, transcript);
@@ -397,13 +398,13 @@ export async function mountChatShell(
   const paintContext = (): void => {
     const est = estimateContextTokens(seen);
     chrome.setHeaderMeta(`~${fmtTokens(est)}`);
-    sbContext.content = otui.t`${otui.dim(`~${est.toLocaleString()} tokens (est)`)}`;
+    sbContext.content = otui.t`${dimChunk(otui, `~${est.toLocaleString()} tokens (est)`)}`;
   };
 
   const paintLabels = (): void => {
     chrome.setTitle(`keryx · chat · ${label()}`);
     chrome.setStatus(label());
-    sbModel.content = otui.t`${otui.dim(label())}`;
+    sbModel.content = otui.t`${dimChunk(otui, label())}`;
     void balancePanel.setProvider(selection.provider);
   };
 
@@ -432,7 +433,7 @@ export async function mountChatShell(
       }
     },
     onTurnStart: () => {
-      append(otui.t`${otui.cyan("●")} ${otui.bold("keryx")}`);
+      append(otui.t`${roleChunk(otui, "accent", "●")} ${boldChunk(otui, "keryx")}`);
       chrome.startBusy("waiting for model");
     },
     onText: (chunk) => {
@@ -461,7 +462,7 @@ export async function mountChatShell(
       if (body.length === 0) {
         return;
       }
-      append(body.includes("[error]") ? otui.t`${otui.red(body)}` : otui.t`${otui.dim(body)}`);
+      append(body.includes("[error]") ? otui.t`${roleChunk(otui, "error", body)}` : otui.t`${dimChunk(otui, body)}`);
     },
   });
 
@@ -507,7 +508,7 @@ export async function mountChatShell(
         if (arg.length > 0) {
           const next = parseThemeId(arg);
           if (next === undefined) {
-            append(otui.t`${otui.dim(`Unknown theme '${arg}'.\n${formatThemeList(getThemeId())}`)}`);
+            append(otui.t`${dimChunk(otui, `Unknown theme '${arg}'.\n${formatThemeList(getThemeId())}`)}`);
             return;
           }
           applyThemeId(next, r.themeMode);
@@ -564,7 +565,7 @@ export async function mountChatShell(
     }
     if (result === "deferred") {
       append(
-        otui.t`${otui.yellow("◇ a reply is still streaming — command deferred. Wait for it to finish.")}`,
+        otui.t`${roleChunk(otui, "attention", "◇ a reply is still streaming — command deferred. Wait for it to finish.")}`,
       );
     }
   });
@@ -572,7 +573,7 @@ export async function mountChatShell(
   // Started here, not awaited: the driver runs for the life of the shell and
   // resolves only once the line stream ends.
   const done = opts.runShell(bridge.io, deps).catch((cause: unknown) => {
-    append(otui.t`${otui.red(`[error] ${cause instanceof Error ? cause.message : String(cause)}`)}`);
+    append(otui.t`${roleChunk(otui, "error", `[error] ${cause instanceof Error ? cause.message : String(cause)}`)}`);
   });
 
   return {

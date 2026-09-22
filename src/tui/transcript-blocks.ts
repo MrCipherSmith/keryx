@@ -32,6 +32,7 @@ import {
   type MdSegment,
 } from "../lib/md-blocks";
 import { deriveTranscriptPalette, getTheme, type TranscriptPalette } from "./theme";
+import { dimChunk, roleChunk } from "./theme-text";
 
 // --- registry (pure) -------------------------------------------------------
 
@@ -949,7 +950,7 @@ export function createBlockView(
     const line = state.summary.length > 0 ? `${label}  ${state.summary}` : label;
     if (focused) {
       header.fg = undefined;
-      header.content = otui.t`${otui.yellow(`❯ ${line}`)}`;
+      header.content = otui.t`${roleChunk(otui, "attention", `❯ ${line}`)}`;
       return;
     }
     // Theme-driven, not `otui.red`/`otui.cyan`: those are OpenTUI's fixed
@@ -963,7 +964,7 @@ export function createBlockView(
       return;
     }
     header.fg = undefined;
-    header.content = otui.t`${otui.dim(line)}`;
+    header.content = otui.t`${dimChunk(otui, line)}`;
   };
 
   const dropBody = (): void => {
@@ -1104,7 +1105,7 @@ export function appendUserEcho(
   box.add(
     new otui.TextRenderable(renderer, {
       id: `${options.id}-t`,
-      content: fullWidth ? text : otui.t`${otui.dim(text)}`,
+      content: fullWidth ? text : otui.t`${dimChunk(otui, text)}`,
       ...(fullWidth ? { fg: getTheme().user, wrapMode: "word" as const } : {}),
     }),
   );

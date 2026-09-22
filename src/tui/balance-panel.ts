@@ -12,6 +12,7 @@
 // the shell or spam the transcript. Clicking the value re-fetches.
 import { balanceCapableProvider, fetchProviderBalance, providerApiKey, resolveProviderBaseUrl, type ProviderBalance } from "../commands/providers";
 import { envWithSavedApiKeys } from "../lib/shell-config";
+import { dimChunk } from "./theme-text";
 
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
@@ -99,13 +100,13 @@ export function mountBalancePanel(
     }
     const label = new core.TextRenderable(r, {
       id: "sb-balance-k",
-      content: core.t`${core.dim("Balance")}`,
+      content: core.t`${dimChunk(core, "Balance")}`,
       marginTop: 1,
     });
     box.add(label);
     const value = new core.TextRenderable(r, {
       id: "sb-balance-v",
-      content: core.t`${core.dim("…")}`,
+      content: core.t`${dimChunk(core, "…")}`,
       onMouseDown: () => {
         void refresh();
       },
@@ -117,7 +118,7 @@ export function mountBalancePanel(
   const paint = (balance: ProviderBalance | undefined): void => {
     current = balance;
     if (textNode !== undefined) {
-      textNode.content = core.t`${core.dim(formatBalance(balance))}`;
+      textNode.content = core.t`${dimChunk(core, formatBalance(balance))}`;
     }
   };
 

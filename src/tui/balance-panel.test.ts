@@ -56,6 +56,9 @@ const fakeOtui = {
   TextRenderable: FakeText,
   BoxRenderable: FakeBox,
   t: tag,
+  // The real module always has `fg`: the panel's dim lines are painted through
+  // `dimChunk`, which names a colour from the ACTIVE theme.
+  fg: (_color: string) => (x: unknown) => x,
   bold: (x: unknown) => x,
   dim: (x: unknown) => x,
 };

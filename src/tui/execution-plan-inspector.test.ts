@@ -235,6 +235,6 @@ test("a session with no plan renders the empty state instead of an empty box", (
 
 test("styling degrades to plain text when the host has no style helpers", () => {
   // A headless host (and every test above) hands us exactly this much.
-  expect(stylePlanText({}, "▶ in progress  X", "cyan")).toBe("▶ in progress  X");
+  expect(stylePlanText({}, "▶ in progress  X", "accent")).toBe("▶ in progress  X");
   expect(stylePlanText(undefined, "plain", "plain")).toBe("plain");
 });

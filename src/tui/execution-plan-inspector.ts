@@ -15,6 +15,7 @@
 // revision — none of which the sidebar has room for.
 
 import { openModal } from "./modal-host";
+import { boldChunk, dimChunk, roleChunk } from "./theme-text";
 import {
   subscribeExecutionPlans,
   type ExecutionPlan,
@@ -195,27 +196,30 @@ type PlanBody = {
 
 type StyleHelpers = {
   t?: (strings: TemplateStringsArray, ...values: unknown[]) => unknown;
+  fg?: (color: string) => (text: string) => unknown;
   bold?: (text: string) => unknown;
   dim?: (text: string) => unknown;
-  cyan?: (text: string) => unknown;
-  red?: (text: string) => unknown;
-  yellow?: (text: string) => unknown;
 };
 
-type Tone = "bold" | "dim" | "cyan" | "red" | "yellow" | "plain";
+/**
+ * The role a plan row is painted in. A role resolves through `theme.ts` to the
+ * ACTIVE palette's colour; the names replaced here were OpenTUI's own helpers,
+ * whose fixed hexes vanish on the light palettes (see `theme-text.ts`).
+ */
+type Tone = "strong" | "muted" | "accent" | "attention" | "error" | "plain";
 
 function toneFor(status: ExecutionPlanStatus): Tone {
   switch (status) {
     case "proposed":
-      // Yellow, not red: nothing failed — a human is being asked.
-      return "yellow";
+      // Attention, not error: nothing failed — a human is being asked.
+      return "attention";
     case "in_progress":
-      return "cyan";
+      return "accent";
     case "blocked":
-      return "red";
+      return "error";
     case "completed":
     case "skipped":
-      return "dim";
+      return "muted";
     case "pending":
       return "plain";
   }
@@ -229,11 +233,20 @@ function toneFor(status: ExecutionPlanStatus): Tone {
 export function stylePlanText(otui: unknown, text: string, tone: Tone): unknown {
   const helpers = (otui ?? {}) as StyleHelpers;
   const tag = helpers.t;
-  const styler = tone === "plain" ? undefined : helpers[tone];
-  if (typeof tag !== "function" || typeof styler !== "function") {
+  if (typeof tag !== "function" || typeof helpers.fg !== "function" || tone === "plain") {
     return text;
   }
-  return tag`${styler(text)}`;
+  // Every arm resolves through the ACTIVE theme's palette, never through
+  // `otui.dim`/`otui.bold`'s own uncoloured (terminal-default) rendering.
+  const core = otui as Parameters<typeof roleChunk>[0];
+  switch (tone) {
+    case "strong":
+      return tag`${boldChunk(core, text)}`;
+    case "muted":
+      return tag`${dimChunk(core, text)}`;
+    default:
+      return tag`${roleChunk(core, tone, text)}`;
+  }
 }
 
 export function presentExecutionPlanInspector(
@@ -268,17 +281,17 @@ export function presentExecutionPlanInspector(
       add("plan-meta", formatPlanMeta(plan, dir));
       return;
     }
-    add("plan-summary", stylePlanText(otui, formatPlanSummary(plan), "bold"));
+    add("plan-summary", stylePlanText(otui, formatPlanSummary(plan), "strong"));
     if (plan === undefined || plan.items.length === 0) {
-      add("plan-empty", stylePlanText(otui, PLAN_EMPTY_TEXT, "dim"), 1);
+      add("plan-empty", stylePlanText(otui, PLAN_EMPTY_TEXT, "muted"), 1);
       return;
     }
     add(
       "plan-bar",
-      stylePlanText(otui, `${planProgressBar(plan)}  ${planCounts(plan).completed}/${plan.items.length}`, "cyan"),
+      stylePlanText(otui, `${planProgressBar(plan)}  ${planCounts(plan).completed}/${plan.items.length}`, "accent"),
       1,
     );
-    add("plan-legend", stylePlanText(otui, formatPlanLegend(), "dim"), 1);
+    add("plan-legend", stylePlanText(otui, formatPlanLegend(), "muted"), 1);
     plan.items.forEach((item, index) => {
       add(
         `plan-item-${item.id}`,

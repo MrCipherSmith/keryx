@@ -69,6 +69,7 @@ function resolveAcceptDelay(request: ComposerChoiceRequest): number {
 }
 
 import { getTheme } from "./theme";
+import { boldChunk, dimChunk, roleChunk } from "./theme-text";
 import { containsNode } from "./modal-host";
 import { debugEvent } from "./debug-log";
 
@@ -244,7 +245,7 @@ function presentComposerChoice(
 
     const title = new otui.TextRenderable(r, {
       id: `ch-title-${Date.now()}`,
-      content: otui.t`${otui.bold(request.title)} ${otui.dim(hasScrollableSubtitle ? "↑/↓ Enter · Esc · ctrl+o scroll cmd" : "↑/↓ Enter · Esc")}`,
+      content: otui.t`${boldChunk(otui, request.title)} ${dimChunk(otui, hasScrollableSubtitle ? "↑/↓ Enter · Esc · ctrl+o scroll cmd" : "↑/↓ Enter · Esc")}`,
     });
     dock.add(title);
 
@@ -262,7 +263,7 @@ function presentComposerChoice(
         subtitleScroll.content.add(
           new otui.TextRenderable(r, {
             id: `ch-sub-line-${i}-${Date.now()}`,
-            content: otui.t`${otui.yellow(line)}`,
+            content: otui.t`${roleChunk(otui, "attention", line)}`,
           }),
         );
       }
@@ -272,7 +273,7 @@ function presentComposerChoice(
       // ctrl+o hint, exactly the pre-rewrite behavior for short subtitles.
       subtitleLine = new otui.TextRenderable(r, {
         id: `ch-sub-${Date.now()}`,
-        content: otui.t`${otui.yellow(subtitleLines[0] ?? "")}`,
+        content: otui.t`${roleChunk(otui, "attention", subtitleLines[0] ?? "")}`,
       });
       dock.add(subtitleLine);
     }
@@ -298,8 +299,8 @@ function presentComposerChoice(
         const active = i === selected;
         row.box.backgroundColor = active ? theme.highlight : undefined;
         row.label.fg = active ? theme.focus : theme.text;
-        row.label.content = active ? otui.t`${otui.bold(o.displayLabel)}` : o.displayLabel;
-        row.desc.content = otui.t`${otui.dim(o.description.length > 0 ? o.description : " ")}`;
+        row.label.content = active ? otui.t`${boldChunk(otui, o.displayLabel)}` : o.displayLabel;
+        row.desc.content = otui.t`${dimChunk(otui, o.description.length > 0 ? o.description : " ")}`;
         if (active) {
           // Keyboard nav (↑/↓) must keep the highlighted row on-screen once
           // the list is taller than `MAX_OPTIONS_ROWS` — a mouse click never
@@ -336,7 +337,7 @@ function presentComposerChoice(
       const label = new otui.TextRenderable(r, { id: `ch-opt-l-${i}-${Date.now()}`, content: o.displayLabel });
       const desc = new otui.TextRenderable(r, {
         id: `ch-opt-d-${i}-${Date.now()}`,
-        content: otui.t`${otui.dim(o.description.length > 0 ? o.description : " ")}`,
+        content: otui.t`${dimChunk(otui, o.description.length > 0 ? o.description : " ")}`,
       });
       box.add(label);
       box.add(desc);
@@ -357,7 +358,7 @@ function presentComposerChoice(
       for (const [i, line] of lines.entries()) {
         const renderable = new otui.TextRenderable(r, {
           id: `ch-ctx-${i}-${Date.now()}`,
-          content: otui.t`${otui.dim(line)}`,
+          content: otui.t`${dimChunk(otui, line)}`,
         });
         contextLines.push(renderable);
         try {

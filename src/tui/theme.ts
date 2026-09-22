@@ -65,6 +65,15 @@ export type TranscriptPalette = {
   diffDeleteBackground: string;
 };
 
+/**
+ * The de-emphasis axis every surface can name without knowing a palette slot.
+ * OpenTUI's own named helpers (`otui.cyan`, `otui.yellow`, …) are fixed,
+ * terminal-independent hexes — see `theme-text.ts` for why they are unusable —
+ * so a surface asks for a ROLE and this module answers with the active theme's
+ * colour for it.
+ */
+export type TextRole = "text" | "muted" | "accent" | "attention" | "ok" | "error" | "side";
+
 function hexChannels(hex: string): [number, number, number] {
   return [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16)) as [number, number, number];
 }
@@ -134,6 +143,33 @@ export function deriveTranscriptPalette(theme: Theme): TranscriptPalette {
   };
 }
 
+/**
+ * The active theme's colour for a semantic `TextRole`.
+ *
+ * `accent` is the `tool` slot and `attention` the `focus` slot: those are the two
+ * roles the surfaces kept spelling as fixed ANSI-bright helpers (a tool call
+ * marker was `otui.cyan`, a warning `otui.yellow`), and the palettes already
+ * carry a deliberately softer answer for each.
+ */
+export function roleColor(role: TextRole, theme: Theme = getTheme()): string {
+  switch (role) {
+    case "text":
+      return theme.text;
+    case "muted":
+      return theme.muted;
+    case "accent":
+      return theme.tool;
+    case "attention":
+      return theme.focus;
+    case "ok":
+      return theme.ok;
+    case "error":
+      return theme.error;
+    case "side":
+      return theme.side;
+  }
+}
+
 export const THEME_NAMES: readonly ThemeName[] = [
   "groknight",
   "tokyonight",
@@ -152,6 +188,17 @@ export const THEME_IDS: readonly ThemeId[] = ["auto", ...THEME_NAMES];
 export const DEFAULT_THEME_ID: ThemeId = "groknight";
 
 const LIGHT_THEME_NAMES = new Set<ThemeName>(["grokday", "paper", "frost", "sand", "mint"]);
+
+/**
+ * True for the palettes authored for a light background. One caller needs the
+ * distinction rather than a colour: `dimChunk` (theme-text.ts) must pick a
+ * DIFFERENT mechanism to de-emphasise with on each, because OpenTUI's DIM
+ * attribute lowers luminance — which de-emphasises a light foreground on a dark
+ * background and does the exact opposite for a dark one on a light background.
+ */
+export function isLightTheme(name: ThemeName): boolean {
+  return LIGHT_THEME_NAMES.has(name);
+}
 
 const THEMES: Record<ThemeName, Theme> = {
   groknight: {
@@ -213,7 +260,7 @@ const THEMES: Record<ThemeName, Theme> = {
     user: "#c8d0d0",
     assistant: "#5ec8c8",
     tool: "#5ec8c8",
-    side: "#5a3a6a",
+    side: "#b39ddb",
     focus: "#ffd166",
     error: "#e05a5a",
     ok: "#6bcf6b",

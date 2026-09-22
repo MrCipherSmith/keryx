@@ -56,6 +56,7 @@ import {
   type BlockState,
 } from "./transcript-blocks";
 import { hugWidth } from "../lib/md-blocks";
+import { applyThemeId, getTheme, getThemeId } from "./theme";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
@@ -3858,4 +3859,176 @@ describe("session switch rebinds the slate (/resume, /sessions)", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+});
+
+// --- light-palette readability (the /theme report) --------------------------
+//
+// Report: with a light theme the text colour is light, so it is invisible on a
+// light background — and the bright cyan for commands in the feed looks
+// especially bad. Two independent causes, both asserted here as CONTRAST against
+// the colour actually painted behind each span, so a change that merely compiles
+// cannot pass:
+//
+//   1. `otui.cyan`/`otui.yellow`/… are OpenTUI's FIXED hexes (#00FFFF, #FFFF00):
+//      1.15:1 and 1.02:1 against grokday's #f5f5f5 — painted but unreadable.
+//   2. Text with no `fg` at all is drawn in the TERMINAL's default foreground,
+//      which stays light on a dark terminal over keryx's own light background.
+//
+// `src/capability/tui-theme.test.ts` bans (1) statically across the runtime tree;
+// this is the behavioural half, on the REAL chrome and the REAL io wiring.
+
+/** `#rrggbb` → the `[r,g,b,a]` form `captureSpans()` reports. */
+function rgbaOf(hex: string): [number, number, number, number] {
+  const channels = [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16));
+  return [channels[0] ?? 0, channels[1] ?? 0, channels[2] ?? 0, 255];
+}
+
+/** WCAG relative luminance of a `captureSpans()` colour tuple. */
+function rgbaLuminance(rgba: readonly number[]): number {
+  const linear = [0, 1, 2].map((index) => {
+    const value = (rgba[index] ?? 0) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * (linear[0] ?? 0) + 0.7152 * (linear[1] ?? 0) + 0.0722 * (linear[2] ?? 0);
+}
+
+/** WCAG contrast ratio between two `captureSpans()` colour tuples. */
+function rgbaContrast(a: readonly number[], b: readonly number[]): number {
+  const [light, dark] = [rgbaLuminance(a), rgbaLuminance(b)].sort((x, y) => y - x);
+  return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+}
+
+otuiTest("light theme (grokday): feed and chrome text is theme-coloured and readable, never a fixed ANSI hex", async () => {
+  const otui = requireOtui();
+  const previous = getThemeId();
+  applyThemeId("grokday", "light");
+  try {
+    const light = getTheme();
+    const setup = await otui.testing.createTestRenderer({ width: 100, height: 26 });
+    // Mirrors `paintRendererBackground`: the frame is cleared with the theme's own
+    // bg, so every assertion below is against #f5f5f5 and NOT against a default
+    // black that would make any foreground look readable.
+    setup.renderer.setBackgroundColor(light.bg);
+    const chrome = await createShellChrome(otui.core, setup.renderer, {
+      title: "keryx · agent",
+      status: "s/m",
+      footerHint: "/ commands",
+      placeholder: "ask keryx",
+      commands: commandsForMode("agent"),
+    });
+    const io = createTuiAgentIo(otui.core, setup.renderer, chrome.transcript);
+    io.onToolCall?.("read_file", '{"path":"src/tui/theme.ts"}');
+    io.onSystem?.("◇ a system notice");
+    chrome.setStatus("↑1.2K ↓340");
+    appendUserEcho(otui.core, setup.renderer, chrome.transcript, { id: "echo-1", line: "/theme grokday" });
+    await setup.flush();
+
+    const spans = setup.captureSpans();
+    const spanFor = (needle: string): { fg: number[]; bg: number[] } | undefined => {
+      for (const line of spans.lines) {
+        for (const span of line.spans) {
+          if (span.text.includes(needle)) {
+            return { fg: span.fg.toInts(), bg: span.bg.toInts() };
+          }
+        }
+      }
+      return undefined;
+    };
+
+    // The reported one: the tool-call marker that used to BE `otui.cyan`.
+    const tool = spanFor("⚙ read_file");
+    expect(tool).toBeDefined();
+    if (tool !== undefined) {
+      expect(tool.bg).toEqual(rgbaOf(light.bg)); // really on the light canvas
+      expect(tool.fg).not.toEqual(rgbaOf("#00ffff"));
+      expect(tool.fg).toEqual(rgbaOf(light.tool));
+      expect(rgbaContrast(tool.fg, tool.bg)).toBeGreaterThanOrEqual(3);
+    }
+
+    // A dim/secondary line: it had no `fg` before, so the terminal's own default
+    // (white) was what landed on keryx's #f5f5f5.
+    const notice = spanFor("◇ a system notice");
+    expect(notice).toBeDefined();
+    if (notice !== undefined) {
+      expect(notice.fg).not.toEqual(rgbaOf("#ffffff"));
+      expect(notice.fg).toEqual(rgbaOf(light.muted));
+      expect(rgbaContrast(notice.fg, notice.bg)).toBeGreaterThanOrEqual(3);
+    }
+
+    // The operator echo in the feed — the other half of the same report.
+    const echo = spanFor("❯ /theme grokday");
+    expect(echo).toBeDefined();
+    if (echo !== undefined) {
+      expect(echo.fg).toEqual(rgbaOf(light.muted));
+      expect(rgbaContrast(echo.fg, echo.bg)).toBeGreaterThanOrEqual(3);
+    }
+
+    // Chrome: the header title (bold + `text`) and the footer status (muted).
+    const title = spanFor("keryx · agent");
+    expect(title).toBeDefined();
+    if (title !== undefined) {
+      expect(title.fg).toEqual(rgbaOf(light.text));
+      expect(rgbaContrast(title.fg, title.bg)).toBeGreaterThanOrEqual(3);
+    }
+    const status = spanFor("↑1.2K ↓340");
+    expect(status).toBeDefined();
+    if (status !== undefined) {
+      expect(status.fg).toEqual(rgbaOf(light.muted));
+      expect(rgbaContrast(status.fg, status.bg)).toBeGreaterThanOrEqual(3);
+    }
+
+    chrome.destroy();
+    setup.renderer.destroy();
+  } finally {
+    applyThemeId(previous);
+  }
+});
+
+otuiTest("/theme switch remaps tone-painted feed text to the new palette's slots (painted frame: known gap)", async () => {
+  const otui = requireOtui();
+  const previous = getThemeId();
+  applyThemeId("groknight", "dark");
+  try {
+    const dark = getTheme();
+    const setup = await otui.testing.createTestRenderer({ width: 100, height: 26 });
+    setup.renderer.setBackgroundColor(dark.bg);
+    const chrome = await createShellChrome(otui.core, setup.renderer, {
+      title: "keryx · agent",
+      status: "s/m",
+      footerHint: "/ commands",
+      placeholder: "ask keryx",
+      commands: commandsForMode("agent"),
+    });
+    const io = createTuiAgentIo(otui.core, setup.renderer, chrome.transcript);
+    io.onToolCall?.("read_file", "{}");
+    await setup.flush();
+    const before = fgOf(setup.captureSpans(), "⚙ read_file");
+    expect(before).toEqual(rgbaOf(dark.tool));
+
+    // What `/theme grokday` does: applyThemeId → onThemeChange → chrome.applyTheme
+    // → recolorThemeTree, which remaps only values matching an OLD palette slot. A
+    // chunk carrying a theme SLOT (what `roleChunk` produces) moves with the
+    // palette; the fixed `otui.cyan` hex it replaced could not, which is why the
+    // reported cyan survived a switch to a light theme.
+    applyThemeId("grokday", "light");
+    await setup.flush();
+    // The REMAP contract this work guarantees: the chunk is painted from a PALETTE
+    // SLOT, so a switch moves it. That is precisely what the fixed `otui.cyan` hex
+    // could not do — it matched no slot and so survived every switch.
+    const painted = chrome.transcript.getChildren() as unknown as {
+      content?: { chunks?: { fg?: { toInts(): number[] } }[] };
+    }[];
+    expect(painted[0]?.content?.chunks?.[0]?.fg?.toInts()).toEqual(rgbaOf(getTheme().tool));
+    // KNOWN GAP, measured rather than assumed: the painted CELLS keep the previous
+    // palette until that row repaints for some other reason. Swapping the chunk
+    // values, rebuilding the StyledText AND calling requestRender() all left this
+    // captured frame at the old colour, so the fix belongs to OpenTUI's
+    // invalidation path (recolorThemeTree, shell-chrome.ts) rather than to another
+    // guess here. Asserted as it BEHAVES today, so the fix flips one line.
+    expect(fgOf(setup.captureSpans(), "⚙ read_file")).toEqual(before);
+    chrome.destroy();
+    setup.renderer.destroy();
+  } finally {
+    applyThemeId(previous);
+  }
 });

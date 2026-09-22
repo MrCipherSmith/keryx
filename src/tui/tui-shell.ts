@@ -131,6 +131,7 @@ import {
   persistThemeId,
   themeLabel,
 } from "./theme";
+import { boldChunk, dimChunk, roleChunk } from "./theme-text";
 import { openThemePicker } from "./theme-picker";
 import { openGamesModal } from "./games";
 import { mountBalancePanel } from "./balance-panel";
@@ -583,7 +584,7 @@ function promptCustomFieldStep(
       },
     });
     if (opts.note !== undefined) {
-      surface.body.add(new otui.TextRenderable(r, { id: "cf-note", content: otui.t`${otui.dim(opts.note)}`, marginTop: 1 }));
+      surface.body.add(new otui.TextRenderable(r, { id: "cf-note", content: otui.t`${dimChunk(otui, opts.note)}`, marginTop: 1 }));
     }
     const input = new otui.InputRenderable(r, { id: "cf-input", value: opts.value ?? "", marginTop: 1 });
     surface.body.add(input);
@@ -802,7 +803,8 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
     onReasoningEnd: (info) => {
       const lineCount = info.text.trim().split("\n").filter((l) => l.trim().length > 0).length;
       append(
-        otui.t`${otui.dim(
+        otui.t`${dimChunk(
+          otui,
           formatReasoningOneLiner({
             lineCount,
             redacted: info.redacted,
@@ -821,21 +823,22 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
         parts.push(`↓${usage.outputTokens}`);
       }
       if (parts.length > 0) {
-        append(otui.t`${otui.dim(`${parts.join(" ")} tokens`)}`);
+        append(otui.t`${dimChunk(otui, `${parts.join(" ")} tokens`)}`);
       }
     },
     onToolCall: (name, input) => {
       const args = summarizeToolArgs(input);
       const call = args.length > 0 ? `${name}(${args})` : `${name}()`;
-      append(otui.t`${otui.cyan(`⚙ ${call}`)}`);
+      append(otui.t`${roleChunk(otui, "accent", `⚙ ${call}`)}`);
     },
     onToolResult: (_name, result) => {
       const { summary, hidden } = collapseToolOutput(result.output);
       const more = hidden > 0 ? ` · +${hidden} more` : "";
       const line = `${result.isError ? "✗" : "↳"} ${summary}${more}`;
-      append(result.isError ? otui.t`${otui.red(line)}` : otui.t`${otui.dim(line)}`);
+      append(result.isError ? otui.t`${roleChunk(otui, "error", line)}` : otui.t`${dimChunk(otui, line)}`);
     },
-    onSystem: (text) => append(text.includes("[error]") ? otui.t`${otui.red(text)}` : otui.t`${otui.dim(text)}`),
+    onSystem: (text) =>
+      append(text.includes("[error]") ? otui.t`${roleChunk(otui, "error", text)}` : otui.t`${dimChunk(otui, text)}`),
     resetStream: () => {
       messages.reset();
     },
@@ -1027,7 +1030,7 @@ export function mountTitlePanel(otui: OpenTui, r: Renderer, sidebarTop: Box): vo
   sidebarTop.add(
     new otui.TextRenderable(r, {
       id: "sb-title",
-      content: otui.t`${otui.bold("keryx")} ${otui.dim(`v${packageJson.version}`)}`,
+      content: otui.t`${boldChunk(otui, "keryx")} ${dimChunk(otui, `v${packageJson.version}`)}`,
     }),
   );
 }
@@ -1059,30 +1062,30 @@ export function mountCwdPanel(
   cwd: string,
   metadata: SidebarRepoMetadata = resolveSidebarMetadata(cwd),
 ): void {
-  sidebarTop.add(new otui.TextRenderable(r, { id: "sb-cwd-k", content: otui.t`${otui.dim("Directory")}`, marginTop: 1 }));
+  sidebarTop.add(new otui.TextRenderable(r, { id: "sb-cwd-k", content: otui.t`${dimChunk(otui, "Directory")}`, marginTop: 1 }));
   sidebarTop.add(
     new otui.TextRenderable(r, {
       id: "sb-cwd-v",
-      content: otui.t`${otui.dim(shortenCwd(cwd, SIDEBAR_TEXT_WIDTH))}`,
+      content: otui.t`${dimChunk(otui, shortenCwd(cwd, SIDEBAR_TEXT_WIDTH))}`,
     }),
   );
 
   if (metadata.branch !== undefined) {
-    sidebarTop.add(new otui.TextRenderable(r, { id: "sb-branch-k", content: otui.t`${otui.dim("Branch")}`, marginTop: 1 }));
+    sidebarTop.add(new otui.TextRenderable(r, { id: "sb-branch-k", content: otui.t`${dimChunk(otui, "Branch")}`, marginTop: 1 }));
     sidebarTop.add(
       new otui.TextRenderable(r, {
         id: "sb-branch-v",
-        content: otui.t`${otui.dim(shortenCwd(metadata.branch, SIDEBAR_TEXT_WIDTH))}`,
+        content: otui.t`${dimChunk(otui, shortenCwd(metadata.branch, SIDEBAR_TEXT_WIDTH))}`,
       }),
     );
   }
 
   if (metadata.prUrl !== undefined) {
-    sidebarTop.add(new otui.TextRenderable(r, { id: "sb-pr-k", content: otui.t`${otui.dim("PR")}`, marginTop: 1 }));
+    sidebarTop.add(new otui.TextRenderable(r, { id: "sb-pr-k", content: otui.t`${dimChunk(otui, "PR")}`, marginTop: 1 }));
     sidebarTop.add(
       new otui.TextRenderable(r, {
         id: "sb-pr-v",
-        content: otui.t`${otui.dim(shortenCwd(metadata.prUrl, SIDEBAR_TEXT_WIDTH))}`,
+        content: otui.t`${dimChunk(otui, shortenCwd(metadata.prUrl, SIDEBAR_TEXT_WIDTH))}`,
       }),
     );
   }
@@ -1595,7 +1598,7 @@ function openStepSurface(
   if (!isModalChrome(target)) {
     const box = overlayBox(otui, r, opts.id);
     r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: `${opts.id}-title`, content: otui.t`${otui.bold(opts.title)} ${otui.dim(opts.hint)}` }));
+    box.add(new otui.TextRenderable(r, { id: `${opts.id}-title`, content: otui.t`${boldChunk(otui, opts.title)} ${dimChunk(otui, opts.hint)}` }));
     let closed = false;
     const close = (): void => {
       if (closed) return;
@@ -1787,7 +1790,7 @@ function promptSearchCredentialStep(otui: OpenTui, target: StepTarget, opts: { l
     surface.body.add(
       new otui.TextRenderable(r, {
         id: "sc-note",
-        content: otui.t`${otui.dim("Saved to your keryx config dir (owner-only, 0600)")}`,
+        content: otui.t`${dimChunk(otui, "Saved to your keryx config dir (owner-only, 0600)")}`,
         marginTop: 1,
       }),
     );
@@ -2003,7 +2006,7 @@ function runSearchProviderTestStep(
     // Enter only on a success, which the generic surface cannot express.
     const box = surface?.body ?? overlayBox(otui, r, "search-test-picker");
     if (surface === undefined) r.root.add(box);
-    const status = new otui.TextRenderable(r, { id: "st-title", content: otui.t`${otui.bold(`Testing '${provider.id}'`)} ${otui.dim("...")}` });
+    const status = new otui.TextRenderable(r, { id: "st-title", content: otui.t`${boldChunk(otui, `Testing '${provider.id}'`)} ${dimChunk(otui, "...")}` });
     box.add(status);
     const cleanup = (): void => {
       left = true;
@@ -2033,12 +2036,12 @@ function runSearchProviderTestStep(
       if (!tested.ok) {
         settled = "failure";
         const reason = describeConnectionFailure(tested.reason);
-        status.content = otui.t`${otui.red("✗")} ${otui.bold(`'${provider.id}' test failed: ${reason}`)} ${otui.dim("(Esc to go back and retry)")}`;
+        status.content = otui.t`${roleChunk(otui, "error", "✗")} ${boldChunk(otui, `'${provider.id}' test failed: ${reason}`)} ${dimChunk(otui, "(Esc to go back and retry)")}`;
         return;
       }
       settled = "success";
       if (!setActive) {
-        status.content = otui.t`${otui.green("✓")} ${otui.bold(`'${provider.id}' configured and tested successfully`)} ${otui.dim("(Enter to close)")}`;
+        status.content = otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested successfully`)} ${dimChunk(otui, "(Enter to close)")}`;
         return;
       }
       const selected = await controller.select(provider.id);
@@ -2046,8 +2049,8 @@ function runSearchProviderTestStep(
         return;
       }
       status.content = selected.ok
-        ? otui.t`${otui.green("✓")} ${otui.bold(`'${provider.id}' configured, tested, and set as active`)} ${otui.dim("(Enter to close)")}`
-        : otui.t`${otui.green("✓")} ${otui.bold(`'${provider.id}' configured and tested`)} ${otui.dim(`but could not be set active (${selected.reason ?? "unknown"})`)} ${otui.dim("(Enter to close)")}`;
+        ? otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured, tested, and set as active`)} ${dimChunk(otui, "(Enter to close)")}`
+        : otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested`)} ${dimChunk(otui, `but could not be set active (${selected.reason ?? "unknown"})`)} ${dimChunk(otui, "(Enter to close)")}`;
     })();
   });
 }
@@ -2119,9 +2122,9 @@ function promptBaseUrlStep(
     });
     const box = surface.body;
     if (notice !== undefined) {
-      box.add(new otui.TextRenderable(r, { id: "bp-notice", content: otui.t`${otui.red("✗")} ${notice}`, marginTop: 1 }));
+      box.add(new otui.TextRenderable(r, { id: "bp-notice", content: otui.t`${roleChunk(otui, "error", "✗")} ${notice}`, marginTop: 1 }));
     }
-    box.add(new otui.TextRenderable(r, { id: "bp-note", content: otui.t`${otui.dim("Edit host and port before discovering models")}`, marginTop: 1 }));
+    box.add(new otui.TextRenderable(r, { id: "bp-note", content: otui.t`${dimChunk(otui, "Edit host and port before discovering models")}`, marginTop: 1 }));
     const input = new otui.InputRenderable(r, { id: "bp-input", value: baseUrl, marginTop: 1 });
     box.add(input);
     input.focus();
@@ -2156,12 +2159,12 @@ function promptApiKeyStep(otui: OpenTui, target: StepTarget, opts: { label: stri
     const box = surface.body;
     if (opts.notice !== undefined) {
       // Why they are being asked again, in the provider's own words.
-      box.add(new otui.TextRenderable(r, { id: "kp-notice", content: otui.t`${otui.red("✗")} ${opts.notice}`, marginTop: 1 }));
+      box.add(new otui.TextRenderable(r, { id: "kp-notice", content: otui.t`${roleChunk(otui, "error", "✗")} ${opts.notice}`, marginTop: 1 }));
     }
     box.add(
       new otui.TextRenderable(r, {
         id: "kp-note",
-        content: otui.t`${otui.dim(`Set as ${opts.envKey} · saved to your keryx config dir (owner-only, 0600)`)}`,
+        content: otui.t`${dimChunk(otui, `Set as ${opts.envKey} · saved to your keryx config dir (owner-only, 0600)`)}`,
         marginTop: 1,
       }),
     );
@@ -2245,7 +2248,7 @@ function runDeviceLoginInTui(otui: OpenTui, target: StepTarget, provider: string
         resolve(false);
       },
     });
-    const status = new otui.TextRenderable(r, { id: "dl-status", content: otui.t`${otui.dim("Requesting a device code…")}`, marginTop: 1 });
+    const status = new otui.TextRenderable(r, { id: "dl-status", content: otui.t`${dimChunk(otui, "Requesting a device code…")}`, marginTop: 1 });
     surface.body.add(status);
     const cleanup = (): void => {
       surface.close();
@@ -2256,7 +2259,7 @@ function runDeviceLoginInTui(otui: OpenTui, target: StepTarget, provider: string
       signal: controller.signal,
       ...(dir !== undefined ? { dir } : {}),
       onChallenge: (challenge) => {
-        status.content = otui.t`${otui.bold(challenge.userCode)}\n${otui.dim(challenge.verificationUri)}\n${otui.dim("Open that URL on any device and enter the code. Waiting for authorization…")}`;
+        status.content = otui.t`${boldChunk(otui, challenge.userCode)}\n${dimChunk(otui, challenge.verificationUri)}\n${dimChunk(otui, "Open that URL on any device and enter the code. Waiting for authorization…")}`;
         openVerificationUrl(challenge.verificationUriComplete ?? challenge.verificationUri);
       },
     }).then((result) => {
@@ -2269,13 +2272,13 @@ function runDeviceLoginInTui(otui: OpenTui, target: StepTarget, provider: string
         resolve(true);
         return;
       }
-      status.content = otui.t`${otui.red("✗")} ${otui.bold(result.error)} ${otui.dim("(Esc to go back)")}`;
+      status.content = otui.t`${roleChunk(otui, "error", "✗")} ${boldChunk(otui, result.error)} ${dimChunk(otui, "(Esc to go back)")}`;
     }).catch((err) => {
       if (controller.signal.aborted) {
         return;
       }
       const message = err instanceof Error ? err.message : "device authorization failed";
-      status.content = otui.t`${otui.red("✗")} ${otui.bold(message)} ${otui.dim("(Esc to go back)")}`;
+      status.content = otui.t`${roleChunk(otui, "error", "✗")} ${boldChunk(otui, message)} ${dimChunk(otui, "(Esc to go back)")}`;
     });
   });
 }
@@ -2630,7 +2633,7 @@ export function pickModelInTui(
   const r = chrome !== undefined ? (chrome.renderer as Renderer) : (rOrChrome as Renderer);
   const showNotice = models.length === 0 && notice !== undefined;
   const noticeText = (): InstanceType<OpenTui["TextRenderable"]> =>
-    new otui.TextRenderable(r, { id: "mp-notice", content: otui.t`${otui.red("✗")} ${notice ?? ""}` });
+    new otui.TextRenderable(r, { id: "mp-notice", content: otui.t`${roleChunk(otui, "error", "✗")} ${notice ?? ""}` });
   const listSpec = {
     idPrefix: "mp",
     items: models,
@@ -2683,7 +2686,7 @@ export function pickModelInTui(
   return new Promise((resolve) => {
     const box = overlayBox(otui, r, "model-picker");
     r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "mp-title", content: otui.t`${otui.bold("Select a model")}` }));
+    box.add(new otui.TextRenderable(r, { id: "mp-title", content: otui.t`${boldChunk(otui, "Select a model")}` }));
     if (showNotice) {
       box.add(noticeText());
     }
@@ -2778,7 +2781,7 @@ function mountFilterList<T>(
         ? shown.map(spec.toOption)
         : [{ name: spec.items.length === 0 ? spec.emptyLabel : "(no match)", description: "" }];
     sel.selectedIndex = 0;
-    filterLine.content = otui.t`${otui.dim(
+    filterLine.content = otui.t`${dimChunk(otui, 
       q.length > 0 ? spec.filterHint(filter, shown.length, spec.items.length) : spec.idleHint,
     )}`;
   };
@@ -2930,7 +2933,7 @@ export function pickSessionInTui(
   return new Promise((resolve) => {
     const box = overlayBox(otui, r, "session-picker");
     r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "sp-title", content: otui.t`${otui.bold("Open session")} ${otui.dim("↑/↓ Enter · Esc to cancel")}` }));
+    box.add(new otui.TextRenderable(r, { id: "sp-title", content: otui.t`${boldChunk(otui, "Open session")} ${dimChunk(otui, "↑/↓ Enter · Esc to cancel")}` }));
     let unsub = (): void => {};
     const finish = (row: SessionPickerOption | undefined): void => {
       unsub();
@@ -3374,8 +3377,8 @@ export async function launchTuiAgentShell(opts: {
     // so anything added to `sidebar` itself would land beside the toast.
     const sidebar = chrome.sidebarTop;
     mountTitlePanel(otui, r, sidebar);
-    sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
-    const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${dimChunk(otui, "Model")}`, marginTop: 1 }));
+    const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${dimChunk(otui, `${sel.provider}/${sel.model}`)}` });
     sidebar.add(sbModelV);
     // Mode line (flow 270 AC9): the permission mode and the /plan read-only
     // posture were only ever toasts. One line under the model, not a labelled
@@ -3392,13 +3395,13 @@ export async function launchTuiAgentShell(opts: {
     sidebar.add(sbHoldV);
     const paintHoldBanner = (): void => {
       const banner = leaseView()?.banner();
-      sbHoldV.content = banner === undefined ? "" : otui.t`${otui.yellow(banner)}`;
+      sbHoldV.content = banner === undefined ? "" : otui.t`${roleChunk(otui, "attention", banner)}`;
     };
     // Usage row under Model: cumulative in/out tokens this session, fed by
     // `attachUsageIo`'s setUsage chrome. Starts "↑0 ↓0"; real numbers replace
     // it the first time the provider reports usage.
-    sidebar.add(new otui.TextRenderable(r, { id: "sb-usage-k", content: otui.t`${otui.dim("Usage")}`, marginTop: 1 }));
-    const sbUsageV = new otui.TextRenderable(r, { id: "sb-usage-v", content: otui.t`${otui.dim("↑0 ↓0")}` });
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-usage-k", content: otui.t`${dimChunk(otui, "Usage")}`, marginTop: 1 }));
+    const sbUsageV = new otui.TextRenderable(r, { id: "sb-usage-v", content: otui.t`${dimChunk(otui, "↑0 ↓0")}` });
     sidebar.add(sbUsageV);
     // Balance row under Usage: live balance for the ACTIVE provider, fetched
     // on mount and on click (mountBalancePanel). "—" when the provider has no
@@ -3434,11 +3437,11 @@ export async function launchTuiAgentShell(opts: {
       if (workspace === undefined) {
         return;
       }
-      sbWorkspace.add(new otui.TextRenderable(r, { id: "sb-workspace-k", content: otui.t`${otui.dim("Workspace")}`, marginTop: 1 }));
+      sbWorkspace.add(new otui.TextRenderable(r, { id: "sb-workspace-k", content: otui.t`${dimChunk(otui, "Workspace")}`, marginTop: 1 }));
       sbWorkspace.add(
         new otui.TextRenderable(r, {
           id: "sb-workspace-v",
-          content: otui.t`${otui.dim(`${shortenCwd(workspace.title, SIDEBAR_TEXT_WIDTH)} · ${workspace.status} · ${slates.length} slate${slates.length === 1 ? "" : "s"}`)}`,
+          content: otui.t`${dimChunk(otui, `${shortenCwd(workspace.title, SIDEBAR_TEXT_WIDTH)} · ${workspace.status} · ${slates.length} slate${slates.length === 1 ? "" : "s"}`)}`,
           onMouseDown: () => {
             showWorkspace();
           },
@@ -3483,25 +3486,25 @@ export async function launchTuiAgentShell(opts: {
       if (count === 0) {
         return;
       }
-      sbReview.add(new otui.TextRenderable(r, { id: "sb-review-k", content: otui.t`${otui.dim("Review")}`, marginTop: 1 }));
+      sbReview.add(new otui.TextRenderable(r, { id: "sb-review-k", content: otui.t`${dimChunk(otui, "Review")}`, marginTop: 1 }));
       sbReview.add(
         new otui.TextRenderable(r, {
           id: "sb-review-v",
-          content: otui.t`${otui.yellow(`${count} item${count === 1 ? "" : "s"} need review`)}`,
+          content: otui.t`${roleChunk(otui, "attention", `${count} item${count === 1 ? "" : "s"} need review`)}`,
           onMouseDown: () => {
             showReview();
           },
         }),
       );
     };
-    sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${otui.dim("Context")}`, marginTop: 1 }));
-    const sbContext = new otui.TextRenderable(r, { id: "sb-ctx-v", content: otui.t`${otui.dim("0 tokens")}` });
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${dimChunk(otui, "Context")}`, marginTop: 1 }));
+    const sbContext = new otui.TextRenderable(r, { id: "sb-ctx-v", content: otui.t`${dimChunk(otui, "0 tokens")}` });
     sidebar.add(sbContext);
-    sidebar.add(new otui.TextRenderable(r, { id: "sb-tools-k", content: otui.t`${otui.dim("Tools")}`, marginTop: 1 }));
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-tools-k", content: otui.t`${dimChunk(otui, "Tools")}`, marginTop: 1 }));
     sidebar.add(
       new otui.TextRenderable(r, {
         id: "sb-tools-v",
-        content: otui.t`${otui.dim(`${deps.tools.length} available`)}`,
+        content: otui.t`${dimChunk(otui, `${deps.tools.length} available`)}`,
         onMouseDown: () => {
           showTools();
         },
@@ -3510,10 +3513,10 @@ export async function launchTuiAgentShell(opts: {
     // Multi-agent / page-worker fleet (enrich swarm + future harness subagents).
     // Live activity: main agent phase + optional enrich/subagent fleet.
     // Yellow when blocked (user must act), red on failure — not cryptic glyphs only.
-    sidebar.add(new otui.TextRenderable(r, { id: "sb-status-k", content: otui.t`${otui.dim("Status")}`, marginTop: 1 }));
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-status-k", content: otui.t`${dimChunk(otui, "Status")}`, marginTop: 1 }));
     const sbWorkers = new otui.TextRenderable(r, {
       id: "sb-status-v",
-      content: otui.t`${otui.dim("○ Ready")}`,
+      content: otui.t`${dimChunk(otui, "○ Ready")}`,
     });
     sidebar.add(sbWorkers);
     // Hug-content box, not a flexGrow ScrollBox: a growing viewport inside
@@ -3571,11 +3574,11 @@ export async function launchTuiAgentShell(opts: {
       const text = formatFleetSidebarWithPeers(list, busFleetPeers, 12);
       const main = list.find((w) => w.id === MAIN_AGENT_ID);
       if (main?.status === "blocked") {
-        sbWorkers.content = otui.t`${otui.yellow(text)}`;
+        sbWorkers.content = otui.t`${roleChunk(otui, "attention", text)}`;
       } else if (main?.status === "failed") {
-        sbWorkers.content = otui.t`${otui.red(text)}`;
+        sbWorkers.content = otui.t`${roleChunk(otui, "error", text)}`;
       } else {
-        sbWorkers.content = otui.t`${otui.dim(text)}`;
+        sbWorkers.content = otui.t`${dimChunk(otui, text)}`;
       }
     };
     const paintSubagents = (hint?: { kind: string }): void => {
@@ -3792,7 +3795,7 @@ export async function launchTuiAgentShell(opts: {
     });
     // Block-nav mode owns the footer hint even mid-turn: the chrome's 120ms
     // spinner interval would otherwise repaint over it.
-    chrome.setFooterOverride(() => (nav.active() ? otui.t`${otui.yellow(FOOTER_NAV)}` : undefined));
+    chrome.setFooterOverride(() => (nav.active() ? otui.t`${roleChunk(otui, "attention", FOOTER_NAV)}` : undefined));
     const focusComposer = (): void => nav.restoreComposerFocus();
     const newestBlock = (kind?: string): BlockState | undefined => nav.newest(kind);
     const toggleNewestBlock = (kind?: string): BlockState | undefined => nav.toggleNewest(kind);
@@ -3839,13 +3842,13 @@ export async function launchTuiAgentShell(opts: {
     const usage = attachUsageIo(io, {
       setHeaderMeta: (text) => chrome.setHeaderMeta(text),
       setContextTotal: (total) => {
-        sbContext.content = otui.t`${otui.dim(`${total.toLocaleString()} tokens`)}`;
+        sbContext.content = otui.t`${dimChunk(otui, `${total.toLocaleString()} tokens`)}`;
       },
       onExactUsage: () => {
         hasExactUsage = true;
       },
       setUsage: (input, output) => {
-        sbUsageV.content = otui.t`${otui.dim(`↑${fmtTokens(input)} ↓${fmtTokens(output)}`)}`;
+        sbUsageV.content = otui.t`${dimChunk(otui, `↑${fmtTokens(input)} ↓${fmtTokens(output)}`)}`;
       },
     });
     let lastUsage: NormalizedUsage | undefined;
@@ -3923,7 +3926,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
-            content: otui.t`${otui.yellow("⚠ follows untrusted external content — it cannot authorize this call; your answer does")}`,
+            content: otui.t`${roleChunk(otui, "attention", "⚠ follows untrusted external content — it cannot authorize this call; your answer does")}`,
           }),
         );
       }
@@ -3954,7 +3957,7 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `ap${uid++}`,
-              content: otui.t`${otui.cyan("◇ subagent auto-approved")} ${otui.dim(`mode=read_only (no shell) · ${taskPreview}`)}`,
+              content: otui.t`${roleChunk(otui, "accent", "◇ subagent auto-approved")} ${dimChunk(otui, `mode=read_only (no shell) · ${taskPreview}`)}`,
             }),
           );
           return true;
@@ -3986,8 +3989,8 @@ export async function launchTuiAgentShell(opts: {
             id: `ap${uid++}`,
             content:
               id === "allow"
-                ? otui.t`${otui.green("◇ subagent approved")}`
-                : otui.t`${otui.red("◇ subagent denied")}`,
+                ? otui.t`${roleChunk(otui, "ok", "◇ subagent approved")}`
+                : otui.t`${roleChunk(otui, "error", "◇ subagent denied")}`,
           }),
         );
         return id === "allow";
@@ -4001,10 +4004,10 @@ export async function launchTuiAgentShell(opts: {
         for (const line of extractPatchText(inputJson).split(/\r?\n/)) {
           const kind = classifyDiffLine(line);
           const rendered =
-            kind === "add" ? otui.green(line)
-            : kind === "del" ? otui.red(line)
-            : kind === "hunk" ? otui.cyan(line)
-            : kind === "meta" ? otui.dim(line)
+            kind === "add" ? roleChunk(otui, "ok", line)
+            : kind === "del" ? roleChunk(otui, "error", line)
+            : kind === "hunk" ? roleChunk(otui, "accent", line)
+            : kind === "meta" ? dimChunk(otui, line)
             : line;
           transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${rendered}` }));
         }
@@ -4012,7 +4015,7 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `ap${uid++}`,
-              content: otui.t`${otui.yellow("deletes a file, touches .git/, or touches many files in one call")}`,
+              content: otui.t`${roleChunk(otui, "attention", "deletes a file, touches .git/, or touches many files in one call")}`,
             }),
           );
         }
@@ -4020,7 +4023,7 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `ap${uid++}`,
-              content: otui.t`${otui.yellow("touches the agent's own permission/credential files")}`,
+              content: otui.t`${roleChunk(otui, "attention", "touches the agent's own permission/credential files")}`,
             }),
           );
         }
@@ -4045,7 +4048,7 @@ export async function launchTuiAgentShell(opts: {
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
             content:
-              id === "allow" ? otui.t`${otui.green("◇ apply_patch approved")}` : otui.t`${otui.red("◇ apply_patch denied")}`,
+              id === "allow" ? otui.t`${roleChunk(otui, "ok", "◇ apply_patch approved")}` : otui.t`${roleChunk(otui, "error", "◇ apply_patch denied")}`,
           }),
         );
         return id === "allow";
@@ -4075,17 +4078,17 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
-            content: otui.t`${otui.yellow(`⚙ ${described.server} wants to run ${described.tool}`)}`,
+            content: otui.t`${roleChunk(otui, "attention", `⚙ ${described.server} wants to run ${described.tool}`)}`,
           }),
         );
         for (const line of described.argumentLines) {
-          transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${otui.dim(`  ${line}`)}` }));
+          transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${dimChunk(otui, `  ${line}`)}` }));
         }
         if (described.argumentsTruncated) {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `ap${uid++}`,
-              content: otui.t`${otui.dim(`  … arguments truncated at ${MAX_ARGUMENT_CHARS} characters`)}`,
+              content: otui.t`${dimChunk(otui, `  … arguments truncated at ${MAX_ARGUMENT_CHARS} characters`)}`,
             }),
           );
         }
@@ -4118,8 +4121,8 @@ export async function launchTuiAgentShell(opts: {
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
             content: allowed
-              ? otui.t`${otui.green(`◇ ${described.fqn} approved`)}`
-              : otui.t`${otui.red(`◇ ${described.fqn} denied`)}`,
+              ? otui.t`${roleChunk(otui, "ok", `◇ ${described.fqn} approved`)}`
+              : otui.t`${roleChunk(otui, "error", `◇ ${described.fqn} denied`)}`,
           }),
         );
         return allowed;
@@ -4135,17 +4138,17 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
-            content: otui.t`${otui.yellow("⚙ codex is requesting approval")}`,
+            content: otui.t`${roleChunk(otui, "attention", "⚙ codex is requesting approval")}`,
           }),
         );
         transcript.add(
-          new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${otui.dim(described.message)}` }),
+          new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${dimChunk(otui, described.message)}` }),
         );
         if (described.command !== undefined) {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `ap${uid++}`,
-              content: otui.t`${otui.dim(`command: ${described.command}`)}`,
+              content: otui.t`${dimChunk(otui, `command: ${described.command}`)}`,
             }),
           );
         }
@@ -4153,7 +4156,7 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `ap${uid++}`,
-              content: otui.t`${otui.yellow("deletes a file, touches .git/, or touches many files in one call")}`,
+              content: otui.t`${roleChunk(otui, "attention", "deletes a file, touches .git/, or touches many files in one call")}`,
             }),
           );
         }
@@ -4161,7 +4164,7 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `ap${uid++}`,
-              content: otui.t`${otui.yellow("touches the agent's own permission/credential files")}`,
+              content: otui.t`${roleChunk(otui, "attention", "touches the agent's own permission/credential files")}`,
             }),
           );
         }
@@ -4189,8 +4192,8 @@ export async function launchTuiAgentShell(opts: {
             id: `ap${uid++}`,
             content:
               id === "allow"
-                ? otui.t`${otui.green("◇ codex elicitation approved")}`
-                : otui.t`${otui.red("◇ codex elicitation denied")}`,
+                ? otui.t`${roleChunk(otui, "ok", "◇ codex elicitation approved")}`
+                : otui.t`${roleChunk(otui, "error", "◇ codex elicitation denied")}`,
           }),
         );
         return id === "allow";
@@ -4209,7 +4212,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
-            content: otui.t`${otui.yellow(
+            content: otui.t`${roleChunk(otui, "attention", 
               `⚠ ${ev.rejected.length} saved shell permission(s) are no longer honoured — they granted arbitrary execution:`,
             )}`,
           }),
@@ -4218,14 +4221,14 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `ap${uid++}`,
-              content: otui.t`${otui.dim(`    “${rej.pattern}” — ${rej.reason}`)}`,
+              content: otui.t`${dimChunk(otui, `    “${rej.pattern}” — ${rej.reason}`)}`,
             }),
           );
         }
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
-            content: otui.t`${otui.dim(
+            content: otui.t`${dimChunk(otui, 
               `    They are still in ${shellPermissionsPath()} — edit or remove them there.`,
             )}`,
           }),
@@ -4236,7 +4239,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
-            content: otui.t`${otui.red(
+            content: otui.t`${roleChunk(otui, "error", 
               "⚠ the saved shell permissions changed outside this approval UI — review them before trusting an auto-approve",
             )}`,
           }),
@@ -4246,7 +4249,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
-            content: otui.t`${otui.dim(`✓ auto-approved shell: ${cmd}`)}`,
+            content: otui.t`${dimChunk(otui, `✓ auto-approved shell: ${cmd}`)}`,
           }),
         );
         return true;
@@ -4255,7 +4258,7 @@ export async function launchTuiAgentShell(opts: {
       transcript.add(
         new otui.TextRenderable(r, {
           id: `ap${uid++}`,
-          content: otui.t`${otui.yellow(`⚙ shell_exec needs approval`)} ${otui.dim("(menu above input)")}`,
+          content: otui.t`${roleChunk(otui, "attention", `⚙ shell_exec needs approval`)} ${dimChunk(otui, "(menu above input)")}`,
         }),
       );
       setMainAgent("blocked", "approval");
@@ -4287,7 +4290,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `av${uid++}`,
-            content: otui.t`${otui.red("denied")}`,
+            content: otui.t`${roleChunk(otui, "error", "denied")}`,
           }),
         );
         setMainAgent("running", "denied");
@@ -4310,8 +4313,8 @@ export async function launchTuiAgentShell(opts: {
             id: `av${uid++}`,
             content:
               stored.length > 0
-                ? otui.t`${otui.green(`approved · remembered “${stored}”`)}`
-                : otui.t`${otui.yellow(`approved once · “${pattern}” cannot be remembered`)}`,
+                ? otui.t`${roleChunk(otui, "ok", `approved · remembered “${stored}”`)}`
+                : otui.t`${roleChunk(otui, "attention", `approved once · “${pattern}” cannot be remembered`)}`,
           }),
         );
         setMainAgent("running", "shell");
@@ -4323,7 +4326,7 @@ export async function launchTuiAgentShell(opts: {
       transcript.add(
         new otui.TextRenderable(r, {
           id: `av${uid++}`,
-          content: otui.t`${otui.green("approved (once)")}`,
+          content: otui.t`${roleChunk(otui, "ok", "approved (once)")}`,
         }),
       );
       setMainAgent("running", "shell");
@@ -4344,7 +4347,7 @@ export async function launchTuiAgentShell(opts: {
       transcript.add(
         new otui.TextRenderable(r, {
           id: `ask${uid++}`,
-          content: otui.t`${otui.yellow("? ")} ${otui.dim(qShort)}`,
+          content: otui.t`${roleChunk(otui, "attention", "? ")} ${dimChunk(otui, qShort)}`,
         }),
       );
       const chosen = await chrome.withOverlay(() =>
@@ -4370,14 +4373,14 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `aska${uid++}`,
-            content: otui.t`${otui.green("→")} ${otui.dim(picked?.label ?? chosen)}`,
+            content: otui.t`${roleChunk(otui, "ok", "→")} ${dimChunk(otui, picked?.label ?? chosen)}`,
           }),
         );
       } else {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `askc${uid++}`,
-            content: otui.t`${otui.dim("→ cancelled")}`,
+            content: otui.t`${dimChunk(otui, "→ cancelled")}`,
           }),
         );
       }
@@ -4436,8 +4439,8 @@ export async function launchTuiAgentShell(opts: {
       const row = describeModeRow(permissionMode, readOnly);
       // Read-only is the state an operator must not forget they are in.
       sbModeV.content = row.readOnly === undefined
-        ? otui.t`${otui.dim(`mode ${row.mode}`)}`
-        : otui.t`${otui.dim(`mode ${row.mode}`)} ${otui.yellow(row.readOnly)}`;
+        ? otui.t`${dimChunk(otui, `mode ${row.mode}`)}`
+        : otui.t`${dimChunk(otui, `mode ${row.mode}`)} ${roleChunk(otui, "attention", row.readOnly)}`;
     };
     paintModeRow();
     io.onAutoApproved = (tool, input, meta) => {
@@ -4454,7 +4457,7 @@ export async function launchTuiAgentShell(opts: {
       transcript.add(
         new otui.TextRenderable(r, {
           id: `ap${uid++}`,
-          content: otui.t`${otui.yellow(label)} ${otui.dim(preview)}`,
+          content: otui.t`${roleChunk(otui, "attention", label)} ${dimChunk(otui, preview)}`,
         }),
       );
     };
@@ -4588,7 +4591,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `sessskip${uid++}`,
-            content: otui.t`${otui.yellow(describeSkippedSession(opened.skipped).replace(/\n+$/, ""))}`,
+            content: otui.t`${roleChunk(otui, "attention", describeSkippedSession(opened.skipped).replace(/\n+$/, ""))}`,
             marginTop: 1,
           }),
         );
@@ -4597,7 +4600,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `sessdeg${uid++}`,
-            content: otui.t`${otui.yellow(`archive unavailable — resumed from the active context (${opened.archiveDegraded})`)}`,
+            content: otui.t`${roleChunk(otui, "attention", `archive unavailable — resumed from the active context (${opened.archiveDegraded})`)}`,
             marginTop: 1,
           }),
         );
@@ -4606,7 +4609,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `sess${uid++}`,
-            content: otui.t`${otui.dim(
+            content: otui.t`${dimChunk(otui, 
               `session ${shortSessionId(liveSession.summary.id)} · ${liveSession.summary.title} · ctx ${history.length} · archive ${archive.length}`,
             )}`,
             marginTop: 1,
@@ -4617,7 +4620,7 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `sessu${uid++}`,
-              content: otui.t`${otui.dim(`  ❯ ${t}`)}`,
+              content: otui.t`${dimChunk(otui, `  ❯ ${t}`)}`,
             }),
           );
         }
@@ -4682,7 +4685,7 @@ export async function launchTuiAgentShell(opts: {
               transcript.add(
                 new otui.TextRenderable(r, {
                   id: `sessview${uid++}`,
-                  content: otui.t`${otui.dim(`${markdown.replace(/\n+$/, "")}\n\n— read-only view; a new session starts below —`)}`,
+                  content: otui.t`${dimChunk(otui, `${markdown.replace(/\n+$/, "")}\n\n— read-only view; a new session starts below —`)}`,
                   marginTop: 1,
                 }),
               );
@@ -4691,7 +4694,7 @@ export async function launchTuiAgentShell(opts: {
               transcript.add(
                 new otui.TextRenderable(r, {
                   id: `sesslease${uid++}`,
-                  content: otui.t`${otui.yellow(text)}`,
+                  content: otui.t`${roleChunk(otui, "attention", text)}`,
                   marginTop: 1,
                 }),
               );
@@ -4712,7 +4715,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `sesserr${uid++}`,
-            content: otui.t`${otui.red(failure instanceof Error ? failure.message : String(failure))}`,
+            content: otui.t`${roleChunk(otui, "error", failure instanceof Error ? failure.message : String(failure))}`,
             marginTop: 1,
           }),
         );
@@ -5474,7 +5477,7 @@ export async function launchTuiAgentShell(opts: {
     const updateModelLabels = (): void => {
       paintSessionHeader();
       const label = `${currentSel.provider}/${currentSel.model}`;
-      sbModelV.content = otui.t`${otui.dim(label)}`;
+      sbModelV.content = otui.t`${dimChunk(otui, label)}`;
       chrome.setStatus(label);
     };
     const switchTo = async (ns: TuiSelection): Promise<void> => {
@@ -5616,7 +5619,7 @@ export async function launchTuiAgentShell(opts: {
       box.add(text);
       const setActive = (active: boolean): void => {
         box.backgroundColor = active ? getTheme().highlight : undefined;
-        text.content = active ? otui.t`${otui.bold(`[${label}]`)}` : `[${label}]`;
+        text.content = active ? otui.t`${boldChunk(otui, `[${label}]`)}` : `[${label}]`;
         text.fg = color;
       };
       return { box, setActive };
@@ -5691,7 +5694,7 @@ export async function launchTuiAgentShell(opts: {
           id: `mq-${item.id}-t`,
           flexGrow: 1,
           minWidth: 0,
-          content: otui.t`${otui.dim(`${formatMainQueueMarker(index)} ${item.displayQuestion}`)}`,
+          content: otui.t`${dimChunk(otui, `${formatMainQueueMarker(index)} ${item.displayQuestion}`)}`,
         });
         row.add(label);
         const force = mainQueueButton("Force", `mq-force-${item.id}`, theme.focus, () => forceMainQueue(index));
@@ -5860,8 +5863,8 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `side-max${uid++}`,
-            content: otui.t`${otui.yellow(`◦ side-1 queued (${sideQueue.length - 1} pending)`)} ${
-              otui.dim(`· while main: ${busyPhase}`)
+            content: otui.t`${roleChunk(otui, "attention", `◦ side-1 queued (${sideQueue.length - 1} pending)`)} ${
+              dimChunk(otui, `· while main: ${busyPhase}`)
             }`,
             marginTop: 1,
           }),
@@ -5897,8 +5900,8 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(
             new otui.TextRenderable(r, {
               id: `side-h${uid++}`,
-              content: otui.t`${otui.magenta("──")} ${otui.bold(sideWorkerLabelText)} ${otui.magenta("──")} ${
-                otui.dim(`while main: ${busyPhase}`)
+              content: otui.t`${roleChunk(otui, "side", "──")} ${boldChunk(otui, sideWorkerLabelText)} ${roleChunk(otui, "side", "──")} ${
+                dimChunk(otui, `while main: ${busyPhase}`)
               }`,
               marginTop: 1,
             }),
@@ -5966,7 +5969,7 @@ export async function launchTuiAgentShell(opts: {
                 transcript.add(
                   new otui.TextRenderable(r, {
                     id: `side-sys${uid++}`,
-                    content: otui.t`${otui.dim(text.trimEnd())}`,
+                    content: otui.t`${dimChunk(otui, text.trimEnd())}`,
                   }),
                 );
               },
@@ -5993,7 +5996,7 @@ export async function launchTuiAgentShell(opts: {
             transcript.add(
               new otui.TextRenderable(r, {
                 id: `side-err${uid++}`,
-                content: otui.t`${otui.red(`◇ ${sideWorkerLabelText} failed: ${msg}`)}`,
+                content: otui.t`${roleChunk(otui, "error", `◇ ${sideWorkerLabelText} failed: ${msg}`)}`,
               }),
             );
             fleet.upsert({ id: SIDE_WORKER_ID, label: sideWorkerLabelText, status: "failed", detail: "error" });
@@ -6100,7 +6103,7 @@ export async function launchTuiAgentShell(opts: {
             transcript.add(
               new otui.TextRenderable(r, {
                 id: `c${uid++}`,
-                content: otui.t`${otui.cyan(`❯ ${line}`)}`,
+                content: otui.t`${roleChunk(otui, "accent", `❯ ${line}`)}`,
                 marginTop: 1,
               }),
             );
@@ -6215,7 +6218,7 @@ export async function launchTuiAgentShell(opts: {
             transcript.add(
               new otui.TextRenderable(r, {
                 id: `c${uid++}`,
-                content: otui.t`${otui.yellow(
+                content: otui.t`${roleChunk(otui, "attention", 
                   `◇ main is busy — command deferred. Ask a normal question for a side worker, or wait.`,
                 )}`,
                 marginTop: 1,
@@ -6303,7 +6306,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `c${uid++}`,
-            content: otui.t`${otui.cyan(`❯ ${line}`)}`,
+            content: otui.t`${roleChunk(otui, "accent", `❯ ${line}`)}`,
             marginTop: 1,
           }),
         );
@@ -6757,7 +6760,7 @@ export async function launchTuiAgentShell(opts: {
       transcript.add(
         new otui.TextRenderable(r, {
           id: `h${uid++}`,
-          content: otui.t`${otui.cyan("●")} ${otui.bold("keryx")}  ${otui.dim(hhmm())}`,
+          content: otui.t`${roleChunk(otui, "accent", "●")} ${boldChunk(otui, "keryx")}  ${dimChunk(otui, hhmm())}`,
           marginTop: 1,
         }),
       );
@@ -6784,7 +6787,7 @@ export async function launchTuiAgentShell(opts: {
             transcript.add(
               new otui.TextRenderable(r, {
                 id: `we-list${uid++}`,
-                content: otui.t`${otui.dim(
+                content: otui.t`${dimChunk(otui, 
                   [
                     `Wiki enrich plan: ${plan.drafts.length} draft · ${plan.accepted.length} accepted · ${plan.forceTargets.length} total`,
                     ...(plan.drafts.length > 0 ? ["Drafts:", ...draftLines, ...(moreDrafts ? [moreDrafts] : [])] : ["Drafts: (none)"]),
@@ -6801,7 +6804,7 @@ export async function launchTuiAgentShell(opts: {
               transcript.add(
                 new otui.TextRenderable(r, {
                   id: `we-empty${uid++}`,
-                  content: otui.t`${otui.yellow("No wiki pages found. Run `keryx wiki collect` first.")}`,
+                  content: otui.t`${roleChunk(otui, "attention", "No wiki pages found. Run `keryx wiki collect` first.")}`,
                 }),
               );
               return;
@@ -6819,7 +6822,7 @@ export async function launchTuiAgentShell(opts: {
               transcript.add(
                 new otui.TextRenderable(r, {
                   id: `we-cancel${uid++}`,
-                  content: otui.t`${otui.dim("Wiki enrich cancelled.")}`,
+                  content: otui.t`${dimChunk(otui, "Wiki enrich cancelled.")}`,
                 }),
               );
               return;
@@ -6829,7 +6832,7 @@ export async function launchTuiAgentShell(opts: {
               transcript.add(
                 new otui.TextRenderable(r, {
                   id: `we-nodraft${uid++}`,
-                  content: otui.t`${otui.yellow("No draft pages. Choose force enrich all, or collect new drafts.")}`,
+                  content: otui.t`${roleChunk(otui, "attention", "No draft pages. Choose force enrich all, or collect new drafts.")}`,
                 }),
               );
               return;
@@ -6898,7 +6901,7 @@ export async function launchTuiAgentShell(opts: {
             transcript.add(
               new otui.TextRenderable(r, {
                 id: `we-res${uid++}`,
-                content: otui.t`${otui.dim(lines.join("\n"))}`,
+                content: otui.t`${dimChunk(otui, lines.join("\n"))}`,
                 marginTop: 1,
               }),
             );
@@ -6919,7 +6922,7 @@ export async function launchTuiAgentShell(opts: {
             transcript.add(
               new otui.TextRenderable(r, {
                 id: `we-err${uid++}`,
-                content: otui.t`${otui.red(`wiki enrich failed: ${cause instanceof Error ? cause.message : String(cause)}`)}`,
+                content: otui.t`${roleChunk(otui, "error", `wiki enrich failed: ${cause instanceof Error ? cause.message : String(cause)}`)}`,
               }),
             );
           } finally {
@@ -6934,7 +6937,7 @@ export async function launchTuiAgentShell(opts: {
                   transcript.add(
                     new otui.TextRenderable(r, {
                       id: `w${uid++}`,
-                      content: otui.t`${otui.dim(`worked for ${secs}s`)}`,
+                      content: otui.t`${dimChunk(otui, `worked for ${secs}s`)}`,
                       marginTop: 1,
                     }),
                   );
@@ -7042,13 +7045,13 @@ export async function launchTuiAgentShell(opts: {
           // best-effort persist
         }
         transcript.add(
-          new otui.TextRenderable(r, { id: `w${uid++}`, content: otui.t`${otui.dim(`worked for ${secs}s`)}`, marginTop: 1 }),
+          new otui.TextRenderable(r, { id: `w${uid++}`, content: otui.t`${dimChunk(otui, `worked for ${secs}s`)}`, marginTop: 1 }),
         );
         // No exact provider usage → show an estimated context size (never stuck at 0).
         if (!hasExactUsage) {
           const est = estimateContextTokens(history);
           chrome.setHeaderMeta(`~${fmtTokens(est)}`);
-          sbContext.content = otui.t`${otui.dim(`~${est.toLocaleString()} tokens (est)`)}`;
+          sbContext.content = otui.t`${dimChunk(otui, `~${est.toLocaleString()} tokens (est)`)}`;
         }
         focusComposer(); // never steal focus from an active block-nav mode (R3)
         // Only suggest a next step when nothing is already queued — a queued

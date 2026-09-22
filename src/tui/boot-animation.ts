@@ -11,6 +11,7 @@
 // would otherwise wait out the animation on every run.
 
 import { getTheme } from "./theme";
+import { boldChunk, dimChunk } from "./theme-text";
 import { SIDEBAR_WIDTH } from "./shell-chrome";
 
 type OpenTui = typeof import("@opentui/core");
@@ -79,13 +80,13 @@ export async function playBootAnimation(otui: OpenTui, r: Renderer, opts: BootAn
   const logoBox = new otui.BoxRenderable(r, { id: "boot-logo-box", flexDirection: "column", alignItems: "center" });
   box.add(logoBox);
   for (const [index, line] of WORDMARK.entries()) {
-    logoBox.add(new otui.TextRenderable(r, { id: `boot-logo-${index}`, content: otui.t`${otui.bold(line)}` }));
+    logoBox.add(new otui.TextRenderable(r, { id: `boot-logo-${index}`, content: otui.t`${boldChunk(otui, line)}` }));
   }
 
   // No loading steps: the ones this used to cycle through ("Reading
   // .metaproject index", "Connecting provider", "Warming graph") were labels
   // on a timer, not work being done (flow 270 AC10).
-  box.add(new otui.TextRenderable(r, { id: "boot-hint", content: otui.t`${otui.dim("any key to skip")}`, marginTop: 1 }));
+  box.add(new otui.TextRenderable(r, { id: "boot-hint", content: otui.t`${dimChunk(otui, "any key to skip")}`, marginTop: 1 }));
 
   await new Promise<void>((resolve) => {
     let settled = false;
@@ -244,7 +245,7 @@ export function mountEmptyTranscriptSplash(otui: OpenTui, r: Renderer, transcrip
           // Load-bearing: a row of exactly `width` columns can still be
           // re-wrapped by the renderer, putting half of it back at the left edge.
           wrapMode: "none",
-          content: otui.t`${kind === "logo" ? otui.bold(line) : otui.dim(line)}`,
+          content: otui.t`${kind === "logo" ? boldChunk(otui, line) : dimChunk(otui, line)}`,
           ...(index === 0 && kind !== "logo" ? { marginTop: 1 } : {}),
         });
         box.add(node);
