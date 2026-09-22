@@ -847,40 +847,147 @@ deleted.
 
 Fire one declared project trigger — the single entry point every git hook, cron
 line, and CI job calls. A trigger is declared by hand in
-`.metaproject/triggers.json` (keryx never writes this file), each entry naming
-what fires it (a repository event or a schedule) and what it does (`reconcile`,
-`rebuild`, `open-flow`, or `flow-next`).
+`.metaproject/triggers.json` (keryx never writes this file — see
+[sync](#sync) and [update](#update) for the files it *does* own), each entry
+naming what fires it (a repository event or a schedule) and what it does
+(`reconcile`, `rebuild`, `open-flow`, or `flow-next`).
+
+### The config file
+
+`.metaproject/triggers.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "triggers": [
+    { "name": "reconcile-on-merge", "on": { "kind": "event", "event": "post-merge" },
+      "action": { "kind": "reconcile" }, "enabled": true },
+    { "name": "rebuild-on-commit", "on": { "kind": "event", "event": "post-commit" },
+      "action": { "kind": "rebuild" } },
+    { "name": "nightly-maintenance", "on": { "kind": "schedule", "cron": "0 2 * * *" },
+      "action": { "kind": "open-flow", "template": "Nightly graph/wiki maintenance", "skipIfOpen": true } },
+    { "name": "report-next-task", "on": { "kind": "event", "event": "ci" },
+      "action": { "kind": "flow-next", "flow": "142-2026-08-01-nightly-maintenance" } }
+  ]
+}
+```
+
+Each entry: `name` (unique, also the `trigger run <name>` argument — letters,
+digits, `-`, `_`, `.`, max 64 chars), `on` (`{ kind: "event", event:
+"post-merge" | "post-commit" | "post-checkout" | "ci" }` or `{ kind:
+"schedule", cron: "<5- or 6-field cron expression>" }`), `action`, and
+`enabled` (defaults to `true`). `"ci"` is declared, not hooked — nothing writes
+a git hook for it; it exists so an entry can say "a CI job calls `keryx
+trigger run` for this itself" and show up in `list`/`status`.
+
+Four action kinds:
+
+- `{ "kind": "reconcile" }` — one pass of `keryx sync --apply`.
+- `{ "kind": "rebuild" }` — one pass of `keryx gdgraph build`.
+- `{ "kind": "open-flow", "template": "<flow title>", "skipIfOpen"?: true }` —
+  `keryx flow init --title "<template>"`. With `skipIfOpen`, a fire is a no-op
+  when another flow's title is exactly `template` and that flow's status is
+  not `done` (an `initializing`, not-yet-`start`ed flow still counts as open).
+- `{ "kind": "flow-next", "flow": "<flow id>" }` — reports `keryx flow next
+  <flow>`'s decision into the run record; see **Honest limits** below.
+
+An entry that fails validation is refused on load with the reason, and its
+neighbours still load; a later entry re-using an already-used `name` is
+refused the same way. `keryx trigger list` prints every rejected entry
+alongside the valid ones.
+
+### Subcommands
 
 ```
-keryx trigger run <name>   # perform exactly one pass of <name>'s action
+keryx trigger run <name>        # perform exactly one pass of <name>'s action
+keryx trigger install           # write a git hook block for every event-fired entry
+keryx trigger uninstall         # remove those hook blocks
+keryx trigger list              # list declared entries: enabled state, fire, action, hook status
+keryx trigger status [<name>]   # show the last recorded outcome for one or every entry
+keryx trigger schedule <name>   # print the cron line / systemd timer unit for a schedule entry
 ```
 
 | Subcommand | Description |
 |---|---|
 | `run <name>` | Resolve `<name>` against `.metaproject/triggers.json` and perform exactly one pass of its action. |
+| `install` | Write a managed hook block (`# keryx:trigger-<name>:begin/end`) into `post-merge`/`post-commit`/`post-checkout` for every declared, event-fired entry — `enabled` or not, so re-enabling one later takes effect on its next fire without reinstalling. No `.git` directory: prints and does nothing. |
+| `uninstall` | Remove those blocks. Every other managed block in the same hook file is untouched. |
+| `list` | List every declared entry — name, enabled state, what fires it, what it does, and whether its hook is installed — plus every rejected entry and why it was refused. |
+| `status [<name>]` | Print the last recorded outcome for one entry, or every entry, read from the run record (below). |
+| `schedule <name>` | Print the cron line and the systemd service/timer pair for a schedule-fired entry. Installs nothing. |
 | `--help`, `-h` | Print `trigger` usage and exit. |
 
-Only this dispatch's two action kinds actually run: `reconcile` reuses `keryx
-sync --apply`, and `rebuild` reuses `keryx gdgraph build` — neither is
-reimplemented here. `open-flow` and `flow-next` load and validate, but running
-one refuses cleanly with "not implemented in this build" rather than
-half-working.
+**Exit codes.** Non-zero only when the action itself failed, the name is
+unknown, or the matching entry is malformed. Every other outcome exits `0`:
+nothing declared, a disabled entry, a lock refusal, and a budget refusal are
+all "nothing done this pass", not an error — which is also how each is
+classified in the run record.
 
-**Exit codes.** A run exits `0` and says so when there is nothing to do: no
-`.metaproject/triggers.json` yet, or the named entry is disabled. It exits
-non-zero when the name is unknown, the matching entry is malformed, or the
-action itself fails. It also exits `0` (a clean refusal, not a failure) when
-another `keryx trigger run` already holds this project's trigger lock, or when
-the action kind is not implemented yet.
+### The run record
+
+Every `run` that resolves to a real, declared entry (`disabled` or `ready`)
+appends one line to `.metaproject/data/trigger/runs.jsonl` — when it fired,
+what fired it (`on`, verbatim), what it did (`action`, verbatim), the outcome
+(`ok`, `no-op`, `lock-refused`, `budget-refused`, or `failed`), a human-readable
+detail, and its cost (`{ recorded: false, reason }` for every action kind
+today — none of the four calls a model yet, so there is nothing to record a
+real `usd` figure for). A run that never reaches a concrete entry (no config,
+unknown name, malformed entry) is not recorded — that stays a stderr line and
+an exit code. `status` reads this file; it never resolves or re-runs anything.
+Taken from a real run:
+
+```
+$ keryx trigger status
+keryx trigger status (reading /path/to/project/.metaproject/data/trigger/runs.jsonl):
+  - nightly-reconcile  [enabled]  schedule:"0 2 * * *"  -> reconcile
+      last: 2026-09-22T19:33:15.623Z — ok — action "reconcile" completed. [cost: n/a (this action does not call a model — reconcile/rebuild are deterministic, no spend to record)]
+```
 
 **Locking.** A second `trigger run` for the same project, started while the
 first is still running, refuses immediately rather than waiting — this keeps
 one run at exactly one pass instead of blocking on another run's schedule.
-Retry on the next fire. This lock covers triggered runs only, not `sync
---apply` / `gdgraph build` invoked directly by a person.
+Retry on the next fire. This lock is taken by `trigger run` only (`reconcile`/
+`rebuild` actions); see **Honest limits** below for what it does not cover.
 
-`keryx trigger install`, `keryx trigger list` and `keryx trigger status` are
-not implemented yet.
+**Installing hooks.** `install`'s blocks live beside the ones `keryx sync
+install-hooks` (its `keryx-sync` block) and `keryx update` (its
+`gdgraph-post-commit`, `gdwiki-post-commit`, etc. blocks) already write into
+the same `post-merge`/`post-commit`/`post-checkout` files — each installer
+owns only its own delimited block, so all of them, plus any hand-authored
+content already in the file, coexist regardless of install order.
+
+**Scheduling.** `schedule <name>` runs no daemon and installs nothing itself —
+it prints a ready-to-use cron line and an alternative systemd service+timer
+pair for you to install with your own scheduler. Both bake in the absolute
+path to the interpreter (`node`/`bun`) and script actually running `keryx
+trigger schedule`, plus an explicit `PATH` (that interpreter's own directory,
+then `/usr/local/bin:/usr/bin:/bin`, for whatever the action shells out to,
+e.g. `git`) — never bare `keryx`, because cron and a systemd unit resolve
+commands with a minimal or absent `PATH` that a version-manager install (nvm,
+bun) is frequently not on. Output is appended to
+`.metaproject/data/trigger/<name>.schedule.log`. **Assumption, stated rather
+than hidden:** the printed paths stay valid only while the resolved
+interpreter and script stay where they were at the moment you ran `schedule`
+— an nvm prune, or a `node`/`bun` version switch, afterward needs a
+regenerate-and-reinstall of the line.
+
+### Honest limits
+
+- **`flow-next` reports, it does not dispatch.** It records `keryx flow next
+  <flow>`'s own decision (ready/blocked/none, plus unresolved tasks) into the
+  run record. It never starts an agent turn to work the task — an unattended
+  fire (a git hook, cron, CI) has no safe way to own a model dispatch (model
+  choice, tool access, reviewing the result), so this build turns "an event
+  happened" into "here is what should happen next" and stops there.
+- **The spend ceiling is project-wide, with no per-trigger override.**
+  `open-flow` and `flow-next` (the only two action kinds that could ever lead
+  to model spend) are gated on the same default ceiling `keryx review budget`
+  uses, evaluated against every recorded trigger cost across every trigger
+  name and action kind in this project — not a ceiling scoped to one entry.
+- **The trigger-run lock is not taken by the interactive commands.** It
+  serializes `trigger run` invocations against each other, not against a
+  person typing `keryx sync --apply` or `keryx gdgraph build` directly — the
+  two can still race.
 
 ---
 
