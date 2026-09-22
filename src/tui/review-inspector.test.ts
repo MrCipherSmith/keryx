@@ -362,6 +362,105 @@ test("[d] then [y] runs declineProposal (--decision rejected), separately from a
   expect(acceptCalls).toBe(0);
 });
 
+test("[s] then [y] runs acceptProposalWithAcknowledgement (--acknowledge-security), never the plain accept", async () => {
+  let active = "detail";
+  let node: { content: string } | undefined;
+  let acceptCalls = 0;
+  let ackCalls = 0;
+  let resolveAck: (() => void) | undefined;
+  presentReview(
+    (_otui, _chrome, input) => {
+      input.renderTab("detail", {
+        add: (child: { content?: string }) => {
+          node = child as { content: string };
+        },
+      });
+      return {
+        close: () => input.onClose?.(),
+        setTab: (id) => {
+          active = id;
+        },
+        activeTab: () => active,
+      };
+    },
+    fakeOtui(),
+    {},
+    {
+      items: [PROPOSAL],
+      visibleRows: 20,
+      acceptProposal: async () => {
+        acceptCalls += 1;
+        return { ok: true };
+      },
+      acceptProposalWithAcknowledgement: (item) =>
+        new Promise((resolve) => {
+          ackCalls += 1;
+          resolveAck = () => resolve({ ok: true });
+          expect(item.proposalId).toBe(PROPOSAL.proposalId);
+        }),
+      onKeypress: (handler) => {
+        handler({ name: "s", sequence: "s" });
+        expect(node?.content).toContain("CONFIRM accept-acknowledged (--acknowledge-security)");
+        // The acknowledgement is the operator's own statement, so the arm step
+        // says out loud what pressing y claims.
+        expect(node?.content).toContain("have READ the evidence");
+        handler({ name: "y", sequence: "y" });
+        expect(node?.content).toContain("acknowledging the security findings");
+        return () => {};
+      },
+    },
+  );
+  expect(resolveAck).toBeDefined();
+  resolveAck?.();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(node?.content).toContain("✓ Accepted (security findings acknowledged).");
+  expect(ackCalls).toBe(1);
+  // The plain accept is a DIFFERENT action: the acknowledged path must never be
+  // reachable through it, and this one must never fall back to it.
+  expect(acceptCalls).toBe(0);
+});
+
+test("[s] with no acknowledgement handler wired reports 'unavailable' instead of silently accepting", () => {
+  let active = "detail";
+  let node: { content: string } | undefined;
+  let acceptCalls = 0;
+  presentReview(
+    (_otui, _chrome, input) => {
+      input.renderTab("detail", {
+        add: (child: { content?: string }) => {
+          node = child as { content: string };
+        },
+      });
+      return {
+        close: () => input.onClose?.(),
+        setTab: (id) => {
+          active = id;
+        },
+        activeTab: () => active,
+      };
+    },
+    fakeOtui(),
+    {},
+    {
+      items: [PROPOSAL],
+      visibleRows: 20,
+      acceptProposal: async () => {
+        acceptCalls += 1;
+        return { ok: true };
+      },
+      onKeypress: (handler) => {
+        handler({ name: "s", sequence: "s" });
+        expect(node?.content).not.toContain("CONFIRM accept-acknowledged");
+        expect(node?.content).toContain("no accept-acknowledged handler is configured");
+        // Never silently downgraded to the plain, unacknowledged accept.
+        expect(acceptCalls).toBe(0);
+        return () => {};
+      },
+    },
+  );
+});
+
 test("a non-proposal selection never arms accept/decline, even with both handlers present — and says why instead of doing nothing", () => {
   let active = "detail";
   let node: { content: string } | undefined;

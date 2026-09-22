@@ -175,6 +175,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
             `keryx workspace confirm-review: proposal ${proposalId} is gated \`needs-approval\` — its evidence tripped the security scan.`,
             ...(security.evidenceRefs.length > 0 ? [`Evidence: ${security.evidenceRefs.join(", ")}`] : []),
             "Read the evidence, then re-run with --acknowledge-security to state that you have.",
+            `  keryx workspace confirm-review ${workspaceId} ${proposalId} --acknowledge-security`,
             "Accepting without reading it is the thing this gate exists to prevent.",
           ].join("\n"),
         );

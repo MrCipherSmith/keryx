@@ -264,13 +264,26 @@ export class ProposalLifecycleService {
             { securityGate: proposal.security.gate },
           );
           if (!confirmed.ok) {
+            // The mint command must carry the flag this refusal is ABOUT. It did
+            // not: the `needs-approval` branch told the reviewer to "mint a fresh
+            // token with `keryx workspace confirm-review …`" — no
+            // `--acknowledge-security` — so every freshly minted token lacked the
+            // acknowledgement and was refused the same way, for ever. The gate was
+            // right; the instruction looped (operator report: "accept always
+            // fails"). Only `needs-approval` requires the flag, so it is appended
+            // only there: a `pass` proposal must not be told to acknowledge
+            // something it never tripped.
+            const mintCommand =
+              proposal.security.gate === "needs-approval"
+                ? "keryx workspace confirm-review <workspace-id> <proposal-id> --acknowledge-security"
+                : "keryx workspace confirm-review <workspace-id> <proposal-id>";
             throw new ProposalLifecycleError(
               confirmed.reason,
               confirmed.reason === "token_required"
-                ? "accept requires a confirm token — run `keryx workspace confirm-review <workspace-id> <proposal-id>` from an interactive terminal first"
+                ? `accept requires a confirm token — run \`${mintCommand}\` from an interactive terminal first`
                 : confirmed.reason === "security_acknowledgement_required"
-                  ? "accept requires explicit human acknowledgement of the proposal security findings — mint a fresh token with `keryx workspace confirm-review <workspace-id> <proposal-id>`"
-                  : "confirm token is missing, expired, already used, or does not match this proposal — mint a fresh one with `keryx workspace confirm-review <workspace-id> <proposal-id>`",
+                  ? `accept requires explicit human acknowledgement of the proposal security findings — re-mint the token WITH the acknowledgement flag: \`${mintCommand}\``
+                  : `confirm token is missing, expired, already used, or does not match this proposal — mint a fresh one with \`${mintCommand}\``,
             );
           }
         }

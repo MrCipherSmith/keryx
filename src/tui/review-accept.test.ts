@@ -98,3 +98,37 @@ test("a decline command failure is reported, never thrown", async () => {
   const outcome = await declineProposalViaShell(run, "ws-1", "proposal-abc");
   expect(outcome).toEqual({ ok: false, message: "proposal already has a terminal transition" });
 });
+
+test("acknowledgeSecurity puts --acknowledge-security on the mint only — the second command is unchanged", async () => {
+  const { run, calls } = fakeRunner({
+    "keryx workspace confirm-review": {
+      output: JSON.stringify({ token: "tok-ack", expiresAt: "2026-08-16T00:05:00.000Z" }),
+      isError: false,
+    },
+    "keryx workspace review": { output: JSON.stringify({ status: "accepted" }), isError: false },
+  });
+  const outcome = await acceptProposalViaShell(run, "ws-1", "proposal-abc", { acknowledgeSecurity: true });
+  expect(outcome).toEqual({ ok: true });
+  // The flag has to reach the MINT: that is what makes the stored token carry
+  // `securityAcknowledged: true`, the sole way a `needs-approval` proposal can be
+  // accepted (src/sac/review-confirm-token.ts). Spending the token is identical
+  // either way.
+  expect(calls[0]).toBe("keryx workspace confirm-review 'ws-1' 'proposal-abc' --acknowledge-security");
+  expect(calls[1]).toBe(
+    "keryx workspace review 'ws-1' 'proposal-abc' --decision accepted --confirm-token 'tok-ack'",
+  );
+});
+
+test("the default mint carries no --acknowledge-security — the acknowledgement is never assumed", async () => {
+  const { run, calls } = fakeRunner({
+    "keryx workspace confirm-review": { output: JSON.stringify({ token: "tok-plain" }), isError: false },
+    "keryx workspace review": { output: "{}", isError: false },
+  });
+  await acceptProposalViaShell(run, "ws-1", "proposal-abc");
+  expect(calls[0]).toBe("keryx workspace confirm-review 'ws-1' 'proposal-abc'");
+  expect(calls[0]).not.toContain("--acknowledge-security");
+  // …and an explicit `false` is the same as omitting it — the flag is opt-in,
+  // never inferred from the proposal's gate.
+  await acceptProposalViaShell(run, "ws-1", "proposal-abc", { acknowledgeSecurity: false });
+  expect(calls[2]).toBe("keryx workspace confirm-review 'ws-1' 'proposal-abc'");
+});

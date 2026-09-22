@@ -11,6 +11,14 @@
 // keying [a] then [y] inside the modal is the SLATE-20 confirm-token's
 // human-presence proof, exactly like a human typing both commands at a
 // terminal would be.
+//
+// `options.acknowledgeSecurity` backs the /review modal's separate `[s]`
+// action: the same two commands, with `--acknowledge-security` on the mint. A
+// proposal whose evidence tripped the scanner (`security.gate:
+// "needs-approval"`) can be accepted no other way — without the flag the mint
+// is refused outright — so the modal needs a real action for it, rather than
+// acknowledging on the operator's behalf, which is the single thing that gate
+// exists to prevent.
 
 import type { CommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 
@@ -36,8 +44,15 @@ export async function acceptProposalViaShell(
   run: CommandRunner,
   workspaceId: string,
   proposalId: string,
+  options: { acknowledgeSecurity?: boolean } = {},
 ): Promise<AcceptProposalOutcome> {
-  const mint = await run(`keryx workspace confirm-review ${shQuote(workspaceId)} ${shQuote(proposalId)}`);
+  // The flag goes on the MINT only: it is what makes `confirm-review` record
+  // `securityAcknowledged: true` in the token, the one thing a `needs-approval`
+  // accept requires (src/sac/review-confirm-token.ts). The second command is
+  // byte-identical either way. Never defaulted to true — the flag IS the
+  // operator stating they read the findings.
+  const acknowledge = options.acknowledgeSecurity === true ? " --acknowledge-security" : "";
+  const mint = await run(`keryx workspace confirm-review ${shQuote(workspaceId)} ${shQuote(proposalId)}${acknowledge}`);
   if (mint.isError) {
     return { ok: false, message: mint.output };
   }

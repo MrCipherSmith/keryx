@@ -185,6 +185,9 @@ test("confirm-review refuses a needs-approval proposal until the reviewer acknow
   expect(refused.stderr).toContain("needs-approval");
   expect(refused.stderr).toContain("./evidence/secret.txt");
   expect(refused.stderr).toContain("--acknowledge-security");
+  // …and the ready-to-copy command, flag included — prose alone was what let an
+  // operator re-run the plain command and mint another unacknowledged token.
+  expect(refused.stderr).toContain("confirm-review workspace-a proposal-a --acknowledge-security");
 
   const acknowledged = await invoke(cwd, ["confirm-review", "workspace-a", "proposal-a", "--acknowledge-security"]);
   expect(acknowledged.exitCode).toBe(0);

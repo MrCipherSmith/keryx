@@ -25,7 +25,7 @@ export const REVIEW_COMMAND = "/review";
 
 export const REVIEW_FOOTER = [
   { key: "[/]", label: "item" },
-  { key: "←/→ a d", label: "accept/decline" },
+  { key: "←/→ a s d", label: "accept / accept+ack / decline" },
   { key: "enter y", label: "arm → confirm" },
   { key: "↑/↓", label: "scroll" },
   { key: "esc", label: "close" },
@@ -197,10 +197,16 @@ function describeGroupOutcome(g: WrapUpGroupOutcome): string {
   }
 }
 
-/** The two mutating actions this modal offers — `accept` or `decline` (a
- * `--decision rejected`; `dismissed` stays terminal-only, see
- * `describeReviewItem`'s proposal case). */
-export type ReviewDecision = "accept" | "decline";
+/** The mutating actions this modal offers. `accept` and `decline` map to the
+ * two `--decision` values (`dismissed` stays terminal-only, see
+ * `describeReviewItem`'s proposal case); `accept-acknowledged` is the SAME
+ * accept run through `keryx workspace confirm-review --acknowledge-security`,
+ * the only way a proposal whose evidence tripped the scanner (`security.gate:
+ * "needs-approval"`) can be accepted at all. Deliberately a separate, explicit
+ * action and never an automatic fallback: the whole point of that flag is that
+ * a human states they read the findings, so the modal must not claim it for
+ * them. */
+export type ReviewDecision = "accept" | "accept-acknowledged" | "decline";
 
 export type ReviewDetailStatus =
   | { kind: "idle" }
@@ -214,13 +220,37 @@ export type ReviewDetailStatus =
   | { kind: "running"; decision: ReviewDecision }
   | { kind: "done"; decision: ReviewDecision; outcome: { ok: true } | { ok: false; message: string } };
 
-const DECISION_VERB: Record<ReviewDecision, string> = { accept: "Accept", decline: "Decline" };
-const DECISION_ING: Record<ReviewDecision, string> = { accept: "Accepting", decline: "Declining" };
-const DECISION_DONE: Record<ReviewDecision, string> = { accept: "Accepted", decline: "Declined" };
+const DECISION_VERB: Record<ReviewDecision, string> = {
+  accept: "Accept",
+  "accept-acknowledged": "Accept with security acknowledgement",
+  decline: "Decline",
+};
+const DECISION_ING: Record<ReviewDecision, string> = {
+  accept: "Accepting",
+  "accept-acknowledged": "Accepting (acknowledging the security findings)",
+  decline: "Declining",
+};
+const DECISION_DONE: Record<ReviewDecision, string> = {
+  accept: "Accepted",
+  "accept-acknowledged": "Accepted (security findings acknowledged)",
+  decline: "Declined",
+};
 const DECISION_COMMAND: Record<ReviewDecision, string> = {
   accept: "running `keryx workspace confirm-review` then `keryx workspace review`",
+  "accept-acknowledged": "running `keryx workspace confirm-review --acknowledge-security` then `keryx workspace review`",
   decline: "running `keryx workspace review --decision rejected`",
 };
+/** The key that arms each decision — the legend and the two "does nothing"
+ * lines read it from here so a second copy can never drift from the handler. */
+const DECISION_KEY: Record<ReviewDecision, string> = { accept: "a", "accept-acknowledged": "s", decline: "d" };
+/** Ring order for ←/→ on a proposal's Detail tab. Three buttons, so the arrows
+ * step through them rather than jumping between the two ends. */
+const ACTION_ORDER: readonly ReviewDecision[] = ["accept", "accept-acknowledged", "decline"];
+function stepDecision(current: ReviewDecision, delta: number): ReviewDecision {
+  const index = ACTION_ORDER.indexOf(current);
+  const next = (index + delta + ACTION_ORDER.length) % ACTION_ORDER.length;
+  return ACTION_ORDER[next] as ReviewDecision;
+}
 
 export function formatReviewDetailLines(item: CatchUpItem | undefined, status: ReviewDetailStatus): string[] {
   if (item === undefined) {
@@ -229,13 +259,19 @@ export function formatReviewDetailLines(item: CatchUpItem | undefined, status: R
   const lines = describeReviewItem(item);
   if (item.type !== "proposal") {
     if (status.kind === "unavailable") {
-      return [...lines, "", `[${status.decision === "accept" ? "a" : "d"}] does nothing here — accept/decline only apply to a pending proposal, not to this item.`];
+      return [...lines, "", `[${DECISION_KEY[status.decision]}] does nothing here — accept/decline only apply to a pending proposal, not to this item.`];
     }
     return lines;
   }
   const withAction = [...lines, ""];
   if (status.kind === "armed") {
-    withAction.push(`Press [y] to CONFIRM ${status.decision}, any other key cancels.`);
+    // Keeps the decision id as the load-bearing word (the modal's own tests and
+    // the armed-confirm contract both key on it); the acknowledged variant adds
+    // the flag it will actually pass, so the confirmation states what it does.
+    withAction.push(`Press [y] to CONFIRM ${status.decision}${status.decision === "accept-acknowledged" ? " (--acknowledge-security)" : ""}, any other key cancels.`);
+    if (status.decision === "accept-acknowledged") {
+      withAction.push("This states that you have READ the evidence above and accept its security findings.");
+    }
   } else if (status.kind === "running") {
     withAction.push(`${DECISION_ING[status.decision]}… ${DECISION_COMMAND[status.decision]}.`);
   } else if (status.kind === "done" && status.outcome.ok) {
@@ -243,9 +279,11 @@ export function formatReviewDetailLines(item: CatchUpItem | undefined, status: R
   } else if (status.kind === "done" && !status.outcome.ok) {
     withAction.push(`✗ ${DECISION_VERB[status.decision]} failed: ${status.outcome.message}`);
   } else if (status.kind === "unavailable") {
-    withAction.push(`[${status.decision === "accept" ? "a" : "d"}] does nothing — no ${status.decision} handler is configured for this modal.`);
+    withAction.push(`[${DECISION_KEY[status.decision]}] does nothing — no ${status.decision} handler is configured for this modal.`);
   } else {
-    withAction.push("[a] Accept this proposal   [d] Decline this proposal");
+    withAction.push("[a] Accept this proposal");
+    withAction.push("[s] Accept it, acknowledging the security findings its evidence tripped");
+    withAction.push("[d] Decline this proposal");
   }
   return withAction;
 }
@@ -321,6 +359,7 @@ type TextLike = { content: string; fg: string | undefined };
 
 type ActionButtonCallbacks = {
   onAccept: () => void;
+  onAcceptAcknowledged: () => void;
   onDecline: () => void;
 };
 
@@ -329,7 +368,7 @@ function paintActionButtons(
   renderer: unknown,
   body: unknown,
   callbacks: ActionButtonCallbacks,
-): { accept: ButtonRef; decline: ButtonRef } | undefined {
+): { accept: ButtonRef; acceptAcknowledged: ButtonRef; decline: ButtonRef } | undefined {
   if (otui === undefined || otui === null || body === undefined || body === null) {
     return undefined;
   }
@@ -379,6 +418,9 @@ function paintActionButtons(
   };
   return {
     accept: make("Accept", "review-accept", theme.ok, callbacks.onAccept),
+    // Same colour as Accept: this is the same accept, and a distinct colour
+    // would read as a different severity rather than a different precondition.
+    acceptAcknowledged: make("Accept + ack", "review-accept-ack", theme.ok, callbacks.onAcceptAcknowledged),
     decline: make("Decline", "review-decline", theme.error, callbacks.onDecline),
   };
 }
@@ -398,6 +440,12 @@ export type PresentReviewOptions = {
    * the accept commands — `[a]` then sets `status: "unavailable"` instead of
    * arming, and the Detail pane says so, rather than doing nothing silently. */
   acceptProposal?: AcceptProposalFn;
+  /** Same as {@link acceptProposal}, but minted with `--acknowledge-security` —
+   * the only action that can accept a proposal whose evidence tripped the
+   * scanner (`security.gate: "needs-approval"`). Omitted ⇒ `[s]` reports "does
+   * nothing", exactly like a missing accept handler. Never derived from
+   * `acceptProposal`: the acknowledgement has to be its own deliberate act. */
+  acceptProposalWithAcknowledgement?: AcceptProposalFn;
   /** Same as {@link acceptProposal}, for `[d]` (`--decision rejected`). */
   declineProposal?: DeclineProposalFn;
   /** Fires once, after a successful accept OR decline — the caller's cue to
@@ -425,7 +473,7 @@ export function presentReview(
   let focusedAction: ReviewDecision = "accept";
   let listNode: { content: string } | undefined;
   let detailNode: { content: string } | undefined;
-  let actionButtons: { accept: ButtonRef; decline: ButtonRef } | undefined;
+  let actionButtons: { accept: ButtonRef; acceptAcknowledged: ButtonRef; decline: ButtonRef } | undefined;
   let unsubscribeKey: (() => void) | undefined;
   const rendererHint = options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
   const bodyRows =
@@ -466,8 +514,11 @@ export function presentReview(
     paintSelection();
   };
 
-  const handlerFor = (decision: ReviewDecision): AcceptProposalFn | DeclineProposalFn | undefined =>
-    decision === "accept" ? options.acceptProposal : options.declineProposal;
+  const handlerFor = (decision: ReviewDecision): AcceptProposalFn | DeclineProposalFn | undefined => {
+    if (decision === "accept") return options.acceptProposal;
+    if (decision === "accept-acknowledged") return options.acceptProposalWithAcknowledgement;
+    return options.declineProposal;
+  };
 
   /** Repaint the Accept/Decline button highlights to match `focusedAction`
    * (idle) or the armed/running decision. No-op when buttons aren't mounted
@@ -479,6 +530,7 @@ export function presentReview(
     const onProposal = items[selected]?.type === "proposal" && status.kind !== "done";
     const highlighted = status.kind === "armed" ? status.decision : focusedAction;
     actionButtons.accept.setActive(onProposal && highlighted === "accept");
+    actionButtons.acceptAcknowledged.setActive(onProposal && highlighted === "accept-acknowledged");
     actionButtons.decline.setActive(onProposal && highlighted === "decline");
   };
 
@@ -542,7 +594,7 @@ export function presentReview(
         status.kind !== "done" &&
         handle?.activeTab() === "detail"
       ) {
-        focusedAction = direction === "left" ? "accept" : "decline";
+        focusedAction = stepDecision(focusedAction, direction === "left" ? -1 : 1);
         status = { kind: "idle" };
         paintSelection();
         return true;
@@ -572,6 +624,10 @@ export function presentReview(
           onAccept: () => {
             focusedAction = "accept";
             armDecision("accept");
+          },
+          onAcceptAcknowledged: () => {
+            focusedAction = "accept-acknowledged";
+            armDecision("accept-acknowledged");
           },
           onDecline: () => {
             focusedAction = "decline";
@@ -637,13 +693,13 @@ export function presentReview(
       // keypress still sees them (modal-host skipped its tab switch), so
       // this is the same no-op update — idempotent.
       if (onDetail && (token === "left" || token === "right") && status.kind !== "running" && status.kind !== "done") {
-        focusedAction = token === "left" ? "accept" : "decline";
+        focusedAction = stepDecision(focusedAction, token === "left" ? -1 : 1);
         status = { kind: "idle" };
         paintSelection();
         return;
       }
-      if (onDetail && (token === "a" || token === "d") && status.kind !== "running" && status.kind !== "done") {
-        const decision: ReviewDecision = token === "a" ? "accept" : "decline";
+      if (onDetail && (token === "a" || token === "s" || token === "d") && status.kind !== "running" && status.kind !== "done") {
+        const decision: ReviewDecision = token === "a" ? "accept" : token === "s" ? "accept-acknowledged" : "decline";
         focusedAction = decision;
         armDecision(decision);
         return;

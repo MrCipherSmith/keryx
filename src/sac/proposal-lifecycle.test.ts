@@ -251,6 +251,54 @@ test("evidence content containing a detectable secret flips security.gate to \"n
   expect(proposal.security.gate).toBe("needs-approval");
 });
 
+// Regression (operator report: "accept always fails"): the mint instruction a
+// refused accept hands back must carry the flag the refusal is ABOUT. It did
+// not — the `needs-approval` branch said "mint a fresh token with `keryx
+// workspace confirm-review <workspace-id> <proposal-id>`", with no
+// `--acknowledge-security`, so every freshly minted token lacked the
+// acknowledgement and was refused identically, for ever. The gate was right;
+// the instruction looped, and the loop is the bug these two tests pin.
+//
+// The wrap-up's revision is pinned to the secret content on disk (same
+// technique as the detectPii isolation test above), so the `needs-approval`
+// gate comes from the SCANNER's secret detector and not from the
+// revision-mismatch branch — and, below, so the accept is not refused as
+// `stale_evidence` for a reason this test is not about.
+async function serviceWithPinnedSecretEvidence(): Promise<{ root: string; service: ProposalLifecycleService }> {
+  const { root, service } = await setup();
+  const awsExampleKey = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+  await writeFile(path.join(root, "evidence", "e.md"), awsExampleKey);
+  const wrapUpAuthority = createTrustedWrapUpAuthority({ now: () => new Date(time), resolveExplicitWrapUp: async () => ({ workspaceId: "workspace-a", sourceRevision: "wrapup-r1", summary: "secret wrap-up summary", evidence: [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update(awsExampleKey).digest("hex"), observedAt: time }], expiresAt: "2026-08-12T01:00:00.000Z" }) });
+  const pinned = new ProposalLifecycleService({ workspaceRoot: root, workspaces: (service as any).options.workspaces, authorizationServer: (service as any).options.authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, policyRef: "./security/policy", policyRevision: "policy-r1", targetWriters: (service as any).options.targetWriters, wrapUpAuthority, now: () => new Date(time) });
+  const actor = await (pinned as any).options.authorizationServer.actorContextFor(undefined, "proposal-create-correlation-0001");
+  const provenance = await wrapUpAuthority.issue({ actor, source: "session", sourceRef: "./evidence/e.md" });
+  const proposal = await pinned.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0001", workspaceId: "workspace-a", id: "proposal-a", proposalRevision: "r1", kind: "wiki-update", wrapUp: provenance });
+  expect(proposal.security.gate).toBe("needs-approval");
+  return { root, service: pinned };
+}
+
+test("a needs-approval accept refusal names --acknowledge-security in its mint instruction", async () => {
+  const { service } = await serviceWithPinnedSecretEvidence();
+  // No token at all — the `token_required` branch, where the reviewer is told
+  // which token to mint for the first time.
+  await expect(service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true })).rejects.toMatchObject({ code: "token_required", message: expect.stringContaining("--acknowledge-security") });
+});
+
+test("a needs-approval accept whose token lacks the acknowledgement names the flag, and the acknowledged token the message asks for then accepts", async () => {
+  const { root, service } = await serviceWithPinnedSecretEvidence();
+  // Minted WITHOUT the acknowledgement — byte-for-byte the token the old,
+  // flag-less instruction produced. Refused, and the refusal must now name the
+  // flag instead of sending the reviewer round the same loop.
+  const unacknowledged = await acceptToken(service);
+  await expect(service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: unacknowledged })).rejects.toMatchObject({ code: "security_acknowledgement_required", message: expect.stringContaining("--acknowledge-security") });
+  // The refusal is recoverable: mint exactly what it asked for, and the accept
+  // completes. That re-mint-with-the-flag half is what the old message never
+  // told the reviewer, which is why the gate read as an unbreakable wall.
+  const acknowledged = (await mintConfirmToken(root, "workspace-a", "proposal-a", { securityAcknowledged: true })).token;
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0002", interactive: true, confirmToken: acknowledged });
+  expect(result.event.toStatus).toBe("accepted");
+});
+
 // Regression for the reviewed-and-fixed blocker: scanEvidenceSecurityGate must
 // pin scan results to the exact content the trusted wrap-up's revision hash
 // was computed over, not "whatever is currently on disk" at create() time —

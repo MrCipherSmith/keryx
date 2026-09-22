@@ -5100,6 +5100,11 @@ export async function launchTuiAgentShell(opts: {
         openReview(otui, chrome, {
           items,
           acceptProposal: (item) => acceptProposalViaShell(makeCommandRunner(cwd), item.workspaceId, item.proposalId),
+          // `[s]`: the same accept, minted with `--acknowledge-security`. Without
+          // it a `needs-approval` proposal (evidence that tripped the scanner)
+          // could never be accepted from this modal at all, and with it wired
+          // automatically Accept would silently acknowledge findings nobody read.
+          acceptProposalWithAcknowledgement: (item) => acceptProposalViaShell(makeCommandRunner(cwd), item.workspaceId, item.proposalId, { acknowledgeSecurity: true }),
           declineProposal: (item) => declineProposalViaShell(makeCommandRunner(cwd), item.workspaceId, item.proposalId),
           onResolved: () => {
             void refreshReviewSidebar();
