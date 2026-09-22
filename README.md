@@ -35,7 +35,8 @@ run `keryx shell`, or do both — they all read the same project brain.
 You can delegate the work, not the responsibility: a managed flow freezes its
 acceptance criteria before the work starts, lets them change only through a
 recorded update with a reason, and completes only when every one is confirmed
-against recorded evidence.
+against recorded evidence — under a named owner, with every confirmation and
+the completion itself signed.
 
 ```bash
 npm install -g @mrciphersmith/keryx
