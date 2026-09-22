@@ -381,7 +381,14 @@ otuiTest("flow 142 AC4: late notice remains visible above a full 12-agent sideba
 
   const frame = h.captureCharFrame();
   expect(frame).toContain("Keryx update");
-  expect(frame.replace(/[\s│]/g, "")).toContain("@mrciphersmith/keryx@latest");
+  // The advisory SPLITS the install command across two rows on purpose — it does
+  // not fit one sidebar column — so the frame carries the two halves with the
+  // sidebar's own chrome, the scrollbox's scrollbar cell included, between them.
+  // Asserting on the halves proves the command is complete and unclipped without
+  // depending on whatever that chrome paints between them.
+  const halfAt = Math.ceil(FIXED_INSTALL_COMMAND.length / 2);
+  expect(frame).toContain(FIXED_INSTALL_COMMAND.slice(0, halfAt));
+  expect(frame).toContain(FIXED_INSTALL_COMMAND.slice(halfAt));
   expect(h.chrome.textarea.focused).toBe(true);
   h.destroy();
 });

@@ -47,6 +47,7 @@ import { deriveTranscriptPalette, getTheme, onThemeChange, type Theme } from "./
 import { destroyModalHost } from "./modal-host";
 import { currentDebugRun, debugEvent } from "./debug-log";
 import { attachRendererGuards } from "./renderer-debug";
+import { SIDEBAR_WIDTH } from "./sidebar-metrics";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only). */
 type OpenTui = typeof import("@opentui/core");
@@ -93,8 +94,13 @@ export const COMPOSER_MAX_ROWS = 6;
 const COMPOSER_BORDER_ROWS = 2;
 /** Rows the `/` dropdown occupies when open (a described option costs two). */
 const MENU_HEIGHT = 10;
-/** Sidebar is a fixed column so the transcript width does not jump. */
-export const SIDEBAR_WIDTH = 30;
+/**
+ * Re-exported for the chrome's own callers (the shell, the splash, the tests).
+ * The value, and the reason the column is fixed, live in `sidebar-metrics.ts` —
+ * which `modal-host.ts` can import without a cycle, so the two files share one
+ * number instead of two.
+ */
+export { SIDEBAR_WIDTH };
 const SIDEBAR_BORDER_LEFT = 1;
 const SIDEBAR_PADDING_LEFT = 2;
 const SIDEBAR_PADDING_RIGHT = 1;
@@ -102,10 +108,10 @@ const WORKSPACE_GUTTER_X = 1;
 const TRANSCRIPT_PADDING_X = 1;
 /**
  * Columns a sidebar panel's TEXT actually gets: the fixed width less the left
- * border and the horizontal padding (30 - 1 - 2 - 1 = 26). Derived from the very
+ * border and the horizontal padding (34 - 1 - 2 - 1 = 30). Derived from the very
  * constants the sidebar box below is built from, so a caller that fits a label to
  * this budget cannot drift from the layout — and exported because a caller has
- * to shorten to it: the working directory (`shortenCwd`, `tui-shell.ts`) does not
+ * fit in 26 columns and must be told how much room it has, not guess.
  * fit in 26 columns and must be told how much room it has, not guess.
  */
 export const SIDEBAR_TEXT_WIDTH =

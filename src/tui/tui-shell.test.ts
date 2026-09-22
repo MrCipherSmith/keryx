@@ -464,26 +464,26 @@ otuiTest("G-2: the shipped sidebar shows the working directory, tail-first and u
   // The SHIPPED panel and the SHIPPED budget — not a replica.
   //
   // This cwd sits ON the boundary deliberately: at the correct budget the
-  // greediest fit is exactly 26 chars, and at the next segment out it is 29 — so
-  // a budget that forgot the sidebar's border and padding (30) would pick the
-  // 29-char form, which the 26-column column cannot render. A path whose
-  // shortening happens to be identical at 26 and 30 would let a wrong budget
+  // greediest fit is exactly 30 chars, and at the next segment out it is 33 — so
+  // a budget that forgot the sidebar's border and padding (34) would pick the
+  // 33-char form, which the 30-column column cannot render. A path whose
+  // shortening happens to be identical at 30 and 34 would let a wrong budget
   // through, which is precisely what an earlier draft of this test did.
-  const cwd = "/Users/someone/cc/aaaaaaaaaa/bbbbbbbbb/src";
+  const cwd = "/Users/someone/dd/ccc/aaaaaaaaaa/bbbbbbbbb/src";
   mountCwdPanel(otui.core, setup.renderer, chrome.sidebarTop, cwd);
   await setup.flush();
   const frame = setup.captureCharFrame();
 
   expect(frame).toContain("Directory"); // the panel label
   const expected = shortenCwd(cwd, SIDEBAR_TEXT_WIDTH);
-  expect(expected).toBe("…/aaaaaaaaaa/bbbbbbbbb/src");
+  expect(expected).toBe("…/ccc/aaaaaaaaaa/bbbbbbbbb/src");
   expect(expected.length).toBe(SIDEBAR_TEXT_WIDTH); // exactly fills the column
   // Present in full: a value shortened to a wrong budget is cut off by the
   // layout, and this fails.
   expect(frame).toContain(expected);
   expect(expected.endsWith("/src")).toBe(true);
   // …and on ONE row: a value over budget wraps into a second sidebar line
-  // (measured: `…/cc/aaaaaaaaaa/bbbbbbbbb/` + `src`), which is the visible
+  // (measured: `…/dd/ccc/aaaaaaaaaa/bbbbbbbbb/` + `src`), which is the visible
   // symptom `toContain` above rejects.
   const rows = frame.split("\n").filter((line) => line.includes("…/") || line.includes("/src"));
   expect(rows.length).toBe(1);

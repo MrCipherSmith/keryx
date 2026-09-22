@@ -11,6 +11,7 @@
 // `typeof import(...)`. There is no top-level import of it (the static guard
 // in `src/capability/no-optional-imports` is a regex over file text).
 import type { ShellChrome } from "./shell-chrome";
+import { SIDEBAR_WIDTH } from "./sidebar-metrics";
 import { getTheme, onThemeChange } from "./theme";
 import { clearTranscriptChildren } from "./transcript-blocks";
 
@@ -142,8 +143,12 @@ export function modalBodyRows(panelHeight: number): number {
 }
 const CLOSE_HINT = "[x] esc";
 
-/** Sidebar width assumed before the first layout pass has measured it. */
-const UNMEASURED_SIDEBAR_WIDTH = 30;
+/**
+ * Columns the sidebar occupies before the first layout pass has measured it.
+ * Imported from the module that owns the number, never copied: a fallback that
+ * drifted from the column it stands in for would under-reserve the panel by
+ * exactly the drift (PR #591 F-013).
+ */
 
 /**
  * Columns the panel may occupy (flow 269 AC2): the main column when the chrome
@@ -158,7 +163,7 @@ export function resolveModalAvailableWidth(chrome: ModalChrome): number {
     return Math.min(rWidth, mainWidth);
   }
   if (chrome.sidebar !== undefined) {
-    const sidebarWidth = chrome.sidebar.width > 0 ? chrome.sidebar.width : UNMEASURED_SIDEBAR_WIDTH;
+    const sidebarWidth = chrome.sidebar.width > 0 ? chrome.sidebar.width : SIDEBAR_WIDTH;
     return Math.max(20, rWidth - sidebarWidth);
   }
   return rWidth;

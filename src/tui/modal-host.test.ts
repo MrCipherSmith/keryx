@@ -27,6 +27,7 @@ import {
   resolveModalPanelSize,
   type ModalTabContext,
 } from "./modal-host";
+import { SIDEBAR_WIDTH } from "./sidebar-metrics";
 import { applyThemeId, getThemeId, resolveTheme } from "./theme";
 
 async function loadOpenTui(): Promise<{
@@ -601,7 +602,8 @@ otuiTest("AC6: unknown initialTab falls back to the first tab", async () => {
 
 otuiTest("Flow 269 AC2: ModalHost bounds dialog width strictly within main pane width, preventing right border collision with sidebar separator", async () => {
   const otui = requireOtui();
-  // Standard 120x40 terminal with 30-col sidebar -> main pane width is 90 cols
+  // Standard 120x40 terminal, and the main pane is whatever is left of it after
+  // the shipped sidebar column — derived from the constant, never repeated.
   const h = await mountChrome(otui, { width: 120, height: 40 });
   const handle = openModal(otui.core, h.chrome, {
     title: "Clamping Test",
@@ -614,12 +616,13 @@ otuiTest("Flow 269 AC2: ModalHost bounds dialog width strictly within main pane 
   await h.flush();
 
   const mainWidth = resolveModalAvailableWidth(h.chrome);
-  expect(mainWidth).toBe(90);
+  expect(mainWidth).toBe(120 - SIDEBAR_WIDTH);
 
   const panel = h.renderer.root.findDescendantById("modal-panel") as { width: number };
   expect(panel).toBeDefined();
   expect(panel.width).toBeLessThanOrEqual(mainWidth);
-  expect(panel.width).toBe(86);
+  const sized = resolveModalPanelSize(mainWidth, h.renderer.height);
+  expect(panel.width).toBe(sized.width); // the clamped panel, from the call openModal makes
 
   const frame = h.captureCharFrame();
   expect(frame).toContain("Clamping Test");
