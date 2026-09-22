@@ -140,6 +140,13 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // `unclassifiedSegments()` is for, and worth leaving on the record here
   // rather than quietly registering it as if it had always been named.
   { segment: "forgetting", zone: "core" },
+  // Trigger config loading + run resolution/locking (flow 286 T6/T7):
+  // deterministic project-state bookkeeping over a hand-authored config file,
+  // no provider registry and no model call — same shape as `sync`/
+  // `forgetting` above. `src/commands/trigger.ts` (adapter) is what actually
+  // dispatches to `sync --apply` / `gdgraph build`; this segment never
+  // imports adapter code itself.
+  { segment: "trigger", zone: "core" },
   // The published package's one public door (`exports["."]`), which re-exports
   // the ten declared owner facades and nothing else. It is core BY
   // CONSTRUCTION, and `src/core-package.test.ts` is what proves it stays so.

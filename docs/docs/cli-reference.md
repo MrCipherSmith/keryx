@@ -843,6 +843,47 @@ deleted.
 
 ---
 
+## trigger
+
+Fire one declared project trigger — the single entry point every git hook, cron
+line, and CI job calls. A trigger is declared by hand in
+`.metaproject/triggers.json` (keryx never writes this file), each entry naming
+what fires it (a repository event or a schedule) and what it does (`reconcile`,
+`rebuild`, `open-flow`, or `flow-next`).
+
+```
+keryx trigger run <name>   # perform exactly one pass of <name>'s action
+```
+
+| Subcommand | Description |
+|---|---|
+| `run <name>` | Resolve `<name>` against `.metaproject/triggers.json` and perform exactly one pass of its action. |
+| `--help`, `-h` | Print `trigger` usage and exit. |
+
+Only this dispatch's two action kinds actually run: `reconcile` reuses `keryx
+sync --apply`, and `rebuild` reuses `keryx gdgraph build` — neither is
+reimplemented here. `open-flow` and `flow-next` load and validate, but running
+one refuses cleanly with "not implemented in this build" rather than
+half-working.
+
+**Exit codes.** A run exits `0` and says so when there is nothing to do: no
+`.metaproject/triggers.json` yet, or the named entry is disabled. It exits
+non-zero when the name is unknown, the matching entry is malformed, or the
+action itself fails. It also exits `0` (a clean refusal, not a failure) when
+another `keryx trigger run` already holds this project's trigger lock, or when
+the action kind is not implemented yet.
+
+**Locking.** A second `trigger run` for the same project, started while the
+first is still running, refuses immediately rather than waiting — this keeps
+one run at exactly one pass instead of blocking on another run's schedule.
+Retry on the next fire. This lock covers triggered runs only, not `sync
+--apply` / `gdgraph build` invoked directly by a person.
+
+`keryx trigger install`, `keryx trigger list` and `keryx trigger status` are
+not implemented yet.
+
+---
+
 ## commands
 
 The agent-facing command registry: each described keryx command as a

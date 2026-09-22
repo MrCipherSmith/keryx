@@ -365,7 +365,7 @@ test("exactly the known zones bypass a facade — a new one joining is a real ch
 test("some core zones have no service.ts, so the facade rule is unsatisfiable for them", async () => {
   const { unavoidable, facadeless } = await bypassSplit();
 
-  expect(facadeless).toEqual(["capability", "ctx", "gdskills", "metrics", "retention", "review", "sync"]);
+  expect(facadeless).toEqual(["capability", "ctx", "gdskills", "metrics", "retention", "review", "sync", "trigger"]);
   // Load-bearing rather than theoretical: code really does import from them.
   expect(unavoidable).toBeGreaterThan(0);
 });

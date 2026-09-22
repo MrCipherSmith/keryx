@@ -9,7 +9,7 @@
   "title": "Start a flow from a repository event or a schedule, not only from a person at a prompt",
   "status": "in-progress",
   "createdAt": "2026-09-22T18:18:39.374Z",
-  "updatedAt": "2026-09-22T18:30:55.616Z",
+  "updatedAt": "2026-09-22T18:39:44.659Z",
   "source": {
     "type": "description",
     "ref": null
@@ -85,7 +85,7 @@
       "id": "T5",
       "title": "Survey what already fires: hooks, background tasks, serve, bus; decide where triggers live",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -99,13 +99,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Trigger config: schema, validation, per-entry refusal",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -121,7 +122,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -132,8 +134,14 @@
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T18:39:44.659Z",
+            "outcome": "started",
+            "detail": "sonnet: trigger run with locking"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -326,6 +334,21 @@
       "at": "2026-09-22T18:30:55.616Z",
       "event": "task-attempt",
       "detail": "T6: started (attempt 1) — sonnet: trigger config schema"
+    },
+    {
+      "at": "2026-09-22T18:39:44.461Z",
+      "event": "task-done",
+      "detail": "T5: Survey what already fires: hooks, background tasks, serve, bus; decide where triggers live"
+    },
+    {
+      "at": "2026-09-22T18:39:44.560Z",
+      "event": "task-done",
+      "detail": "T6: Trigger config: schema, validation, per-entry refusal"
+    },
+    {
+      "at": "2026-09-22T18:39:44.659Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — sonnet: trigger run with locking"
     }
   ]
 }
