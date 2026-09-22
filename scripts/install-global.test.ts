@@ -62,8 +62,17 @@ let fakeHome: string;
  * (which itself runs `bun install` inside a fresh clone). Generous on purpose:
  * these steps are I/O- and contention-bound, so a tight bound produces a flake
  * that looks like a product bug — a SIGTERM'd git — rather than a slow fixture.
+ *
+ * 120 s was not generous enough, and that is measured rather than guessed: the
+ * fixture clones this repository (bare) and installs into a temp prefix, which
+ * took 131 s for the FILE on an otherwise idle, loaded-by-one-model machine —
+ * and inside a full `bun run check` run (849 files competing for the same CPU)
+ * the `beforeAll` hook hit the cap, which is how `bun run check` came back
+ * `(fail) (unnamed) 120006ms: a beforeEach/afterEach hook timed out`. The
+ * failure names no test and reads like an infrastructure fault, so the cap is
+ * now five times the observed cost.
  */
-const FIXTURE_TIMEOUT_MS = 120_000;
+const FIXTURE_TIMEOUT_MS = 600_000;
 
 beforeAll(async () => {
   if (!installable) {

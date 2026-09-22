@@ -1,6 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { collectFiles, exemptions, isWasIsRow, scanText, scanTree } from "./check-retired-cli-spellings";
 
+/**
+ * `scanTree()` walks the entire documentation corpus — ~1000 markdown files
+ * across `docs/` and `.metaproject/` — while bun's default is a 5 s budget meant
+ * for a unit test. Measured: 0.2 s for the file alone, 17.4 s inside a full
+ * `bun run check`, where 849 test files compete for the same CPU. That is a
+ * TIMEOUT, not a violated assertion, and it makes the release gate red for a
+ * reason that has nothing to do with the docs. 60 s is an order of magnitude
+ * over the contended figure and still catches a genuinely hung scan.
+ */
+const SCAN_TIMEOUT_MS = 60_000;
+
 describe("retired publisher spellings are not taught to readers", () => {
   test("the documentation tree contains no undeclared retired spelling", () => {
     const { violations, markerErrors } = scanTree();
@@ -8,7 +19,7 @@ describe("retired publisher spellings are not taught to readers", () => {
     // Named, not counted: a bare count tells you a gate failed, not what to fix.
     expect(violations.map((v) => `${v.file}:${v.line}  ${v.spelling}`)).toEqual([]);
     expect(markerErrors).toEqual([]);
-  });
+  }, SCAN_TIMEOUT_MS);
 
   // A scanner that silently matches nothing reports "clean" exactly like a
   // clean tree. That failure mode has shipped in this repository before, so
@@ -24,7 +35,7 @@ describe("retired publisher spellings are not taught to readers", () => {
     // design — they record the rename. If the matcher stops seeing even those,
     // it has stopped working, whatever it reports about violations.
     expect(occurrences).toBeGreaterThanOrEqual(6);
-  });
+  }, SCAN_TIMEOUT_MS);
 
   test("the collector reaches the specific files a reader is sent to", () => {
     const files = collectFiles();
