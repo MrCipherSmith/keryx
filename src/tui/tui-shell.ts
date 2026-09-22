@@ -233,7 +233,9 @@ import { attachExternalOperator, type ExternalOperator } from "./external-operat
 import { openExternalInspector } from "./external-inspector";
 import { setBackgroundJobListener } from "./job-bridge";
 import { openJobInspector, paintBackgroundJobSidebar } from "./background-job-inspector";
+import { getExecutionPlan } from "../session/execution-plan";
 import { mountExecutionPlanPanel } from "./execution-plan-panel";
+import { openExecutionPlanInspector } from "./execution-plan-inspector";
 import { BackgroundJobStore, type BackgroundJobStoreHint } from "./background-job-session";
 import { formatFleetSidebarWithPeers, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet, type FleetPeer } from "./worker-fleet";
 import type { VersionCheckResult } from "../lib/version-check";
@@ -3525,6 +3527,17 @@ export async function launchTuiAgentShell(opts: {
       getSessionDir: () => liveSlateSession()?.dir,
       width: SIDEBAR_TEXT_WIDTH,
       maxRows: 7,
+      // Clicking the Plan section opens the full plan in the shared modal host,
+      // the same way the Workspace/Review/Tools rows and every subagent or job
+      // row do. The sidebar stays a seven-row glance; the modal is where the
+      // whole list, the status of each item and the revision are legible.
+      onOpen: () => {
+        void openExecutionPlanInspector(otui, chrome, {
+          getSessionDir: () => liveSlateSession()?.dir,
+          readPlan: (dir) => getExecutionPlan(dir),
+          renderer: r,
+        });
+      },
     });
     disposeExecutionPlanPanel = executionPlanPanel.dispose;
     // Flow 173 (AC8): Background Jobs panel, same hug-content-box idiom as

@@ -62,13 +62,26 @@ type PanelParent = {
   remove?: (child: unknown) => void;
 };
 
-type TextCtor = new (renderer: unknown, options: { id: string; content: string; marginTop?: number }) => unknown;
+type TextCtor = new (
+  renderer: unknown,
+  options: { id: string; content: string; marginTop?: number; onMouseDown?: () => void },
+) => unknown;
 
 export function mountExecutionPlanPanel(
   otui: unknown,
   renderer: unknown,
   parent: unknown,
-  options: { getSessionDir: () => string | undefined; width: number; maxRows?: number },
+  options: {
+    getSessionDir: () => string | undefined;
+    width: number;
+    maxRows?: number;
+    /**
+     * Opens the full-plan inspector. Attached to the header AND to every row,
+     * so the whole section is a target — the sidebar has rows, not buttons, and
+     * a click on any of them means the same thing: show me the plan.
+     */
+    onOpen?: () => void;
+  },
 ): { refresh: () => Promise<void>; dispose: () => void } {
   const box = parent as PanelParent;
   let paintedDir: string | undefined;
@@ -88,8 +101,15 @@ export function mountExecutionPlanPanel(
     }
     const Ctor = (otui as { TextRenderable?: TextCtor }).TextRenderable;
     if (!projected.visible || box.add === undefined || Ctor === undefined) return;
-    box.add(new Ctor(renderer, { id: "sb-plan-h", content: "Plan", marginTop: 1 }));
-    for (const row of projected.rows) box.add(new Ctor(renderer, { id: `sb-plan-${row.id}`, content: row.text }));
+    const open = options.onOpen;
+    const clickable = open === undefined ? {} : { onMouseDown: open };
+    // The header carries the revision: the modal is where the detail lives, but
+    // the section should still say WHICH revision it is showing.
+    const header = projected.revision === undefined ? "Plan" : `Plan · rev ${projected.revision}`;
+    box.add(new Ctor(renderer, { id: "sb-plan-h", content: header, marginTop: 1, ...clickable }));
+    for (const row of projected.rows) {
+      box.add(new Ctor(renderer, { id: `sb-plan-${row.id}`, content: row.text, ...clickable }));
+    }
   };
   const refresh = async (): Promise<void> => {
     const dir = options.getSessionDir();

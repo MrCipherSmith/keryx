@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExecutionPlan } from "../session/execution-plan";
-import { projectExecutionPlanPanel } from "./execution-plan-panel";
+import { setExecutionPlan, type ExecutionPlan } from "../session/execution-plan";
+import { mountExecutionPlanPanel, projectExecutionPlanPanel } from "./execution-plan-panel";
 
 const plan = (active: number, count = 10): ExecutionPlan => ({
   revision: 4,
@@ -64,4 +66,77 @@ test("tui-shell mounts the conditional Plan panel immediately before Background 
 
   expect(planMount).toBeGreaterThanOrEqual(0);
   expect(jobsMount).toBeGreaterThan(planMount);
+});
+
+test("the Plan section is ONE click target: the header carries the revision and every row opens the inspector", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-plan-click-"));
+  const first = await setExecutionPlan(dir, {
+    expectedRevision: 0,
+    items: [
+      { id: "t1", title: "First", status: "completed" },
+      { id: "t2", title: "Second", status: "pending" },
+    ],
+  });
+
+  type Painted = { id: string; content: string; onMouseDown?: () => void };
+  const painted: Painted[] = [];
+  const parent = {
+    add: (child: unknown) => painted.push(child as Painted),
+    getChildren: () => [...painted],
+    remove: (child: unknown) => {
+      const index = painted.indexOf(child as Painted);
+      if (index >= 0) painted.splice(index, 1);
+    },
+  };
+  const otui = {
+    TextRenderable: class {
+      id: string;
+      content: string;
+      onMouseDown: (() => void) | undefined;
+      constructor(_r: unknown, o: { id: string; content: string; onMouseDown?: () => void }) {
+        this.id = o.id;
+        this.content = o.content;
+        this.onMouseDown = o.onMouseDown;
+      }
+    },
+  };
+
+  let opened = 0;
+  mountExecutionPlanPanel(otui, {}, parent, {
+    getSessionDir: () => dir,
+    width: 26,
+    maxRows: 7,
+    onOpen: () => {
+      opened += 1;
+    },
+  });
+  // The mount's own first read is async; let it settle so the repaint below is
+  // the only thing that touches the rows (no write/read interleaving).
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  // A live plan write repaints synchronously through the same subscription the
+  // inspector uses — after which the rows are the ones a click would land on.
+  await setExecutionPlan(dir, {
+    expectedRevision: first.revision,
+    items: [
+      { id: "t1", title: "First", status: "completed" },
+      { id: "t2", title: "Second", status: "in_progress" },
+      { id: "t3", title: "Third", status: "pending" },
+    ],
+  });
+
+  const header = painted.find((node) => node.id === "sb-plan-h");
+  // `sb-plan-h` shares the prefix with the rows, so the header is excluded by
+  // id rather than by a second, drifting prefix.
+  const rows = painted.filter((node) => node.id.startsWith("sb-plan-") && node.id !== "sb-plan-h");
+  expect(header?.content).toBe("Plan · rev 2");
+  expect(rows).toHaveLength(3);
+  expect(rows[1]?.content).toContain("Second");
+
+  header?.onMouseDown?.();
+  for (const row of rows) {
+    row.onMouseDown?.();
+  }
+  // Header + every row: no dead area inside the section.
+  expect(opened).toBe(rows.length + 1);
 });
