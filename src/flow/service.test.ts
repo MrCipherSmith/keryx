@@ -160,6 +160,7 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
   const { flow } = await service.init({
     cwd: ROOT,
     issue: "https://github.com/acme/app/issues/42",
+    owner: "Test Owner",
   });
   expect(flow.title).toBe("Issue title");
   expect(flow.source.type).toBe("github-issue");
@@ -189,6 +190,7 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
     "pull-request",
     "base-branch",
     "tasks",
+    "owner",
     "review",
     "health",
   ]);
@@ -198,6 +200,7 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
     "pass",
     "pass",
     "skipped",
+    "pass",
     "pass",
     "pass",
     "pass",
@@ -231,7 +234,7 @@ test("failed gates return the flow to in-progress with fix notes", async () => {
   // The scaffolded T1-T4 are still `todo`, so the task gate fails alongside
   // the other three — and no review round was ever recorded, so the review gate
   // fails too rather than passing on the absence of one.
-  expect(failedNames).toEqual(["acceptance-criteria", "pull-request", "tasks", "review", "health"]);
+  expect(failedNames).toEqual(["acceptance-criteria", "pull-request", "tasks", "owner", "review", "health"]);
   expect(result.flow.history.some((event) => event.event === "completion-failed")).toBe(true);
 });
 
@@ -247,7 +250,7 @@ test("merged completion closes a flow without a PR when main contains the commit
     }),
   );
 
-  const { flow } = await service.init({ cwd: ROOT, title: "Merged handoff" });
+  const { flow } = await service.init({ cwd: ROOT, title: "Merged handoff", owner: "Test Owner" });
   const dir = "001-2026-07-07-merged-handoff";
   await writeAc(dir, ["Implementation is present on main"]);
   await service.freeze({ cwd: ROOT, id: flow.id });
@@ -272,6 +275,7 @@ test("merged completion closes a flow without a PR when main contains the commit
     "main-merge",
     "base-branch",
     "tasks",
+    "owner",
     "review",
     "health",
   ]);
@@ -282,6 +286,7 @@ test("merged completion closes a flow without a PR when main contains the commit
     "pass",
     "pass",
     "skipped",
+    "pass",
     "pass",
     "pass",
     "pass",
@@ -426,7 +431,7 @@ test("healthGate -> warn still completes, but the row is not identical to a genu
     }),
   );
 
-  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Health gate warn" });
+  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Health gate warn", owner: "Test Owner" });
   const dir = path.basename(created);
   await writeAc(dir, ["Must be verified"]);
   await service.freeze({ cwd: ROOT, id: flow.id });
@@ -481,7 +486,7 @@ test("a warn completion's stored flow.json and issue comment are NOT identical t
       // allocate "001") -- the ONLY difference driving the two fixtures must
       // be the health gate's status, or a difference in the stored record
       // would prove nothing about this fix specifically.
-      const { flow, dir: created } = await service.init({ cwd: root, title: "Health gate check" });
+      const { flow, dir: created } = await service.init({ cwd: root, title: "Health gate check", owner: "Test Owner" });
       const dir = path.basename(created);
       await writeFile(
         path.join(root, ".metaproject", "flows", dir, "acceptance-criteria.md"),

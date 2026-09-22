@@ -131,7 +131,7 @@ async function driveToGates(
   service: FlowService,
   options: { collectComments?: boolean } = {},
 ): Promise<{ id: string; dir: string }> {
-  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Review gate subject" });
+  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Review gate subject", owner: "Test Owner" });
   const dir = path.basename(created);
   await writeAc(dir, ["Only criterion"]);
   await service.freeze({ cwd: ROOT, id: flow.id });
@@ -1328,10 +1328,10 @@ test("`flow init` opts every new package into both the task and the review gate"
   await fresh();
   const service = createFlowService(makeDeps());
   const { flow } = await service.init({ cwd: ROOT, title: "Opt-in check" });
-  expect(flow.gates).toEqual({ tasks: true, review: true });
+  expect(flow.gates).toEqual({ tasks: true, review: true, owner: true });
 });
 
-test("the gate runs where the specification puts it: sixth, after tasks", async () => {
+test("the gate runs where the specification puts it: seventh, after owner", async () => {
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
@@ -1349,10 +1349,12 @@ test("the gate runs where the specification puts it: sixth, after tasks", async 
     // recount when the list grows again.
     "base-branch",
     "tasks",
+    "owner",
     "review",
     "health",
   ]);
   expect(names.indexOf("review")).toBeGreaterThan(names.indexOf("tasks"));
+  expect(names.indexOf("review")).toBeGreaterThan(names.indexOf("owner"));
 });
 
 // --- configuration ---------------------------------------------------------
