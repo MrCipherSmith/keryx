@@ -306,6 +306,45 @@ const FLOW_NEXT_NO_MODEL_COST = noModelCost(
     "dispatches an agent turn, so there is nothing to record a cost for.",
 );
 
+/**
+ * What the locked section below (`runOpenFlow`) decided, so the outer
+ * function can turn it into the right console line + recorded outcome AFTER
+ * the lock is released, without doing any of the actual I/O twice.
+ */
+type OpenFlowLockResult =
+  | { readonly kind: "skipped"; readonly equivalent: { id: string; title: string; status: string } }
+  | { readonly kind: "opened"; readonly flowId: string; readonly dir: string };
+
+/**
+ * REVIEW FIX (finding 1, T15): `service.list()` + `findEquivalentOpenFlow()`
+ * + `service.init()` used to run with no lock at all, so two `trigger run`
+ * firings close together (two hooks, or a hook plus a CI call) could both see
+ * "nothing open" and both create a flow with the same title — exactly the
+ * duplicate noise AC7 exists to prevent. `../flow/service.ts`'s own lock
+ * (`resolveAllocationScope`) only serializes ID MINTING, not title
+ * uniqueness, so it never closed this window on its own.
+ *
+ * Fix: the WHOLE check-then-create sequence now runs inside
+ * `withTriggerRunLock` — the same project-wide trigger-run lock AC3 already
+ * uses for `reconcile`/`rebuild`, reused rather than introducing a second
+ * lock type here. Two reasons this was chosen over taking the flow
+ * allocation-scope lock directly: (1) `withTriggerRunLock`'s refusal is
+ * already wired end-to-end into this file's `lock-refused` outcome/exit-0
+ * handling (see below) — reusing it means a lock refusal here costs no new
+ * code path to get right, where a second lock type would need its own
+ * refusal-to-outcome mapping invented and tested from scratch; (2) it keeps
+ * this file's only two lock-shaped behaviours (reconcile/rebuild vs.
+ * open-flow) consistent for an operator reading `keryx trigger status` after
+ * a refusal — "another trigger run holds the lock" always means the same
+ * thing. The tradeoff, named rather than hidden: this now serializes
+ * `open-flow` against reconcile/rebuild/other open-flow firings project-wide,
+ * not just against other opens of the SAME template — a deliberately
+ * coarser lock than the minimum needed, traded for reusing already-correct,
+ * already-tested machinery instead of adding a title-scoped lock this
+ * dispatch does not need. Proven with two real concurrent `keryx trigger run`
+ * processes (not a stubbed lock), the same pattern AC3's own
+ * `trigger-run.e2e.test.ts` uses: `trigger-run-open-flow.e2e.test.ts`.
+ */
 async function runOpenFlow(
   projectRoot: string,
   name: string,
@@ -320,25 +359,25 @@ async function runOpenFlow(
 
   const service = getFlowService();
 
-  if (action.skipIfOpen) {
-    const flows = await service.list({ cwd: projectRoot });
-    const equivalent = findEquivalentOpenFlow(flows, action.template);
-    if (equivalent) {
-      const detail =
-        `flow ${equivalent.id} ("${equivalent.title}", status: ${equivalent.status}) is already open for ` +
-        `template "${action.template}" and \`skipIfOpen\` is set — not opening a second one.`;
-      console.log(`keryx trigger run ${name}: ${detail}`);
-      await recordRun(projectRoot, entry, { outcome: "no-op", detail, cost: OPEN_FLOW_NO_MODEL_COST });
-      return;
-    }
-  }
-
+  let outcome;
   try {
-    const result = await service.init({ cwd: projectRoot, title: action.template });
-    const detail = `opened flow ${result.flow.id} ("${action.template}") at ${result.dir}.`;
-    console.log(`keryx trigger run ${name}: ok — ${detail}`);
-    await recordRun(projectRoot, entry, { outcome: "ok", detail, cost: OPEN_FLOW_NO_MODEL_COST });
+    outcome = await withTriggerRunLock(projectRoot, async (): Promise<OpenFlowLockResult> => {
+      if (action.skipIfOpen) {
+        const flows = await service.list({ cwd: projectRoot });
+        const equivalent = findEquivalentOpenFlow(flows, action.template);
+        if (equivalent) {
+          return { kind: "skipped", equivalent };
+        }
+      }
+      const result = await service.init({ cwd: projectRoot, title: action.template });
+      return { kind: "opened", flowId: result.flow.id, dir: result.dir };
+    });
   } catch (error) {
+    // `withTriggerRunLock` only ever catches its own lock-timeout error;
+    // everything else (here: `service.init`/`service.list` throwing) is
+    // rethrown unchanged, exactly as it was when this code ran unlocked —
+    // this is the same try/catch that used to wrap `service.init` alone,
+    // now wrapping the whole locked section instead.
     const message = error instanceof Error ? error.message : String(error);
     console.error(`keryx trigger run ${name}: action "open-flow" failed: ${message}`);
     process.exitCode = 1;
@@ -347,7 +386,33 @@ async function runOpenFlow(
       detail: `action "open-flow" failed: ${message}`,
       cost: OPEN_FLOW_NO_MODEL_COST,
     });
+    return;
   }
+
+  if (!outcome.acquired) {
+    console.log(`keryx trigger run ${name}: ${outcome.reason}`);
+    await recordRun(projectRoot, entry, {
+      outcome: "lock-refused",
+      detail: outcome.reason,
+      cost: { recorded: false, reason: "run was refused before the action could start" },
+    });
+    return;
+  }
+
+  if (outcome.result.kind === "skipped") {
+    const { equivalent } = outcome.result;
+    const detail =
+      `flow ${equivalent.id} ("${equivalent.title}", status: ${equivalent.status}) is already open for ` +
+      `template "${action.template}" and \`skipIfOpen\` is set — not opening a second one.`;
+    console.log(`keryx trigger run ${name}: ${detail}`);
+    await recordRun(projectRoot, entry, { outcome: "no-op", detail, cost: OPEN_FLOW_NO_MODEL_COST });
+    return;
+  }
+
+  const { flowId, dir } = outcome.result;
+  const detail = `opened flow ${flowId} ("${action.template}") at ${dir}.`;
+  console.log(`keryx trigger run ${name}: ok — ${detail}`);
+  await recordRun(projectRoot, entry, { outcome: "ok", detail, cost: OPEN_FLOW_NO_MODEL_COST });
 }
 
 // ---------------------------------------------------------------------------

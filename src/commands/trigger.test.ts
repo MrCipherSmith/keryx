@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { triggerCommand } from "./trigger";
 import { triggersConfigPath } from "../trigger/config";
-import { appendTriggerRunRecord, readTriggerRuns } from "../trigger/record";
+import { appendTriggerRunRecord, readTriggerRuns, triggerRunsPath } from "../trigger/record";
 import { DEFAULT_SPEND_CEILING_USD } from "../review/caps";
 import { readProvenance } from "../sync/provenance";
 import { acquireCwd, releaseCwd } from "../lib/test-cwd";
@@ -272,6 +272,34 @@ describe("keryx trigger run — AC2: exactly one pass, exit code reflects only t
       expect(record?.outcome).toBe("budget-refused");
       expect(record?.trigger).toBe("open-over-budget");
     }
+  });
+
+  test("review finding 3 (T15) — an unreadable run ledger refuses the budget gate rather than failing it open", async () => {
+    await writeTriggers(root, [
+      { name: "open-with-bad-ledger", on: { kind: "event", event: "ci" }, action: { kind: "open-flow", template: "should not open either" } },
+    ]);
+    // Damage the ledger `evaluateTriggerBudget` reads from directly, the same
+    // way a partial write / disk corruption would: one line that will not
+    // parse as JSON. Before the fix this collapsed to `spent: undefined`,
+    // `evaluateSpendCap` reported `not-recorded`/`stop: false`, and the run
+    // proceeded — AC8's promise silently disabled for good by one bad line.
+    await mkdir(path.dirname(triggerRunsPath(root)), { recursive: true });
+    await writeFile(triggerRunsPath(root), "this is not jsonl\n", "utf8");
+
+    await triggerCommand(["run", "open-with-bad-ledger"]);
+
+    // Same outcome kind and exit-code contract as the over-ceiling refusal:
+    // exit 0 (a refusal is a clean "nothing done this pass", not a crash).
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(logged.join("\n")).toContain("could not be read");
+    expect(logged.join("\n")).toContain("refusing to start");
+    // The message says the ledger could not be read, never a quoted spend
+    // number for this cause.
+    expect(logged.join("\n")).not.toContain("$undefined");
+    expect(logged.join("\n")).not.toContain("$NaN");
+
+    const flowDirs = await readdir(path.join(root, ".metaproject", "flows")).catch(() => []);
+    expect(flowDirs.filter((d) => d.includes("should-not-open-either")).length).toBe(0);
   });
 
   // Delegated-runner failure path (`delegateToLocalRunner` in `./gdgraph.ts`):

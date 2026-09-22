@@ -9,7 +9,7 @@
   "title": "Start a flow from a repository event or a schedule, not only from a person at a prompt",
   "status": "in-progress",
   "createdAt": "2026-09-22T18:18:39.374Z",
-  "updatedAt": "2026-09-22T19:16:55.705Z",
+  "updatedAt": "2026-09-22T19:43:13.136Z",
   "source": {
     "type": "description",
     "ref": null
@@ -235,7 +235,7 @@
       "id": "T11",
       "title": "Flow-opening action with the do-not-duplicate rule and the budget refusal outcome",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
@@ -251,13 +251,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "Concurrency test: two triggered runs at once leave the artifacts intact",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -267,13 +268,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Docs: README and CLI reference for triggers",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -283,7 +285,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
@@ -291,12 +294,39 @@
       "kind": "verify",
       "status": "todo",
       "dependsOn": [
-        "T12",
+        "T15"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T19:43:12.836Z",
+            "outcome": "failed",
+            "detail": "review round 1: open-flow skipIfOpen is a TOCTOU race; systemd unit and cron line unescaped; unreadable ledger fails the budget gate open"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Review fixes: serialize the open-flow check, escape the schedule output, fail closed on an unreadable ledger",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T19:43:13.136Z",
+            "outcome": "started",
+            "detail": "sonnet: review fixes"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -431,6 +461,41 @@
       "at": "2026-09-22T19:16:55.705Z",
       "event": "task-attempt",
       "detail": "T11: started (attempt 1) — sonnet: flow actions and budget refusal"
+    },
+    {
+      "at": "2026-09-22T19:30:12.518Z",
+      "event": "task-done",
+      "detail": "T11: Flow-opening action with the do-not-duplicate rule and the budget refusal outcome"
+    },
+    {
+      "at": "2026-09-22T19:30:12.617Z",
+      "event": "task-done",
+      "detail": "T12: Concurrency test: two triggered runs at once leave the artifacts intact"
+    },
+    {
+      "at": "2026-09-22T19:36:32.635Z",
+      "event": "task-done",
+      "detail": "T13: Docs: README and CLI reference for triggers"
+    },
+    {
+      "at": "2026-09-22T19:43:12.836Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 1) — review round 1: open-flow skipIfOpen is a TOCTOU race; systemd unit and cron line unescaped; unreadable ledger fails the budget gate open"
+    },
+    {
+      "at": "2026-09-22T19:43:12.934Z",
+      "event": "task-added",
+      "detail": "T15: Review fixes: serialize the open-flow check, escape the schedule output, fail closed on an unreadable ledger"
+    },
+    {
+      "at": "2026-09-22T19:43:13.035Z",
+      "event": "task-depends-set",
+      "detail": "T14: dependsOn T15 (was T12, T13) — verification runs after the review fixes"
+    },
+    {
+      "at": "2026-09-22T19:43:13.136Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — sonnet: review fixes"
     }
   ]
 }

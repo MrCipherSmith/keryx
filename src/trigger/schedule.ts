@@ -89,6 +89,72 @@ function shQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+// ---------------------------------------------------------------------------
+// REVIEW FIX (finding 2, T15): the printed schedule was not escaped the way
+// `cronCommand` is.
+//
+//   1. systemd. `WorkingDirectory=`, `ExecStartPre=` and `ExecStart=` used to
+//      interpolate `projectRoot`/`logDir`/`invocation.execPath`/
+//      `invocation.scriptPath`/the trigger name RAW. `ExecStart=`/
+//      `ExecStartPre=` split their value on unquoted whitespace into argv —
+//      exactly like a shell command line — so any one of those containing a
+//      space (a project checked out under a path with a space is common)
+//      produced the wrong argv. Separately, an unescaped `%` anywhere in a
+//      systemd unit value is read as the start of a specifier (`%h`, `%n`,
+//      …), so a literal `%` must be doubled (`%%`) or it silently expands to
+//      something else, or systemd refuses the unit outright for an unknown
+//      specifier. `systemdQuote` fixes the first (per systemd.syntax(7)'s
+//      quoting: wrap in double quotes when the value contains whitespace or a
+//      quote/backslash, escaping embedded `"`/`\`) and `systemdEscapePercent`
+//      fixes the second, applied to every interpolated value in
+//      `Description=`, `WorkingDirectory=`, `ExecStartPre=`, `ExecStart=` and
+//      the `Environment=PATH=…` line below.
+//   2. cron. Independently of shell quoting, cron itself treats an unescaped
+//      `%` in a crontab line as a literal newline — it splits the line there
+//      and feeds everything after it to the command as stdin — before
+//      `/bin/sh` ever sees the line. `cronEscapePercent` escapes `%` to
+//      `\%` (cron unescapes it back to a literal `%` before invoking the
+//      shell) but is applied ONLY to `cronLine` (what an operator pastes into
+//      `crontab -e`), never to the standalone `cronCommand` field: that field
+//      is also used to run the SAME command directly via `/bin/sh -c`,
+//      bypassing crontab's own line-preprocessing entirely (see
+//      `../commands/trigger-schedule.e2e.test.ts`, which extracts
+//      `cronCommand` and spawns it straight through `/bin/sh -c`) — escaping
+//      `%` there would hand the shell a literal backslash it was never meant
+//      to see.
+
+/**
+ * Quote one systemd unit-file value per systemd.syntax(7)'s unified quoting
+ * rules (which apply to every configuration value, not only `Exec*=`
+ * command lines): wrap in double quotes, escaping embedded `"`/`\`, when the
+ * value contains whitespace or either of those characters. Values with
+ * neither are returned unchanged, so an already-clean project path renders
+ * identically to before this fix.
+ */
+function systemdQuote(value: string): string {
+  if (!/[\s"\\]/.test(value)) return value;
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/** Double a literal `%` for a systemd unit-file value — an unescaped `%` starts a specifier. */
+function systemdEscapePercent(value: string): string {
+  return value.replace(/%/g, "%%");
+}
+
+/** `systemdEscapePercent` then `systemdQuote`, in the order every interpolated systemd value below needs. */
+function systemdValue(value: string): string {
+  return systemdQuote(systemdEscapePercent(value));
+}
+
+/**
+ * Escape `%` for a literal crontab line — see the file-header note above for
+ * why this is applied to `cronLine` only, never to the standalone
+ * `cronCommand` field.
+ */
+function cronEscapePercent(value: string): string {
+  return value.replace(/%/g, "\\%");
+}
+
 export interface ScheduleLines {
   /** The PATH baked into every generated command — see the file header. */
   readonly assumedPath: string;
@@ -134,29 +200,39 @@ export function renderScheduleLines(params: {
     `cd ${shQuote(projectRoot)} && mkdir -p ${shQuote(logDir)} && PATH=${shQuote(assumedPath)} ` +
     `${shQuote(invocation.execPath)} ${shQuote(invocation.scriptPath)} trigger run ${shQuote(name)} ` +
     `>> ${shQuote(logPath)} 2>&1`;
-  const cronLine = `${cron} ${cronCommand}`;
+  // `cronLine` (what actually goes into a crontab) gets cron's own `%`
+  // escaping on top of `cronCommand`'s shell quoting — see the file-header
+  // note. `cronCommand` itself stays as-is: it is also handed straight to
+  // `/bin/sh -c` (the AC6 e2e test, and the "cron-command-only" line printed
+  // below), which never runs cron's line-preprocessing at all.
+  const cronLine = `${cron} ${cronEscapePercent(cronCommand)}`;
 
   const serviceUnitName = `keryx-trigger-${name}.service`;
   const timerUnitName = `keryx-trigger-${name}.timer`;
+  // Description= is free text (not word-split, not argv), so it only needs
+  // `%` doubled — the literal decorative quotes around the name below stay
+  // exactly as authored.
+  const descriptionName = systemdEscapePercent(name);
+  const descriptionProjectRoot = systemdEscapePercent(projectRoot);
   const systemdService = `# ${serviceUnitName} — install under /etc/systemd/system/ (or ~/.config/systemd/user/ for --user)
 [Unit]
-Description=keryx trigger "${name}" (${projectRoot})
+Description=keryx trigger "${descriptionName}" (${descriptionProjectRoot})
 
 [Service]
 Type=oneshot
-WorkingDirectory=${projectRoot}
-Environment=PATH=${assumedPath}
+WorkingDirectory=${systemdValue(projectRoot)}
+Environment=${systemdQuote(systemdEscapePercent(`PATH=${assumedPath}`))}
 # Same reason as the cron line's own \`mkdir -p\`: StandardOutput=append: does
 # not create a missing PARENT directory, only a missing file. The leading "-"
 # means systemd ignores this step's own exit status.
-ExecStartPre=-/bin/mkdir -p ${logDir}
-ExecStart=${invocation.execPath} ${invocation.scriptPath} trigger run ${name}
-StandardOutput=append:${logPath}
-StandardError=append:${logPath}
+ExecStartPre=-/bin/mkdir -p ${systemdValue(logDir)}
+ExecStart=${systemdValue(invocation.execPath)} ${systemdValue(invocation.scriptPath)} trigger run ${systemdValue(name)}
+StandardOutput=${systemdQuote(`append:${systemdEscapePercent(logPath)}`)}
+StandardError=${systemdQuote(`append:${systemdEscapePercent(logPath)}`)}
 `;
   const systemdTimer = `# ${timerUnitName} — install alongside ${serviceUnitName}
 [Unit]
-Description=Schedule for keryx trigger "${name}"
+Description=Schedule for keryx trigger "${descriptionName}"
 
 [Timer]
 # Translate the cron expression "${cron}" into OnCalendar= syntax, e.g. with

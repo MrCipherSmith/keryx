@@ -202,32 +202,83 @@ export interface TriggerBudgetRefused {
 export type TriggerBudgetOutcome = TriggerBudgetAllowed | TriggerBudgetRefused;
 
 /**
- * How much this project's fired-trigger record demonstrates has been spent —
- * `undefined` only when the record exists but could not be read (see the file
- * header note above for why an ABSENT record is a demonstrated `0`, not an
- * unknown).
+ * What this project's fired-trigger record demonstrates about spend. Distinct
+ * from `SpendCapEvaluation`'s own tri-state (`under`/`over`/`not-recorded`)
+ * because `not-recorded` there is ambiguous about WHY nothing was recorded —
+ * "no trigger has ever fired" (an ABSENT ledger, a demonstrated `$0`) and "the
+ * ledger exists but a line in it is damaged" (`unreadable`) are different
+ * facts with different correct responses (proceed vs. refuse), and
+ * `evaluateSpendCap` alone cannot tell them apart from a bare `number |
+ * undefined`.
+ *
+ * REVIEW FIX (finding 3, T15): before this type existed, an `unreadable`
+ * ledger collapsed to `spent: undefined`, which `evaluateSpendCap` reports as
+ * `not-recorded` with `stop: false` — the SAME shape a project that has never
+ * fired a trigger gets. That let a single damaged line in `runs.jsonl` disable
+ * AC8's budget refusal silently: `readTriggerRuns` correctly refused to
+ * pretend `$0`, but the caller then threw that honesty away. `evaluateSpendCap`
+ * itself already gets this right for what it CAN see (`spent === undefined`
+ * is never coerced to `0`) — the bug was one level up, in what `spent` was
+ * built from.
  */
-async function recordedTriggerSpend(projectRoot: string): Promise<number | undefined> {
+type RecordedTriggerSpend =
+  | { readonly known: true; readonly usd: number }
+  | { readonly known: false; readonly reason: string };
+
+/**
+ * How much this project's fired-trigger record demonstrates has been spent.
+ * An ABSENT record is a demonstrated `$0` (nothing has ever fired, hence
+ * recorded, a cost) — an UNREADABLE one is `known: false`, carrying the
+ * reason it could not be read, never coerced to a number.
+ */
+async function recordedTriggerSpend(projectRoot: string): Promise<RecordedTriggerSpend> {
   const read = await readTriggerRuns(projectRoot);
-  if (read.state === "absent") return 0;
-  if (read.state === "unreadable") return undefined;
-  return read.records.reduce((sum, record) => sum + (record.cost.recorded ? record.cost.usd : 0), 0);
+  if (read.state === "absent") return { known: true, usd: 0 };
+  if (read.state === "unreadable") return { known: false, reason: read.reason };
+  const usd = read.records.reduce((sum, record) => sum + (record.cost.recorded ? record.cost.usd : 0), 0);
+  return { known: true, usd };
 }
 
 /**
  * Whether an `open-flow`/`flow-next` run may proceed under the project's
- * spend ceiling (AC8). Never throws for the ceiling decision itself — every
- * shape `evaluateSpendCap` can report (`under`, `over`, `not-recorded`) maps
- * to `allowed: true` except `over`, mirroring `withTriggerRunLock`'s own
- * "only the specific refusal condition is caught here" discipline.
+ * spend ceiling (AC8). Never throws for the ceiling decision itself.
+ *
+ * Two distinct refusal paths, not one: an UNREADABLE ledger (finding 3, T15)
+ * refuses immediately, before `evaluateSpendCap` is even asked — spend cannot
+ * be verified from a ledger that cannot be read, so this treats that the same
+ * as "assume the worst" rather than the "assume nothing was spent" that
+ * `not-recorded`/`stop: false` would otherwise produce. A DEMONSTRATED spend
+ * (an absent ledger's `$0`, or a readable one's sum) goes through
+ * `evaluateSpendCap` as before, and every shape it can report there
+ * (`under`, `over`) maps to `allowed: true` except `over` — the pre-existing
+ * "only the specific refusal condition is caught here" discipline,
+ * unchanged for the case the ledger actually answers.
  */
 export async function evaluateTriggerBudget(
   projectRoot: string,
   actionKind: string,
   options: SpendCapOptions = {},
 ): Promise<TriggerBudgetOutcome> {
-  const spent = await recordedTriggerSpend(projectRoot);
-  const evaluation = evaluateSpendCap(spent, options);
+  const spend = await recordedTriggerSpend(projectRoot);
+  if (!spend.known) {
+    // A `SpendCapEvaluation` is still produced (unreadable maps to
+    // `evaluateSpendCap(undefined, …)`'s own `not-recorded` shape) so
+    // `TriggerBudgetOutcome`'s `evaluation` field stays populated for every
+    // caller that reads it — but `allowed` is decided HERE, not by
+    // `evaluation.stop`, precisely because `not-recorded` alone must not read
+    // as "safe to proceed" for this specific cause.
+    const evaluation = evaluateSpendCap(undefined, options);
+    return {
+      allowed: false,
+      evaluation,
+      reason:
+        `this project's fired-trigger run record could not be read (${spend.reason}) — spend cannot be verified ` +
+        `against the ${evaluation.currency} ${evaluation.ceiling} spend ceiling, so refusing to start "${actionKind}" ` +
+        "rather than proceed on an unknown ledger. Fix or restore `runs.jsonl` (see `keryx trigger status`), then retry.",
+    };
+  }
+
+  const evaluation = evaluateSpendCap(spend.usd, options);
   if (!evaluation.stop) {
     return { allowed: true, evaluation };
   }
