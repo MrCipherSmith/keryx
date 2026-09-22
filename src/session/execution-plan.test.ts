@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readSlate, writeSlate, type Slate } from "./slate";
+import { archiveSlate, readSlate, writeSlate, type Slate } from "./slate";
 import { openSlate } from "./slate-lifecycle";
 import {
+  executionPlanPath,
   getExecutionPlan,
   setExecutionPlan,
   updateExecutionPlan,
@@ -13,10 +14,26 @@ import {
 
 const baseSlate = (): Slate => ({ anchors: { root: ".", touched: [] }, course: {}, seeds: [] });
 
+/** A bare session dir — no `slate.json`, and for the decoupling tests never one. */
+async function bareDir(): Promise<string> {
+  return mkdtemp(join(tmpdir(), "keryx-execution-plan-"));
+}
+
+/** A session dir WITH a slate — the plan's pre-decoupling home. */
 async function sessionDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "keryx-execution-plan-"));
+  const dir = await bareDir();
   await writeSlate(dir, () => baseSlate());
   return dir;
+}
+
+/**
+ * The legacy field, read STRUCTURALLY: the `Slate` type no longer declares
+ * `executionPlan` (that removal is the change under test), so asserting its
+ * absence has to go through an explicit shape rather than the type.
+ */
+async function legacyPlanInSlate(dir: string): Promise<unknown> {
+  const slate = (await readSlate(dir)) as { executionPlan?: unknown } | undefined;
+  return slate?.executionPlan;
 }
 
 const items: ExecutionPlanItem[] = [
@@ -25,14 +42,69 @@ const items: ExecutionPlanItem[] = [
   { id: "verify", title: "Verify the result", status: "pending" },
 ];
 
-test("setExecutionPlan persists stable item ids in Slate and getExecutionPlan restores them", async () => {
+test("setExecutionPlan persists stable item ids in the plan's OWN file, never inside slate.json", async () => {
   const dir = await sessionDir();
   const created = await setExecutionPlan(dir, { expectedRevision: 0, items });
 
   expect(created.revision).toBe(1);
   expect(created.items.map((item) => item.id)).toEqual(["inspect", "implement", "verify"]);
   expect(await getExecutionPlan(dir)).toEqual(created);
-  expect((await readSlate(dir))?.executionPlan).toEqual(created);
+  expect(JSON.parse(await readFile(executionPlanPath(dir), "utf8"))).toEqual(created);
+  // The regression this decoupling exists for: the plan is not a Slate field,
+  // so nothing a Slate does can take it away.
+  expect(await legacyPlanInSlate(dir)).toBeUndefined();
+});
+
+test("REGRESSION: a session with NO slate at all can publish, read and update a plan", async () => {
+  const dir = await bareDir();
+  expect(await readSlate(dir)).toBeUndefined();
+
+  const created = await setExecutionPlan(dir, { expectedRevision: 0, items });
+  expect(created.revision).toBe(1);
+  expect(await getExecutionPlan(dir)).toEqual(created);
+
+  // `blocked`, not `in_progress`: `implement` is already the plan's single
+  // active item, and `validateItems` correctly refuses a second one — that rule
+  // is not what this test is about.
+  const progressed = await updateExecutionPlan(dir, {
+    expectedRevision: created.revision,
+    itemId: "verify",
+    status: "blocked",
+  });
+  expect(progressed.revision).toBe(2);
+  expect(progressed.items.find((item) => item.id === "verify")?.status).toBe("blocked");
+  // Writing a plan opened no slate on the side.
+  expect(await readSlate(dir)).toBeUndefined();
+});
+
+test("REGRESSION: closing the Slate (archive-on-flow-done) no longer destroys the plan", async () => {
+  const dir = await sessionDir();
+  const created = await setExecutionPlan(dir, { expectedRevision: 0, items });
+
+  await archiveSlate(dir, "flow-done-1"); // exactly what closeSlateOnFlowDone does
+  expect(await readSlate(dir)).toBeUndefined();
+
+  expect(await getExecutionPlan(dir)).toEqual(created);
+  const after = await updateExecutionPlan(dir, {
+    expectedRevision: created.revision,
+    itemId: "implement",
+    status: "completed",
+  });
+  expect(after.revision).toBe(2);
+});
+
+test("a plan stored the old way (inside slate.json) is still read, and migrates on the first write", async () => {
+  const dir = await bareDir();
+  const legacy = { revision: 3, items };
+  await writeSlate(dir, () => ({ ...baseSlate(), executionPlan: legacy }));
+
+  expect(await getExecutionPlan(dir)).toEqual(legacy);
+
+  const next = await updateExecutionPlan(dir, { expectedRevision: 3, itemId: "verify", status: "completed" });
+  expect(next.revision).toBe(4);
+  // Migrated: the new revision lives in plan.json; the slate keeps the old copy.
+  expect((JSON.parse(await readFile(executionPlanPath(dir), "utf8")) as { revision: number }).revision).toBe(4);
+  expect(await legacyPlanInSlate(dir)).toEqual(legacy);
 });
 
 test("a Slate written before execution plans existed remains readable and has no plan", async () => {
@@ -41,12 +113,21 @@ test("a Slate written before execution plans existed remains readable and has no
   expect(await readSlate(dir)).toEqual(baseSlate());
 });
 
-test("an existing execution plan is restored when the Slate is reopened on resume", async () => {
+test("a plan survives a slate reopen (resume) without the Slate having to carry it", async () => {
   const dir = await sessionDir();
   const created = await setExecutionPlan(dir, { expectedRevision: 0, items });
   const reopened = await openSlate({ dir, cwd: dir, mintAttemptId: () => "resume-1" });
-  expect(reopened.executionPlan).toEqual(created);
+  expect((reopened as unknown as { executionPlan?: unknown }).executionPlan).toBeUndefined();
   expect(await getExecutionPlan(dir)).toEqual(created);
+});
+
+test("a corrupt plan.json degrades to 'no plan' instead of wedging every plan tool call", async () => {
+  const dir = await sessionDir();
+  await writeFile(executionPlanPath(dir), "{ not json", "utf8");
+  expect(await getExecutionPlan(dir)).toBeUndefined();
+  // And the next write still succeeds, replacing the corrupt file.
+  const created = await setExecutionPlan(dir, { expectedRevision: 0, items });
+  expect(created.revision).toBe(1);
 });
 
 test("setExecutionPlan rejects duplicate ids, invalid statuses, and multiple in-progress items", async () => {

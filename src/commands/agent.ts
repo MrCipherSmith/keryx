@@ -2052,9 +2052,18 @@ async function runAgentTurnCore(
     }
     roundState.round += 1;
     let currentPlan: ExecutionPlan | undefined;
-    if (options.slateSession?.opened === true) {
+    // Read whenever this session's dir is KNOWN — deliberately not gated on
+    // `opened`. The plan lives in its own `plan.json` now and must outlive a
+    // Slate close (`closeSlateOnFlowDone` archives `slate.json` the moment the
+    // Flow reports done), which is exactly when `opened` goes false — under the
+    // old gate that silently stopped feeding the plan back to both the model and
+    // the sidebar at the worst possible moment. A DETACHED ref still reads
+    // nothing: `slateSessionDir` is the lease-loss-aware accessor (flow 271
+    // R3-1), so a displaced shell never picks up the new holder's plan.
+    const planDir = options.slateSession === undefined ? undefined : slateSessionDir(options.slateSession);
+    if (planDir !== undefined) {
       try {
-        currentPlan = await getExecutionPlan(options.slateSession.dir);
+        currentPlan = await getExecutionPlan(planDir);
       } catch (cause) {
         io.onSystem?.(`execution plan read failed (ignored): ${cause instanceof Error ? cause.message : String(cause)}\n`);
       }

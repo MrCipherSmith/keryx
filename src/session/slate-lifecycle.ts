@@ -123,7 +123,6 @@ export async function openSlate(opts: OpenSlateOptions): Promise<Slate> {
     anchors,
     course: {},
     seeds: [],
-    ...(existing?.executionPlan === undefined ? {} : { executionPlan: existing.executionPlan }),
   }));
 }
 
@@ -276,7 +275,6 @@ export async function ensureSlateOpened(
     anchors,
     course: {},
     seeds: [],
-    ...(existing?.executionPlan === undefined ? {} : { executionPlan: existing.executionPlan }),
   }));
   ref.opened = true;
 }

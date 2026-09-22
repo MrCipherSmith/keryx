@@ -21,7 +21,6 @@ import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { assembleContext, type ContextCandidate } from "../ctx/assembly";
 import { estimateTokens } from "../gdgraph/repomap";
 import { redactSensitiveText } from "../security/redact";
-import type { ExecutionPlan } from "./execution-plan";
 
 /**
  * Mirrors `ProposalKind` from `src/sac/proposal-lifecycle.ts`. Duplicated
@@ -130,7 +129,6 @@ export type Slate = {
   course: SlateCourse;
   seeds: SlateSeed[];
   childDispatches?: Record<string, SlateChildDispatch>;
-  executionPlan?: ExecutionPlan;
 };
 
 function slatePath(dir: string): string {
