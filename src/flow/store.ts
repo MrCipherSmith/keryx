@@ -247,6 +247,175 @@ export async function readAcCriteria(
   return ids;
 }
 
+const AC_LINE_PATTERN = /^(\s*)[-*]\s*(AC\d+)\s*:\s?(.*)$/i;
+const HEADING_PATTERN = /^\s*#/;
+
+type AcLine = { text: string; eol: "\r\n" | "\n" | "" };
+
+/**
+ * `\r\n` if the file uses it anywhere, `\n` otherwise. Used ONLY as the
+ * convention for bytes that did not exist before this write (a brand-new
+ * appended line, and — the one case an existing line's ending changes — the
+ * line a new one is appended after, when that line had no trailing newline
+ * at all because it used to be the end of the file). Every other existing
+ * line keeps its own original ending untouched; see {@link splitAcLines}
+ * (review finding #2, flow 293 T10 — a single detected-eol-for-the-whole-file,
+ * the flow 293 T9 version's approach, rewrote every line of a mixed-ending
+ * file to one ending, changing bytes nobody asked to change).
+ */
+function detectEol(content: string): "\r\n" | "\n" {
+  return content.includes("\r\n") ? "\r\n" : "\n";
+}
+
+/**
+ * Split into (text, original-terminator) pairs, one per line, so a rewrite
+ * can put every untouched line back with the EXACT bytes it had. The last
+ * entry's `eol` is `""` when the file has no trailing newline.
+ */
+function splitAcLines(content: string): AcLine[] {
+  if (content.length === 0) {
+    return [];
+  }
+  const lines: AcLine[] = [];
+  let index = 0;
+  while (index < content.length) {
+    const newlineIndex = content.indexOf("\n", index);
+    if (newlineIndex === -1) {
+      lines.push({ text: content.slice(index), eol: "" });
+      break;
+    }
+    const hasCr = newlineIndex > index && content[newlineIndex - 1] === "\r";
+    lines.push({
+      text: hasCr ? content.slice(index, newlineIndex - 1) : content.slice(index, newlineIndex),
+      eol: hasCr ? "\r\n" : "\n",
+    });
+    index = newlineIndex + 1;
+  }
+  return lines;
+}
+
+function renderAcLines(lines: readonly AcLine[]): string {
+  return lines.map((line) => line.text + line.eol).join("");
+}
+
+/**
+ * The end (exclusive) of the criterion block starting at `lines[start]`: its
+ * `- ACn:` line plus every INDENTED, non-empty line that follows, stopping
+ * at (not including) whichever comes first: the next `- ACn:`/`* ACn:` line,
+ * a blank line, a Markdown heading, or a line that is no longer indented.
+ *
+ * Used for two different purposes, and only one of them ever writes: finding
+ * where a NEW criterion is appended (after the last existing block, wherever
+ * it ends — flow 293, AC1), and, in {@link writeAcCriterion}, detecting
+ * whether the TARGET of a replace has any continuation lines at all, so it
+ * can be refused rather than silently deleted or left orphaned (flow 293
+ * T10, review finding #1 — see that function's doc comment for why a replace
+ * never touches a multi-line block).
+ *
+ * `readAcCriteria`'s own scan (no indentation requirement) only ever matches
+ * a block's first line too — a continuation line is prose, not `- ACn:`
+ * text, so it never re-triggers that regex either. Same rule, two places:
+ * neither counts a continuation line as its own criterion.
+ */
+function acBlockEnd(lines: readonly AcLine[], start: number): number {
+  let end = start + 1;
+  while (end < lines.length) {
+    const line = lines[end] as AcLine;
+    if (line.text.trim() === "") break;
+    if (HEADING_PATTERN.test(line.text)) break;
+    if (AC_LINE_PATTERN.test(line.text)) break;
+    if (!/^\s/.test(line.text)) break; // not indented -> not a continuation of the block above
+    end += 1;
+  }
+  return end;
+}
+
+/**
+ * Rewrite one criterion's text in `acceptance-criteria.md`, or append it as a
+ * new line when no line for that criterion exists yet (flow 293, AC1).
+ *
+ * A replace touches EXACTLY the criterion's own `- ACn:` line — the format
+ * `acceptance-criteria.md`'s own Rules section prescribes — and refuses if
+ * that criterion has ANY following indented, non-blank line before the next
+ * criterion, a blank line, or a heading (flow 293 T10, review finding #1).
+ * The flow 293 T9 version instead swept those lines into the replace as a
+ * "continuation", which sounds right for a criterion literally wrapped
+ * across two lines and is wrong for everything else that shape also matches:
+ * this repo has 1098 indented lines under criteria across 224 real
+ * `acceptance-criteria.md` files — sub-bullet evidence notes, fenced code
+ * blocks, nested detail — and every one of them would have been silently
+ * deleted (or, for a line that was not text, silently corrupted) by a
+ * `--criterion`/`--text` replace that happened to name that criterion.
+ * There is no heuristic here that tells "this criterion wraps onto the next
+ * line" apart from "unrelated indented content follows it" — both produce
+ * the identical shape on disk — so this refuses ALL of them rather than
+ * guessing, and says so by naming the criterion. `previousText` for a
+ * (necessarily single-line) replaced criterion is just that line's text.
+ *
+ * Appending a criterion that does not exist yet is unaffected: it is always
+ * a brand-new line, so it never has continuation lines of its own to lose.
+ */
+export async function writeAcCriterion(
+  cwd: string,
+  dir: string,
+  criterion: string,
+  text: string,
+): Promise<{ previousText: string | undefined }> {
+  const file = acPath(cwd, dir);
+  const content = (await pathExists(file)) ? await readFile(file, "utf8") : "";
+  const lines = splitAcLines(content);
+  const rendered = `- ${criterion}: ${text}`;
+
+  let previousText: string | undefined;
+  let matchedIndex = -1;
+  let lastBlockEnd = -1;
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index] as AcLine;
+    const match = line.text.match(AC_LINE_PATTERN);
+    if (!match?.[2]) {
+      index += 1;
+      continue;
+    }
+    const end = acBlockEnd(lines, index);
+    lastBlockEnd = end;
+    if (match[2].toUpperCase() === criterion) {
+      if (end > index + 1) {
+        throw new Error(
+          `${criterion} spans more than one line; edit acceptance-criteria.md directly and run ` +
+            '`keryx flow ac update <id> --reason "..."`.',
+        );
+      }
+      matchedIndex = index;
+      previousText = (match[3] ?? "").trim();
+    }
+    index = end;
+  }
+
+  if (matchedIndex >= 0) {
+    const existing = lines[matchedIndex] as AcLine;
+    lines[matchedIndex] = { text: rendered, eol: existing.eol };
+  } else if (lastBlockEnd >= 0) {
+    const precedingIndex = lastBlockEnd - 1;
+    const preceding = lines[precedingIndex] as AcLine;
+    let newEol = preceding.eol;
+    if (newEol === "") {
+      // `preceding` had no trailing newline because it used to be the end of
+      // the file. Give it the file's own convention so it does not merge
+      // with the new line, and use that same convention for the new line —
+      // there is no "ending it follows" to copy when none existed.
+      const fallbackEol = detectEol(content);
+      preceding.eol = fallbackEol;
+      newEol = fallbackEol;
+    }
+    lines.splice(lastBlockEnd, 0, { text: rendered, eol: newEol });
+  } else {
+    lines.push({ text: rendered, eol: detectEol(content) });
+  }
+  await writeFileAtomic(file, renderAcLines(lines));
+  return { previousText };
+}
+
 export async function acChecksum(cwd: string, dir: string): Promise<string> {
   const content = await readFile(acPath(cwd, dir), "utf8");
   const normalized = content
