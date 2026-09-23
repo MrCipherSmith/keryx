@@ -98,6 +98,8 @@ test("no securityGate dep: no security gate runs (no regression)", async () => {
     "owner",
     "review",
     "health",
+    // Flow 299: evaluated when the attempt starts, reported last.
+    "confirmation",
   ]);
   expect(names).not.toContain("security");
   expect(result.passed).toBe(true);

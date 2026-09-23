@@ -59,6 +59,10 @@ const FORBIDDEN_FLOW_VERBS: readonly RegExp[] = [
   /\bflow\s+(?:block|unblock)\b/,
   /\bflow\s+task\s+(?:add|depends|done|attempt|skip)\b/,
   /\bflow\s+start\b/,
+  // Flow 299 (AC4): minting a completion confirmation token, and moving a flow
+  // out of `completing`, belong to the operator.
+  /\bflow\s+confirm\b/,
+  /\bflow\s+recover\b/,
   // A nested dispatch would run outside this run's spend reservation.
   /\btrigger\s+run\b/,
 ];
@@ -86,6 +90,9 @@ const PROTECTED_TEXT_MARKERS: readonly string[] = [
   "acceptance-criteria.md",
   "triggers.json",
   "data/trigger",
+  // Flow 299 (AC4): the confirmation token stores, flow and SAC alike
+  // (`<flow>/confirm-token.json`, `<proposal>.confirm-token.json`).
+  "confirm-token",
 ];
 
 /** True when `p` (repo-relative or absolute) is a file an unattended run must never write. */
@@ -95,7 +102,8 @@ export function isUnattendedProtectedPath(p: string): boolean {
     /(^|\/)flow\.json$/.test(normalized) ||
     /(^|\/)acceptance-criteria\.md$/.test(normalized) ||
     /(^|\/)\.metaproject\/triggers\.json$/.test(normalized) ||
-    /(^|\/)\.metaproject\/data\/trigger(\/|$)/.test(normalized)
+    /(^|\/)\.metaproject\/data\/trigger(\/|$)/.test(normalized) ||
+    /confirm-token\.json$/.test(normalized)
   );
 }
 

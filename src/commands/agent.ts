@@ -15,7 +15,7 @@
 // injected `InteractiveTool` executors.
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
-import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesSacConfirmReview } from "../lib/command-risk";
+import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
@@ -3481,7 +3481,8 @@ async function executeCall(
     const command = typeof input.command === "string" ? input.command : "";
     const destructive = risk === "destructive" || isDestructiveCommand(command);
     const credentials = touchesAgentCredentials(command);
-    const sacReviewConfirmation = touchesSacConfirmReview(command);
+    // Flow 299: SAC's `confirm-review` and `flow confirm` share this floor.
+    const sacReviewConfirmation = touchesHumanConfirmation(command);
     // specification §4.4 / D-05: a `git-publish` pause lease targeting this
     // instance (and not overridden by it) forces `ask` in every mode, `auto`
     // included, and is never satisfied by a saved/session shell allowlist

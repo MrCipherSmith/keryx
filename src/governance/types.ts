@@ -8,7 +8,7 @@
 // `src/trigger/record.ts`'s `TriggerRunCost`, and `src/flow/identity.ts`'s
 // `Identity` for the precedent this mirrors.
 
-import type { FlowCompletionAttempt, GateOutcome, Identity } from "../flow/types";
+import type { FlowCompletionAttempt, GateOutcome, Identity, SignatureConfirmation } from "../flow/types";
 
 export type { GateOutcome, Identity };
 
@@ -76,7 +76,14 @@ export type FlowConfirmations =
       criteria: CriterionConfirmation[];
       /** The most recent `complete`-kind signature, when one exists. */
       completionSignature:
-        | { at: string; identity: Identity; acChecksum: string | null; headCommit: string | undefined }
+        | {
+            at: string;
+            identity: Identity;
+            acChecksum: string | null;
+            headCommit: string | undefined;
+            /** Flow 299: present only when a terminal confirmation token was spent on this completion. */
+            confirmation?: SignatureConfirmation | undefined;
+          }
         | undefined;
     };
 

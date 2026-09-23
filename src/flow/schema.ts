@@ -93,6 +93,11 @@ export function flowStateSchema(): Record<string, unknown> {
             description:
               "Written by `flow init`. When true, `flow complete` fails the owner gate with a named reason while no owner is set, and passes it once one is. Absent on packages created before the gate existed, which report the gate `skipped` rather than `fail`.",
           },
+          confirmation: {
+            type: "boolean",
+            description:
+              "flow 299: written by `flow init --require-confirmation`, or by `flow init` when `.metaproject/tasks.config.json` has `completion.require_confirmation: true`. When true, `flow complete` fails the confirmation gate unless `--confirm-token` carries a valid, unexpired, unspent token minted by `keryx flow confirm` for this flow and its current criteria checksum. Absent on every other flow, which reports the gate `skipped`.",
+          },
         },
       },
       owner: {
@@ -270,6 +275,28 @@ export function flowStateSchema(): Record<string, unknown> {
             type: "string",
             description: "The commit the completion gates evaluated, when known. Present only for kind complete.",
           },
+          confirmation: {
+            type: "object",
+            description:
+              "flow 299: present only on a `complete` signature whose flow required a confirmation token. Records that an interactive confirmation step ran within the token's TTL for this criteria checksum — not who ran it. `identity` beside it is unchanged.",
+            additionalProperties: true,
+            required: ["mechanism", "tokenRef", "mintedAt", "consumedAt", "boundTo"],
+            properties: {
+              mechanism: { type: "string", enum: ["terminal-token"] },
+              tokenRef: { type: "string", description: "A prefix of the stored token hash. Never the token." },
+              mintedAt: { type: "string" },
+              consumedAt: { type: "string" },
+              boundTo: {
+                type: "object",
+                additionalProperties: true,
+                required: ["kind", "acChecksum"],
+                properties: {
+                  kind: { type: "string", enum: ["complete"] },
+                  acChecksum: { type: "string" },
+                },
+              },
+            },
+          },
         },
       },
       completionAttempt: {
@@ -309,6 +336,7 @@ export function flowStateSchema(): Record<string, unknown> {
               "review",
               "base-branch",
               "owner",
+              "confirmation",
             ],
           },
           status: { type: "string", enum: ["pass", "fail", "skipped"] },

@@ -425,6 +425,8 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
     "owner",
     "review",
     "health",
+    // Flow 299: evaluated when the attempt starts, reported last.
+    "confirmation",
   ]);
   // `skipped`: no base recorded on this fixture. See the merged-completion
   // test above for why that is neither a pass nor a failure.
@@ -436,6 +438,8 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
     "pass",
     "pass",
     "pass",
+    // confirmation: this flow did not opt in (flow 299).
+    "skipped",
   ]);
   expect(result.commented).toBe(true);
   expect(tracker.commented[0]).toContain("Flow 001");
@@ -510,6 +514,8 @@ test("merged completion closes a flow without a PR when main contains the commit
     "owner",
     "review",
     "health",
+    // Flow 299: evaluated when the attempt starts, reported last.
+    "confirmation",
   ]);
   // `base-branch` is `skipped`, not `pass`: this fixture's flow records no base
   // branch, and "nothing to compare against" must not read as "compared and
@@ -522,6 +528,8 @@ test("merged completion closes a flow without a PR when main contains the commit
     "pass",
     "pass",
     "pass",
+    // confirmation: this flow did not opt in (flow 299).
+    "skipped",
   ]);
 });
 

@@ -29,7 +29,7 @@
 // `allow_once` option — selects `reject_once`, or answers `cancelled` when the
 // agent offered no `reject_once` (the spec reads `cancelled` as "do not run").
 
-import { isDestructiveCommand, touchesAgentCredentials, touchesSacConfirmReview } from "../../lib/command-risk";
+import { isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../../lib/command-risk";
 import {
   resolveApprovalDecision,
   type ApprovalGateDecision,
@@ -139,7 +139,8 @@ export function classifyAcpToolCall(toolCall: AcpToolCallUpdate, worktree: strin
       const destructive = command.length > 0 && isDestructiveCommand(command);
       if (destructive) reasons.push("the command is classified destructive");
       const credentials = pathCredentials || (command.length > 0 && touchesAgentCredentials(command));
-      const sacReviewConfirmation = command.length > 0 && touchesSacConfirmReview(command);
+      // Flow 299: `flow confirm` shares SAC's confirm-review floor.
+      const sacReviewConfirmation = command.length > 0 && touchesHumanConfirmation(command);
       return {
         ...base,
         risk: destructive ? "destructive" : "shell",

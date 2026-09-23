@@ -80,6 +80,8 @@ The strongest mechanism keryx already has for "a human, not an agent, did this" 
 
 This document deliberately does **not** adopt that mechanism now. It is heavier machinery (a TTL'd token store, idempotency-keyed receipts, approval-gate wiring) built for one specific high-stakes SAC accept path, and the operator's ask for this flow was an accountable, on-the-record human — a claim with an honestly-stated basis — not a forgery-proof one. Building the stronger mechanism is flagged here as a natural, separately-scoped follow-up, not committed to.
 
+**Update (flow 299):** the follow-up shipped as an opt-in confirmation gate, specified in [TM-03: Terminal Confirmation Token](TM-03-terminal-confirmation-token.md). TM-03 also corrects this section's wording. Neither that token nor SAC's is a "structural proof": both are friction that an agent with an unrestricted shell can get around. TM-03 lists how.
+
 ## 8. CLI surface
 
 ```

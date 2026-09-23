@@ -1,11 +1,38 @@
 import { createHash } from "node:crypto";
 import { appendFile, mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { pathExists, writeFileAtomic } from "../lib/fs";
-import type { AttemptEntry, FlowHistoryEvent, FlowState, FlowTask } from "./types";
+import { isLockHeld, pathExists, writeFileAtomic } from "../lib/fs";
+import type { AttemptEntry, FlowHistoryEvent, FlowState, FlowStatus, FlowTask } from "./types";
 
 export function flowsRoot(cwd: string): string {
   return path.join(cwd, ".metaproject", "flows");
+}
+
+/** The lock every flow mutation takes, `complete()` included. */
+export function flowLockPathFor(cwd: string, dir: string): string {
+  return path.join(flowsRoot(cwd), `.flow-lock-${dir}`);
+}
+
+/**
+ * True when a flow in `completing` has no live holder of its lock: the
+ * completion that put it there is no longer running (flow 299, AC6). `flow
+ * status` and the TUI's `/flows` view both show this as "interrupted" and name
+ * `keryx flow recover`. Lives here, beside the lock path, so the TUI can ask
+ * without loading the flow service.
+ */
+export async function isCompletionInterrupted(
+  cwd: string,
+  flow: { id: string; status: FlowStatus },
+  dir?: string,
+): Promise<boolean> {
+  if (flow.status !== "completing") return false;
+  const flowDir = dir ?? (await resolveFlowDir(cwd, flow.id));
+  return !(await isLockHeld(flowLockPathFor(cwd, flowDir)));
+}
+
+/** The one line `flow status` and the TUI's `/flows` view show for an interrupted completion (flow 299, AC6). */
+export function interruptedCompletionLine(id: string): string {
+  return `interrupted: completion did not finish and nothing is running it — run \`keryx flow recover ${id} --reason "<why>"\``;
 }
 
 export async function listFlowDirs(cwd: string): Promise<string[]> {

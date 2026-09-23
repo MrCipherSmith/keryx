@@ -48,6 +48,7 @@ export function summarizeConfirmations(flow: FlowState): FlowConfirmations {
             identity: completionSignature.identity,
             acChecksum: completionSignature.acChecksum,
             headCommit: completionSignature.headCommit,
+            ...(completionSignature.confirmation ? { confirmation: completionSignature.confirmation } : {}),
           },
   };
 }

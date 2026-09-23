@@ -173,7 +173,12 @@ export function renderGovernanceMarkdown(report: GovernanceReport): string {
           `completion signature: ${
             flow.confirmations.completionSignature === undefined
               ? "not recorded"
-              : `${identityLine(flow.confirmations.completionSignature.identity)} at ${flow.confirmations.completionSignature.at}`
+              : `${identityLine(flow.confirmations.completionSignature.identity)} at ${flow.confirmations.completionSignature.at}${
+                  flow.confirmations.completionSignature.confirmation
+                    ? ` + terminal token ${flow.confirmations.completionSignature.confirmation.tokenRef} ` +
+                      `(minted ${flow.confirmations.completionSignature.confirmation.mintedAt}; an interactive step, not proof of who)`
+                    : ""
+                }`
           }`,
         );
       }
