@@ -106,6 +106,10 @@ instead of silently doing nothing.
   yet exercised against a real Gemini CLI**. (#654, flow 292)
 
 ### Fixed
+- **The editor's model picker fills in when the model list arrives late.** A session
+  that waited out the 8 s bound for the model list was offered only the launch model,
+  and nothing told it when the list arrived; it now receives one `config_option_update`
+  with the complete list, keeping its current model selected (#655, flow 288).
 - **`keryx acp` no longer runs on a stale OAuth token.**
   `resolveTuiStartup` copies a saved grok/copilot token into the environment
   before grants are refreshed, so the first real turn on an expired token
