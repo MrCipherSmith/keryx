@@ -67,15 +67,19 @@ type SourceCollection = {
 type PathMapping = {
   pattern: string;
   targets: string[];
-  // GDGRAPH-3 fix round 1 (F6): the project-root-relative directory these
-  // targets resolve against — this mapping's OWN declaring config's `baseUrl`
-  // when that SAME config also sets one, otherwise the declaring config's own
-  // directory (TS 4.1: `paths` without `baseUrl` resolves relative to the
-  // tsconfig file that contains `paths`). "" means the project root itself.
-  // Carried per-mapping (not read from the resolver's single top-level
-  // `baseUrl`) because a mapping declared deep in an `extends` chain can have
-  // a different declaring config, and therefore a different base, than
-  // whichever config happens to set the final effective `baseUrl`.
+  // GDGRAPH-3 fix round 2 (R2-2): the project-root-relative directory these
+  // targets resolve against — the EFFECTIVE `baseUrl` of the whole `extends`
+  // chain when ANY config in that chain sets one (child's own `baseUrl` wins
+  // over an inherited one, per field-level override), otherwise the directory
+  // of whichever config in the chain declares the (wholesale, nearest-wins)
+  // `paths` map that ended up effective (TS 4.1 `pathsBasePath`). This can
+  // only be known once the ENTIRE chain has been walked, so it is filled in
+  // after `resolveTsconfigOptions` returns — never at the point a config's own
+  // `paths`/`baseUrl` is first read. "" means the project root itself.
+  // `paths` is taken wholesale (never merged) from the nearest config in the
+  // chain that declares it, so every mapping in a given resolved set shares
+  // this same `base` — it is carried per-mapping only so `createTsconfigResolver`
+  // does not need a second parameter to learn it.
   base: string;
 };
 
@@ -629,7 +633,26 @@ export function parseGradleSourceRoots(buildGradle: string): string[] {
 // would for it.
 const TSCONFIG_EXTENDS_MAX_DEPTH = 10;
 
-type TsconfigOptions = { baseUrl: string | null; paths: PathMapping[] };
+// GDGRAPH-3 fix round 2 (R2-2): `baseUrl` and `paths` are tracked as two
+// SEPARATE properties of the whole `extends` chain, matching `tsc`'s actual
+// resolution (verified against `tsc --traceResolution`):
+//   - `baseUrl`: the EFFECTIVE baseUrl of the chain — the nearest (most
+//     child-ward) config that sets one, full stop. It does not matter which
+//     config declared the `paths` that ended up effective; ANY config in the
+//     chain setting `baseUrl` makes every mapping resolve against it.
+//   - `pathsBasePath`: the directory of whichever config declares the
+//     (wholesale, nearest-wins) `paths` map that ended up effective. This is
+//     the fallback used ONLY when NO config anywhere in the chain sets
+//     `baseUrl`.
+// Each mapping's final `base` (`effectiveBaseUrl ?? pathsBasePath`) can only
+// be computed once the whole chain is known, so `resolveTsconfigOptions`
+// leaves it unset and `loadTsconfigResolver` fills it in on the fully merged
+// result below.
+type TsconfigOptions = {
+  baseUrl: string | null;
+  paths: Array<{ pattern: string; targets: string[] }>;
+  pathsBasePath: string | null;
+};
 
 async function loadTsconfigResolver(projectRoot: string): Promise<ImportResolver> {
   const empty = createTsconfigResolver(null, []);
@@ -642,7 +665,9 @@ async function loadTsconfigResolver(projectRoot: string): Promise<ImportResolver
   if (!resolved) {
     return empty;
   }
-  return createTsconfigResolver(resolved.baseUrl, resolved.paths);
+  const base = resolved.baseUrl ?? resolved.pathsBasePath ?? "";
+  const paths: PathMapping[] = resolved.paths.map((mapping) => ({ ...mapping, base }));
+  return createTsconfigResolver(resolved.baseUrl, paths);
 }
 
 // GDGRAPH-3 fix round 1 (F6): `baseUrl` and `paths` are each resolved relative
@@ -723,12 +748,11 @@ async function resolveTsconfigOptions(
     }
   }
 
-  // F6: both `baseUrl` and (when this same config sets no `baseUrl` of its
-  // own) `paths` resolve relative to THIS config's own directory — never the
-  // project root and never the directory of whichever other config in the
-  // chain happens to declare `baseUrl`. `declaringDir` is this config's own
-  // directory, already expressed in the resolver's project-root-relative
-  // convention.
+  // R2-2: `baseUrl` resolves relative to THIS config's own directory when
+  // THIS config sets one — never the project root and never some other
+  // config's directory. `declaringDir` is this config's own directory,
+  // already expressed in the resolver's project-root-relative convention;
+  // it is the `pathsBasePath` candidate when THIS config declares `paths`.
   const configDir = path.dirname(resolvedPath);
   const declaringDir = toProjectRelativeDir(projectRoot, configDir);
 
@@ -738,6 +762,10 @@ async function resolveTsconfigOptions(
     : null;
   // Child overrides parent per field: this config's own `baseUrl` wins when
   // present, otherwise the (already-resolved) inherited one, otherwise none.
+  // This is the EFFECTIVE baseUrl of the chain as seen from this level —
+  // since a config's own fields are computed only after its `extends`
+  // ancestor has already been fully resolved, the outermost caller's return
+  // value carries the true effective baseUrl for the whole chain.
   const baseUrl = ownBaseUrl ?? inherited?.baseUrl ?? null;
 
   const ownPaths = isRecord(options.paths)
@@ -746,17 +774,19 @@ async function resolveTsconfigOptions(
         .map(([pattern, targets]) => ({
           pattern,
           targets: targets.filter((target): target is string => typeof target === "string"),
-          // TS 4.1: relative to baseUrl when THIS config itself sets one;
-          // otherwise relative to the directory containing THIS config file
-          // (not the project root, and not some other config's directory).
-          base: ownBaseUrl ?? declaringDir,
         }))
     : null;
-  // `paths` is likewise replaced wholesale by a child that declares its own
-  // (never merged with the parent's), and each inherited mapping already
-  // carries the `base` its own declaring config computed for it.
+  // `paths` is replaced wholesale by a child that declares its own (never
+  // merged with the parent's). Crucially, the `base` those mappings resolve
+  // against is NOT decided here: whether it ends up being THIS config's
+  // directory depends on whether ANY config anywhere in the chain (including
+  // ones not yet visited further up) sets `baseUrl`, which isn't known until
+  // the whole chain unwinds. So only `pathsBasePath` (this declaring config's
+  // own directory) is tracked here, and the real `base` is filled in once by
+  // `loadTsconfigResolver` from the final `baseUrl ?? pathsBasePath`.
   const paths = ownPaths ?? inherited?.paths ?? [];
-  return { baseUrl, paths };
+  const pathsBasePath = ownPaths ? declaringDir : (inherited?.pathsBasePath ?? null);
+  return { baseUrl, paths, pathsBasePath };
 }
 
 function createTsconfigResolver(baseUrl: string | null, mappings: PathMapping[]): ImportResolver {

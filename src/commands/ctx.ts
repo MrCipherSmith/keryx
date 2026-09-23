@@ -5,7 +5,7 @@ import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { redactRaw } from "../security/guard";
-import { sourceForFileRead } from "../security/read-source";
+import { sourceForFileRead } from "../security/service";
 import { runCtxHook } from "../ctx/hook";
 import { installRuntimeHook, uninstallRuntimeHook } from "../ctx/hook-install";
 import { resolveRuntimes, runtimeIds, UNSUPPORTED_RUNTIMES } from "../ctx/runtimes";

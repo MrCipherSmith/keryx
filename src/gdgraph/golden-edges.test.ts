@@ -300,3 +300,133 @@ test("GDGRAPH-3 F6 golden (negative) — a subdirectory base's `baseUrl: \".\"` 
 
   expect(edgesFromApp.some((edge) => edge.to === "src/lib/x.ts")).toBe(false);
 });
+
+// ---------------------------------------------------------------------------
+// GDGRAPH-3 fix round 2 (R2-2) — round 1 (F6) pinned each mapping's `base` to
+// its OWN declaring config (`ownBaseUrl ?? declaringDir`), which is wrong
+// whenever `baseUrl` and `paths` are declared by DIFFERENT configs in the
+// chain: `tsc` resolves `paths` against the chain's EFFECTIVE `baseUrl` (the
+// nearest config, anywhere in the chain, that sets one) and only falls back
+// to the `paths`-declaring config's own directory when NO config in the whole
+// chain sets `baseUrl`. These three fixtures (verified against
+// `tsc --traceResolution`) pin the exact-edge behavior for that split:
+//   A — only the CHILD sets `baseUrl`; the parent's `paths` still resolves
+//       against it.
+//   B — BOTH set `baseUrl`; the child's (nearer) one wins over the parent's.
+//   C — only the PARENT sets `baseUrl` (alongside its own `paths`); nothing
+//       in the child overrides it, so it stays effective.
+// ---------------------------------------------------------------------------
+
+test("GDGRAPH-3 R2-2 golden (A) — a paths-only base's aliases resolve against a CHILD-only `baseUrl`", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-golden-tsconfig-r2-a");
+  await reset(root);
+  await mkdir(path.join(root, "config"), { recursive: true });
+  await mkdir(path.join(root, "src", "lib"), { recursive: true });
+  // Parent declares `paths` and NO `baseUrl` at all.
+  await writeFile(
+    path.join(root, "config", "tsconfig.base.json"),
+    JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["lib/*"] } } }),
+  );
+  // Child sets `baseUrl` but no `paths` of its own.
+  await writeFile(
+    path.join(root, "tsconfig.json"),
+    JSON.stringify({ extends: "./config/tsconfig.base.json", compilerOptions: { baseUrl: "src" } }),
+  );
+  await writeFile(
+    path.join(root, "src", "app.ts"),
+    'import { helper } from "@lib/x";\nexport const use = helper;\n',
+  );
+  await writeFile(path.join(root, "src", "lib", "x.ts"), "export const helper = 1;\n");
+
+  await buildGraph(root);
+  const graph = await loadGraph(root);
+  const edgesFromApp = graph.edges.filter((edge) => edge.from === "src/app.ts");
+
+  // Resolves to src/lib/x.ts (baseUrl "src" + "lib/*") — NOT config/lib/x.ts
+  // (the parent's own directory, round 1's bug).
+  expect(normalizeEdges(edgesFromApp)).toEqual([
+    {
+      from: "src/app.ts",
+      to: "src/lib/x.ts",
+      kind: "imports",
+      specifier: "@lib/x",
+      importKind: "import-statement",
+    },
+  ]);
+});
+
+test("GDGRAPH-3 R2-2 golden (B) — a CHILD `baseUrl` overrides a parent `baseUrl` for the parent's own `paths`", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-golden-tsconfig-r2-b");
+  await reset(root);
+  await mkdir(path.join(root, "config"), { recursive: true });
+  await mkdir(path.join(root, "src", "lib"), { recursive: true });
+  // Parent sets its own `baseUrl` (escaping to the project root) alongside
+  // its `paths`.
+  await writeFile(
+    path.join(root, "config", "tsconfig.base.json"),
+    JSON.stringify({ compilerOptions: { baseUrl: "..", paths: { "@lib/*": ["lib/*"] } } }),
+  );
+  // Child overrides `baseUrl` and declares no `paths` of its own.
+  await writeFile(
+    path.join(root, "tsconfig.json"),
+    JSON.stringify({ extends: "./config/tsconfig.base.json", compilerOptions: { baseUrl: "src" } }),
+  );
+  await writeFile(
+    path.join(root, "src", "app.ts"),
+    'import { helper } from "@lib/x";\nexport const use = helper;\n',
+  );
+  await writeFile(path.join(root, "src", "lib", "x.ts"), "export const helper = 1;\n");
+
+  await buildGraph(root);
+  const graph = await loadGraph(root);
+  const edgesFromApp = graph.edges.filter((edge) => edge.from === "src/app.ts");
+
+  // The CHILD's `baseUrl: "src"` wins (nearer in the chain) over the
+  // parent's own `baseUrl: ".."` — src/lib/x.ts, not lib/x.ts.
+  expect(normalizeEdges(edgesFromApp)).toEqual([
+    {
+      from: "src/app.ts",
+      to: "src/lib/x.ts",
+      kind: "imports",
+      specifier: "@lib/x",
+      importKind: "import-statement",
+    },
+  ]);
+});
+
+test("GDGRAPH-3 R2-2 golden (C) — only the parent sets `baseUrl`, alongside its own `paths`, and the child overrides neither", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-golden-tsconfig-r2-c");
+  await reset(root);
+  await mkdir(path.join(root, "config"), { recursive: true });
+  await mkdir(path.join(root, "lib"), { recursive: true });
+  await writeFile(
+    path.join(root, "config", "tsconfig.base.json"),
+    JSON.stringify({ compilerOptions: { baseUrl: "..", paths: { "@lib/*": ["lib/*"] } } }),
+  );
+  await writeFile(
+    path.join(root, "tsconfig.json"),
+    JSON.stringify({ extends: "./config/tsconfig.base.json", compilerOptions: {} }),
+  );
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(
+    path.join(root, "src", "app.ts"),
+    'import { helper } from "@lib/x";\nexport const use = helper;\n',
+  );
+  await writeFile(path.join(root, "lib", "x.ts"), "export const helper = 1;\n");
+
+  await buildGraph(root);
+  const graph = await loadGraph(root);
+  const edgesFromApp = graph.edges.filter((edge) => edge.from === "src/app.ts");
+
+  // The parent's own `baseUrl: ".."` escapes to the project root, uncontested
+  // by the child — lib/x.ts, not config/lib/x.ts.
+  expect(normalizeEdges(edgesFromApp)).toEqual([
+    {
+      from: "src/app.ts",
+      to: "lib/x.ts",
+      kind: "imports",
+      specifier: "@lib/x",
+      importKind: "import-statement",
+    },
+  ]);
+});

@@ -38,6 +38,7 @@ import type {
   SecuritySource,
 } from "./types";
 import { scanContainedPath, type SecurityScanOptions } from "./path-scan";
+import { sourceForFileRead as sourceForFileReadInternal } from "./read-source";
 
 /**
  * Validate serialized JSON structurally, or ordinary text without changing its format.
@@ -54,6 +55,16 @@ import { scanContainedPath, type SecurityScanOptions } from "./path-scan";
  * counts as a bypass. The implementation stays where it is.
  */
 export { redactSensitiveText } from "./redact";
+
+/**
+ * Re-exported here for the same reason as `redactSensitiveText` above: this is
+ * the facade, and a caller that needs to know whether a file read is
+ * `trusted-project` or `untrusted-external` (`ctx.ts`'s `redactRaw` call,
+ * `security/tools.ts`'s `security.scan` path handling) must go through it
+ * instead of reaching past it into `./read-source` directly, which the import
+ * policy counts as a bypass.
+ */
+export const sourceForFileRead = sourceForFileReadInternal;
 
 export function validateSerializedOutput(
   content: string,

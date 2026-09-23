@@ -84,3 +84,79 @@ test("a symlink inside the project pointing OUTSIDE it resolves to untrusted-ext
 
   expect(await sourceForFileRead(root, linkPath)).toBe("untrusted-external");
 });
+
+// R2-3 (flow 304, fix round 2): `git ls-files -- <path>` interprets pathspec
+// magic by default — glob metacharacters in the path itself, and a leading
+// `:(...)`/`:!`/`:^` prefix — so an UNTRACKED path can still be reported as a
+// match against an unrelated TRACKED file, and a tracked directory matches a
+// path that only names the directory. Each case below is a path that must
+// resolve `untrusted-external` despite a tracked file/dir existing that a
+// naive `git ls-files` would treat as a match for it.
+
+test("an untracked file whose name is a glob pattern does not borrow trust from a matching tracked file", async () => {
+  const tracked = path.join(root, "abc.md");
+  await writeFile(tracked, "hello\n", "utf8");
+  await $`git -c user.email=t@t -c user.name=t add -A`.cwd(root).quiet();
+  await $`git -c user.email=t@t -c user.name=t commit -q -m first`.cwd(root).quiet();
+
+  const untracked = path.join(root, "a*.md");
+  await writeFile(untracked, "hello\n", "utf8");
+
+  expect(await sourceForFileRead(root, untracked)).toBe("untrusted-external");
+});
+
+test("an untracked file named with a ? glob does not borrow trust from a matching tracked file", async () => {
+  const tracked = path.join(root, "abc.md");
+  await writeFile(tracked, "hello\n", "utf8");
+  await $`git -c user.email=t@t -c user.name=t add -A`.cwd(root).quiet();
+  await $`git -c user.email=t@t -c user.name=t commit -q -m first`.cwd(root).quiet();
+
+  const untracked = path.join(root, "a?c.md");
+  await writeFile(untracked, "hello\n", "utf8");
+
+  expect(await sourceForFileRead(root, untracked)).toBe("untrusted-external");
+});
+
+test("an untracked file named with a bracket glob does not borrow trust from a matching tracked file", async () => {
+  const tracked = path.join(root, "a.md");
+  await writeFile(tracked, "hello\n", "utf8");
+  await $`git -c user.email=t@t -c user.name=t add -A`.cwd(root).quiet();
+  await $`git -c user.email=t@t -c user.name=t commit -q -m first`.cwd(root).quiet();
+
+  const untracked = path.join(root, "[a].md");
+  await writeFile(untracked, "hello\n", "utf8");
+
+  expect(await sourceForFileRead(root, untracked)).toBe("untrusted-external");
+});
+
+test("a path shaped like an exclude pathspec (:!zz) resolves untrusted-external, not a vacuous match", async () => {
+  const untracked = path.join(root, ":!zz");
+  await writeFile(untracked, "hello\n", "utf8");
+
+  expect(await sourceForFileRead(root, untracked)).toBe("untrusted-external");
+});
+
+test("a path shaped like a glob-magic pathspec (:(glob)**) resolves untrusted-external", async () => {
+  const untracked = path.join(root, ":(glob)**");
+  await writeFile(untracked, "hello\n", "utf8");
+
+  expect(await sourceForFileRead(root, untracked)).toBe("untrusted-external");
+});
+
+test("a tracked directory resolves untrusted-external, not trusted-project", async () => {
+  await mkdir(path.join(root, "sub"), { recursive: true });
+  await writeFile(path.join(root, "sub", "file.md"), "hello\n", "utf8");
+  await $`git -c user.email=t@t -c user.name=t add -A`.cwd(root).quiet();
+  await $`git -c user.email=t@t -c user.name=t commit -q -m first`.cwd(root).quiet();
+
+  expect(await sourceForFileRead(root, path.join(root, "sub"))).toBe("untrusted-external");
+});
+
+test("a plain tracked file still resolves trusted-project", async () => {
+  const file = path.join(root, "plain.md");
+  await writeFile(file, "hello\n", "utf8");
+  await $`git -c user.email=t@t -c user.name=t add -A`.cwd(root).quiet();
+  await $`git -c user.email=t@t -c user.name=t commit -q -m first`.cwd(root).quiet();
+
+  expect(await sourceForFileRead(root, file)).toBe("trusted-project");
+});

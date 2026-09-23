@@ -75,6 +75,18 @@ const CREDENTIAL_QUERY_PARAM_NAMES: ReadonlySet<string> = new Set([
   "bearer",
   "jwt",
   "code",
+  // R2-5 (flow 304, fix round 2): exact spellings seen in the wild that the
+  // segment/stem machinery below does not already reach on its own —
+  // `?APIToken=` (an unseparated acronym+word compound the OLD camelCase
+  // split missed; also caught independently by the acronym split added
+  // below), `?XTOKEN=` (all-caps, no separator to split on at all), `?pw=`
+  // (too short/ambiguous a stem to add to the suffix/prefix set — "pw" alone
+  // would risk matching unrelated short params — so it is listed by name
+  // instead), and `?sid=` (the common short spelling of `sessionid`).
+  "apitoken",
+  "xtoken",
+  "pw",
+  "sid",
 ]);
 
 // F2 (review round 1): a param name compounded with an UNRELATED word around a
@@ -113,10 +125,20 @@ function normalizeQueryParamName(name: string): string {
 }
 
 const CAMEL_CASE_BOUNDARY = /([a-z0-9])([A-Z])/g;
+// R2-5 (flow 304, fix round 2): the boundary above only splits a lower-
+// case/digit run followed by an uppercase letter, so an ACRONYM immediately
+// followed by a titlecase word — `APIToken`, `OAuthCode` — never splits: the
+// transition it needs (`I` -> `T`, upper -> upper) is not lower -> upper.
+// This second boundary catches exactly that shape: a run of two or more
+// uppercase letters followed by an uppercase letter that starts a titlecase
+// word, splitting `APIToken` into `API` + `Token` the same way plain
+// camelCase already splits `apiToken`.
+const ACRONYM_CASE_BOUNDARY = /([A-Z]+)([A-Z][a-z])/g;
 const NON_ALPHANUMERIC_RUN = /[^a-zA-Z0-9]+/g;
 
 function queryParamNameSegments(name: string): string[] {
   return name
+    .replace(ACRONYM_CASE_BOUNDARY, "$1_$2")
     .replace(CAMEL_CASE_BOUNDARY, "$1_$2")
     .replace(NON_ALPHANUMERIC_RUN, "_")
     .split("_")
@@ -124,8 +146,34 @@ function queryParamNameSegments(name: string): string[] {
     .filter((segment) => segment.length > 0);
 }
 
+// R2-5: a smaller set than the segment stems above, and checked only as a
+// SUFFIX or PREFIX of the whole normalized (lowercased) name — never a bare
+// substring — so it catches an unseparated compound that segmentation cannot
+// reach at all (nothing splits `oldpassword` or `userapikey`; there is no
+// separator and no case change to split on). Restricted to stems that are
+// long and specific enough not to false-positive on an ordinary word:
+// deliberately excludes `key` and `code`, which stay segment-only so
+// `areacode`, `monkey` and `barcode` keep passing (they contain the letters
+// but are not a `key`/`code` segment or a `token`/`secret`/`password`/
+// `passwd`/`apikey` affix).
+const CREDENTIAL_QUERY_PARAM_AFFIXES: readonly string[] = [
+  "token",
+  "secret",
+  "password",
+  "passwd",
+  "apikey",
+];
+
 function isCredentialShapedParamName(name: string): boolean {
-  if (CREDENTIAL_QUERY_PARAM_NAMES.has(normalizeQueryParamName(name))) {
+  const normalized = normalizeQueryParamName(name);
+  if (CREDENTIAL_QUERY_PARAM_NAMES.has(normalized)) {
+    return true;
+  }
+  if (
+    CREDENTIAL_QUERY_PARAM_AFFIXES.some(
+      (affix) => normalized.startsWith(affix) || normalized.endsWith(affix),
+    )
+  ) {
     return true;
   }
   return queryParamNameSegments(name).some((segment) =>

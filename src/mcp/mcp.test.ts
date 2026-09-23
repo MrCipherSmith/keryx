@@ -376,6 +376,37 @@ test("AC-security: security.check clamps a caller-claimed trusted-project source
   expect(egressFinding?.action).not.toBe("allow");
 });
 
+// R2-4 (flow 304, fix round 2): `security.scan` used to hard-code
+// `trusted-project` for caller-supplied inline `content`, unconditionally —
+// the same GDCTX-2 egress source-override allowance the test above proves
+// `security.check` must never let a caller self-assign. Mirrors that test,
+// through `security.scan` instead: the same badge-shaped URL, as inline
+// content, must not resolve to the shipped `allow` override.
+test("AC-security: security.scan treats inline content as untrusted-external, not trusted-project", async () => {
+  await writeFile(
+    path.join(root, ".metaproject", "metaproject.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      standardVersion: "0.1.0",
+      name: "fixture",
+      createdBy: "keryx",
+      paths: {},
+      modules: { security: { enabled: true }, mcp: { enabled: true } },
+    }),
+    "utf8",
+  );
+  const ctx = await buildMcpContext(root);
+  const badgeUrl = `<img src="https://github.com/o/r/actions/workflows/ci.yml/badge.svg">`;
+  const result = await dispatchCallTool(ctx, "security.scan", { content: badgeUrl });
+  expect(result.isError).toBe(false);
+  const { decision } = JSON.parse(result.text) as { decision: { findings: Array<{ action: string }> } };
+  const egressFinding = decision.findings.find((f) => "action" in f);
+  expect(egressFinding).toBeDefined();
+  // A REAL trusted-project source would resolve this to "allow" (the shipped
+  // GDCTX-2 badge override) — inline content must not get it for free.
+  expect(egressFinding?.action).not.toBe("allow");
+});
+
 // --- AC1/AC2 stdio round-trip (SDK-gated) ------------------------------------
 
 test("stdio round-trip over the real SDK transport (skips if SDK unavailable)", async () => {

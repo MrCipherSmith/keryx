@@ -10,8 +10,9 @@
 
 import { getAffected, getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 import type { GraphData } from "../gdgraph/types";
-import { createSecurityService, runScan } from "../security/service";
+import { createSecurityService, runScan, sourceForFileRead } from "../security/service";
 import { scanMcpManifest } from "../security/detect/mcp";
+import { resolveContainedPath, resolveProjectRoot } from "../lib/contained-path";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { createCodeHealthService } from "../health/service";
 import { createGdWikiService } from "../wiki/service";
@@ -680,11 +681,49 @@ export function buildToolRegistry(): ToolEntry[] {
       async invoke(cwd, params) {
         const filePath = stringParam(params, "path");
         const inline = stringParam(params, "content");
-        const content = inline ?? (filePath ? await readFile(filePath, "utf8") : "");
+        // R2-4 (flow 304, fix round 2): this hard-coded `trusted-project` for
+        // BOTH inline `content` and a `path` read, unconditionally. That is
+        // the same mistake `read-source.ts` documents at length for `ctx
+        // read` — `trusted-project` grants the shipped egress source-override
+        // allowance (`resolve.ts#egressSourceOverrideAction`), meant for a
+        // committed file the operator vetted by committing it, never for
+        // caller-supplied bytes with no such provenance.
+        //
+        // Inline `content` has no provenance at all — it is bytes the MCP
+        // caller typed into this call, exactly the shape `security.check`
+        // already clamps below — so it is always `untrusted-external`.
+        //
+        // A `path` is contained to the project root with the same helper
+        // `read-source.ts` uses (never a module internal — `lib/contained-path`
+        // is a shared lib), and its actual trust is derived from
+        // `sourceForFileRead`: tracked-by-git inside the root is
+        // `trusted-project`, everything else (untracked, ignored, a directory)
+        // is `untrusted-external`. A path that resolves outside the root is
+        // refused outright rather than silently scanned as untrusted, so a
+        // traversal attempt is surfaced instead of quietly downgraded.
+        let content: string;
+        let source: SecuritySource;
+        let resolvedPath: string | undefined;
+        if (inline !== undefined) {
+          content = inline;
+          source = "untrusted-external";
+        } else if (filePath) {
+          const projectRoot = resolveProjectRoot(cwd);
+          const contained = await resolveContainedPath(projectRoot, filePath);
+          if (!contained.ok) {
+            throw new Error(`security.scan: ${contained.message}`);
+          }
+          resolvedPath = contained.path;
+          content = await readFile(contained.path, "utf8");
+          source = await sourceForFileRead(cwd, contained.path);
+        } else {
+          content = "";
+          source = "untrusted-external";
+        }
         const result = await runScan(cwd, {
           content,
-          source: "trusted-project",
-          ...(filePath ? { path: filePath } : {}),
+          source,
+          ...(resolvedPath ?? filePath ? { path: resolvedPath ?? (filePath as string) } : {}),
         });
         return { decision: result.decision, report: result.report };
       },

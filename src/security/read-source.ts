@@ -21,7 +21,7 @@
 // error (not a repository, `git` missing, a transient failure) fails CLOSED to
 // `untrusted-external` rather than assuming trust it could not verify.
 import { resolveContainedPath, resolveProjectRoot } from "../lib/contained-path";
-import { realpath } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import type { SecuritySource } from "./types";
 
@@ -61,14 +61,48 @@ export async function sourceForFileRead(
   if (relativePath.length === 0 || path.isAbsolute(relativePath)) {
     return "untrusted-external";
   }
+  // A directory is never a single trustable FILE read (`ctx read`/`redactRaw`
+  // read file content, not a listing), and `git ls-files` happily reports a
+  // tracked directory as a match for a path that names it. Refuse it here
+  // before git ever gets a say.
+  const fileStat = await stat(contained.path).catch(() => null);
+  if (fileStat === null || !fileStat.isFile()) {
+    return "untrusted-external";
+  }
   try {
-    const proc = Bun.spawn(["git", "ls-files", "--error-unmatch", "--", relativePath], {
-      cwd: projectRootReal,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const exitCode = await proc.exited;
-    return exitCode === 0 ? "trusted-project" : "untrusted-external";
+    // `--literal-pathspecs` (equivalently `GIT_LITERAL_PATHSPECS=1`) turns off
+    // ALL pathspec magic for this invocation: a leading `:(glob)`/`:!`/`:^`
+    // prefix, and glob metacharacters (`*`, `?`, `[...]`) inside the path
+    // itself, are taken as literal characters instead of being interpreted.
+    // Without it, an UNTRACKED `a*.md` is reported as tracked because it
+    // happens to glob-match a real tracked `abc.md`, and `:!zz` is parsed as
+    // an exclude pathspec (matching nothing, but exiting 0 as "no error") —
+    // both silently mislabel an unvetted path `trusted-project`.
+    //
+    // `-z` NUL-terminates the output so a path containing a newline cannot
+    // smuggle a second, forged line into the comparison below.
+    //
+    // Even with magic disabled, `git ls-files -- <path>` matches any tracked
+    // path *under* a tracked directory of that name, not just an exact file —
+    // so the exit code alone is not enough. Requiring the (single) NUL-split
+    // entry to equal `relativePath` exactly rejects that case, along with any
+    // other multi-match surprise, while a literal, single, exact match still
+    // passes.
+    const proc = Bun.spawn(
+      ["git", "--literal-pathspecs", "ls-files", "--error-unmatch", "-z", "--", relativePath],
+      {
+        cwd: projectRootReal,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, GIT_LITERAL_PATHSPECS: "1" },
+      },
+    );
+    const [exitCode, stdout] = await Promise.all([proc.exited, new Response(proc.stdout).text()]);
+    if (exitCode !== 0) {
+      return "untrusted-external";
+    }
+    const entries = stdout.split("\0").filter((entry) => entry.length > 0);
+    return entries.length === 1 && entries[0] === relativePath ? "trusted-project" : "untrusted-external";
   } catch {
     // git missing, not a repository, or a spawn failure: the workspace's own
     // provenance cannot be established, so this fails closed rather than

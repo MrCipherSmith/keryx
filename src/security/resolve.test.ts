@@ -106,6 +106,72 @@ test("a harmless query string (?style=flat, ?branch=main) does not block the ove
   expect(action).toBe("allow");
 });
 
+// R2-5 (flow 304, fix round 2): the credential-name gate above missed a
+// handful of real-world spellings entirely — `?APIToken=` (acronym+titlecase
+// compound the old camelCase split never broke apart), `?XTOKEN=` (all-caps,
+// no separator at all), `?apitoken=` (already-lowercase, no separator), and
+// `?pw=hunter2` (a short exact name that was never listed). Each must still
+// gate the override exactly like `?token=`/`?key=`/`?auth=` already do.
+test("credential-shaped query param NAME (round 2 spellings) keeps redaction even from trusted-project", () => {
+  for (const query of ["?APIToken=abc123", "?XTOKEN=abc123", "?apitoken=abc123", "?pw=hunter2", "?sid=abc123"]) {
+    const content = `<img src="https://img.shields.io/npm/v/x.svg${query}">`;
+    const matches = detectExfil(content);
+    const urlMatch = matches.find((m) => m.policyId === "egress.html-image-exfil");
+    expect(urlMatch).toBeDefined();
+    const action = egressSourceOverrideAction(
+      DEFAULT_SECURITY_CONFIG.policies.egress,
+      urlMatch!,
+      "trusted-project",
+    );
+    expect(action).toBeUndefined();
+  }
+});
+
+// R2-5: an unseparated compound built on a long, unambiguous stem — no
+// camelCase, no delimiter for segmentation to split on at all — must still be
+// caught as a suffix/prefix of the whole name, the gap plain segmentation
+// cannot close on its own (nothing splits "oldpassword" into two segments).
+test("an unseparated credential-shaped compound (suffix/prefix) keeps redaction", () => {
+  for (const query of ["?oldpassword=hunter2", "?userapikey=abc123", "?mytoken=abc123"]) {
+    const content = `<img src="https://img.shields.io/npm/v/x.svg${query}">`;
+    const urlMatch = detectExfil(content).find((m) => m.policyId === "egress.html-image-exfil");
+    expect(urlMatch).toBeDefined();
+    const action = egressSourceOverrideAction(
+      DEFAULT_SECURITY_CONFIG.policies.egress,
+      urlMatch!,
+      "trusted-project",
+    );
+    expect(action).toBeUndefined();
+  }
+});
+
+// R2-5: `key`/`code` stay SEGMENT-ONLY on purpose (never a suffix/prefix
+// match), so an ordinary word that merely contains those letters must keep
+// passing — same for the shields.io badge params that are routinely present
+// on a trusted README badge and must never be treated as credential-shaped.
+test("false-positive controls: ordinary words and shields.io badge params still allow", () => {
+  for (const query of [
+    "?areacode=555",
+    "?monkey=1",
+    "?barcode=123",
+    "?style=flat",
+    "?logo=npm",
+    "?label=build",
+    "?color=blue",
+    "?branch=main",
+  ]) {
+    const content = `<img src="https://img.shields.io/npm/v/x.svg${query}">`;
+    const urlMatch = detectExfil(content).find((m) => m.policyId === "egress.html-image-exfil");
+    expect(urlMatch).toBeDefined();
+    const action = egressSourceOverrideAction(
+      DEFAULT_SECURITY_CONFIG.policies.egress,
+      urlMatch!,
+      "trusted-project",
+    );
+    expect(action).toBe("allow");
+  }
+});
+
 test("a query VALUE that a secret detector flags keeps redaction even with a benign param name", () => {
   // `note` is not in the credential-shaped name list, but the value itself is
   // an AWS-shaped key — the design's "value is hit by the existing secret
