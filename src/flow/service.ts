@@ -107,8 +107,14 @@ const AC_TEXT_SELF_PREFIX_PATTERN = /^-?\s*AC\d+\s*:/i;
  * Validate `--criterion` (flow 293, AC4): it must name `AC` followed by a
  * number, so a typo becomes a refusal naming the rule rather than a criterion
  * silently created (or matched) under the wrong id.
+ *
+ * Exported (flow 294, review of PR #658 finding 2) so the CLI layer can
+ * normalize a criterion for DISPLAY the exact same way — trim, then
+ * uppercase — instead of a second, narrower `.toUpperCase()`-only rule that
+ * left a padded `--criterion " AC1 "` printed with the stray whitespace
+ * still in it.
  */
-function validateCriterionName(raw: string): string {
+export function validateCriterionName(raw: string): string {
   const trimmed = raw.trim();
   if (!AC_CRITERION_NAME_PATTERN.test(trimmed)) {
     throw new Error(`--criterion must name "AC" followed by a number, e.g. AC7 (got "${raw}").`);
@@ -1661,4 +1667,41 @@ async function verifyCommitOnMain(
   return exitCode === 0
     ? { status: "pass", detail: `${commit} is contained in origin/main` }
     : { status: "fail", detail: `${commit} is not contained in origin/main` };
+}
+
+/**
+ * Is `criterion` already one of the acceptance criteria this flow has frozen?
+ *
+ * A read-only question the CLI layer (`commands/flow.ts`'s `flow ac update`)
+ * asks BEFORE calling {@link FlowService.acUpdate | acUpdate}, purely to know
+ * which word to print afterward — "rewritten" for an existing criterion,
+ * "appended" for a new one. `acUpdate` re-derives this same fact internally
+ * regardless of what the caller believed going in, so this exists only for
+ * the caller's own printed text, not as a second source of truth `acUpdate`
+ * depends on.
+ *
+ * Exported from `service.ts` — not a bare `../flow/store` re-import — because
+ * `store.ts` is this owner's internal storage layer, and a client/adapter
+ * module reaching past this facade for it is exactly the
+ * `client-imports-core-internal` bypass `import-policy.live.test.ts` caps and
+ * ratchets down: `flow` already has a facade, so there is no reason for
+ * `commands/flow.ts` to import `readAcCriteria`/`resolveFlowDir` directly.
+ *
+ * Normalizes `criterion` through {@link validateCriterionName} — the SAME
+ * function `acUpdate` itself validates `--criterion` with (trim, then
+ * uppercase, then check the `AC\d+` shape) — rather than re-deriving a
+ * second, slightly different normalization here. The bug this replaced:
+ * `input.criterion.toUpperCase()` alone left a caller-supplied `" AC3 "`
+ * padded with whitespace, which never matched any entry of `known` (always
+ * clean, e.g. `"AC3"`), so an already-frozen AC3 was reported "appended"
+ * instead of "rewritten" whenever the flag's value carried incidental
+ * whitespace. Asking the service for the same normalization it uses
+ * internally, instead of copying the trim-then-uppercase rule a second time,
+ * is what keeps this from drifting from `acUpdate` again.
+ */
+export async function acCriterionKnown(input: { cwd: string; id: string; criterion: string }): Promise<boolean> {
+  const normalized = validateCriterionName(input.criterion);
+  const dir = await resolveFlowDir(input.cwd, input.id);
+  const known = await readAcCriteria(input.cwd, dir);
+  return known.includes(normalized);
 }
