@@ -2001,6 +2001,37 @@ loading, validating, passing `flow check`, and completing exactly as before —
 these fields are additive and optional, like every Task Manager v2 field, and
 reading an old file never rewrites it on disk.
 
+### Completion attempts (gate outcomes)
+
+Every `flow complete` invocation — pass or fail — appends one entry to
+`FlowState.completionAttempts`: the outcome (`pass`, `fail`, or `skipped`) and
+detail of every gate that attempt evaluated, whether the attempt passed
+overall, and the acceptance-criteria checksum in force at the time. Unlike
+`gates.owner`/`gates.review`/`gates.tasks`, this is not opt-in — it is written
+on every attempt from every flow, starting the moment this field shipped — and
+it does not bump `schemaVersion`. A `flow.json` written before this field
+existed simply has no `completionAttempts`; `keryx governance report` reads
+that absence as `gate outcomes: not recorded`, never as "every gate passed".
+
+The record is written **before** the attempt's final state transition, not
+after — specifically so that an acceptance-criteria file edited out-of-band
+while a later gate (health, review, security, …) is still running cannot cost
+the attempt its record. If that race is caught, the attempt is persisted as
+**failed**, with an extra `acceptance-criteria` gate entry naming the tamper,
+alongside whatever the earlier gates already decided — not silently dropped
+by the exception the stale criteria file still throws a moment later.
+
+**Growth is unbounded, on purpose — the same choice `signatures` already
+makes.** Every entry costs one `flow complete` invocation, made by a human or
+an agent that decided to attempt completion; nothing amplifies it (a single
+gate re-run inside one attempt is not a second entry). A flow that has been
+completed and reopened repeatedly might carry a few dozen attempts over its
+whole lifetime — nowhere near the volume that would make truncation worth the
+honesty cost of a record captioned "the last N attempts" instead of "every
+attempt". If a pathological retry loop ever makes this a real concern, the fix
+belongs beside `flow.json`'s general size (which every field here already
+affects), not as a special case for this one array.
+
 ---
 
 ## rules

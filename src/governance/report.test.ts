@@ -479,3 +479,33 @@ test("markdown rendering never prints a bare 0 for an unrecorded figure", async 
   expect(markdown).toContain("gate outcomes: not recorded");
   expect(markdown).toContain("confirmations: not recorded (predates signing)");
 });
+
+test("review-fix: trigger spend is formatted through the same usd() rounding as review spend, not printed raw", async () => {
+  // A classic float-sum artifact (0.1 + 0.2 === 0.30000000000000004 in IEEE
+  // 754) — printed raw, this is exactly the kind of figure a reader would
+  // (rightly) distrust. It must come out trimmed, the same way review
+  // spend's `usd()` formatter trims it.
+  await appendTriggerRunRecord(ROOT, {
+    at: "2026-01-01T00:00:00.000Z",
+    trigger: "t1",
+    firedBy: { kind: "event", name: "push" } as never,
+    action: { kind: "reconcile" } as never,
+    outcome: "ok",
+    detail: "ok",
+    cost: { recorded: true, usd: 0.1 },
+  });
+  await appendTriggerRunRecord(ROOT, {
+    at: "2026-01-02T00:00:00.000Z",
+    trigger: "t2",
+    firedBy: { kind: "event", name: "push" } as never,
+    action: { kind: "reconcile" } as never,
+    outcome: "ok",
+    detail: "ok",
+    cost: { recorded: true, usd: 0.2 },
+  });
+
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  const markdown = renderGovernanceMarkdown(report);
+  expect(markdown).toContain("$0.3 across 2 run(s) with recorded cost");
+  expect(markdown).not.toContain("0.30000000000000004");
+});

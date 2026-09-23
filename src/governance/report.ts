@@ -196,15 +196,16 @@ export function renderGovernanceMarkdown(report: GovernanceReport): string {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
+/** Same `usd()` formatter review spend uses — one place a figure becomes a string, not two. */
 function renderTriggerSpendLine(spend: ProjectGovernance["triggerSpend"]): string {
   if (spend.state === "absent") {
-    return "$0 (no trigger has ever run)";
+    return `${usd(0)} (no trigger has ever run)`;
   }
   if (spend.state === "unreadable") {
     return `not recorded (${spend.reason})`;
   }
   return (
-    `$${spend.spentUsd} across ${spend.runsWithCostRecorded} run(s) with recorded cost; ` +
+    `${usd(spend.spentUsd)} across ${spend.runsWithCostRecorded} run(s) with recorded cost; ` +
     `${spend.runsWithCostNotRecorded} run(s) fired with cost not recorded (never counted as $0); ` +
     `${spend.runsTotal} run(s) total`
   );

@@ -5,8 +5,13 @@
 // service, and the only files it writes are its own report artifacts.
 
 import { optionValue } from "../lib/args";
-import { buildGovernanceReport, readLatestGovernanceReport, renderGovernanceMarkdown, writeGovernanceArtifacts } from "../governance/report";
-import type { GovernanceFilters } from "../governance/types";
+import {
+  buildGovernanceReport,
+  readLatestGovernanceReport,
+  renderGovernanceMarkdown,
+  writeGovernanceArtifacts,
+  type GovernanceFilters,
+} from "../governance/service";
 
 const REPORT_FLAGS = ["--flow", "--owner", "--since", "--until", "--all-projects", "--json"] as const;
 

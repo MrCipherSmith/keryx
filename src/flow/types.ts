@@ -245,6 +245,12 @@ export type FlowState = {
    * never had `complete` invoked since — the governance report reads that
    * absence as "not recorded", never as "every gate passed" or "no attempt
    * was made".
+   *
+   * Unbounded growth, deliberately — the same choice `signatures` already
+   * makes. One entry costs one `complete` invocation, so it is bounded by how
+   * many times a human or agent attempts completion on this flow, not by any
+   * data volume; see the CLI reference's "Completion attempts (gate
+   * outcomes)" section for the full reasoning.
    */
   completionAttempts?: FlowCompletionAttempt[] | undefined;
   tasks: FlowTask[];

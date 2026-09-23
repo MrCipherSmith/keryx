@@ -156,3 +156,56 @@ test("AC4: a completion attempt is recorded even on a pre-change fixture that ne
   expect(validateAgainstSchemaObject(flowStateSchema(), result.flow).valid).toBe(true);
   expect(result.flow.schemaVersion).toBeLessThanOrEqual(2); // no new schema version introduced
 });
+
+test("AC4 review fix: a tamper caught between gate evaluation and persistence is still recorded on disk, as a failed attempt naming the tamper", async () => {
+  let dir = "";
+  // The health gate stands in for "some gate that takes real time" — by the
+  // time it runs, gate 1 (acceptance-criteria) has ALREADY checked the file
+  // and passed. Tampering from inside it reproduces the exact race: the
+  // criteria file changes WHILE later gates are still running, after the
+  // one check that exists specifically to catch this has already happened.
+  const service = await fresh({
+    healthGate: async () => {
+      await writeAc(dir, ["Only criterion (tampered mid-complete!)"]);
+      return { status: "pass", reasons: [] };
+    },
+  });
+  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Tamper mid complete", owner: "Aleks" });
+  dir = path.basename(created);
+  await writeAc(dir, ["Only criterion"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+  await service.start({ cwd: ROOT, id: flow.id });
+  await service.implemented({ cwd: ROOT, id: flow.id, prUrl: "https://github.com/acme/app/pull/1" });
+  await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+  await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: "https://github.com/acme/app/pull/1" });
+  for (const taskId of ["T1", "T2", "T3", "T4"]) {
+    await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
+  }
+
+  // The final transition's own AC re-check still throws on a genuine
+  // out-of-band edit — that contract is unchanged. What must not happen is
+  // losing the attempt's record because of it.
+  await expect(service.complete({ cwd: ROOT, id: flow.id, signedBy: "Aleks" })).rejects.toThrow(
+    /do not match their recorded checksum/,
+  );
+
+  const onDisk = JSON.parse(await readFile(flowJsonPath(dir), "utf8")) as {
+    completionAttempts?: Array<{ passed: boolean; gates: Array<{ name: string; status: string; detail: string }> }>;
+    signatures?: Array<{ kind: string }>;
+  };
+  expect(onDisk.completionAttempts).toHaveLength(1);
+  const attempt = onDisk.completionAttempts?.[0];
+  expect(attempt?.passed).toBe(false);
+  // Every gate this attempt evaluated is still on the record, including the
+  // ones that passed before the tamper was caught (the health gate itself
+  // still reports `pass` — it did its job before tampering on the way out).
+  expect(attempt?.gates.some((gate) => gate.name === "health" && gate.status === "pass")).toBe(true);
+  // A tamper-naming failure is appended, alongside gate 1's earlier (now
+  // stale) pass — both are on the record, not one replacing the other.
+  const tamperGates = attempt?.gates.filter((gate) => gate.name === "acceptance-criteria") ?? [];
+  expect(tamperGates.some((gate) => gate.status === "fail" && /checksum/.test(gate.detail))).toBe(true);
+  // No COMPLETION signature was recorded (the earlier `ac-confirm` one from
+  // setup is expected and untouched) — a tamper caught here must not let a
+  // false "all gates passed" claim get signed.
+  expect((onDisk.signatures ?? []).some((signature) => signature.kind === "complete")).toBe(false);
+});

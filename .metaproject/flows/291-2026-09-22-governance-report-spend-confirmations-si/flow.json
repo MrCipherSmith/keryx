@@ -10,7 +10,7 @@
   "title": "Governance report: spend, confirmations, signatures and gate outcomes across flows",
   "status": "in-progress",
   "createdAt": "2026-09-22T23:17:46.032Z",
-  "updatedAt": "2026-09-22T23:43:51.036Z",
+  "updatedAt": "2026-09-23T00:00:37.616Z",
   "source": {
     "type": "description",
     "ref": null
@@ -194,6 +194,21 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Review and CI fixes: governance facade, command descriptors, tamper-safe attempt persistence, one USD formatter",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -279,6 +294,16 @@
       "at": "2026-09-22T23:43:51.036Z",
       "event": "task-done",
       "detail": "T10: Docs: README and CLI reference"
+    },
+    {
+      "at": "2026-09-23T00:00:37.495Z",
+      "event": "task-added",
+      "detail": "T12: Review and CI fixes: governance facade, command descriptors, tamper-safe attempt persistence, one USD formatter"
+    },
+    {
+      "at": "2026-09-23T00:00:37.616Z",
+      "event": "task-done",
+      "detail": "T12: Review and CI fixes: governance facade, command descriptors, tamper-safe attempt persistence, one USD formatter"
     }
   ]
 }

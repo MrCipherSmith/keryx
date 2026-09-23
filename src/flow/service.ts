@@ -819,22 +819,67 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
 
       const passed = gates.every((gate) => gate.status !== "fail");
 
-      // Flow 291, AC4: this attempt's full gate outcomes go on the record —
-      // pass or fail, every gate evaluated, not folded into one prose
-      // `history` line. Additive and unconditional (not opt-in like
+      // Flow 291, AC4 (review fix): re-check AC intactness HERE, explicitly
+      // and caught, before anything below is trusted or written. Every gate
+      // above finished before this line; the criteria file can have been
+      // edited out-of-band WHILE they ran (gate 1 checked it first, but the
+      // health/review/security gates that ran afterward take real time), and
+      // that race must not cost the record of what every gate decided. A
+      // tamper caught here overrides this attempt to `failed`, naming the
+      // tamper, rather than persisting a `passed: true` — or a signature —
+      // built on a criteria file that no longer matches what was evaluated.
+      let tamperDetail: string | undefined;
+      try {
+        await assertAcIntact(cwd, dir, flow);
+      } catch (error) {
+        tamperDetail = error instanceof Error ? error.message : String(error);
+      }
+      const recordedGates: GateOutcome[] =
+        tamperDetail === undefined
+          ? gates
+          : [
+              ...gates,
+              {
+                name: "acceptance-criteria",
+                status: "fail",
+                detail:
+                  `acceptance criteria changed after this attempt's gates were evaluated, before it could be ` +
+                  `recorded: ${tamperDetail}`,
+              },
+            ];
+      const recordedPassed = tamperDetail === undefined && passed;
+
+      // This attempt's full gate outcomes go on the record — pass or fail,
+      // every gate evaluated, not folded into one prose `history` line.
+      // Additive and unconditional (not opt-in like
       // `gates.owner`/`gates.review`/`gates.tasks`): a flow.json written
       // before this field existed simply has no `completionAttempts`, and the
       // governance report reads that absence as "not recorded" rather than
       // inferring or backfilling anything about it.
       flow.completionAttempts = [
         ...(flow.completionAttempts ?? []),
-        { at: now(), gates, passed, acChecksum: flow.acChecksum },
+        { at: now(), gates: recordedGates, passed: recordedPassed, acChecksum: flow.acChecksum },
       ];
+
+      // Persisted NOW, independent of the transition below — a plain `save`,
+      // not `transition`, so it carries no AC re-check of its own that could
+      // throw this record away a second time. Whatever happens next (a fresh
+      // tamper landing in the gap between this write and the transition
+      // below, however unlikely), THIS attempt already reached disk.
+      flow = await save(
+        cwd,
+        dir,
+        flow,
+        "completion-attempt-recorded",
+        tamperDetail !== undefined
+          ? `attempt ${flow.completionAttempts.length}: acceptance criteria tampered — ${tamperDetail}`
+          : `attempt ${flow.completionAttempts.length}: ${recordedPassed ? "passed" : "failed"}`,
+      );
 
       let issueComment: string | null = null;
       let commented = false;
 
-      if (passed) {
+      if (recordedPassed) {
         if (mergedCommit) {
           flow.merged = { commit: mergedCommit, ref: "origin/main", at: now() };
         }
@@ -858,7 +903,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         // unchanged) but must stay distinguishable from a genuine pass in the
         // record a reader actually sees. `healthWarnNote` is the only place
         // that surfaces it, into the one durable event this branch writes.
-        const warnNote = healthWarnNote(gates);
+        const warnNote = healthWarnNote(recordedGates);
         flow = await transition(
           cwd,
           dir,
@@ -867,7 +912,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           "done",
           warnNote ? `all gates passed (${warnNote})` : "all gates passed",
         );
-        issueComment = buildIssueComment(flow, gates);
+        issueComment = buildIssueComment(flow, recordedGates);
         if (comment && flow.source.type === "github-issue" && flow.source.ref && deps.tracker) {
           const ref = deps.tracker.parseRef(flow.source.ref);
           if (ref && (await deps.tracker.detect())) {
@@ -875,7 +920,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           }
         }
       } else {
-        const failed = gates.filter((gate) => gate.status === "fail");
+        const failed = recordedGates.filter((gate) => gate.status === "fail");
         flow = await transition(
           cwd,
           dir,
@@ -886,7 +931,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         );
       }
 
-      return { flow, gates, passed, issueComment, commented };
+      return { flow, gates: recordedGates, passed: recordedPassed, issueComment, commented };
       });
     },
 
