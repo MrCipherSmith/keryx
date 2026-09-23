@@ -347,10 +347,10 @@ its own:
   started with their `command`, `args` and `env`, through the same MCP client
   and dial procedure `keryx shell` uses for its configured servers. The child
   gets the entry's `env` on top of keryx's own environment, with keryx's
-  credentials stripped from it — credential-shaped names, and every variable
-  keryx loaded from its own saved keys, by name; its stderr is discarded. The
-  session is answered at once; its first `session/prompt` waits for the
-  servers to finish starting.
+  credentials stripped from it — credential-shaped names, and every name
+  saved in your config (`auth.json`), whether or not this run has actually
+  loaded it; its stderr is discarded. The session is answered at once; its
+  first `session/prompt` waits for the servers to finish starting.
 - **One running set per distinct list.** Zed sends its whole list with every
   new thread; sessions on one connection that send the same list (same
   entries, same project root) share one set of server processes rather than
@@ -1602,17 +1602,47 @@ Per flow (`.metaproject/flows/<id>/flow.json` and its `reviews/*/manifest.json`)
 
 Per project (`.metaproject/data/trigger/runs.jsonl`):
 
-- **Trigger spend** — USD summed over fired-trigger runs whose cost was
+- **Trigger spend** — USD summed over every fired-trigger run whose cost was
   recorded, plus the count of runs whose cost was not recorded (never folded
-  into the sum as `$0`). Never attributed to any individual flow: a fired-
-  trigger record carries no flow reference, so this is always a project-wide
-  figure, stated as such. An absent ledger reports a demonstrated `$0`
-  (nothing has ever fired); an unreadable one reports `not recorded` with the
-  reason.
-- **Policy decisions** — allow/ask/deny decisions and unattended-run denials
-  have no durable project-wide record in this build, so this section always
-  reads `not recorded (no durable log exists yet)`. (Flow 290, unattended
-  denials, is a future source for this — not a dependency of this report.)
+  into the sum as `$0`). This is the project's TRUE total, project-wide across
+  every trigger and every action kind, whether or not the run named a flow.
+  `attributedToFlowsUsd` says how much of that total is ALSO shown under a
+  flow's own "Dispatch runs" section below (`spentUsd` there); it is a SUBSET
+  of the project total, never an amount on top of it — **do not add the
+  project's `spentUsd` to any flow's `dispatch.spend.spentUsd`, that
+  double-counts every dispatch dollar.** The markdown says so in place, with
+  "of which $X is shown under flows below (not additive)". An absent ledger
+  reports a demonstrated `$0` (nothing has ever fired); an unreadable one
+  reports `not recorded` with the reason.
+- **Policy decisions** — an INTERACTIVE session's own allow/ask/deny decisions
+  have no durable record in this build, so this section always reads `not
+  recorded` with that reason. An UNATTENDED dispatch run is different: flow 290
+  records every such run's denials, and this report reads them — see "Dispatch
+  runs" below, not this line.
+
+Per flow, also from `runs.jsonl` (flow 297):
+
+- **Dispatch runs** — every unattended `flow-next` dispatch run that named
+  this flow (`TriggerDispatchRecord.flow`), joined by `runId`: the trigger,
+  the time, the outcome (`ok`, `failed`, `dispatch-refused`, `budget-refused`,
+  or an operator's `reservation-resolved`), the cost, and every call its
+  unattended approval gate denied — the tool and the reason, timed by the
+  run's own `at`. Spend is summed only over these CLOSED runs, the same
+  "never folded into `$0`" rule trigger spend keeps. This `spentUsd` is
+  **included in** the project's trigger spend above, not additional to it —
+  `includedInProjectTriggerSpend: true` in the JSON, and the markdown line
+  says "(included in the project's trigger spend above — not additive)".
+- **Open reservations** — a spend reservation this flow's dispatch opened
+  (`keryx trigger run`, before its first model call) that no closing record —
+  and no `keryx trigger resolve` — has closed yet: a killed run. Shown as
+  "reserved, not spent", on its own line, never added into the spend figure
+  above. A reservation recorded before this change carries no flow reference
+  and stays out of every flow's section — it is still counted at the
+  project-wide trigger-spend line, unchanged from before.
+- A report-only `flow-next` entry (no `dispatch` block — it only reports the
+  next task, no model call) writes no `dispatch` record at all, so it never
+  appears in either list here; it is still counted at the project-wide
+  trigger-spend line, exactly as before this change.
 
 The report never re-runs `flow complete`, `review ingest`/`budget`, `health
 run`, or any security scan, and never calls a model or a network service. The
@@ -3825,14 +3855,36 @@ in them may be able to push the tool's identity out of view, and an
 "always" grant would store a pattern the model chose in your permission
 file.
 
-**Environment.** A server is spawned with your environment minus anything
-credential-shaped: provider keys (`ANTHROPIC_*`, `OPENAI_API_KEY`,
-`GEMINI_API_KEY`, …), forge and cloud tokens (`GITHUB_TOKEN`, `NPM_TOKEN`,
-`AWS_*`), `SSH_AUTH_SOCK`, the whole `KERYX_*` namespace, and any variable
-whose name says it holds a token, key, password or credential. A server that
-genuinely needs one takes it explicitly with `-e`, which is a decision you
-made rather than a default you inherited. Its stderr is captured, not
-inherited, so it cannot write to your terminal.
+**Environment.** A server is spawned with your environment minus two things,
+stripped independently and for independent reasons — the same strip, built
+once in `buildMcpChildEnv` and used by every surface that launches an MCP
+server (`keryx shell`, `keryx mcp doctor`, and an ACP client's own servers
+under `keryx acp`; see "MCP servers from the client" above):
+
+- **Anything credential-SHAPED**, by name or by value: provider keys
+  (`ANTHROPIC_*`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …), forge and cloud
+  tokens (`GITHUB_TOKEN`, `NPM_TOKEN`, `AWS_*`), agent sockets
+  (`SSH_AUTH_SOCK`), credential-file pointers (`NETRC`, `KUBECONFIG`, …), the
+  whole `KERYX_*` namespace, any variable whose name says it holds a token,
+  key, password or credential, and any value shaped like
+  `scheme://user:pass@host` wherever it turns up.
+- **Every variable your saved config (`auth.json`) declares**, removed by the
+  exact NAME it is saved under — whatever that name is. This catches what
+  the shape rule cannot: the "add custom provider" wizard saves an API key
+  under whatever env-var name it is given, which may carry none of
+  KEY/TOKEN/SECRET (`MY_LLM_GATEWAY`, say). That name would otherwise reach
+  every server you launch, indistinguishable from a variable you exported
+  yourself — and it holds whether or not THIS run has actually loaded the
+  key into its own process yet: `keryx mcp doctor` and `keryx shell --print`/
+  `--no-tui`/non-TTY never call the function that would, but the strip reads
+  the same saved names straight off disk, so it applies there too, not only
+  on a path that happened to load them first.
+
+A server that genuinely needs one of these takes it explicitly — `-e` for a
+stdio server, its own `env` entry either way — which is a decision you made
+rather than a default you inherited; an explicit entry always wins over both
+strips, even for a name your saved config declares. Its stderr is captured,
+not inherited, so it cannot write to your terminal.
 
 ```
 $ keryx mcp add fs -- npx -y @modelcontextprotocol/server-filesystem ~/notes

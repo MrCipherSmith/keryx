@@ -601,7 +601,12 @@ export async function defaultConnect(
     [command, ...(server.args ?? [])],
     {
       cwd: server.cwd ?? defaultServerCwd(server),
-      env: buildMcpChildEnv({ parent: env, serverEnv: server.env }),
+      // `configDir` threaded through too, not just `env`: `buildMcpChildEnv`
+      // reads the saved-config file directly (flow 296's follow-up) so the
+      // by-name strip holds even on a path — `keryx mcp doctor`, or a caller
+      // that never ran `applySavedApiKeys` — that never loaded anything into
+      // `env` from it in the first place.
+      env: buildMcpChildEnv({ parent: env, serverEnv: server.env, configDir }),
     },
     // Bounded at the transport, so a server that never handshakes has its
     // child KILLED rather than merely abandoned by the caller's race. See

@@ -33,8 +33,12 @@ export { readProjectTriggerSpend } from "./spend";
 export type {
   CriterionConfirmation,
   FlowConfirmations,
+  FlowDispatch,
+  FlowDispatchRun,
+  FlowDispatchSpend,
   FlowGateOutcomes,
   FlowGovernance,
+  FlowOpenReservation,
   FlowReviewSpend,
   GovernanceFilters,
   GovernanceReport,

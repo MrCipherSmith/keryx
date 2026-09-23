@@ -15,6 +15,18 @@
 //     events). That is the result, so it is never silently truncated: passing
 //     the budget fails the run with a named reason and the child is killed.
 //
+// `BoundedTranscript` bounds what stderr RETAINS, not what it COSTS to read: a
+// child that writes an endless number of short lines never grows past the
+// head+tail ceiling in memory, but keryx still reads, decodes and pushes every
+// one of them forever — bounded RAM, unbounded CPU, for the run's full
+// `timeoutMs` (default 10 minutes). A second `OutputBudget`, sized and named
+// separately from the run-output one, counts stderr BYTES READ (not bytes
+// retained) and stops the run the same way once it is passed. It is kept
+// separate from the run-output budget rather than shared with it because the
+// two measure different things a hostile child can do — flood the result vs.
+// flood the diagnostic — and merging them would let noisy-but-harmless stderr
+// chatter starve a legitimate large result's budget, or vice versa.
+//
 // Sizes are measured in UTF-16 code units of the decoded text — the same unit
 // the line ceiling and keryx's own ACP framing use. For ASCII that is bytes.
 //
@@ -34,6 +46,42 @@ export const DIAGNOSTIC_TAIL_BYTES = 48 * 1024;
  * make keryx spend.
  */
 export const DEFAULT_MAX_RUN_OUTPUT_BYTES = 16 * 1024 * 1024;
+
+/**
+ * The most stderr a single ACP run may be READ FROM before it is stopped —
+ * independent of `BoundedTranscript`'s retention bound, which only caps what
+ * is kept, not what is read. Same order of magnitude as
+ * {@link DEFAULT_MAX_RUN_OUTPUT_BYTES}: both exist to keep a hostile or
+ * misbehaving child from making keryx do unbounded work in one run, whether
+ * that work is holding the result or reading a diagnostic stream.
+ *
+ * ACP-transport default only. A line-stream (codec) run uses
+ * {@link DEFAULT_MAX_LINE_STREAM_STDERR_BYTES} instead — see that constant for
+ * why the two differ. Either can be overridden per agent by
+ * `ExternalAgentEntry.maxStderrBytes` (`./types.ts`).
+ */
+export const DEFAULT_MAX_STDERR_BYTES = 16 * 1024 * 1024;
+
+/**
+ * The most stderr a single line-stream (codec) run may be READ FROM before it
+ * is stopped — the shared supervisor's counterpart to
+ * {@link DEFAULT_MAX_STDERR_BYTES}, sized differently on purpose.
+ *
+ * `codex exec` narrates itself on stderr BY DESIGN and prints the contents of
+ * files it reads (`./codec/codex-cli.ts`'s header) — a legitimate read-heavy
+ * run can be verbose there in a way no ACP agent is documented to be. Since
+ * stderr MEMORY is already bounded by `BoundedTranscript`'s head/tail
+ * retention regardless of this value, this budget's only job is to end a
+ * PATHOLOGICAL flood sooner than the run's wall-clock `timeoutMs` (default 10
+ * minutes) — not to protect a legitimate chatty run. 256 MiB does that: a
+ * synthetic flood of short lines against this ceiling still ends in well
+ * under a second of pure read/budget overhead (`bounded.test.ts`'s flood
+ * tests exercise the mechanism, not the wall-clock number, since a real
+ * child's actual pipe I/O dominates), while 256 MiB sits far above anything a
+ * real narrating run has been observed to write.
+ * Overridable per agent by `ExternalAgentEntry.maxStderrBytes`.
+ */
+export const DEFAULT_MAX_LINE_STREAM_STDERR_BYTES = 256 * 1024 * 1024;
 
 /** Fixed per-event overhead counted against the budget, so zero-text events cannot grow the list for free. */
 export const EVENT_OVERHEAD_BYTES = 64;
@@ -150,4 +198,9 @@ export function eventCost(event: { readonly kind: string } & Record<string, unkn
 /** The named reason a run is stopped with when it passes its output budget. */
 export function outputBudgetReason(limit: number): string {
   return `the agent produced more than ${limit} bytes of output in one run; the run was stopped and the agent killed`;
+}
+
+/** The named reason a run is stopped with when it passes its stderr budget. */
+export function stderrBudgetReason(limit: number): string {
+  return `the agent wrote more than ${limit} bytes to stderr in one run; the run was stopped and the agent killed`;
 }

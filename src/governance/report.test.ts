@@ -170,6 +170,8 @@ test("AC2: trigger spend sums recorded runs and counts unrecorded ones separatel
     runsWithCostRecorded: 1,
     runsWithCostNotRecorded: 1,
     runsTotal: 2,
+    // Neither record above named a flow (`dispatch` field), so nothing is attributed.
+    attributedToFlowsUsd: undefined,
   });
 });
 
@@ -190,6 +192,191 @@ test("AC2: a trigger run record carries no flow reference, so project-wide spend
   // The flow's own review spend is unaffected by project-wide trigger spend.
   expect(flow?.spend.spentUsd).toBeUndefined();
   expect(report.projects[0]?.triggerSpend).toMatchObject({ state: "present", spentUsd: 9 });
+});
+
+// --- Flow 297 (AC1, AC2, AC3, AC4): unattended denials, dispatch attribution ---
+
+test("AC1/AC2: a dispatch run's denials (tool, reason, time) are read from the ledger and attributed to the flow it named", async () => {
+  await writeFlowFixture("120-2026-01-01-dispatch-with-denials");
+  await appendTriggerRunRecord(ROOT, {
+    at: "2026-01-01T00:00:00.000Z",
+    trigger: "overnight",
+    firedBy: { kind: "schedule", cron: "0 2 * * *" } as never,
+    action: { kind: "flow-next", flow: "120" } as never,
+    outcome: "ok",
+    detail: "task T1 done",
+    cost: { recorded: true, usd: 0.42, tokens: { input: 100, output: 50 } },
+    dispatch: {
+      runId: "run-a",
+      flow: "120",
+      task: "T1",
+      attempt: 1,
+      branch: "trigger/120-T1",
+      closing: "done",
+      denials: [
+        { tool: "shell_exec", reason: 'approval required under permission mode "ask" — unattended, so denied' },
+      ],
+    },
+  });
+
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  const flow = report.projects[0]?.flows.find((f) => f.id === "120");
+  expect(flow?.dispatch.state).toBe("present");
+  if (flow?.dispatch.state !== "present") throw new Error("unreachable");
+  expect(flow.dispatch.runs).toHaveLength(1);
+  const run = flow.dispatch.runs[0]!;
+  expect(run).toMatchObject({ runId: "run-a", trigger: "overnight", at: "2026-01-01T00:00:00.000Z", task: "T1", outcome: "ok" });
+  // Pins the source (AC3): the denial is exactly what `TriggerDispatchRecord.denials` carried, not fabricated.
+  expect(run.denials).toEqual([
+    { tool: "shell_exec", reason: 'approval required under permission mode "ask" — unattended, so denied' },
+  ]);
+  expect(flow.dispatch.spend).toEqual({
+    runsTotal: 1,
+    spentUsd: 0.42,
+    runsWithCostRecorded: 1,
+    runsWithCostNotRecorded: 0,
+    openReservedUsd: 0,
+    includedInProjectTriggerSpend: true,
+  });
+
+  const markdown = renderGovernanceMarkdown(report);
+  expect(markdown).toContain("denied: shell_exec — approval required under permission mode");
+});
+
+// Review finding (PR #659): a dispatch run's cost was counted in
+// `triggerSpend` AND in its flow's `dispatch.spend` as two UNCONNECTED
+// figures — a consumer summing project + flows from `latest.json` (or a
+// reader of the markdown) would double-count every dispatch dollar. Fixed by
+// making the overlap explicit: `attributedToFlowsUsd` (project side) and
+// `includedInProjectTriggerSpend` (flow side) — this test pins that the two
+// are never additive.
+test("review fix: a flow-attributed dispatch run's cost is the SAME dollar under the project total and the flow — never additive", async () => {
+  await writeFlowFixture("124-2026-01-01-double-count-fix");
+  await appendTriggerRunRecord(ROOT, {
+    at: "2026-01-01T00:00:00.000Z",
+    trigger: "overnight",
+    firedBy: { kind: "schedule", cron: "0 2 * * *" } as never,
+    action: { kind: "flow-next", flow: "124" } as never,
+    outcome: "ok",
+    detail: "task T1 done",
+    cost: { recorded: true, usd: 0.42 },
+    dispatch: { runId: "run-b", flow: "124", task: "T1", closing: "done" },
+  });
+
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  const project = report.projects[0]!;
+  const flow = project.flows.find((f) => f.id === "124");
+  expect(flow?.dispatch.state).toBe("present");
+  if (flow?.dispatch.state !== "present") throw new Error("unreachable");
+
+  // The project's total IS the true total ($0.42 — one run, nothing else fired).
+  expect(project.triggerSpend).toMatchObject({ state: "present", spentUsd: 0.42 });
+  if (project.triggerSpend.state !== "present") throw new Error("unreachable");
+  // The attributed part equals the whole total here — everything that fired named this flow.
+  expect(project.triggerSpend.attributedToFlowsUsd).toBe(0.42);
+  // The flow's own figure carries the explicit "this is a slice, not an addition" flag.
+  expect(flow.dispatch.spend.includedInProjectTriggerSpend).toBe(true);
+  expect(flow.dispatch.spend.spentUsd).toBe(0.42);
+
+  // The double-count a naive consumer would compute — project + every flow's
+  // dispatch spend — must NOT equal what the report presents as the total.
+  // It must instead equal spentUsd + attributedToFlowsUsd, proving the two
+  // figures overlap rather than sum.
+  const naiveDoubleCount = project.triggerSpend.spentUsd + flow.dispatch.spend.spentUsd!;
+  expect(naiveDoubleCount).toBe(0.84);
+  expect(naiveDoubleCount).not.toBe(project.triggerSpend.spentUsd); // the double-count is wrong…
+  expect(project.triggerSpend.spentUsd).toBe(0.42); // …the report's own total is the true, non-doubled figure
+
+  // Markdown makes the non-additivity explicit in both directions.
+  const markdown = renderGovernanceMarkdown(report);
+  expect(markdown).toContain("of which $0.42 is shown under flows");
+  expect(markdown).toMatch(/not additive/i);
+  expect(markdown).toContain("included in the project's trigger spend");
+});
+
+test("AC2/AC4: an open spend reservation is shown as reserved, not spent — never folded into spentUsd", async () => {
+  await writeFlowFixture("121-2026-01-01-open-reservation");
+  await appendTriggerRunRecord(ROOT, {
+    at: "2026-01-01T00:00:00.000Z",
+    trigger: "overnight",
+    firedBy: { kind: "schedule", cron: "0 2 * * *" } as never,
+    action: { kind: "flow-next", flow: "121" } as never,
+    outcome: "reserved",
+    detail: "reserved $1 for dispatch run run-killed before its first model call",
+    cost: { recorded: false, reason: "a reservation — the run's own record carries what it spent" },
+    reservation: { runId: "run-killed", usd: 1 },
+    dispatch: { runId: "run-killed", flow: "121", task: "T1" },
+  });
+
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  const flow = report.projects[0]?.flows.find((f) => f.id === "121");
+  expect(flow?.dispatch.state).toBe("present");
+  if (flow?.dispatch.state !== "present") throw new Error("unreachable");
+  // No closing record yet — this is not a "run" in the closed sense.
+  expect(flow.dispatch.runs).toEqual([]);
+  expect(flow.dispatch.openReservations).toEqual([
+    { runId: "run-killed", trigger: "overnight", at: "2026-01-01T00:00:00.000Z", usd: 1 },
+  ]);
+  expect(flow.dispatch.spend.spentUsd).toBeUndefined(); // never folded in as spent
+  expect(flow.dispatch.spend.openReservedUsd).toBe(1);
+  expect(flow.dispatch.spend.runsTotal).toBe(1);
+
+  const markdown = renderGovernanceMarkdown(report);
+  expect(markdown).toContain("reserved, not spent");
+});
+
+test("AC4: a report-only flow-next run (no `dispatch` block) stays project-level, never attributed to the flow it named", async () => {
+  await writeFlowFixture("122-2026-01-01-report-only");
+  await appendTriggerRunRecord(ROOT, {
+    at: "2026-01-01T00:00:00.000Z",
+    trigger: "on-merge",
+    firedBy: { kind: "event", name: "post-merge" } as never,
+    action: { kind: "flow-next", flow: "122" } as never,
+    outcome: "ok",
+    detail: "flow 122's next task is T1",
+    cost: { recorded: false, reason: "this action does not call a model — reconcile/rebuild are deterministic, no spend to record" },
+  });
+
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  const flow = report.projects[0]?.flows.find((f) => f.id === "122");
+  expect(flow?.dispatch.state).toBe("present");
+  if (flow?.dispatch.state !== "present") throw new Error("unreachable");
+  // No `dispatch` on the record at all (report-only never writes one) — it never attaches to this flow.
+  expect(flow.dispatch.runs).toEqual([]);
+  expect(flow.dispatch.openReservations).toEqual([]);
+  // Still counted at the project level, exactly as before this change.
+  expect(report.projects[0]?.triggerSpend).toMatchObject({ state: "present", runsWithCostNotRecorded: 1, runsTotal: 1 });
+});
+
+test("AC4: a record written before this change (a 'reserved' line with no `dispatch` block) still reads, and stays unattributed rather than guessed onto a flow", async () => {
+  await writeFlowFixture("123-2026-01-01-pre-change-record");
+  await appendTriggerRunRecord(ROOT, {
+    at: "2026-01-01T00:00:00.000Z",
+    trigger: "overnight",
+    firedBy: { kind: "schedule", cron: "0 2 * * *" } as never,
+    action: { kind: "flow-next", flow: "123" } as never,
+    outcome: "reserved",
+    detail: "reserved $1 for dispatch run pre-change-run before its first model call",
+    cost: { recorded: false, reason: "a reservation — the run's own record carries what it spent" },
+    reservation: { runId: "pre-change-run", usd: 1 },
+    // No `dispatch` field — exactly what every "reserved" record looked like before flow 297.
+  });
+
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  const flow = report.projects[0]?.flows.find((f) => f.id === "123");
+  expect(flow?.dispatch.state).toBe("present");
+  if (flow?.dispatch.state !== "present") throw new Error("unreachable");
+  expect(flow.dispatch.openReservations).toEqual([]); // unattributable — never guessed onto this flow
+  expect(flow.dispatch.runs).toEqual([]);
+  // Still visible at the project level, exactly as before this change.
+  expect(report.projects[0]?.triggerSpend).toMatchObject({ state: "present", runsWithCostNotRecorded: 1, runsTotal: 1 });
+});
+
+test("AC1/AC3: policy decisions are narrowed to interactive sessions — the report no longer calls flow 290 a future source", async () => {
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  const reason = report.projects[0]?.policyDecisions.reason ?? "";
+  expect(reason).not.toContain("future source");
+  expect(reason.toLowerCase()).toContain("interactive session");
 });
 
 // --- AC3: confirmations, signatures, identity basis --------------------------

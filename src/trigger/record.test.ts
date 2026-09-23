@@ -8,6 +8,7 @@ import {
   appendTriggerRunRecord,
   latestRunByTrigger,
   NO_MODEL_COST,
+  openReservations,
   readTriggerRuns,
   triggerRunsPath,
   type TriggerRunRecord,
@@ -101,6 +102,56 @@ describe("appendTriggerRunRecord / readTriggerRuns", () => {
       const names = new Set(read.records.map((r) => r.trigger));
       expect(names.size).toBe(25); // every writer's own record is present, none clobbered another's
     }
+  });
+});
+
+// Flow 297 (AC2): the "reserved" record can now additively carry the
+// dispatch's flow/task, so an OPEN reservation is attributable — and a
+// "reserved" record written BEFORE this change (no `dispatch` block) still
+// reads, just with `flow`/`task` left `undefined` rather than guessed.
+describe("openReservations: flow/task attribution (flow 297, AC2)", () => {
+  function reservedRecord(runId: string, overrides: Partial<TriggerRunRecord> = {}): TriggerRunRecord {
+    return {
+      ...baseRecord("overnight", "2026-09-23T00:00:00.000Z"),
+      v: 1,
+      outcome: "reserved",
+      detail: `reserved for ${runId}`,
+      cost: { recorded: false, reason: "a reservation" },
+      reservation: { runId, usd: 1 },
+      ...overrides,
+    };
+  }
+
+  test("a reservation whose record carries `dispatch` reports the flow and task it was opened for", () => {
+    const records: TriggerRunRecord[] = [
+      reservedRecord("run-1", { dispatch: { runId: "run-1", flow: "297", task: "T5" } }),
+    ];
+    const open = openReservations(records);
+    expect(open).toHaveLength(1);
+    expect(open[0]).toMatchObject({ runId: "run-1", flow: "297", task: "T5" });
+  });
+
+  test("a pre-change reservation record (no `dispatch` block) still reads, with flow/task left undefined — never a crash, never a guess", () => {
+    const records: TriggerRunRecord[] = [reservedRecord("run-2")];
+    const open = openReservations(records);
+    expect(open).toHaveLength(1);
+    expect(open[0]?.runId).toBe("run-2");
+    expect(open[0]?.flow).toBeUndefined();
+    expect(open[0]?.task).toBeUndefined();
+  });
+
+  test("a closing record for the same runId still closes the reservation, flow-attributed or not", () => {
+    const records: TriggerRunRecord[] = [
+      reservedRecord("run-3", { dispatch: { runId: "run-3", flow: "297", task: "T5" } }),
+      {
+        ...baseRecord("overnight", "2026-09-23T00:05:00.000Z"),
+        v: 1,
+        outcome: "ok",
+        cost: { recorded: true, usd: 0.5 },
+        dispatch: { runId: "run-3", flow: "297", task: "T5", closing: "done" },
+      },
+    ];
+    expect(openReservations(records)).toEqual([]);
   });
 });
 

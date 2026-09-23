@@ -18,8 +18,12 @@
 // detected. It catches the failure that actually happened, not every possible
 // one.
 
+import path from "node:path";
 import { describe, expect, test } from "bun:test";
 import { CLI_ROUTES } from "../cli";
+import { triggerCommand } from "../commands/trigger";
+import { dispatchLockPath } from "../commands/trigger-dispatch";
+import { maintenanceLockPath } from "../lib/maintenance-lock";
 import { COMMAND_DESCRIPTORS, isAutoAllowable, listDescriptors } from "./command-registry";
 
 /**
@@ -157,5 +161,94 @@ describe("command registry coverage", () => {
       "status",
       "version check",
     ]);
+  });
+});
+
+// AC3 (flow 294): the `trigger run` descriptor once claimed "open-flow"/
+// "flow-next" refuse cleanly and named a `.run.lock` path neither is true of
+// this build any more (flows 286/290 made both actions run, and flow-next
+// with a "dispatch" block DISPATCHES an agent; the lock moved to
+// `.metaproject/data/.locks/`). Nothing caught that drift because the
+// descriptor and the CLI's own help text are two independent copies of the
+// same belief. This test pins the descriptor against `keryx trigger`'s own
+// help text — the actual behaviour, as `triggerCommand` states it — so the
+// two cannot drift apart again unnoticed.
+describe("trigger run descriptor pinned against the trigger help", () => {
+  async function captureTriggerHelp(): Promise<string> {
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = ((...args: unknown[]) => {
+      lines.push(args.map((arg) => String(arg)).join(" "));
+    }) as typeof console.log;
+    try {
+      await triggerCommand(["--help"]);
+    } finally {
+      console.log = original;
+    }
+    return lines.join("\n");
+  }
+
+  test("the help itself no longer claims open-flow/flow-next refuse, and describes dispatch", async () => {
+    const help = await captureTriggerHelp();
+    // Sanity on the pin's own premise: if the CLI's help stopped saying
+    // flow-next dispatches, or started claiming a clean refusal again, that
+    // is a real behaviour change the descriptor would then have to follow —
+    // not a false positive in this test.
+    expect(help).toContain("DISPATCHES a keryx agent");
+    expect(help).not.toMatch(/open-flow[^.]*flow-next[^.]*refuse/i);
+    expect(help).not.toContain(".metaproject/data/trigger/.run.lock");
+  });
+
+  test("the descriptor matches: no refusal claim, no stale lock path, and it mentions dispatch", () => {
+    const descriptor = COMMAND_DESCRIPTORS.find((entry) => entry.command === "trigger run");
+    expect(descriptor).toBeDefined();
+    const text = `${descriptor!.summary} ${(descriptor!.sideEffects ?? []).join(" ")}`;
+    expect(text).not.toMatch(/open-flow[^.]*flow-next[^.]*refuse/i);
+    expect(text).not.toContain(".metaproject/data/trigger/.run.lock");
+    expect(text.toLowerCase()).toContain("dispatch");
+  });
+
+  // Review of PR #658 caught a second false claim the tests above did not:
+  // the descriptor said EVERY action "briefly holds the project's shared
+  // maintenance lock … refuses when another run holds it". True for
+  // reconcile/rebuild/open-flow (`withTriggerRunLock` -> `withMaintenanceLock`
+  // in trigger.ts), but FALSE for a dispatching `flow-next`:
+  // `runFlowNextDispatch` (trigger-dispatch.ts) takes a PER-FLOW
+  // `dispatch-<flow>.lock` for the dispatch, and only briefly a separate
+  // `spend.lock` for the reservation — its own top-of-file comment says so
+  // outright ("The project's MAINTENANCE lock is not held across the agent
+  // run: the agent's own `keryx gdgraph build` must be able to take it"), so
+  // two dispatches on DIFFERENT flows run concurrently. Pinned against the
+  // real exported lock-path functions, not against a second hand-written
+  // string, so a rename of either lock file fails this instead of the
+  // descriptor silently going stale again.
+  test("the descriptor's lock claim is split per action: reconcile/rebuild/open-flow name the shared maintenance lock, a dispatching flow-next names the per-flow dispatch lock instead", () => {
+    const descriptor = COMMAND_DESCRIPTORS.find((entry) => entry.command === "trigger run");
+    expect(descriptor).toBeDefined();
+    const sideEffects = descriptor!.sideEffects ?? [];
+
+    const maintenanceLockName = path.basename(maintenanceLockPath("/tmp/keryx-pin-test"));
+    const dispatchLockName = path.basename(dispatchLockPath("/tmp/keryx-pin-test", "142"));
+    expect(maintenanceLockName).toBe("maintenance.lock");
+    expect(dispatchLockName).toBe("dispatch-142.lock");
+
+    const reconcileEffect = sideEffects.find((line) => line.startsWith("reconcile:"));
+    const rebuildEffect = sideEffects.find((line) => line.startsWith("rebuild:"));
+    const openFlowEffect = sideEffects.find((line) => line.startsWith("open-flow:"));
+    for (const effect of [reconcileEffect, rebuildEffect, openFlowEffect]) {
+      expect(effect).toBeDefined();
+      expect(effect).toContain(maintenanceLockName);
+    }
+
+    const dispatchEffect = sideEffects.find(
+      (line) => /flow-next/i.test(line) && /dispatch block/i.test(line) && !/no dispatch block/i.test(line),
+    );
+    expect(dispatchEffect).toBeDefined();
+    // Names the real per-flow lock (derived above from the actual export)...
+    expect(dispatchEffect).toContain("dispatch-<flow>.lock");
+    // ...and must NOT claim it takes (or refuses via) the shared maintenance
+    // lock — the exact false claim this test exists to catch.
+    expect(dispatchEffect).not.toContain(maintenanceLockName);
+    expect(dispatchEffect?.toLowerCase()).not.toMatch(/refuses[^.]*when another run[^.]*holds/);
   });
 });

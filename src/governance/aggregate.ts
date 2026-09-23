@@ -4,20 +4,40 @@
 // (AC5).
 
 import { flowIdOf, listFlowDirs, readFlow } from "../flow/store";
-import { readFlowReviewManifests, readProjectTriggerSpend, summarizeReviewSpend } from "./spend";
+import { readTriggerRuns, type TriggerRunsRead } from "../trigger/record";
+import {
+  collectFlowDispatch,
+  readFlowReviewManifests,
+  summarizeProjectTriggerSpend,
+  summarizeReviewSpend,
+} from "./spend";
 import { summarizeConfirmations, summarizeGateOutcomes } from "./accountability";
 import type { FlowGovernance, GovernanceFilters, PolicyDecisionsSummary, ProjectGovernance } from "./types";
 
-/** AC9: stated once, everywhere the report surfaces policy decisions. */
+/**
+ * AC1: stated once, everywhere the report surfaces policy decisions. Narrowed
+ * to INTERACTIVE sessions specifically — since flow 290 shipped in the same
+ * release as this one, every unattended dispatch run's denials ARE recorded
+ * (`.metaproject/data/trigger/runs.jsonl`, `TriggerDispatchRecord.denials`)
+ * and surfaced per flow in `FlowGovernance.dispatch` below, not here. What
+ * has no durable log in this build is specifically an interactive session's
+ * own allow/ask/deny decisions.
+ */
 export const POLICY_DECISIONS_NOT_RECORDED: PolicyDecisionsSummary = {
   recorded: false,
   reason:
-    "no durable log of allow/ask/deny policy decisions or unattended-run denials exists in this build; " +
-    "flow 290 (unattended denials) is a future source, not a dependency of this report",
+    "no durable log of an interactive session's own allow/ask/deny policy decisions exists in this build " +
+    "(unattended dispatch runs are different: their denials are recorded per run, and reported under each " +
+    "flow's own dispatch section below)",
 };
 
-/** Every flow in `cwd`'s `.metaproject/flows/`, aggregated, unfiltered. */
-export async function collectFlowGovernance(cwd: string): Promise<FlowGovernance[]> {
+/**
+ * Every flow in `cwd`'s `.metaproject/flows/`, aggregated, unfiltered.
+ * `ledger` is the project's trigger-run record, read once by the caller
+ * (`collectProjectGovernance`) and shared with every flow's dispatch view
+ * (AC1, AC2) so the ledger file is read once per project, not once per flow.
+ */
+export async function collectFlowGovernance(cwd: string, ledger: TriggerRunsRead): Promise<FlowGovernance[]> {
   const dirs = await listFlowDirs(cwd);
   const flows: FlowGovernance[] = [];
   for (const dir of dirs) {
@@ -35,6 +55,7 @@ export async function collectFlowGovernance(cwd: string): Promise<FlowGovernance
       spend: summarizeReviewSpend(manifests),
       confirmations: summarizeConfirmations(flow),
       gateOutcomes: summarizeGateOutcomes(flow),
+      dispatch: collectFlowDispatch(ledger, flow.id),
     });
   }
   return flows;
@@ -81,8 +102,9 @@ export async function collectProjectGovernance(
   // `collectAllProjectsGovernance` in `report.ts`, which wraps this call in
   // a try/catch per project so one bad registry entry cannot fail the whole
   // report.
-  const flows = filterFlows(await collectFlowGovernance(root), filters);
-  const triggerSpend = await readProjectTriggerSpend(root);
+  const ledger = await readTriggerRuns(root);
+  const flows = filterFlows(await collectFlowGovernance(root, ledger), filters);
+  const triggerSpend = summarizeProjectTriggerSpend(ledger);
   return {
     root,
     displayName,

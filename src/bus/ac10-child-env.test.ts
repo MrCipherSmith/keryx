@@ -60,6 +60,20 @@ async function repo(): Promise<string> {
   return dir;
 }
 
+/**
+ * An isolated, empty config dir — never the developer's real one.
+ *
+ * `buildMcpChildEnv`'s by-name strip now also reads `auth.json` off
+ * `configDir` by default (flow 296 follow-up); this test asserts about
+ * specific KERYX_BUS_* names only, so it must not depend on — or read —
+ * whatever the machine running it happens to have saved.
+ */
+async function isolatedConfigDir(): Promise<string> {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-bus-ac10-cfg-"));
+  ROOTS.push(dir);
+  return dir;
+}
+
 function asClient(result: BusClient | { disabled: string }): BusClient {
   if ("disabled" in result) throw new Error(`joinBus unexpectedly disabled: ${result.disabled}`);
   return result;
@@ -108,7 +122,7 @@ describe("AC10: an external-agent or MCP-server child environment never carries 
         expect(value).not.toContain(client.name);
       }
 
-      const mcpEnv = buildMcpChildEnv({ parent });
+      const mcpEnv = buildMcpChildEnv({ parent, configDir: await isolatedConfigDir() });
       expect(mcpEnv.KERYX_BUS_INSTANCE_ID).toBeUndefined();
       expect(mcpEnv.KERYX_BUS_NAME).toBeUndefined();
       expect(mcpEnv.KERYX_SESSION_LABEL).toBeUndefined();
