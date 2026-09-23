@@ -3,6 +3,63 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.159] — 2026-09-23
+
+A new user can now find their way in. `keryx help` and a tabbed `/help`
+group every command by the steps a user takes to start, the README and the
+onboarding page walk the first session in that order, and every page on the
+docs site was checked against the code. A schedule can no longer be created
+for a provider that cannot be priced.
+
+### Added
+- **`keryx help` — every command, grouped by the steps to get started.** One
+  table places each CLI verb and each shell slash command in one of nine
+  groups: start here, connect a model provider, look and feel, working in
+  keryx shell, project knowledge, managed work, automation, external agents
+  (ACP and MCP), and maintenance. `keryx help` prints them all within 80
+  columns, `keryx help <group>` prints one, `keryx help <command>` or
+  `keryx help /<slash>` prints that command's usage, and a typo gets the
+  closest matches. A test fails when a command is in no group or in two;
+  internal helpers and aliases are hidden with a reason. `keryx --help`,
+  `-h` and a bare `keryx` still print the flat usage block, now with one line
+  naming `keryx help`. (flow 303)
+- **`/help` in the shell opens a modal with a tab per group** and a detail
+  view per command; left and right switch tabs, up and down move, Enter shows
+  usage, Esc closes. It opens during a turn too. The readline shell and ACP
+  editors get the same grouping as text. The first shell run with no model
+  provider connected opens it on the provider tab, once; the check runs in
+  the background and never delays the composer. (flow 303)
+- **Commands by task** on the docs site is generated from the same table, so
+  it cannot drift from the code. (flow 303)
+- **The start screen names `/help`**, and the shell no longer goes dark
+  between the splash and a ready composer: a spinner names the startup step
+  until the composer paints. (flow 303)
+
+### Changed
+- **Documentation revision.** The README has one quick start, right after the
+  introduction — install, `keryx init`, connecting a provider, the first
+  session and where to go next — ahead of the deep dives, with a test pinning
+  that order. The onboarding page gains the first `keryx shell` session:
+  providers, theme, permission modes, slash-command basics and sessions. The
+  two long setup references state their audience and link to onboarding
+  instead of restating it. Checking every page against the code found
+  triggers, schedules and governance missing from the module maps in
+  `architecture.md` and `modules.md`, `SECURITY.md` naming 0.1.x as
+  supported, and `bun run check` described as typecheck plus tests; all are
+  fixed, and a test keeps the docs index and the site navigation in
+  agreement. (flow 302)
+
+### Fixed
+- **A schedule is refused at the card when its provider cannot be priced or
+  has no usable credential** — the "Known" gap in 0.2.158. `keryx schedule
+  add`, `/schedule` and the `schedule_create` tool now make the same two
+  checks the dispatcher makes at run time, before anything is written or a
+  timer installed, so a card can no longer leave a schedule whose every fire
+  refuses.
+- **A theme switch recolours a modal's body**, not only its frame, in every
+  modal the shell opens.
+- **`/help` during a turn** opens the help modal instead of a busy notice.
+
 ## [0.2.158] — 2026-09-23
 
 DeepSeek can be priced, so an unattended run may use it. The dispatcher accepts

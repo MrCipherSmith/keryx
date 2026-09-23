@@ -1,0 +1,72 @@
+[
+  {
+    "id": "F-101",
+    "reviewer": "code-reviewer (flow 303 PR #669 round 2)",
+    "severity": "major",
+    "problem": "Round 1's fix made resolveFirstRunHelp call opts.mark() unconditionally after the probe, but neither opts.probe() nor opts.mark() was wrapped: a probe that threw (e.g. a filesystem or network error while checking connected providers) or a mark that threw (a marker file that could not be written — read-only home, full disk) propagated out of resolveFirstRunHelp as an unhandled rejection, since the call site in tui-shell.ts fires it in the background without a .catch.",
+    "impact": "A first-run help check that could not complete — for reasons entirely unrelated to the user's actual work — crashed the whole shell process via an unhandled promise rejection, turning a courtesy onboarding feature into a hard failure mode.",
+    "suggested_fix": "Wrap the probe call and the mark call each in their own try/catch: a failed probe opens and marks nothing (next launch asks again); a failed mark is silently ignored (the worst case is one extra probe on the next launch).",
+    "evidence": "resolveFirstRunHelp's body called `await opts.probe()` and `opts.mark()` with no try/catch around either, and the caller in tui-shell.ts attached only a `.then()`, no `.catch()`.",
+    "confidence": "high",
+    "file": "src/tui/help-first-run.ts",
+    "line": null,
+    "quote": "opts.mark()",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/help-first-run.ts resolveFirstRunHelp (probe call, mark call)"
+      ],
+      "enumeration_method": "resolveFirstRunHelp has exactly one probe call and one mark call, both unguarded before this finding; the class has two sites, one function."
+    },
+    "global_id": "2026-09-23-round2#F-101",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "probe() and mark() each wrapped in their own try/catch in resolveFirstRunHelp; commit 6882b1ce82af478f7230019e4ce5e3ec6c398ddb, PR #669, merged to main as 0b4f4d64b61519486ab8c63e53c30ee572c251c2."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/help-first-run.ts:89-105 (commit 6882b1ce): opts.probe() wrapped in try/catch returning undefined on failure; opts.mark() wrapped in its own try/catch that swallows the error. src/tui/help-first-run.test.ts gained coverage for both failure paths. bun test src/tui/help-first-run.test.ts: passes against 6882b1ce. Fixing commit 6882b1ce82af478f7230019e4ce5e3ec6c398ddb, PR #669, merged to main in 0b4f4d64b61519486ab8c63e53c30ee572c251c2.",
+      "verifier": "flow-close verifier (flow 303 completion pass)"
+    }
+  },
+  {
+    "id": "F-102",
+    "reviewer": "code-reviewer (flow 303 PR #669 round 2)",
+    "severity": "major",
+    "problem": "The first-run probe runs in the background and can outlive the shell (the user quits before it resolves). Its .then() callback called openHelp(tab) unconditionally when a tab was returned, with no check that the renderer/shell was still alive — opening a modal on a torn-down renderer.",
+    "impact": "A user who quit keryx shell quickly after the first-run probe started could trigger a modal-open call against a destroyed renderer, which is exactly the shape of bug that produces a confusing crash or a silent no-op depending on what OpenTUI does with a call on a torn-down instance — undefined behaviour either way.",
+    "suggested_fix": "Guard the openHelp call with the shell's own `!destroyed` flag, and add a .catch on the whole chain so a probe/mark failure (F-101) cannot surface as an unhandled rejection either.",
+    "evidence": "The `.then((tab) => { if (tab !== undefined) { openHelp(tab); } })` chain had no liveness check and no `.catch`.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "openHelp(tab)",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts launchTuiAgentShell first-run .then() callback"
+      ],
+      "enumeration_method": "The first-run resolveFirstRunHelp() call has exactly one .then() chain attached to it in launchTuiAgentShell; the class has one member."
+    },
+    "global_id": "2026-09-23-round2#F-102",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "openHelp guarded by `!destroyed`, and `.catch` added to the first-run promise chain, logging via debugEvent instead of throwing; commit 6882b1ce82af478f7230019e4ce5e3ec6c398ddb, PR #669, merged to main as 0b4f4d64b61519486ab8c63e53c30ee572c251c2."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/tui-shell.ts:4589-4602 (commit 6882b1ce): the .then((tab) => {...}) callback now reads if (tab !== undefined && !destroyed) { openHelp(tab); }, and a .catch((error) => { debugEvent('help.first-run-failed', ...) }) is chained after it. bun test src/tui/tui-shell.test.ts: 156 pass, 0 fail, re-run against 6882b1ce. Fixing commit 6882b1ce82af478f7230019e4ce5e3ec6c398ddb, PR #669, merged to main in 0b4f4d64b61519486ab8c63e53c30ee572c251c2.",
+      "verifier": "flow-close verifier (flow 303 completion pass)"
+    }
+  }
+]

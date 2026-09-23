@@ -14,8 +14,14 @@
 // without a terminal. `tui-shell.ts` passes its transcript and card dialog.
 
 import { requestFromArgs } from "../commands/schedule";
+import { providerHasUsableCredential, providerReportsUsage as dispatchProviderReportsUsage } from "../commands/trigger-dispatch";
 import type { ScheduleHost } from "../trigger/install";
 import { confirmSchedule, draftSchedule, nestedAgentScheduleRefusal, type DraftContext } from "../trigger/schedules";
+
+/** Flow 302: the real checks, reused so a draft agrees with what `keryx trigger run` would do. Production's default; tests inject a fake to stay hermetic. */
+async function defaultCheckCredential(provider: string, model: string): ReturnType<NonNullable<DraftContext["checkCredential"]>> {
+  return providerHasUsableCredential({ provider, model });
+}
 
 export const SCHEDULE_SLASH_USAGE = [
   "usage: /schedule --name <name> --every \"<cadence>\" --rates <in>,<out> --ceiling <usd> [--tool <id>]... [--repo owner/name]...",
@@ -63,6 +69,10 @@ export interface ScheduleSlashDeps {
   readonly now?: () => Date;
   readonly resolveProgram?: DraftContext["resolveProgram"];
   readonly accountOf?: DraftContext["accountOf"];
+  /** Default: `providerReportsUsage` (`../commands/trigger-dispatch`) — the same the dispatcher checks at run time. */
+  readonly providerReportsUsage?: DraftContext["providerReportsUsage"];
+  /** Default: `providerHasUsableCredential` (`../commands/trigger-dispatch`) — the same construction the dispatcher uses at run time. */
+  readonly checkCredential?: DraftContext["checkCredential"];
   /** M3a: the process environment (default `process.env`). */
   readonly env?: Readonly<Record<string, string | undefined>>;
 }
@@ -98,6 +108,8 @@ export async function runScheduleSlashCommand(raw: string, deps: ScheduleSlashDe
   }
   const drafted = await draftSchedule(request, {
     projectRoot: deps.cwd,
+    providerReportsUsage: deps.providerReportsUsage ?? dispatchProviderReportsUsage,
+    checkCredential: deps.checkCredential ?? defaultCheckCredential,
     ...(deps.host !== undefined ? { host: deps.host } : {}),
     ...(deps.now !== undefined ? { now: deps.now } : {}),
     ...(deps.resolveProgram !== undefined ? { resolveProgram: deps.resolveProgram } : {}),

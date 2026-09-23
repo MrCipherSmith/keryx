@@ -28,6 +28,12 @@ import {
   type ScheduleDraft,
   type ScheduleRequest,
 } from "../trigger/schedules";
+import { providerHasUsableCredential, providerReportsUsage as dispatchProviderReportsUsage } from "./trigger-dispatch";
+
+/** Flow 302: the real checks, reused so a draft agrees with what `keryx trigger run` would do. Production's default; tests inject a fake to stay hermetic. */
+async function defaultCheckCredential(provider: string, model: string): ReturnType<NonNullable<DraftContext["checkCredential"]>> {
+  return providerHasUsableCredential({ provider, model });
+}
 
 export interface ScheduleToolBinding {
   readonly projectRoot: string;
@@ -37,6 +43,10 @@ export interface ScheduleToolBinding {
   readonly now?: () => Date;
   readonly resolveProgram?: DraftContext["resolveProgram"];
   readonly accountOf?: DraftContext["accountOf"];
+  /** Default: `providerReportsUsage` (`./trigger-dispatch`) — the same the dispatcher checks at run time. */
+  readonly providerReportsUsage?: DraftContext["providerReportsUsage"];
+  /** Default: `providerHasUsableCredential` (`./trigger-dispatch`) — the same construction the dispatcher uses at run time. */
+  readonly checkCredential?: DraftContext["checkCredential"];
   /** M3a: the process environment (default `process.env`). */
   readonly env?: Readonly<Record<string, string | undefined>>;
 }
@@ -171,6 +181,8 @@ export function scheduleTools(binding: ScheduleToolBinding): InteractiveTool[] {
       if ("error" in request) return request;
       const drafted = await draftSchedule(request, {
         projectRoot: binding.projectRoot,
+        providerReportsUsage: binding.providerReportsUsage ?? dispatchProviderReportsUsage,
+        checkCredential: binding.checkCredential ?? defaultCheckCredential,
         ...(binding.host !== undefined ? { host: binding.host } : {}),
         ...(binding.now !== undefined ? { now: binding.now } : {}),
         ...(binding.resolveProgram !== undefined ? { resolveProgram: binding.resolveProgram } : {}),

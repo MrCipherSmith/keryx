@@ -1675,6 +1675,17 @@ keryx schedule remove <name> [--yes]
 | `run <name>` | One pass now (`keryx trigger run --schedule <name>`: local schedules only). |
 | `remove <name>` | After a confirmation, uninstall the timer and delete the entry. keryx deletes only files that carry its `# keryx-managed <projecthash> <name>` header. Anything else found at those paths is left untouched and named. |
 
+**Drafting checks the provider before the card is even shown.** `add`, `/schedule`
+and the agent's `schedule_create` tool all draft through the same code, which
+refuses — before anything is written or installed — a provider that is not known
+to report token usage on every response (`anthropic`, `openai`, `gemini`, or a
+registry provider whose entry sets `streamUsage`, for example `grok` or
+`deepseek`; see [Dispatching flow-next](#dispatching-flow-next)), and a provider
+with no usable credential in this environment. Both use the same resolution the
+scheduled run itself would use, so a confirmed card cannot install a timer whose
+every fire is bound to refuse with `dispatch-refused (provider-usage-unknown)` or
+for want of a credential.
+
 **Cadence.** A five-field cron expression, or one of `every N hours` (a divisor of
 24), `every N minutes` (5, 10, 15, 20 or 30), `hourly`, `daily at HH:MM`,
 `weekdays at HH:MM`, `every monday at HH:MM`. The phrase is turned into cron by

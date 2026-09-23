@@ -1,0 +1,838 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "303",
+  "slug": "keryx-help-grouped-command-help-in-the-c",
+  "title": "keryx help: grouped command help in the CLI and a tabbed /help modal in the TUI",
+  "status": "done",
+  "createdAt": "2026-09-23T12:08:14.084Z",
+  "updatedAt": "2026-09-23T15:01:25.550Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-23T14:12:55.587Z",
+      "note": "src/standard/help-groups.ts HELP_GROUPS + HIDDEN_FROM_HELP (added post-review for __sandbox-net-forward/session/skill-verify-skill); help-groups.test.ts requires every CLI_ROUTES verb in exactly one group XOR hidden, never both"
+    },
+    "AC2": {
+      "at": "2026-09-23T14:12:55.724Z",
+      "note": "help-groups.test.ts AC2 block unchanged: every entry.summary non-empty, single-line"
+    },
+    "AC3": {
+      "at": "2026-09-23T14:12:55.854Z",
+      "note": "renderGroupedCliHelp; help.test.ts + help-groups.test.ts pin group order and 80-col width over the real (now HIDDEN_FROM_HELP-filtered) table"
+    },
+    "AC4": {
+      "at": "2026-09-23T14:12:56.018Z",
+      "note": "help.ts group/command/slash detail + closestHelpTopics; help.test.ts + help-groups.test.ts"
+    },
+    "AC5": {
+      "at": "2026-09-23T14:13:04.856Z",
+      "note": "Amended AC re-satisfied: fixtures/cli-help-pre-flow-303/*.txt captured by RUNNING src/cli.ts at commit 0d6ac030 (--help + flow/trigger/serve-mcp/governance --help); cli.test.ts new describe pins the current flat block == pre-flow fixture + exactly the 2 new keryx-help lines, and each rich help byte-identical to its pre-flow fixture"
+    },
+    "AC6": {
+      "at": "2026-09-23T14:13:04.994Z",
+      "note": "help-modal.ts; help-modal.test.ts drives a real OpenTUI renderer + chrome proving every key (tabs, up/down w/ floor+ceiling, enter toggle, esc+refocus, initialGroupSlug), plus new narrow-terminal (40 cols) and inputBlocked/keyboardOwnedElsewhere cases added post-review"
+    },
+    "AC7": {
+      "at": "2026-09-23T14:13:05.132Z",
+      "note": "shell.ts HELP_TEXT/readlineAgentHelpText via renderGroupedNamedHelp; acp/commands.ts acpCommandHelpText groups ACP's 4 commands and now THROWS by name if one has no HELP_GROUPS entry instead of silently dropping into an unrendered Other bucket (post-review fix); help-grouped.test.ts covers all three surfaces plus the throw"
+    },
+    "AC8": {
+      "at": "2026-09-23T14:13:13.387Z",
+      "note": "PR #669 review HIGH 1 fix: resolveFirstRunHelp({shown,probe,mark}) in help-first-run.ts folds decision+probe+mark into one function; marker now written on EVERY first run (bug: used to write only on the opens-modal branch, so an already-connected user re-ran the slow network probe on every launch forever); dispatched via void...then() in tui-shell.ts, never awaited inline, so the probe cannot delay the composer; help-first-run.test.ts covers all 3 named cases + a structural pin that the call site is never awaited"
+    },
+    "AC9": {
+      "at": "2026-09-23T14:13:13.519Z",
+      "note": "renderCommandsByTaskMarkdown; regenerated after HIDDEN_FROM_HELP change, verified no session/skill-verify-skill/__sandbox-net-forward row; commands-by-task.test.ts byte-equality + nav pin"
+    },
+    "AC10": {
+      "at": "2026-09-23T14:13:13.650Z",
+      "note": "help in CLI_ROUTES, cli-reference.md ## help section, COMMAND_DESCRIPTORS core/help descriptor, HELP_GROUPS Start here"
+    },
+    "AC11": {
+      "at": "2026-09-23T14:13:13.787Z",
+      "note": "cli-reference.md ## help + README document keryx help and the /help modal, link commands-by-task.md"
+    },
+    "AC13": {
+      "at": "2026-09-23T14:13:21.675Z",
+      "note": "unchanged since last confirmation: SPLASH_HELP_HINT under SPLASH_HINT, dimChunk theme colours, wrapped to pane width; boot-animation.test.ts pins presence + colour parity + width"
+    },
+    "AC14": {
+      "at": "2026-09-23T14:13:21.815Z",
+      "note": "PR #669 review HIGH 2 fix: mountStartupIndicator region (opts.makeAgentDeps + createShellChrome) now wrapped in try/finally so a throw still removes the indicator (no leaked setInterval, no stuck spinner) and the error propagates; boot-animation.test.ts new reject test + tui-shell.ts source-text pin proving the wrap shape; pre-renderer 'keryx: starting' line re-gated on chooseShellSurface(...)!=='readline' (not raw isTty) so it never prints under --print/--no-tui/no-TTY/CI, single write call with trailing newline so no partial line on failure; new shell-starting-line.test.ts + kept shell-grant-refresh.test.ts's refresh-before-surface ordering intact"
+    },
+    "AC12": {
+      "at": "2026-09-23T15:01:17.297Z",
+      "note": "gh pr view 669 --json headRefOid,mergeCommit,state: state MERGED, headRefOid 6882b1ce82af478f7230019e4ce5e3ec6c398ddb, mergeCommit.oid 0b4f4d64b61519486ab8c63e53c30ee572c251c2. gh pr checks 669: 19 checks, all pass (deploy to GitHub Pages skipped as expected). keryx health run (run by this session): PASS, project score 94."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/669"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Researched cli.ts/CLI_ROUTES, AGENT_SLASH_COMMANDS, command-registry.ts, modal-host.ts/schedules-inspector.ts TUI patterns, import-policy zone rules, config-dir.ts, mkdocs nav/cli-reference-coverage tests"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented HELP_GROUPS core table + service.ts facade, keryx help CLI route, grouped readline/ACP /help, TUI /help tabbed modal, AC8 first-run wiring, commands-by-task.md generator, README/onboarding/CLI-reference docs, merged origin/main (flow 302 docs restructure)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "New tests: help-groups.test.ts, help.test.ts, help-grouped.test.ts, help-modal.test.ts, help-first-run.test.ts, commands-by-task.test.ts, cli.test.ts AC5 pin; full suites green: test:core 7807/0, test:client:terminal 1416/0, test:client:runtime 3793/0, opentui-tests-no-skips 1131/0, import-policy ratchet unchanged at 150"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-reviewed new/changed files (help-modal.ts, help.ts, help-groups.ts, tui-shell.ts wiring); merged origin/main (flow 302) manually via git checkout + git merge-file since HEAD==merge-base and 2 files (README.md, cli-reference-coverage.test.ts) overlapped, all reconciled and re-verified with full test suites, eslint, typecheck, import-policy ratchet"
+    },
+    {
+      "id": "T5",
+      "title": "AC13/AC14: start-screen /help hint and never-blank startup indicator",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Added SPLASH_HELP_HINT to mountEmptyTranscriptSplash (AC13, TUI-tested); traced the black-screen gap to opts.makeAgentDeps running before createShellChrome in launchTuiAgentShell, added mountStartupIndicator with injectable timer, wired it around that gap (AC14, TUI-tested with an injected slow startup step); added a gated plain-terminal line for the pre-renderer OAuth-refresh/provider-detection phase in commands/shell.ts"
+    },
+    {
+      "id": "T6",
+      "title": "Hide internal/alias verbs from keryx help via HIDDEN_FROM_HELP",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Added HIDDEN_FROM_HELP to help-groups.ts (__sandbox-net-forward, session, skill-verify-skill -- matching cli.ts's own flat Commands: block, which shows dash/mcp as their own rows but omits session/skill-verify-skill entirely); coverage test now requires every CLI_ROUTES verb in exactly one group XOR hidden; regenerated commands-by-task.md; reran help-groups.test.ts, src/standard, help-modal/help-first-run/help/help-grouped tests, opentui-tests-no-skips, check-doc-links, import-policy ratchet -- all green"
+    },
+    {
+      "id": "T7",
+      "title": "PR #669 review fixes: HIGH1 first-run marker, HIGH2 startup-indicator try/finally, AC5 pre-flow fixtures, busy /help modal, modal-host theme body repaint, ACP Other-bucket throw, AC6 narrow/inputBlocked tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All review-fix items landed and re-tested; see flow.json history for the AC re-confirmation notes covering each fix"
+    },
+    {
+      "id": "T8",
+      "title": "Fix src/shell-source-audits.test.ts manifest drift from the 4 new source-text audits",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "test:core surfaced 2 deterministic failures in src/shell-source-audits.test.ts: the manifest at docs/requirements/keryx-shell-split/source-text-audit-inventory.md did not list the 4 new source-text audits this fix round added (commands/shell-starting-line.test.ts, tui/busy-dispatch.test.ts, tui/help-first-run.test.ts, and a 2nd site in tui/boot-animation.test.ts). Updated the manifest fenced block plus prose rows in audits-commands.md and audits-tui-other.md. Full test:core reran clean: 7821 pass, 0 fail, 7 skip"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-23T12:08:14.084Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-23T12:08:36.751Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T12:08:36.953Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T13:01:53.682Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T13:01:59.053Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T13:02:05.626Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T13:02:32.433Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-23T13:03:23.017Z",
+      "event": "ac-updated",
+      "detail": "AC13: \"(new)\" -> \"The keryx shell start screen shows a short line for a new user naming `/help` and what it opens (commands grouped by the steps to get started), in theme colours, within the start screen width, and a TUI test pins it.\" (operator request 2026-09-23 13:03 UTC (Telegram): show /help and what it means on the start screen)"
+    },
+    {
+      "at": "2026-09-23T13:03:23.131Z",
+      "event": "ac-updated",
+      "detail": "AC14: \"(new)\" -> \"From launch until the shell can take input, keryx shell never shows a blank screen: the splash, or a spinner with a short label of the current startup step, stays visible until the composer is ready, and a test proves the loading indicator is on screen while startup is still pending and gone once it completes.\" (operator request 2026-09-23 13:03 UTC (Telegram): the splash disappears after half a second and loading continues on a black screen; needs a spinner)"
+    },
+    {
+      "at": "2026-09-23T13:18:14.604Z",
+      "event": "task-added",
+      "detail": "T5: AC13/AC14: start-screen /help hint and never-blank startup indicator"
+    },
+    {
+      "at": "2026-09-23T13:18:20.960Z",
+      "event": "task-done",
+      "detail": "T5: AC13/AC14: start-screen /help hint and never-blank startup indicator"
+    },
+    {
+      "at": "2026-09-23T13:18:55.392Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/standard/help-groups.ts HELP_GROUPS table; src/standard/help-groups.test.ts verifies every CLI_ROUTES key and every AGENT_SLASH_COMMANDS name appears exactly once, group order fixed at 9 groups (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:02.443Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: help-groups.test.ts AC2 block: every entry.summary non-empty, single-line, trimmed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:02.580Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/commands/help.ts renderGroupedCliHelp; help.test.ts + help-groups.test.ts pin group order and an 80-column width test over the real table (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:02.714Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: help.ts: group slug, CLI verb (printCommandHelp), slash-command detail, closestHelpTopics suggestions on unknown, exit 1; pinned in help.test.ts and help-groups.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:23.487Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: cli.ts main(): help removed from the --help/-h/bare condition into its own CLI_ROUTES entry; printCommandHelp extracted verbatim from the old inline branch. cli.test.ts new test proves --help/-h/bare byte-identical and keryx help differs; RICH_GROUP_HELP dispatch tests (flow/trigger/serve-mcp/governance) still green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:23.741Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/tui/help-modal.ts on modal-host.ts; src/tui/help-modal.test.ts drives a real headless OpenTUI renderer + shell chrome and proves every key: tab order, left/right switch, up/down select (with floor/ceiling), Enter toggles detail and back, Esc closes + refocuses composer, initialGroupSlug (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:23.989Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: shell.ts HELP_TEXT/readlineAgentHelpText use renderGroupedNamedHelp (registry-wording preserved); acp/commands.ts acpCommandHelpText groups ACP's 4 commands by the same table; src/commands/help-grouped.test.ts proves group headers appear in order on all three surfaces (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:32.103Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/tui/help-first-run.ts: shouldOpenFirstRunHelp pure predicate (both AC cases + edge cases) and per-user-config-dir persistence, both fully unit-tested in help-first-run.test.ts; help-modal.test.ts proves initialGroupSlug opens on connect tab. Wired into launchTuiAgentShell (tui-shell.ts). Scope note: launchTuiAgentShell itself is not driven end-to-end in tests, matching this file's own established convention (tui-shell.test.ts states it deliberately never calls launchTuiAgentShell directly) -- coverage is at the component level, not a full TUI-launch integration test (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:40.245Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: renderCommandsByTaskMarkdown in help-groups.ts; scripts/generate-commands-by-task.ts writes docs/docs/commands-by-task.md; mkdocs.yml nav updated; src/standard/commands-by-task.test.ts fails on drift (byte equality) and pins nav link (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:40.532Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: help: helpCommand in CLI_ROUTES (cli.ts); docs/docs/cli-reference.md has a ## help section; COMMAND_DESCRIPTORS has a core/help descriptor (command-registry.ts), pinned in command-registry.test.ts/coverage.test.ts; help-groups.ts places help in Start here (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:40.839Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: docs/docs/cli-reference.md ## help section documents keryx help and the TUI /help modal; README.md Quick start Finding a command section + Where to go next both document keryx help, the modal, and link to commands-by-task.md (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:51.587Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: boot-animation.ts SPLASH_HELP_HINT emitted under SPLASH_HINT in mountEmptyTranscriptSplash, dimChunk theme colours, wrapped to pane width via existing centerWrappedLines; boot-animation.test.ts new otuiTest proves presence, same colour as the existing hint, and every frame line <=80 cols (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:19:51.882Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: traced the gap to opts.makeAgentDeps running in launchTuiAgentShell between playBootAnimation closing and createShellChrome painting; mountStartupIndicator (boot-animation.ts) covers exactly that window, removed once chrome exists; also a gated plain-terminal line for the pre-renderer oauth-refresh/provider-detection phase in commands/shell.ts (explained: that phase runs before the OpenTUI renderer exists at all, so it gets a plain-terminal line rather than an OpenTUI spinner, by choice, to avoid reordering a heavily-tested startup sequence); boot-animation.test.ts's AC14 suite proves the indicator is on screen with an injected slow startup step (manually-resolved promise) while pending and gone once resolved, plus label swap and injectable-timer spinner-advance tests (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T13:30:02.205Z",
+      "event": "task-added",
+      "detail": "T6: Hide internal/alias verbs from keryx help via HIDDEN_FROM_HELP"
+    },
+    {
+      "at": "2026-09-23T13:30:08.316Z",
+      "event": "task-done",
+      "detail": "T6: Hide internal/alias verbs from keryx help via HIDDEN_FROM_HELP"
+    },
+    {
+      "at": "2026-09-23T13:45:06.010Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"`keryx --help`, `keryx -h` and a bare `keryx` keep printing what they print today, and the four rich group helps (flow, trigger, serve-mcp, governance) are unchanged; both are pinned by tests.\" -> \"`keryx --help`, `keryx -h` and a bare `keryx` keep printing the same flat usage block as before, changed only by the lines that name `keryx help`, and the four rich group helps (flow, trigger, serve-mcp, governance) are unchanged; a test pins the flat block against the pre-flow text plus exactly those lines, and the rich helps against their pre-flow output.\" (review finding: the flat usage block gained two lines naming the new keryx help verb; that addition is intended, so the criterion names it instead of the verb staying hidden from --help)"
+    },
+    {
+      "at": "2026-09-23T14:12:55.587Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/standard/help-groups.ts HELP_GROUPS + HIDDEN_FROM_HELP (added post-review for __sandbox-net-forward/session/skill-verify-skill); help-groups.test.ts requires every CLI_ROUTES verb in exactly one group XOR hidden, never both (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:12:55.724Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: help-groups.test.ts AC2 block unchanged: every entry.summary non-empty, single-line (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:12:55.854Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: renderGroupedCliHelp; help.test.ts + help-groups.test.ts pin group order and 80-col width over the real (now HIDDEN_FROM_HELP-filtered) table (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:12:56.018Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: help.ts group/command/slash detail + closestHelpTopics; help.test.ts + help-groups.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:13:04.856Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Amended AC re-satisfied: fixtures/cli-help-pre-flow-303/*.txt captured by RUNNING src/cli.ts at commit 0d6ac030 (--help + flow/trigger/serve-mcp/governance --help); cli.test.ts new describe pins the current flat block == pre-flow fixture + exactly the 2 new keryx-help lines, and each rich help byte-identical to its pre-flow fixture (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:13:04.994Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: help-modal.ts; help-modal.test.ts drives a real OpenTUI renderer + chrome proving every key (tabs, up/down w/ floor+ceiling, enter toggle, esc+refocus, initialGroupSlug), plus new narrow-terminal (40 cols) and inputBlocked/keyboardOwnedElsewhere cases added post-review (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:13:05.133Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: shell.ts HELP_TEXT/readlineAgentHelpText via renderGroupedNamedHelp; acp/commands.ts acpCommandHelpText groups ACP's 4 commands and now THROWS by name if one has no HELP_GROUPS entry instead of silently dropping into an unrendered Other bucket (post-review fix); help-grouped.test.ts covers all three surfaces plus the throw (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:13:13.387Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: PR #669 review HIGH 1 fix: resolveFirstRunHelp({shown,probe,mark}) in help-first-run.ts folds decision+probe+mark into one function; marker now written on EVERY first run (bug: used to write only on the opens-modal branch, so an already-connected user re-ran the slow network probe on every launch forever); dispatched via void...then() in tui-shell.ts, never awaited inline, so the probe cannot delay the composer; help-first-run.test.ts covers all 3 named cases + a structural pin that the call site is never awaited (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:13:13.519Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: renderCommandsByTaskMarkdown; regenerated after HIDDEN_FROM_HELP change, verified no session/skill-verify-skill/__sandbox-net-forward row; commands-by-task.test.ts byte-equality + nav pin (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:13:13.650Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: help in CLI_ROUTES, cli-reference.md ## help section, COMMAND_DESCRIPTORS core/help descriptor, HELP_GROUPS Start here (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:13:13.787Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: cli-reference.md ## help + README document keryx help and the /help modal, link commands-by-task.md (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:13:21.675Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: unchanged since last confirmation: SPLASH_HELP_HINT under SPLASH_HINT, dimChunk theme colours, wrapped to pane width; boot-animation.test.ts pins presence + colour parity + width (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:13:21.815Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: PR #669 review HIGH 2 fix: mountStartupIndicator region (opts.makeAgentDeps + createShellChrome) now wrapped in try/finally so a throw still removes the indicator (no leaked setInterval, no stuck spinner) and the error propagates; boot-animation.test.ts new reject test + tui-shell.ts source-text pin proving the wrap shape; pre-renderer 'keryx: starting' line re-gated on chooseShellSurface(...)!=='readline' (not raw isTty) so it never prints under --print/--no-tui/no-TTY/CI, single write call with trailing newline so no partial line on failure; new shell-starting-line.test.ts + kept shell-grant-refresh.test.ts's refresh-before-surface ordering intact (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T14:13:27.090Z",
+      "event": "task-added",
+      "detail": "T7: PR #669 review fixes: HIGH1 first-run marker, HIGH2 startup-indicator try/finally, AC5 pre-flow fixtures, busy /help modal, modal-host theme body repaint, ACP Other-bucket throw, AC6 narrow/inputBlocked tests"
+    },
+    {
+      "at": "2026-09-23T14:16:52.929Z",
+      "event": "task-done",
+      "detail": "T7: PR #669 review fixes: HIGH1 first-run marker, HIGH2 startup-indicator try/finally, AC5 pre-flow fixtures, busy /help modal, modal-host theme body repaint, ACP Other-bucket throw, AC6 narrow/inputBlocked tests"
+    },
+    {
+      "at": "2026-09-23T14:28:46.254Z",
+      "event": "task-added",
+      "detail": "T8: Fix src/shell-source-audits.test.ts manifest drift from the 4 new source-text audits"
+    },
+    {
+      "at": "2026-09-23T14:28:53.224Z",
+      "event": "task-done",
+      "detail": "T8: Fix src/shell-source-audits.test.ts manifest drift from the 4 new source-text audits"
+    },
+    {
+      "at": "2026-09-23T15:00:38.607Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/669 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-23T15:00:43.861Z",
+      "event": "owner-set",
+      "detail": "not set -> altsay (Flow-close gate requires an owner; operator is accountable for flow 303 per task instructions.)"
+    },
+    {
+      "at": "2026-09-23T15:01:17.297Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: gh pr view 669 --json headRefOid,mergeCommit,state: state MERGED, headRefOid 6882b1ce82af478f7230019e4ce5e3ec6c398ddb, mergeCommit.oid 0b4f4d64b61519486ab8c63e53c30ee572c251c2. gh pr checks 669: 19 checks, all pass (deploy to GitHub Pages skipped as expected). keryx health run (run by this session): PASS, project score 94. (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-23T15:01:21.340Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T15:01:25.549Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-23T15:01:25.550Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-23T13:18:55.392Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:02.443Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:02.580Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:02.714Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:23.487Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:23.741Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:23.989Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:32.102Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:40.245Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:40.532Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:40.838Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:51.587Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T13:19:51.882Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:ebd2d7042ca0cf84ec1816910ab7ae0a80e3f4efc138f7b28e0175690d113ca8"
+    },
+    {
+      "at": "2026-09-23T14:12:55.587Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:12:55.724Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:12:55.854Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:12:56.018Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:13:04.856Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:13:04.994Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:13:05.132Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:13:13.387Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:13:13.519Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:13:13.650Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:13:13.787Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:13:21.675Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T14:13:21.815Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T15:01:17.297Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    },
+    {
+      "at": "2026-09-23T15:01:25.550Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c",
+      "headCommit": "0b4f4d64b61519486ab8c63e53c30ee572c251c2"
+    }
+  ],
+  "baseBranch": "main",
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "completionAttempts": [
+    {
+      "at": "2026-09-23T15:01:25.549Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "14 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "0b4f4d64b61519486ab8c63e53c30ee572c251c2 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "0b4f4d64b61519486ab8c63e53c30ee572c251c2 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "8 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:8e8da964404effc19e3ec1e0107689492fccd66eb5207d4810450b444b26561c"
+    }
+  ],
+  "merged": {
+    "commit": "0b4f4d64b61519486ab8c63e53c30ee572c251c2",
+    "ref": "origin/main",
+    "at": "2026-09-23T15:01:25.550Z"
+  }
+}

@@ -1,0 +1,9 @@
+# Decisions
+
+- F-001: acted-on — resolveFirstRunHelp folds decision+probe+mark into one function, mark() called unconditionally; commit 481eafbe98598401705c4a150b712037ca5a49bf, PR #669, merged to main as 0b4f4d64b61519486ab8c63e53c30ee572c251c2. (valid_followup, post_flow_feedback).
+- F-002: acted-on — try/finally wrap around makeAgentDeps/createShellChrome with startupIndicator.remove() in finally; commit 481eafbe98598401705c4a150b712037ca5a49bf, PR #669, merged to main as 0b4f4d64b61519486ab8c63e53c30ee572c251c2. (valid_followup, post_flow_feedback).
+- F-003: acted-on — AC5 text amended, pre-flow fixtures captured and pinned against in src/cli.test.ts; commit 481eafbe98598401705c4a150b712037ca5a49bf, PR #669, merged to main as 0b4f4d64b61519486ab8c63e53c30ee572c251c2. (valid_followup, post_flow_feedback).
+- F-004: acted-on — `/help` now opens the modal during a busy turn; commit 481eafbe98598401705c4a150b712037ca5a49bf, PR #669, merged to main as 0b4f4d64b61519486ab8c63e53c30ee572c251c2. (valid_followup, post_flow_feedback).
+- F-005: acted-on — theme_mode handler now replays the body render, not only chrome styling; commit 481eafbe98598401705c4a150b712037ca5a49bf, PR #669, merged to main as 0b4f4d64b61519486ab8c63e53c30ee572c251c2. (valid_followup, post_flow_feedback).
+- F-006: acted-on — acpCommandHelpText throws by name instead of dropping into an unrendered bucket; commit 481eafbe98598401705c4a150b712037ca5a49bf, PR #669, merged to main as 0b4f4d64b61519486ab8c63e53c30ee572c251c2. (valid_followup, post_flow_feedback).
+- F-007: acted-on — narrow-terminal and inputBlocked/keyboardOwnedElsewhere test cases added to help-modal.test.ts; commit 481eafbe98598401705c4a150b712037ca5a49bf, PR #669, merged to main as 0b4f4d64b61519486ab8c63e53c30ee572c251c2. (valid_followup, post_flow_feedback).
