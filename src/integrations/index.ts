@@ -20,9 +20,12 @@ export { SUBSYSTEM_CTX_GUARD, SUBSYSTEM_ORIENT, SUBSYSTEM_SECURITY } from "./typ
 export {
   HARNESS_ADAPTERS,
   SETTINGS_FILE_OWNERS,
+  allowAction,
   assertRegistryCoherent,
+  decisionCodecFor,
   getHarnessAdapter,
   harnessAdapterIds,
+  refusalAction,
   settingsFileOwnerFor,
   surfacesOf,
 } from "./registry";
@@ -52,9 +55,7 @@ export {
   ANTIGRAVITY_DECISION_CODEC,
   CURSOR_DECISION_CODEC,
   EXIT_CODE_DECISION_CODEC,
-  allowAction,
   parseToolName,
-  refusalAction,
 } from "./codecs";
 
 export {

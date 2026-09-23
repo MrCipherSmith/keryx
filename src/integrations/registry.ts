@@ -23,7 +23,8 @@ import {
   UNSUPPORTED_CTX_GUARD,
   UNSUPPORTED_ORIENT,
 } from "./surfaces";
-import type { HarnessAdapter, SettingsFileOwner, SurfaceAdapter, SurfaceFlag } from "./types";
+import { ANTIGRAVITY_DECISION_CODEC, CURSOR_DECISION_CODEC, EXIT_CODE_DECISION_CODEC } from "./codecs";
+import type { DecisionCodec, HarnessAdapter, HookAction, SettingsFileOwner, SurfaceAdapter, SurfaceFlag } from "./types";
 import { createSettingsFileOwner } from "./settings-file";
 
 // F11: `lastVerified` is the date this record was reconciled with its
@@ -43,6 +44,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     unsupported: {},
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "src/security/agent-hooks/runtimes.ts"],
     lastVerified: LAST_VERIFIED,
+    decisionCodec: EXIT_CODE_DECISION_CODEC,
   },
   {
     id: "codex",
@@ -53,6 +55,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     unsupported: {},
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "docs/docs/harness.md"],
     lastVerified: LAST_VERIFIED,
+    decisionCodec: EXIT_CODE_DECISION_CODEC,
   },
   {
     id: "cursor",
@@ -63,6 +66,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     unsupported: {},
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "src/security/agent-hooks/runtimes.ts"],
     lastVerified: LAST_VERIFIED,
+    decisionCodec: CURSOR_DECISION_CODEC,
   },
   {
     id: "windsurf",
@@ -73,6 +77,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     unsupported: { "inject-context": UNSUPPORTED_ORIENT.windsurf! },
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "src/security/agent-hooks/runtimes.ts"],
     lastVerified: LAST_VERIFIED,
+    decisionCodec: EXIT_CODE_DECISION_CODEC,
   },
   {
     id: "antigravity",
@@ -83,6 +88,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     unsupported: { "inject-context": UNSUPPORTED_ORIENT.antigravity! },
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts"],
     lastVerified: LAST_VERIFIED,
+    decisionCodec: ANTIGRAVITY_DECISION_CODEC,
   },
   {
     id: "opencode",
@@ -93,6 +99,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     unsupported: { "inject-context": UNSUPPORTED_ORIENT.opencode! },
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts"],
     lastVerified: LAST_VERIFIED,
+    decisionCodec: EXIT_CODE_DECISION_CODEC,
   },
   {
     id: "zed",
@@ -111,6 +118,9 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     },
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts"],
     lastVerified: LAST_VERIFIED,
+    // No scriptable host hook at all (see the surfaces:[] note above), so this
+    // is never actually invoked — the exit-code form is the harmless default.
+    decisionCodec: EXIT_CODE_DECISION_CODEC,
   },
   {
     id: "generic-mcp",
@@ -121,11 +131,43 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     unsupported: {},
     sourceDocs: ["src/security/agent-hooks/runtimes.ts"],
     lastVerified: LAST_VERIFIED,
+    decisionCodec: EXIT_CODE_DECISION_CODEC,
   },
 ];
 
 export function getHarnessAdapter(id: string): HarnessAdapter | undefined {
   return HARNESS_ADAPTERS.find((a) => a.id === id);
+}
+
+/**
+ * R2-F1: the single answer to "how does runtime `id` signal a decision",
+ * read off `HarnessAdapter.decisionCodec` rather than a second id-keyed
+ * switch. An unknown id falls back to the exit-code form — the majority
+ * shape, and the one that fails toward refusing when a caller has no
+ * registered adapter to consult at all.
+ */
+export function decisionCodecFor(id: string): DecisionCodec {
+  return getHarnessAdapter(id)?.decisionCodec ?? EXIT_CODE_DECISION_CODEC;
+}
+
+/**
+ * How a runtime says NO, given the message, resolved by runtime id — for
+ * callers with only a bare id in hand and no `SurfaceAdapter` (the ctx
+ * native-search refusal in `src/ctx/hook.ts`, and the security CLI's
+ * `--runtime <id>` argument path). A ctx-guard `SurfaceAdapter` should still
+ * prefer its own `decisionCodec` directly when it has one; this delegates to
+ * the exact same registry-held constant either way; a NEW adapter (say, a
+ * future stdout-JSON one) is covered automatically the moment it is added to
+ * `HARNESS_ADAPTERS` with its own `decisionCodec` — nothing here needs to
+ * grow a case for it.
+ */
+export function refusalAction(runtimeId: string, message: string): HookAction {
+  return decisionCodecFor(runtimeId).refuse(runtimeId, message);
+}
+
+/** How a runtime says YES. The other half of the same fact. */
+export function allowAction(runtimeId: string): HookAction {
+  return decisionCodecFor(runtimeId).allow(runtimeId);
 }
 
 export function harnessAdapterIds(): string[] {
@@ -182,6 +224,17 @@ interface SlotRecord {
  * slot never conflicts with a `"migrates-legacy"` slot on the same key,
  * whatever type the latter declares — see `SurfaceSlot.access` for why that
  * pairing can never actually clobber anything.
+ *
+ * R2-F3: surface ids are unique WITHIN one adapter (checked below), but a
+ * `SettingsFileOwner` (see `SETTINGS_FILE_OWNERS` above) keys its surfaces by
+ * id PER FILE, aggregated ACROSS every adapter that targets that file — so
+ * two different adapters each registering a surface with the same id on the
+ * same `relativePath` would silently collide in that owner's map (one
+ * clobbering the other), even though neither adapter alone has a duplicate.
+ * That collision is latent today (no two adapters share a `relativePath` with
+ * matching surface ids yet) but becomes reachable the moment two adapters
+ * share a settings file (W5-b/W8) — so it is asserted here rather than left
+ * for a future owner-map bug report.
  */
 export function assertRegistryCoherent(adapters: readonly HarnessAdapter[] = HARNESS_ADAPTERS): void {
   for (const adapter of adapters) {
@@ -191,6 +244,26 @@ export function assertRegistryCoherent(adapters: readonly HarnessAdapter[] = HAR
         throw new Error(`integrations registry: duplicate surface id "${surface.id}" on adapter "${adapter.id}"`);
       }
       seenIds.add(surface.id);
+    }
+  }
+  const surfaceOwnerByFile = new Map<string, Map<string, string>>();
+  for (const adapter of adapters) {
+    for (const surface of adapter.surfaces) {
+      if (!surface.relativePath) continue;
+      let owningAdapterById = surfaceOwnerByFile.get(surface.relativePath);
+      if (!owningAdapterById) {
+        owningAdapterById = new Map();
+        surfaceOwnerByFile.set(surface.relativePath, owningAdapterById);
+      }
+      const existingOwner = owningAdapterById.get(surface.id);
+      if (existingOwner !== undefined && existingOwner !== adapter.id) {
+        throw new Error(
+          `integrations registry: "${surface.relativePath}" has surface id "${surface.id}" registered by both ` +
+            `"${existingOwner}" and "${adapter.id}" — a SettingsFileOwner keys its surfaces by id per file, so this ` +
+            `would clobber one adapter's surface with the other's`,
+        );
+      }
+      owningAdapterById.set(surface.id, adapter.id);
     }
   }
   const slotsByFile = new Map<string, Map<string, SlotRecord[]>>();

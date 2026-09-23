@@ -21,8 +21,11 @@ import { describe, expect, test } from "bun:test";
 import {
   HARNESS_ADAPTERS,
   SETTINGS_FILE_OWNERS,
+  allowAction,
   assertRegistryCoherent,
+  decisionCodecFor,
   getHarnessAdapter,
+  refusalAction,
   surfacesOf,
 } from "./registry";
 import type { HarnessAdapter, SurfaceAdapter, SurfaceFlag } from "./types";
@@ -526,6 +529,140 @@ describe("surfacesOf query helper", () => {
     const ctxGuards = surfacesOf(claude, { subsystem: "ctx-guard" });
     expect(ctxGuards.length).toBeGreaterThan(0);
     expect(ctxGuards.every((s) => s.subsystem === "ctx-guard")).toBe(true);
+  });
+});
+
+describe("R2-F1: refusalAction/allowAction resolve through the registry's own HarnessAdapter.decisionCodec", () => {
+  test("every adapter id: refusalAction/allowAction equal that adapter's decisionCodec output", () => {
+    for (const adapter of HARNESS_ADAPTERS) {
+      const message = `refusal message for ${adapter.id}`;
+      expect({ id: adapter.id, refusal: refusalAction(adapter.id, message) }).toEqual({
+        id: adapter.id,
+        refusal: adapter.decisionCodec.refuse(adapter.id, message),
+      });
+      expect({ id: adapter.id, allow: allowAction(adapter.id) }).toEqual({
+        id: adapter.id,
+        allow: adapter.decisionCodec.allow(adapter.id),
+      });
+      expect({ id: adapter.id, codec: decisionCodecFor(adapter.id) }).toEqual({
+        id: adapter.id,
+        codec: adapter.decisionCodec,
+      });
+    }
+  });
+
+  test("an unknown id yields the exit-code form: refuse {exitCode:2, stderr}, allow {exitCode:0}", () => {
+    const message = "unknown-runtime message";
+    expect(refusalAction("some-future-runtime", message)).toEqual({ exitCode: 2, stderr: `${message}\n` });
+    expect(allowAction("some-future-runtime")).toEqual({ exitCode: 0 });
+  });
+});
+
+describe("R2-F2: a `migrates-legacy` slot never creates its key and never retypes a pre-existing one", () => {
+  // Runs merge AND strip over every fixture that LACKS the key (must never
+  // create it) and every fixture that HAS it (must never change its JSON
+  // type) — factored so the negative control below can run the exact same
+  // check against a deliberately-broken fake surface and prove it is caught.
+  function assertNeverCreatesOrRetypes(surface: SurfaceAdapter): void {
+    for (const slot of surface.slots) {
+      if (slot.access !== "migrates-legacy") continue;
+      if (!surface.merge || !surface.strip) continue;
+      const merge = surface.merge;
+      const strip = surface.strip;
+
+      for (const op of [merge, strip]) {
+        // Fixture LACKING the key: op must never create it.
+        const withoutKey = op({});
+        expect({
+          surface: surface.id,
+          key: slot.key,
+          createdWhenAbsent: Object.prototype.hasOwnProperty.call(withoutKey, slot.key),
+        }).toEqual({ surface: surface.id, key: slot.key, createdWhenAbsent: false });
+
+        // Fixture WITH the key already present: op must never change its type.
+        const seedValue = slot.type === "array" ? ([{ seed: true }] as unknown) : ({ seed: true } as unknown);
+        const withKey = op({ [slot.key]: structuredClone(seedValue) });
+        if (Object.prototype.hasOwnProperty.call(withKey, slot.key)) {
+          const after = (withKey as Record<string, unknown>)[slot.key];
+          const afterType = Array.isArray(after) ? "array" : typeof after;
+          expect({ surface: surface.id, key: slot.key, afterType }).toEqual({
+            surface: surface.id,
+            key: slot.key,
+            afterType: slot.type,
+          });
+        }
+      }
+    }
+  }
+
+  test("non-vacuous and exhaustive over every registered migrates-legacy slot", () => {
+    let checked = 0;
+    for (const adapter of HARNESS_ADAPTERS) {
+      for (const surface of adapter.surfaces) {
+        if (surface.slots.some((s) => s.access === "migrates-legacy")) {
+          checked += 1;
+          assertNeverCreatesOrRetypes(surface);
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  test("negative control: a fake surface that creates the key from `{}` is caught", () => {
+    const fakeSurface: SurfaceAdapter = {
+      id: "fake-migrates-legacy-surface",
+      flag: "block",
+      subsystem: "security",
+      sentinel: "fake-sentinel",
+      confidence: "experimental",
+      sourceDocs: ["test"],
+      relativePath: ".fake/hooks.json",
+      slots: [{ key: "hooks", type: "array", access: "migrates-legacy" }],
+      // The bug this check exists to catch: declares `access: "migrates-legacy"`
+      // (implying it only ever touches a PRE-EXISTING `hooks`) while its merge
+      // actually CREATES `hooks: []` from an empty settings object.
+      merge: (s) => ({ ...s, hooks: Array.isArray(s.hooks) ? s.hooks : [] }),
+      strip: (s) => s,
+      validate: () => [],
+    };
+
+    expect(() => assertNeverCreatesOrRetypes(fakeSurface)).toThrow();
+  });
+});
+
+describe("R2-F3: assertRegistryCoherent rejects duplicate surface ids per relativePath across adapters", () => {
+  test("negative control: two different adapters sharing a relativePath with the same surface id throws", () => {
+    // Two brand-new fake adapters (not derived from any real one), each with
+    // exactly one surface, so neither has an intra-adapter duplicate id of
+    // its own — the ONLY collision here is the shared id on the shared file
+    // across the two DIFFERENT adapters, which is what R2-F3 is about.
+    const sharedSurface = (adapterLabel: string): SurfaceAdapter => ({
+      id: "shared-surface-id",
+      flag: "block",
+      subsystem: "security",
+      sentinel: `fake-sentinel-${adapterLabel}`,
+      confidence: "experimental",
+      sourceDocs: ["test"],
+      relativePath: ".fake-shared/file.json",
+      slots: [],
+    });
+    const fakeAdapterA: HarnessAdapter = {
+      id: "fake-adapter-a",
+      label: "Fake Adapter A",
+      confidence: "experimental",
+      adapterKind: "host-hook",
+      surfaces: [sharedSurface("a")],
+      unsupported: {},
+      sourceDocs: ["test"],
+      lastVerified: "2026-09-23",
+      decisionCodec: getHarnessAdapter("claude")!.decisionCodec,
+    };
+    const fakeAdapterB: HarnessAdapter = { ...fakeAdapterA, id: "fake-adapter-b", label: "Fake Adapter B", surfaces: [sharedSurface("b")] };
+    const adapters = [...HARNESS_ADAPTERS, fakeAdapterA, fakeAdapterB];
+
+    expect(() => assertRegistryCoherent(adapters)).toThrow(/surface id "shared-surface-id".*registered by both/);
+    // The real registry is untouched by building this copy.
+    expect(() => assertRegistryCoherent()).not.toThrow();
   });
 });
 

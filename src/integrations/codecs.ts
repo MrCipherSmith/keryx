@@ -4,7 +4,7 @@
 // `src/ctx` or `src/security` (import-cycle guard: those zones import THIS
 // module, never the reverse).
 
-import type { DecisionCodec, HookAction } from "./types";
+import type { DecisionCodec } from "./types";
 
 function parseJson(payload: string): Record<string, unknown> | null {
   try {
@@ -59,16 +59,18 @@ export function parseAntigravityCommand(payload: string): string | null {
 
 // --- block/allow signalers ---------------------------------------------------
 //
-// F10: each SHAPE is its own `DecisionCodec` constant, and a ctx-guard
+// F10/R2-F1: each SHAPE is its own `DecisionCodec` constant, and a ctx-guard
 // surface in `surfaces.ts` picks the one it needs directly — so a NEW adapter
 // with, say, cursor's stdout-JSON shape reuses `CURSOR_DECISION_CODEC` on its
 // own surface, and a genuinely new shape adds a new constant here, but never
-// needs to edit a switch keyed on a growing list of runtime ids. The
-// `refusalAction`/`allowAction` switches below still exist ONLY for the
-// security CLI's `--runtime <id>` argument path, which decides a shape from a
-// bare string at process-invocation time with no `SurfaceAdapter` in hand —
-// they now delegate to these same constants rather than duplicating the
-// literal `HookAction` shapes a second time.
+// needs to edit a switch keyed on a growing list of runtime ids. Resolving a
+// SHAPE from a bare runtime id (the ctx native-search refusal in
+// `src/ctx/hook.ts`, and the security CLI's `--runtime <id>` argument path,
+// neither of which has a `SurfaceAdapter` in hand) is `registry.ts`'s job now
+// — `decisionCodecFor`/`refusalAction`/`allowAction` there read
+// `HarnessAdapter.decisionCodec`, so this module never re-lists which id maps
+// to which shape a second time. This file stays a leaf: it may be imported by
+// the registry, but must never import it back (cycle guard, module header).
 
 /** Exit-code signalling: claude, codex, windsurf, the opencode bridge. */
 export const EXIT_CODE_DECISION_CODEC: DecisionCodec = {
@@ -94,35 +96,3 @@ export const ANTIGRAVITY_DECISION_CODEC: DecisionCodec = {
   allow: (_runtimeId) => ({ exitCode: 0, stdout: `${JSON.stringify({ allow_tool: true })}\n` }),
 };
 
-/**
- * How a runtime says NO, given the message, resolved by runtime id — kept for
- * the security CLI's `--runtime <id>` argument path (see the module note
- * above); a ctx-guard `SurfaceAdapter` should use its own `decisionCodec`
- * instead of this switch. An unknown id returns the exit-code form, which is
- * the majority shape and fails toward refusing.
- */
-export function refusalAction(runtimeId: string, message: string): HookAction {
-  switch (runtimeId) {
-    case "cursor":
-      return CURSOR_DECISION_CODEC.refuse(runtimeId, message);
-    case "antigravity":
-      return ANTIGRAVITY_DECISION_CODEC.refuse(runtimeId, message);
-    default:
-      return EXIT_CODE_DECISION_CODEC.refuse(runtimeId, message);
-  }
-}
-
-/** How a runtime says YES. The other half of the same fact. */
-export function allowAction(runtimeId: string): HookAction {
-  switch (runtimeId) {
-    case "cursor":
-      return CURSOR_DECISION_CODEC.allow(runtimeId);
-    case "antigravity":
-      return ANTIGRAVITY_DECISION_CODEC.allow(runtimeId);
-    default:
-      return EXIT_CODE_DECISION_CODEC.allow(runtimeId);
-  }
-}
-
-/** @deprecated Use the surface's own `decisionCodec`, or `refusalAction`/`allowAction` for the CLI's dynamic-id path. Kept only so nothing importing it breaks mid-refactor. */
-export const HOOK_DECISION_CODEC: DecisionCodec = { refuse: refusalAction, allow: allowAction };

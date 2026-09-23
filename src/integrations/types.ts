@@ -172,6 +172,18 @@ export interface HarnessAdapter {
   readonly sourceDocs: readonly string[];
   /** ISO date the confidence/unsupported facts were last checked against docs. */
   readonly lastVerified: string;
+  /**
+   * How THIS harness signals refuse/allow back to its process, for callers
+   * that only have a runtime id in hand (the ctx native-search refusal in
+   * `src/ctx/hook.ts`, and the security CLI's `--runtime <id>` argument path)
+   * with no `SurfaceAdapter` to read a `decisionCodec` off directly. A
+   * ctx-guard surface on this same adapter may — and today does — reference
+   * this exact same constant rather than duplicating it (see `surfaces.ts`);
+   * this is what makes the registry (`decisionCodecFor`/`refusalAction`/
+   * `allowAction` in `registry.ts`) the SINGLE place that answers "how does
+   * runtime X signal a decision", instead of a second id-keyed switch.
+   */
+  readonly decisionCodec: DecisionCodec;
 }
 
 /**
