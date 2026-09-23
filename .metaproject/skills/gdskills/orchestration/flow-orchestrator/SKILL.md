@@ -60,10 +60,7 @@ CLI-owned files:
 - task status - only through `keryx flow task done ...`.
 - task attempt counts - only through `keryx flow task attempt ...`.
 - frozen acceptance criteria changes - only through
-  `keryx flow ac update <id> --reason "<why>"` (re-freezes as edited) or
-  `keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"`
-  (rewrites/appends one line). Every `ac` subcommand refuses an argument it
-  does not use.
+  `keryx flow ac update <id> --reason "<why>"` (or `--criterion ACn --text "…"`; unused arguments are refused).
 
 Agent-editable files:
 
@@ -634,14 +631,7 @@ keryx flow complete <id>
 
 Completion is allowed only after the PR merge has been confirmed. The merge
 target must be the base branch captured when the flow was created; do not
-silently retarget or close against another branch.
-
-If the flow opted into the owner gate (`flow init --owner` set the flag),
-completion also fails while no owner is recorded, naming
-`keryx flow owner set <id> --owner "<name>" --reason "<why>"` as the remedy.
-`ac confirm` and `flow complete` each append a signature; pass `--signed-by
-"<name>"` to name the signer explicitly rather than falling back to
-`KERYX_ACTOR` or local git identity.
+silently retarget or close against another branch. Flows created since the owner gate fail completion while no owner is set (`keryx flow owner set <id> --owner "<name>" --reason "<why>"`); `ac confirm` and `flow complete` append a signature — `--signed-by "<name>"` names the signer, otherwise `KERYX_ACTOR` or the local git identity is recorded, as a claim.
 
 If gates fail, the CLI returns the flow to `in-progress`. Add a journal note,
 create fix tasks, and repeat Phase 2.
