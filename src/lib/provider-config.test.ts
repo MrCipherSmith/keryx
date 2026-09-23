@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -36,6 +36,21 @@ describe("llm-providers.json custom provider registry", () => {
       apiKey: "sk-test",
       models: ["Qwen/Qwen3.5-122B-A10B-FP8"],
     });
+  });
+
+  // flow 304 review finding #6: llm-providers.json now writes atomically too.
+  test("writes atomically: same content and mode as before, and no temp file survives a save or a remove", () => {
+    const dir = tempDir();
+    saveCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [] }, dir);
+    saveCustomCompatProvider({ name: "b", baseUrl: "http://localhost:2", models: [] }, dir);
+    const file = llmProvidersConfigPath(dir);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(readdirSync(dir)).toEqual(["llm-providers.json"]);
+
+    removeCustomCompatProvider("a", dir);
+    expect(loadCustomCompatProviders(dir).map((p) => p.name)).toEqual(["b"]);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(readdirSync(dir)).toEqual(["llm-providers.json"]); // no `*.tmp` sibling left behind
   });
 
   test("saving a second provider preserves the first (merge)", () => {

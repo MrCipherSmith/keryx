@@ -156,12 +156,15 @@ describe("AC2 — [Test] runs the live probe and shows ok/failure inline, withou
 });
 
 describe("AC3 — rows and both buttons reach without a mouse", () => {
-  otuiTest("Right lands on Test; Enter runs it; Right again lands on Disconnect", async () => {
+  otuiTest("Right lands on Test; Enter runs it; Right again arms Disconnect", async () => {
     const otui = requireOtui();
     const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    // Hermetic: arming now classifies the credential (flow 304 review #2),
+    // which reads the config dir — never the real machine's.
+    const configDir = tempConfigDir();
     try {
       const fetchFn = (async () => ({ ok: true, json: async () => ({ data: [{ id: "m1" }] }) }) as Response) as unknown as typeof fetch;
-      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: ENV });
+      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: ENV, configDir });
       await h.waitForFrame((f) => f.includes("[Test]"));
 
       h.mockInput.pressArrow("right"); // Label -> Test
@@ -174,10 +177,47 @@ describe("AC3 — rows and both buttons reach without a mouse", () => {
       const armedFrame = await h.waitForFrame((f) => f.includes("disconnect 'DeepSeek'?"));
       expect(armedFrame).toContain("Esc to cancel");
 
-      await pressEscapeAndSettle(h); // Esc leaves the whole step, per AC3
+      // flow 304 review finding #4: Esc while armed cancels ONLY the arm —
+      // the step stays open. A SECOND Esc is what finally leaves.
+      await pressEscapeAndSettle(h);
+      const clearedFrame = h.captureCharFrame();
+      expect(clearedFrame).not.toContain("disconnect 'DeepSeek'?");
+      expect(clearedFrame).toContain("[Disconnect]"); // still here — the step did not close
+      await pressEscapeAndSettle(h);
       expect(await pending).toBeUndefined();
     } finally {
       h.renderer.destroy();
+      rmSync(configDir, { recursive: true, force: true });
+    }
+  });
+
+  // flow 304 review finding #4, isolated: Esc's FIRST job is cancelling an
+  // armed Disconnect, matching the hint text "Esc to cancel" literally —
+  // it does not, on its own, leave `/connect`.
+  otuiTest("Esc while Disconnect is armed cancels the arm and keeps the picker open; nothing is written", async () => {
+    const otui = requireOtui();
+    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    const configDir = tempConfigDir();
+    saveApiKey("DEEPSEEK_API_KEY", "sk-real", configDir); // a real credential that a wrongly-confirmed Esc could remove
+    try {
+      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK], { onlyConnected: true, fetch: alwaysLive, env: ENV, configDir });
+      const frame = await h.waitForFrame((f) => f.includes("[Disconnect]"));
+      const disc = columnOnRow(frame, "DeepSeek", "[Disconnect]");
+      const mouse = otui.testing.createMockMouse(h.renderer);
+      await mouse.click(disc.col, disc.row); // arm, by mouse this time
+      await h.waitForFrame((f) => f.includes("disconnect 'DeepSeek'?"));
+
+      await pressEscapeAndSettle(h); // cancel the arm only
+      const afterOneEsc = h.captureCharFrame();
+      expect(afterOneEsc).not.toContain("disconnect 'DeepSeek'?");
+      expect(afterOneEsc).toContain("DeepSeek"); // row still here, step still open
+      expect(loadShellConfig(configDir).apiKeys).toEqual({ DEEPSEEK_API_KEY: "sk-real" }); // untouched
+
+      await pressEscapeAndSettle(h); // NOW leave
+      expect(await pending).toBeUndefined();
+    } finally {
+      h.renderer.destroy();
+      rmSync(configDir, { recursive: true, force: true });
     }
   });
 
@@ -284,6 +324,41 @@ describe("AC4 — [Disconnect] asks for confirmation; declining writes nothing",
   });
 });
 
+describe("review finding #2 — arming Disconnect warns about a shared env var BEFORE confirming", () => {
+  otuiTest("arming zai's Disconnect names zai-coding and ZAI_API_KEY (real registry pair, same shared credential)", async () => {
+    const otui = requireOtui();
+    const h = await otui.testing.createTestRenderer({ width: 120, height: 30 });
+    const configDir = tempConfigDir();
+    saveApiKey("ZAI_API_KEY", "sk-zai", configDir);
+    const ZAI: DetectedProvider = { name: "zai", label: "Z.AI (GLM)", models: ["glm-5.2"] };
+    const ZAI_CODING: DetectedProvider = { name: "zai-coding", label: "Z.AI GLM Coding Plan", models: ["glm-5.2"] };
+    try {
+      const pending = selectProviderModelInTui(otui.core, h.renderer, [ZAI, ZAI_CODING], {
+        onlyConnected: true,
+        fetch: alwaysLive,
+        env: { ZAI_API_KEY: "sk-zai" },
+        configDir,
+      });
+      const frame = await h.waitForFrame((f) => f.includes("Z.AI (GLM)"));
+      const disc = columnOnRow(frame, "Z.AI (GLM)", "[Disconnect]");
+      const mouse = otui.testing.createMockMouse(h.renderer);
+      await mouse.click(disc.col, disc.row); // arm — do NOT confirm
+      const armedFrame = await h.waitForFrame((f) => f.includes("disconnect 'Z.AI (GLM)'?"));
+      expect(armedFrame).toContain("zai-coding");
+      expect(armedFrame).toContain("ZAI_API_KEY");
+
+      await pressEscapeAndSettle(h); // decline (cancels the arm; step stays open)
+      await pressEscapeAndSettle(h); // leave
+      expect(await pending).toBeUndefined();
+      // Declined: neither credential was touched.
+      expect(loadShellConfig(configDir).apiKeys).toEqual({ ZAI_API_KEY: "sk-zai" });
+    } finally {
+      h.renderer.destroy();
+      rmSync(configDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("AC10 — button/row colours come from the active theme", () => {
   function paintedHexes(frame: { lines: readonly { spans: readonly { fg: unknown; bg: unknown }[] }[] }): { fg: Set<string>; bg: Set<string> } {
     const fg = new Set<string>();
@@ -338,10 +413,10 @@ describe("AC10 — button/row colours come from the active theme", () => {
 describe("AC7 — the /connect command handler prints the active-provider-disconnected line (source-text audit)", () => {
   const tuiSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
   const handlerStart = tuiSource.indexOf('if (command.name === "/connect" || command.name === "/provider")');
-  const handlerBody = tuiSource.slice(handlerStart, handlerStart + 1500);
+  const handlerBody = tuiSource.slice(handlerStart, handlerStart + 2500);
 
   test("onDisconnected compares the disconnected name against the session's OWN provider", () => {
-    expect(handlerBody).toContain("onDisconnected: (name) => {");
+    expect(handlerBody).toContain("onDisconnected: (name, sharedWith) => {");
     expect(handlerBody).toContain("if (name === currentSel.provider) {");
   });
 
@@ -351,8 +426,15 @@ describe("AC7 — the /connect command handler prints the active-provider-discon
     expect(handlerBody).toContain("io.onSystem?.(");
   });
 
+  // flow 304 review finding #2: the result must ALSO name every provider a
+  // shared env var affected (e.g. built-in zai/zai-coding sharing ZAI_API_KEY).
+  test("the result also reports sharedWith to the operator", () => {
+    expect(handlerBody).toContain("if (sharedWith.length > 0) {");
+    expect(handlerBody).toContain("this also disconnected");
+  });
+
   test("the line is NOT a forced switch: no call to switchTo inside the onDisconnected callback", () => {
-    const callbackStart = handlerBody.indexOf("onDisconnected: (name) => {");
+    const callbackStart = handlerBody.indexOf("onDisconnected: (name, sharedWith) => {");
     const callbackEnd = handlerBody.indexOf("})", callbackStart);
     const callbackBody = handlerBody.slice(callbackStart, callbackEnd);
     expect(callbackBody).not.toContain("switchTo(");

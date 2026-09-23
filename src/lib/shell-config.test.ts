@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { uniqueTestRoot } from "./test-tmp";
@@ -43,6 +43,19 @@ test("saveShellConfig writes the file mode 0600 (owner-only)", () => {
   saveShellConfig({ openrouterKey: "sk-or-secret" }, dir);
   const mode = statSync(shellConfigPath(dir)).mode & 0o777;
   expect(mode).toBe(0o600);
+});
+
+// flow 304 review finding #6: auth.json now writes atomically (temp + rename)
+// so a crash or a racing second write can never leave it half-written.
+test("saveShellConfig writes atomically: same content and mode as before, and no temp file survives", () => {
+  const dir = tempDir();
+  saveShellConfig({ provider: "openrouter" }, dir);
+  saveShellConfig({ model: "openai/gpt-4o-mini" }, dir); // a second, merging write
+  const file = shellConfigPath(dir);
+  expect(loadShellConfig(dir)).toEqual({ provider: "openrouter", model: "openai/gpt-4o-mini" });
+  expect(statSync(file).mode & 0o777).toBe(0o600);
+  const entries = readdirSync(dir);
+  expect(entries).toEqual(["auth.json"]); // no `*.tmp` sibling left behind
 });
 
 test("shellConfigPath honors XDG_DATA_HOME on non-Windows (cross-platform dir)", () => {

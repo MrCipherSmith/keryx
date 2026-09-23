@@ -23,7 +23,7 @@ import {
   removeCustomCompatProvider,
 } from "../lib/provider-config";
 import { extraRequestHeaders } from "../lib/oauth/catalog";
-import { envWithOAuthAccess } from "../lib/oauth/grants";
+import { envWithOAuthAccess, oauthEnvKeyFor } from "../lib/oauth/grants";
 import { logoutProvider } from "../lib/oauth/login";
 import { resolveCallerSession } from "../lib/caller-session";
 import {
@@ -845,6 +845,32 @@ export async function testProviderConnection(
 }
 
 /**
+ * Every OTHER provider (built-in or custom) whose OWN credential lives in the
+ * SAME env var as `envKey` — e.g. built-in `zai`/`zai-coding` both read
+ * `ZAI_API_KEY` (flow 304 review finding #2: disconnecting one silently
+ * disconnected the other, with no warning). Generic over whatever provider
+ * list is handed in — never special-cased by name — so it covers a custom
+ * provider that happens to share a built-in's env var the same way it covers
+ * two built-ins. Pure; `providers` is normally `allOpenAiCompatProviders(dir)`.
+ */
+export function providersSharingEnvKey(
+  envKey: string,
+  excludeName: string,
+  providers: readonly OpenAiCompatProvider[],
+): string[] {
+  return providers
+    .filter((p) => p.envKey === envKey && p.name !== excludeName)
+    .map((p) => p.name)
+    .sort();
+}
+
+/** The confirmation/result phrase naming `sharedWith`, or `undefined` when nothing is shared. */
+export function sharedCredentialWarning(sharedWith: readonly string[], envKey: string | undefined): string | undefined {
+  if (sharedWith.length === 0 || envKey === undefined) return undefined;
+  return `this also disconnects ${sharedWith.join(", ")} (same ${envKey})`;
+}
+
+/**
  * Why a provider's credential cannot be resolved to a single owned artifact —
  * or can, naming which one Disconnect must remove.
  *
@@ -852,7 +878,13 @@ export async function testProviderConnection(
  *   together with any saved `baseUrls`/`modelParams` override for it.
  * - `oauth-grant`: a device-code/PKCE grant in `auth.json` (`logoutProvider` —
  *   LOCAL delete only; it does not call a vendor revoke endpoint, see
- *   `logoutProvider`'s own doc and `docs/docs/cli-reference.md`).
+ *   `logoutProvider`'s own doc and `docs/docs/cli-reference.md`). `envKey`
+ *   (when the grant maps onto one, via `oauthEnvKeyFor`) is the var
+ *   `envWithOAuthAccess` copied the access token onto (e.g. `grok` →
+ *   `XAI_API_KEY`) — flow 304 review finding #1: this used to go unnoticed by
+ *   `process.env`, so the NEXT `/connect` misclassified the just-disconnected
+ *   provider as `env-var-only` and told the operator to unset a variable
+ *   keryx itself had set.
  * - `saved-api-key`: a key keryx itself saved under `apiKeys[envKey]` in
  *   `auth.json` (`removeApiKey`).
  * - `env-var-only`: the provider's env var IS set, but not by keryx (absent
@@ -866,8 +898,10 @@ export type ProviderConnectionKind = "custom" | "oauth-grant" | "saved-api-key" 
 
 export interface ProviderConnectionClassification {
   kind: ProviderConnectionKind;
-  /** Present for `saved-api-key`/`env-var-only`: the env var carrying the key. */
+  /** Present for `saved-api-key`/`env-var-only`/`oauth-grant` (when mapped): the env var carrying the key. */
   envKey?: string;
+  /** Every OTHER provider sharing that same env var (flow 304 review finding #2). Always present; empty when none. */
+  sharedWith: string[];
 }
 
 /**
@@ -884,24 +918,27 @@ export function classifyProviderConnection(
   dir?: string,
 ): ProviderConnectionClassification {
   if (customCompatProviders(dir).some((p) => p.name === name)) {
-    return { kind: "custom" };
+    return { kind: "custom", sharedWith: [] };
   }
   if (loadShellConfig(dir).oauthGrants?.[name] !== undefined) {
-    return { kind: "oauth-grant" };
+    const envKey = oauthEnvKeyFor(name);
+    const sharedWith = envKey === undefined ? [] : providersSharingEnvKey(envKey, name, allOpenAiCompatProviders(dir));
+    return { kind: "oauth-grant", ...(envKey !== undefined ? { envKey } : {}), sharedWith };
   }
   const registry = providerByName(name, dir);
   const envKey = registry?.envKey;
   if (envKey === undefined) {
-    return { kind: "no-credential" };
+    return { kind: "no-credential", sharedWith: [] };
   }
+  const sharedWith = providersSharingEnvKey(envKey, name, allOpenAiCompatProviders(dir));
   if (loadShellConfig(dir).apiKeys?.[envKey] !== undefined) {
-    return { kind: "saved-api-key", envKey };
+    return { kind: "saved-api-key", envKey, sharedWith };
   }
   const raw = env[envKey];
   if (typeof raw === "string" && raw.length > 0) {
-    return { kind: "env-var-only", envKey };
+    return { kind: "env-var-only", envKey, sharedWith };
   }
-  return { kind: "no-credential" };
+  return { kind: "no-credential", sharedWith: [] };
 }
 
 export interface DisconnectProviderResult {
@@ -909,15 +946,23 @@ export interface DisconnectProviderResult {
   kind: ProviderConnectionKind;
   /** Set on `ok: false` (env-var-only) and as an informational note on `no-credential`. */
   reason?: string;
+  /** Every OTHER provider this disconnect ALSO affected, sharing the same env var. Always present. */
+  sharedWith: string[];
 }
 
 /**
  * Disconnect one provider: remove exactly the credential
  * {@link classifyProviderConnection} says it owns, and nothing belonging to a
- * sibling provider. Also clears `process.env[envKey]` for THIS process when
- * (and only when) the removed key is one keryx itself loaded into it
- * (`savedCredentialEnvKeys()`) — an operator-exported var is never touched,
- * in `env-var-only` or any other branch. Best-effort; never throws.
+ * sibling provider'S OWN storage. Also clears `process.env[envKey]` for THIS
+ * process when (and only when) the removed key is one keryx itself loaded
+ * into it (`savedCredentialEnvKeys()`) — an operator-exported var is never
+ * touched, in `env-var-only` or any other branch. This covers BOTH a saved
+ * API key and an OAuth grant's mapped env var (flow 304 review finding #1).
+ * A shared env var (finding #2) is, by construction, actually removed for
+ * every provider in `sharedWith` too — one `apiKeys[envKey]`/env entry serves
+ * all of them — `sharedWith` is reported so a caller can say so BEFORE and
+ * AFTER acting, not because a second removal is needed. Best-effort; never
+ * throws.
  */
 export function disconnectProvider(
   name: string,
@@ -930,26 +975,37 @@ export function disconnectProvider(
       removeCustomCompatProvider(name, dir);
       removeProviderBaseUrl(name, dir);
       removeProviderModelParams(name, dir);
-      return { ok: true, kind: "custom" };
-    case "oauth-grant":
+      return { ok: true, kind: "custom", sharedWith: classification.sharedWith };
+    case "oauth-grant": {
       logoutProvider(name, dir);
-      return { ok: true, kind: "oauth-grant" };
+      const envKey = classification.envKey;
+      if (envKey !== undefined && savedCredentialEnvKeys().has(envKey)) {
+        delete process.env[envKey];
+      }
+      return { ok: true, kind: "oauth-grant", sharedWith: classification.sharedWith };
+    }
     case "saved-api-key": {
       const envKey = classification.envKey!;
       removeApiKey(envKey, dir);
       if (savedCredentialEnvKeys().has(envKey)) {
         delete process.env[envKey];
       }
-      return { ok: true, kind: "saved-api-key" };
+      return { ok: true, kind: "saved-api-key", sharedWith: classification.sharedWith };
     }
     case "env-var-only":
       return {
         ok: false,
         kind: "env-var-only",
         reason: `set via ${classification.envKey} in your environment — unset ${classification.envKey} in your shell to disconnect`,
+        sharedWith: classification.sharedWith,
       };
     case "no-credential":
-      return { ok: true, kind: "no-credential", reason: "no saved credential for this provider — nothing to remove" };
+      return {
+        ok: true,
+        kind: "no-credential",
+        reason: "no saved credential for this provider — nothing to remove",
+        sharedWith: classification.sharedWith,
+      };
   }
 }
 
@@ -1071,32 +1127,73 @@ async function runProvidersTest(args: string[], deps: ProvidersCommandDeps): Pro
   process.exitCode = 1;
 }
 
-/** `keryx providers remove <name> [--yes]` — the CLI form of the `[Disconnect]` row button. */
+/** `keryx providers remove <name> [--yes] [--json]` — the CLI form of the `[Disconnect]` row button. */
 async function runProvidersRemove(args: string[], deps: ProvidersCommandDeps): Promise<void> {
   const name = args[0];
   if (name === undefined || name === "--help" || name === "-h") {
-    console.error("Usage: keryx providers remove <name> [--yes]");
+    console.error("Usage: keryx providers remove <name> [--yes] [--json]");
     process.exitCode = 1;
     return;
   }
   const dir = deps.dir;
   const env = deps.env ?? process.env;
+  const json = args.includes("--json");
+  // flow 304 review finding #3: an unknown name used to report success and
+  // exit 0. Validate the SAME way `test` does, before even asking to confirm.
+  if (providerByName(name, dir) === undefined) {
+    if (json) {
+      console.log(JSON.stringify({ provider: name, ok: false, reason: "unknown provider" }, null, 2));
+    } else {
+      console.error(`Unknown provider: ${name}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+  // Classified BEFORE confirming (flow 304 review finding #2) so the
+  // confirmation prompt can name every provider this ALSO disconnects —
+  // `disconnectProvider` re-classifies internally too, which is fine: this
+  // read is pure and cheap, and the two must agree since nothing external
+  // can change the classification between this call and the actual removal
+  // (a CLI invocation is single-threaded, unlike the TUI's own arm/confirm
+  // gap, which re-classifies at confirm time for the same reason).
+  const classification = classifyProviderConnection(name, env, dir);
+  const warning = sharedCredentialWarning(classification.sharedWith, classification.envKey);
   const yes = args.includes("--yes");
   const confirmFn = deps.confirm ?? ttyConfirm;
-  const confirmed = yes || (await confirmFn(`Disconnect provider "${name}" and remove its saved credential?`, false));
+  const question =
+    warning === undefined
+      ? `Disconnect provider "${name}" and remove its saved credential?`
+      : `Disconnect provider "${name}" and remove its saved credential? Note: ${warning}.`;
+  const confirmed = yes || (await confirmFn(question, false));
   if (!confirmed) {
-    console.log("keryx providers remove: not confirmed — nothing was changed.");
+    if (json) {
+      console.log(JSON.stringify({ provider: name, ok: false, reason: "not confirmed", sharedWith: classification.sharedWith }, null, 2));
+    } else {
+      console.log("keryx providers remove: not confirmed — nothing was changed.");
+    }
     if (!yes && !process.stdin.isTTY && deps.confirm === undefined) process.exitCode = 1;
     return;
   }
   const result = disconnectProvider(name, env, dir);
+  if (json) {
+    console.log(
+      JSON.stringify(
+        { provider: name, ok: result.ok, kind: result.kind, sharedWith: result.sharedWith, reason: result.reason ?? null },
+        null,
+        2,
+      ),
+    );
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
   if (!result.ok) {
     console.log(`keryx providers remove: "${name}" not removed — ${result.reason}`);
     process.exitCode = 1;
     return;
   }
+  const sharedNote = sharedCredentialWarning(result.sharedWith, classification.envKey);
   console.log(
-    `keryx providers remove: "${name}" disconnected (${result.kind}).${result.reason !== undefined ? ` ${result.reason}` : ""}`,
+    `keryx providers remove: "${name}" disconnected (${result.kind}).${sharedNote !== undefined ? ` Note: ${sharedNote}.` : ""}${result.reason !== undefined ? ` ${result.reason}` : ""}`,
   );
 }
 
@@ -1240,7 +1337,7 @@ Usage:
   keryx providers list [--json]
   keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
   keryx providers test <name> [--json]
-  keryx providers remove <name> [--yes]
+  keryx providers remove <name> [--yes] [--json]
 
 Commands:
   list          Providers this operator has configured, and the family of each
@@ -1250,10 +1347,16 @@ Commands:
                 or the failure reason. Makes ONE network call — unlike list/
                 cross-family, not network-free
   remove        Disconnect a provider: remove its saved API key, OAuth grant,
-                or custom-provider entry. Asks for confirmation on a terminal;
+                or custom-provider entry. Errors on an unknown name (exit 1)
+                before asking anything. Asks for confirmation on a terminal;
                 refuses without one unless --yes. A provider whose only
                 credential is an environment variable you exported yourself
-                cannot be removed — the command names the variable to unset
+                cannot be removed — the command names the variable to unset.
+                Some built-ins share one env var (e.g. zai/zai-coding both
+                read ZAI_API_KEY): removing either ALSO disconnects the
+                other, and both the confirmation prompt and the result name
+                every provider this affects — --json lists them under
+                sharedWith
 
 cross-family is OPT-IN: without --opt-in it reports what would happen and
 chooses single-family review. Dispatching to another provider spends tokens and

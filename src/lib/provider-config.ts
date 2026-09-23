@@ -9,7 +9,7 @@
 // stay denied on both.
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "./config-dir";
 
 /** One operator-defined OpenAI-compatible provider, as persisted on disk. */
 export interface CustomCompatProvider {
@@ -467,7 +467,8 @@ export function saveCustomCompatProvider(provider: CustomCompatProvider, dir?: s
       return acc;
     }, {});
     current[provider.name] = provider;
-    writeOwnerOnlyFile(
+    // Atomic (flow 304 review finding #6) — same reasoning as `saveShellConfig`.
+    writeOwnerOnlyFileAtomic(
       llmProvidersConfigPath(dir),
       `${JSON.stringify({ schemaVersion: 1, providers: current }, null, 2)}\n`,
     );
@@ -492,7 +493,7 @@ export function removeCustomCompatProvider(name: string, dir?: string): void {
     }, {});
     if (!(name in current)) return;
     delete current[name];
-    writeOwnerOnlyFile(
+    writeOwnerOnlyFileAtomic(
       llmProvidersConfigPath(dir),
       `${JSON.stringify({ schemaVersion: 1, providers: current }, null, 2)}\n`,
     );

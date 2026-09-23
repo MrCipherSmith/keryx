@@ -150,11 +150,13 @@ import type { DetectedProvider } from "../commands/select";
 import type { ModelsFailure, ModelsResolveResult } from "../commands/providers";
 import {
   MODELS_FETCH_TIMEOUT_MS,
+  classifyProviderConnection,
   disconnectProvider,
   fetchOpenAiCompatModelsDetailed,
   modelsFailureLine,
   providerByName,
   resolveModelsForPicker,
+  sharedCredentialWarning,
   testProviderConnection,
 } from "../commands/providers";
 import { loadSessionLimits } from "../commands/model-limits";
@@ -522,9 +524,10 @@ export interface SelectProviderModelOptions {
    * `/connect` command handler can tell whether the just-disconnected
    * provider was the CURRENT session's active one and print the "session
    * keeps its loaded credential" line. This function has no session state of
-   * its own to compare against.
+   * its own to compare against. `sharedWith` (flow 304 review finding #2)
+   * names every OTHER provider the same disconnect also affected.
    */
-  onDisconnected?: (name: string) => void;
+  onDisconnected?: (name: string, sharedWith: readonly string[]) => void;
 }
 
 /**
@@ -2517,9 +2520,12 @@ interface ConnectedProviderStepOptions {
    * Called synchronously right after a successful disconnect, before the row
    * is removed from the list — so the caller can tell whether the CURRENT
    * session's active provider was just disconnected (AC7) without this step
-   * knowing anything about session state itself.
+   * knowing anything about session state itself. `sharedWith` (flow 304
+   * review finding #2) names every OTHER provider this same disconnect also
+   * affected (e.g. built-in `zai`/`zai-coding` sharing `ZAI_API_KEY`) — empty
+   * when none.
    */
-  onDisconnected?: (name: string) => void;
+  onDisconnected?: (name: string, sharedWith: readonly string[]) => void;
 }
 
 /**
@@ -2567,6 +2573,27 @@ function pickConnectedProviderStep(
     const labelOf = (d: DetectedProvider): string => d.label ?? d.name;
     const noteOf = (d: DetectedProvider): string => d.note ?? `${d.models.length} model(s)`;
 
+    // flow 304 review finding #4: Esc while a Disconnect is armed used to
+    // close the WHOLE step, even though the hint says "Esc to cancel" (of
+    // the arm, an operator reasonably assumes). Registered BEFORE
+    // `openStepSurface` below, so it is called FIRST on every keypress
+    // (OpenTUI's `InternalKeyHandler.emit` walks `renderableHandlers` in
+    // registration order and stops at the first handler that calls
+    // `stopPropagation()` — confirmed against the bundled implementation,
+    // `node_modules/@opentui/core/chunk-bun-t2myhmwd.js`'s `emit`/`onInternal`
+    // pair, the same investigation technique `mainQueueButton`'s own mouse-
+    // bubbling comment used). When nothing is armed this does nothing and
+    // the key falls through to `openStepSurface`'s own Escape handler
+    // (`onEscape` below) unchanged — so a SECOND Esc still leaves, matching
+    // AC3's "Esc leaves" and this step's own footer.
+    const unsubEscapeGuard = onKeypress(r, (key) => {
+      if (resolved || key.name !== "escape" || pendingDisconnect === undefined) return;
+      clearPending();
+      applyHighlight();
+      key.preventDefault();
+      key.stopPropagation();
+    });
+
     const surface = openStepSurface(otui, target, {
       id: "connect-picker",
       title: "Connected providers",
@@ -2586,6 +2613,7 @@ function pickConnectedProviderStep(
     function finish(value: DetectedProvider | undefined): void {
       if (resolved) return;
       resolved = true;
+      unsubEscapeGuard();
       unsub();
       surface.close();
       resolve(value);
@@ -2639,7 +2667,19 @@ function pickConnectedProviderStep(
       if (pendingDisconnect !== name) {
         clearPending();
         pendingDisconnect = name;
-        block.status.content = otui.t`${roleChunk(otui, "attention", "?")} disconnect '${labelOf(rows.find((d) => d.name === name) ?? { name, models: [] })}'? ${dimChunk(otui, "click/Enter Disconnect again to confirm, Esc to cancel")}`;
+        // flow 304 review finding #2: warn BEFORE the irreversible action
+        // when this provider shares its env var with another (e.g. built-in
+        // zai/zai-coding both reading ZAI_API_KEY) — classified fresh here,
+        // not reused from paint time, since the credential state could have
+        // changed since this row was last drawn.
+        const env = opts.env ?? process.env;
+        const classification = classifyProviderConnection(name, env, opts.configDir);
+        const warning = sharedCredentialWarning(classification.sharedWith, classification.envKey);
+        const label = labelOf(rows.find((d) => d.name === name) ?? { name, models: [] });
+        block.status.content =
+          warning === undefined
+            ? otui.t`${roleChunk(otui, "attention", "?")} disconnect '${label}'? ${dimChunk(otui, "click/Enter Disconnect again to confirm, Esc to cancel")}`
+            : otui.t`${roleChunk(otui, "attention", "?")} disconnect '${label}'? ${roleChunk(otui, "attention", `Note: ${warning}.`)} ${dimChunk(otui, "click/Enter Disconnect again to confirm, Esc to cancel")}`;
         return;
       }
       pendingDisconnect = undefined;
@@ -2648,7 +2688,7 @@ function pickConnectedProviderStep(
         block.status.content = otui.t`${roleChunk(otui, "error", "✗")} not removed — ${result.reason ?? "unknown reason"}`;
         return;
       }
-      opts.onDisconnected?.(name);
+      opts.onDisconnected?.(name, result.sharedWith);
       rows = rows.filter((d) => d.name !== name);
       paint();
     }
@@ -7226,7 +7266,17 @@ export async function launchTuiAgentShell(opts: {
                     // `disconnectProvider` has already cleared the env var
                     // for THIS process when it was keryx-saved, so a LATER
                     // `/connect` (or a fresh launch) no longer offers it.
-                    onDisconnected: (name) => {
+                    onDisconnected: (name, sharedWith) => {
+                      // flow 304 review finding #2: the RESULT must name
+                      // every other provider a shared env var also
+                      // disconnected (e.g. built-in zai/zai-coding sharing
+                      // ZAI_API_KEY) — the row-nav step's own confirmation
+                      // text already warned about this before the operator
+                      // confirmed; this is the durable, transcript-printed
+                      // follow-up.
+                      if (sharedWith.length > 0) {
+                        io.onSystem?.(`◇ ${name} disconnected — this also disconnected: ${sharedWith.join(", ")}.\n`);
+                      }
                       if (name === currentSel.provider) {
                         io.onSystem?.(
                           `◇ ${name} disconnected — this session keeps its already-loaded credential until you /connect another provider or restart.\n`,
