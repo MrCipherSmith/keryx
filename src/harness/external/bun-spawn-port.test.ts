@@ -235,3 +235,43 @@ describe("the line-size ceiling (flow 292 T13)", () => {
     expect(fake.killed()).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe("line framing stays linear in its input (flow 292 T14)", () => {
+  /** Sum of characters every `indexOf("\\n")` call covered while `body` ran — measured, not self-reported. */
+  async function scannedDuring(body: () => Promise<void>): Promise<number> {
+    const original = String.prototype.indexOf;
+    let scanned = 0;
+    String.prototype.indexOf = function (this: string, search: string, from?: number): number {
+      if (search === "\n") scanned += this.length - (from ?? 0);
+      return original.call(this, search, from);
+    } as typeof String.prototype.indexOf;
+    try {
+      await body();
+    } finally {
+      String.prototype.indexOf = original;
+    }
+    return scanned;
+  }
+
+  test("one long line built from many small chunks is scanned about once, not once per chunk", async () => {
+    const chunks = Array.from({ length: 2000 }, () => "x".repeat(100));
+    const fake = fakeBun([...chunks, "\nnext\n"]);
+    const reported: number[] = [];
+    const proc = createBunSpawnPort(fake.impl, { onScan: (chars) => reported.push(chars) }).spawn(["agent"], OPTS);
+    let lines: string[] = [];
+    const scanned = await scannedDuring(async () => {
+      lines = await collect(proc.stdout);
+    });
+    expect(lines).toEqual(["x".repeat(200_000), "next"]);
+    const total = 200_000 + "\nnext\n".length;
+    // Re-scanning the pending buffer per chunk would cover ~200 million characters.
+    expect(scanned).toBeLessThanOrEqual(2 * total);
+    expect(reported.reduce((a, b) => a + b, 0)).toBe(total);
+  });
+
+  test("a line split exactly at chunk boundaries, and a final line with no newline, still frame correctly", async () => {
+    const fake = fakeBun(["ab", "c\r", "\nd", "e\n\n", "tail"]);
+    const proc = createBunSpawnPort(fake.impl).spawn(["agent"], OPTS);
+    expect(await collect(proc.stdout)).toEqual(["abc", "de", "", "tail"]);
+  });
+});

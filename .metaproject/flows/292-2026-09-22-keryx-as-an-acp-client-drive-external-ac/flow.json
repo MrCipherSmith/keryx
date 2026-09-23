@@ -10,7 +10,7 @@
   "title": "keryx as an ACP client: drive external ACP agents with keryx context and policy",
   "status": "in-progress",
   "createdAt": "2026-09-22T23:36:27.199Z",
-  "updatedAt": "2026-09-23T01:05:24.677Z",
+  "updatedAt": "2026-09-23T01:17:24.857Z",
   "source": {
     "type": "description",
     "ref": null
@@ -229,6 +229,26 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Bound the agent's total output: stderr tail, capped transcript, linear line buffering, named stderr overflow",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T01:09:40.950Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -339,6 +359,21 @@
       "at": "2026-09-23T01:05:24.677Z",
       "event": "task-done",
       "detail": "T13: Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding"
+    },
+    {
+      "at": "2026-09-23T01:09:40.837Z",
+      "event": "task-added",
+      "detail": "T14: Bound the agent's total output: stderr tail, capped transcript, linear line buffering, named stderr overflow"
+    },
+    {
+      "at": "2026-09-23T01:09:40.950Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T01:17:24.857Z",
+      "event": "task-done",
+      "detail": "T14: Bound the agent's total output: stderr tail, capped transcript, linear line buffering, named stderr overflow"
     }
   ]
 }

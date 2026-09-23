@@ -504,7 +504,9 @@ export async function runExternalChild(
         },
       );
 
-      const cause = codec.classifyFailure(outcome);
+      // A run stopped for size carries its own named reason; the codec would
+      // only see a killed child (flow 292 T14).
+      const cause = outcome.overflow ?? codec.classifyFailure(outcome);
       const built = buildOutcome({ cause, outcome, argv, worktreePath: created.path });
       return await validateStructuredResult(built, resultSchema);
     } finally {

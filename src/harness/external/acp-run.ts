@@ -197,6 +197,8 @@ export interface AcpChildOptions {
   /** keryx data dir for the session record (tests). */
   readonly dataDir?: string;
   readonly killGraceMs?: number;
+  /** Ceiling on the run's output (assistant text + events). Defaults to 16 MiB; see `./bounded.ts`. */
+  readonly maxOutputBytes?: number;
   readonly onDecision?: (decision: AcpPermissionDecision) => void;
   readonly onFsRequest?: (record: AcpFsRequestRecord) => void;
 }
@@ -244,6 +246,7 @@ export async function runAcpInWorktree(input: RunAcpInWorktreeInput): Promise<Ru
       write: input.write,
       timeoutMs: input.timeoutMs,
       ...(options.killGraceMs === undefined ? {} : { killGraceMs: options.killGraceMs }),
+      ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),
       permission: {
         mode,
         unattended,

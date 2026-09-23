@@ -168,6 +168,22 @@ session, and the session directory contains:
   before the worktree is removed. **It is never applied.** To keep it, review
   it and apply it through keryx's own `apply_patch` gate.
 
+### Size bounds
+
+A foreign agent cannot make keryx hold unbounded output:
+
+- **Lines:** a line longer than 64 MiB with no newline stops the run with a
+  named reason, and the agent is killed.
+- **Stderr:** keryx keeps only its first 16 KiB and last 48 KiB, and counts the
+  bytes it dropped from the middle.
+- **What the run produces:** the assistant text plus the recorded events are
+  capped at 16 MiB. Past that, the run fails with a named reason and the agent
+  is killed.
+
+The Claude and Codex agents, which use the non-ACP path, get the same line and
+stderr bounds and the same 16 MiB cap on their recorded events. Their raw stdout
+is kept as its first 256 KiB and last 768 KiB.
+
 ## What keryx cannot control
 
 These limits come from the protocol, not from a missing feature. Read them

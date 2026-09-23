@@ -65,6 +65,8 @@ import {
   writeTextFileInWorktree,
   type AcpFsRequestRecord,
 } from "./acp-fs";
+import { BoundedTranscript, DEFAULT_MAX_RUN_OUTPUT_BYTES, OutputBudget, eventCost, outputBudgetReason } from "./bounded";
+import { ExternalLineTooLongError } from "./bun-spawn-port";
 import type { ExternalSpawnPort } from "./supervise";
 import type { ExternalEvent } from "./types";
 
@@ -101,6 +103,12 @@ export interface SuperviseAcpInput {
   /** Wall-clock ceiling for the whole run. */
   readonly timeoutMs: number;
   readonly killGraceMs?: number;
+  /**
+   * Ceiling on what the turn PRODUCES — assistant text plus canonical events
+   * (flow 292 T14). Passing it fails the run with a named reason and kills the
+   * agent. Defaults to {@link DEFAULT_MAX_RUN_OUTPUT_BYTES}.
+   */
+  readonly maxOutputBytes?: number;
   readonly clientInfo?: AcpImplementation;
   readonly permission: {
     readonly mode: AcpModeClamp;
@@ -163,7 +171,10 @@ export interface SuperviseAcpOutcome {
   readonly cancelSent: boolean;
   readonly killed: boolean;
   readonly exitCode?: number;
+  /** The agent's stderr: head and tail only, never the whole stream (flow 292 T14). */
   readonly stderr: string;
+  /** Bytes of stderr dropped from the middle to keep that bound. */
+  readonly stderrDroppedBytes: number;
 }
 
 const TIMEOUT = Symbol("timeout");
@@ -222,16 +233,43 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
   const decisions: AcpPermissionDecision[] = [];
   const fsRequests: AcpFsRequestRecord[] = [];
   const toolCalls = new Map<string, AcpToolCallRecord>();
-  const stderr: string[] = [];
+  // Bounded, not a list of every line: a child writing endless lines to stderr
+  // must not be able to make keryx hold them all (flow 292 T14).
+  const stderr = new BoundedTranscript();
+  const budget = new OutputBudget(input.maxOutputBytes ?? DEFAULT_MAX_RUN_OUTPUT_BYTES);
+  let abortReason: string | undefined;
   let assistantText = "";
   let usage: AcpUsage | undefined;
   let cost: AcpCost | undefined;
   let killed = false;
   let exitCode: number | undefined;
 
-  const emit = (event: ExternalEvent): void => {
+  /**
+   * Stop the run NOW with a named reason: kill the agent and settle every
+   * pending request with that reason, so whatever the run is awaiting returns
+   * and `finish` reports this reason rather than a downstream symptom.
+   */
+  const abortRun = (reason: string): void => {
+    if (abortReason !== undefined) return;
+    abortReason = reason;
+    killed = true;
+    try {
+      child.kill();
+    } catch {
+      // Already gone.
+    }
+    requests.close(reason);
+  };
+  /** Record one event against the output budget. False once the run has been stopped. */
+  const emit = (event: ExternalEvent): boolean => {
+    if (abortReason !== undefined) return false;
+    if (!budget.add(eventCost(event as ExternalEvent & Record<string, unknown>))) {
+      abortRun(outputBudgetReason(budget.limit));
+      return false;
+    }
     events.push(event);
     deps.onEvent?.(event);
+    return true;
   };
   const recordFs = (record: AcpFsRequestRecord): void => {
     fsRequests.push(record);
@@ -423,8 +461,7 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
         const text = content !== undefined && content.type === "text" ? content.text : "";
         if (text.length === 0) return;
         if (update.sessionUpdate === "agent_message_chunk") {
-          assistantText += text;
-          emit({ kind: "assistant_text", text });
+          if (emit({ kind: "assistant_text", text })) assistantText += text;
         } else if (update.sessionUpdate === "agent_thought_chunk") {
           emit({ kind: "thinking", text });
         } else {
@@ -527,6 +564,7 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
       stderr.push(`[keryx] stdout read failed: ${message}`);
       closeReason = message;
       killed = true;
+      if (error instanceof ExternalLineTooLongError) abortRun(message);
     } finally {
       requests.close(closeReason);
     }
@@ -534,8 +572,12 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
   void (async (): Promise<void> => {
     try {
       for await (const line of child.stderr) stderr.push(line);
-    } catch {
-      // A stderr read failure loses diagnostics, never the run.
+    } catch (error) {
+      // The line ceiling on stderr is the run's reason, not a lost diagnostic:
+      // the port has already killed the child, and without this the run would
+      // read "the agent closed its stdout" (flow 292 T14). Any other stderr read
+      // failure loses diagnostics only.
+      if (error instanceof ExternalLineTooLongError) abortRun(error.message);
     }
   })();
   const exited = child.exited.then(
@@ -669,6 +711,11 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
   }
 
   async function finish(): Promise<SuperviseAcpOutcome> {
+    // A stop for cause wins over whatever symptom the interrupted step reported.
+    if (abortReason !== undefined) {
+      status = "failed";
+      failure = abortReason;
+    }
     // Let answers to anything the agent asked in its last breath go out before
     // the process goes away; bounded by the grace window.
     if (inflight.size > 0) {
@@ -676,11 +723,13 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
       await Promise.race([Promise.allSettled([...inflight]), grace.promise]);
       grace.cancel();
     }
-    if (status === "completed") {
-      emit({ kind: "child_finished", text: assistantText });
-    } else {
-      emit({ kind: "child_failed", message: failure ?? "the ACP run failed" });
-    }
+    // The terminal event is recorded outside the budget: it is how the run ends.
+    const terminal: ExternalEvent =
+      status === "completed"
+        ? { kind: "child_finished", text: assistantText }
+        : { kind: "child_failed", message: failure ?? "the ACP run failed" };
+    events.push(terminal);
+    deps.onEvent?.(terminal);
     // An ACP agent stays alive waiting for the next prompt; this run is over.
     await stop();
     requests.close("the run is over");
@@ -707,7 +756,8 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
       cancelSent,
       killed,
       ...(exitCode === undefined ? {} : { exitCode }),
-      stderr: stderr.join("\n"),
+      stderr: stderr.text(),
+      stderrDroppedBytes: stderr.droppedBytes,
     };
   }
 }

@@ -31,3 +31,16 @@
   6. The guide now has a warning that the MCP server's reads cover the whole real project, skip the bridge, and that some read tools write `.metaproject/data/**`.
   Every mutation broke its test. Wide affected set: 4843 pass, 13 skip, 0 fail. Typecheck and eslint clean, health PASS.
 - 2026-09-23T01:05:24.677Z - task-done: T13: Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding
+- 2026-09-23T01:09:40.837Z - task-added: T14: Bound the agent's total output: stderr tail, capped transcript, linear line buffering, named stderr overflow
+- 2026-09-23T01:09:40.950Z - task-attempt: T14: started (attempt 1)
+- 2026-09-23T01:16:44Z - T14 security re-probe fixes (uncommitted, not staged).
+  1. New `src/harness/external/bounded.ts`:
+     - `BoundedTranscript` keeps the head and tail of diagnostic streams (stderr: 16 KiB head + 48 KiB tail) and counts the dropped bytes.
+     - `OutputBudget` caps a run's output at 16 MiB (assistant text + events, 64 B overhead per event).
+     - The ACP client keeps stderr in a `BoundedTranscript`, budgets assistant text and events, and on overflow calls `abortRun`: named reason, agent killed, pending requests closed. The terminal event is exempt from the budget.
+     - The line-stream supervisor used by claude/codex is bounded the same way: stdout 256 KiB head + 768 KiB tail, stderr 16+48 KiB, events budgeted. On overflow the child is killed and `outcome.overflow` becomes the runtime's cause.
+     - The codex MCP path is not affected: its stderr is inherited or drained, not retained.
+  2. `readLines` is linear: pending pieces are kept in an array with a running length, each chunk is scanned once, and the line is joined once. Checked with an `indexOf` spy and an `onScan` counter.
+  3. A stderr line past the line cap now aborts the ACP run with that reason, instead of reporting "closed its stdout".
+  Every mutation broke its test. Wide affected set: 4706 pass, 13 skip, 0 fail. Typecheck and eslint clean, doc links 0 broken, health PASS.
+- 2026-09-23T01:17:24.857Z - task-done: T14: Bound the agent's total output: stderr tail, capped transcript, linear line buffering, named stderr overflow
