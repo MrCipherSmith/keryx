@@ -42,7 +42,7 @@
 // namespace, not a corner of a generated one. This also matches the shape the
 // flow's own description.md names first (`.metaproject/triggers.json`).
 
-import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { readConfigFile } from "../lib/config-dir";
@@ -134,8 +134,14 @@ export interface AgentTaskGrants {
   readonly tools: readonly string[];
   /** Repositories every repo-scoped granted tool is limited to. */
   readonly repos: readonly string[];
-  /** Absolute program paths resolved when the operator confirmed (`{ gh: "/usr/bin/gh" }`). */
+  /** Absolute program paths resolved when the operator confirmed (`{ gh: "/usr/bin/gh" }`). Each basename equals its program. */
   readonly bins: Readonly<Record<string, string>>;
+  /**
+   * Flow 295 (F1d): per program, the realpath and the sha256 of the binary as it was when
+   * the operator confirmed. Both are covered by the signed hash and checked again before
+   * every `execFile`, so a swapped binary or a repointed symlink refuses with `grants-changed`.
+   */
+  readonly binDigests: Readonly<Record<string, { readonly realpath: string; readonly sha256: string }>>;
   /** The account the granted tools act as, as shown on the confirmation card (display only). */
   readonly account?: string;
 }
@@ -345,6 +351,20 @@ function grantsProblems(grants: Record<string, unknown>): string[] {
     for (const [program, bin] of Object.entries(bins as Record<string, unknown>)) {
       if (typeof bin !== "string" || !path.isAbsolute(bin)) {
         problems.push(`action.grants.bins.${program}: must be an absolute path`);
+      } else if (path.basename(bin) !== program) {
+        // Flow 295 (F1d): `bins.gh` must be a program named `gh`, never `/bin/bash`.
+        problems.push(`action.grants.bins.${program}: "${bin}" is not a program named "${program}"`);
+      }
+    }
+  }
+  const digests = grants.binDigests ?? {};
+  if (digests === null || typeof digests !== "object" || Array.isArray(digests)) {
+    problems.push("action.grants.binDigests: must be an object");
+  } else {
+    for (const [program, digest] of Object.entries(digests as Record<string, unknown>)) {
+      const d = digest as { realpath?: unknown; sha256?: unknown } | null;
+      if (d === null || typeof d !== "object" || typeof d.realpath !== "string" || !path.isAbsolute(d.realpath) || typeof d.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(d.sha256)) {
+        problems.push(`action.grants.binDigests.${program}: must be {realpath (absolute), sha256 (hex)}`);
       }
     }
   }
@@ -491,6 +511,7 @@ function normalizeAgentTask(action: AgentTaskAction): AgentTaskAction {
       tools: [...(grants.tools ?? [])],
       repos: [...(grants.repos ?? [])],
       bins: { ...(grants.bins ?? {}) },
+      binDigests: { ...(grants.binDigests ?? {}) },
       ...(grants.account !== undefined ? { account: grants.account } : {}),
     },
     report: { keep: action.report?.keep ?? DEFAULT_AGENT_TASK_REPORT_KEEP },
@@ -498,16 +519,19 @@ function normalizeAgentTask(action: AgentTaskAction): AgentTaskAction {
 }
 
 /**
- * Flow 295 (AC5): the hash an operator confirms. It covers everything that decides what an
- * `agent-task` run does: its name, cadence, prompt, runner, budget and grants.
- * `enabled` is excluded on purpose, because pause and resume are not a change of
- * content. The input is the RAW entry as stored (before defaults are filled),
- * canonicalised by sorting object keys, so the same JSON always hashes the same.
+ * Flow 295 (AC5): the content an operator confirms. It covers everything that decides what
+ * an `agent-task` run does: its name, cadence, prompt, runner, budget and grants,
+ * including the realpath and sha256 of every granted binary. `enabled` is excluded on
+ * purpose, because pause and resume are not a change of content. The input is the RAW
+ * entry as stored (before defaults are filled), canonicalised by sorting object keys.
+ *
+ * Flow 295 (F1): this is signed with an HMAC keyed by a per-machine secret
+ * (`./schedule-key.ts`), never merely hashed. Anyone could compute a plain hash for a
+ * committed or forged store; only this machine's key can produce the MAC.
  */
-export function scheduleContentHash(entry: unknown): string {
+export function scheduleContentCanonical(entry: unknown): string {
   const raw = (entry ?? {}) as Record<string, unknown>;
-  const content = { name: raw.name, on: raw.on, action: raw.action };
-  return createHash("sha256").update(canonicalJson(content)).digest("hex");
+  return canonicalJson({ name: raw.name, on: raw.on, action: raw.action });
 }
 
 function canonicalJson(value: unknown): string {
@@ -685,9 +709,33 @@ function readTriggerFile(file: string): TriggerFileRead {
  * silently win would make that resolution depend on file order without
  * saying so.
  */
+/**
+ * Flow 295 (F1b): is the schedule store tracked by git? A tracked store is shared
+ * content, and so possibly someone else's. It is refused whole. `git ls-files
+ * --error-unmatch` exits 0 only when the path is in the index. Any other exit
+ * (untracked, not a repository, no git) means "not tracked".
+ */
+export function isScheduleStoreTracked(projectRoot: string): boolean {
+  try {
+    execFileSync("git", ["ls-files", "--error-unmatch", "--", path.relative(projectRoot, scheduleStorePath(projectRoot))], {
+      cwd: projectRoot,
+      stdio: "ignore",
+      timeout: 10_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function loadTriggersConfig(projectRoot: string): TriggersLoadResult {
   const config = readTriggerFile(triggersConfigPath(projectRoot));
-  const store = readTriggerFile(scheduleStorePath(projectRoot));
+  let store = readTriggerFile(scheduleStorePath(projectRoot));
+  let storeTracked = false;
+  if (store.problem === undefined && isScheduleStoreTracked(projectRoot)) {
+    storeTracked = true;
+    store = { problem: "unreadable" };
+  }
 
   if (config.problem !== undefined && config.problem !== "absent") {
     return { triggers: [], rejected: [], fileProblem: config.problem };
@@ -699,6 +747,15 @@ export function loadTriggersConfig(projectRoot: string): TriggersLoadResult {
   const triggers: TriggerEntry[] = [];
   const rejected: RejectedTriggerEntry[] = [];
   const seenNames = new Set<string>();
+  // Flow 295 (F4): a local schedule's name wins over a committed trigger of the
+  // same name. Otherwise a committed entry could take over the operator's timer.
+  const storeNames = new Set<string>(
+    store.problem === undefined
+      ? store.entries
+          .map((e) => (e !== null && typeof e === "object" ? (e as { name?: unknown }).name : undefined))
+          .filter((n): n is string => typeof n === "string")
+      : [],
+  );
 
   const take = (candidates: readonly unknown[], source: TriggerEntrySource): void => {
     candidates.forEach((candidate, index) => {
@@ -718,6 +775,20 @@ export function loadTriggersConfig(projectRoot: string): TriggersLoadResult {
         reasons = [
           "action.kind: an agent-task is created with `keryx schedule add` (or /schedule in the shell) and lives in the " +
             "per-machine schedule store — never in the committed triggers.json, where a merged edit could change its prompt or grants",
+        ];
+      }
+      const fireKind = (candidate as { on?: { kind?: unknown } } | null)?.on?.kind;
+      if (reasons.length === 0 && source === "store" && kind !== "agent-task") {
+        reasons = ["action.kind: the schedule store holds only agent-task schedules"];
+      }
+      if (reasons.length === 0 && (source === "store" || kind === "agent-task") && fireKind !== "schedule") {
+        // Flow 295 (F1c): a stored schedule never fires on a git event, so it is never hooked.
+        reasons = ['on.kind: a stored schedule / agent-task fires only on {"kind": "schedule"} — never on a git event'];
+      }
+      if (reasons.length === 0 && source === "config" && candidateName !== undefined && storeNames.has(candidateName)) {
+        reasons = [
+          `name: "${candidateName}" is also a local schedule on this machine — the local schedule wins and this committed ` +
+            "trigger is refused. Rename one of them.",
         ];
       }
       if (reasons.length === 0 && candidateName !== undefined && seenNames.has(candidateName)) {
@@ -746,7 +817,12 @@ export function loadTriggersConfig(projectRoot: string): TriggersLoadResult {
     rejected.push({
       index: -1,
       name: undefined,
-      reasons: [`schedule store ${scheduleStorePath(projectRoot)} could not be read (${store.problem}) — its schedules do not run`],
+      reasons: [
+        storeTracked
+          ? `schedule store ${scheduleStorePath(projectRoot)} is tracked by git — it is per-machine and must never be ` +
+            "committed; a committed store may be someone else's, so none of its schedules run. `git rm --cached` it."
+          : `schedule store ${scheduleStorePath(projectRoot)} could not be read (${store.problem}) — its schedules do not run`,
+      ],
       source: "store",
     });
   }

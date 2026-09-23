@@ -76,8 +76,13 @@ export interface TriggerRunOverrides {
 }
 
 /** One `keryx trigger run <name>` pass against `projectRoot`, with optional seams (tests). */
-export async function runTriggerOnce(projectRoot: string, name: string, overrides: TriggerRunOverrides = {}): Promise<void> {
-  await runTrigger(projectRoot, name, overrides);
+export async function runTriggerOnce(
+  projectRoot: string,
+  name: string,
+  overrides: TriggerRunOverrides = {},
+  options: { readonly scheduleOnly?: boolean } = {},
+): Promise<void> {
+  await runTrigger(projectRoot, name, overrides, options);
 }
 
 /**
@@ -130,17 +135,19 @@ export async function triggerCommand(args: string[]): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function runSubcommand(args: string[]): Promise<void> {
-  const name = args[1];
   if (args[1] === "--help" || args[1] === "-h") {
     printHelp();
     return;
   }
+  // Flow 295 (F4): `--schedule` resolves only the per-machine schedule store.
+  const scheduleOnly = args.includes("--schedule");
+  const name = args.slice(1).find((a) => a !== "--schedule");
   if (!name) {
-    console.error("Usage: keryx trigger run <name>");
+    console.error("Usage: keryx trigger run <name>   (or: keryx trigger run --schedule <name>)");
     process.exitCode = 1;
     return;
   }
-  await runTrigger(process.cwd(), name);
+  await runTrigger(process.cwd(), name, {}, { scheduleOnly });
 }
 
 /**
@@ -153,8 +160,13 @@ async function runSubcommand(args: string[]): Promise<void> {
  * runner path on a failed child) is left to produce a non-zero exit, which is
  * exactly the line AC2 draws.
  */
-async function runTrigger(projectRoot: string, name: string, overrides: TriggerRunOverrides = {}): Promise<void> {
-  const resolution = resolveTriggerForRun(projectRoot, name);
+async function runTrigger(
+  projectRoot: string,
+  name: string,
+  overrides: TriggerRunOverrides = {},
+  options: { readonly scheduleOnly?: boolean } = {},
+): Promise<void> {
+  const resolution = resolveTriggerForRun(projectRoot, name, options);
 
   switch (resolution.kind) {
     case "config-absent": {
@@ -938,6 +950,8 @@ function printHelp(): void {
 
 Usage:
   keryx trigger run <name>        Perform exactly one pass of <name>'s action
+  keryx trigger run --schedule <name>
+                                  The same, resolving only a local schedule (\`keryx schedule add\`)
   keryx trigger install           Install a git hook block for every event-fired entry
   keryx trigger uninstall         Remove those hook blocks (other managed blocks are untouched)
   keryx trigger list              List declared entries: enabled state, fire, action, hook status

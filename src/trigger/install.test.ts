@@ -66,7 +66,7 @@ describe("systemd --user", () => {
     const timer = await readFile(path.join(unitDir, `${base}.timer`), "utf8");
     expect(service.startsWith(`# keryx-managed ${projectScheduleHash(root)} check-github\n`)).toBe(true);
     expect(service).toContain(`WorkingDirectory=${root}`);
-    expect(service).toContain("ExecStart=/bin/true /bin/true trigger run check-github");
+    expect(service).toContain("ExecStart=/bin/true /bin/true trigger run --schedule check-github");
     expect(timer).toContain("\nOnCalendar=*-*-* 00,04,08,12,16,20:00:00\n");
     expect(timer).toContain("\nPersistent=true\n");
     expect(host.calls).toEqual(["systemctl --user daemon-reload", `systemctl --user enable --now ${base}.timer`]);

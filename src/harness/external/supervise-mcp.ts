@@ -33,7 +33,7 @@ import {
   MCP_ELICITATION_TOOL_PREFIX,
 } from "../../mcp-client/elicitation";
 import { isExecApprovalRequestEvent } from "../../mcp-client/wire";
-import { touchesSacConfirmReview } from "../../lib/command-risk";
+import { touchesHumanConfirmation } from "../../lib/command-risk";
 import { resolveApprovalDecision, type ApprovalGateDecision, type PermissionMode } from "../../commands/permission-mode";
 import {
   agentConfig,
@@ -254,7 +254,7 @@ export async function superviseCodexMcpRun(
     // `extractCommandTextForClassification` — one extraction, not a second
     // one that could drift.
     const commandText = extractCommandTextForClassification(pending.vendor) ?? "";
-    const sacReviewConfirmation = touchesSacConfirmReview(commandText);
+    const sacReviewConfirmation = touchesHumanConfirmation(commandText);
 
     // AC6: resolveApprovalDecision is called for EVERY received elicitation,
     // whether or not it could be correlated — an uncorrelated one still gets

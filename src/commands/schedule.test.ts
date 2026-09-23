@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 // Flow 295 (AC9, and AC6's "declining writes nothing"): `keryx schedule` end to end,
 // using a temporary unit directory and a fake systemctl. Nothing is installed on this
 // machine and no model is called: the provider is "fake", which the dispatcher refuses
@@ -13,6 +14,34 @@ import { loadTriggersConfig, scheduleStorePath } from "../trigger/config";
 import { readTriggerRuns } from "../trigger/record";
 import type { CommandResult, ScheduleHost } from "../trigger/install";
 import { projectScheduleHash } from "../trigger/schedule";
+
+// Flow 295 (F1): confirming a schedule creates the per-machine signing key in keryx's
+// user-global directory. Point HOME and XDG_DATA_HOME at a throwaway directory so no
+// test ever writes the developer's real key.
+let keyHome = "";
+const savedKeyEnv = { HOME: process.env["HOME"], XDG_DATA_HOME: process.env["XDG_DATA_HOME"] };
+beforeEach(async () => {
+  keyHome = await mkdtemp(path.join(tmpdir(), "keryx-schedule-key-home-"));
+  process.env["HOME"] = keyHome;
+  process.env["XDG_DATA_HOME"] = path.join(keyHome, ".local", "share");
+});
+afterEach(async () => {
+  for (const [name, value] of Object.entries(savedKeyEnv)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+  await rm(keyHome, { recursive: true, force: true });
+});
+
+/** A real, executable stand-in for a granted program, outside every project root. */
+function fakeProgram(program: string): string {
+  const dir = path.join(keyHome, "bin");
+  mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, program);
+  writeFileSync(file, "#!/bin/sh\necho '[]'\n", { mode: 0o755 });
+  return file;
+}
+
 
 let root = "";
 let unitDir = "";
@@ -36,7 +65,7 @@ function deps(extra: Partial<ScheduleCommandDeps> = {}): ScheduleCommandDeps {
     cwd: root,
     host,
     now: () => new Date(2026, 8, 23, 5, 7, 0),
-    resolveProgram: (p) => `/opt/bin/${p}`,
+    resolveProgram: (p) => fakeProgram(p),
     accountOf: async () => "MrCipherSmith",
     ...extra,
   };
@@ -91,10 +120,10 @@ describe("keryx schedule add", () => {
     expect(text).toContain("runner: fake/m, mode ask");
     expect(text).toContain("budget: ceiling $0.5");
     expect(text).toContain("network: off");
-    expect(text).toContain("  - gh.pr.list: /opt/bin/gh");
+    expect(text).toContain(`  - gh.pr.list: ${path.join(keyHome, "bin", "gh")}`);
     expect(text).toContain("  account: gh: MrCipherSmith");
     expect(text).toContain(`install: systemd — ${path.join(unitDir, `keryx-${projectScheduleHash(root)}-check-github.service`)} + .timer`);
-    expect(text).toContain("runs: /bin/true /bin/true trigger run check-github");
+    expect(text).toContain("runs: /bin/true /bin/true trigger run --schedule check-github");
     expect(text).toContain("linger: off");
     expect(text).toContain("not confirmed — nothing was written or installed");
     expect(existsSync(scheduleStorePath(root))).toBe(false);

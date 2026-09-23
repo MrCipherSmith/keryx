@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync, realpathSync } from "node:fs";
 // Flow 295 (AC2, AC3, AC5, AC14): an `agent-task` schedule end to end through
 // `runTriggerOnce`. The model is scripted, and the sandbox is the real one where
 // the test is about containment. The granted tool is a real `execFile` of a fake
@@ -17,6 +19,25 @@ import { appendTriggerRunRecord, openReservations, readTriggerRuns, type Trigger
 import { addConfirmedSchedule, readScheduleStore } from "../trigger/store";
 import { buildGrantedArgv, grantedToolSpec } from "../trigger/granted-tools";
 import { writeFileAtomic } from "../lib/fs";
+
+// Flow 295 (F1): confirming a schedule creates the per-machine signing key in keryx's
+// user-global directory. Point HOME and XDG_DATA_HOME at a throwaway directory so no
+// test ever writes the developer's real key.
+let keyHome = "";
+const savedKeyEnv = { HOME: process.env["HOME"], XDG_DATA_HOME: process.env["XDG_DATA_HOME"] };
+beforeEach(async () => {
+  keyHome = await mkdtemp(path.join(tmpdir(), "keryx-schedule-key-home-"));
+  process.env["HOME"] = keyHome;
+  process.env["XDG_DATA_HOME"] = path.join(keyHome, ".local", "share");
+});
+afterEach(async () => {
+  for (const [name, value] of Object.entries(savedKeyEnv)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+  await rm(keyHome, { recursive: true, force: true });
+});
+
 
 const DESCRIPTION: ProviderDescription = {
   capabilities: {
@@ -90,9 +111,28 @@ function entry(overrides: { mode?: "ask" | "trust"; network?: "off" | "full"; to
         tools: overrides.tools ?? [],
         repos: ["MrCipherSmith/keryx"],
         bins: overrides.bins ?? {},
+        binDigests: digestsFor(overrides.bins ?? {}),
       },
     },
   };
+}
+
+/** A harmless `gh` outside the project, for tests whose subject is not the granted tool. */
+async function stubGh(): Promise<string> {
+  const bin = path.join(aside, "gh");
+  await writeFile(bin, "#!/bin/sh\necho '[]'\n", "utf8");
+  await chmod(bin, 0o755);
+  return bin;
+}
+
+/** What `draftSchedule` records per granted program: its realpath and sha256. */
+function digestsFor(bins: Record<string, string>): Record<string, { realpath: string; sha256: string }> {
+  const out: Record<string, { realpath: string; sha256: string }> = {};
+  for (const [program, bin] of Object.entries(bins)) {
+    const real = realpathSync(bin);
+    out[program] = { realpath: real, sha256: createHash("sha256").update(readFileSync(real)).digest("hex") };
+  }
+  return out;
 }
 
 async function lastRecord(): Promise<TriggerRunRecord> {
@@ -294,7 +334,7 @@ describe("AC5: the posture and the floor hold under every grant, and a changed s
   for (const mode of ["ask", "trust"] as const) {
     for (const network of ["off", "full"] as const) {
       test(`mode ${mode}, network ${network}: every forbidden command is refused by the floor`, async () => {
-        await addConfirmedSchedule(root, entry({ mode, network, tools: ["gh.pr.list"], bins: { gh: "/bin/false" } }));
+        await addConfirmedSchedule(root, entry({ mode, network, tools: ["gh.pr.list"], bins: { gh: await stubGh() } }));
         const rounds = FORBIDDEN.map((command, i) => toolCall("shell_exec", { command }, `f${i}`));
         const provider = scripted([...rounds, finalText("done")]);
         await run(provider);
@@ -320,10 +360,10 @@ describe("AC5: the posture and the floor hold under every grant, and a changed s
   });
 
   test("a schedule edited after confirmation is refused with grants-changed and calls no model", async () => {
-    await addConfirmedSchedule(root, entry({ tools: ["gh.pr.list"], bins: { gh: "/bin/false" } }));
+    await addConfirmedSchedule(root, entry({ tools: ["gh.pr.list"], bins: { gh: await stubGh() } }));
     // Widen the grant behind the confirmed hash, the way a hand edit would.
     const stored = await readScheduleStore(root);
-    const widened = { ...stored[0]!, action: { ...(stored[0]!["action"] as Record<string, unknown>), grants: { network: "full", tools: ["gh.pr.list"], repos: ["MrCipherSmith/keryx"], bins: { gh: "/bin/false" } } } };
+    const widened = { ...stored[0]!, action: { ...(stored[0]!["action"] as Record<string, unknown>), grants: { network: "full", tools: ["gh.pr.list"], repos: ["MrCipherSmith/keryx"], bins: { gh: await stubGh() } } } };
     await writeFileAtomic(scheduleStorePath(root), JSON.stringify({ schemaVersion: 1, triggers: [widened] }));
     const provider = scripted([finalText("never")]);
     await run(provider);

@@ -39,7 +39,12 @@ export interface ScheduleCommandDeps {
   readonly resolveProgram?: DraftContext["resolveProgram"];
   readonly accountOf?: DraftContext["accountOf"];
   readonly cwd?: string;
+  /** The environment to read the agent-shell marker from (default `process.env`). */
+  readonly env?: Record<string, string | undefined>;
 }
+
+/** Subcommands that create, change or run a schedule: never from inside an agent's shell (flow 295 F2). */
+const OPERATOR_ONLY = new Set(["add", "remove", "pause", "resume", "run"]);
 
 async function ttyConfirm(question: string): Promise<boolean> {
   if (!process.stdin.isTTY) return false;
@@ -108,6 +113,17 @@ does not run while you are logged out, and keryx never enables linger for you.
 export async function scheduleCommand(args: string[], deps: ScheduleCommandDeps = {}): Promise<void> {
   const sub = args[0];
   const cwd = deps.cwd ?? process.cwd();
+  // Flow 295 (F2): `shell_exec` children carry KERYX_TOOL_CALL=1. A schedule is
+  // created or changed only by the operator, at a terminal or through the shell's
+  // card. `--yes` from an agent's shell would skip that card, so it is refused.
+  if (sub !== undefined && OPERATOR_ONLY.has(sub) && (deps.env ?? process.env)["KERYX_TOOL_CALL"] === "1") {
+    console.error(
+      `keryx schedule ${sub}: refused inside an agent's shell (KERYX_TOOL_CALL=1). A schedule is created or changed only by ` +
+        "the operator: run this in your own terminal, or confirm the card that /schedule or the schedule_create tool shows.",
+    );
+    process.exitCode = 1;
+    return;
+  }
   try {
     switch (sub) {
       case undefined:
@@ -128,7 +144,7 @@ export async function scheduleCommand(args: string[], deps: ScheduleCommandDeps 
       case "run": {
         const name = args[1];
         if (name === undefined) throw new Error("usage: keryx schedule run <name>");
-        await runTriggerOnce(cwd, name);
+        await runTriggerOnce(cwd, name, {}, { scheduleOnly: true });
         return;
       }
       case "remove":

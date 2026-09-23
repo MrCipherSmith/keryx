@@ -6,7 +6,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { loadTriggersConfig, scheduleContentHash, scheduleStorePath, triggerEntryProblems, triggersConfigPath } from "./config";
+import { execFileSync } from "node:child_process";
+import { loadTriggersConfig, scheduleContentCanonical, scheduleStorePath, triggerEntryProblems, triggersConfigPath } from "./config";
 import { GRANTED_TOOL_CATALOGUE, grantedToolProblems, type GrantedToolSpec } from "./granted-tools";
 
 async function projectWith(content: string | undefined): Promise<string> {
@@ -453,7 +454,7 @@ describe("flow 295: agent-task entries", () => {
     if (entry.action.kind !== "agent-task") throw new Error("expected an agent-task");
     expect(entry.action.dispatch.permissionMode).toBe("ask");
     expect(entry.action.dispatch.maxSeconds).toBe(600);
-    expect(entry.action.grants).toEqual({ network: "off", tools: ["gh.pr.list"], repos: ["MrCipherSmith/keryx"], bins: { gh: "/usr/bin/gh" } });
+    expect(entry.action.grants).toEqual({ network: "off", tools: ["gh.pr.list"], repos: ["MrCipherSmith/keryx"], bins: { gh: "/usr/bin/gh" }, binDigests: {} });
     expect(entry.action.report.keep).toBe(20);
   });
 
@@ -517,11 +518,49 @@ describe("flow 295: agent-task entries", () => {
     expect(reasonsOf(root, "check-github")).toContain("action.grants.repos: required when granted tools are listed");
   });
 
-  test("scheduleContentHash ignores key order and `enabled`, but changes with the grants", () => {
+  test("scheduleContentCanonical ignores key order and `enabled`, but changes with the grants", () => {
     const a = agentTask();
     const reordered = { action: a["action"], on: a["on"], name: a["name"], enabled: false };
-    expect(scheduleContentHash(reordered)).toBe(scheduleContentHash(a));
+    expect(scheduleContentCanonical(reordered)).toBe(scheduleContentCanonical(a));
     const widened = agentTask({ grants: { network: "full", tools: ["gh.pr.list"], repos: ["MrCipherSmith/keryx"], bins: { gh: "/usr/bin/gh" } } });
-    expect(scheduleContentHash(widened)).not.toBe(scheduleContentHash(a));
+    expect(scheduleContentCanonical(widened)).not.toBe(scheduleContentCanonical(a));
+  });
+
+  // --- flow 295 security review --------------------------------------------------
+
+  test("F1c: a stored schedule that fires on a git event is refused on load, and never hooked", async () => {
+    const root = await storeWith([{ ...agentTask(), on: { kind: "event", event: "post-merge" } }]);
+    expect(reasonsOf(root, "check-github")).toContain("fires only on {\"kind\": \"schedule\"}");
+    expect(loadTriggersConfig(root).triggers).toEqual([]);
+  });
+
+  test("F1c: the store holds only agent-task schedules", async () => {
+    const root = await storeWith([{ name: "sneaky", on: { kind: "schedule", cron: "0 2 * * *" }, action: { kind: "rebuild" } }]);
+    expect(reasonsOf(root, "sneaky")).toContain("the schedule store holds only agent-task schedules");
+  });
+
+  test("F1d: bins must name the program they stand for — bins.gh = /bin/bash is refused", async () => {
+    const root = await storeWith([agentTask({ grants: { network: "off", tools: ["gh.pr.list"], repos: ["a/b"], bins: { gh: "/bin/bash" } } })]);
+    expect(reasonsOf(root, "check-github")).toContain('"/bin/bash" is not a program named "gh"');
+  });
+
+  test("F1b: a schedule store tracked by git is refused whole", async () => {
+    const root = await storeWith([agentTask()]);
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root });
+    expect(loadTriggersConfig(root).triggers.map((t) => t.name)).toEqual(["check-github"]);
+    execFileSync("git", ["add", "-f", path.relative(root, scheduleStorePath(root))], { cwd: root });
+    const loaded = loadTriggersConfig(root);
+    expect(loaded.triggers).toEqual([]);
+    expect(loaded.rejected.map((r) => r.reasons.join(" ")).join("\n")).toContain("is tracked by git");
+  });
+
+  test("F4: a committed trigger with a local schedule's name is refused; the local schedule is kept", async () => {
+    const root = await storeWith(
+      [agentTask({}, "nightly")],
+      [{ name: "nightly", on: { kind: "schedule", cron: "0 2 * * *" }, action: { kind: "rebuild" } }],
+    );
+    const loaded = loadTriggersConfig(root);
+    expect(loaded.triggers.map((t) => `${t.name}/${t.source}`)).toEqual(["nightly/store"]);
+    expect(loaded.rejected.find((r) => r.source === "config")?.reasons.join(" ")).toContain("also a local schedule on this machine");
   });
 });

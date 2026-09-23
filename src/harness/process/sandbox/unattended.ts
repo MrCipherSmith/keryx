@@ -63,6 +63,13 @@ export interface UnattendedSandboxInput {
   readonly network: boolean;
   /** Extra read-only roots (the repository's git dir, the keryx package, `node_modules`). */
   readonly readOnly: readonly string[];
+  /**
+   * Flow 295: directories hidden behind an empty tmpfs, like $HOME, before the worktree
+   * and scratch home are bound back. Pass the shared parent of every run's scratch
+   * directory, and one run then cannot read another's, even when TMPDIR is not `/tmp`
+   * (a host `/var/tmp` is otherwise visible read-only through `--ro-bind / /`).
+   */
+  readonly hide?: readonly string[];
   /** The operator's environment — read for PATH/locale and the opt-outs, never passed through. */
   readonly env: Record<string, string | undefined>;
   readonly home: string;
@@ -200,6 +207,9 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   if (runtimeDir !== undefined && runtimeDir.length > 0 && isDir(runtimeDir)) {
     const resolved = real(runtimeDir);
     if (![...hidden].some((dir) => resolved === dir || resolved.startsWith(`${dir}${path.sep}`))) hidden.add(resolved);
+  }
+  for (const extra of input.hide ?? []) {
+    if (isDir(extra)) hidden.add(real(extra));
   }
   for (const dir of hidden) args.push("--tmpfs", dir);
 

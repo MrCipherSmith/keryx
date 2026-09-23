@@ -22,7 +22,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { ensureLocksDir, keryxLocksDir } from "../lib/maintenance-lock";
-import { scheduleContentHash, scheduleStorePath, TRIGGERS_SCHEMA_VERSION, triggerEntryProblems } from "./config";
+import { scheduleContentCanonical, scheduleStorePath, TRIGGERS_SCHEMA_VERSION, triggerEntryProblems } from "./config";
+import { ensureScheduleKey, scheduleMac } from "./schedule-key";
 import { triggerDataDir } from "./record";
 
 /** What `.metaproject/data/trigger/.gitignore` lists: the store and the reports. `runs.jsonl` stays trackable. */
@@ -97,13 +98,16 @@ async function writeRawStore(projectRoot: string, entries: readonly Record<strin
 /**
  * Add a confirmed schedule. Refuses a malformed entry, and refuses a name already in the store.
  * `confirmedHash` is computed HERE from the exact entry being stored, so a caller
- * cannot hand in a hash that does not match what is written.
+ * cannot hand in a hash that does not match what is written. Since flow 295 F1 it is an
+ * HMAC keyed by this machine's schedule key (`./schedule-key.ts`), which is created on first use.
  */
 export async function addConfirmedSchedule(projectRoot: string, entry: Record<string, unknown>): Promise<StoredScheduleEntry> {
   const { confirmedHash: _ignored, ...content } = entry;
   const problems = triggerEntryProblems(content);
   if (problems.length > 0) throw new Error(`schedule refused: ${problems.join("; ")}`);
-  const stored = { ...content, confirmedHash: scheduleContentHash(content) } as StoredScheduleEntry;
+  const key = ensureScheduleKey();
+  if (!key.ok) throw new Error(`schedule refused: ${key.reason}`);
+  const stored = { ...content, confirmedHash: scheduleMac(key.key, scheduleContentCanonical(content)) } as StoredScheduleEntry;
   await withStoreLock(projectRoot, async () => {
     const entries = await readRawStore(projectRoot);
     if (entries.some((e) => e["name"] === stored.name)) {

@@ -34,8 +34,9 @@
 // The operator's token therefore never reaches the model, the provider or the report (AC3).
 
 import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { realpathSync } from "node:fs";
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
@@ -46,7 +47,8 @@ import { planUnattendedSandbox, type UnattendedSandboxInput, type UnattendedSand
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir } from "../lib/maintenance-lock";
 import { redactSensitiveText } from "../security/service";
-import { scheduleContentHash, type AgentTaskAction, type TriggerDispatch, type TriggerEntry } from "../trigger/config";
+import { scheduleContentCanonical, type AgentTaskAction, type TriggerDispatch, type TriggerEntry } from "../trigger/config";
+import { readScheduleKey, scheduleMac } from "../trigger/schedule-key";
 import {
   buildGrantedArgv,
   grantedToolInputSchema,
@@ -98,30 +100,62 @@ const GRANTED_TIMEOUT_MS = 30_000;
 const GRANTED_MAX_BYTES = 64 * 1024;
 
 /** Names of environment variables whose VALUES are scrubbed from every granted-tool output. */
-const SECRET_ENV_NAME = /(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CREDENTIAL)/i;
+const SECRET_ENV_NAME = /(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CREDENTIAL|AUTH)/i;
 
 /**
- * AC3: redact a granted tool's output before the model sees it. Two layers. The first is
- * the deterministic secret detector every tool output already goes through. The second
- * scrubs the EXACT value of every credential-looking variable in the environment the
- * tool ran with, which catches a token the detector has no pattern for.
+ * Flow 295 (F5): token shapes GitHub issues, caught even when no environment variable holds
+ * them: classic `ghp_/gho_/ghu_/ghs_/ghr_` tokens (and a prefix of one, at 8 characters
+ * or more), fine-grained `github_pat_` tokens, and an `Authorization: token|bearer`
+ * header value.
  */
-export function scrubGrantedOutput(text: string, env: Record<string, string | undefined>): string {
+const TOKEN_SHAPES: readonly [RegExp, string][] = [
+  [/github_pat_[A-Za-z0-9_]{8,}/g, "[redacted:github_pat]"],
+  [/\bgh[pousr]_[A-Za-z0-9]{8,}/g, "[redacted:github_token]"],
+  [/(authorization:\s*(?:token|bearer)\s+)[A-Za-z0-9._~+/=-]{16,}/gi, "$1[redacted]"],
+];
+
+/**
+ * AC3 / F5: redact a granted tool's output before the model sees it. There are four layers:
+ *   1. the exact values the dispatcher already knows are secrets (the `gh auth token` it
+ *      fetched at run start);
+ *   2. the exact value of every credential-looking environment variable;
+ *   3. GitHub token shapes;
+ *   4. the deterministic secret detector every tool output goes through.
+ */
+export function scrubGrantedOutput(text: string, env: Record<string, string | undefined>, secrets: readonly string[] = []): string {
   let out = text;
+  for (const value of secrets) {
+    if (value.length >= 8) out = out.split(value).join("[redacted:gh-auth-token]");
+  }
   for (const [name, value] of Object.entries(env)) {
     if (value === undefined || value.length < 8 || !SECRET_ENV_NAME.test(name)) continue;
     out = out.split(value).join(`[redacted:${name}]`);
   }
+  for (const [shape, mask] of TOKEN_SHAPES) out = out.replace(shape, mask);
   return redactSensitiveText(out);
 }
 
-/** Run one granted command with `execFile` — no shell — and return capped, scrubbed output. */
+/**
+ * F5: scrub FIRST, then cap. A cap applied first can cut a token in half, and a half
+ * token matches neither an exact value nor a shape. After capping, the trailing
+ * partial line is dropped as well.
+ */
+export function scrubThenCap(raw: string, env: Record<string, string | undefined>, secrets: readonly string[], max: number = GRANTED_MAX_BYTES): string {
+  const scrubbed = scrubGrantedOutput(raw, env, secrets);
+  if (scrubbed.length <= max) return scrubbed;
+  const head = scrubbed.slice(0, max);
+  const lastBreak = head.lastIndexOf("\n");
+  return `${lastBreak > 0 ? head.slice(0, lastBreak) : ""}\n[output truncated at ${max} bytes]`;
+}
+
+/** Run one granted command with `execFile` — no shell — and return scrubbed, capped output. */
 async function runGrantedCommand(
   bin: string,
   argv: readonly string[],
   cwd: string,
   env: Record<string, string | undefined>,
   signal: AbortSignal | undefined,
+  secrets: readonly string[] = [],
 ): Promise<{ output: string; exitCode: number | null; ok: boolean }> {
   return new Promise((resolve) => {
     execFile(
@@ -130,10 +164,9 @@ async function runGrantedCommand(
       { cwd, env: env as NodeJS.ProcessEnv, timeout: GRANTED_TIMEOUT_MS, maxBuffer: GRANTED_MAX_BYTES * 4, ...(signal ? { signal } : {}) },
       (error, stdout, stderr) => {
         const raw = `${stdout ?? ""}${stderr ? `\n[stderr]\n${stderr}` : ""}`;
-        const capped = raw.length > GRANTED_MAX_BYTES ? `${raw.slice(0, GRANTED_MAX_BYTES)}\n[output truncated at ${GRANTED_MAX_BYTES} bytes]` : raw;
         const code = error === null ? 0 : typeof (error as { code?: unknown }).code === "number" ? ((error as { code: number }).code) : null;
         const reason = error === null ? "" : `\n[exit: ${code ?? (error as Error).message}]`;
-        resolve({ output: scrubGrantedOutput(`${capped}${reason}`, env), exitCode: code, ok: error === null });
+        resolve({ output: `${scrubThenCap(raw, env, secrets)}${scrubGrantedOutput(reason, env, secrets)}`, exitCode: code, ok: error === null });
       },
     );
   });
@@ -146,6 +179,9 @@ export function grantedTool(
   projectRoot: string,
   env: Record<string, string | undefined>,
   calls: GrantedCallRecord[],
+  /** Flow 295 (F1d): the realpaths `verifyGrantedBinaries` just checked. Only these are executed. */
+  verified: Readonly<Record<string, string>>,
+  scrubValues: readonly string[] = [],
 ): InteractiveTool {
   return {
     definition: {
@@ -157,19 +193,30 @@ export function grantedTool(
     invoke: async (input, ctx): Promise<InteractiveToolResult> => {
       const built = buildGrantedArgv(spec, input, action.grants.repos);
       if (!built.ok) return { output: built.reason, isError: true };
-      const bin = action.grants.bins[spec.program];
+      const bin = verified[spec.program];
       if (bin === undefined) {
         return {
           output: `${spec.tool}: no absolute path for "${spec.program}" was confirmed with this schedule — recreate it to grant the tool`,
           isError: true,
         };
       }
-      const result = await runGrantedCommand(bin, built.argv, projectRoot, env, ctx?.signal);
+      const result = await runGrantedCommand(bin, built.argv, projectRoot, env, ctx?.signal, scrubValues);
       calls.push({ tool: spec.tool, argv: [bin, ...built.argv], exitCode: result.exitCode, ok: result.ok });
       // Third-party text (PR bodies, comments) — it may be shown, never obeyed.
       return { output: result.output, isError: !result.ok, untrusted: true };
     },
   };
+}
+
+/** `gh auth token`, run by the dispatcher, for scrubbing only. Never logged; empty on any failure. */
+function ghAuthToken(bin: string | undefined, cwd: string, env: Record<string, string | undefined>): Promise<string[]> {
+  if (bin === undefined) return Promise.resolve([]);
+  return new Promise((resolve) => {
+    execFile(bin, ["auth", "token"], { cwd, env: env as NodeJS.ProcessEnv, timeout: 10_000 }, (error, stdout) => {
+      const token = error === null ? String(stdout).trim() : "";
+      resolve(token.length >= 8 ? [token] : []);
+    });
+  });
 }
 
 /** The fixed preamble every scheduled prompt is wrapped in. */
@@ -203,8 +250,80 @@ function refusal(runId: string, code: DispatchRefusalCode, detail: string, actio
   };
 }
 
-/** AC5: does the STORED entry still hash to what the operator confirmed? */
-async function confirmedContentProblem(projectRoot: string, entry: TriggerEntry): Promise<string | undefined> {
+/** True when `child` is `parent` or inside it (both already resolved). */
+function isInside(parent: string, child: string): boolean {
+  const rel = path.relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function realOr(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+/**
+ * Flow 295 (F1d/F6): every granted program must still be exactly the binary the operator
+ * confirmed. The basename must equal the program, it must resolve outside the project
+ * (a `bin/` that direnv put on PATH does not count), and the realpath and sha256 must be
+ * those recorded at confirmation. Returns the verified realpath per program, or the
+ * reason for refusing.
+ */
+export async function verifyGrantedBinaries(
+  projectRoot: string,
+  action: AgentTaskAction,
+): Promise<{ readonly ok: true; readonly realpaths: Record<string, string> } | { readonly ok: false; readonly reason: string }> {
+  const realpaths: Record<string, string> = {};
+  const root = realOr(projectRoot);
+  for (const [program, bin] of Object.entries(action.grants.bins)) {
+    const recorded = action.grants.binDigests[program];
+    if (path.basename(bin) !== program) return { ok: false, reason: `granted binary for "${program}" is "${bin}", not a program named "${program}"` };
+    if (recorded === undefined) return { ok: false, reason: `granted binary "${bin}" has no recorded digest — recreate the schedule` };
+    let real: string;
+    try {
+      real = realpathSync(bin);
+    } catch {
+      return { ok: false, reason: `granted binary "${bin}" no longer exists` };
+    }
+    if (isInside(root, real) || isInside(root, path.resolve(bin))) {
+      return { ok: false, reason: `granted binary "${bin}" resolves inside the project (${real}) — a project may not supply the program that holds your credentials` };
+    }
+    if (real !== recorded.realpath) return { ok: false, reason: `granted binary "${bin}" now resolves to ${real}, not ${recorded.realpath} as confirmed` };
+    let digest: string;
+    try {
+      digest = createHash("sha256").update(await readFile(real)).digest("hex");
+    } catch (error) {
+      return { ok: false, reason: `granted binary ${real} could not be read (${error instanceof Error ? error.message : String(error)})` };
+    }
+    if (digest !== recorded.sha256) return { ok: false, reason: `granted binary ${real} changed since it was confirmed (sha256 differs)` };
+    realpaths[program] = real;
+  }
+  for (const id of action.grants.tools) {
+    const program = grantedToolSpec(id)?.program;
+    if (program !== undefined && realpaths[program] === undefined) {
+      return { ok: false, reason: `granted tool ${id} has no confirmed binary for "${program}"` };
+    }
+  }
+  return { ok: true, realpaths };
+}
+
+/**
+ * AC5 / F1a: does the STORED entry still carry this machine's signature (an HMAC keyed
+ * by the per-machine schedule key) over exactly the content the operator confirmed?
+ */
+async function confirmedContentProblem(
+  projectRoot: string,
+  entry: TriggerEntry,
+): Promise<{ readonly code: DispatchRefusalCode; readonly reason: string } | undefined> {
+  const key = readScheduleKey();
+  if (!key.ok) return { code: "schedule-key-unavailable", reason: `no stored schedule runs: ${key.reason}` };
+  const reason = await signatureProblem(projectRoot, entry, key.key);
+  return reason === undefined ? undefined : { code: "grants-changed", reason };
+}
+
+async function signatureProblem(projectRoot: string, entry: TriggerEntry, key: Buffer): Promise<string | undefined> {
   if (entry.source !== "store" || entry.confirmedHash === undefined) {
     return `schedule "${entry.name}" was never confirmed by an operator (no confirmed content hash) — create it with \`keryx schedule add\``;
   }
@@ -216,8 +335,9 @@ async function confirmedContentProblem(projectRoot: string, entry: TriggerEntry)
   }
   if (raw === undefined) return `schedule "${entry.name}" is no longer in the schedule store`;
   const { confirmedHash, enabled: _enabled, ...content } = raw;
-  const actual = scheduleContentHash(content);
-  if (actual !== confirmedHash || confirmedHash !== entry.confirmedHash) {
+  const actual = Buffer.from(scheduleMac(key, scheduleContentCanonical(content)), "hex");
+  const claimed = typeof confirmedHash === "string" && /^[0-9a-f]{64}$/.test(confirmedHash) ? Buffer.from(confirmedHash, "hex") : Buffer.alloc(0);
+  if (claimed.length !== actual.length || !timingSafeEqual(claimed, actual) || confirmedHash !== entry.confirmedHash) {
     return (
       `schedule "${entry.name}" changed after the operator confirmed it (prompt, cadence, runner or grants) — ` +
       "refusing to run content nobody confirmed. Remove it and create it again with `keryx schedule add`."
@@ -274,12 +394,19 @@ async function runLocked(
 ): Promise<AgentTaskResult> {
   const dispatch = action.dispatch;
 
-  // --- 2. confirmed content (AC5) -------------------------------------------
+  // --- 2. confirmed content (AC5, F1) ---------------------------------------
   const changed = await confirmedContentProblem(projectRoot, entry);
-  if (changed !== undefined) return refusal(runId, "grants-changed", changed, action);
+  if (changed !== undefined) return refusal(runId, changed.code, changed.reason, action);
+  const binaries = await verifyGrantedBinaries(projectRoot, action);
+  if (!binaries.ok) return refusal(runId, "grants-changed", `refusing to run: ${binaries.reason}`, action);
 
   // --- 3. containment -------------------------------------------------------
-  const scratch = await mkdtemp(path.join(tmpdir(), `keryx-agent-task-${entry.name.replace(/[^A-Za-z0-9._-]/g, "-")}-`));
+  // Every run's scratch lives under one 0700 parent, and that parent is hidden inside
+  // the sandbox (only this run's own directories are bound back), so one run cannot
+  // read another's scratch however TMPDIR is set.
+  const scratchParent = path.join(tmpdir(), "keryx-agent-tasks");
+  await mkdir(scratchParent, { recursive: true, mode: 0o700 });
+  const scratch = await mkdtemp(path.join(scratchParent, `${entry.name.replace(/[^A-Za-z0-9._-]/g, "-")}-`));
   const workdir = path.join(scratch, "work");
   const scratchHome = path.join(scratch, "home");
   await mkdir(workdir, { recursive: true });
@@ -295,6 +422,7 @@ async function runLocked(
       scratchHome,
       network,
       readOnly: [projectRoot, ...invocation.roots],
+      hide: [scratchParent],
       env: process.env,
       home: homedir(),
       ...(typeof process.getuid === "function" ? { uid: process.getuid() } : {}),
@@ -360,10 +488,13 @@ async function runLocked(
     });
     try {
       const env = deps.grantedEnv ?? process.env;
+      // F5: gh's own token, fetched once, outside the sandbox. It is never logged or
+      // shown, and it is scrubbed by exact value from every granted-tool output.
+      const extraSecrets = await ghAuthToken(binaries.realpaths["gh"], projectRoot, env);
       const granted = action.grants.tools
         .map((id) => grantedToolSpec(id))
         .filter((spec): spec is GrantedToolSpec => spec !== undefined)
-        .map((spec) => grantedTool(spec, action, projectRoot, env, grantedCalls));
+        .map((spec) => grantedTool(spec, action, projectRoot, env, grantedCalls, binaries.realpaths, extraSecrets));
       const tools = [...builtinReadOnlyTools(projectRoot), shellExecTool(workdir, sandboxedRunner(workdir, sandbox)), ...granted];
       const offending = tools.filter((t) => UNATTENDED_EXCLUDED_TOOLS.includes(t.definition.name));
       if (offending.length > 0) throw new Error(`agent-task roster must not offer: ${offending.map((t) => t.definition.name).join(", ")}`);

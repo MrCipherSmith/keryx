@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 // Flow 295 (AC7): `schedule_create` from plain language, through the REAL agent
 // loop. The model is scripted. The approval must ask in EVERY permission mode,
 // `auto` included, and show the card. A declined card writes and installs nothing.
@@ -14,6 +15,34 @@ import type { NormalizedEvent, NormalizedMessage, ProviderDescription, ProviderP
 import type { CommandResult, ScheduleHost } from "../trigger/install";
 import { loadTriggersConfig, scheduleStorePath } from "../trigger/config";
 import { UNATTENDED_EXCLUDED_TOOLS, unattendedRefusal } from "../trigger/unattended";
+
+// Flow 295 (F1): confirming a schedule creates the per-machine signing key in keryx's
+// user-global directory. Point HOME and XDG_DATA_HOME at a throwaway directory so no
+// test ever writes the developer's real key.
+let keyHome = "";
+const savedKeyEnv = { HOME: process.env["HOME"], XDG_DATA_HOME: process.env["XDG_DATA_HOME"] };
+beforeEach(async () => {
+  keyHome = await mkdtemp(path.join(tmpdir(), "keryx-schedule-key-home-"));
+  process.env["HOME"] = keyHome;
+  process.env["XDG_DATA_HOME"] = path.join(keyHome, ".local", "share");
+});
+afterEach(async () => {
+  for (const [name, value] of Object.entries(savedKeyEnv)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+  await rm(keyHome, { recursive: true, force: true });
+});
+
+/** A real, executable stand-in for a granted program, outside every project root. */
+function fakeProgram(program: string): string {
+  const dir = path.join(keyHome, "bin");
+  mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, program);
+  writeFileSync(file, "#!/bin/sh\necho '[]'\n", { mode: 0o755 });
+  return file;
+}
+
 
 const DESCRIPTION: ProviderDescription = {
   capabilities: {
@@ -79,7 +108,7 @@ async function turn(mode: "ask" | "trust" | "auto", answer: boolean): Promise<{ 
     defaults: () => ({ provider: "anthropic", model: "claude-x" }),
     host: host(),
     now: () => new Date(2026, 8, 23, 5, 7, 0),
-    resolveProgram: (p) => `/opt/bin/${p}`,
+    resolveProgram: (p) => fakeProgram(p),
     accountOf: async () => "MrCipherSmith",
   });
   const asked: { tool: string; meta: ApprovalMeta | undefined }[] = [];
@@ -140,7 +169,7 @@ describe("AC7: schedule_create always asks and shows the card", () => {
       // "credentials"-class floor: never remembered, never offered "always".
       expect(meta.card?.[0]).toBe('Schedule "check-github" — confirm to store it and install a background timer');
       expect(meta.card).toContain("cadence: 0 */4 * * * (every 4 hours)");
-      expect(meta.card?.join("\n")).toContain("  - gh.pr.list: /opt/bin/gh");
+      expect(meta.card?.join("\n")).toContain(`  - gh.pr.list: ${path.join(keyHome, "bin", "gh")}`);
       expect(result.toolOutput).toContain("not confirmed by the operator; nothing was written or installed");
       expect(existsSync(scheduleStorePath(root))).toBe(false);
       expect(await readdir(unitDir)).toEqual([]);

@@ -262,6 +262,14 @@ const CREDENTIAL_MARKERS: readonly string[] = [
   "auth.json",
   ".local/share/keryx",
   ".config/keryx",
+  // Flow 295 (F1/F3): the per-machine key that signs confirmed schedules, the
+  // schedule store itself, and the OS scheduler's unit directories. Writing any
+  // of them is how a confirmed schedule would be forged or widened, so they sit
+  // with the agent's own credentials: always asked, never remembered.
+  "schedule-hmac.key",
+  "trigger/schedules.json",
+  "systemd/user",
+  "library/launchagents",
 ];
 
 /**
@@ -365,4 +373,47 @@ const SAC_REVIEW_MARKERS: readonly string[] = ["confirm-review", "workspace revi
 export function touchesSacConfirmReview(command: string): boolean {
   const text = command.toLowerCase();
   return SAC_REVIEW_MARKERS.some((marker) => text.includes(marker));
+}
+
+/**
+ * Flow 295 (F2): commands that create, change or run a scheduled background
+ * task, or that drive the OS scheduler directly. A schedule runs unattended,
+ * spends money and uses the operator's granted credentials, so it exists only
+ * after the operator confirms a card (`keryx schedule add`, `/schedule`,
+ * `schedule_create`). A `shell_exec` of `keryx schedule add … --yes`, or a
+ * `systemctl --user enable` of a hand-written unit, would skip that card, so
+ * this family gets the human-confirmation floor: every permission mode asks
+ * (`auto` included), the answer is never remembered, and a pattern for it is refused.
+ *
+ * Matched on whole words (`\b`), not substrings: `reschedule add` is not a
+ * match, while `bun run src/cli.ts schedule add` is. Over-broad in the other
+ * direction on purpose (`echo "crontab"` asks), for the same reason as every
+ * other marker here: a false positive costs one prompt, and a false negative
+ * costs the confirmation.
+ */
+const SCHEDULER_CONTROL_PATTERNS: readonly RegExp[] = [
+  /\bschedule\s+(?:add|remove|pause|resume|run)\b/,
+  /\btrigger\s+(?:schedule|install)\b/,
+  /\bcrontab\b/,
+  /\bsystemctl\b[^\n;&|]*\b(?:enable|reenable|link|start|restart|reload-or-restart|try-restart|daemon-reload|edit|disable|stop|mask|unmask|preset|revert|set-property|set-environment|import-environment)\b/,
+  /\blaunchctl\b/,
+  /\bloginctl\b/,
+  /\bsystemd\/user\b/,
+  /\blibrary\/launchagents\b/,
+];
+
+/** True when `command` creates, changes or runs a schedule, or drives the OS scheduler. Pure. */
+export function touchesSchedulerControl(command: string): boolean {
+  const text = command.toLowerCase();
+  return SCHEDULER_CONTROL_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+/**
+ * Every command family whose guarantee is "a human answered a real prompt":
+ * SAC's confirm-review family and (flow 295) scheduler control. Each approver
+ * site treats this exactly like `credentials`: it always asks, the answer is never
+ * remembered, and a pattern for it is refused. Pure.
+ */
+export function touchesHumanConfirmation(command: string): boolean {
+  return touchesSacConfirmReview(command) || touchesSchedulerControl(command);
 }

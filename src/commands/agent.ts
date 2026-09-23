@@ -15,7 +15,7 @@
 // injected `InteractiveTool` executors.
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
-import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesSacConfirmReview } from "../lib/command-risk";
+import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
@@ -3482,6 +3482,8 @@ async function executeCall(
   }
   const mode: PermissionMode = permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
   const isReadOnly = readOnly?.() ?? false;
+  // Flow 295 (F8): set only in the write branch below, after the operator's yes.
+  let confirmationToken: string | undefined;
   if (tool.confirmation !== undefined && risk !== "write") {
     // Flow 295: the operator confirmation lives in the write branch only; any
     // other risk would skip it, so such a tool is refused rather than run.
@@ -3495,7 +3497,7 @@ async function executeCall(
     const command = typeof input.command === "string" ? input.command : "";
     const destructive = risk === "destructive" || isDestructiveCommand(command);
     const credentials = touchesAgentCredentials(command);
-    const sacReviewConfirmation = touchesSacConfirmReview(command);
+    const sacReviewConfirmation = touchesHumanConfirmation(command);
     // specification §4.4 / D-05: a `git-publish` pause lease targeting this
     // instance (and not overridden by it) forces `ask` in every mode, `auto`
     // included, and is never satisfied by a saved/session shell allowlist
@@ -3590,6 +3592,7 @@ async function executeCall(
         return { output: `${call.name} refused: ${confirmation.error}`, isError: true };
       }
       card = confirmation.card;
+      confirmationToken = confirmation.token;
     }
     const decision = resolveApprovalDecision({
       mode,
@@ -3599,6 +3602,7 @@ async function executeCall(
       sacReviewConfirmation: false,
       readOnly: isReadOnly,
     });
+    if (decision === "deny" && confirmationToken !== undefined) tool.confirmationDeclined?.(confirmationToken);
     if (decision === "deny") {
       return { output: `tool "${call.name}" is not permitted while read-only mode (/plan) is on`, isError: true };
     }
@@ -3616,6 +3620,7 @@ async function executeCall(
               ...(card !== undefined ? { alwaysAsk: true, card } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
+        if (confirmationToken !== undefined) tool.confirmationDeclined?.(confirmationToken);
         return {
           output: card !== undefined ? `${call.name} not confirmed by the operator; nothing was written or installed` : `patch not approved by the user; not executed`,
           isError: true,
@@ -3631,7 +3636,10 @@ async function executeCall(
   }
   // The context is passed unconditionally: a tool that ignores it is unaffected,
   // and making the parameter conditional would hide which calls are abortable.
-  return tool.invoke(input, { ...(signal !== undefined ? { signal } : {}) });
+  return tool.invoke(input, {
+    ...(signal !== undefined ? { signal } : {}),
+    ...(confirmationToken !== undefined ? { confirmationToken } : {}),
+  });
 }
 
 function validateDirectBudget(

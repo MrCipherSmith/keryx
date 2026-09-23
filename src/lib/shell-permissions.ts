@@ -15,7 +15,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
 import { shellConfigPath } from "./shell-config";
-import { isDestructiveCommand, touchesAgentCredentials, touchesSacConfirmReview } from "./command-risk";
+import { isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation, touchesSacConfirmReview, touchesSchedulerControl } from "./command-risk";
 import { createHash } from "node:crypto";
 import { hasUnquotedMetacharacter } from "./shell-syntax";
 
@@ -146,6 +146,16 @@ export function validateShellPattern(pattern: string): PatternValidation {
       ok: false,
       reason:
         "touches SAC's proposal-review/confirm-token family; that guarantee depends on a human answering a real approval prompt, so it is never remembered",
+    };
+  }
+  // A wildcard pattern such as `systemctl *` or `keryx schedule *` has no control verb
+  // in its text, yet it would cover one. So the pattern is refused by the command
+  // family it can reach, not only by the verb it happens to spell out.
+  if (touchesSchedulerControl(trimmed) || /\b(?:schedule|crontab|systemctl|launchctl|loginctl)\b|\btrigger\s+(?:\*|schedule|install)/i.test(trimmed)) {
+    return {
+      ok: false,
+      reason:
+        "creates, changes or runs a scheduled background task, or drives the OS scheduler; a schedule exists only after the operator confirms its card, so this is never remembered",
     };
   }
   const banned = bannedPrefixGrant(trimmed, firstToken);
@@ -408,7 +418,7 @@ export function isShellCommandAllowed(command: string, allow: readonly string[])
   if (touchesAgentCredentials(cmd)) {
     return false;
   }
-  if (touchesSacConfirmReview(cmd)) {
+  if (touchesHumanConfirmation(cmd)) {
     return false;
   }
   return allow.some((pat) => matchShellPattern(pat, cmd));
@@ -474,7 +484,7 @@ export function suggestShellPatterns(command: string): ShellPatternSuggestion {
   const first = collapsed.split(" ")[0] ?? collapsed;
   const prefix = first.length > 0 ? `${first} *` : exact;
   const neverRemember =
-    trimmed.length > 0 && (isDestructiveCommand(trimmed) || touchesSacConfirmReview(trimmed));
+    trimmed.length > 0 && (isDestructiveCommand(trimmed) || touchesHumanConfirmation(trimmed));
   return {
     exact,
     prefix,

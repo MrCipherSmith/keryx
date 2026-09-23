@@ -383,6 +383,29 @@ export function writeOwnerOnlyFile(file: string, body: string): void {
 }
 
 /**
+ * Flow 295: create a user-global owner-only file only if it does not exist yet
+ * (`O_EXCL`). Returns `true` when this call created it and `false` when it was
+ * already there. Two processes racing to create a per-machine secret therefore
+ * never overwrite each other: one creates it, and the other reads the winner's.
+ */
+export function createOwnerOnlyFileExclusive(file: string, body: string): boolean {
+  try {
+    writeFileSync(file, body, { encoding: "utf8", mode: 0o600, flag: "wx" });
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST") return false;
+    throw error;
+  }
+  if (process.platform !== "win32") {
+    try {
+      chmodSync(file, 0o600);
+    } catch {
+      // Same best-effort posture as `writeOwnerOnlyFile`.
+    }
+  }
+  return true;
+}
+
+/**
  * Atomically replace a user-global config file with owner-only contents.
  *
  * The temporary file lives beside the destination so `renameSync` is a

@@ -56,8 +56,22 @@ export type TriggerResolution =
  * do" — it is refused loudly (non-zero), the same way `flow task done` on an
  * unknown task id throws rather than silently no-opping.
  */
-export function resolveTriggerForRun(projectRoot: string, name: string): TriggerResolution {
-  const loaded = loadTriggersConfig(projectRoot);
+export function resolveTriggerForRun(
+  projectRoot: string,
+  name: string,
+  options: { readonly scheduleOnly?: boolean } = {},
+): TriggerResolution {
+  const all = loadTriggersConfig(projectRoot);
+  // Flow 295 (F4): an installed schedule timer runs `trigger run --schedule <name>`,
+  // which resolves ONLY the per-machine store. A committed trigger of the same name
+  // can then never be what the operator's timer fires.
+  const loaded = options.scheduleOnly
+    ? {
+        ...all,
+        triggers: all.triggers.filter((t) => t.source === "store"),
+        rejected: all.rejected.filter((r) => r.source === "store"),
+      }
+    : all;
 
   if (loaded.fileProblem === "absent") {
     return { kind: "config-absent" };

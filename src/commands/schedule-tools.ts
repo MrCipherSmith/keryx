@@ -15,6 +15,7 @@
 // They are never offered to a subagent, an external child, a side worker, or an
 // unattended run. `schedule_create` is on the unattended exclusion list as well.
 
+import { randomUUID } from "node:crypto";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import { GRANTED_TOOL_CATALOGUE } from "../trigger/granted-tools";
 import type { ScheduleHost } from "../trigger/install";
@@ -83,9 +84,12 @@ export function requestFromToolInput(input: Record<string, unknown>, binding: Sc
 }
 
 export function scheduleTools(binding: ScheduleToolBinding): InteractiveTool[] {
-  // The draft whose card the operator saw, keyed by the exact input. Invoke uses
-  // it and never re-drafts, so what is stored is what was confirmed.
-  const drafts = new Map<string, ScheduleDraft>();
+  // The draft whose card the operator saw, keyed by a one-time token issued by
+  // `confirmation` (flow 295 F8). The driver hands that token to `invoke` ONLY after
+  // the operator's yes; a declined card deletes the draft. So nothing can store a
+  // draft the operator refused, including a caller that skips the driver. Invoke never
+  // re-drafts, so what is stored is exactly what was shown.
+  const drafts = new Map<string, { readonly input: string; readonly draft: ScheduleDraft }>();
   const key = (input: Record<string, unknown>): string => JSON.stringify(input);
 
   const create: InteractiveTool = {
@@ -134,15 +138,21 @@ export function scheduleTools(binding: ScheduleToolBinding): InteractiveTool[] {
         ...(binding.accountOf !== undefined ? { accountOf: binding.accountOf } : {}),
       });
       if (!drafted.ok) return { error: drafted.problems.join("; ") };
-      drafts.set(key(input), drafted.draft);
-      return { card: drafted.draft.card };
+      const token = randomUUID();
+      drafts.set(token, { input: key(input), draft: drafted.draft });
+      return { card: drafted.draft.card, token };
     },
-    invoke: async (input): Promise<InteractiveToolResult> => {
-      const draft = drafts.get(key(input));
-      drafts.delete(key(input));
-      if (draft === undefined) {
-        return { output: "schedule_create: no confirmed draft for this request — nothing was written or installed", isError: true };
+    confirmationDeclined: (token) => {
+      drafts.delete(token);
+    },
+    invoke: async (input, ctx): Promise<InteractiveToolResult> => {
+      const token = ctx?.confirmationToken;
+      const pending = token === undefined ? undefined : drafts.get(token);
+      if (token !== undefined) drafts.delete(token);
+      if (pending === undefined || pending.input !== key(input)) {
+        return { output: "schedule_create: no operator-confirmed draft for this request — nothing was written or installed", isError: true };
       }
+      const draft = pending.draft;
       try {
         const created = await confirmSchedule(binding.projectRoot, draft, binding.host ?? {});
         return {

@@ -19,7 +19,8 @@
 // is an operator surface: a TTY prompt, `--yes` typed by the operator, or a TUI card.
 
 import { execFile } from "node:child_process";
-import { accessSync, constants as fsConstants, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { accessSync, constants as fsConstants, readdirSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { loadTriggersConfig, triggerEntryProblems, type AgentTaskAction, type TriggerEntry } from "./config";
 import { nextCronRuns, parseCadence } from "./cron";
@@ -82,6 +83,19 @@ export interface ScheduleDraft {
 
 export type DraftResult = { readonly ok: true; readonly draft: ScheduleDraft } | { readonly ok: false; readonly problems: readonly string[] };
 
+function realOr(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+function isInside(parent: string, child: string): boolean {
+  const rel = path.relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
 /** Search PATH for an executable. */
 export function resolveOnPath(program: string, pathEnv: string | undefined = process.env["PATH"]): string | undefined {
   for (const dir of (pathEnv ?? "").split(path.delimiter)) {
@@ -116,11 +130,36 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
   const programs = [...new Set(tools.map((id) => grantedToolSpec(id)?.program).filter((p): p is string => p !== undefined))];
   const resolve = ctx.resolveProgram ?? ((p: string) => resolveOnPath(p));
   const bins: Record<string, string> = {};
+  const binDigests: Record<string, { realpath: string; sha256: string }> = {};
   const problems: string[] = [];
+  const root = realOr(ctx.projectRoot);
   for (const program of programs) {
     const bin = resolve(program);
-    if (bin === undefined) problems.push(`grants: "${program}" is not on PATH, so the granted tools that run it cannot be confirmed`);
-    else bins[program] = bin;
+    if (bin === undefined) {
+      problems.push(`grants: "${program}" is not on PATH, so the granted tools that run it cannot be confirmed`);
+      continue;
+    }
+    const real = realOr(bin);
+    // F1d/F6: the program that will hold the operator's credentials must be named what
+    // it claims to be, and must not come from the project (direnv's `PATH_add bin` puts
+    // a project directory first on PATH).
+    if (path.basename(bin) !== program) {
+      problems.push(`grants: "${bin}" is not a program named "${program}"`);
+      continue;
+    }
+    if (isInside(root, real) || isInside(root, path.resolve(bin))) {
+      problems.push(`grants: "${program}" resolves inside this project (${real}) — a granted program must come from outside the project`);
+      continue;
+    }
+    let sha256: string;
+    try {
+      sha256 = createHash("sha256").update(readFileSync(real)).digest("hex");
+    } catch (error) {
+      problems.push(`grants: ${real} could not be read (${error instanceof Error ? error.message : String(error)})`);
+      continue;
+    }
+    bins[program] = bin;
+    binDigests[program] = { realpath: real, sha256 };
   }
   const accountOf = ctx.accountOf ?? defaultAccountOf(ctx.projectRoot);
   const accounts: string[] = [];
@@ -144,6 +183,7 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
       tools,
       repos: [...(request.repos ?? [])],
       bins,
+      binDigests,
       ...(accounts.length > 0 ? { account: accounts.join("; ") } : {}),
     },
   };
@@ -213,7 +253,25 @@ function renderCard(input: {
     `runs: ${plan.execStart}`,
     lingerLine,
     "the machine must be on; a missed run is caught up once at the next boot/wake (systemd Persistent=true, launchd) — never by cron",
-  ];
+  ].map(cardSafe);
+}
+
+/**
+ * Flow 295 (F7): the card shows text the MODEL supplied (prompt, name, repos, provider,
+ * model). A line of it must never be able to draw a fake line of the card. So ANSI escape
+ * sequences, C0/C1 controls and bidi overrides are removed, and a newline is shown as a
+ * visible ⏎ instead of starting a new line.
+ */
+export function cardSafe(text: string): string {
+  return text
+    // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
+    .replace(/\u001b[\]P^_][\s\S]*?(?:\u0007|\u001b\\)/g, "")
+    .replace(/\r\n|\r|\n/g, " ⏎ ")
+    // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
+    .replace(/\t/g, " ");
 }
 
 export interface CreateResult {

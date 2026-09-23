@@ -143,9 +143,24 @@ function cronMarkers(projectRoot: string, name: string): { begin: string; end: s
 export async function planInstall(projectRoot: string, name: string, cron: string, host: ScheduleHost = {}): Promise<InstallPlan> {
   const backend = await detectBackend(host);
   const invocation = host.invocation ?? resolveKeryxInvocation();
-  const lines = renderScheduleLines({ projectRoot, name, cron, invocation });
+  // Every value below lands in a unit file, a plist or a crontab line. A newline or
+  // another control character in one of them would start a new directive or a new
+  // crontab line, so such a path is refused rather than escaped.
+  // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
+  const unsafe = [projectRoot, invocation.execPath, invocation.scriptPath, name].find((v) => /[\u0000-\u001f\u007f]/.test(v));
+  if (unsafe !== undefined) {
+    return {
+      backend,
+      files: [],
+      execStart: "",
+      location: "",
+      unit: "",
+      problem: `a path or name contains a newline or control character (${JSON.stringify(unsafe)}); keryx will not write it into a scheduler file`,
+    };
+  }
+  const lines = renderScheduleLines({ projectRoot, name, cron, invocation, scheduleOnly: true });
   const base = scheduleUnitBase(projectRoot, name);
-  const execStart = `${invocation.execPath} ${invocation.scriptPath} trigger run ${name}`;
+  const execStart = `${invocation.execPath} ${invocation.scriptPath} trigger run --schedule ${name}`;
   if (backend === "systemd") {
     const dir = systemdUserUnitDir(host);
     const calendar = cronToOnCalendar(cron);
@@ -182,6 +197,7 @@ export async function planInstall(projectRoot: string, name: string, cron: strin
     <string>${xml(invocation.scriptPath)}</string>
     <string>trigger</string>
     <string>run</string>
+    <string>--schedule</string>
     <string>${xml(name)}</string>
   </array>
   <key>WorkingDirectory</key><string>${xml(projectRoot)}</string>
@@ -256,6 +272,11 @@ function withoutBlock(crontab: string, projectRoot: string, name: string): strin
       continue;
     }
     if (!skipping) out.push(line);
+  }
+  if (skipping) {
+    // A begin marker with no end marker: removing "the block" would delete every
+    // line after it, including the operator's own. Refuse and let them fix the file.
+    throw new Error(`your crontab has "${begin}" with no matching end marker — fix it by hand (crontab -e); keryx changed nothing`);
   }
   return out.join("\n").replace(/\n+$/, "") + (out.some((l) => l.length > 0) ? "\n" : "");
 }

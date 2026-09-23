@@ -40,6 +40,12 @@ export interface InteractiveToolResult {
 export interface InteractiveToolContext {
   /** Aborted when the operator interrupts the turn this call belongs to. */
   signal?: AbortSignal;
+  /**
+   * Flow 295 (F8): the one-time token `confirmation` issued for THIS call. The driver
+   * passes it only after the operator approved the card, so a tool that stores
+   * something on confirmation can refuse an invoke that never went through the card.
+   */
+  confirmationToken?: string;
 }
 
 /** A tool the interactive agent can offer to the model and execute for content. */
@@ -53,7 +59,11 @@ export interface InteractiveTool {
    * `ApprovalMeta.card` (the exact text the operator confirms). An `error` refuses the
    * call without asking. Only a `write`-risk tool may carry it.
    */
-  confirmation?: (input: Record<string, unknown>) => Promise<{ readonly card: readonly string[] } | { readonly error: string }>;
+  confirmation?: (
+    input: Record<string, unknown>,
+  ) => Promise<{ readonly card: readonly string[]; readonly token?: string } | { readonly error: string }>;
+  /** Flow 295 (F8): called with the confirmation's token when the operator declined, so the tool drops its draft. */
+  confirmationDeclined?: (token: string) => void;
 }
 
 /** Read-file output cap so a tool result stays modest. */

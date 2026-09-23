@@ -134,6 +134,9 @@ export const DISPATCH_REFUSAL_CODES = [
   // Flow 295 (AC5): an agent-task whose stored content no longer matches the
   // hash the operator confirmed — an edit behind an installed timer never runs.
   "grants-changed",
+  // Flow 295 (F1a): this machine's schedule key is missing, unreadable or too
+  // open, so no stored schedule's signature can be checked and none runs.
+  "schedule-key-unavailable",
 ] as const;
 export type DispatchRefusalCode = (typeof DISPATCH_REFUSAL_CODES)[number];
 

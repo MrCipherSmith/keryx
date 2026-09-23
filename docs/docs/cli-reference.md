@@ -1542,7 +1542,7 @@ keryx schedule remove <name> [--yes]
 | `show <name>` | The same row plus the prompt, the runner and budget, the grants, the last five runs, and the latest report. |
 | `pause <name>` | Disable the timer and mark the entry disabled. A fire while paused records `no-op`. |
 | `resume <name>` | Re-enable both. The content is unchanged, so no new confirmation is needed. |
-| `run <name>` | One pass now (`keryx trigger run <name>`). |
+| `run <name>` | One pass now (`keryx trigger run --schedule <name>`: local schedules only). |
 | `remove <name>` | After a confirmation, uninstall the timer and delete the entry. keryx deletes only files that carry its `# keryx-managed <projecthash> <name>` header. Anything else found at those paths is left untouched and named. |
 
 **Cadence.** A five-field cron expression, or one of `every N hours` (a divisor of
@@ -1610,6 +1610,48 @@ store or the reports. **No grant lifts any of it.**
   been scrubbed. Your token is never in the sandbox, the model context, the provider
   request or the report. A granted tool's output (PR bodies, comments) is marked
   untrusted: under `trust`, a later write that follows it asks, and so is denied.
+
+**Security.**
+
+- **Signed by this machine.** Every stored schedule is signed with an HMAC-SHA256.
+  The key is a per-machine secret in keryx's user-global directory
+  (`schedule-hmac.key`, 0600), created the first time you confirm a schedule. The key
+  lives outside the project and is hidden from every sandboxed run. A committed or
+  hand-written store entry cannot carry a valid signature, so it never runs. A missing
+  or group-readable key refuses every stored schedule (`schedule-key-unavailable`).
+- **Never committed.** A schedule store tracked by git is refused whole.
+- **Timers only, never git hooks.** A stored schedule can only be `on.kind:
+  "schedule"`. It is never a git-event trigger and never gets a git hook.
+- **Your own name wins.** A committed `triggers.json` entry with the same name as a
+  local schedule is refused, and the local schedule wins. The installed timer runs
+  `keryx trigger run --schedule <name>`, which resolves only local schedules.
+- **Granted binaries are pinned.** Each granted program is recorded with its
+  realpath and sha256, and both are signed. Its basename must equal the program
+  (`bins.gh` is a program named `gh`), and it must resolve outside the project. A
+  swapped binary or a repointed symlink refuses the run with `grants-changed`.
+- **Scrubbed output.** Output is scrubbed first and capped after, and the trailing
+  partial line is dropped. The scrubber removes:
+  - the exact value of every `*TOKEN*`/`*SECRET*`/`*KEY*`/`*AUTH*` variable;
+  - the exact value of `gh auth token`, which keryx reads once per run, outside the
+    sandbox, and never logs or shows;
+  - classic `gh?_` and fine-grained `github_pat_` tokens;
+  - `Authorization: token|bearer` header values.
+- **No shortcut around the card.** In any agent's shell, including `auto` mode, these
+  always ask, are never remembered, and are refused as allowlist patterns:
+  - `keryx schedule add|remove|pause|resume|run`;
+  - `keryx trigger schedule|install`;
+  - `crontab`, `launchctl` and `loginctl`;
+  - `systemctl` with `enable|link|start|restart|daemon-reload|edit|disable|stop|…`;
+  - any write into `~/.config/systemd/user` or `~/Library/LaunchAgents`.
+
+  `keryx schedule add|remove|pause|resume|run` also refuse outright inside an agent's
+  shell (`KERYX_TOOL_CALL=1`).
+- **Clean cards.** Model-supplied text on the card has ANSI and control characters
+  removed, and newlines are shown as `⏎`.
+- **Operator-only storage.** `schedule_create` stores only the draft whose card the
+  operator confirmed. That draft is bound to a one-time token and dropped when the
+  operator declines.
+- **Isolated runs.** One run cannot read another run's scratch directory.
 
 **Where things live.**
 

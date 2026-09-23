@@ -62,8 +62,12 @@ that nothing was written. Point to `/schedules` for the list and the reports.
 
 - NEVER try to confirm, retry past a "no", or re-propose the same schedule unchanged after it was declined.
 - NEVER create or install a schedule by any other route (editing
-  `.metaproject/data/trigger/schedules.json`, `systemctl`, `crontab`,
-  `launchctl`): the entry would carry no confirmed hash and would never run.
+  `.metaproject/data/trigger/schedules.json`, `keryx schedule add --yes` in your
+  shell, `systemctl`, `crontab`, `launchctl`). Each of these asks the operator.
+  `keryx schedule add` refuses inside your shell, and a hand-written entry lacks
+  this machine's signature, so it never runs.
+- NEVER read or copy the schedule signing key (`schedule-hmac.key`). The floor asks
+  about it, but that is a prompt, not a wall. Leave it alone.
 - NEVER run `loginctl enable-linger`. If linger is off, tell the operator the
   timer runs only while they are logged in and that the command is theirs to run.
 - State the limits when they matter: the machine must be on; systemd and launchd

@@ -52,3 +52,21 @@
   - Run-now will be a child process of `keryx trigger run` (`resolveKeryxInvocation`).
   - Schedule entries use `fire.kind "schedule"`, so flow 300's `isScheduledEntry` counts them.
 - 2026-09-23T08:58:00.000Z - note (implementer): flake observed. `sandbox/unattended.test.ts` "T14: no unix socket … find /" hit its 5s timeout twice when run in a large parallel batch, and passes alone every time (3/3, and again after). This flow does not touch that file.
+- 2026-09-23T10:30:00.000Z - note (implementer): fixed the security review of commit 9c9557f9. Each finding has a regression test in `src/commands/schedule-security.test.ts` or `src/trigger/config.test.ts`, and every one of those 21 tests was shown to fail with its fix reverted.
+  - F1 (critical, probe p2):
+    - The confirmation hash is now an HMAC-SHA256 keyed by a per-machine secret, `schedule-hmac.key` (0600) in keryxConfigDir (`src/trigger/schedule-key.ts`). A missing or group-readable key refuses every stored schedule with the refusal `schedule-key-unavailable`.
+    - A store tracked by git is refused whole.
+    - Store and agent-task entries may only use `on.kind: "schedule"`, and `isHookableTriggerEntry` skips store entries.
+    - `bins` basename must equal the program. Its realpath and sha256 are recorded and signed, then checked before exec, and only the verified realpath is executed. A binary under the project root is refused at draft and at run (this also covers F6).
+  - F2 (probe p1): new `touchesSchedulerControl`, folded into `touchesHumanConfirmation`, is used at every approver site: shell-approval, shell-permissions (validate, allowed, suggest), agent executeCall, acp-permission and supervise-mcp. Wildcard patterns that reach a control verb are refused. `keryx schedule add|remove|pause|resume|run` refuse when KERYX_TOOL_CALL=1.
+  - F3: the store, the key and the systemd/launchd unit directories are credentials-class markers, for both shell and patch.
+  - F4: the installed timer runs `trigger run --schedule <name>`, which resolves only the store. A committed trigger that clashes with a store name is refused, and the store entry is kept.
+  - F5 (probe p3): output is scrubbed before it is capped, and the trailing partial line is dropped. GitHub token shapes (`gh?_`, `github_pat_`, `Authorization: token|bearer`), `*_AUTH` variable names, and the exact `gh auth token` value (fetched outside the sandbox) are all scrubbed.
+  - F7: `cardSafe` strips ANSI and control characters from every card line and shows newlines as ⏎.
+  - F8: `schedule_create`'s invoke requires the one-time `confirmationToken` that the driver passes only after the operator's yes. A decline, or a read-only denial, drops the draft.
+  - Unreviewed areas:
+    - The installer refuses control characters in paths and names.
+    - A crontab with an unterminated keryx block is refused and left untouched.
+    - Concurrent schedules: no bug. Reservations under the spend lock sum to at most the project ceiling, and a test now pins that with overlapping runs.
+    - Every run's scratch now lives under one parent that is hidden inside the sandbox (`UnattendedSandboxInput.hide`), so a sibling run cannot be read even with TMPDIR=/var/tmp. This was verified in the real sandbox.
+  - Docs: limitations.md states the honest limit on the signing key. The skill tells the agent to leave the key alone and that `schedule add` refuses inside its shell.

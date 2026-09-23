@@ -110,6 +110,15 @@ for what has been verified on a real host.
   available yet (flow 301); the choices are `off` and `full`.
 - **Platform:** the hardened unattended sandbox is Linux-only, so a macOS schedule
   runs in `ask` mode with granted tools only.
+- **The signing key and an interactive agent:** each confirmed schedule is signed
+  with an HMAC keyed by a per-machine secret. The secret lives outside the project,
+  in keryx's user-global directory (`schedule-hmac.key`, 0600). A committed or forged
+  store therefore never runs, and a scheduled run cannot see the key because its sandbox
+  hides `$HOME`. But an interactive agent running as the same user, in `trust` mode
+  with an unrestricted shell, could in principle read the key by spelling its path in a
+  way the text floor does not recognise. The floor turns every command or patch that
+  names the key, the schedule store or the systemd/launchd unit directories into a
+  prompt. That makes reading the key an ask, not an impossibility.
 
 See [schedule](cli-reference.md#schedule).
 

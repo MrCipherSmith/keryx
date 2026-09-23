@@ -236,8 +236,11 @@ export function renderScheduleLines(params: {
   readonly name: string;
   readonly cron: string;
   readonly invocation: KeryxInvocation;
+  /** Flow 295 (F4): run `trigger run --schedule <name>`, which resolves only the local schedule store. */
+  readonly scheduleOnly?: boolean;
 }): ScheduleLines {
   const { projectRoot, name, cron, invocation } = params;
+  const runFlag = params.scheduleOnly === true ? "--schedule " : "";
   const interpreterDir = path.dirname(invocation.execPath);
   // Interpreter's own directory first (so THIS keryx resolves even if
   // something it shells out to looks up "node"/"bun" by bare name), then the
@@ -255,7 +258,7 @@ export function renderScheduleLines(params: {
   // AC6 test failing exactly this way before this line was added.
   const cronCommand =
     `cd ${shQuote(projectRoot)} && mkdir -p ${shQuote(logDir)} && PATH=${shQuote(assumedPath)} ` +
-    `${shQuote(invocation.execPath)} ${shQuote(invocation.scriptPath)} trigger run ${shQuote(name)} ` +
+    `${shQuote(invocation.execPath)} ${shQuote(invocation.scriptPath)} trigger run ${runFlag}${shQuote(name)} ` +
     `>> ${shQuote(logPath)} 2>&1`;
   // `cronLine` (what actually goes into a crontab) gets cron's own `%`
   // escaping on top of `cronCommand`'s shell quoting — see the file-header
@@ -287,7 +290,7 @@ Environment=${systemdQuote(systemdEscapePercent(`PATH=${assumedPath}`))}
 # not create a missing PARENT directory, only a missing file. The leading "-"
 # means systemd ignores this step's own exit status.
 ExecStartPre=-/bin/mkdir -p ${systemdValue(logDir)}
-ExecStart=${systemdValue(invocation.execPath)} ${systemdValue(invocation.scriptPath)} trigger run ${systemdValue(name)}
+ExecStart=${systemdValue(invocation.execPath)} ${systemdValue(invocation.scriptPath)} trigger run ${runFlag}${systemdValue(name)}
 StandardOutput=append:${systemdEscapePercent(logPath)}
 StandardError=append:${systemdEscapePercent(logPath)}
 `;

@@ -2,7 +2,7 @@
 // Surfaces still own the prompt chrome; this module decides auto-approve vs ask.
 
 import type { ApprovalMeta } from "./agent";
-import { touchesSacConfirmReview } from "../lib/command-risk";
+import { touchesHumanConfirmation } from "../lib/command-risk";
 import {
   allowShellPattern,
   isShellCommandAllowed,
@@ -68,7 +68,7 @@ export function evaluateShellApproval(input: {
   const command = parseShellExecCommand(input.inputJson);
   const destructive = input.meta?.destructive === true;
   const credentials = input.meta?.credentials === true;
-  const sacReviewConfirmation = touchesSacConfirmReview(command);
+  const sacReviewConfirmation = touchesHumanConfirmation(command);
   const publishLease = input.meta?.publishLease === true;
   const publishLeaseDetail = input.meta?.publishLeaseDetail;
   const audit = io.loadAudit();
