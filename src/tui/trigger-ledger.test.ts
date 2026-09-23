@@ -72,7 +72,15 @@ test("entries join their records newest-first; isScheduledEntry partitions them"
   expect(scheduledEntries(view).map((e) => e.entry.name)).toEqual(["nightly"]);
   expect(isScheduledEntry(findEntry(view, "nightly")!.entry)).toBe(true);
   // Spend is the governance report's own figure: recorded USD, unrecorded counted apart.
-  expect(view.spend).toEqual({ state: "present", spentUsd: 0.25, runsWithCostRecorded: 1, runsWithCostNotRecorded: 2, runsTotal: 3 });
+  expect(view.spend).toEqual({
+    state: "present",
+    spentUsd: 0.25,
+    runsWithCostRecorded: 1,
+    runsWithCostNotRecorded: 2,
+    runsTotal: 3,
+    // No record is a flow dispatch, so none of it is shown under a flow.
+    attributedToFlowsUsd: undefined,
+  });
 });
 
 test("recordsPerEntry caps the list but not runCount", async () => {
