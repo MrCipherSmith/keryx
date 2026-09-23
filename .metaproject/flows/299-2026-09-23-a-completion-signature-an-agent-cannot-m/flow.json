@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "299",
+  "slug": "a-completion-signature-an-agent-cannot-m",
+  "title": "A completion signature an agent cannot make on its own, and a way out of completing",
+  "status": "in-progress",
+  "createdAt": "2026-09-23T05:23:59.298Z",
+  "updatedAt": "2026-09-23T05:55:42.329Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "flow never left in completing: fix the failure paths at the source",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T05:31:43.556Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "flow recover",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "flow confirm terminal token, opt-in confirmation gate, signature confirmation field",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "No agent path mints or bypasses the token; floor and approval markers",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Backward compatibility sweep, TM-03 decision record and CLI reference limits",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-23T05:23:59.298Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-23T05:31:42.622Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T05:31:42.734Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T05:31:42.854Z",
+      "event": "task-added",
+      "detail": "T5: flow never left in completing: fix the failure paths at the source"
+    },
+    {
+      "at": "2026-09-23T05:31:42.971Z",
+      "event": "task-added",
+      "detail": "T6: flow recover"
+    },
+    {
+      "at": "2026-09-23T05:31:43.089Z",
+      "event": "task-added",
+      "detail": "T7: flow confirm terminal token, opt-in confirmation gate, signature confirmation field"
+    },
+    {
+      "at": "2026-09-23T05:31:43.206Z",
+      "event": "task-added",
+      "detail": "T8: No agent path mints or bypasses the token; floor and approval markers"
+    },
+    {
+      "at": "2026-09-23T05:31:43.322Z",
+      "event": "task-added",
+      "detail": "T9: Backward compatibility sweep, TM-03 decision record and CLI reference limits"
+    },
+    {
+      "at": "2026-09-23T05:31:43.436Z",
+      "event": "task-added",
+      "detail": "T10: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T05:31:43.556Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T05:55:41.811Z",
+      "event": "task-done",
+      "detail": "T5: flow never left in completing: fix the failure paths at the source"
+    },
+    {
+      "at": "2026-09-23T05:55:41.947Z",
+      "event": "task-done",
+      "detail": "T6: flow recover"
+    },
+    {
+      "at": "2026-09-23T05:55:42.073Z",
+      "event": "task-done",
+      "detail": "T7: flow confirm terminal token, opt-in confirmation gate, signature confirmation field"
+    },
+    {
+      "at": "2026-09-23T05:55:42.202Z",
+      "event": "task-done",
+      "detail": "T8: No agent path mints or bypasses the token; floor and approval markers"
+    },
+    {
+      "at": "2026-09-23T05:55:42.329Z",
+      "event": "task-done",
+      "detail": "T9: Backward compatibility sweep, TM-03 decision record and CLI reference limits"
+    }
+  ]
+}

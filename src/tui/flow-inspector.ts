@@ -52,13 +52,18 @@ export function findFlowItem(
   );
 }
 
+/** The status column: `completing (interrupted)` when nothing is running the completion (flow 299). */
+function statusCell(item: FlowInspectorItem): string {
+  return item.interrupted ? `${item.status} (interrupted)` : item.status;
+}
+
 export function formatFlowListLines(items: readonly FlowInspectorItem[], selected: number): string[] {
   if (items.length === 0) {
     return ["No flows in this project."];
   }
   return items.map((item, index) => {
     const mark = index === selected ? ">" : " ";
-    return `${mark} ${item.id}  ${item.status}  ${item.tasksDone}/${item.tasksTotal}  ${item.title}`;
+    return `${mark} ${item.id}  ${statusCell(item)}  ${item.tasksDone}/${item.tasksTotal}  ${item.title}`;
   });
 }
 
@@ -70,6 +75,7 @@ export function formatFlowDetailLines(item: FlowInspectorItem): string[] {
   return [
     `${item.id}  ${item.title}`,
     `Status   ${item.status}`,
+    ...(item.interrupted ? [`         ${item.interrupted}`] : []),
     `Dir      ${item.dir}`,
     `Tasks    ${item.tasksDone}/${item.tasksTotal}`,
     `PR       ${item.prUrl ?? "—"}`,
@@ -89,7 +95,7 @@ export function formatFlowListText(items: readonly FlowInspectorItem[]): string 
   }
   return [
     "Flows",
-    ...ordered.map((item) => `  ${item.id}  ${item.status}  ${item.tasksDone}/${item.tasksTotal}  ${item.title}`),
+    ...ordered.map((item) => `  ${item.id}  ${statusCell(item)}  ${item.tasksDone}/${item.tasksTotal}  ${item.title}`),
     "",
   ].join("\n");
 }

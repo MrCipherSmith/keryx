@@ -384,6 +384,187 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  {
+    module: "tasks",
+    command: "flow status",
+    summary: "One flow's full status: lifecycle state, AC freeze/confirmation count, PR, owner, latest signature, task list, and recent history.",
+    intent: ["статус флоу", "flow status", "flow details", "show one flow"],
+    args: [{ name: "<id>", type: "string", required: true, desc: "flow id" }],
+    json: false,
+    read: true,
+  },
+  {
+    module: "tasks",
+    command: "flow init",
+    summary:
+      "Create a new flow (managed work item): allocates an id, scaffolds its directory, and collects initial " +
+      "context from the source issue if one is given. `--owner` is NEVER inferred — only an explicit value " +
+      "on this command populates it.",
+    intent: ["создай флоу", "flow init", "start a new flow", "new managed work item", "заведи флоу"],
+    args: [
+      { name: "title", type: "string", required: false, desc: "work title; required unless --issue is given" },
+      { name: "issue", type: "string", required: false, desc: "tracker issue URL; required unless --title is given" },
+      { name: "slug", type: "string", required: false, desc: "override the slug the directory name derives from the title" },
+      { name: "base", type: "string", required: false, desc: "the branch this work is intended to land on; read back by `flow complete`'s base-branch gate" },
+      { name: "owner", type: "string", required: false, desc: "the human accountable for this flow; left unset (not inferred) when omitted" },
+      {
+        name: "require-confirmation",
+        type: "bool",
+        required: false,
+        desc: "opt this flow into the confirmation gate: `flow complete` then needs a token minted by `flow confirm` (flow 299)",
+      },
+    ],
+    json: false,
+    read: false,
+    sideEffects: [
+      "creates .metaproject/flows/<id>-<date>-<slug>/",
+      "writes description.md, context.md, plan.md, tasks.md, acceptance-criteria.md, journal.md and flow.json in that directory",
+    ],
+  },
+  {
+    module: "tasks",
+    command: "flow owner set",
+    summary: 'Set the human accountable for a flow. Never inferred — only this command, or `--owner` on `flow init`, populates it.',
+    intent: ["назначь владельца флоу", "flow owner set", "set flow owner", "who owns this flow", "владелец флоу"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "owner", type: "string", required: true, desc: "the accountable human's name/identity" },
+      { name: "reason", type: "string", required: true, desc: "why the owner is being set" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["writes flow.json's owner field (basis: stated) and appends a history entry"],
+  },
+  {
+    module: "tasks",
+    command: "flow ac confirm",
+    summary:
+      "Confirm one frozen acceptance criterion as satisfied, with optional evidence. Appends a NEW signature " +
+      "rather than replacing an existing one, so re-confirming a criterion keeps the full signing history.",
+    intent: ["подтверди критерий", "flow ac confirm", "confirm acceptance criterion", "mark AC done", "подтверди AC"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "<ACn>", type: "string", required: true, desc: "criterion id, e.g. AC1" },
+      { name: "note", type: "string", required: false, desc: "evidence recorded alongside the confirmation" },
+      {
+        name: "signed-by",
+        type: "string",
+        required: false,
+        desc:
+          "explicit signer identity (stated); falls back to KERYX_ACTOR (stated), then the local git identity " +
+          '(derived), then "unknown" — none of these is proof a human signed',
+      },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["writes flow.json's acConfirmed map for that criterion and appends a signature record"],
+  },
+  {
+    module: "tasks",
+    command: "flow ac update",
+    summary:
+      "Re-freeze acceptance-criteria.md, VOIDING every prior confirmation. With --criterion and --text " +
+      "together, also rewrites that one criterion (or appends the next unused one) before re-freezing; without " +
+      "them, re-checksums the file as already edited by hand. Refuses an extra positional, an unknown flag, or " +
+      "--criterion/--text given alone.",
+    intent: ["обнови критерии", "flow ac update", "rewrite acceptance criterion", "re-freeze acceptance criteria", "измени AC"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "reason", type: "string", required: true, desc: "why the criteria changed" },
+      { name: "criterion", type: "string", required: false, desc: "an existing ACn to rewrite, or the next unused ACn to append; requires --text" },
+      { name: "text", type: "string", required: false, desc: "the criterion's new text; requires --criterion" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: [
+      "with --criterion and --text: rewrites acceptance-criteria.md (replaces an existing ACn's text, or appends the next one)",
+      "re-checksums acceptance-criteria.md into flow.json's acChecksum",
+      "clears flow.json's acConfirmed map — every prior confirmation is voided",
+    ],
+  },
+  {
+    module: "tasks",
+    command: "flow ac reseal",
+    summary:
+      "Re-seal a stale checksum over an acceptance-criteria.md file git shows is UNCHANGED since HEAD. Refuses " +
+      "if the file actually changed (use `flow ac update` instead) or the checksum already matches. KEEPS " +
+      "existing confirmations, unlike `flow ac update`.",
+    intent: ["пересчитай checksum критериев", "flow ac reseal", "reseal acceptance criteria checksum"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "reason", type: "string", required: true, desc: "why the checksum is stale" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["writes flow.json's acChecksum to match the file on disk; acConfirmed is left untouched"],
+  },
+  {
+    module: "tasks",
+    command: "flow complete",
+    summary:
+      "Run the completion gates (acceptance criteria, pull-request or main-merge, base branch, tasks, owner, " +
+      'review) and close the flow when every gate passes; otherwise returns it to in-progress. Records a ' +
+      'signature; `--signed-by` (falling back to KERYX_ACTOR, then the local git identity, then "unknown") is ' +
+      "never proof a human signed.",
+    intent: ["заверши флоу", "flow complete", "close flow", "complete flow"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "comment", type: "bool", required: false, desc: "post the completion summary as a tracker issue comment, for a github-issue-sourced flow that passes" },
+      { name: "merged", type: "string", required: false, desc: "commit sha for a direct-merge handoff, evaluated against origin/main instead of the pull-request gate" },
+      { name: "signed-by", type: "string", required: false, desc: "explicit signer identity for the completion signature" },
+      {
+        name: "confirm-token",
+        type: "string",
+        required: false,
+        desc: "a token minted by `flow confirm`; checked only for a flow that opted into the confirmation gate, spent only on a passing completion",
+      },
+    ],
+    json: false,
+    read: false,
+    sideEffects: [
+      "writes flow.json (status, every gate's outcome, and a completion signature)",
+      "with a valid --confirm-token on a passing completion: marks the flow's confirm-token.json spent",
+      "with --comment, on a github-issue-sourced flow that passes: posts a comment on the source issue",
+    ],
+  },
+  {
+    module: "tasks",
+    command: "flow confirm",
+    summary:
+      "OPERATOR-ONLY — not for agents to run. A person mints, in their own terminal, the completion confirmation " +
+      "token a flow that requires one needs; an agent asked to confirm a completion should ask the operator to run " +
+      "this, not run it. Refuses unless stdin and stdout are TTYs, shows what is being confirmed, and reads a typed " +
+      "challenge from /dev/tty; every approval mode asks before it runs. An interactive step, not proof of a person (TM-03).",
+    // Operator-phrased only (security re-review of PR #661): no agent-facing
+    // "confirm completion" phrasing, so an agent is never routed to a
+    // human-only verb by intent matching.
+    intent: ["flow confirm", "operator mints flow confirmation token"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "merged", type: "bool", required: false, desc: "confirm a direct-merge completion of an in-progress flow" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: [
+      "writes .metaproject/flows/<dir>/confirm-token.json (the token's sha256 and binding, never the token)",
+      "appends a confirmation-minted history entry naming only a hash prefix",
+    ],
+  },
+  {
+    module: "tasks",
+    command: "flow recover",
+    summary:
+      "Move a flow left in `completing` by an interrupted `flow complete` back to in-progress, recording the " +
+      "reason. Refuses from any other status and while the flow lock is held; never touches signatures or attempts.",
+    intent: ["восстанови флоу", "flow recover", "flow stuck in completing", "recover interrupted completion"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "reason", type: "string", required: true, desc: "why the completion was interrupted" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["writes flow.json's status (completing -> in-progress) and appends a completion-recovered history entry"],
+  },
   // ---- gdskills / job packages ------------------------------------------
   {
     module: "gdskills",
@@ -584,6 +765,44 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // `agents external list`/`probe`: flow 176 made both read-only and
+  // quota-free — they run the candidate CLI's own `--version` and nothing
+  // else (`agents.ts`: "list/probe are read-only and quota-free"). Safe to
+  // describe and auto-allow.
+  {
+    module: "agents",
+    command: "agents external list",
+    summary: "The external ACP-agent registry: known agent CLIs and, unless --no-probe, whether each is installed (probes with the candidate's own `--version`, nothing else).",
+    intent: ["внешние агенты", "list external agents", "external agent registry", "which agent clis are installed"],
+    args: [
+      { name: "json", type: "bool", required: false, desc: "emit the registry + availability document as JSON" },
+      { name: "no-probe", type: "bool", required: false, desc: "skip detection entirely; every entry reports not-probed" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "agents",
+    command: "agents external probe",
+    summary: "Detect one external agent by registry id (probes with its own `--version`, nothing else).",
+    intent: ["проверь внешнего агента", "probe external agent", "is this agent cli installed"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "registry id, from `agents external list`" },
+      { name: "json", type: "bool", required: false, desc: "emit the availability document as JSON" },
+    ],
+    json: true,
+    read: true,
+  },
+  // `agents external run` is deliberately NOT described here (flow 292).
+  // Unlike `list`/`probe`, it drives one ACP agent end-to-end — it spends the
+  // operator's provider quota and, being an ordinary subcommand of an already-
+  // described verb, would otherwise be silently reachable by a consumer that
+  // projects this registry onto a remote/MCP surface and trusts an absent
+  // entry to mean "does not exist" only at the VERB level. That is the same
+  // reasoning `harness` is excluded for entirely (see EXCLUSIONS in
+  // command-registry.coverage.test.ts): a descriptor is a query with no cost
+  // or an action the operator explicitly approves in the moment, never a
+  // model-spending action offered up for silent or remote discovery.
   // ---- maintenance ------------------------------------------------------
   // The "bring a project up" commands. They were absent while the registry
   // covered only query surfaces, which left an agent no machine-readable way to
@@ -703,17 +922,96 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     module: "trigger",
     command: "trigger run",
     summary:
-      'Perform exactly one pass of a declared trigger\'s action (.metaproject/triggers.json). Only "reconcile" ' +
-      '(-> sync --apply) and "rebuild" (-> gdgraph build) run today; "open-flow"/"flow-next" refuse cleanly.',
+      'Perform exactly one pass of a declared trigger\'s action (.metaproject/triggers.json): "reconcile" -> ' +
+      '"keryx sync --apply", "rebuild" -> "keryx gdgraph build", "open-flow" opens a flow from a template ' +
+      '(skipIfOpen skips a second one while an equivalent flow is open), and "flow-next" is REPORT-ONLY unless ' +
+      'the entry declares a "dispatch" block — with one, it DISPATCHES an unattended keryx agent, in a throwaway ' +
+      "git worktree, to work the flow's next task. \"agent-task\" (flow 295) runs one unattended agent turn for a " +
+      "schedule the operator confirmed with `keryx schedule add`, and leaves a report.",
     intent: ["запусти триггер", "run trigger", "fire trigger", "trigger run"],
-    args: [{ name: "<name>", type: "string", required: true, desc: "the trigger's name, as declared in .metaproject/triggers.json" }],
+    args: [
+      { name: "<name>", type: "string", required: true, desc: "the trigger's name, as declared in .metaproject/triggers.json or the local schedule store" },
+      {
+        name: "schedule",
+        type: "bool",
+        required: false,
+        desc: "resolve only a local schedule (.metaproject/data/trigger/schedules.json), never a committed trigger — what an installed timer runs",
+      },
+    ],
     json: false,
     read: false,
     sideEffects: [
-      'reconcile: writes graph/wiki/memory via "keryx sync --apply"',
-      'rebuild: writes the code graph via "keryx gdgraph build"',
-      "briefly writes .metaproject/data/trigger/.run.lock while the action runs",
+      'reconcile: writes graph/wiki/memory via "keryx sync --apply"; holds the project\'s shared maintenance lock (.metaproject/data/.locks/maintenance.lock) for the duration and refuses cleanly (exit 0) rather than waiting when another run already holds it',
+      'rebuild: writes the code graph via "keryx gdgraph build"; holds the same shared maintenance lock (.metaproject/data/.locks/maintenance.lock) and refuses cleanly the same way as reconcile',
+      'open-flow: creates a flow via "keryx flow init --title <template>", unless skipIfOpen finds an equivalent flow already open; the whole check-then-create sequence runs under the SAME shared maintenance lock (.metaproject/data/.locks/maintenance.lock) as reconcile/rebuild, with the same clean refusal',
+      'flow-next with NO dispatch block: report-only ("keryx flow next <flow>") — takes no lock at all',
+      "flow-next WITH a dispatch block: does NOT take the shared maintenance lock (so the dispatched agent's own \"keryx gdgraph build\" can take it) — instead takes a PER-FLOW dispatch lock (.metaproject/data/.locks/dispatch-<flow>.lock, no wait) that refuses only a second dispatch on the SAME flow, so dispatches on different flows run concurrently; briefly takes a separate project-wide spend lock (.metaproject/data/.locks/spend.lock) just to decide and record the spend reservation before the first model call; then runs an unattended keryx agent in a throwaway git worktree on branch trigger/<flow>-<task> (committed, never pushed), which may leave a commit there, and records a task-attempt / task-done / attempt-failed-or-blocked outcome on the flow",
+      "agent-task: refuses unless this machine's signature (HMAC) over the stored schedule still verifies; runs one unattended agent turn in a scratch directory with the project read-only; granted tools run outside the sandbox; the dispatcher writes .metaproject/data/trigger/reports/<name>/<runId>.md",
+      "appends one record to .metaproject/data/trigger/runs.jsonl",
     ],
+  },
+  {
+    module: "trigger",
+    command: "trigger list",
+    summary: "List every declared trigger entry: enabled state, what fires it, its action, and hook-install status; also lists any entry rejected at load and why.",
+    intent: ["список триггеров", "list triggers", "declared triggers", "trigger list"],
+    args: [],
+    json: false,
+    read: true,
+  },
+  {
+    module: "trigger",
+    command: "trigger status",
+    summary: "Last recorded outcome for one or every declared trigger (from the run record), plus any open spend reservation that a killed dispatch left behind.",
+    intent: ["статус триггера", "trigger status", "last trigger run", "открытые резервации расхода"],
+    args: [{ name: "<name>", type: "string", required: false, desc: "narrow to one trigger; omit for every declared entry" }],
+    json: false,
+    read: true,
+  },
+  {
+    module: "trigger",
+    command: "trigger schedule",
+    summary: "Print the cron line and systemd service/timer pair for a schedule-fired trigger entry. keryx runs no daemon of its own — the operator installs one of the two with their own scheduler.",
+    intent: ["расписание триггера", "trigger schedule", "cron line for trigger", "systemd timer for trigger"],
+    args: [{ name: "<name>", type: "string", required: true, desc: "a schedule-fired entry's name" }],
+    json: false,
+    read: true,
+  },
+  {
+    module: "trigger",
+    command: "trigger install",
+    summary: "Install a managed git hook block for every declared, event-fired trigger entry (enabled or not). Schedule-fired and ci-fired entries install no hook.",
+    intent: ["установи триггеры", "install trigger hooks", "trigger install"],
+    args: [],
+    json: false,
+    read: false,
+    sideEffects: [
+      "writes a managed hook block into the matching post-merge/post-commit/post-checkout .git/hooks/* file(s) for each event-fired entry",
+      "other managed blocks already in those hook files (e.g. keryx sync install-hooks's block) are untouched and still run",
+    ],
+  },
+  {
+    module: "trigger",
+    command: "trigger uninstall",
+    summary: "Remove the trigger hook blocks previously written by `trigger install`. Other managed blocks in the same hook files are untouched.",
+    intent: ["удали триггеры", "uninstall trigger hooks", "trigger uninstall"],
+    args: [],
+    json: false,
+    read: false,
+    sideEffects: ["removes the managed trigger hook block(s) from .git/hooks/* file(s)"],
+  },
+  {
+    module: "trigger",
+    command: "trigger resolve",
+    summary: "Close a killed dispatch's open spend reservation by stating what it actually spent, so it stops counting against the project and trigger spend ceilings. There is no default figure — it must be stated.",
+    intent: ["закрой резервацию расхода", "trigger resolve", "close spend reservation", "resolve killed dispatch"],
+    args: [
+      { name: "<runId>", type: "string", required: true, desc: "the run id, from an open-reservation line in `trigger status`" },
+      { name: "spent", type: "number", required: true, desc: "non-negative USD the run actually spent" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["appends a reservation-resolved record to .metaproject/data/trigger/runs.jsonl"],
   },
   {
     module: "governance",

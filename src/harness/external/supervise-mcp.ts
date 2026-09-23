@@ -254,6 +254,7 @@ export async function superviseCodexMcpRun(
     // `extractCommandTextForClassification` — one extraction, not a second
     // one that could drift.
     const commandText = extractCommandTextForClassification(pending.vendor) ?? "";
+    // Flow 299: `flow confirm` shares SAC's confirm-review floor.
     const sacReviewConfirmation = touchesHumanConfirmation(commandText);
 
     // AC6: resolveApprovalDecision is called for EVERY received elicitation,

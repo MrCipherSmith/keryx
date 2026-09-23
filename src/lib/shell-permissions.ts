@@ -15,7 +15,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
 import { shellConfigPath } from "./shell-config";
-import { isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation, touchesSacConfirmReview, touchesSchedulerControl } from "./command-risk";
+import { isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation, touchesSchedulerControl } from "./command-risk";
 import { createHash } from "node:crypto";
 import { hasUnquotedMetacharacter } from "./shell-syntax";
 
@@ -141,13 +141,6 @@ export function validateShellPattern(pattern: string): PatternValidation {
         "touches the agent's own permission/credential files; remembering it would let one approved command disable the approval gate for every future session",
     };
   }
-  if (touchesSacConfirmReview(trimmed)) {
-    return {
-      ok: false,
-      reason:
-        "touches SAC's proposal-review/confirm-token family; that guarantee depends on a human answering a real approval prompt, so it is never remembered",
-    };
-  }
   // A wildcard pattern such as `systemctl *` or `keryx schedule *` has no control verb
   // in its text, yet it would cover one. So the pattern is refused by the command
   // family it can reach, not only by the verb it happens to spell out.
@@ -156,6 +149,13 @@ export function validateShellPattern(pattern: string): PatternValidation {
       ok: false,
       reason:
         "creates, changes or runs a scheduled background task, or drives the OS scheduler; a schedule exists only after the operator confirms its card, so this is never remembered",
+    };
+  }
+  if (touchesHumanConfirmation(trimmed)) {
+    return {
+      ok: false,
+      reason:
+        "touches a human-confirmation command (SAC's confirm-review family, or `flow confirm`); that guarantee depends on a human answering a real approval prompt, so it is never remembered",
     };
   }
   const banned = bannedPrefixGrant(trimmed, firstToken);
@@ -399,7 +399,7 @@ export function matchShellPattern(pattern: string, command: string): boolean {
  *    `/bin/sh -c`, so a pattern match says nothing about what will run;
  *  - a destructive command always requires explicit confirmation;
  *  - a command touching the agent's own credentials, or SAC's confirm-review
- *    family (`touchesSacConfirmReview`), is never auto-approved from a stored
+ *    family or `flow confirm` (`touchesHumanConfirmation`), is never auto-approved from a stored
  *    pattern, no matter how that pattern got into the file.
  *
  * Pure.
@@ -468,7 +468,7 @@ export interface ShellPatternSuggestion {
  * A destructive command offers neither grant, whatever its shape: "always" on a
  * destructive command is the exact path that put a literal `rm -rf /` into a
  * live allowlist (flow 115). Same reasoning extends to SAC's proposal-review/
- * confirm-token family (`touchesSacConfirmReview`): "always" there is the
+ * confirm-token family or `flow confirm` (`touchesHumanConfirmation`): "always" there is the
  * exact path that would let a *later*, unrelated turn's `shell_exec` silently
  * satisfy the human-presence proof `keryx workspace confirm-review` exists to
  * require.

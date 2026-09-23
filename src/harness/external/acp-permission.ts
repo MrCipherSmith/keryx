@@ -139,6 +139,7 @@ export function classifyAcpToolCall(toolCall: AcpToolCallUpdate, worktree: strin
       const destructive = command.length > 0 && isDestructiveCommand(command);
       if (destructive) reasons.push("the command is classified destructive");
       const credentials = pathCredentials || (command.length > 0 && touchesAgentCredentials(command));
+      // Flow 299: `flow confirm` shares SAC's confirm-review floor.
       const sacReviewConfirmation = command.length > 0 && touchesHumanConfirmation(command);
       return {
         ...base,

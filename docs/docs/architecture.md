@@ -550,7 +550,7 @@ The three **in-process code imports** (solid) are:
 
 1. **testing → health** — the health `tests` source adapter reuses testing's `loadCompatibleTestingReport` and `TestingReport` type instead of re-running tests.
 2. **memory → gdskills `verify`** — `verify` calls `relevantAcceptedMemory()` to surface accepted decisions/constraints/known-mistakes so a skill can be flagged when it contradicts accepted memory. (`verify` also calls gdwiki's `wikiValidate()` as an evidence signal.)
-3. **health → flow** — flow's completion gate 3 calls `createCodeHealthService().gate`. (flow's context collector also runs a deterministic `memory` search to enrich `context.md`.)
+3. **health → flow** — one of flow's completion gates calls `createCodeHealthService().gate` (full gate list below). (flow's context collector also runs a deterministic `memory` search to enrich `context.md`.)
 
 **Security write-seam gates (Phase 3).** Five modules now call a shared in-process guard (`src/security/guard.ts`) at their write seams — the first real inbound security calls in the system:
 
@@ -558,9 +558,33 @@ The three **in-process code imports** (solid) are:
 - **wiki collect → security** (`guardOutput`, target wiki) before writing a collected draft;
 - **testing run → security** (`guardOutput`, target report) before persisting the raw log;
 - **gdctx run/read → security** (`redactRaw`) to redact secrets from raw output before persist/summarize;
-- **flow complete → security** (`securityFlowGate`) as completion gate 4.
+- **flow complete → security** (`securityFlowGate`), one of the gates listed below.
 
 The guard wraps the frozen Phase 1+2 engine and enforces one rule: **advisory (the default) reports and continues — it never blocks or mutates** (the gdctx seam still redacts detected secrets as a pure safety step); **enforced/ci/gateway blocks or suppresses the write with a masked category+count reason**; **disabled is a zero-cost no-op**. It imports only from the security engine + shared libs (so the seam stays acyclic) and degrades to allow on any engine error, so a seam is never broken.
+
+**`flow complete`'s gates, in the order `src/flow/service.ts` evaluates them.**
+The whole set must report something other than `fail` (`skipped` is a pass for
+a gate a package never opted into) before a flow can complete:
+
+1. **acceptance-criteria** — checksum intact, every `ACn` confirmed.
+2. **pull-request** (or **main-merge** for a direct-merge handoff with no
+   open PR) — the PR exists with green checks, or the implementation commit
+   is proven contained in `origin/main`.
+3. **base-branch** — the PR/merge actually landed on the base branch the flow
+   recorded, not wherever it happens to point now.
+4. **tasks** — opt-in per package (set by `flow init`); no task left open.
+5. **owner** — opt-in per package; an accountable owner is recorded.
+6. **review** — opt-in; a clean review round was actually observed (never
+   passes on silence — an unobservable review fails, not skips).
+7. **health** — `createCodeHealthService().gate`, the in-process import above.
+8. **security** — `securityFlowGate`, omitted entirely when the security
+   module is disabled.
+
+This list is the source of truth for the count and order. It is a
+simplification of one thing: `src/flow/service.ts`'s own comments number these
+`Gate 1`…`Gate 6`, folding base-branch and owner in as `2b`/`3b` — that
+numbering is for reading the function, not for citing a total gate count
+elsewhere; read it there if this list and the code ever disagree.
 
 The **file-mediated flows** (dashed) are the backbone of the system:
 

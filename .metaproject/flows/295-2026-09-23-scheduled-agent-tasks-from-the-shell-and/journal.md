@@ -70,3 +70,12 @@
     - Concurrent schedules: no bug. Reservations under the spend lock sum to at most the project ceiling, and a test now pins that with overlapping runs.
     - Every run's scratch now lives under one parent that is hidden inside the sandbox (`UnattendedSandboxInput.hide`), so a sibling run cannot be read even with TMPDIR=/var/tmp. This was verified in the real sandbox.
   - Docs: limitations.md states the honest limit on the signing key. The skill tells the agent to leave the key alone and that `schedule add` refuses inside its shell.
+- 2026-09-23T11:10:00.000Z - note (implementer): merged origin/main (flows 294, 296, 297, 298, 299) with `--no-commit`. The merge is not committed and the 9 resolved files are not staged.
+  - Conflicts resolved:
+    - `command-risk.ts`: `touchesHumanConfirmation` is now SAC ∪ flow confirm ∪ scheduler control.
+    - `shell-approval.ts`, `acp-permission.ts`, `supervise-mcp.ts` and `agent.ts`: main's comments kept, with the shared call.
+    - `shell-permissions.ts`: imports unioned. The scheduler-specific pattern check now runs before the generic human-confirmation check, so its message is accurate.
+    - `run.ts`: both reservation fields kept (295's `actionKind` and 297's `dispatch`).
+    - `cli.ts`: 294's help imports plus `scheduleCommand`.
+    - `governance/report.test.ts`: both test blocks kept. 295's expectation gains `attributedToFlowsUsd: undefined`, because an agent task names no flow.
+  - Follow-up edit: the `trigger run` descriptor documents `--schedule` and agent-task.

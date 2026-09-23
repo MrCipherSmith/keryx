@@ -199,6 +199,12 @@ export interface AcpChildOptions {
   readonly killGraceMs?: number;
   /** Ceiling on the run's output (assistant text + events). Defaults to 16 MiB; see `./bounded.ts`. */
   readonly maxOutputBytes?: number;
+  /**
+   * Ceiling on stderr read from the agent (flow 298 T14). Defaults to the
+   * registry entry's own `maxStderrBytes`, or 16 MiB (`DEFAULT_MAX_STDERR_BYTES`,
+   * `./bounded.ts`) when the entry declares none.
+   */
+  readonly maxStderrBytes?: number;
   readonly onDecision?: (decision: AcpPermissionDecision) => void;
   readonly onFsRequest?: (record: AcpFsRequestRecord) => void;
 }
@@ -234,6 +240,9 @@ export async function runAcpInWorktree(input: RunAcpInWorktreeInput): Promise<Ru
   const unattended = options.unattended === true || options.requestApproval === undefined;
   const context = options.context ?? (await resolveKeryxMcpOffer(input.projectRoot));
   const argv = acpArgvFor(input.entry, options.argv);
+  // The caller's option wins; otherwise fall back to the registry entry's own
+  // per-agent override (flow 298 T14), if it declared one.
+  const maxStderrBytes = options.maxStderrBytes ?? input.entry.maxStderrBytes;
 
   const supervised = await superviseAcpRun(
     {
@@ -247,6 +256,7 @@ export async function runAcpInWorktree(input: RunAcpInWorktreeInput): Promise<Ru
       timeoutMs: input.timeoutMs,
       ...(options.killGraceMs === undefined ? {} : { killGraceMs: options.killGraceMs }),
       ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),
+      ...(maxStderrBytes === undefined ? {} : { maxStderrBytes }),
       permission: {
         mode,
         unattended,

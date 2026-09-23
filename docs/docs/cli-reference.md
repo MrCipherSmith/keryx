@@ -346,10 +346,10 @@ its own:
   started with their `command`, `args` and `env`, through the same MCP client
   and dial procedure `keryx shell` uses for its configured servers. The child
   gets the entry's `env` on top of keryx's own environment, with keryx's
-  credentials stripped from it — credential-shaped names, and every variable
-  keryx loaded from its own saved keys, by name; its stderr is discarded. The
-  session is answered at once; its first `session/prompt` waits for the
-  servers to finish starting.
+  credentials stripped from it — credential-shaped names, and every name
+  saved in your config (`auth.json`), whether or not this run has actually
+  loaded it; its stderr is discarded. The session is answered at once; its
+  first `session/prompt` waits for the servers to finish starting.
 - **One running set per distinct list.** Zed sends its whole list with every
   new thread; sessions on one connection that send the same list (same
   entries, same project root) share one set of server processes rather than
@@ -1752,17 +1752,47 @@ Per flow (`.metaproject/flows/<id>/flow.json` and its `reviews/*/manifest.json`)
 
 Per project (`.metaproject/data/trigger/runs.jsonl`):
 
-- **Trigger spend** — USD summed over fired-trigger runs whose cost was
+- **Trigger spend** — USD summed over every fired-trigger run whose cost was
   recorded, plus the count of runs whose cost was not recorded (never folded
-  into the sum as `$0`). Never attributed to any individual flow: a fired-
-  trigger record carries no flow reference, so this is always a project-wide
-  figure, stated as such. An absent ledger reports a demonstrated `$0`
-  (nothing has ever fired); an unreadable one reports `not recorded` with the
-  reason.
-- **Policy decisions** — allow/ask/deny decisions and unattended-run denials
-  have no durable project-wide record in this build, so this section always
-  reads `not recorded (no durable log exists yet)`. (Flow 290, unattended
-  denials, is a future source for this — not a dependency of this report.)
+  into the sum as `$0`). This is the project's TRUE total, project-wide across
+  every trigger and every action kind, whether or not the run named a flow.
+  `attributedToFlowsUsd` says how much of that total is ALSO shown under a
+  flow's own "Dispatch runs" section below (`spentUsd` there); it is a SUBSET
+  of the project total, never an amount on top of it — **do not add the
+  project's `spentUsd` to any flow's `dispatch.spend.spentUsd`, that
+  double-counts every dispatch dollar.** The markdown says so in place, with
+  "of which $X is shown under flows below (not additive)". An absent ledger
+  reports a demonstrated `$0` (nothing has ever fired); an unreadable one
+  reports `not recorded` with the reason.
+- **Policy decisions** — an INTERACTIVE session's own allow/ask/deny decisions
+  have no durable record in this build, so this section always reads `not
+  recorded` with that reason. An UNATTENDED dispatch run is different: flow 290
+  records every such run's denials, and this report reads them — see "Dispatch
+  runs" below, not this line.
+
+Per flow, also from `runs.jsonl` (flow 297):
+
+- **Dispatch runs** — every unattended `flow-next` dispatch run that named
+  this flow (`TriggerDispatchRecord.flow`), joined by `runId`: the trigger,
+  the time, the outcome (`ok`, `failed`, `dispatch-refused`, `budget-refused`,
+  or an operator's `reservation-resolved`), the cost, and every call its
+  unattended approval gate denied — the tool and the reason, timed by the
+  run's own `at`. Spend is summed only over these CLOSED runs, the same
+  "never folded into `$0`" rule trigger spend keeps. This `spentUsd` is
+  **included in** the project's trigger spend above, not additional to it —
+  `includedInProjectTriggerSpend: true` in the JSON, and the markdown line
+  says "(included in the project's trigger spend above — not additive)".
+- **Open reservations** — a spend reservation this flow's dispatch opened
+  (`keryx trigger run`, before its first model call) that no closing record —
+  and no `keryx trigger resolve` — has closed yet: a killed run. Shown as
+  "reserved, not spent", on its own line, never added into the spend figure
+  above. A reservation recorded before this change carries no flow reference
+  and stays out of every flow's section — it is still counted at the
+  project-wide trigger-spend line, unchanged from before.
+- A report-only `flow-next` entry (no `dispatch` block — it only reports the
+  next task, no model call) writes no `dispatch` record at all, so it never
+  appears in either list here; it is still counted at the project-wide
+  trigger-spend line, exactly as before this change.
 
 The report never re-runs `flow complete`, `review ingest`/`budget`, `health
 run`, or any security scan, and never calls a model or a network service. The
@@ -2265,7 +2295,9 @@ keryx flow ac update <id> --reason "<why>"
 keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"
 keryx flow ac reseal <id> --reason "<why>"
 keryx flow implemented <id> --pr <url>
-keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"]
+keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]
+keryx flow confirm <id> [--merged]
+keryx flow recover <id> --reason "<why>"
 keryx flow block <id> --reason "<why>"
 keryx flow unblock <id>
 keryx flow check
@@ -2294,7 +2326,9 @@ keryx flow schema [--out <path>]
 
 Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (the syntax before flow 293) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
-| `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. See [the owner gate](#the-owner-gate) and [the owner and completion signatures](#the-owner-and-completion-signatures). |
+| `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
+| `confirm <id>` | `--merged` | Mint a completion confirmation token for a flow that requires one. Refuses unless stdin and stdout are terminals, the flow is `implemented` (or `in-progress` with `--merged`), and its criteria are frozen and unchanged. Shows what is being confirmed, asks for a random code typed back on `/dev/tty`, then prints the token once. See [the confirmation token](#the-confirmation-token). With `--merged` the token binds only `merged`, not a commit: the commit is named later, at `flow complete --merged <commit>`, so the token does not pin which commit that is. `--merged` is accepted on an `implemented` flow that records a PR too, matching `flow complete --merged` being allowed from `implemented`; the token then binds `merged`, and a PR completion with it fails as `token_target_mismatch`. |
+| `recover <id>` | `--reason "<why>"` (required) | Move a flow left in `completing` (by a process that died mid-`complete`) back to `in-progress`, recording the reason, the last event before the interruption, and whether the criteria file is intact. Refuses from any other status and while another process holds the flow's lock. `flow status` and the TUI's `/flows` view label such a flow `interrupted` and name this command. |
 | `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |
 | `unblock <id>` | — | Restore the saved previous status. |
 | `check` | — | Consistency audit across all flows: structure, checksums, schema, duplicate ids, plus every `dependsOn` that can never be satisfied (unknown id, self-reference, cycle) and every task recorded `failed`/`blocked` with no attempt behind it. |
@@ -2474,6 +2508,72 @@ Every pre-existing `flow.json` with no `owner` or `signatures` field keeps
 loading, validating, passing `flow check`, and completing exactly as before —
 these fields are additive and optional, like every Task Manager v2 field, and
 reading an old file never rewrites it on disk.
+
+### The confirmation token
+
+A flow can require a **confirmation token** before it completes. It opts in when
+it is created, with `flow init --require-confirmation`, or with
+`completion.require_confirmation: true` in `.metaproject/tasks.config.json`.
+`flow init` stamps the answer into the new flow as `gates.confirmation`, so
+changing the config later never alters an existing flow. Every other flow, and
+every flow created before this existed, reports the `confirmation` gate as
+`skipped`.
+
+```
+keryx flow confirm <id>                              # in a terminal: review, type the code back, get a token
+keryx flow complete <id> --confirm-token <token>     # the confirmation gate passes; the token is spent
+```
+
+`flow confirm` refuses to mint unless all of these hold:
+- stdin and stdout are both terminals;
+- the flow is `implemented` (or `in-progress`, with `--merged`);
+- the criteria are frozen and unchanged;
+- a random code is typed back on `/dev/tty`, so a pipe on stdin cannot answer.
+
+It stores only the token's sha256, in `confirm-token.json` inside the flow
+directory, bound to the flow, the completion, the criteria checksum, and the
+**target** you were shown: the PR URL, or `merged` for `--merged`. A token
+minted while looking at one PR fails as `token_target_mismatch` if the flow is
+later pointed at another PR, or completed with `--merged` instead (and the
+reverse). Only
+the latest mint is valid. A token lives for ten minutes. `flow complete` checks
+it when the attempt starts, so a slow health gate cannot expire it midway. It is
+spent only on a passing completion, so a failed attempt can be fixed and retried
+with the same token. An expired, spent, other-flow, superseded or
+pre-criteria-change token each fails the gate with its own named reason.
+
+The completion signature keeps its `identity` exactly as before and gains a
+`confirmation` field: `mechanism: "terminal-token"`, a `tokenRef` (a prefix of
+the stored hash, never the token), `mintedAt`, `consumedAt` and `boundTo`.
+`flow status`, `flow complete` and `keryx governance report` show it.
+
+What the token does **not** prove, stated rather than implied:
+
+- **What it does prove.** A step that no agent tool can perform ran within the
+  TTL, for exactly this criteria checksum. Not that a human ran it, and not who.
+- **The command-text floors can be evaded.** keryx's own agent loop, its ACP
+  classifier and its supervised-codex path ask a human before running any
+  command that contains the words `flow confirm`, in every permission mode. No
+  session pattern or remembered grant answers that prompt, and "always" is
+  never offered for it. Unattended
+  trigger runs refuse it outright. But these checks match text: a variable, a
+  script file or `bun -e` spells the same thing without the words.
+- **A pseudo-terminal can be faked.** `script -qc '…' /dev/null` gives any
+  command a terminal with no person present. So an agent with an unrestricted
+  shell can run `flow confirm` and type the code itself.
+- **The hash store can be forged.** It is a plain file. An agent that can write
+  files can write the hash of a token it chose. The harness and ACP refuse to
+  edit it, but a shell redirect is not path-classified.
+- **Agents outside keryx supervision are not gated at all.** An editor's own
+  shell tool, for example, never passes through keryx's approval prompt.
+- **The opt-in lives in `flow.json`.** A shell-capable agent can hand-edit
+  `gates.confirmation` away.
+- **Handing the token to an agent delegates the completion.** That is the
+  intended handoff, and all the record can show is that someone completed the
+  interactive step.
+
+The same limits apply to SAC's `keryx workspace confirm-review` token. See
+[TM-03: Terminal Confirmation Token](https://github.com/MrCipherSmith/keryx/blob/main/docs/decisions/keryx-harness/TM-03-terminal-confirmation-token.md).
 
 ### Completion attempts (gate outcomes)
 
@@ -3975,14 +4075,36 @@ in them may be able to push the tool's identity out of view, and an
 "always" grant would store a pattern the model chose in your permission
 file.
 
-**Environment.** A server is spawned with your environment minus anything
-credential-shaped: provider keys (`ANTHROPIC_*`, `OPENAI_API_KEY`,
-`GEMINI_API_KEY`, …), forge and cloud tokens (`GITHUB_TOKEN`, `NPM_TOKEN`,
-`AWS_*`), `SSH_AUTH_SOCK`, the whole `KERYX_*` namespace, and any variable
-whose name says it holds a token, key, password or credential. A server that
-genuinely needs one takes it explicitly with `-e`, which is a decision you
-made rather than a default you inherited. Its stderr is captured, not
-inherited, so it cannot write to your terminal.
+**Environment.** A server is spawned with your environment minus two things,
+stripped independently and for independent reasons — the same strip, built
+once in `buildMcpChildEnv` and used by every surface that launches an MCP
+server (`keryx shell`, `keryx mcp doctor`, and an ACP client's own servers
+under `keryx acp`; see "MCP servers from the client" above):
+
+- **Anything credential-SHAPED**, by name or by value: provider keys
+  (`ANTHROPIC_*`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …), forge and cloud
+  tokens (`GITHUB_TOKEN`, `NPM_TOKEN`, `AWS_*`), agent sockets
+  (`SSH_AUTH_SOCK`), credential-file pointers (`NETRC`, `KUBECONFIG`, …), the
+  whole `KERYX_*` namespace, any variable whose name says it holds a token,
+  key, password or credential, and any value shaped like
+  `scheme://user:pass@host` wherever it turns up.
+- **Every variable your saved config (`auth.json`) declares**, removed by the
+  exact NAME it is saved under — whatever that name is. This catches what
+  the shape rule cannot: the "add custom provider" wizard saves an API key
+  under whatever env-var name it is given, which may carry none of
+  KEY/TOKEN/SECRET (`MY_LLM_GATEWAY`, say). That name would otherwise reach
+  every server you launch, indistinguishable from a variable you exported
+  yourself — and it holds whether or not THIS run has actually loaded the
+  key into its own process yet: `keryx mcp doctor` and `keryx shell --print`/
+  `--no-tui`/non-TTY never call the function that would, but the strip reads
+  the same saved names straight off disk, so it applies there too, not only
+  on a path that happened to load them first.
+
+A server that genuinely needs one of these takes it explicitly — `-e` for a
+stdio server, its own `env` entry either way — which is a decision you made
+rather than a default you inherited; an explicit entry always wins over both
+strips, even for a name your saved config declares. Its stderr is captured,
+not inherited, so it cannot write to your terminal.
 
 ```
 $ keryx mcp add fs -- npx -y @modelcontextprotocol/server-filesystem ~/notes

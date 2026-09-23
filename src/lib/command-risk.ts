@@ -376,6 +376,30 @@ export function touchesSacConfirmReview(command: string): boolean {
 }
 
 /**
+ * The flow-completion counterpart of {@link SAC_REVIEW_MARKERS} (flow 299,
+ * AC4). `keryx flow confirm` mints the token that a flow opted into the
+ * confirmation gate needs before `flow complete` passes. Like `confirm-review`,
+ * its whole value is that a person answers a prompt for it. `flow ac confirm`
+ * does not match: its text is `flow ac confirm`, not `flow confirm`.
+ *
+ * Text-matched, with the same limit as the SAC markers: a spelling that avoids
+ * the literal words (a variable, a script file, `bun -e`) is not caught. TM-03
+ * states this. The floor is friction for a cooperating agent. It is not a
+ * barrier against one working around it.
+ */
+const FLOW_CONFIRM_MARKER = /\bflow\s+confirm\b/i;
+
+/**
+ * True when `command` mentions `keryx flow confirm`. Pure. Word-bounded, so
+ * `workflow confirmation` or `overflow confirmed` does not match. Accepted
+ * false positive: a command that merely quotes the words, such as
+ * `grep "flow confirm" docs`, still asks.
+ */
+export function touchesFlowConfirm(command: string): boolean {
+  return FLOW_CONFIRM_MARKER.test(command);
+}
+
+/**
  * Flow 295 (F2): commands that create, change or run a scheduled background
  * task, or that drive the OS scheduler directly. A schedule runs unattended,
  * spends money and uses the operator's granted credentials, so it exists only
@@ -409,11 +433,13 @@ export function touchesSchedulerControl(command: string): boolean {
 }
 
 /**
- * Every command family whose guarantee is "a human answered a real prompt":
- * SAC's confirm-review family and (flow 295) scheduler control. Each approver
- * site treats this exactly like `credentials`: it always asks, the answer is never
- * remembered, and a pattern for it is refused. Pure.
+ * Every command whose purpose is to show that a person, not the agent, took a
+ * step: SAC's review confirmation, flow 299's completion confirmation (`flow
+ * confirm`), and flow 295's scheduler control (a schedule exists only after the
+ * operator confirms its card). The approval gate's `sacReviewConfirmation` floor is
+ * fed from this, so every family forces `ask` in every permission mode, `auto`
+ * included; no answer is remembered, and a pattern for any of them is refused.
  */
 export function touchesHumanConfirmation(command: string): boolean {
-  return touchesSacConfirmReview(command) || touchesSchedulerControl(command);
+  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command);
 }

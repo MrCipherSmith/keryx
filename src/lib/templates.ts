@@ -199,6 +199,7 @@ export function renderIndexMarkdown({
     enableTasks
       ? "| Report spend, confirmations, signatures, or gate outcomes across flows | `governance` | `keryx governance report` | Read-only: never re-runs a gate or calls a model. |"
       : "",
+    "| Configure, run, or inspect a dispatching `flow-next` trigger, or drive one external ACP/CLI agent directly | `trigger` / `agents external` | `keryx trigger --help`; `keryx agents external --help`; docs/docs/guides/acp-client.md | Unattended: `ask` is read-only, `trust` needs the Linux sandbox, everything that would ask is denied and recorded — the unattended floor, not the boundary. |",
   ].filter(Boolean).join("\n");
 
   const workflowItems = [
@@ -401,6 +402,7 @@ export function renderIndexGateMarkdown({
       : "",
     enableSecurity ? "| secrets, PII, prompt injection | `keryx security check-output` |" : "",
     enableGdskills ? "| implement, review, refactor, plan | `skills/catalog.md` |" : "",
+    "| dispatch unattended work from a flow, or drive one external agent directly | `keryx trigger run/list/status`, `keryx agents external run` |",
   ]
     .filter(Boolean)
     .join("\n");

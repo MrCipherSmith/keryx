@@ -246,6 +246,42 @@ export function envWithSavedApiKeys(
 }
 
 /**
+ * The env var names the saved configuration DECLARES it would load — without
+ * requiring that anything has actually been loaded into `process.env` yet
+ * this run.
+ *
+ * `savedCredentialEnvKeys()` only knows what THIS process has already
+ * applied (`applySavedApiKeys`, called from TUI startup, `serve-runner.ts`
+ * and `keryx acp`; `envWithOAuthAccess`'s own env-mutating sibling). A
+ * surface that resolves its provider a different way — the `keryx shell`
+ * READLINE path (`--no-tui`/`--print`/non-TTY), which never calls
+ * `applySavedApiKeys` at all — or one that resolves no provider in the first
+ * place (`keryx mcp doctor`) leaves that singleton empty, even though the
+ * SAME `auth.json` on disk would still hand an unrecognised custom name to
+ * every MCP child were it ever loaded. `buildMcpChildEnv`
+ * (`../mcp-servers/spawn-env.ts`) unions this with the runtime singleton so
+ * the strip does not depend on which code path happened to run first —
+ * flow 296's follow-up finding.
+ *
+ * Reuses `envWithSavedApiKeys` — the EXACT function `applySavedApiKeys`
+ * calls to decide what to apply — read-only and value-free: called against
+ * an empty parent env, so every key in the result is one the saved config
+ * itself declares (`apiKeys`, the legacy `openrouterKey` migration target,
+ * and the OAuth-derived `XAI_API_KEY`/`GITHUB_COPILOT_TOKEN`), never one
+ * merely passed through. Never throws — `envWithSavedApiKeys` already
+ * catches internally and a malformed/unreadable file yields an empty
+ * result, the same fail-closed contract `loadShellConfig` gives everything
+ * else here.
+ */
+export function declaredCredentialEnvKeys(dir?: string): ReadonlySet<string> {
+  try {
+    return new Set(Object.keys(envWithSavedApiKeys({}, dir)));
+  } catch {
+    return new Set();
+  }
+}
+
+/**
  * Load every persisted API key into `process.env` WITHOUT overwriting a var the
  * user already set in their environment (env wins). Migrates the legacy
  * `openrouterKey` into `apiKeys.OPENROUTER_API_KEY`. Returns the env var names

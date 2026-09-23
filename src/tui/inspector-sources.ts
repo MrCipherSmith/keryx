@@ -2,7 +2,7 @@
 // stay empty rows.
 
 import { randomUUID } from "node:crypto";
-import { listFlowDirs, readFlow } from "../flow/store";
+import { interruptedCompletionLine, isCompletionInterrupted, listFlowDirs, readFlow } from "../flow/store";
 import type { FlowState } from "../flow/types";
 import {
   localWorkspaceAuthorizationServer,
@@ -34,6 +34,12 @@ export type FlowInspectorItem = {
   updatedAt: string;
   source: string;
   tasks: readonly { id: string; title: string; status: string }[];
+  /**
+   * Set when the flow is `completing` and nothing holds its lock (flow 299,
+   * AC6): the same condition, and the same words, as `keryx flow status`.
+   * Absent otherwise.
+   */
+  interrupted?: string | undefined;
 };
 
 export function workspaceFromManifest(manifest: WorkspaceManifest): WorkspaceInfo {
@@ -172,7 +178,12 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
     const items: FlowInspectorItem[] = [];
     for (const dir of dirs) {
       try {
-        items.push(flowItemFromState(await readFlow(cwd, dir), dir));
+        const flow = await readFlow(cwd, dir);
+        const item = flowItemFromState(flow, dir);
+        if (await isCompletionInterrupted(cwd, flow, dir)) {
+          item.interrupted = interruptedCompletionLine(flow.id);
+        }
+        items.push(item);
       } catch {
         // skip unreadable packages; `keryx flow check` owns that report
       }
@@ -278,6 +289,7 @@ export function formatSessionFlowLines(flows: readonly FlowInspectorItem[]): str
     return ["No flows recorded in this session."];
   }
   return flows.map(
-    (flow) => `${flow.id}  ${flow.status}  ${flow.tasksDone}/${flow.tasksTotal}  ${flow.title}`,
+    (flow) =>
+        `${flow.id}  ${flow.interrupted ? `${flow.status} (interrupted)` : flow.status}  ${flow.tasksDone}/${flow.tasksTotal}  ${flow.title}`,
   );
 }

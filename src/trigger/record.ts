@@ -216,6 +216,14 @@ export interface OpenReservation {
   readonly trigger: string;
   readonly usd: number;
   readonly at: string;
+  /**
+   * Flow 297 (AC2): the flow/task this reservation was opened for, when the
+   * "reserved" record carries a `dispatch` block — additive, so a reservation
+   * recorded before this change (no `dispatch` on its "reserved" line) simply
+   * reads with these `undefined`, never a crash and never a guessed flow.
+   */
+  readonly flow?: string;
+  readonly task?: string;
 }
 
 /** Every reservation in `records` that neither the run's own record nor an operator resolution has closed. */
@@ -228,6 +236,8 @@ export function openReservations(records: readonly TriggerRunRecord[]): OpenRese
         trigger: record.trigger,
         usd: record.reservation.usd,
         at: record.at,
+        ...(record.dispatch?.flow !== undefined ? { flow: record.dispatch.flow } : {}),
+        ...(record.dispatch?.task !== undefined ? { task: record.dispatch.task } : {}),
       });
       continue;
     }

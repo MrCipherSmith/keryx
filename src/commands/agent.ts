@@ -3497,6 +3497,7 @@ async function executeCall(
     const command = typeof input.command === "string" ? input.command : "";
     const destructive = risk === "destructive" || isDestructiveCommand(command);
     const credentials = touchesAgentCredentials(command);
+    // Flow 299: SAC's `confirm-review` and `flow confirm` share this floor.
     const sacReviewConfirmation = touchesHumanConfirmation(command);
     // specification §4.4 / D-05: a `git-publish` pause lease targeting this
     // instance (and not overridden by it) forces `ask` in every mode, `auto`

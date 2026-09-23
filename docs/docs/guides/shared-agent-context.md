@@ -99,8 +99,12 @@ through the harness composition (`createHarnessProposalLifecycleService`): it
 wires real owner writers. The local factory is fail-closed and cannot
 self-accept. `--decision accepted` additionally requires `--confirm-token`,
 minted only by `keryx workspace confirm-review <workspace-id> <proposal-id>`
-run yourself in a real, approval-gated shell — no tool call, MCP or
-`keryx-shell`, can mint one on its own. Accepting a `wiki-update` or
+run yourself in a real, approval-gated shell. No MCP tool or agent-native
+tool mints one. That is friction, not proof. The approval prompt is triggered
+by the command's text, so a differently spelled command avoids it. The token
+store is a plain file, so a shell-capable agent can forge it. An agent outside
+keryx supervision is not gated at all. See
+[TM-03](https://github.com/MrCipherSmith/keryx/blob/main/docs/decisions/keryx-harness/TM-03-terminal-confirmation-token.md) for the full list. Accepting a `wiki-update` or
 `memory-entry` proposal also returns a `DedupHint` (duplicates/conflicts
 against already-accepted entries, computed *after* the decision, never
 gating it) and, when the hint is non-empty, an optional model-judge

@@ -18,7 +18,8 @@ export type ShellApprovalEval = {
   destructive: boolean;
   credentials: boolean;
   /**
-   * SAC's proposal-review/confirm-token family (`touchesSacConfirmReview`).
+   * A human-confirmation command: SAC's proposal-review/confirm-token family,
+   * or `flow confirm` (flow 299) — `touchesHumanConfirmation`.
    * Computed from `command` directly, not from `meta` — this module has the
    * parsed command already, and `ApprovalMeta` has no field for this (adding
    * one would widen a shape shared with every other approver for one
@@ -68,6 +69,8 @@ export function evaluateShellApproval(input: {
   const command = parseShellExecCommand(input.inputJson);
   const destructive = input.meta?.destructive === true;
   const credentials = input.meta?.credentials === true;
+  // Flow 299: `flow confirm` shares this floor with SAC's confirm-review, so no
+  // session pattern or remembered grant can auto-approve either.
   const sacReviewConfirmation = touchesHumanConfirmation(command);
   const publishLease = input.meta?.publishLease === true;
   const publishLeaseDetail = input.meta?.publishLeaseDetail;
@@ -138,7 +141,7 @@ export function formatShellApprovalHints(evaled: ShellApprovalEval): string[] {
     lines.push("touches agent credentials — will not be remembered");
   }
   if (evaled.sacReviewConfirmation) {
-    lines.push("SAC proposal review/confirm-token — will not be remembered");
+    lines.push("human-confirmation command (SAC confirm-review or `flow confirm`) — will not be remembered");
   }
   if (evaled.publishLease) {
     // Flow 275 F1 (specification §4.4): name the lease's holder and reason

@@ -476,6 +476,9 @@ export async function runExternalChild(
           env: buildExternalChildEnv({ parent: input.parentEnv, depth: input.depth }),
           prompt: assembled.prompt,
           timeoutMs: input.timeoutMs,
+          // Per-agent override of the shared line-stream default (flow 298
+          // T14); absent for both shipped codec agents today.
+          ...(entry.maxStderrBytes === undefined ? {} : { maxStderrBytes: entry.maxStderrBytes }),
           // `"ignore"` otherwise, never inherited: a CLI that inherits an open
           // stdin announces it is reading from it and waits forever.
           stdin: streaming ? "pipe" : "ignore",
