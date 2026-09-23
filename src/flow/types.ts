@@ -233,6 +233,26 @@ export type FlowState = {
    * every other v2 field here).
    */
   signatures?: FlowSignature[] | undefined;
+  /**
+   * Append-only record of every `flow complete` attempt's gate outcomes
+   * (flow 291, AC4): every gate this attempt evaluated — passing, failing and
+   * skipped alike — plus whether the attempt as a whole passed and the AC
+   * checksum in force. Written on EVERY completion attempt from now on, pass
+   * or fail — not opt-in the way `gates.owner`/`gates.review`/`gates.tasks`
+   * are, because this is pure additive data (a new array field, not a new
+   * gate that could fail a flow that never asked for it). Absent entirely on
+   * a flow.json written before this field existed, and on any flow that has
+   * never had `complete` invoked since — the governance report reads that
+   * absence as "not recorded", never as "every gate passed" or "no attempt
+   * was made".
+   *
+   * Unbounded growth, deliberately — the same choice `signatures` already
+   * makes. One entry costs one `complete` invocation, so it is bounded by how
+   * many times a human or agent attempts completion on this flow, not by any
+   * data volume; see the CLI reference's "Completion attempts (gate
+   * outcomes)" section for the full reasoning.
+   */
+  completionAttempts?: FlowCompletionAttempt[] | undefined;
   tasks: FlowTask[];
   history: FlowHistoryEvent[];
 };
@@ -303,6 +323,21 @@ export type GateOutcome = {
     | "owner";
   status: "pass" | "fail" | "skipped";
   detail: string;
+};
+
+/**
+ * One `flow complete` attempt, on the record (flow 291, AC4): the outcome of
+ * every gate that attempt evaluated, whether the attempt passed overall, and
+ * the AC checksum in force. Pushed onto `FlowState.completionAttempts` on
+ * every invocation of `complete()`, pass or fail — never mutated once
+ * written.
+ */
+export type FlowCompletionAttempt = {
+  at: string;
+  gates: GateOutcome[];
+  passed: boolean;
+  /** The acceptance-criteria checksum in force when this attempt ran. */
+  acChecksum: string | null;
 };
 
 export type FlowServiceDeps = {
@@ -486,7 +521,14 @@ export interface FlowService {
     signedByEnv?: string | undefined;
     gitIdentity?: string | undefined;
   }): Promise<FlowState>;
-  acUpdate(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
+  acUpdate(input: {
+    cwd: string;
+    id: string;
+    reason: string;
+    /** Both present or both absent (flow 293, AC1/AC2/AC3): rewrites/appends that one criterion's text before re-freezing. */
+    criterion?: string | undefined;
+    text?: string | undefined;
+  }): Promise<FlowState>;
   acReseal(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
   implemented(input: { cwd: string; id: string; prUrl: string }): Promise<FlowState>;
   /**

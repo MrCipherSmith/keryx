@@ -31,6 +31,7 @@ import {
   readFlow,
   resolveFlowDir,
   slugify,
+  writeAcCriterion,
   writeFlow,
 } from "./store";
 import {
@@ -98,6 +99,62 @@ function recordAttempt(
  * input outright; the same blank name deserved the same answer from both.
  */
 const BLANK_OWNER_MESSAGE = '--owner requires a non-blank name, e.g. --owner "Alex Smith"';
+
+const AC_CRITERION_NAME_PATTERN = /^AC\d+$/i;
+const AC_TEXT_SELF_PREFIX_PATTERN = /^-?\s*AC\d+\s*:/i;
+
+/**
+ * Validate `--criterion` (flow 293, AC4): it must name `AC` followed by a
+ * number, so a typo becomes a refusal naming the rule rather than a criterion
+ * silently created (or matched) under the wrong id.
+ */
+function validateCriterionName(raw: string): string {
+  const trimmed = raw.trim();
+  if (!AC_CRITERION_NAME_PATTERN.test(trimmed)) {
+    throw new Error(`--criterion must name "AC" followed by a number, e.g. AC7 (got "${raw}").`);
+  }
+  return trimmed.toUpperCase();
+}
+
+/**
+ * Validate `--text` (flow 293, AC4). Each rule is checked, and named,
+ * separately: an empty criterion, a criterion that silently swallows every
+ * line after the first, and a criterion that repeats the `- ACn:` prefix
+ * `writeAcCriterion` already adds (producing `- AC1: - AC1: ...`) are three
+ * different mistakes, not one.
+ */
+function validateCriterionText(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error("--text must not be empty.");
+  }
+  if (raw.includes("\n") || raw.includes("\r")) {
+    throw new Error("--text must fit on one line (no line breaks) — acceptance-criteria.md uses one line per ACn.");
+  }
+  if (AC_TEXT_SELF_PREFIX_PATTERN.test(trimmed)) {
+    throw new Error(
+      '--text must not carry its own "- ACn:" prefix — `flow ac update --criterion` adds that prefix itself.',
+    );
+  }
+  return trimmed;
+}
+
+/**
+ * Validate `--reason` on `ac update`/`ac reseal` (flow 293 T9, review finding
+ * #3): `save()` writes `detail` — which embeds `reason` verbatim — as ONE
+ * `journal.md` bullet (`appendJournal`, `- <at> - <event>: <detail>\n`). A
+ * `reason` carrying its own `\n` therefore breaks that line into a second,
+ * unprefixed line, corrupting the journal for every reader after it. Refused
+ * rather than silently flattened, matching the rule `--text` already applies
+ * (`validateCriterionText` above) rather than inventing a second one.
+ */
+function validateSingleLineReason(reason: string): void {
+  if (reason.includes("\n") || reason.includes("\r")) {
+    throw new Error(
+      "--reason must fit on one line (no line breaks) — it is written as a single `journal.md` bullet.",
+    );
+  }
+}
 
 export function createFlowService(deps: FlowServiceDeps): FlowService {
   const now = () => deps.now().toISOString();
@@ -557,14 +614,66 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async acUpdate({ cwd, id, reason }): Promise<FlowState> {
+    /**
+     * Re-freeze the criteria (flow 209 AC-update path), optionally rewriting
+     * ONE criterion's text itself instead of trusting that an operator
+     * already edited the file (flow 293, AC1).
+     *
+     * Without `--criterion`/`--text` this keeps the pre-293 contract exactly
+     * (AC2): re-checksum whatever is on disk, void every confirmation,
+     * record `reason`. With both, it also performs the edit — replacing an
+     * existing `ACn` line or appending the next unused one — before taking
+     * the checksum, so "the file changed" is never left to a second command
+     * the caller has to remember to run first. `criterion` and `text` are a
+     * pair: the CLI refuses one without the other (flow.ts, AC3) before this
+     * is ever called, but the check is repeated here because `acUpdate` is
+     * the `FlowService` contract, not just what the CLI happens to send it.
+     */
+    async acUpdate({ cwd, id, reason, criterion, text }): Promise<FlowState> {
       if (!reason?.trim()) {
         throw new Error('flow ac update requires --reason "<why the criteria changed>"');
       }
+      validateSingleLineReason(reason);
+      if ((criterion === undefined) !== (text === undefined)) {
+        throw new Error(
+          "flow ac update requires --criterion and --text together, or neither " +
+            '(pass --reason "<why>" alone to re-freeze the file as already edited).',
+        );
+      }
+      const normalizedCriterion = criterion !== undefined ? validateCriterionName(criterion) : undefined;
+      const normalizedText = text !== undefined ? validateCriterionText(text) : undefined;
       return mutate(cwd, id, async ({ dir, flow }) => {
+        let detail = reason.trim();
+        if (normalizedCriterion !== undefined && normalizedText !== undefined) {
+          const known = await readAcCriteria(cwd, dir);
+          const highest = known.reduce((max, ac) => Math.max(max, Number(ac.slice(2)) || 0), 0);
+          const nextUnused = `AC${highest + 1}`;
+          if (!known.includes(normalizedCriterion) && normalizedCriterion !== nextUnused) {
+            const requestedNumber = Number(normalizedCriterion.slice(2));
+            // "Next unused" is always highest-known + 1, never the lowest gap:
+            // appending AC3 after AC4 exists would put it out of order in the
+            // file. A gap (AC1, AC2, AC4 — AC3 missing) is therefore never
+            // fillable through `--criterion`/`--text`; the refusal says so
+            // explicitly rather than repeating the generic "neither known nor
+            // next" message for a caller who has no way to satisfy it via a
+            // different --criterion value (flow 293 T9, review finding #5).
+            const gapNote =
+              requestedNumber < highest
+                ? ` ${normalizedCriterion} is a gap in the numbering — this command cannot fill a gap; edit ` +
+                  'acceptance-criteria.md directly and re-freeze with `flow ac update <id> --reason "..."` (no --criterion/--text).'
+                : "";
+            throw new Error(
+              `--criterion ${normalizedCriterion} is neither an existing criterion ` +
+                `(${known.join(", ") || "none yet"}) nor the next unused one; the next number is ${nextUnused}.` +
+                `${gapNote} Use an existing ACn to replace its text, or ${nextUnused} to add a new criterion.`,
+            );
+          }
+          const { previousText } = await writeAcCriterion(cwd, dir, normalizedCriterion, normalizedText);
+          detail = `${normalizedCriterion}: "${previousText ?? "(new)"}" -> "${normalizedText}" (${reason.trim()})`;
+        }
         flow.acChecksum = await acChecksum(cwd, dir);
         flow.acConfirmed = {}; // criteria changed - prior confirmations are void
-        return save(cwd, dir, flow, "ac-updated", reason);
+        return save(cwd, dir, flow, "ac-updated", detail);
       });
     },
 
@@ -587,6 +696,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       if (!reason?.trim()) {
         throw new Error('flow ac reseal requires --reason "<why the checksum is stale>"');
       }
+      validateSingleLineReason(reason);
       return mutate(cwd, id, async ({ dir, flow }) => {
         if (!flow.acChecksum) {
           throw new Error("flow ac reseal: the criteria are not frozen yet, so there is no checksum to re-seal.");
@@ -818,10 +928,68 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       }
 
       const passed = gates.every((gate) => gate.status !== "fail");
+
+      // Flow 291, AC4 (review fix): re-check AC intactness HERE, explicitly
+      // and caught, before anything below is trusted or written. Every gate
+      // above finished before this line; the criteria file can have been
+      // edited out-of-band WHILE they ran (gate 1 checked it first, but the
+      // health/review/security gates that ran afterward take real time), and
+      // that race must not cost the record of what every gate decided. A
+      // tamper caught here overrides this attempt to `failed`, naming the
+      // tamper, rather than persisting a `passed: true` — or a signature —
+      // built on a criteria file that no longer matches what was evaluated.
+      let tamperDetail: string | undefined;
+      try {
+        await assertAcIntact(cwd, dir, flow);
+      } catch (error) {
+        tamperDetail = error instanceof Error ? error.message : String(error);
+      }
+      const recordedGates: GateOutcome[] =
+        tamperDetail === undefined
+          ? gates
+          : [
+              ...gates,
+              {
+                name: "acceptance-criteria",
+                status: "fail",
+                detail:
+                  `acceptance criteria changed after this attempt's gates were evaluated, before it could be ` +
+                  `recorded: ${tamperDetail}`,
+              },
+            ];
+      const recordedPassed = tamperDetail === undefined && passed;
+
+      // This attempt's full gate outcomes go on the record — pass or fail,
+      // every gate evaluated, not folded into one prose `history` line.
+      // Additive and unconditional (not opt-in like
+      // `gates.owner`/`gates.review`/`gates.tasks`): a flow.json written
+      // before this field existed simply has no `completionAttempts`, and the
+      // governance report reads that absence as "not recorded" rather than
+      // inferring or backfilling anything about it.
+      flow.completionAttempts = [
+        ...(flow.completionAttempts ?? []),
+        { at: now(), gates: recordedGates, passed: recordedPassed, acChecksum: flow.acChecksum },
+      ];
+
+      // Persisted NOW, independent of the transition below — a plain `save`,
+      // not `transition`, so it carries no AC re-check of its own that could
+      // throw this record away a second time. Whatever happens next (a fresh
+      // tamper landing in the gap between this write and the transition
+      // below, however unlikely), THIS attempt already reached disk.
+      flow = await save(
+        cwd,
+        dir,
+        flow,
+        "completion-attempt-recorded",
+        tamperDetail !== undefined
+          ? `attempt ${flow.completionAttempts.length}: acceptance criteria tampered — ${tamperDetail}`
+          : `attempt ${flow.completionAttempts.length}: ${recordedPassed ? "passed" : "failed"}`,
+      );
+
       let issueComment: string | null = null;
       let commented = false;
 
-      if (passed) {
+      if (recordedPassed) {
         if (mergedCommit) {
           flow.merged = { commit: mergedCommit, ref: "origin/main", at: now() };
         }
@@ -845,7 +1013,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         // unchanged) but must stay distinguishable from a genuine pass in the
         // record a reader actually sees. `healthWarnNote` is the only place
         // that surfaces it, into the one durable event this branch writes.
-        const warnNote = healthWarnNote(gates);
+        const warnNote = healthWarnNote(recordedGates);
         flow = await transition(
           cwd,
           dir,
@@ -854,7 +1022,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           "done",
           warnNote ? `all gates passed (${warnNote})` : "all gates passed",
         );
-        issueComment = buildIssueComment(flow, gates);
+        issueComment = buildIssueComment(flow, recordedGates);
         if (comment && flow.source.type === "github-issue" && flow.source.ref && deps.tracker) {
           const ref = deps.tracker.parseRef(flow.source.ref);
           if (ref && (await deps.tracker.detect())) {
@@ -862,7 +1030,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           }
         }
       } else {
-        const failed = gates.filter((gate) => gate.status === "fail");
+        const failed = recordedGates.filter((gate) => gate.status === "fail");
         flow = await transition(
           cwd,
           dir,
@@ -873,7 +1041,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         );
       }
 
-      return { flow, gates, passed, issueComment, commented };
+      return { flow, gates: recordedGates, passed: recordedPassed, issueComment, commented };
       });
     },
 

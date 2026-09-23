@@ -1486,6 +1486,84 @@ regenerate-and-reinstall of the line.
 
 ---
 
+## governance
+
+One report over what is already recorded — spend, confirmations, signatures
+and gate outcomes, unified across flows and (optionally) across projects.
+Read-only: it never re-runs a gate, never calls a model or a network service,
+and the only files it writes are its own report artifacts. A figure nobody
+recorded is reported as "not recorded", never as zero — the same rule
+`keryx review budget`'s `spend_status: not-recorded` and `keryx trigger
+status`'s `cost: n/a` already follow.
+
+```
+keryx governance report [--flow <id>] [--owner <name>] [--since <iso>] [--until <iso>] [--all-projects] [--json]
+keryx governance show [--json]
+```
+
+| Subcommand | Description |
+|---|---|
+| `report` | Build the report from what is on disk right now, write `.metaproject/data/governance/artifacts/latest.md` and `latest.json`, and print it. |
+| `show` | Reprint the most recently written report without regenerating it. Prints "No governance report yet" if `report` has never run. |
+| `--flow <id>` | Narrow to one flow, by its bare id (e.g. `291`). |
+| `--owner <name>` | Narrow to flows whose owner's identity value matches exactly. A flow with no owner set is excluded. |
+| `--since <iso>` / `--until <iso>` | Narrow to flows whose own `updatedAt` falls in the range, and trigger runs whose own `at` falls in the range. |
+| `--all-projects` | Also cover every project in the user-global registry (`keryx projects`), not only the current one. A registered project whose path is missing or unreadable is listed with a `state: "skipped"` reason instead of failing the whole report. |
+| `--json` | Print the report as JSON instead of markdown. |
+
+### What it reads, and what it never does
+
+Per flow (`.metaproject/flows/<id>/flow.json` and its `reviews/*/manifest.json`):
+
+- **Review-round spend** (input tokens, output tokens, USD), summed across
+  every round's `manifest.json` `cost` field. A figure is a number only when
+  at least one round reported it; a flow with partial coverage (some rounds
+  recorded cost, some did not) reports the sum together with a
+  `rounds_with_cost`/`rounds_total` count, never silently dropping the gap.
+- **Confirmations and signatures** — who confirmed each acceptance criterion
+  and who signed completion, joined from `acConfirmed` and `signatures`
+  (flow 289), with each identity's basis (`stated`, `derived`, `unknown`)
+  shown beside the name. A `derived`/`unknown` identity is never presented as
+  a verified confirmation. A flow with no `signatures` field at all — every
+  flow completed before flow 289 — reports `confirmations: not recorded
+  (predates signing)`.
+- **Gate outcomes** — every `flow complete` attempt's gate results (pass,
+  fail, skipped), from `FlowState.completionAttempts` (flow 291). Absent on
+  every completion attempt made before flow 291, which reports `gate
+  outcomes: not recorded` rather than inferring anything.
+
+Per project (`.metaproject/data/trigger/runs.jsonl`):
+
+- **Trigger spend** — USD summed over fired-trigger runs whose cost was
+  recorded, plus the count of runs whose cost was not recorded (never folded
+  into the sum as `$0`). Never attributed to any individual flow: a fired-
+  trigger record carries no flow reference, so this is always a project-wide
+  figure, stated as such. An absent ledger reports a demonstrated `$0`
+  (nothing has ever fired); an unreadable one reports `not recorded` with the
+  reason.
+- **Policy decisions** — allow/ask/deny decisions and unattended-run denials
+  have no durable project-wide record in this build, so this section always
+  reads `not recorded (no durable log exists yet)`. (Flow 290, unattended
+  denials, is a future source for this — not a dependency of this report.)
+
+The report never re-runs `flow complete`, `review ingest`/`budget`, `health
+run`, or any security scan, and never calls a model or a network service. The
+only files a run writes are its own two artifacts, below.
+
+### Artifacts
+
+`report` writes both files on every run, following the same convention
+`keryx health run` uses:
+
+- `.metaproject/data/governance/artifacts/latest.md` — the human-readable
+  report, the same text printed to the terminal.
+- `.metaproject/data/governance/artifacts/latest.json` — schema-versioned
+  (`schemaVersion: 1`), machine-readable. `show`'s reader is shape-guarded: a
+  missing or malformed stored file is treated as "no report yet", never a
+  crash and never silently read as an empty-but-valid report.
+
+---
+
 ## commands
 
 The agent-facing command registry: each described keryx command as a
@@ -1966,6 +2044,7 @@ keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"
 keryx flow owner set <id> --owner "<name>" --reason "<why>"
 keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]
 keryx flow ac update <id> --reason "<why>"
+keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"
 keryx flow ac reseal <id> --reason "<why>"
 keryx flow implemented <id> --pr <url>
 keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"]
@@ -1992,8 +2071,10 @@ keryx flow schema [--out <path>]
 | `task depends <id> <taskId>` | `--on T1,T2\|none` (required), `--reason "<why>"` (required) | Rewrite one task's `dependsOn` — the repair for the three unsatisfiable shapes `flow check` reports. Until this existed, `--depends` wrote the field once at creation and nothing could rewrite it, so the only remedy was editing `flow.json` by hand; flow 178 carried a self-dependent `T10` for two weeks because the check was right and the operator had nowhere to go. Ids are normalised, so `t1`, `T1` and ` t1 ` are one edge. The change is validated against the same `dependencyIssues` the check uses and **refused if it would introduce an issue that was not already there** — deliberately narrower than "the graph must end clean", because a flow with two broken tasks has to be repairable one task at a time. A refused change leaves the record exactly as it was found. `--on none` clears the field. |
 | `owner set <id>` | `--owner "<name>"` (required), `--reason "<why>"` (required) | Set or change the flow's owner — the human accountable for it. **Never inferred**, and a `--reason` is required even for the first assignment. Every change is kept, not overwritten: it appends a `history` event naming the previous owner, the new owner, the reason and the time, so no earlier owner is ever lost. See [the owner and completion signatures](#the-owner-and-completion-signatures). |
 | `ac confirm <id> <ACn>` | `--note "<evidence>"`, `--signed-by "<name>"` | Confirm one acceptance criterion. Appends an append-only signature recording who confirmed it (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — a repeated confirmation of the same criterion adds a new signature rather than replacing the last one. |
-| `ac update <id>` | `--reason "<why>"` (required) | Re-freeze the AC checksum **and void every prior confirmation** — right when the criteria changed, because a criterion nobody confirmed in its current wording has not been confirmed. Wrong when only the seal is stale; use `ac reseal` for that. |
-| `ac reseal <id>` | `--reason "<why>"` (required) | Re-seal a stale checksum over a file that did **not** change, keeping the confirmations. Refuses unless git reports the criteria file tracked and unchanged against HEAD, and refuses when git cannot answer at all — no evidence must not read the same as clean. It proves the file being sealed now is the file committed now; it cannot prove the old checksum was ever right. Exists because the only other repair destroys the record: flow 002 carries ten dated confirmations against a criteria file byte-identical to its first commit, with a checksum sealed against content predating the squashed `0.1.0` import. |
+| `ac update <id>` | `--reason "<why>"` (required); or `--criterion ACn --text "<criterion>"` together with `--reason` | Re-freeze the AC checksum **and void every prior confirmation** — right when the criteria changed, because a criterion nobody confirmed in its current wording has not been confirmed. Wrong when only the seal is stale; use `ac reseal` for that. Without `--criterion`/`--text`, re-freezes the file exactly as an operator already edited it (the only behaviour before flow 293). With both, rewrites that one `ACn` line's text itself — **only when the criterion is genuinely a single line**, the format the file's own Rules section prescribes — or appends it, when `ACn` is the **next unused number** (highest existing `ACn` + 1; a gap in the numbering, e.g. AC1/AC2/AC4 with AC3 missing, can never be filled this way — the refusal names the gap and says to edit the file directly and re-freeze with `--reason` alone). If the target criterion has ANY indented, non-blank line following it before the next `- ACn:` line, a blank line, or a heading — a criterion wrapped across two lines, a sub-bullet evidence note, a fenced code block, anything — the command **refuses**, naming the criterion, and writes nothing; there is no way to tell "this is the criterion continuing" from "this is unrelated content under it" from the file alone, so it never guesses at either. Edit the file directly and re-freeze with `--reason` alone instead. `--text` and `--reason` must each be non-empty, fit on one line, and (for `--text`) not repeat its own `- ACn:` prefix. `--criterion` and `--text` must be given together; either alone is refused. The flow's `history` records the criterion, its (single-line) previous text and its new text alongside the reason. The write itself preserves the rest of the file's bytes exactly: an untouched line keeps its own original line ending (even in a file with mixed `\n`/`\r\n` endings), and an appended line takes the ending of the line it follows. |
+| `ac reseal <id>` | `--reason "<why>"` (required, one line) | Re-seal a stale checksum over a file that did **not** change, keeping the confirmations. Refuses unless git reports the criteria file tracked and unchanged against HEAD, and refuses when git cannot answer at all — no evidence must not read the same as clean. It proves the file being sealed now is the file committed now; it cannot prove the old checksum was ever right. Exists because the only other repair destroys the record: flow 002 carries ten dated confirmations against a criteria file byte-identical to its first commit, with a checksum sealed against content predating the squashed `0.1.0` import. |
+
+Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (the syntax before flow 293) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
 | `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. See [the owner gate](#the-owner-gate) and [the owner and completion signatures](#the-owner-and-completion-signatures). |
 | `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |
@@ -2175,6 +2256,37 @@ Every pre-existing `flow.json` with no `owner` or `signatures` field keeps
 loading, validating, passing `flow check`, and completing exactly as before —
 these fields are additive and optional, like every Task Manager v2 field, and
 reading an old file never rewrites it on disk.
+
+### Completion attempts (gate outcomes)
+
+Every `flow complete` invocation — pass or fail — appends one entry to
+`FlowState.completionAttempts`: the outcome (`pass`, `fail`, or `skipped`) and
+detail of every gate that attempt evaluated, whether the attempt passed
+overall, and the acceptance-criteria checksum in force at the time. Unlike
+`gates.owner`/`gates.review`/`gates.tasks`, this is not opt-in — it is written
+on every attempt from every flow, starting the moment this field shipped — and
+it does not bump `schemaVersion`. A `flow.json` written before this field
+existed simply has no `completionAttempts`; `keryx governance report` reads
+that absence as `gate outcomes: not recorded`, never as "every gate passed".
+
+The record is written **before** the attempt's final state transition, not
+after — specifically so that an acceptance-criteria file edited out-of-band
+while a later gate (health, review, security, …) is still running cannot cost
+the attempt its record. If that race is caught, the attempt is persisted as
+**failed**, with an extra `acceptance-criteria` gate entry naming the tamper,
+alongside whatever the earlier gates already decided — not silently dropped
+by the exception the stale criteria file still throws a moment later.
+
+**Growth is unbounded, on purpose — the same choice `signatures` already
+makes.** Every entry costs one `flow complete` invocation, made by a human or
+an agent that decided to attempt completion; nothing amplifies it (a single
+gate re-run inside one attempt is not a second entry). A flow that has been
+completed and reopened repeatedly might carry a few dozen attempts over its
+whole lifetime — nowhere near the volume that would make truncation worth the
+honesty cost of a record captioned "the last N attempts" instead of "every
+attempt". If a pathological retry loop ever makes this a real concern, the fix
+belongs beside `flow.json`'s general size (which every field here already
+affects), not as a special case for this one array.
 
 ---
 
