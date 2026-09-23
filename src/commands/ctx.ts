@@ -16,7 +16,7 @@ import {
   omissionNote,
   shownSuffix,
 } from "../ctx/lines";
-import type { OmittedRange } from "../ctx/lines";
+import type { LineStreamContext, OmittedRange } from "../ctx/lines";
 import { buildLossManifest, renderLossManifest } from "../ctx/manifest";
 import { cappedHeaderNote, completenessLine, rgSearchScope, scopeLine } from "../ctx/search-scope";
 import type { SearchScope, SearchTotals } from "../ctx/search-scope";
@@ -871,8 +871,15 @@ ${importantSection(lines, config)}
 // rather than forwarded, so an option added to a future ripgrep — including a
 // new way to execute something — is denied by default instead of inherited.
 
-/** rg boolean flags keryx forwards. */
-const RG_SAFE_FLAGS = new Set([
+/**
+ * rg boolean flags keryx forwards.
+ *
+ * Exported so tests can iterate its single-letter members programmatically
+ * (e.g. asserting every RG_SAFE_FLAGS letter bundles correctly) instead of
+ * hand-copying the letter list, which would silently stop covering a letter
+ * added here later.
+ */
+export const RG_SAFE_FLAGS = new Set([
   "-i", "--ignore-case",
   "-s", "--case-sensitive",
   "-S", "--smart-case",
@@ -900,8 +907,14 @@ const RG_SAFE_FLAGS = new Set([
   "--word-regexp",
 ]);
 
-/** rg flags that consume a following value (or use `--flag=value`). */
-const RG_SAFE_VALUE_FLAGS = new Set([
+/**
+ * rg flags that consume a following value (or use `--flag=value`).
+ *
+ * Exported for the same reason as RG_SAFE_FLAGS: tests assert every one of
+ * its single-letter members is refused when bundled, without hand-copying
+ * the letter list.
+ */
+export const RG_SAFE_VALUE_FLAGS = new Set([
   "-e", "--regexp",
   "-g", "--glob",
   "--iglob",
@@ -920,6 +933,68 @@ export type RgCommandResult =
   | { ok: true; command: string[] }
   | { ok: false; reason: string };
 
+// Single-letter forms of the boolean/value allowlists, derived (not
+// hand-maintained) from RG_SAFE_FLAGS/RG_SAFE_VALUE_FLAGS so a flag added to
+// either set is automatically eligible (or ineligible) for bundling without a
+// second list to keep in sync.
+const RG_SAFE_SHORT_FLAGS = new Set(
+  [...RG_SAFE_FLAGS].filter((f) => /^-[a-zA-Z]$/.test(f)),
+);
+const RG_SAFE_SHORT_VALUE_FLAGS = new Set(
+  [...RG_SAFE_VALUE_FLAGS].filter((f) => /^-[a-zA-Z]$/.test(f)),
+);
+
+type BundleExpansion = { ok: true; args: string[] } | { ok: false; reason: string };
+
+/**
+ * Expand POSIX-bundled short flags (`-il` → `-i`, `-l`) into their split
+ * form, so the rest of the pipeline (allowlist check, `rgListMode`) sees the
+ * exact same tokens a split invocation would have produced.
+ *
+ * A bundle is accepted only when EVERY letter in it is a single-letter
+ * BOOLEAN flag already in `RG_SAFE_FLAGS` — never a value flag (`-e`/`-g`/
+ * `-A`/…, which cannot legally bundle in ripgrep itself: a value flag always
+ * consumes the next token) and never an unknown letter. Either case refuses
+ * the whole bundle, naming the offending letter, rather than silently
+ * admitting part of it — an ambiguous token like `-mA` (is `m` bundled with
+ * `A`, or is this `--max-count`'s short form followed by a value?) must never
+ * be resolved by guessing.
+ */
+function expandBundledShortFlags(args: string[]): BundleExpansion {
+  const expanded: string[] = [];
+  let sawSeparator = false;
+  for (const arg of args) {
+    if (arg === "--" && !sawSeparator) {
+      sawSeparator = true;
+      expanded.push(arg);
+      continue;
+    }
+    if (!sawSeparator && /^-[a-zA-Z]{2,}$/.test(arg)) {
+      const bundleFlags: string[] = [];
+      for (const letter of arg.slice(1)) {
+        const flag = `-${letter}`;
+        if (RG_SAFE_SHORT_VALUE_FLAGS.has(flag)) {
+          return {
+            ok: false,
+            reason: `keryx ctx rg: bundled flag ${arg}: ${flag} takes a value and cannot be bundled.`,
+          };
+        }
+        if (!RG_SAFE_SHORT_FLAGS.has(flag)) {
+          return {
+            ok: false,
+            reason: `keryx ctx rg: bundled flag ${arg}: ${flag} is not an allowed ripgrep option.`,
+          };
+        }
+        bundleFlags.push(flag);
+      }
+      expanded.push(...bundleFlags);
+      continue;
+    }
+    expanded.push(arg);
+  }
+  return { ok: true, args: expanded };
+}
+
 /**
  * Build the ripgrep argv, refusing any option that is not explicitly allowed.
  *
@@ -929,7 +1004,12 @@ export type RgCommandResult =
  * absent from a given build — so such a test could pass for the wrong reason
  * and keep passing after the guard was deleted.
  */
-export function buildRgCommand(rgArgs: string[], listMode: "files" | "count" | null): RgCommandResult {
+export function buildRgCommand(rgArgsIn: string[], listMode: "files" | "count" | null): RgCommandResult {
+  const expansion = expandBundledShortFlags(rgArgsIn);
+  if (!expansion.ok) {
+    return expansion;
+  }
+  const rgArgs = expansion.args;
   // `--with-filename` is passed UNCONDITIONALLY. ripgrep omits the filename
   // whenever it is given a single explicit file path, which breaks the
   // `file:line:col:text` shape `parseRgMatches` expects — so
@@ -1022,8 +1102,18 @@ export function buildRgCommand(rgArgs: string[], listMode: "files" | "count" | n
 }
 
 // rg flags that change output from matches to a file list (or per-file counts).
+//
+// Normalizes bundled short flags first (`-il` → `-i`, `-l`), so a caller
+// passing `-il` sees the same list mode `-i -l` would have — otherwise `-il`
+// would silently fall through to `listMode === null` here while
+// `buildRgCommand` still forwards the expanded `-l` to ripgrep, producing a
+// base argv (`--line-number --column`) that a split `-i -l` invocation would
+// not have gotten. An invalid bundle is left for `buildRgCommand` to reject
+// with its own reason; this only needs "was `-l`/`-c` in there or not".
 export function rgListMode(args: string[]): "files" | "count" | null {
-  const has = (flags: string[]): boolean => args.some((a) => flags.includes(a));
+  const expansion = expandBundledShortFlags(args);
+  const effective = expansion.ok ? expansion.args : args;
+  const has = (flags: string[]): boolean => effective.some((a) => flags.includes(a));
   if (has(["-l", "--files-with-matches", "--files-without-match", "--files"])) {
     return "files";
   }
@@ -1137,6 +1227,22 @@ ${result.stderr.trim() ? renderStderr(result.stderr, config) : ""}
 `;
 }
 
+// Which of `lines` (the non-empty lines of the merged `raw` stream) came from
+// stderr. A merged line counts as stderr when its text appears among the
+// command's stderr lines — `raw` interleaves the two streams and does not
+// keep a per-line origin, so exact text membership is the only signal
+// available here. Two consequences follow from that: a line that happens to
+// appear on both streams verbatim reads as stderr on every occurrence, and
+// this is a set-membership test, not a sequence walk, so it is O(lines) to
+// build rather than re-diffing per line.
+function commandLineContext(lines: string[], result: CommandResult): LineStreamContext {
+  const stderrLines = new Set(nonEmptyLines(result.stderr));
+  return {
+    exitCode: result.exitCode,
+    isStderr: (index: number) => stderrLines.has(lines[index] as string),
+  };
+}
+
 export function summarizeCommandOutput(
   command: string,
   result: CommandResult,
@@ -1144,7 +1250,8 @@ export function summarizeCommandOutput(
   context: SummaryContext = { address: LATEST_ADDRESS },
 ): string {
   const lines = nonEmptyLines(result.raw);
-  const compaction = compactLines(lines, config.maxOutputLines, config.maxImportantLines);
+  const lineContext = commandLineContext(lines, result);
+  const compaction = compactLines(lines, config.maxOutputLines, config.maxImportantLines, lineContext);
   // A command whose output IS a document (`--reporter=json`, a `cat` of a
   // manifest) must not hand back a compacted body that still looks like one.
   const format = compaction.omitted > 0 ? detectStructuredFormat(result.raw) : null;
@@ -1157,7 +1264,7 @@ Raw lines: \`${lines.length}\`
 stdout bytes: \`${Buffer.byteLength(result.stdout)}\`
 stderr bytes: \`${Buffer.byteLength(result.stderr)}\`
 ${format ? `${excerptNotice(format, compaction.lines.length - 1, lines.length)}\n` : ""}
-${importantSection(lines, config)}${manifestSection(compaction.omittedRanges, context)}## Output
+${importantSection(lines, config, lineContext)}${manifestSection(compaction.omittedRanges, context)}## Output
 
 \`\`\`text
 ${compaction.lines.join("\n") || "(no output)"}
@@ -1599,8 +1706,14 @@ async function loadConfig(): Promise<CtxConfig> {
 // Verdict lines for the `Errors / Warnings` section, with the marker that says
 // how many the budget cut. Which lines count is `classifyLine` in ctx/lines.ts —
 // shared with compaction, which used to carry a second, different regex.
-function importantSection(lines: string[], config: CtxConfig): string {
-  const { kept, total } = importantLines(lines, config.maxImportantLines);
+// `context` is optional: the diff-summary call site (`summarizeDiff`) has no
+// separate stdout/stderr for its patch text and no exit code that means
+// "failed" (git diff's exit code reports whether there were differences, not
+// success), so it is left on the no-context default — classifying every
+// `lines` entry the way this always did — rather than being fed a made-up
+// context.
+function importantSection(lines: string[], config: CtxConfig, context?: LineStreamContext): string {
+  const { kept, total } = importantLines(lines, config.maxImportantLines, context);
   if (kept.length === 0) {
     return "";
   }

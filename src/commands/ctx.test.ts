@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
 import {
+  RG_SAFE_FLAGS,
+  RG_SAFE_VALUE_FLAGS,
   buildRgCommand,
   isWorkingTreeDiff,
   rgListMode,
@@ -23,8 +25,14 @@ const CONFIG = {
   outlineMaxEntries: 160,
 };
 
-function result(raw: string) {
-  return { stdout: raw, stderr: "", raw, exitCode: 0 };
+function result(raw: string, opts: { stderr?: string; exitCode?: number } = {}) {
+  const stderr = opts.stderr ?? "";
+  return {
+    stdout: raw,
+    stderr,
+    raw: stderr ? `${raw}\n${stderr}` : raw,
+    exitCode: opts.exitCode ?? 0,
+  };
 }
 
 test("rgListMode detects file-listing and count flags", () => {
@@ -63,6 +71,75 @@ test("buildRgCommand always passes --with-filename", () => {
   expect(listing.ok).toBe(true);
   if (!listing.ok) return;
   expect(listing.command).toEqual(["rg", "--with-filename", "--no-heading", "-l", "--", "foo"]);
+});
+
+// GDCTX-3 (W7): `keryx ctx rg -il "todo" src` was rejected while the split
+// `-i -l` form worked. buildRgCommand must expand a POSIX-bundled short-flag
+// token into its constituent flags and produce the IDENTICAL argv the split
+// form would have — including the listMode-dependent base flags
+// (--line-number/--column), which is why `rgListMode` is exercised on the
+// bundled token too, not just `buildRgCommand` in isolation.
+const RG_SAFE_SHORT_FLAG_LETTERS = [...RG_SAFE_FLAGS]
+  .filter((f) => /^-[a-zA-Z]$/.test(f))
+  .map((f) => f.slice(1));
+const RG_SAFE_SHORT_VALUE_FLAG_LETTERS = [...RG_SAFE_VALUE_FLAGS]
+  .filter((f) => /^-[a-zA-Z]$/.test(f))
+  .map((f) => f.slice(1));
+
+test("buildRgCommand expands a bundled boolean short flag to the identical split-form argv", () => {
+  const bundles: Array<{ bundle: string; split: string[] }> = [
+    { bundle: "-il", split: ["-i", "-l"] },
+    { bundle: "-iwl", split: ["-i", "-w", "-l"] },
+    { bundle: "-nc", split: ["-n", "-c"] },
+  ];
+
+  for (const { bundle, split } of bundles) {
+    // listMode must be computed the same way a real caller would: from the
+    // caller's own (possibly bundled) args, via rgListMode — not hand-picked
+    // per case — so the base argv (line-number/column) tracks reality.
+    const bundledListMode = rgListMode(["needle", bundle]);
+    const splitListMode = rgListMode(["needle", ...split]);
+    expect(bundledListMode).toBe(splitListMode);
+
+    const bundled = buildRgCommand(["needle", bundle], bundledListMode);
+    const expanded = buildRgCommand(["needle", ...split], splitListMode);
+    expect(bundled.ok).toBe(true);
+    expect(expanded.ok).toBe(true);
+    if (!bundled.ok || !expanded.ok) continue;
+    expect(bundled.command).toEqual(expanded.command);
+  }
+});
+
+test("buildRgCommand refuses a bundle containing any value-flag letter, naming it", () => {
+  for (const letter of RG_SAFE_SHORT_VALUE_FLAG_LETTERS) {
+    const bundle = `-i${letter}`; // -i is always boolean-safe; pairs it with each value letter
+    const result = buildRgCommand(["needle", bundle], null);
+    expect(result.ok).toBe(false);
+    if (result.ok) continue;
+    expect(result.reason).toContain(`-${letter}`);
+    expect(result.reason).toContain("cannot be bundled");
+  }
+});
+
+test("buildRgCommand refuses a bundle containing an unknown letter, naming it", () => {
+  const result = buildRgCommand(["needle", "-iz"], null);
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.reason).toContain("-z");
+  expect(result.reason).toContain("not an allowed ripgrep option");
+});
+
+test("buildRgCommand accepts every RG_SAFE_FLAGS single letter bundled with -i", () => {
+  for (const letter of RG_SAFE_SHORT_FLAG_LETTERS) {
+    if (letter === "i") continue;
+    const bundle = `-i${letter}`;
+    const bundled = buildRgCommand(["needle", bundle], null);
+    const split = buildRgCommand(["needle", "-i", `-${letter}`], null);
+    expect(bundled.ok).toBe(true);
+    expect(split.ok).toBe(true);
+    if (!bundled.ok || !split.ok) continue;
+    expect(bundled.command).toEqual(split.command);
+  }
 });
 
 test("rg emits file:line:col for a single explicit file path", async () => {
@@ -307,10 +384,18 @@ function logWithVerdict(verdict: string, at: number, total = 5_000): string {
   ).join("\n");
 }
 
+// GDCTX-1: these fixtures model an ACTUAL failing run (a `FAIL`/error line in
+// the log is only there because the command genuinely failed), so — now that
+// classification can see the exit code — they pass a non-zero one. Leaving
+// them at the `result()` default of `exitCode: 0` would itself be the bug
+// this task fixes: a command that failed, described as if it had not.
+
 test("summarizeCommandOutput keeps a failure verdict buried in the middle of a long log", () => {
   const out = summarizeCommandOutput(
     "bun test",
-    result(logWithVerdict("FAIL src/thing/broken.test.ts > it keeps the receipt", 2_500)),
+    result(logWithVerdict("FAIL src/thing/broken.test.ts > it keeps the receipt", 2_500), {
+      exitCode: 1,
+    }),
     CONFIG,
   );
   expect(out).toContain("FAIL src/thing/broken.test.ts");
@@ -329,7 +414,7 @@ test("summarizeCommandOutput keeps the verdict vocabulary this repository alread
     "Segmentation fault",
     "2 fail, 8 pass",
   ]) {
-    const out = summarizeCommandOutput("run", result(logWithVerdict(verdict, 2_500)), CONFIG);
+    const out = summarizeCommandOutput("run", result(logWithVerdict(verdict, 2_500), { exitCode: 1 }), CONFIG);
     expect(out).toContain(verdict);
   }
 });
@@ -343,6 +428,34 @@ test("summarizeCommandOutput does not treat a clean verdict as a failure", () =>
     CONFIG,
   );
   expect(out).not.toContain("## Errors / Warnings");
+});
+
+// GDCTX-1 / defect register row GDCTX-1: `keryx ctx run -- printf 'refuse
+// this\n'` (exit 0, empty stderr) put "refuse this" into "Errors / Warnings"
+// because FAILURE_STEMS was applied to every line regardless of exit code —
+// a `git log --oneline` whose commit subject happens to start with "fix:
+// refuse ..." is the same shape: ordinary prose on a clean, successful
+// stdout line, not a verdict.
+test("summarizeCommandOutput does not treat a clean commit message as a failure", () => {
+  const log = [
+    "a1b2c3d fix: refuse unpriceable provider at the card",
+    "e4f5a6b chore: bump version",
+  ].join("\n");
+  const out = summarizeCommandOutput("git log --oneline", result(log, { exitCode: 0 }), CONFIG);
+
+  expect(out).not.toContain("## Errors / Warnings");
+  expect(out).toContain("fix: refuse unpriceable provider at the card");
+});
+
+test("summarizeCommandOutput treats the same commit message as a failure when the command exited non-zero", () => {
+  const log = [
+    "a1b2c3d fix: refuse unpriceable provider at the card",
+    "e4f5a6b chore: bump version",
+  ].join("\n");
+  const out = summarizeCommandOutput("git log --oneline", result(log, { exitCode: 1 }), CONFIG);
+
+  expect(out).toContain("## Errors / Warnings");
+  expect(out).toContain("fix: refuse unpriceable provider at the card");
 });
 
 // Defect 3. Compacted structured output still looked like a whole document and
