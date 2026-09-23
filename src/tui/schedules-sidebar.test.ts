@@ -211,9 +211,17 @@ function mountBoth(
   return { timer, ops, schedules };
 }
 
-/** Render-and-microtask rounds until `cond` holds (bounded; never a wall-clock sleep). */
-async function until(h: MountedChrome, cond: () => boolean): Promise<void> {
-  for (let i = 0; i < 200 && !cond(); i += 1) await settle(h, 1);
+/**
+ * Render rounds until `cond` holds, bounded by time rather than by a round count:
+ * the actions behind some conditions (delete, pause) do real file I/O, which a
+ * loaded CI runner can stretch past any fixed number of microtask rounds.
+ */
+async function until(h: MountedChrome, cond: () => boolean, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!cond() && Date.now() < deadline) {
+    await settle(h, 1);
+    if (!cond()) await new Promise((resolve) => setTimeout(resolve, 5));
+  }
   expect(cond()).toBe(true);
 }
 

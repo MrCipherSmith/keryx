@@ -304,8 +304,13 @@ describe("L4: installer details", () => {
   test("the backend probe runs once per host, so a reload does not spawn systemctl again", async () => {
     resetDetectedBackendCache();
     let probes = 0;
+    // `unitDir` is faked too, even though this test never installs anything: `planInstall`
+    // below still resolves the unit paths it returns, and with no `unitDir` those would be
+    // the operator's real `~/.config/systemd/user` (flow 295 follow-up: this is exactly the
+    // gap that once let a test install a real, enabled timer there).
     const host: ScheduleHost = {
       platform: "linux",
+      unitDir,
       run: async (command) => {
         if (command === "systemctl") probes += 1;
         return { code: 0, stdout: "running\n", stderr: "" };

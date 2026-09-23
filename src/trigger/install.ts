@@ -29,6 +29,12 @@
 // Every external command goes through `ScheduleHost.run`, so tests use a fake
 // `systemctl`/`launchctl`/`crontab` and a temporary unit directory. No test
 // installs a real timer.
+//
+// That is a convention, not a guarantee, and a convention was once missed: see
+// `refuseRealHost` below. Under `bun test` (NODE_ENV=test), `runner()`, `systemdUserUnitDir()`
+// and `launchAgentsDir()` refuse to fall back to the real scheduler / real unit
+// directories when a test's `ScheduleHost` does not inject `run`/`unitDir`/`launchAgentsDir`
+// — loudly, so the offending test fails instead of installing something real.
 
 import { execFile } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -82,8 +88,36 @@ function defaultRun(command: string, args: readonly string[], input?: string): P
   });
 }
 
+/**
+ * Test-hermeticity safety net (flow 295 follow-up): a test that forgets to inject a fake
+ * `ScheduleHost` must fail loudly, not install a real, enabled systemd --user timer on the
+ * developer's machine. That happened once — `schedule-review.test.ts` and
+ * `schedule-security.test.ts` left `keryx-<hash>-x.{service,timer}` enabled in
+ * `~/.config/systemd/user/` on an operator's box before the per-test fakes below existed.
+ *
+ * Honoured only in a test context: `NODE_ENV === "test"` (set by `bun test`), the same
+ * signal `src/session/lease.ts` and `src/bus/send.ts` already gate similar test-only
+ * behaviour on. Production (`keryx schedule add`, the compiled binary, …) never runs under
+ * `bun test`, so this never fires outside a test process.
+ */
+function inTestContext(): boolean {
+  return process.env["NODE_ENV"] === "test";
+}
+
+function refuseRealHost(what: string): never {
+  throw new Error(
+    `keryx refuses to touch the real ${what} while running under \`bun test\` (NODE_ENV=test) with no fake ` +
+      "ScheduleHost injected. Pass a ScheduleHost with `run` (a fake systemctl/launchctl/crontab) and, for " +
+      "systemd/launchd, `unitDir`/`launchAgentsDir` pointed at a temp directory — see src/trigger/install.test.ts. " +
+      "This guard exists because an un-hermetic test once installed a real, enabled systemd --user timer on a " +
+      "developer's machine.",
+  );
+}
+
 function runner(host: ScheduleHost): NonNullable<ScheduleHost["run"]> {
-  return host.run ?? defaultRun;
+  if (host.run !== undefined) return host.run;
+  if (inTestContext()) refuseRealHost("scheduler (systemctl / launchctl / crontab / loginctl)");
+  return defaultRun;
 }
 
 /**
@@ -139,11 +173,15 @@ function runnerInvocation(confirmed: ConfirmedRunner): KeryxInvocation {
 }
 
 export function systemdUserUnitDir(host: ScheduleHost = {}): string {
-  return host.unitDir ?? path.join(process.env["XDG_CONFIG_HOME"] ?? path.join(homedir(), ".config"), "systemd", "user");
+  if (host.unitDir !== undefined) return host.unitDir;
+  if (inTestContext()) refuseRealHost("systemd --user unit directory (~/.config/systemd/user)");
+  return path.join(process.env["XDG_CONFIG_HOME"] ?? path.join(homedir(), ".config"), "systemd", "user");
 }
 
 function launchAgentsDir(host: ScheduleHost): string {
-  return host.launchAgentsDir ?? path.join(homedir(), "Library", "LaunchAgents");
+  if (host.launchAgentsDir !== undefined) return host.launchAgentsDir;
+  if (inTestContext()) refuseRealHost("LaunchAgents directory (~/Library/LaunchAgents)");
+  return path.join(homedir(), "Library", "LaunchAgents");
 }
 
 function uidOf(host: ScheduleHost): number {

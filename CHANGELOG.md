@@ -3,6 +3,27 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.157] — 2026-09-23
+
+A patch for the test suite, found by the 0.2.156 smoke run: a scheduler test
+could install a real, enabled `systemd --user` timer on the machine running
+the tests.
+
+### Fixed
+- **Tests can no longer touch the real scheduler.** Under `bun test` the
+  schedule installer now refuses to run `systemctl`, `launchctl`, `crontab` or
+  `loginctl`, or to read or write `~/.config/systemd/user` or
+  `~/Library/LaunchAgents`, unless the test injected its own host and
+  directories; the refusal fails the test loudly. A regression test snapshots
+  the real unit directories and crontab before and after. The one half-faked
+  test host that resolved real unit paths now uses a temporary directory.
+  Anyone who ran keryx's own test suite on 2026-09-23 should check
+  `~/.config/systemd/user` for `keryx-*-x.{service,timer}` units pointing at
+  a `*.test.ts` file and remove them (`systemctl --user disable --now` the
+  timer, then delete both files).
+- **`keryx schedule add` documentation.** The CLI reference said a missing
+  terminal was refused only without `--yes`; `--yes` is refused too.
+
 ## [0.2.156] — 2026-09-23
 
 Eight flows, the day after 0.2.155: keryx can now schedule its own unattended
