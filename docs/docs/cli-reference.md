@@ -197,6 +197,40 @@ flags in the arguments your client launches `keryx acp` with. `--base-url`
 overrides the endpoint, as in the shell; `--data-dir` overrides where sessions
 are stored (mainly useful for a sandboxed client integration test).
 
+**Switching model from the editor.** That launch model is where a session
+starts, not where it has to stay. Every `session/new` and `session/load`
+response carries `configOptions` with one `select` option of category
+`model` — the editor's model picker — whose `currentValue` is the model the
+session is running. Its values are `<provider>/<model>` for every model keryx
+can run here, from the same source `keryx shell`'s picker uses: the providers
+it detects (with your saved API keys) and each one's model list, narrowed to
+providers that have a usable credential — the shell's picker also lists
+providers you have not configured yet so you can enter a key, and an editor
+has nowhere to enter one. Each provider is reached at the endpoint the shell
+would use (a per-provider endpoint you saved in the shell wins), and Ollama is
+probed at `--base-url` only, as in the shell. The launch model is always in
+the list. Building the list touches the network, so it is started at launch
+and a new session waits for it at most 8 seconds: a list not ready by then is
+not waited for — that session offers only the launch model, stderr says so,
+and the next session asks again. Choose one
+in the editor (`session/set_config_option`, answered with the complete,
+updated `configOptions`) or type `/model <value>` (a bare model id works when
+only one provider has it; keryx then sends `config_option_update`). The
+switch is per session, applies **from the next turn** — a turn already
+running finishes on the model it started with — and builds the provider the
+way the launch did: saved logins refreshed first, the shell's own provider
+factory, the new provider's saved settings. A value that is not in the list,
+or a provider that turns out to have no usable credential, is refused with
+the reason and the session stays on its model; of two switches in flight,
+the one requested later wins, and one that fails leaves the other in effect.
+Nothing is saved: `keryx shell`'s selection is left as it was.
+
+A **loaded** session continues on the model it last ran — the session record
+names it — when that model is still in the list here; otherwise it continues
+on the launch model, and keryx says so in the session (`keryx: this session
+last ran …, but …; it continues on …`). A session this connection has already
+run keeps the model it has now.
+
 **When nothing is configured** — no flags, nothing saved, or a provider with
 no usable credential — `keryx acp` still starts and still answers
 `initialize`, writes one line to stderr saying what is missing, and refuses
@@ -225,11 +259,78 @@ promised here.
 | Method | What it does |
 |---|---|
 | `initialize` | Negotiates the protocol version and returns keryx's `agentCapabilities`/`agentInfo`. Requesting the version keryx serves gets it back unchanged; requesting a newer one gets keryx's latest supported version — not an error, the spec requires this, and the client then decides whether to proceed or close the connection; a malformed or out-of-range version (not an integer, or outside `uint16`) is refused with a JSON-RPC error. Any other request before `initialize` succeeds is refused, not served. |
-| `session/new` | Creates a keryx session bound to `resolveProjectRoot(cwd)` — the git toplevel above the requested `cwd`, or the requested `cwd` itself outside a repository. `session/list`/`session/load` report this resolved root back, not the `cwd` you sent, so a session opened at `/repo/packages/web` is later listed with `cwd: /repo`. `mcpServers` is accepted: its stdio entries are started (or, when another session on this connection already runs the same list, shared) and the others are reported — see [MCP servers from the client](#mcp-servers-from-the-client). Only a list that does not match the schema (not an array, or an entry with no `name`) is refused, with `-32602`. Refused with the configured message when no provider is configured (see above). |
+| `session/new` | Creates a keryx session bound to `resolveProjectRoot(cwd)` — the git toplevel above the requested `cwd`, or the requested `cwd` itself outside a repository. `session/list`/`session/load` report this resolved root back, not the `cwd` you sent, so a session opened at `/repo/packages/web` is later listed with `cwd: /repo`. `mcpServers` is accepted: its stdio entries are started (or, when another session on this connection already runs the same list, shared) and the others are reported — see [MCP servers from the client](#mcp-servers-from-the-client). Only a list that does not match the schema (not an array, or an entry with no `name`) is refused, with `-32602`. Refused with the configured message when no provider is configured (see above). The response carries `configOptions` (the model option, see *Switching model from the editor* above), and right after it keryx sends one `available_commands_update` (see [Slash commands](#slash-commands)). |
+| `session/set_config_option` | Switches the session's model from its next turn (`configId: "model"`, `value` one of the option's values) and answers with the complete `configOptions`. Not refused while a turn runs — that turn keeps its model. An unknown option id or value, or a provider that cannot be built, is refused with `-32602` and the reason. |
 | `session/prompt` | Runs a real harness turn in that session and streams `session/update` notifications (assistant text, reasoning, tool calls and their results) as the turn runs — not buffered to the end — resolving with the spec's `stopReason` (`end_turn`, `max_tokens`, `max_turn_requests`, or `cancelled`) once it finishes. One turn per session at a time: a second `session/prompt` for a session whose turn is still running is refused with `-32600` and `data.condition: "session-busy"` rather than interleaved into the same transcript. Wait for the first turn's response before prompting again; `session/cancel` shortens that wait but does not end it, because the slot is freed by the cancelled turn itself once it observes the abort — a turn parked in a long tool call frees it a moment later, not instantly. |
 | `session/cancel` | A notification (no reply). Aborts the running turn — the same abort path a local hard-stop uses — and settles any `session/request_permission` the turn had open as a local denial, so a pending ask never leaves the client hanging. The turn's `session/prompt` response resolves `stopReason: "cancelled"`, and no further `session/update` for that turn is sent afterwards. Cancelling an unknown or already-finished session is a harmless no-op. |
 | `session/list` | Lists the project's durable sessions — the same store `keryx sessions` and `keryx shell --resume` read. An omitted `cwd` lists the sessions of the ACP process's own project root (refusing an optional parameter would itself be a conformance break); a provided `cwd` filters to that project. One page per call; there is no pagination (`nextCursor`) today. |
-| `session/load` | Loads a session created anywhere — including one created outside any ACP connection, such as with `keryx shell` — and replays its history as `session/update` notifications **before** responding, as the spec requires. `user`/`assistant` messages become `user_message_chunk`/`agent_message_chunk`; a stored tool call/result pair becomes a `tool_call` + `tool_call_update` sharing one id; `system` messages are dropped (there is no ACP chunk for them). A replayed tool call's status is always reported `completed` — the persisted transcript keeps only the final content, not a separate success/failure marker, so that is the honest approximation available, not a claim that the original call actually succeeded. Loading a session that has a turn in flight is refused the same way `session/prompt` is (`-32600`, `data.condition: "session-busy"`): the load would replace the history the running turn is still writing to. A session whose transcript exists but cannot be read is answered `-32603` with the session id, the transcript's path and the reason in `error.data` — not `resourceNotFound` (the session does exist) and not an empty replay (which would tell the client the conversation had no messages). This is the one error on this wire that names a path on the agent's filesystem; it is the transcript under the data directory the client itself launched the agent with, and it is there because "which file, and why" is what makes the failure fixable. `mcpServers` is handled as for `session/new`, and the list a load carries **replaces** the session's servers: the session is rebound to the set for its new list, a set no session uses any more is stopped, and nothing is started if the load itself is refused. |
+| `session/load` | Loads a session created anywhere — including one created outside any ACP connection, such as with `keryx shell` — and replays its history as `session/update` notifications **before** responding, as the spec requires. `user`/`assistant` messages become `user_message_chunk`/`agent_message_chunk`; a stored tool call/result pair becomes a `tool_call` + `tool_call_update` sharing one id; `system` messages are dropped (there is no ACP chunk for them). A replayed tool call's status is always reported `completed` — the persisted transcript keeps only the final content, not a separate success/failure marker, so that is the honest approximation available, not a claim that the original call actually succeeded. Loading a session that has a turn in flight is refused the same way `session/prompt` is (`-32600`, `data.condition: "session-busy"`): the load would replace the history the running turn is still writing to. A session whose transcript exists but cannot be read is answered `-32603` with the session id, the transcript's path and the reason in `error.data` — not `resourceNotFound` (the session does exist) and not an empty replay (which would tell the client the conversation had no messages). This is the one error on this wire that names a path on the agent's filesystem; it is the transcript under the data directory the client itself launched the agent with, and it is there because "which file, and why" is what makes the failure fixable. `mcpServers` is handled as for `session/new`, and the list a load carries **replaces** the session's servers: the session is rebound to the set for its new list, a set no session uses any more is stopped, and nothing is started if the load itself is refused. Like `session/new`, the response carries `configOptions` and is followed by one `available_commands_update`. |
+
+### Tools a session offers
+
+A turn in an ACP session is offered:
+
+- **keryx's project tools** — `search_code`, `graph_find`, `graph_query`,
+  `graph_symbol`, `graph_path`, `graph_affected`, `repomap`, `memory_search`,
+  `read_wiki`, `wiki_ask`, `wiki_resolve`, `wiki_evidence`, `wiki_backlinks`,
+  `wiki_freshness`, `flow_status`, `health_status`, `skills_catalog`,
+  `skill_load` and `test_related` — in exactly the projects where `keryx
+  shell` offers them. They come from the same assembly the shell uses, gate
+  included: in a project with no usable metaproject (no manifest and nothing
+  built under `.metaproject/`) only `search_code` is offered, because every
+  other one could only answer "never built here". All are read-only.
+- `get_cwd`, `list_dir`, `read_file` (through the client's `fs/read_text_file`
+  when it advertises it, see below), `shell_exec` and `apply_patch` — the last
+  two always asked through `session/request_permission`.
+- `search_tool`/`use_tool`, only when the client sent MCP servers (above).
+
+Each is reported to the client with an ACP tool `kind`: the search tools as
+`search`, the read tools as `read`, `shell_exec` and `use_tool` as `execute`,
+`apply_patch` as `edit` — so an editor shows what kind of call it is looking
+at rather than a generic one.
+
+Not offered, on purpose: `web_fetch` and `web_search`, and keryx's own
+configured MCP servers — their results are untrusted content, which switches
+on an approve-before-announce path this wire has no live test for yet;
+`spawn_subagent`, because delegation needs a process port the ACP server does
+not build; the agent-bus tools, a shell surface; and `ask_user`, workspace,
+Slate, execution-plan and background-task tools, which need a host or a
+session store this wire does not carry. `/status` lists what a session is
+actually offered.
+
+### Slash commands
+
+After every `session/new` and `session/load` keryx sends one
+`available_commands_update` listing the commands it handles over ACP, in the
+published shape (`name`, `description`, and `input.hint` for one that takes an
+argument). A command arrives as ordinary prompt text beginning with `/`;
+keryx answers it itself — it never reaches the model and adds nothing to the
+conversation's history.
+
+**What counts as a command:** a prompt whose first block is ONE line of
+text starting with `/` and a word — `/model x`, `/status`, but also `/tmp is
+full` or `/explain this`, which are answered with the command list rather
+than sent to the model. To send text like that to the model, start it with a
+space (` /explain this`), as Zed itself suggests, or put it on more than one
+line: a prompt with a second line is never a command, so nothing typed after
+a command is silently dropped. A path (`/src/cli.ts fails`) is not a command
+either. A command that takes no argument refuses extra text, and any command
+sent with an attachment refuses it — in both cases saying so and doing
+nothing, and never repeating the attachment back. `session/cancel` while
+`/model` is building the new provider cancels the switch: the session keeps
+its model.
+
+| Command | What it does |
+|---|---|
+| `/help` | Lists these commands. |
+| `/model [<model>]` | Without an argument, lists the models the session can run and marks the current one. With one, switches to it from the next turn — the same switch as the editor's model picker — and sends `config_option_update`. |
+| `/reasoning [<level>]` | Shows or sets this session's reasoning effort (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) from the next turn. Not saved, as in the shell. |
+| `/status` | The session id, project root, model, reasoning effort, the tools the session's turns are offered, and whether the client's MCP servers are running. |
+
+Every other shell command is left out because it needs the terminal UI —
+`/workspace`, `/review`, `/integrations`, `/mcp`, `/game` and the pickers — or
+a session feature this wire does not carry. One typed anyway is answered with
+the list above rather than sent to the model.
 
 ### MCP servers from the client
 
@@ -318,8 +419,7 @@ these; the refusal exists for the client that does anyway.
 | `session/resume` | `sessionCapabilities.resume` is not advertised; use `session/load`, which replays history instead. |
 | `session/close` | `sessionCapabilities.close` is not advertised; keryx sessions are durable on disk and have no open/closed state to leave. |
 | `session/delete` | `sessionCapabilities.delete` is not advertised; session retention is an operator decision, not a client one. |
-| `session/set_mode` | `session/new` returns no `modes`, so there is no mode to set. |
-| `session/set_config_option` | `session/new` returns no `configOptions`, so there is no option to set. |
+| `session/set_mode` | `session/new` returns no `modes`, so there is no mode to set. (The model is a config option — see `session/set_config_option` above.) |
 
 ### Client capabilities
 
@@ -400,8 +500,8 @@ to run".
   atomicity or `shell_exec`'s streaming/approval behaviour for a capability
   keryx does not need on a machine it already shares with the client.
 - **Not implemented at all:** `session/resume`, `session/close`,
-  `session/delete`, `session/set_mode`, `session/set_config_option` — see the
-  refusal table above for why each one specifically.
+  `session/delete`, `session/set_mode` — see the refusal table above for why
+  each one specifically.
 - **No cross-project `session/list`.** Only the ACP process's own project
   (or a `cwd` you pass) is listed; there is no "every session on this
   machine" view.
@@ -1073,7 +1173,7 @@ keryx sync uninstall-hooks
 | Subcommand / flag | Description |
 |---|---|
 | *(none)* | Advisory report per module. Prints `HEAD`, then per artifact either "up to date" or the change counts with the first few paths. Always exits `0` — the hooks decide what to do with the report. |
-| `--apply` | Rebuild each stale artifact incrementally and record the new provenance. An artifact with no provenance yet is built as a baseline. |
+| `--apply` | Rebuild each stale artifact incrementally and record the new provenance. An artifact with no provenance yet is built as a baseline. Takes the project's maintenance lock (see [trigger](#trigger) → **Locking**): when another keryx run holds it, waits up to `KERYX_MAINTENANCE_LOCK_WAIT_MS` (default 120 s), then exits `75` naming the holder's pid. |
 | `install-hooks` | Install `post-merge` and `post-checkout` git hooks that run the advisory report. Prints that nothing was installed when there is no `.git`. |
 | `uninstall-hooks` | Remove them. |
 | `--help`, `-h` | Print `sync` usage and exit. |
@@ -1109,7 +1209,12 @@ naming what fires it (a repository event or a schedule) and what it does
     { "name": "nightly-maintenance", "on": { "kind": "schedule", "cron": "0 2 * * *" },
       "action": { "kind": "open-flow", "template": "Nightly graph/wiki maintenance", "skipIfOpen": true } },
     { "name": "report-next-task", "on": { "kind": "event", "event": "ci" },
-      "action": { "kind": "flow-next", "flow": "142-2026-08-01-nightly-maintenance" } }
+      "action": { "kind": "flow-next", "flow": "142-2026-08-01-nightly-maintenance" } },
+    { "name": "overnight-next-task", "on": { "kind": "schedule", "cron": "0 1 * * *" },
+      "action": { "kind": "flow-next", "flow": "142",
+        "dispatch": { "provider": "anthropic", "model": "claude-sonnet-4-5", "permissionMode": "trust",
+                      "rates": { "inputUsdPerMTok": 3, "outputUsdPerMTok": 15 },
+                      "ceilingUsd": 2, "maxSeconds": 1800, "maxAttempts": 3 } } }
   ]
 }
 ```
@@ -1130,8 +1235,12 @@ Four action kinds:
   `keryx flow init --title "<template>"`. With `skipIfOpen`, a fire is a no-op
   when another flow's title is exactly `template` and that flow's status is
   not `done` (an `initializing`, not-yet-`start`ed flow still counts as open).
-- `{ "kind": "flow-next", "flow": "<flow id>" }` — reports `keryx flow next
-  <flow>`'s decision into the run record; see **Honest limits** below.
+- `{ "kind": "flow-next", "flow": "<flow id>" }` — **report-only**: records
+  `keryx flow next <flow>`'s decision into the run record. `list`/`status` show
+  it as `flow-next(<flow>, report-only)`.
+- `{ "kind": "flow-next", "flow": "<flow id>", "dispatch": { … } }` —
+  **dispatches** a keryx agent to work the flow's next task, unattended. See
+  **Dispatching `flow-next`** below.
 
 An entry that fails validation is refused on load with the reason, and its
 neighbours still load; a later entry re-using an already-used `name` is
@@ -1159,21 +1268,148 @@ keryx trigger schedule <name>   # print the cron line / systemd timer unit for a
 | `schedule <name>` | Print the cron line and the systemd service/timer pair for a schedule-fired entry. Installs nothing. |
 | `--help`, `-h` | Print `trigger` usage and exit. |
 
-**Exit codes.** Non-zero only when the action itself failed, the name is
-unknown, or the matching entry is malformed. Every other outcome exits `0`:
-nothing declared, a disabled entry, a lock refusal, and a budget refusal are
-all "nothing done this pass", not an error — which is also how each is
-classified in the run record.
+**Exit codes.** Non-zero only when the action itself failed (for a dispatch:
+the task did not end `done`), the name is unknown, or the matching entry is
+malformed. Every other outcome exits `0`: nothing declared, a disabled entry,
+a lock refusal, a budget refusal and a dispatch refusal are all "nothing done
+this pass", not an error — which is also how each is classified in the run
+record.
+
+### Dispatching `flow-next`
+
+A `dispatch` block turns `flow-next` from a report into real work: one fire
+starts one keryx agent on the flow's next ready task, with no terminal and
+nobody present, and records what happened.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `provider`, `model` | yes | The model the agent runs on. Only providers known to report token usage on every response are accepted: `anthropic`, `openai`, `gemini`, and an OpenAI-compatible provider whose registry entry sets `streamUsage` (today: `grok`). Anything else is refused (`provider-usage-unknown`). A provider with no usable credential is refused before anything is written. |
+| `permissionMode` | no (`ask`) | `ask` — every non-read call is denied (read-only by construction). `trust` — non-destructive `shell_exec`/`apply_patch` run, **inside the hardened sandbox, which is then mandatory**. `auto` is **rejected at load**. |
+| `rates` | yes | `{ inputUsdPerMTok, outputUsdPerMTok }` — USD per million tokens, both **greater than zero**. Without rates, or with a zero rate, a run is free to the ceiling; the entry is rejected at load. |
+| `ceilingUsd` | yes | This trigger's own spend ceiling, on top of the project-wide one. Rejected at load when absent. |
+| `maxSeconds` | no (1800) | Wall-clock limit for one agent run. |
+| `maxAttempts` | no (3) | A task whose attempt count has reached this is not dispatched again. |
+| `baseUrl` | no | Provider base URL override — **loopback only** (`localhost`, `127.0.0.0/8`, `[::1]`). `triggers.json` is a committed file and the run sends the operator's saved key for `provider` to this URL, so a non-loopback URL is rejected at load. |
+| `network` | no (`false`) | Network for the agent's **shell commands**. `true` gives them the host's **full** network: the internet, every service on the host's loopback (a local model server, a database, …) and the host's abstract unix sockets — nothing is filtered, and `keryx trigger list` says so for the entry. The **model call** is made by the dispatcher itself, outside the sandbox, so talking to the provider — including a local Ollama on `127.0.0.1` — never needs this. Leave it off unless the task's own commands truly need the network (a loopback-only mode via `slirp4netns --disable-host-loopback` is possible but not built in this version). |
+
+**One fire, in order** — every refusal happens before any model call:
+
+1. A per-flow dispatch lock: a second dispatch on the same flow refuses
+   (`dispatch-refused`, `dispatch-locked`); different flows do not wait on
+   each other.
+2. The flow must be `in-progress` with frozen acceptance criteria, `flow next`
+   must be `ready`, the ready task must have no open attempt, and its attempt
+   count must be under `maxAttempts`. Otherwise `dispatch-refused` with the
+   cause (`flow-not-in-progress`, `flow-not-frozen`, `nothing-ready`,
+   `blocked`, `open-attempt`, `attempt-cap`), exit `0`.
+3. Containment: `trust` refuses (`sandbox-unavailable`, exit `0`, reason
+   recorded) unless the hardened sandbox below can be built — no launcher, a
+   launcher that cannot create namespaces, a non-Linux host,
+   `KERYX_DANGEROUSLY_DISABLE_SANDBOX=1` or `KERYX_SANDBOX_SHELL=off` all refuse.
+   `ask` may run without one: every command and patch is an approval request,
+   every approval request is denied, and its shell runner refuses every command
+   as well.
+4. The spend reservation: under a project-wide spend lock, the remaining
+   allowance (the smaller of the trigger's and the project's) is written to the
+   ledger as a `reserved` record **before the first model call**. At or over
+   either ceiling, or with nothing left to reserve → `budget-refused`, exit `0`.
+   Two triggers firing together cannot both get the full allowance.
+5. A throwaway git worktree on branch `trigger/<flow>-<task>` (reused when it
+   exists). Never your checkout; the branch is never pushed. A worktree a
+   killed run left registered to that branch is recovered first — removed when
+   it is under the dispatcher's own worktree directory, pruned when its
+   directory is gone; a branch checked out anywhere else refuses
+   (`worktree-conflict`) and is never touched.
+6. `flow task attempt <flow> <task> --outcome started` with the run id —
+   before the model is called.
+7. One agent turn in the worktree (see **Unattended posture**), stopped by
+   `maxSeconds`, when its priced cost reaches the reservation, or when a
+   response arrives without token usage (that run is charged its whole
+   reservation).
+8. Whatever changed is committed on the trigger branch; then `keryx health run`
+   and `keryx health gate` run in the worktree **inside the same sandbox** —
+   they execute code the agent wrote.
+9. Exactly one closing fact: `flow task done --disposition completed` with a
+   `runLink` **only** when the turn ended normally, the branch has a new commit
+   and the health gate passed; otherwise `flow task attempt --outcome
+   failed|blocked` with the reason (`blocked` when the run was stopped by
+   denials or by `ask_user`). The worktree is removed; the branch stays for you
+   to review and merge.
+
+**The unattended sandbox (Linux, bubblewrap).** Every `shell_exec` of a
+dispatched run, and its health gate, run inside a profile built from allow
+lists: `/` read-only; your home directory and **all of `/run`** (and
+`/var/run` where it is not a symlink to it) hidden behind an empty tmpfs.
+`/run` is where the host's services listen — the system D-Bus, systemd-resolved,
+tailscaled, libvirt, snapd, Docker, ssh-agent and gpg-agent under
+`/run/user/<uid>` — and turning the network off does **not** isolate unix
+path sockets, so the whole directory is hidden rather than known sockets masked
+by name. Nothing under `/run` is bound back; with `network: true` only the
+resolver file `/etc/resolv.conf` points to is bound back, read-only; bound back read-only only the toolchain roots found on `PATH` under
+your home (`~/.bun`, an nvm node version — detected, not hard-coded), the
+repository's git directory, the keryx package and `node_modules`; the worktree
+and a scratch `HOME` read-write; a private `/tmp`; the Docker socket masked;
+network off unless `dispatch.network: true` (abstract-namespace unix sockets
+are per network namespace, so they are isolated with it). The environment is an allowlist —
+`PATH`, locale, `TERM`, `TZ`, colour flags — with `HOME`, the XDG directories
+and `TMPDIR` pointed at the scratch home: no exported token, no
+`SSH_AUTH_SOCK`. The known-secret deny list (`~/.ssh`, `~/.config/gh`, …) is
+still applied inside anything bound back. macOS `sandbox-exec` is not
+implemented for this profile, so `trust` refuses on macOS.
+
+**Unattended posture — fail closed.** The agent runs with `unattended: true`.
+Its permission mode is the entry's — never the project's stored default
+(`/mode`), never the saved shell allowlist. Every call that would ask — a
+write or command under `ask`, a destructive one under `trust`, anything
+touching credentials or the SAC confirm flow, anything after untrusted
+content, `ask_user` — is **denied and written to the run record** with the
+tool and the reason; nothing is ever approved on your behalf. On top of the
+mode, a text floor denies: `git push` (any form), `git merge`, `git tag`, `git
+update-ref`, `git branch -f|-D|-m|…`, `gh pr merge`, `gh release`, `gh api`
+with a mutating method or a body, `npm publish`, `bun publish`; `keryx flow
+freeze`, `flow start`, `flow ac update|reseal|confirm`, `flow implemented`,
+`flow complete`, `flow renumber`, `flow block|unblock`, `flow task
+add|depends|done|attempt|skip`, `keryx trigger run` (no nested dispatch); and
+any write — by `apply_patch` or by a command that names them — to
+`flow.json`, `acceptance-criteria.md`, `.metaproject/triggers.json` or
+`.metaproject/data/trigger/**`. **The floor is defence in depth, not the
+boundary**: it is text matching, a shell can spell a command in ways it does
+not see (quoting, `$(…)`, aliases, `bun -e`/`python3 -c`), and it is
+deliberately over-broad (a commit message containing "tag" is refused). The
+boundary is the sandbox — with the network off and credentials hidden, a push
+or an API call that slips past the text has nothing to authenticate with and
+nowhere to go. The tool roster is `get_cwd`, `list_dir`, `read_file` (confined
+to the worktree), `shell_exec`, `apply_patch` — no `web_fetch`, `web_search`,
+`search_tool`/`use_tool`, `spawn_subagent` or `ask_user`.
+
+**Cost.** Every dispatched run records `cost: { recorded: true, usd, tokens:
+{ input, output } }` — tokens as the provider reported them, USD from the
+entry's `rates` — including a run that failed, timed out, was stopped, or hit
+an error while writing its closing fact. That record also closes the run's
+`reserved` record. Both ceilings sum recorded costs **plus every reservation
+no record has closed yet**, so a run in flight — or one whose process was
+killed — keeps its whole reservation counted. `keryx trigger status` lists
+open reservations; once you know the killed run is gone, close its
+reservation with what it really spent (from your provider's console):
+
+```
+keryx trigger resolve <runId> --spent <usd>
+```
+
+There is no default for `--spent`: guessing would be the fail-open this
+exists to prevent.
 
 ### The run record
 
 Every `run` that resolves to a real, declared entry (`disabled` or `ready`)
 appends one line to `.metaproject/data/trigger/runs.jsonl` — when it fired,
 what fired it (`on`, verbatim), what it did (`action`, verbatim), the outcome
-(`ok`, `no-op`, `lock-refused`, `budget-refused`, or `failed`), a human-readable
-detail, and its cost (`{ recorded: false, reason }` for every action kind
-today — none of the four calls a model yet, so there is nothing to record a
-real `usd` figure for). A run that never reaches a concrete entry (no config,
+(`ok`, `no-op`, `lock-refused`, `budget-refused`, `dispatch-refused`, or
+`failed`), a human-readable detail, and its cost — `{ recorded: false, reason }`
+for every action that calls no model, `{ recorded: true, usd, tokens }` for a
+dispatched `flow-next`. A dispatch also records `dispatch: { runId, flow,
+task, attempt, branch, closing, refusal?, denials? }`. Lines written before
+`tokens`/`dispatch` existed still read. A run that never reaches a concrete entry (no config,
 unknown name, malformed entry) is not recorded — that stays a stderr line and
 an exit code. `status` reads this file; it never resolves or re-runs anything.
 Taken from a real run:
@@ -1185,11 +1421,24 @@ keryx trigger status (reading /path/to/project/.metaproject/data/trigger/runs.js
       last: 2026-09-22T19:33:15.623Z — ok — action "reconcile" completed. [cost: n/a (this action does not call a model — reconcile/rebuild are deterministic, no spend to record)]
 ```
 
-**Locking.** A second `trigger run` for the same project, started while the
-first is still running, refuses immediately rather than waiting — this keeps
-one run at exactly one pass instead of blocking on another run's schedule.
-Retry on the next fire. This lock is taken by `trigger run` only (`reconcile`/
-`rebuild` actions); see **Honest limits** below for what it does not cover.
+**Locking.** One project maintenance lock —
+`.metaproject/data/.locks/maintenance.lock`; the `.locks` directory carries its
+own `.gitignore` (`*`), so a `git add -A` that runs while a build holds the
+lock (the post-commit hook's own rebuild is such a moment) never commits it,
+and it stays writable inside the unattended sandbox — is shared by `keryx sync --apply`,
+`keryx gdgraph build`, and the triggered `reconcile`, `rebuild` and
+`open-flow`. A triggered run that finds it held refuses at once
+(`lock-refused`, exit `0`, the holder's pid named) — one run stays exactly one
+pass. An interactive `sync --apply` or `gdgraph build` waits instead, up to
+`KERYX_MAINTENANCE_LOCK_WAIT_MS` (default 120 s), then exits `75` naming the
+holder's pid — "not run", not "build failed"; the `post-commit` hook reports
+exit `75` as a skipped rebuild. The lock is re-entrant within one process's
+call chain, so `sync --apply` building the graph, or a triggered `reconcile`
+running `sync --apply`, never waits on itself. A dispatching `flow-next` does
+**not** hold it while the agent runs — the agent's own `keryx gdgraph build`
+must be able to take it — and uses its own per-flow dispatch lock instead.
+(Flow 286 described its trigger lock as the one the interactive commands take;
+until this change they took none.)
 
 **Installing hooks.** `install`'s blocks live beside the ones `keryx sync
 install-hooks` (its `keryx-sync` block) and `keryx update` (its
@@ -1215,21 +1464,103 @@ regenerate-and-reinstall of the line.
 
 ### Honest limits
 
-- **`flow-next` reports, it does not dispatch.** It records `keryx flow next
-  <flow>`'s own decision (ready/blocked/none, plus unresolved tasks) into the
-  run record. It never starts an agent turn to work the task — an unattended
-  fire (a git hook, cron, CI) has no safe way to own a model dispatch (model
-  choice, tool access, reviewing the result), so this build turns "an event
-  happened" into "here is what should happen next" and stops there.
-- **The spend ceiling is project-wide, with no per-trigger override.**
-  `open-flow` and `flow-next` (the only two action kinds that could ever lead
-  to model spend) are gated on the same default ceiling `keryx review budget`
-  uses, evaluated against every recorded trigger cost across every trigger
-  name and action kind in this project — not a ceiling scoped to one entry.
-- **The trigger-run lock is not taken by the interactive commands.** It
-  serializes `trigger run` invocations against each other, not against a
-  person typing `keryx sync --apply` or `keryx gdgraph build` directly — the
-  two can still race.
+- **A dispatched task is "done" by the dispatcher's checks, not by review.**
+  `task done` means: the turn ended normally, the trigger branch got a commit,
+  and `keryx health gate` passed in the worktree. Nobody has read the diff; the
+  branch waits for you. A fresh worktree has no dependencies of its own — the
+  project's `node_modules`, when present, is linked in for the gate.
+- **The unattended text floor is defence in depth.** It is over-broad by
+  design and still incomplete by construction (a shell can spell a command
+  many ways). The boundary is the hardened sandbox, which `trust` requires —
+  Linux with a working bubblewrap only in this version.
+- **Review the trigger branch before you install or build it.** The agent can
+  commit anything a task could — including a `package.json` script or a build
+  step that runs when you later install or build that branch on your machine.
+- **The sandbox hides your home, not the host.** `/` stays readable (read-only)
+  outside the hidden directories, so a secret kept outside `$HOME` and outside
+  the known deny list — `/etc/some-token`, another user's readable file — is
+  visible to the agent's commands, and through them to the model provider.
+- **Cost is priced from your rates.** keryx has no price table; if `rates` are
+  wrong, both ceilings are wrong by the same factor. Token counts are summed
+  from every usage event the provider emits.
+
+---
+
+## governance
+
+One report over what is already recorded — spend, confirmations, signatures
+and gate outcomes, unified across flows and (optionally) across projects.
+Read-only: it never re-runs a gate, never calls a model or a network service,
+and the only files it writes are its own report artifacts. A figure nobody
+recorded is reported as "not recorded", never as zero — the same rule
+`keryx review budget`'s `spend_status: not-recorded` and `keryx trigger
+status`'s `cost: n/a` already follow.
+
+```
+keryx governance report [--flow <id>] [--owner <name>] [--since <iso>] [--until <iso>] [--all-projects] [--json]
+keryx governance show [--json]
+```
+
+| Subcommand | Description |
+|---|---|
+| `report` | Build the report from what is on disk right now, write `.metaproject/data/governance/artifacts/latest.md` and `latest.json`, and print it. |
+| `show` | Reprint the most recently written report without regenerating it. Prints "No governance report yet" if `report` has never run. |
+| `--flow <id>` | Narrow to one flow, by its bare id (e.g. `291`). |
+| `--owner <name>` | Narrow to flows whose owner's identity value matches exactly. A flow with no owner set is excluded. |
+| `--since <iso>` / `--until <iso>` | Narrow to flows whose own `updatedAt` falls in the range, and trigger runs whose own `at` falls in the range. |
+| `--all-projects` | Also cover every project in the user-global registry (`keryx projects`), not only the current one. A registered project whose path is missing or unreadable is listed with a `state: "skipped"` reason instead of failing the whole report. |
+| `--json` | Print the report as JSON instead of markdown. |
+
+### What it reads, and what it never does
+
+Per flow (`.metaproject/flows/<id>/flow.json` and its `reviews/*/manifest.json`):
+
+- **Review-round spend** (input tokens, output tokens, USD), summed across
+  every round's `manifest.json` `cost` field. A figure is a number only when
+  at least one round reported it; a flow with partial coverage (some rounds
+  recorded cost, some did not) reports the sum together with a
+  `rounds_with_cost`/`rounds_total` count, never silently dropping the gap.
+- **Confirmations and signatures** — who confirmed each acceptance criterion
+  and who signed completion, joined from `acConfirmed` and `signatures`
+  (flow 289), with each identity's basis (`stated`, `derived`, `unknown`)
+  shown beside the name. A `derived`/`unknown` identity is never presented as
+  a verified confirmation. A flow with no `signatures` field at all — every
+  flow completed before flow 289 — reports `confirmations: not recorded
+  (predates signing)`.
+- **Gate outcomes** — every `flow complete` attempt's gate results (pass,
+  fail, skipped), from `FlowState.completionAttempts` (flow 291). Absent on
+  every completion attempt made before flow 291, which reports `gate
+  outcomes: not recorded` rather than inferring anything.
+
+Per project (`.metaproject/data/trigger/runs.jsonl`):
+
+- **Trigger spend** — USD summed over fired-trigger runs whose cost was
+  recorded, plus the count of runs whose cost was not recorded (never folded
+  into the sum as `$0`). Never attributed to any individual flow: a fired-
+  trigger record carries no flow reference, so this is always a project-wide
+  figure, stated as such. An absent ledger reports a demonstrated `$0`
+  (nothing has ever fired); an unreadable one reports `not recorded` with the
+  reason.
+- **Policy decisions** — allow/ask/deny decisions and unattended-run denials
+  have no durable project-wide record in this build, so this section always
+  reads `not recorded (no durable log exists yet)`. (Flow 290, unattended
+  denials, is a future source for this — not a dependency of this report.)
+
+The report never re-runs `flow complete`, `review ingest`/`budget`, `health
+run`, or any security scan, and never calls a model or a network service. The
+only files a run writes are its own two artifacts, below.
+
+### Artifacts
+
+`report` writes both files on every run, following the same convention
+`keryx health run` uses:
+
+- `.metaproject/data/governance/artifacts/latest.md` — the human-readable
+  report, the same text printed to the terminal.
+- `.metaproject/data/governance/artifacts/latest.json` — schema-versioned
+  (`schemaVersion: 1`), machine-readable. `show`'s reader is shape-guarded: a
+  missing or malformed stored file is treated as "no report yet", never a
+  crash and never silently read as an empty-but-valid report.
 
 ---
 
@@ -1329,7 +1660,7 @@ keryx gdgraph assets list | verify [<id>] | pull <id>
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `build` | — | Scan the tree, build the graph, write JSONL storage + `summary.md`/`module-map.json`, print node/edge counts. |
+| `build` | — | Scan the tree, build the graph, write JSONL storage + `summary.md`/`module-map.json`, print node/edge counts. Takes the project's maintenance lock (see [trigger](#trigger) → **Locking**): waits up to `KERYX_MAINTENANCE_LOCK_WAIT_MS` (default 120 s) when another keryx run holds it, then exits `75` naming the holder's pid. |
 | `query cycles` | — | Print dependency cycles (`a -> b -> a`), or "No cycles found." |
 | `query orphans` | — | Print modules with no resolved inbound or outbound edges. |
 | `find "<terms>"` | — | Rank file paths and available symbols by concept/name match. Directs content searches to `ctx rg`. |
@@ -1925,6 +2256,37 @@ Every pre-existing `flow.json` with no `owner` or `signatures` field keeps
 loading, validating, passing `flow check`, and completing exactly as before —
 these fields are additive and optional, like every Task Manager v2 field, and
 reading an old file never rewrites it on disk.
+
+### Completion attempts (gate outcomes)
+
+Every `flow complete` invocation — pass or fail — appends one entry to
+`FlowState.completionAttempts`: the outcome (`pass`, `fail`, or `skipped`) and
+detail of every gate that attempt evaluated, whether the attempt passed
+overall, and the acceptance-criteria checksum in force at the time. Unlike
+`gates.owner`/`gates.review`/`gates.tasks`, this is not opt-in — it is written
+on every attempt from every flow, starting the moment this field shipped — and
+it does not bump `schemaVersion`. A `flow.json` written before this field
+existed simply has no `completionAttempts`; `keryx governance report` reads
+that absence as `gate outcomes: not recorded`, never as "every gate passed".
+
+The record is written **before** the attempt's final state transition, not
+after — specifically so that an acceptance-criteria file edited out-of-band
+while a later gate (health, review, security, …) is still running cannot cost
+the attempt its record. If that race is caught, the attempt is persisted as
+**failed**, with an extra `acceptance-criteria` gate entry naming the tamper,
+alongside whatever the earlier gates already decided — not silently dropped
+by the exception the stale criteria file still throws a moment later.
+
+**Growth is unbounded, on purpose — the same choice `signatures` already
+makes.** Every entry costs one `flow complete` invocation, made by a human or
+an agent that decided to attempt completion; nothing amplifies it (a single
+gate re-run inside one attempt is not a second entry). A flow that has been
+completed and reopened repeatedly might carry a few dozen attempts over its
+whole lifetime — nowhere near the volume that would make truncation worth the
+honesty cost of a record captioned "the last N attempts" instead of "every
+attempt". If a pathological retry loop ever makes this a real concern, the fix
+belongs beside `flow.json`'s general size (which every field here already
+affects), not as a special case for this one array.
 
 ---
 

@@ -32,6 +32,11 @@ It also ships **an agent runtime of its own**, built directly on that context:
 durable sessions, an allow/ask/deny policy engine, kernel-enforced sandboxing,
 child agents and evidence-gated completion. Keep using Codex, Claude or Cursor,
 run `keryx shell`, or do both — they all read the same project brain.
+You can delegate the work, not the responsibility: a managed flow freezes its
+acceptance criteria before the work starts, lets them change only through a
+recorded update with a reason, and completes only when every one is confirmed
+against recorded evidence — under a named owner, with every confirmation and
+the completion itself signed.
 
 ```bash
 npm install -g @mrciphersmith/keryx
@@ -253,13 +258,23 @@ What is in it today:
   over stdio — so an ACP client (an editor, typically) can launch keryx as a
   subprocess, open a session bound to a project, and drive a real harness turn
   with streamed `session/update` notifications instead of one dump at the end.
+  The session gets keryx's own read-only project tools — graph, wiki, memory,
+  flow status, skills, repo map, related tests, health status and
+  `search_code` — wherever `keryx shell` would offer them (same gate, same
+  definitions), alongside file reads, `shell_exec` and `apply_patch`; web
+  tools, keryx's own MCP servers, subagents and bus tools are left out on
+  purpose. keryx advertises the commands it handles over ACP — `/help`,
+  `/model`, `/reasoning`, `/status` — and answers them itself. The model is
+  the editor's model picker (a `configOptions` entry of category `model`,
+  listing what keryx can run here): switch it there or with `/model`, and it
+  applies from the next turn without touching `keryx shell`'s saved choice.
   A gated tool call is asked through `session/request_permission` rather than
   approved locally — only an explicit allow runs it, and an `allow_always`
   answer is remembered by the client, never persisted by keryx — and
   `session/cancel`, `session/list`, and `session/load` (replaying a session
   created anywhere, including one from `keryx shell`) are all implemented.
-  With no `--provider`/`--model` it uses the provider and model `keryx shell`
-  saved (run `keryx shell` once and pick one); with nothing configured it
+  With no `--provider`/`--model` a session starts on the provider and model
+  `keryx shell` saved (run `keryx shell` once and pick one); with nothing configured it
   still answers `initialize` and refuses `session/new` with a message saying
   what to configure — it never answers with a test stand-in. The client's own
   stdio MCP servers from `mcpServers` are started for that session, their
@@ -270,12 +285,13 @@ What is in it today:
   opens. Writes and shell execution stay local unconditionally (no `fs/write_text_file`
   or `terminal/*` calls, whatever the client advertises), and there is no
   HTTP/WebSocket transport, no authentication over this wire, and no
-  `session/resume`/`close`/`delete`/`set_mode`/`set_config_option`. Verified
+  `session/resume`/`close`/`delete`/`set_mode`. Verified
   against the published v1 schema and this repo's own scripted test client;
   Zed has been driven against it by hand, and no shipping IDE is part of the
   automated tests. See [the CLI
-  reference](docs/docs/cli-reference.md#acp) for the full method table and
-  what keryx does when a capability is absent.
+  reference](docs/docs/cli-reference.md#acp) for the full method table, the
+  tool roster and why each exclusion, the commands, and what keryx does when a
+  capability is absent.
 - **Plans that survive the turn.** For multi-step work, the agent can keep a
   structured execution plan in the session's own `plan.json` — beside the
   transcript, not inside the Slate — so closing a Slate (or a Flow reporting
@@ -412,12 +428,30 @@ Grouped by what you are trying to do, not by internal module layout.
   [TM-02](docs/decisions/keryx-harness/TM-02-flow-owner-and-signed-completion.md).
 - **triggers** — declared automation over `.metaproject/triggers.json` (a
   repository event or a cron/systemd schedule): `reconcile`/`rebuild` keep the
-  graph and wiki current, `open-flow`/`flow-next` open or report on Task
-  Manager work. `keryx trigger install` extends the same hook files `sync
-  install-hooks` and `update` already write into, rather than owning its own;
-  `keryx trigger schedule` prints a cron line or systemd unit pair and runs no
-  daemon of its own. Every fired run is recorded and gated by a project-wide
-  spend ceiling and a run lock. See the [CLI reference](docs/docs/cli-reference.md#trigger).
+  graph and wiki current, `open-flow` opens Task Manager work, and `flow-next`
+  either reports a flow's next task or — with a `dispatch` block — dispatches a
+  keryx agent to work it unattended: in a throwaway worktree on a
+  `trigger/<flow>-<task>` branch that is never pushed, its commands and its
+  health gate inside a mandatory hardened sandbox (network off, home and
+  credentials hidden, allow-listed environment), every would-be-approval
+  denied and recorded, spend reserved before the first model call, tokens and
+  USD recorded, and a per-trigger spend ceiling on top of the project-wide one.
+  `keryx trigger install` extends the same hook files `sync install-hooks` and
+  `update` already write into; `keryx trigger schedule` prints a cron line or
+  systemd unit pair and runs no daemon of its own. Triggered runs and a manual
+  `sync --apply`/`gdgraph build` share one maintenance lock (manual waits,
+  triggered refuses). See the [CLI reference](docs/docs/cli-reference.md#trigger).
+- **governance** — `keryx governance report`, one read-only report unifying what
+  is already recorded: review-round spend per flow (USD and tokens, with a
+  rounds-with-cost/rounds-total count for partial coverage), project-wide
+  trigger spend (never attributed to a flow — the run record carries no flow
+  reference), who confirmed each acceptance criterion and who signed
+  completion (with identity basis), and every `flow complete` attempt's gate
+  outcomes. A figure nobody recorded is reported as "not recorded", never as
+  zero. Writes `.metaproject/data/governance/artifacts/latest.{md,json}`, the
+  same convention `keryx health run` uses; `--all-projects` also covers every
+  project in the user-global registry. See the
+  [CLI reference](docs/docs/cli-reference.md#governance).
 - **security** — deterministic secrets / PII / prompt-injection / egress
   scanning, redaction, and a policy gate at agent write seams, with a committed
   evaluation corpus.
@@ -595,9 +629,12 @@ graph falls back to its deterministic resolver when a grammar is absent.
 | ripgrep is external | `keryx ctx rg` needs `rg` on `PATH` | Install ripgrep, or let the agent read files directly |
 | Model commands need a credential | Four of the five commands above exit non-zero without one; `wiki enrich` exits `0` and marks the affected pages skipped | Everything else runs deterministically offline |
 | External agents are read-only, and unproven against a live vendor process | A delegated CLI can read and search but never write; `worktree-write` is refused with a named reason. The parent gets the child's result and nothing before it — supervision of a running external child is not implemented. Everything is verified offline against recorded transcripts | Use keryx's own child agents for work that must mutate the tree |
-| `keryx trigger`'s `flow-next` action only reports | It records the next task's status into the run record; it never dispatches an agent turn to work it | Dispatch the reported task yourself, or through a flow orchestrator |
-| Trigger spend ceiling is project-wide | `open-flow`/`flow-next` triggers share one ceiling with every other recorded trigger cost; there is no per-trigger override | Watch `keryx trigger status`'s recorded cost |
-| Trigger-run lock does not cover interactive commands | A person running `keryx sync --apply` / `keryx gdgraph build` by hand can still race a triggered `reconcile`/`rebuild` | Avoid running those by hand while triggers may be firing |
+| A dispatched `flow-next` task is "done" by checks, not review | `task done` means normal end + a commit on the trigger branch + `keryx health gate` passing in the worktree; nobody has read the diff | Review and merge the `trigger/<flow>-<task>` branch yourself |
+| `trust` dispatch needs Linux + a working bubblewrap | The hardened unattended sandbox (network off, home hidden, allow-listed env) is bwrap-only; without it — or on macOS — a `trust` dispatch refuses before starting | Use `permissionMode: "ask"` (read-only), or run triggers on a Linux host with bwrap |
+| `dispatch.network: true` is the host's full network | The agent's commands then reach the internet and every host loopback service; the model call never needs it (it is made outside the sandbox) | Leave `network` off; review the `trigger/*` branch before installing or building it |
+| The unattended text floor is defence in depth | It can be spelled around (quoting, `$(…)`, interpreters); the boundary is the sandbox, not the floor | Keep `dispatch.network` off unless the task truly needs it |
+| A killed dispatch keeps its spend reserved | Its reservation counts against both ceilings until closed | `keryx trigger status`, then `keryx trigger resolve <runId> --spent <usd>` |
+| Dispatch cost is priced from your declared rates | keryx has no price table; wrong `rates` make both ceilings wrong by the same factor | Set `rates` from your provider's price list |
 
 Full detail, including known defects and platform caveats:
 [limitations](docs/docs/limitations.md).

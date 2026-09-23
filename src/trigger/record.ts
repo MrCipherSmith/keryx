@@ -70,7 +70,30 @@ export function triggerRunsPath(projectRoot: string): string {
  * from day one rather than needing a schema change to add it, per the T5
  * survey's own note that a budget refusal "must not look like a crash".
  */
-export const TRIGGER_RUN_OUTCOME_KINDS = ["ok", "no-op", "lock-refused", "failed", "budget-refused"] as const;
+//
+// Flow 290 (AC3): `dispatch-refused` — a dispatching `flow-next` declined to
+// start an agent (flow not frozen/in progress, nothing ready, an open attempt,
+// the attempt cap, or another dispatch on the same flow). Distinct from
+// `no-op` so an operator can tell "there was nothing to do" from "there was
+// work and the dispatcher would not touch it"; the precise cause is in
+// `dispatch.refusal`.
+//
+// Flow 290 T13 (AC14): `reserved` — a dispatch's spend reservation, written
+// under the project-wide spend lock BEFORE its first model call and closed by
+// the run's own final record (same `dispatch.runId`). A reservation with no
+// closing record — a killed run — keeps counting against both ceilings until an
+// operator closes it with `keryx trigger resolve <runId> --spent <usd>`, which
+// writes `reservation-resolved`.
+export const TRIGGER_RUN_OUTCOME_KINDS = [
+  "ok",
+  "no-op",
+  "lock-refused",
+  "failed",
+  "budget-refused",
+  "dispatch-refused",
+  "reserved",
+  "reservation-resolved",
+] as const;
 export type TriggerRunOutcomeKind = (typeof TRIGGER_RUN_OUTCOME_KINDS)[number];
 
 /**
@@ -82,8 +105,53 @@ export type TriggerRunOutcomeKind = (typeof TRIGGER_RUN_OUTCOME_KINDS)[number];
  * reporting rather than seeing an absent cost either way.
  */
 export type TriggerRunCost =
-  | { readonly recorded: true; readonly usd: number }
-  | { readonly recorded: false; readonly reason: string };
+  | { readonly recorded: true; readonly usd: number; readonly tokens?: TriggerRunTokens }
+  | { readonly recorded: false; readonly reason: string; readonly tokens?: TriggerRunTokens };
+
+/**
+ * Flow 290 (AC6): the provider-reported token counts behind a cost. Additive
+ * and optional — every record written before flow 290 has none and still
+ * reads. A dispatched run always records these, even when it failed or was
+ * stopped, because a stopped run still consumed them.
+ */
+export interface TriggerRunTokens {
+  readonly input: number;
+  readonly output: number;
+}
+
+/** Flow 290 (AC3): why a dispatching `flow-next` declined to start an agent. */
+export const DISPATCH_REFUSAL_CODES = [
+  "flow-not-in-progress",
+  "flow-not-frozen",
+  "nothing-ready",
+  "blocked",
+  "open-attempt",
+  "attempt-cap",
+  "dispatch-locked",
+  "sandbox-unavailable",
+  "provider-usage-unknown",
+  "worktree-conflict",
+] as const;
+export type DispatchRefusalCode = (typeof DISPATCH_REFUSAL_CODES)[number];
+
+/** Flow 290 (AC4): one call the unattended run refused rather than ask about. */
+export interface UnattendedDenial {
+  readonly tool: string;
+  readonly reason: string;
+}
+
+/** Flow 290: what a dispatching `flow-next` did, beside the generic record fields. Additive. */
+export interface TriggerDispatchRecord {
+  readonly runId: string;
+  readonly flow: string;
+  readonly task?: string;
+  readonly attempt?: number;
+  readonly branch?: string;
+  readonly refusal?: DispatchRefusalCode;
+  /** The closing fact written to the flow: `done` or the attempt outcome. */
+  readonly closing?: "done" | "failed" | "blocked";
+  readonly denials?: readonly UnattendedDenial[];
+}
 
 export const NO_MODEL_COST: TriggerRunCost = {
   recorded: false,
@@ -105,6 +173,39 @@ export interface TriggerRunRecord {
   /** Human-readable explanation. Never empty — mirrors every other "never silent" convention in this codebase. */
   readonly detail: string;
   readonly cost: TriggerRunCost;
+  /** Flow 290: present only on a dispatching `flow-next` run. */
+  readonly dispatch?: TriggerDispatchRecord;
+  /** Flow 290 T13: on a `reserved` record — the amount held back for run `runId`. */
+  readonly reservation?: { readonly runId: string; readonly usd: number };
+  /** Flow 290 T13: on a `reservation-resolved` record — the run whose reservation an operator closed. */
+  readonly resolves?: string;
+}
+
+/** A reservation no final record has closed yet. */
+export interface OpenReservation {
+  readonly runId: string;
+  readonly trigger: string;
+  readonly usd: number;
+  readonly at: string;
+}
+
+/** Every reservation in `records` that neither the run's own record nor an operator resolution has closed. */
+export function openReservations(records: readonly TriggerRunRecord[]): OpenReservation[] {
+  const open = new Map<string, OpenReservation>();
+  for (const record of records) {
+    if (record.outcome === "reserved" && record.reservation !== undefined) {
+      open.set(record.reservation.runId, {
+        runId: record.reservation.runId,
+        trigger: record.trigger,
+        usd: record.reservation.usd,
+        at: record.at,
+      });
+      continue;
+    }
+    const closes = record.resolves ?? record.dispatch?.runId;
+    if (closes !== undefined) open.delete(closes);
+  }
+  return [...open.values()];
 }
 
 export type TriggerRunAppend =

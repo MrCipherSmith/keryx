@@ -91,7 +91,7 @@ test(
       const results = [a, b];
 
       const ran = results.filter((r) => r.stdout.includes('ok — "rebuild" completed'));
-      const refused = results.filter((r) => r.stdout.includes("holds this project's trigger lock"));
+      const refused = results.filter((r) => r.stdout.includes("holds this project's maintenance lock"));
 
       expect(ran).toHaveLength(1);
       expect(refused).toHaveLength(1);

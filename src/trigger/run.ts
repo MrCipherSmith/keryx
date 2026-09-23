@@ -11,15 +11,23 @@
 // decides WHICH entry to run and WHETHER the caller may proceed (lock); it
 // never performs an action itself.
 
-import path from "node:path";
-import { withFileLock } from "../lib/fs";
+import {
+  ensureLocksDir,
+  keryxLocksDir,
+  maintenanceLockPath,
+  MaintenanceLockBusyError,
+  withMaintenanceLock,
+} from "../lib/maintenance-lock";
 import { evaluateSpendCap, type SpendCapEvaluation, type SpendCapOptions } from "../review/caps";
 import {
   loadTriggersConfig,
   type TriggerEntry,
   type TriggersFileProblem,
 } from "./config";
-import { readTriggerRuns } from "./record";
+import { appendTriggerRunRecord, openReservations, readTriggerRuns } from "./record";
+import type { TriggerAction, TriggerFire } from "./config";
+import { withFileLock } from "../lib/fs";
+import path from "node:path";
 
 // ---------------------------------------------------------------------------
 // Resolution — "which entry does `<name>` mean, and can a run proceed at all"
@@ -93,12 +101,19 @@ export function resolveTriggerForRun(projectRoot: string, name: string): Trigger
 // open on purpose (see the journal note) rather than widening the lock's
 // scope beyond what this task was asked to build.
 
-/** One project-scoped lock directory for every triggered run, regardless of which entry fired. */
-export function triggerRunLockPath(projectRoot: string): string {
-  return path.join(projectRoot, ".metaproject", "data", "trigger", ".run.lock");
-}
+//
+// FLOW 290 (AC9): the gap above is closed. The lock a triggered run takes is
+// now the project's MAINTENANCE lock (`../lib/maintenance-lock.ts`), the same
+// one interactive `keryx sync --apply` and `keryx gdgraph build` take. A
+// triggered run still refuses at once (`waitMs: 0`); an interactive one waits,
+// bounded. The lock is re-entrant within one async context, so the triggered
+// `reconcile`/`rebuild` calling those commands while holding it runs straight
+// through instead of refusing itself.
 
-const LOCK_TIMEOUT_PREFIX = "Timed out waiting for lock:";
+/** One project-scoped lock directory for every triggered run — the shared maintenance lock. */
+export function triggerRunLockPath(projectRoot: string): string {
+  return maintenanceLockPath(projectRoot);
+}
 
 export interface TriggerLockAcquired<T> {
   readonly acquired: true;
@@ -124,8 +139,8 @@ export async function withTriggerRunLock<T>(
   fn: () => Promise<T>,
 ): Promise<TriggerLockOutcome<T>> {
   try {
-    const result = await withFileLock(
-      triggerRunLockPath(projectRoot),
+    const result = await withMaintenanceLock(
+      projectRoot,
       async () => {
         // TEST SEAM, never set in production (mirrors `KERYX_CTX_CLOCK_PIN_MS`
         // in `src/ctx/artifact-id.ts` and `KERYX_GDGRAPH_LOCAL` in
@@ -140,16 +155,18 @@ export async function withTriggerRunLock<T>(
         }
         return fn();
       },
-      { timeoutMs: 0 },
+      { waitMs: 0 },
     );
     return { acquired: true, result };
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith(LOCK_TIMEOUT_PREFIX)) {
+    if (error instanceof MaintenanceLockBusyError) {
+      const holder = error.holderPid === undefined ? "another keryx run" : `another keryx run (pid ${error.holderPid})`;
       return {
         acquired: false,
         reason:
-          "another `keryx trigger run` holds this project's trigger lock — refusing rather than waiting, " +
-          "so this run stays exactly one pass (AC2) instead of blocking on another run's schedule. Retry on the next fire.",
+          `${holder} holds this project's maintenance lock (a trigger, or a manual \`sync --apply\`/\`gdgraph build\`) — ` +
+          "refusing rather than waiting, so this run stays exactly one pass instead of blocking on another run. " +
+          "Retry on the next fire.",
       };
     }
     throw error;
@@ -193,6 +210,13 @@ export async function withTriggerRunLock<T>(
 export interface TriggerBudgetAllowed {
   readonly allowed: true;
   readonly evaluation: SpendCapEvaluation;
+  /**
+   * Flow 290 (AC8): how much may still be spent by THIS run — the smaller of
+   * the project-wide remaining allowance and, when a per-trigger ceiling was
+   * given, that trigger's own remaining allowance. A dispatch stops its agent
+   * once its recorded cost reaches this.
+   */
+  readonly remainingUsd: number;
 }
 export interface TriggerBudgetRefused {
   readonly allowed: false;
@@ -222,7 +246,7 @@ export type TriggerBudgetOutcome = TriggerBudgetAllowed | TriggerBudgetRefused;
  * built from.
  */
 type RecordedTriggerSpend =
-  | { readonly known: true; readonly usd: number }
+  | { readonly known: true; readonly usd: number; readonly byTrigger: ReadonlyMap<string, number> }
   | { readonly known: false; readonly reason: string };
 
 /**
@@ -233,10 +257,91 @@ type RecordedTriggerSpend =
  */
 async function recordedTriggerSpend(projectRoot: string): Promise<RecordedTriggerSpend> {
   const read = await readTriggerRuns(projectRoot);
-  if (read.state === "absent") return { known: true, usd: 0 };
+  if (read.state === "absent") return { known: true, usd: 0, byTrigger: new Map() };
   if (read.state === "unreadable") return { known: false, reason: read.reason };
-  const usd = read.records.reduce((sum, record) => sum + (record.cost.recorded ? record.cost.usd : 0), 0);
-  return { known: true, usd };
+  const byTrigger = new Map<string, number>();
+  let usd = 0;
+  const add = (trigger: string, spent: number): void => {
+    usd += spent;
+    byTrigger.set(trigger, (byTrigger.get(trigger) ?? 0) + spent);
+  };
+  for (const record of read.records) add(record.trigger, recordedUsd(record.cost));
+  // Flow 290 T13 (AC14): a reservation no final record has closed — a run in
+  // flight, or one that was killed — counts at its full reserved amount.
+  for (const open of openReservations(read.records)) add(open.trigger, open.usd);
+  return { known: true, usd, byTrigger };
+}
+
+/** The project-wide spend lock: every reservation is decided under it. */
+function spendLockPath(projectRoot: string): string {
+  return path.join(keryxLocksDir(projectRoot), "spend.lock");
+}
+
+export type SpendReservation =
+  | { readonly reserved: true; readonly usd: number }
+  | { readonly reserved: false; readonly reason: string };
+
+/**
+ * Flow 290 T13 (AC14): reserve spend for one dispatch BEFORE its first model
+ * call, under a project-wide lock, so two triggers firing together cannot both
+ * be told the full allowance. The reservation is the whole remaining allowance
+ * (the smaller of the project-wide and the trigger's own), written to the
+ * ledger as a `reserved` record; the run's own final record closes it. A
+ * killed run's reservation stays counted until `keryx trigger resolve`.
+ */
+export async function reserveTriggerSpend(
+  projectRoot: string,
+  input: {
+    readonly runId: string;
+    readonly trigger: string;
+    readonly firedBy: TriggerFire;
+    readonly action: TriggerAction;
+    readonly perTrigger: PerTriggerCeiling;
+    readonly options?: SpendCapOptions;
+    readonly now?: () => Date;
+  },
+): Promise<SpendReservation> {
+  await ensureLocksDir(projectRoot);
+  return withFileLock(
+    spendLockPath(projectRoot),
+    async (): Promise<SpendReservation> => {
+      const budget = await evaluateTriggerBudget(projectRoot, "flow-next", input.options ?? {}, input.perTrigger);
+      if (!budget.allowed) return { reserved: false, reason: budget.reason };
+      if (!(budget.remainingUsd > 0)) {
+        return {
+          reserved: false,
+          reason: `nothing left to reserve for trigger "${input.trigger}" — every dollar under its ceilings is already spent or reserved by another run.`,
+        };
+      }
+      const append = await appendTriggerRunRecord(projectRoot, {
+        at: (input.now ?? (() => new Date()))().toISOString(),
+        trigger: input.trigger,
+        firedBy: input.firedBy,
+        action: input.action,
+        outcome: "reserved",
+        detail: `reserved $${roundUsd(budget.remainingUsd)} for dispatch run ${input.runId} before its first model call`,
+        cost: { recorded: false, reason: "a reservation — the run's own record carries what it spent" },
+        reservation: { runId: input.runId, usd: budget.remainingUsd },
+      });
+      if (append.status === "failed") {
+        return { reserved: false, reason: `the spend reservation could not be written, so no model call is made: ${append.reason}` };
+      }
+      return { reserved: true, usd: budget.remainingUsd };
+    },
+    { timeoutMs: 30_000 },
+  );
+}
+
+/** A record's USD, or 0 when it records none. A non-finite number counts as 0 rather than poisoning the sum. */
+function recordedUsd(cost: { recorded: boolean; usd?: unknown } | undefined): number {
+  if (cost === undefined || cost.recorded !== true) return 0;
+  return typeof cost.usd === "number" && Number.isFinite(cost.usd) ? cost.usd : 0;
+}
+
+/** Flow 290 (AC7): a single trigger's own spend ceiling, on top of the project-wide one. */
+export interface PerTriggerCeiling {
+  readonly name: string;
+  readonly ceilingUsd: number;
 }
 
 /**
@@ -258,6 +363,7 @@ export async function evaluateTriggerBudget(
   projectRoot: string,
   actionKind: string,
   options: SpendCapOptions = {},
+  perTrigger?: PerTriggerCeiling,
 ): Promise<TriggerBudgetOutcome> {
   const spend = await recordedTriggerSpend(projectRoot);
   if (!spend.known) {
@@ -279,8 +385,26 @@ export async function evaluateTriggerBudget(
   }
 
   const evaluation = evaluateSpendCap(spend.usd, options);
+  if (!evaluation.stop && perTrigger !== undefined) {
+    // AC7: the trigger's OWN ceiling, checked only once the project-wide one
+    // allowed the run — both apply, whichever is tighter wins.
+    const triggerSpent = spend.byTrigger.get(perTrigger.name) ?? 0;
+    if (triggerSpent >= perTrigger.ceilingUsd) {
+      return {
+        allowed: false,
+        evaluation,
+        reason:
+          `trigger "${perTrigger.name}" has $${roundUsd(triggerSpent)} USD recorded against its own per-trigger ceiling ` +
+          `of $${perTrigger.ceilingUsd} USD (dispatch.ceilingUsd) — refusing to start "${actionKind}" before any model ` +
+          "call. Raise that trigger's ceiling, or review `keryx trigger status`, before retrying.",
+      };
+    }
+    const projectRemaining = Math.max(0, evaluation.ceiling - spend.usd);
+    const triggerRemaining = Math.max(0, perTrigger.ceilingUsd - triggerSpent);
+    return { allowed: true, evaluation, remainingUsd: Math.min(projectRemaining, triggerRemaining) };
+  }
   if (!evaluation.stop) {
-    return { allowed: true, evaluation };
+    return { allowed: true, evaluation, remainingUsd: Math.max(0, evaluation.ceiling - spend.usd) };
   }
   return {
     allowed: false,
@@ -290,4 +414,8 @@ export async function evaluateTriggerBudget(
       `${evaluation.currency} spend ceiling (over by $${evaluation.overBy}) — refusing to start "${actionKind}" ` +
       "rather than risk spending further. Raise the ceiling, or review `keryx trigger status`'s recorded cost, before retrying.",
   };
+}
+
+function roundUsd(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
 }

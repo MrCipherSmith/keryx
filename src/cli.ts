@@ -45,6 +45,7 @@ import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
 import { forgettingCommand } from "./commands/forgetting";
 import { triggerCommand } from "./commands/trigger";
+import { governanceCommand } from "./commands/governance";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -111,6 +112,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   retention: retentionCommand,
   forgetting: forgettingCommand,
   trigger: triggerCommand,
+  governance: governanceCommand,
 };
 
 export async function main(): Promise<void> {
@@ -292,6 +294,10 @@ export const USAGE_BODY = `Usage:
                                                whose request, on what basis
   keryx trigger run <name>                      Perform exactly one pass of a declared trigger's
                                                action (.metaproject/triggers.json)
+  keryx governance report [--flow <id>] [--owner <name>] [--since <iso>] [--until <iso>] [--all-projects] [--json]
+                                               Spend, confirmations, signatures and gate outcomes,
+                                               unified across flows; writes latest.md/latest.json
+  keryx governance show [--json]                Reprint the most recently written governance report
   keryx --version
 
 Commands:
@@ -338,6 +344,7 @@ Commands:
   retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
   forgetting Read the deletion trail — was this removed, or did it never exist?
   trigger   Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code
+  governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
 `;
 
 function printHelp(): void {

@@ -25,8 +25,23 @@ import { requireSymbols, SymbolsUnavailableError } from "../gdgraph/symbols-capa
 import { createTreesitterSpec, type GrammarDiagnosis } from "../gdgraph/treesitter/adapter";
 // Through the owner's facade, not its internals — `src/lib/import-policy.ts`.
 import { explainAbsentGraphTarget, loadDeletionTrail } from "../forgetting/service";
+import { runInteractiveUnderMaintenanceLock } from "../lib/maintenance-lock";
 
 export async function gdgraphCommand(args: string[]): Promise<void> {
+  // Flow 290 (AC9/AC10): `build` rewrites the graph, so it runs under the
+  // project's maintenance lock — taken HERE, before local-runner delegation,
+  // so the delegated child (a copied template that knows nothing about the
+  // lock) is covered by its parent. Re-entrant for an in-process caller that
+  // already holds it (`sync --apply`, a triggered `rebuild`). The delegated
+  // child itself runs with `KERYX_GDGRAPH_LOCAL=1` and never reaches this line.
+  if (args[0] === "build" && process.env.KERYX_GDGRAPH_LOCAL !== "1") {
+    await runInteractiveUnderMaintenanceLock(process.cwd(), "gdgraph build", () => gdgraphCommandUnlocked(args));
+    return;
+  }
+  await gdgraphCommandUnlocked(args);
+}
+
+async function gdgraphCommandUnlocked(args: string[]): Promise<void> {
   if (process.env.KERYX_GDGRAPH_LOCAL !== "1") {
     const delegation = await delegateToLocalRunner(args);
     if (delegation.delegated) {

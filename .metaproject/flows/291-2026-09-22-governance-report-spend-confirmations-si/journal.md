@@ -1,0 +1,23 @@
+# Flow Journal
+
+- 2026-09-22T23:17:46.032Z - flow created
+- 2026-09-22T23:25:04.641Z - frozen: 11 criteria; checksum recorded
+- 2026-09-22T23:25:04.752Z - started
+- 2026-09-22T23:25:04.868Z - task-added: T5: Persist gate outcomes on every completion attempt, additively
+- 2026-09-22T23:25:04.982Z - task-added: T6: Governance aggregation: review spend, trigger spend, confirmations and signatures
+- 2026-09-22T23:25:05.096Z - task-added: T7: keryx governance report command, artifacts, shape-guarded reader
+- 2026-09-22T23:25:05.210Z - task-added: T8: Filters and --all-projects
+- 2026-09-22T23:25:05.324Z - task-added: T9: Read-only and not-recorded-vs-zero tests with fixtures
+- 2026-09-22T23:25:05.442Z - task-added: T10: Docs: README and CLI reference
+- 2026-09-22T23:25:05.558Z - task-added: T11: Verification: CI green, keryx health run
+- 2026-09-22T23:25:05.670Z - task-attempt: T5: started (attempt 1)
+- 2026-09-23T00:00:00.000Z - implementer (T5-T10): AC4 gate-outcome persistence added as additive `FlowState.completionAttempts` (no opt-in, no schema-version bump); `keryx governance report`/`show` implemented in new `src/governance/` core module + `src/commands/governance.ts`, writing `.metaproject/data/governance/artifacts/latest.{md,json}`; AC1/AC2/AC4 covered by tests that were verified to fail with each fix reverted, then restored; `flow schema` regenerated and docpack copy kept consistent; `src/governance/` registered in `src/lib/import-zones.ts` and `package.json` test:core (verified the CI-split gap test fails without the registration, then restored); README + docs/docs/cli-reference.md updated; `flow check` and `bun run typecheck` clean. T11 (CI green / `keryx health run`) intentionally left untouched — out of scope for this pass per the coordinator's instruction.
+- 2026-09-22T23:43:50.458Z - task-done: T5: Persist gate outcomes on every completion attempt, additively
+- 2026-09-22T23:43:50.568Z - task-done: T6: Governance aggregation: review spend, trigger spend, confirmations and signatures
+- 2026-09-22T23:43:50.684Z - task-done: T7: keryx governance report command, artifacts, shape-guarded reader
+- 2026-09-22T23:43:50.796Z - task-done: T8: Filters and --all-projects
+- 2026-09-22T23:43:50.917Z - task-done: T9: Read-only and not-recorded-vs-zero tests with fixtures
+- 2026-09-22T23:43:51.036Z - task-done: T10: Docs: README and CLI reference
+- 2026-09-23T00:15:00.000Z - implementer: CI fixes on PR #652 — (1) added `src/governance/service.ts` as the governance zone's facade (following `src/forgetting/service.ts`'s precedent, not an exemption) and routed `src/commands/governance.ts` through it, fixing `import-policy.live.test.ts`'s "facade rule is unsatisfiable" failure; (2) added `governance report`/`governance show` descriptors to `src/standard/command-registry.ts`, fixing `command-registry.coverage.test.ts`'s "every CLI verb is either described or excluded" failure. Also addressed PR #652 review findings: (a) MEDIUM — a completion attempt could be lost if the AC file was tampered mid-`complete()` (the final `transition()`'s unwrapped `assertAcIntact` re-check threw before the attempt was ever saved); fixed by re-checking AC intactness explicitly, persisting the attempt via a plain `save()` (no AC re-check) BEFORE the final transition, and recording a caught tamper as a failed attempt naming it — proved with a test that mutates the AC file from inside a `healthGate` stub mid-`complete()` and asserts the attempt lands on disk, verified to fail without the fix; (b) LOW — documented that `completionAttempts` grows unboundedly, by design, matching `signatures`' existing precedent (CLI reference + `FlowState` doc comment); (c) LOW — `renderTriggerSpendLine` now formats through the same `usd()` rounding review spend uses, instead of printing the raw float — proved with a 0.1+0.2 float-artifact test, verified to fail without the fix. 359 tests pass across the touched suite (import-policy.live, command-registry.coverage, core-package, import-policy*, cli-reference-coverage, governance/, flow/); typecheck and eslint clean.
+- 2026-09-23T00:00:37.495Z - task-added: T12: Review and CI fixes: governance facade, command descriptors, tamper-safe attempt persistence, one USD formatter
+- 2026-09-23T00:00:37.616Z - task-done: T12: Review and CI fixes: governance facade, command descriptors, tamper-safe attempt persistence, one USD formatter
