@@ -26,7 +26,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 
 | Shell command | Summary |
 |---|---|
-| `/connect` | Switch provider / API key. |
+| `/connect` | Switch provider; row buttons test/disconnect it. |
 | `/search-provider` | Configure and test a web search provider. |
 | `/search-connect` | Select a connected web search provider. |
 | `/provider` | Switch provider — /provider <name>, or no arg to re-select. |

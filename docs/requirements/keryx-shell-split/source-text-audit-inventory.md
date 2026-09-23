@@ -36,6 +36,17 @@ have dropped to zero read sites because their structural audits now scan
 `src/tui/**` instead of one file, which is what lets them survive P3 rather
 than be broken by it.
 
+Flow 304 (`/connect`'s Test/Disconnect row buttons) added one more site:
+`tui/connect-provider-buttons.test.ts` pins that the `/connect` command
+handler's `onDisconnected` callback compares the disconnected provider's name
+against the session's own `currentSel.provider` and prints the operator-facing
+line, rather than forcing a provider switch — that comparison lives inside
+`launchTuiAgentShell`'s closure with no exported seam, the same reason the
+other rows in this table exist. The row-list step's OWN contract (`onDisconnected`
+fires with the right name, exactly once, only on a confirmed disconnect) is
+proven behaviourally in the same file, driving the real `selectProviderModelInTui`
+— only the closure-internal session comparison needed a text audit.
+
 ### What the count does and does not measure
 
 The manifest counts **files coupled to the two paths**, not assertions coupled
@@ -351,6 +362,7 @@ harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts 
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 tui/boot-animation.test.ts | tui/tui-shell.ts | 2
 tui/busy-dispatch.test.ts | tui/tui-shell.ts | 1
+tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
 tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
 tui/help-first-run.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1

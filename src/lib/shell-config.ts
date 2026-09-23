@@ -200,6 +200,38 @@ export function saveProviderModelParams(
 }
 
 /**
+ * Remove one provider's saved API key (flow 304, the `/connect` Disconnect
+ * button + `keryx providers remove`). Merge-and-rewrite, same shape as
+ * `saveApiKey`'s own read-modify-write — siblings under `apiKeys` are left
+ * untouched. A no-op (not an error) when `envKey` was never saved: disconnect
+ * is idempotent, and a caller that already classified the credential as
+ * "saved" before calling this never hits the absent case in practice.
+ * Best-effort; never throws.
+ */
+export function removeApiKey(envKey: string, dir?: string): void {
+  const existing = loadShellConfig(dir).apiKeys ?? {};
+  if (!(envKey in existing)) return;
+  const { [envKey]: _removed, ...rest } = existing;
+  saveShellConfig({ apiKeys: rest }, dir);
+}
+
+/** Remove a provider's saved endpoint override, if any. Best-effort; never throws. Mirrors {@link removeApiKey}. */
+export function removeProviderBaseUrl(provider: string, dir?: string): void {
+  const existing = loadShellConfig(dir).baseUrls ?? {};
+  if (!(provider in existing)) return;
+  const { [provider]: _removed, ...rest } = existing;
+  saveShellConfig({ baseUrls: rest }, dir);
+}
+
+/** Remove a provider's saved sampling/budget/timeout overrides, if any. Best-effort; never throws. Mirrors {@link removeApiKey}. */
+export function removeProviderModelParams(provider: string, dir?: string): void {
+  const existing = loadShellConfig(dir).modelParams ?? {};
+  if (!(provider in existing)) return;
+  const { [provider]: _removed, ...rest } = existing;
+  saveShellConfig({ modelParams: rest }, dir);
+}
+
+/**
  * Merge persisted shell API keys (auth.json) into an env map without overwriting
  * non-empty existing entries. Pure relative to `process.env` mutation — returns
  * a new object. Used by model-backed CLI commands (`wiki enrich`, etc.) so a key

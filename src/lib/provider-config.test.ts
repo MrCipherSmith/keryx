@@ -6,6 +6,7 @@ import {
   isCustomCompatProvider,
   loadCustomCompatProviders,
   llmProvidersConfigPath,
+  removeCustomCompatProvider,
   saveCustomCompatProvider,
   type CustomCompatProvider,
 } from "./provider-config";
@@ -50,6 +51,26 @@ describe("llm-providers.json custom provider registry", () => {
 
   test("absent file loads as an empty list (never throws)", () => {
     expect(loadCustomCompatProviders(tempDir())).toEqual([]);
+  });
+
+  // flow 304 (AC5): the `/connect` Disconnect button + `keryx providers remove`.
+  test("removeCustomCompatProvider deletes exactly the named entry, leaving siblings intact", () => {
+    const dir = tempDir();
+    saveCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [] }, dir);
+    saveCustomCompatProvider({ name: "b", baseUrl: "http://localhost:2", models: [] }, dir);
+    removeCustomCompatProvider("a", dir);
+    expect(loadCustomCompatProviders(dir).map((p) => p.name)).toEqual(["b"]);
+  });
+
+  test("removeCustomCompatProvider on an unknown name is a no-op, not an error", () => {
+    const dir = tempDir();
+    saveCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [] }, dir);
+    removeCustomCompatProvider("never-existed", dir);
+    expect(loadCustomCompatProviders(dir).map((p) => p.name)).toEqual(["a"]);
+  });
+
+  test("removeCustomCompatProvider against an absent file never throws", () => {
+    expect(() => removeCustomCompatProvider("a", tempDir())).not.toThrow();
   });
 
   test("malformed entries (missing baseUrl) are dropped", () => {

@@ -20,12 +20,23 @@ import {
   decideCrossFamilyReview,
   familyOf,
   loadCustomCompatProviders,
+  removeCustomCompatProvider,
 } from "../lib/provider-config";
 import { extraRequestHeaders } from "../lib/oauth/catalog";
 import { envWithOAuthAccess } from "../lib/oauth/grants";
+import { logoutProvider } from "../lib/oauth/login";
 import { resolveCallerSession } from "../lib/caller-session";
-import { type ShellConfig, envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import {
+  type ShellConfig,
+  envWithSavedApiKeys,
+  loadShellConfig,
+  removeApiKey,
+  removeProviderBaseUrl,
+  removeProviderModelParams,
+  savedCredentialEnvKeys,
+} from "../lib/shell-config";
 import { optionValue } from "../lib/args";
+import { confirm as ttyConfirm } from "../lib/prompt";
 
 /** A hosted OpenAI-compatible provider offered in the picker. */
 export interface OpenAiCompatProvider {
@@ -812,6 +823,137 @@ export function providerApiKey(
 }
 
 // ---------------------------------------------------------------------------
+// Test connection / Disconnect (flow 304) — the `/connect` row buttons and
+// their CLI parity (`keryx providers test`/`keryx providers remove`).
+// ---------------------------------------------------------------------------
+
+/**
+ * Run the provider's live model-list probe for a "Test connection" action —
+ * the exact probe `filterConnectedDetectedProviders` already runs to decide
+ * whether a provider belongs in `/connect`'s list in the first place. Resolves
+ * the key the same way that filter does: an env var when the registry names
+ * one, else the provider's own in-file `apiKey` (custom/local providers).
+ * Never throws.
+ */
+export async function testProviderConnection(
+  provider: OpenAiCompatProvider,
+  fetchFn: typeof fetch = globalThis.fetch,
+  env: Record<string, string | undefined> = process.env,
+): Promise<ModelsResolveResult> {
+  const apiKey = providerApiKey(provider, env) ?? provider.apiKey;
+  return fetchOpenAiCompatModelsDetailed(fetchFn, provider, apiKey, { timeoutMs: MODELS_FETCH_TIMEOUT_MS });
+}
+
+/**
+ * Why a provider's credential cannot be resolved to a single owned artifact —
+ * or can, naming which one Disconnect must remove.
+ *
+ * - `custom`: an `llm-providers.json` entry (`removeCustomCompatProvider`),
+ *   together with any saved `baseUrls`/`modelParams` override for it.
+ * - `oauth-grant`: a device-code/PKCE grant in `auth.json` (`logoutProvider` —
+ *   LOCAL delete only; it does not call a vendor revoke endpoint, see
+ *   `logoutProvider`'s own doc and `docs/docs/cli-reference.md`).
+ * - `saved-api-key`: a key keryx itself saved under `apiKeys[envKey]` in
+ *   `auth.json` (`removeApiKey`).
+ * - `env-var-only`: the provider's env var IS set, but not by keryx (absent
+ *   from `savedCredentialEnvKeys()`/`apiKeys`) — the operator exported it in
+ *   their own shell. Not removable: unsetting a live process's env would
+ *   silently reappear on the next launch, which is worse than refusing.
+ * - `no-credential`: nothing keryx holds for this provider (a keyless local
+ *   provider, e.g. `rapid-mlx`, or a name with no saved credential at all).
+ */
+export type ProviderConnectionKind = "custom" | "oauth-grant" | "saved-api-key" | "env-var-only" | "no-credential";
+
+export interface ProviderConnectionClassification {
+  kind: ProviderConnectionKind;
+  /** Present for `saved-api-key`/`env-var-only`: the env var carrying the key. */
+  envKey?: string;
+}
+
+/**
+ * Classify how (if at all) `name`'s credential is held, in the SAME order
+ * Disconnect must check it: a custom provider's file entry outranks a
+ * same-named built-in (matches `allOpenAiCompatProviders`'s own precedence —
+ * a custom `name` colliding with a built-in is excluded from
+ * `customCompatProviders`, so this order never double-classifies one name).
+ * Pure; never throws.
+ */
+export function classifyProviderConnection(
+  name: string,
+  env: Record<string, string | undefined> = process.env,
+  dir?: string,
+): ProviderConnectionClassification {
+  if (customCompatProviders(dir).some((p) => p.name === name)) {
+    return { kind: "custom" };
+  }
+  if (loadShellConfig(dir).oauthGrants?.[name] !== undefined) {
+    return { kind: "oauth-grant" };
+  }
+  const registry = providerByName(name, dir);
+  const envKey = registry?.envKey;
+  if (envKey === undefined) {
+    return { kind: "no-credential" };
+  }
+  if (loadShellConfig(dir).apiKeys?.[envKey] !== undefined) {
+    return { kind: "saved-api-key", envKey };
+  }
+  const raw = env[envKey];
+  if (typeof raw === "string" && raw.length > 0) {
+    return { kind: "env-var-only", envKey };
+  }
+  return { kind: "no-credential" };
+}
+
+export interface DisconnectProviderResult {
+  ok: boolean;
+  kind: ProviderConnectionKind;
+  /** Set on `ok: false` (env-var-only) and as an informational note on `no-credential`. */
+  reason?: string;
+}
+
+/**
+ * Disconnect one provider: remove exactly the credential
+ * {@link classifyProviderConnection} says it owns, and nothing belonging to a
+ * sibling provider. Also clears `process.env[envKey]` for THIS process when
+ * (and only when) the removed key is one keryx itself loaded into it
+ * (`savedCredentialEnvKeys()`) — an operator-exported var is never touched,
+ * in `env-var-only` or any other branch. Best-effort; never throws.
+ */
+export function disconnectProvider(
+  name: string,
+  env: Record<string, string | undefined> = process.env,
+  dir?: string,
+): DisconnectProviderResult {
+  const classification = classifyProviderConnection(name, env, dir);
+  switch (classification.kind) {
+    case "custom":
+      removeCustomCompatProvider(name, dir);
+      removeProviderBaseUrl(name, dir);
+      removeProviderModelParams(name, dir);
+      return { ok: true, kind: "custom" };
+    case "oauth-grant":
+      logoutProvider(name, dir);
+      return { ok: true, kind: "oauth-grant" };
+    case "saved-api-key": {
+      const envKey = classification.envKey!;
+      removeApiKey(envKey, dir);
+      if (savedCredentialEnvKeys().has(envKey)) {
+        delete process.env[envKey];
+      }
+      return { ok: true, kind: "saved-api-key" };
+    }
+    case "env-var-only":
+      return {
+        ok: false,
+        kind: "env-var-only",
+        reason: `set via ${classification.envKey} in your environment — unset ${classification.envKey} in your shell to disconnect`,
+      };
+    case "no-credential":
+      return { ok: true, kind: "no-credential", reason: "no saved credential for this provider — nothing to remove" };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // `keryx providers` — what is configured, and whether review can cross families
 // ---------------------------------------------------------------------------
 
@@ -845,15 +987,26 @@ export function configuredProviders(
     .map((provider) => ({ name: provider.name, models: provider.models }));
 }
 
+/** Seams for `keryx providers test`/`keryx providers remove` tests: production passes none. */
+export interface ProvidersCommandDeps {
+  /** Injected fetch for `test` (never a real network call in a test). */
+  readonly fetch?: typeof fetch;
+  /** Injected env for `test`/`remove` key resolution. Default `process.env`. */
+  readonly env?: Record<string, string | undefined>;
+  /** Config dir `test`/`remove` read/write against. Default the real one. */
+  readonly dir?: string;
+  /** Confirmation prompt for `remove`. Default: a real TTY `y/N` prompt (`../lib/prompt`'s `confirm`). */
+  readonly confirm?: (question: string, defaultValue?: boolean) => Promise<boolean>;
+}
+
 /**
- * `keryx providers` — read-only reporting over the provider configuration.
- *
- * Read-only and network-free on purpose. `keryx review tier` already probes live
- * `/models` when it needs a capability ordering; this command answers a question
- * about CONFIGURATION, so it reads files and exits. That is also what lets it
- * carry a `read: true` command descriptor with no side effects.
+ * `keryx providers` — reporting over the provider configuration, plus the
+ * `test`/`remove` actions (flow 304) that give CLI parity with the `/connect`
+ * row buttons. `list`/`cross-family` stay read-only/network-free (AC8);
+ * `test` makes exactly one network call, and `remove` writes to disk only
+ * after confirmation.
  */
-export function providersCommand(args: string[]): void {
+export async function providersCommand(args: string[], deps: ProvidersCommandDeps = {}): Promise<void> {
   const command = args[0];
   if (!command || command === "--help" || command === "-h") {
     printProvidersHelp();
@@ -867,9 +1020,84 @@ export function providersCommand(args: string[]): void {
     runCrossFamily(args.slice(1));
     return;
   }
+  if (command === "test") {
+    await runProvidersTest(args.slice(1), deps);
+    return;
+  }
+  if (command === "remove") {
+    await runProvidersRemove(args.slice(1), deps);
+    return;
+  }
   console.error(`Unknown providers command: ${command}`);
   printProvidersHelp();
   process.exitCode = 1;
+}
+
+/** `keryx providers test <name> [--json]` — the CLI form of the `[Test]` row button. */
+async function runProvidersTest(args: string[], deps: ProvidersCommandDeps): Promise<void> {
+  const name = args[0];
+  if (name === undefined || name === "--help" || name === "-h") {
+    console.error("Usage: keryx providers test <name> [--json]");
+    process.exitCode = 1;
+    return;
+  }
+  const dir = deps.dir;
+  const provider = providerByName(name, dir);
+  if (provider === undefined) {
+    console.error(`Unknown provider: ${name}`);
+    process.exitCode = 1;
+    return;
+  }
+  const env = deps.env ?? envWithOAuthAccess(envWithSavedApiKeys(process.env, dir));
+  const fetchFn = deps.fetch ?? globalThis.fetch;
+  const result = await testProviderConnection(provider, fetchFn, env);
+  const label = provider.label ?? provider.name;
+  if (args.includes("--json")) {
+    console.log(
+      JSON.stringify(
+        { provider: name, ok: result.source === "live", models: result.models.length, failure: result.failure ?? null },
+        null,
+        2,
+      ),
+    );
+    if (result.source !== "live") process.exitCode = 1;
+    return;
+  }
+  if (result.source === "live") {
+    console.log(`${label}: ok — ${result.models.length} model(s)`);
+    return;
+  }
+  console.log(modelsFailureLine(label, result.failure ?? { kind: "empty" }));
+  process.exitCode = 1;
+}
+
+/** `keryx providers remove <name> [--yes]` — the CLI form of the `[Disconnect]` row button. */
+async function runProvidersRemove(args: string[], deps: ProvidersCommandDeps): Promise<void> {
+  const name = args[0];
+  if (name === undefined || name === "--help" || name === "-h") {
+    console.error("Usage: keryx providers remove <name> [--yes]");
+    process.exitCode = 1;
+    return;
+  }
+  const dir = deps.dir;
+  const env = deps.env ?? process.env;
+  const yes = args.includes("--yes");
+  const confirmFn = deps.confirm ?? ttyConfirm;
+  const confirmed = yes || (await confirmFn(`Disconnect provider "${name}" and remove its saved credential?`, false));
+  if (!confirmed) {
+    console.log("keryx providers remove: not confirmed — nothing was changed.");
+    if (!yes && !process.stdin.isTTY && deps.confirm === undefined) process.exitCode = 1;
+    return;
+  }
+  const result = disconnectProvider(name, env, dir);
+  if (!result.ok) {
+    console.log(`keryx providers remove: "${name}" not removed — ${result.reason}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(
+    `keryx providers remove: "${name}" disconnected (${result.kind}).${result.reason !== undefined ? ` ${result.reason}` : ""}`,
+  );
 }
 
 function runProvidersList(args: string[]): void {
@@ -1011,16 +1239,31 @@ function printProvidersHelp(): void {
 Usage:
   keryx providers list [--json]
   keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
+  keryx providers test <name> [--json]
+  keryx providers remove <name> [--yes]
 
 Commands:
   list          Providers this operator has configured, and the family of each
   cross-family  Whether review can run on a different model family than authored
                 the change, and the record the round should carry
+  test          Run this provider's live model-list probe and report ok/count
+                or the failure reason. Makes ONE network call — unlike list/
+                cross-family, not network-free
+  remove        Disconnect a provider: remove its saved API key, OAuth grant,
+                or custom-provider entry. Asks for confirmation on a terminal;
+                refuses without one unless --yes. A provider whose only
+                credential is an environment variable you exported yourself
+                cannot be removed — the command names the variable to unset
 
 cross-family is OPT-IN: without --opt-in it reports what would happen and
 chooses single-family review. Dispatching to another provider spends tokens and
 sends the change to a second vendor, which is a decision rather than an
 optimisation. With no second family configured it reports single-family review
 with a stated reason and exits 0 — that is a normal configuration, not an error.
+
+Disconnecting a provider removes only keryx's LOCAL copy of its credential. It
+does not revoke anything at the vendor: an OAuth grant is deleted from
+auth.json only (no revoke call), and a saved API key simply stops being read —
+the key itself is still valid until you revoke it yourself with the vendor.
 `);
 }

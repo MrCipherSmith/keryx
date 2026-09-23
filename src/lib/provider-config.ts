@@ -475,3 +475,28 @@ export function saveCustomCompatProvider(provider: CustomCompatProvider, dir?: s
     // best-effort persistence — a failure just means the provider is re-entered
   }
 }
+
+/**
+ * Remove one custom provider from the persisted registry (flow 304, the
+ * `/connect` Disconnect button + `keryx providers remove`). Merge-and-rewrite
+ * over the other entries, mirroring {@link saveCustomCompatProvider}'s own
+ * read-modify-write. A no-op when `name` is not a custom provider (nothing to
+ * remove — a built-in has no `llm-providers.json` entry at all). Best-effort;
+ * never throws.
+ */
+export function removeCustomCompatProvider(name: string, dir?: string): void {
+  try {
+    const current = loadCustomCompatProviders(dir).reduce<Record<string, CustomCompatProvider>>((acc, p) => {
+      acc[p.name] = p;
+      return acc;
+    }, {});
+    if (!(name in current)) return;
+    delete current[name];
+    writeOwnerOnlyFile(
+      llmProvidersConfigPath(dir),
+      `${JSON.stringify({ schemaVersion: 1, providers: current }, null, 2)}\n`,
+    );
+  } catch {
+    // best-effort persistence — a failure just means the entry is removed again next time
+  }
+}

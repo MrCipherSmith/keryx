@@ -1167,18 +1167,25 @@ keryx auth status <provider> [--json]
 ## providers
 
 Report over the **provider configuration** — the built-in OpenAI-compatible
-registry plus the operator-defined entries in `llm-providers.json`. Read-only and
-network-free: it reads files and exits, and spends no tokens.
+registry plus the operator-defined entries in `llm-providers.json` — plus, since
+flow 304, `test` and `remove`: the CLI form of the `/connect` row buttons
+("Test connection" and "Disconnect"). `list` and `cross-family` stay read-only
+and network-free, exactly as before; `test` makes ONE network call (the live
+`/models` probe) and `remove` writes to disk only after confirmation.
 
 ```
 keryx providers list [--json]
 keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
+keryx providers test <name> [--json]
+keryx providers remove <name> [--yes]
 ```
 
 | Subcommand | Flags | Description |
 |---|---|---|
-| `list` | `--json` | Providers this operator has actually **configured** — a custom entry in `llm-providers.json`, or a built-in with a resolvable credential — and the model family of each. |
+| `list` | `--json` | Providers this operator has actually **configured** — a custom entry in `llm-providers.json`, or a built-in with a resolvable credential — and the model family of each. Read-only, network-free. |
 | `cross-family` | `--opt-in`, `--session-provider <id>`, `--session-model <id>`, `--from-shell-config`, `--json` | Decide whether review may run on a different model family than authored the change, and print the record the round should carry. The authoring session comes from the flags, else `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL`; the selection `keryx shell` persisted only with `--from-shell-config`. |
+| `test` | `<name>`, `--json` | Run that provider's live model-list probe (the same one `/connect` uses to decide what's "connected") and report `ok` with the model count, or the humanized failure reason. Exits non-zero on a failed probe. |
+| `remove` | `<name>`, `--yes` | **Disconnect** that provider: remove its saved API key, its OAuth grant, or its `llm-providers.json` entry (together with any saved base-URL/model-param override) — whichever one it actually has. Asks for confirmation on a terminal; refuses without one unless `--yes`. A provider whose only credential is an environment variable you exported yourself is refused outright — the command names the exact variable to `unset`. Disconnecting removes only keryx's LOCAL copy of the credential: an OAuth grant is deleted from `auth.json` with no vendor revoke call, and a removed API key simply stops being read (the key itself stays valid at the vendor until you revoke it there yourself). |
 
 ### Cross-family review
 

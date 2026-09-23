@@ -323,19 +323,33 @@ keryx shell
   ```bash
   keryx providers list         # every provider you already have configured,
                                 # and its model family
+  keryx providers test <name>  # run its live model-list probe; ok + count,
+                                # or the failure reason
+  keryx providers remove <name> [--yes]  # disconnect it: remove the saved
+                                # key/grant/custom entry (asks first)
   keryx auth login <provider>  # subscription login (device code / OAuth,
                                 # where the provider supports it) or API key
   keryx auth status <provider> # is this provider currently authorized
-  keryx auth logout <provider> # revoke a stored credential
+  keryx auth logout <provider> # delete a stored OAuth grant, LOCALLY —
+                                # no vendor revoke call is made
   ```
 
 - **Inside a running session**, `/connect` switches between providers you
-  already configured (no key/URL prompts); `/provider` opens the same
-  add/reconfigure wizard the startup picker used, so it also covers a
-  provider you have not set up yet. `/model` opens a model picker for the
-  current provider; in chat mode (`--no-tui --chat`) it instead takes an
-  argument (`/model <name>`) and `/models` lists what is available as a
-  numbered menu.
+  already configured (no key/URL prompts). Since flow 304, each row in that
+  list also carries two buttons, drawn and reachable the same way the queue
+  dock's Force/Edit/Delete are: `[Test]` runs the same live model-list probe
+  `keryx providers test` does and shows the result on the row; `[Disconnect]`
+  asks for confirmation, then removes that provider's saved credential the
+  same way `keryx providers remove` does. Reach both without a mouse: ↑/↓
+  picks a row, ←/→ picks Label, Test or Disconnect, Enter fires it, Esc backs
+  out. Disconnecting the provider the CURRENT session is using does not
+  switch it or interrupt a turn — the session keeps its already-loaded
+  credential until you `/connect` another provider or restart. `/provider`
+  opens the same add/reconfigure wizard the startup picker used (no row
+  buttons there), so it also covers a provider you have not set up yet.
+  `/model` opens a model picker for the current provider; in chat mode
+  (`--no-tui --chat`) it instead takes an argument (`/model <name>`) and
+  `/models` lists what is available as a numbered menu.
 
 #### Pick a theme
 

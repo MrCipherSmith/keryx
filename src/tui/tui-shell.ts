@@ -150,10 +150,12 @@ import type { DetectedProvider } from "../commands/select";
 import type { ModelsFailure, ModelsResolveResult } from "../commands/providers";
 import {
   MODELS_FETCH_TIMEOUT_MS,
+  disconnectProvider,
   fetchOpenAiCompatModelsDetailed,
   modelsFailureLine,
   providerByName,
   resolveModelsForPicker,
+  testProviderConnection,
 } from "../commands/providers";
 import { loadSessionLimits } from "../commands/model-limits";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
@@ -233,8 +235,8 @@ import {
   editMainQueueItem,
   reinsertMainQueueItem,
 } from "./main-queue";
-import type { QueueNavAction } from "./queue-nav";
-import { clampQueueNavIndex, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
+import type { ConnectNavAction, QueueNavAction } from "./queue-nav";
+import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
 
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { openSubagentInspector, paintSubagentSidebar } from "./subagent-inspector";
@@ -514,6 +516,15 @@ export interface SelectProviderModelOptions {
    * developer's Mac.
    */
   configDir?: string;
+  /**
+   * `onlyConnected` only (flow 304, AC7): called synchronously right after a
+   * successful Disconnect, before the row disappears from the list — so the
+   * `/connect` command handler can tell whether the just-disconnected
+   * provider was the CURRENT session's active one and print the "session
+   * keeps its loaded credential" line. This function has no session state of
+   * its own to compare against.
+   */
+  onDisconnected?: (name: string) => void;
 }
 
 /**
@@ -2396,6 +2407,64 @@ export function modelPickerNotice(label: string, result: ModelsResolveResult): s
   return modelsFailureLine(label, result.failure);
 }
 
+/**
+ * Small styled label mimicking a clickable button — mirrors
+ * `composer-choice.ts`'s "small styled label" pattern (bold/colored
+ * `TextRenderable`, no border) rather than a bordered box: a bordered child
+ * box next to a plain-text label in the same row would need its own explicit
+ * height to avoid the row's cross-axis stretch fighting its border rows (see
+ * `.metaproject/memory/lessons/tui-alignself-height-collapse.md` — this file
+ * avoids `alignSelf` entirely for exactly that class of bug).
+ *
+ * The ONE button factory behind the queue dock's Force/Edit/Delete AND
+ * `/connect`'s Test/Disconnect (flow 304) — both call this, not a parallel
+ * copy, so "built the way `mainQueueButton` builds Force/Edit/Delete" is
+ * true by construction rather than by two implementations staying in sync.
+ */
+function smallActionButton(
+  otui: OpenTui,
+  r: Renderer,
+  label: string,
+  id: string,
+  color: string,
+  onMouseDown: () => void,
+): { box: Box; setActive: (active: boolean) => void } {
+  const box = new otui.BoxRenderable(r, {
+    id,
+    flexShrink: 0,
+    marginLeft: 1,
+    paddingLeft: 1,
+    paddingRight: 1,
+    onMouseDown: (event: { stopPropagation: () => void }) => {
+      // Part A (flow 170 T5 investigation): @opentui/core's
+      // Renderable.processMouseEvent fires this handler THEN, unless told
+      // otherwise, walks up .parent and fires every ancestor's onMouseDown
+      // too (confirmed against the bundled implementation,
+      // node_modules/@opentui/core/chunk-bun-tkm837n2.js, the
+      // processMouseEvent/onMouseDown setter pair) -- mouse events bubble by
+      // default. A row/dock above this button may have its own
+      // onMouseDown (queueDock's background click, or a row's label click
+      // here); without stopping it here, every button click would ALSO fire
+      // that ancestor handler as an unwanted bubbled side effect. Stop it at
+      // the deepest, most specific handler -- the button itself.
+      event.stopPropagation();
+      onMouseDown();
+    },
+  });
+  // Theme-driven color, not `otui.red`/`otui.yellow` (fixed ANSI-bright
+  // helpers) -- plain content + `.fg` is the same pattern
+  // `transcript-blocks.ts`'s block header already uses for theme colors.
+  const text = new otui.TextRenderable(r, { id: `${id}-t`, content: `[${label}]` });
+  text.fg = color;
+  box.add(text);
+  const setActive = (active: boolean): void => {
+    box.backgroundColor = active ? getTheme().highlight : undefined;
+    text.content = active ? otui.t`${boldChunk(otui, `[${label}]`)}` : `[${label}]`;
+    text.fg = color;
+  };
+  return { box, setActive };
+}
+
 /** Provider-selection step. Resolves the chosen provider, or `undefined` on Esc/cancel. */
 function pickProviderStep(otui: OpenTui, target: StepTarget, detected: DetectedProvider[]): Promise<DetectedProvider | undefined> {
   const r = stepRenderer(target);
@@ -2436,6 +2505,269 @@ function pickProviderStep(otui: OpenTui, target: StepTarget, detected: DetectedP
       cleanup();
       resolve(chosen === null ? undefined : detected.find((d) => labelOf(d) === chosen.name));
     });
+  });
+}
+
+/** {@link pickConnectedProviderStep}'s dependencies for the two row buttons. */
+interface ConnectedProviderStepOptions {
+  fetch?: typeof fetch;
+  env?: Record<string, string | undefined>;
+  configDir?: string;
+  /**
+   * Called synchronously right after a successful disconnect, before the row
+   * is removed from the list — so the caller can tell whether the CURRENT
+   * session's active provider was just disconnected (AC7) without this step
+   * knowing anything about session state itself.
+   */
+  onDisconnected?: (name: string) => void;
+}
+
+/**
+ * `/connect`'s provider list (flow 304, AC1–AC3): one row per connected
+ * provider, drawn like the queue dock's rows — a label (Enter/click still
+ * selects the provider, unchanged from `pickProviderStep`'s old
+ * `SelectRenderable` behavior) plus `[Test]` and `[Disconnect]` buttons built
+ * by the SAME `smallActionButton` the queue dock uses. `/provider`'s own
+ * wizard keeps calling `pickProviderStep` unchanged — this step is used only
+ * for the `onlyConnected` (`/connect`) path in `selectProviderModelInTui`.
+ *
+ * Row/action navigation (AC3) reuses `stepQueueNavIndex`/`clampQueueNavIndex`
+ * verbatim for up/down, and the sibling `stepConnectNavAction` for left/right
+ * across Label/Test/Disconnect. No separate `chrome.addOverlaySource`
+ * registration is needed: this step already runs inside the caller's
+ * `chrome.withOverlay(...)` (see the `/connect` command handler), whose
+ * `overlayDepth` counter stays incremented for this step's entire lifetime —
+ * the same reason none of `pickProviderStep`/`promptApiKeyStep`/etc. register
+ * their own overlay source either.
+ */
+function pickConnectedProviderStep(
+  otui: OpenTui,
+  target: StepTarget,
+  detected: readonly DetectedProvider[],
+  opts: ConnectedProviderStepOptions,
+): Promise<DetectedProvider | undefined> {
+  const r = stepRenderer(target);
+  return new Promise((resolve) => {
+    let rows: DetectedProvider[] = [...detected];
+    let selectedIndex = 0;
+    let selectedAction: ConnectNavAction = "label";
+    let pendingDisconnect: string | undefined;
+    let resolved = false;
+    interface RowBlock {
+      name: string;
+      outer: Box;
+      label: Box;
+      labelText: InstanceType<OpenTui["TextRenderable"]>;
+      status: InstanceType<OpenTui["TextRenderable"]>;
+      test: { box: Box; setActive: (active: boolean) => void };
+      disconnect: { box: Box; setActive: (active: boolean) => void };
+    }
+    let rowBlocks: RowBlock[] = [];
+
+    const labelOf = (d: DetectedProvider): string => d.label ?? d.name;
+    const noteOf = (d: DetectedProvider): string => d.note ?? `${d.models.length} model(s)`;
+
+    const surface = openStepSurface(otui, target, {
+      id: "connect-picker",
+      title: "Connected providers",
+      tab: "Providers",
+      hint: "(↑/↓ row · ←/→ Label/Test/Disconnect · Enter · Esc to cancel)",
+      footer: [
+        { key: "↑/↓", label: "row" },
+        { key: "←/→", label: "Label/Test/Disconnect" },
+        { key: "Enter", label: "select/run" },
+        { key: "esc", label: "cancel" },
+      ],
+      contentRows: selectBoxHeight(Math.max(rows.length, 1), true),
+      onEscape: () => finish(undefined),
+    });
+    const body = surface.body;
+
+    function finish(value: DetectedProvider | undefined): void {
+      if (resolved) return;
+      resolved = true;
+      unsub();
+      surface.close();
+      resolve(value);
+    }
+
+    /** Cancel an armed Disconnect confirmation on any OTHER action, so it never fires from a stale arm. */
+    function clearPending(): void {
+      if (pendingDisconnect === undefined) return;
+      const armed = rowBlocks.find((b) => b.name === pendingDisconnect);
+      pendingDisconnect = undefined;
+      if (armed !== undefined) armed.status.content = "";
+    }
+
+    function applyHighlight(): void {
+      for (let i = 0; i < rowBlocks.length; i++) {
+        const block = rowBlocks[i];
+        if (block === undefined) continue;
+        const active = i === selectedIndex;
+        block.outer.backgroundColor = active ? getTheme().highlight : undefined;
+        block.labelText.content = active && selectedAction === "label" ? otui.t`${boldChunk(otui, `${labelOf(rows[i]!)}`)}  ${dimChunk(otui, noteOf(rows[i]!))}` : otui.t`${labelOf(rows[i]!)}  ${dimChunk(otui, noteOf(rows[i]!))}`;
+        block.test.setActive(active && selectedAction === "test");
+        block.disconnect.setActive(active && selectedAction === "disconnect");
+      }
+    }
+
+    async function runTest(name: string): Promise<void> {
+      const block = rowBlocks.find((b) => b.name === name);
+      const provider = providerByName(name, opts.configDir);
+      if (block === undefined) return;
+      if (provider === undefined) {
+        block.status.content = otui.t`${roleChunk(otui, "error", "✗")} unknown provider — cannot test`;
+        return;
+      }
+      block.status.content = otui.t`${dimChunk(otui, "testing…")}`;
+      const result = await testProviderConnection(provider, opts.fetch ?? globalThis.fetch, opts.env ?? process.env);
+      // The row (or the whole step) may be gone by the time the probe
+      // resolves — a disconnect elsewhere repaints `rowBlocks`, and Esc/a
+      // label selection closes the step outright. Re-look-up by name rather
+      // than trusting the captured reference; write nothing if it's gone.
+      const current = rowBlocks.find((b) => b.name === name);
+      if (current === undefined || resolved) return;
+      current.status.content =
+        result.source === "live"
+          ? otui.t`${roleChunk(otui, "ok", "✓")} ok — ${String(result.models.length)} model(s)`
+          : otui.t`${roleChunk(otui, "error", "✗")} ${modelsFailureLine(labelOf(rows.find((d) => d.name === name) ?? { name, models: [] }), result.failure ?? { kind: "empty" })}`;
+    }
+
+    function armOrConfirmDisconnect(name: string): void {
+      const block = rowBlocks.find((b) => b.name === name);
+      if (block === undefined) return;
+      if (pendingDisconnect !== name) {
+        clearPending();
+        pendingDisconnect = name;
+        block.status.content = otui.t`${roleChunk(otui, "attention", "?")} disconnect '${labelOf(rows.find((d) => d.name === name) ?? { name, models: [] })}'? ${dimChunk(otui, "click/Enter Disconnect again to confirm, Esc to cancel")}`;
+        return;
+      }
+      pendingDisconnect = undefined;
+      const result = disconnectProvider(name, opts.env ?? process.env, opts.configDir);
+      if (!result.ok) {
+        block.status.content = otui.t`${roleChunk(otui, "error", "✗")} not removed — ${result.reason ?? "unknown reason"}`;
+        return;
+      }
+      opts.onDisconnected?.(name);
+      rows = rows.filter((d) => d.name !== name);
+      paint();
+    }
+
+    function paint(): void {
+      for (const block of rowBlocks) {
+        try {
+          body.remove(block.outer);
+        } catch {
+          // already detached
+        }
+      }
+      rowBlocks = [];
+      if (rows.length === 0) {
+        finish(undefined);
+        return;
+      }
+      selectedIndex = clampQueueNavIndex(selectedIndex, rows.length);
+      for (let i = 0; i < rows.length; i++) {
+        const d = rows[i]!;
+        const outer = new otui.BoxRenderable(r, { id: `cp-${d.name}`, width: "100%", flexDirection: "column" });
+        const row = new otui.BoxRenderable(r, { id: `cp-${d.name}-row`, width: "100%", flexDirection: "row" });
+        const labelText = new otui.TextRenderable(r, {
+          id: `cp-${d.name}-label-t`,
+          content: otui.t`${labelOf(d)}  ${dimChunk(otui, noteOf(d))}`,
+        });
+        const label = new otui.BoxRenderable(r, {
+          id: `cp-${d.name}-label`,
+          flexGrow: 1,
+          minWidth: 0,
+          onMouseDown: (event: { stopPropagation: () => void }) => {
+            event.stopPropagation();
+            clearPending();
+            selectedIndex = i;
+            selectedAction = "label";
+            finish(d);
+          },
+        });
+        label.add(labelText);
+        row.add(label);
+        const test = smallActionButton(otui, r, "Test", `cp-test-${d.name}`, getTheme().focus, () => {
+          clearPending();
+          selectedIndex = i;
+          selectedAction = "test";
+          applyHighlight();
+          void runTest(d.name);
+        });
+        const disconnect = smallActionButton(otui, r, "Disconnect", `cp-disc-${d.name}`, getTheme().error, () => {
+          selectedIndex = i;
+          selectedAction = "disconnect";
+          applyHighlight();
+          armOrConfirmDisconnect(d.name);
+        });
+        row.add(test.box);
+        row.add(disconnect.box);
+        outer.add(row);
+        const status = new otui.TextRenderable(r, { id: `cp-${d.name}-status`, content: "", marginLeft: 1 });
+        outer.add(status);
+        body.add(outer);
+        rowBlocks.push({ name: d.name, outer, label, labelText, status, test, disconnect });
+      }
+      applyHighlight();
+    }
+
+    const unsub = onKeypress(r, (key) => {
+      if (resolved) return;
+      if (key.name === "up") {
+        clearPending();
+        selectedIndex = stepQueueNavIndex(selectedIndex, rows.length, "up");
+        applyHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "down") {
+        clearPending();
+        selectedIndex = stepQueueNavIndex(selectedIndex, rows.length, "down");
+        applyHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "left") {
+        clearPending();
+        selectedAction = stepConnectNavAction(selectedAction, "left");
+        applyHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "right") {
+        clearPending();
+        selectedAction = stepConnectNavAction(selectedAction, "right");
+        applyHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "return" || key.name === "linefeed" || key.name === "kpenter") {
+        const row = rows[selectedIndex];
+        if (row === undefined) return;
+        if (selectedAction === "label") {
+          clearPending();
+          finish(row);
+        } else if (selectedAction === "test") {
+          clearPending();
+          void runTest(row.name);
+        } else {
+          armOrConfirmDisconnect(row.name);
+        }
+        key.preventDefault();
+        key.stopPropagation();
+      }
+      // Escape is handled by `openStepSurface`'s own handler (`onEscape`
+      // above) — this step declares no interest in it, matching every other
+      // step in this file.
+    });
+
+    paint();
   });
 }
 
@@ -2490,7 +2822,18 @@ export function selectProviderModelInTui(
       // OpenAI-compat gateways return 401 without a Bearer key, and we would
       // otherwise show only the short curated fallback (e.g. stale glm-4.5/4.6).
       while (true) {
-        const prov = await pickProviderStep(otui, rOrChrome, allCandidates);
+        // flow 304, AC1: `/connect` (`onlyConnected`) gets the row-list step
+        // with Test/Disconnect buttons; `/provider`'s fuller wizard (base-URL
+        // edit, credential prompt, "add custom provider") keeps the plain
+        // `SelectRenderable` picker unchanged.
+        const prov = options.onlyConnected
+          ? await pickConnectedProviderStep(otui, rOrChrome, allCandidates, {
+              ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
+              ...(options.env !== undefined ? { env: options.env } : {}),
+              ...(options.configDir !== undefined ? { configDir: options.configDir } : {}),
+              ...(options.onDisconnected !== undefined ? { onDisconnected: options.onDisconnected } : {}),
+            })
+          : await pickProviderStep(otui, rOrChrome, allCandidates);
         if (prov === undefined) {
           resolve(undefined);
           return;
@@ -5753,58 +6096,13 @@ export async function launchTuiAgentShell(opts: {
       setRowActive: (active: boolean) => void;
       buttons: Record<QueueNavAction, { box: Box; setActive: (active: boolean) => void }>;
     }> = [];
-    /**
-     * Small styled label mimicking a clickable button \u2014 mirrors
-     * `composer-choice.ts`'s "small styled label" pattern (bold/colored
-     * `TextRenderable`, no border) rather than a bordered box: a bordered
-     * child box next to a plain-text label in the same row would need its own
-     * explicit height to avoid the row's cross-axis stretch fighting its
-     * border rows (see `.metaproject/memory/lessons/
-     * tui-alignself-height-collapse.md` \u2014 this file avoids `alignSelf`
-     * entirely for exactly that class of bug).
-     */
-    const mainQueueButton = (
-      label: string,
-      id: string,
-      color: string,
-      onMouseDown: () => void,
-    ): { box: Box; setActive: (active: boolean) => void } => {
-      const box = new otui.BoxRenderable(r, {
-        id,
-        flexShrink: 0,
-        marginLeft: 1,
-        paddingLeft: 1,
-        paddingRight: 1,
-        onMouseDown: (event: { stopPropagation: () => void }) => {
-          // Part A (flow 170 T5 investigation): @opentui/core's
-          // Renderable.processMouseEvent fires this handler THEN, unless
-          // told otherwise, walks up .parent and fires every ancestor's
-          // onMouseDown too (confirmed against the bundled implementation,
-          // node_modules/@opentui/core/chunk-bun-tkm837n2.js, the
-          // processMouseEvent/onMouseDown setter pair) -- mouse events
-          // bubble by default. queueDock (T6) will get its own onMouseDown
-          // to enter queue-nav on a background click; without stopping it
-          // here, every button click would ALSO re-enter queue-nav as an
-          // unwanted bubbled side effect (AC9/AC10 both depend on the button
-          // click NOT merely focusing the dock). Stop it at the deepest,
-          // most specific handler -- the button itself.
-          event.stopPropagation();
-          onMouseDown();
-        },
-      });
-      // Theme-driven color, not `otui.red`/`otui.yellow` (fixed ANSI-bright
-      // helpers) -- plain content + `.fg` is the same pattern
-      // `transcript-blocks.ts`'s block header already uses for theme colors.
-      const text = new otui.TextRenderable(r, { id: `${id}-t`, content: `[${label}]` });
-      text.fg = color;
-      box.add(text);
-      const setActive = (active: boolean): void => {
-        box.backgroundColor = active ? getTheme().highlight : undefined;
-        text.content = active ? otui.t`${boldChunk(otui, `[${label}]`)}` : `[${label}]`;
-        text.fg = color;
-      };
-      return { box, setActive };
-    };
+    // Small styled label mimicking a clickable button -- `smallActionButton`
+    // (module level, beside `pickProviderStep`) holds the actual
+    // implementation now; `/connect`'s row-list step (flow 304) builds its
+    // Test/Disconnect buttons the SAME way, off the SAME function, rather
+    // than a parallel copy.
+    const mainQueueButton = (label: string, id: string, color: string, onMouseDown: () => void) =>
+      smallActionButton(otui, r, label, id, color, onMouseDown);
     /** Repaint the queue-nav highlight only -- no rebuild, mirrors
      * composer-choice.ts's paintOptions() re-highlight-on-change shape. */
     const applyQueueNavHighlight = (): void => {
@@ -6918,7 +7216,24 @@ export async function launchTuiAgentShell(opts: {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
             const ns = await chrome.withOverlay(() =>
               command.name === "/connect"
-                ? selectProviderModelInTui(otui, chrome, detected, { onlyConnected: true, env: process.env })
+                ? selectProviderModelInTui(otui, chrome, detected, {
+                    onlyConnected: true,
+                    env: process.env,
+                    // flow 304 AC7: disconnecting the provider the session is
+                    // CURRENTLY using neither switches provider nor interrupts
+                    // a turn — this only reports it. The session keeps
+                    // whatever it already loaded into memory this run;
+                    // `disconnectProvider` has already cleared the env var
+                    // for THIS process when it was keryx-saved, so a LATER
+                    // `/connect` (or a fresh launch) no longer offers it.
+                    onDisconnected: (name) => {
+                      if (name === currentSel.provider) {
+                        io.onSystem?.(
+                          `◇ ${name} disconnected — this session keeps its already-loaded credential until you /connect another provider or restart.\n`,
+                        );
+                      }
+                    },
+                  })
                 : selectProviderModelInTui(otui, chrome, detected),
             );
             if (ns !== undefined) {
