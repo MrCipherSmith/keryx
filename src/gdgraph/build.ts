@@ -609,6 +609,18 @@ export function parseGradleSourceRoots(buildGradle: string): string[] {
   return [...roots];
 }
 
+// GDGRAPH-3 (W7): the root `tsconfig.json` may itself declare no
+// `paths`/`baseUrl` and instead `extends` a shared base config (common in a
+// monorepo with one `tsconfig.base.json` carrying the alias map for every
+// package). Before this fix, only the root config's own `compilerOptions`
+// were read — an inherited alias resolved to nothing, silently, with no
+// error. `resolveTsconfigOptions` below walks the `extends` chain, merging
+// `baseUrl`/`paths` so an inherited alias resolves the same way `tsc` itself
+// would for it.
+const TSCONFIG_EXTENDS_MAX_DEPTH = 10;
+
+type TsconfigOptions = { baseUrl: string | null; paths: PathMapping[] };
+
 async function loadTsconfigResolver(projectRoot: string): Promise<ImportResolver> {
   const empty = createTsconfigResolver(null, []);
   const tsconfigPath = path.join(projectRoot, "tsconfig.json");
@@ -616,30 +628,87 @@ async function loadTsconfigResolver(projectRoot: string): Promise<ImportResolver
     return empty;
   }
 
-  try {
-    const raw = await readFile(tsconfigPath, "utf8");
-    const parsed = JSON.parse(stripJsonComments(raw)) as {
-      compilerOptions?: {
-        baseUrl?: unknown;
-        paths?: unknown;
-      };
-    };
-    const options = parsed.compilerOptions ?? {};
-    const baseUrl = typeof options.baseUrl === "string"
-      ? normalizePath(path.posix.normalize(options.baseUrl)).replace(/^\.\//, "")
-      : null;
-    const paths = isRecord(options.paths)
-      ? Object.entries(options.paths)
-          .filter((entry): entry is [string, string[]] => Array.isArray(entry[1]))
-          .map(([pattern, targets]) => ({
-            pattern,
-            targets: targets.filter((target): target is string => typeof target === "string"),
-          }))
-      : [];
-    return createTsconfigResolver(baseUrl, paths);
-  } catch {
+  const resolved = await resolveTsconfigOptions(tsconfigPath, new Set<string>(), 0);
+  if (!resolved) {
     return empty;
   }
+  return createTsconfigResolver(resolved.baseUrl, resolved.paths);
+}
+
+async function readTsconfigJson(
+  configPath: string,
+): Promise<{ compilerOptions?: { baseUrl?: unknown; paths?: unknown }; extends?: unknown } | null> {
+  try {
+    const raw = await readFile(configPath, "utf8");
+    return JSON.parse(stripJsonComments(raw)) as {
+      compilerOptions?: { baseUrl?: unknown; paths?: unknown };
+      extends?: unknown;
+    };
+  } catch {
+    return null;
+  }
+}
+
+// A relative/local `extends` ("./tsconfig.base.json", "../base.json") is
+// resolved against the EXTENDING config's own directory — the same rule
+// `tsc` uses — and gets a `.json` suffix when the specifier omits one. A
+// bare package specifier (no leading "." or "/", e.g. "@tsconfig/node20")
+// is intentionally left unresolved here: following it would mean
+// replicating node_modules package resolution inside this cheap, dependency-
+// light graph-build resolver. It is skipped, not treated as an error — the
+// chain simply stops contributing inherited `paths`/`baseUrl` from that link.
+function resolveTsconfigExtendsPath(configDir: string, extendsSpecifier: string): string | null {
+  if (!extendsSpecifier.startsWith(".") && !extendsSpecifier.startsWith("/")) {
+    return null;
+  }
+  const resolved = path.resolve(configDir, extendsSpecifier);
+  return resolved.endsWith(".json") ? resolved : `${resolved}.json`;
+}
+
+// Depth-capped (10 hops — no real project chains that deep) and cycle-guarded
+// (a config that `extends` back to one already on the current chain stops
+// walking rather than looping forever). `baseUrl`/`paths` are each replaced
+// wholesale by a child that declares them (TS's own `extends` semantics —
+// not a deep merge), inherited unchanged from the base otherwise. Any parse
+// failure at any link degrades that link to "nothing inherited", never a
+// thrown error that would take the whole graph build down.
+async function resolveTsconfigOptions(
+  configPath: string,
+  visited: Set<string>,
+  depth: number,
+): Promise<TsconfigOptions | null> {
+  const resolvedPath = path.resolve(configPath);
+  if (depth > TSCONFIG_EXTENDS_MAX_DEPTH || visited.has(resolvedPath)) {
+    return null;
+  }
+  visited.add(resolvedPath);
+
+  const parsed = await readTsconfigJson(resolvedPath);
+  if (!parsed) {
+    return null;
+  }
+
+  let inherited: TsconfigOptions | null = null;
+  if (typeof parsed.extends === "string") {
+    const basePath = resolveTsconfigExtendsPath(path.dirname(resolvedPath), parsed.extends);
+    if (basePath) {
+      inherited = await resolveTsconfigOptions(basePath, visited, depth + 1);
+    }
+  }
+
+  const options = parsed.compilerOptions ?? {};
+  const baseUrl = typeof options.baseUrl === "string"
+    ? normalizePath(path.posix.normalize(options.baseUrl)).replace(/^\.\//, "")
+    : inherited?.baseUrl ?? null;
+  const paths = isRecord(options.paths)
+    ? Object.entries(options.paths)
+        .filter((entry): entry is [string, string[]] => Array.isArray(entry[1]))
+        .map(([pattern, targets]) => ({
+          pattern,
+          targets: targets.filter((target): target is string => typeof target === "string"),
+        }))
+    : (inherited?.paths ?? []);
+  return { baseUrl, paths };
 }
 
 function createTsconfigResolver(baseUrl: string | null, mappings: PathMapping[]): ImportResolver {
