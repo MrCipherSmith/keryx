@@ -29,7 +29,15 @@
 //   5. A NON-ZERO EXIT IS NEVER THROWN. A failed process is a `ProcessOutcome`
 //      and `classifyFailure` names the cause (§7.7). Throwing is reserved for a
 //      genuinely broken port.
-import { BoundedTranscript, DEFAULT_MAX_RUN_OUTPUT_BYTES, OutputBudget, eventCost, outputBudgetReason } from "./bounded";
+import {
+  BoundedTranscript,
+  DEFAULT_MAX_RUN_OUTPUT_BYTES,
+  DEFAULT_MAX_STDERR_BYTES,
+  OutputBudget,
+  eventCost,
+  outputBudgetReason,
+  stderrBudgetReason,
+} from "./bounded";
 import { ExternalLineTooLongError } from "./bun-spawn-port";
 import { detectSupervisionTriggers } from "./supervision";
 import type { SupervisionConfig, SupervisionTrigger, SupervisionTriggerKind } from "./supervision";
@@ -164,6 +172,13 @@ export interface SuperviseInput {
   readonly initialStdin?: readonly string[];
   /** Ceiling on the run's canonical events (flow 292 T14). Defaults to {@link DEFAULT_MAX_RUN_OUTPUT_BYTES}. */
   readonly maxOutputBytes?: number;
+  /**
+   * Ceiling on stderr READ from the child (flow 298 T14) — independent of
+   * `BoundedTranscript`'s retention bound, which caps what is kept, not what
+   * is read. Passing it stops the run with a named `overflow`, the same as
+   * {@link maxOutputBytes}. Defaults to {@link DEFAULT_MAX_STDERR_BYTES}.
+   */
+  readonly maxStderrBytes?: number;
   /** Grace given to the exit signal AFTER a kill. Defaults to {@link DEFAULT_KILL_GRACE_MS}. */
   readonly killGraceMs?: number;
   /** Grace given to the streams after a terminal event. Defaults to {@link DEFAULT_TERMINAL_SETTLE_MS}. */
@@ -242,10 +257,10 @@ export interface SupervisedOutcome extends ProcessOutcome {
   /** The supervisor terminated the child, for either the timeout or the settle reason. */
   readonly killed: boolean;
   /**
-   * Set when the run was stopped for SIZE (flow 292 T14): its events passed the
-   * output budget, or a stream passed the line ceiling. The named reason; the
-   * runtime reports it as the run's failure instead of the codec's reading of a
-   * killed child.
+   * Set when the run was stopped for SIZE (flow 292/298 T14): its events
+   * passed the output budget, its stderr passed the stderr budget, or a
+   * stream passed the line ceiling. The named reason; the runtime reports it
+   * as the run's failure instead of the codec's reading of a killed child.
    */
   readonly overflow?: string;
   /** Bytes dropped from the middle of stdout and stderr to keep them bounded. */
@@ -327,6 +342,10 @@ export async function superviseExternalRun(
   const stdoutLines = new BoundedTranscript(STDOUT_HEAD_BYTES, STDOUT_TAIL_BYTES);
   const stderrLines = new BoundedTranscript();
   const budget = new OutputBudget(input.maxOutputBytes ?? DEFAULT_MAX_RUN_OUTPUT_BYTES);
+  // Separate from `budget` above: it counts stderr BYTES READ, not retained,
+  // so an endless flood of short lines is stopped even though
+  // `BoundedTranscript` already keeps memory bounded (flow 298 T14).
+  const stderrBudget = new OutputBudget(input.maxStderrBytes ?? DEFAULT_MAX_STDERR_BYTES);
   let overflow: string | undefined;
   const events: ExternalEvent[] = [];
   let skippedLines = 0;
@@ -455,7 +474,17 @@ export async function superviseExternalRun(
   };
 
   const consumeStderr = async (): Promise<void> => {
-    for await (const line of child.stderr) stderrLines.push(line);
+    for await (const line of child.stderr) {
+      stderrLines.push(line);
+      // Counted even though `stderrLines` above already bounds what is
+      // RETAINED (flow 298 T14): without this, a flood of short lines never
+      // grows memory but never stops either, running until `input.timeoutMs`.
+      if (overflow === undefined && !stderrBudget.add(line.length + 1)) {
+        overflow = stderrBudgetReason(stderrBudget.limit);
+        stderrLines.push(`[keryx] ${overflow}`);
+        handle.kill();
+      }
+    }
   };
 
   // Stream-read failures are RECORDED, not thrown. A port whose iterator blows

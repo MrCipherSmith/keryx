@@ -65,7 +65,15 @@ import {
   writeTextFileInWorktree,
   type AcpFsRequestRecord,
 } from "./acp-fs";
-import { BoundedTranscript, DEFAULT_MAX_RUN_OUTPUT_BYTES, OutputBudget, eventCost, outputBudgetReason } from "./bounded";
+import {
+  BoundedTranscript,
+  DEFAULT_MAX_RUN_OUTPUT_BYTES,
+  DEFAULT_MAX_STDERR_BYTES,
+  OutputBudget,
+  eventCost,
+  outputBudgetReason,
+  stderrBudgetReason,
+} from "./bounded";
 import { ExternalLineTooLongError } from "./bun-spawn-port";
 import type { ExternalSpawnPort } from "./supervise";
 import type { ExternalEvent } from "./types";
@@ -109,6 +117,15 @@ export interface SuperviseAcpInput {
    * agent. Defaults to {@link DEFAULT_MAX_RUN_OUTPUT_BYTES}.
    */
   readonly maxOutputBytes?: number;
+  /**
+   * Ceiling on stderr READ from the agent, independent of `BoundedTranscript`'s
+   * retention bound (flow 298 T14): the transcript stays small in memory no
+   * matter how long a flood runs, but reading it costs CPU and wall-clock
+   * forever without this. Passing it fails the run with a named reason and
+   * kills the agent, the same as {@link maxOutputBytes}. Defaults to
+   * {@link DEFAULT_MAX_STDERR_BYTES}.
+   */
+  readonly maxStderrBytes?: number;
   readonly clientInfo?: AcpImplementation;
   readonly permission: {
     readonly mode: AcpModeClamp;
@@ -237,6 +254,10 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
   // must not be able to make keryx hold them all (flow 292 T14).
   const stderr = new BoundedTranscript();
   const budget = new OutputBudget(input.maxOutputBytes ?? DEFAULT_MAX_RUN_OUTPUT_BYTES);
+  // Separate from `budget` above: it counts stderr BYTES READ, not retained,
+  // so an endless flood of short lines is stopped even though
+  // `BoundedTranscript` already keeps memory bounded (flow 298 T14).
+  const stderrBudget = new OutputBudget(input.maxStderrBytes ?? DEFAULT_MAX_STDERR_BYTES);
   let abortReason: string | undefined;
   let assistantText = "";
   let usage: AcpUsage | undefined;
@@ -571,7 +592,15 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
   })();
   void (async (): Promise<void> => {
     try {
-      for await (const line of child.stderr) stderr.push(line);
+      for await (const line of child.stderr) {
+        stderr.push(line);
+        // Counted even though `stderr` above already bounds what is RETAINED
+        // (flow 298 T14): without this, a flood of short lines never grows
+        // memory but never stops either, running until `input.timeoutMs`.
+        if (abortReason === undefined && !stderrBudget.add(line.length + 1)) {
+          abortRun(stderrBudgetReason(stderrBudget.limit));
+        }
+      }
     } catch (error) {
       // The line ceiling on stderr is the run's reason, not a lost diagnostic:
       // the port has already killed the child, and without this the run would

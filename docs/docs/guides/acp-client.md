@@ -174,8 +174,14 @@ A foreign agent cannot make keryx hold unbounded output:
 
 - **Lines:** a line longer than 64 MiB with no newline stops the run with a
   named reason, and the agent is killed.
-- **Stderr:** keryx keeps only its first 16 KiB and last 48 KiB, and counts the
-  bytes it dropped from the middle.
+- **Stderr retained:** keryx keeps only its first 16 KiB and last 48 KiB, and
+  counts the bytes it dropped from the middle.
+- **Stderr read:** retention alone bounds memory, not how long a flood of
+  ordinary short lines can keep the run alive. A second, separate 16 MiB
+  budget counts stderr bytes as they are read; passing it stops the run with a
+  named reason and kills the agent, the same as the output budget below —
+  independent of it, so noisy stderr cannot starve a legitimate large result's
+  budget or vice versa.
 - **What the run produces:** the assistant text plus the recorded events are
   capped at 16 MiB. Past that, the run fails with a named reason and the agent
   is killed.

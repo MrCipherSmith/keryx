@@ -15,6 +15,7 @@ Routing pointers. Everything else is in [`routing.md`](routing.md) — read it o
 | spend, confirmations, signatures, gate outcomes across flows | `keryx governance report` |
 | secrets, PII, prompt injection | `keryx security check-output` |
 | implement, review, refactor, plan | `skills/catalog.md` |
+| dispatch unattended work from a flow, or drive one external agent directly | `keryx trigger run/list/status`, `keryx agents external run` |
 
 - Code search goes through `keryx ctx rg`, never bare `rg`/`grep`.
 - The graph answers from the last `keryx gdgraph build`, not the working tree. Rebuild after adding, renaming or moving files, or say the answer predates them.

@@ -47,3 +47,37 @@ the work.
 - `flow init --owner "<name>"` / `flow owner set <id> --owner "<name>" --reason
   "<why>"` names who is accountable; never inferred. Opted-in flows fail
   `flow complete` while no owner is set.
+
+## Unattended dispatch (triggers, and `agents external run`)
+
+A flow can advance without a human turn. `keryx trigger list` shows declared
+entries; `status [<name>]` shows the last recorded outcome; `run <name>`
+performs one pass by hand; `schedule <name>` prints the cron/systemd line for
+an external scheduler (keryx runs no daemon of its own); `install`/
+`uninstall` manage the git hook blocks for event-fired entries. A `flow-next`
+action without a `dispatch` block only REPORTS the flow's next task; with one
+it DISPATCHES a keryx agent, unattended, to work that task in a throwaway
+worktree and record exactly one closing fact (`task done` only on a green
+`keryx health gate`, otherwise `attempt failed|blocked`). A killed dispatch's
+spend reservation is closed with `keryx trigger resolve <runId> --spent
+<usd>`. Full reference: `keryx trigger --help`.
+
+Unattended means the same floor everywhere in keryx, not just for triggers:
+every call that would ask a human is DENIED and recorded rather than
+guessed; `permissionMode: "trust"` only runs shell commands inside the
+hardened Linux sandbox (network off, home hidden, allow-listed env) and
+refuses to start without it; `"ask"` in an unattended run is read-only, never
+a silent yes. This is a floor, not a full boundary — read what still is not
+contained before trusting a run.
+
+`keryx agents external run <id> --task "<text>" [--unattended] [--write]`
+drives one third-party ACP/CLI agent as a subprocess under the same policy —
+a different mechanism from a trigger's own dispatch (which runs keryx's own
+agent loop). keryx controls: the permission bridge (clamped to `ask` for a
+foreign agent), filesystem confinement to the disposable worktree, and a
+`--write` run's patch, which is captured but **never applied**. keryx does
+NOT control what the foreign agent's own tools do outside ACP messages, or
+its MCP calls, which bypass the permission bridge. See
+`docs/docs/guides/acp-client.md` for the full contract, including the output
+size bounds (a stderr-only flood and an output flood both end the run with a
+named reason, not the timeout).
