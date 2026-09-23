@@ -48,6 +48,7 @@
 // Pure: the parent environment is a parameter, never read from a global.
 
 import { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from "../harness/external/env";
+import { savedCredentialEnvKeys } from "../lib/shell-config";
 
 /**
  * Names that survive despite looking like they should not.
@@ -306,22 +307,52 @@ export type McpChildEnvInput = {
   readonly parent: Readonly<Record<string, string | undefined>>;
   /** The server's own `env` block, already variable-expanded. Applied last. */
   readonly serverEnv?: Record<string, string> | undefined;
+  /**
+   * Overridden in tests; defaults to {@link savedCredentialEnvKeys}, the
+   * live record of what THIS process loaded from its own saved config. See
+   * that function's doc comment for why this exists as a separate strip
+   * from {@link isDeniedForMcpChild}.
+   */
+  readonly savedCredentialKeys?: ReadonlySet<string> | undefined;
 };
 
 /**
- * The parent environment minus everything {@link isDeniedForMcpChild} names,
- * plus whatever the server's own `env` declares.
+ * The parent environment minus everything {@link isDeniedForMcpChild} names
+ * and minus every variable keryx itself loaded from its saved credential
+ * config, plus whatever the server's own `env` declares.
  *
- * The server's block is applied AFTER the strip, deliberately: an operator
- * who writes `"env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"}` has asked for that
- * key to go to that server, by name, in a file they wrote. The strip is
- * about what leaks by default, not about overruling an explicit instruction.
+ * THE ONE PLACE a launched MCP server's environment is built — `keryx shell`
+ * (via `createMcpRuntime` → `defaultConnect`), `keryx mcp doctor`, and an
+ * ACP client's own servers (`startAcpSessionMcp` → `defaultConnect`) all
+ * funnel through this function rather than each carrying its own copy.
+ *
+ * Two independent strips, for two independent reasons:
+ *
+ *   - {@link isDeniedForMcpChild} strips by SHAPE: a name or value that
+ *     LOOKS like a credential (`*_KEY`, `*_TOKEN`, `://user:pass@`, …),
+ *     whoever set it and however it got into the parent environment.
+ *   - the saved-credential strip removes by NAME: keryx loads a provider's
+ *     saved key into `process.env` so its OWN providers can find it
+ *     (`applySavedApiKeys`/`noteSavedCredentialEnv`), and a custom provider
+ *     in `llm-providers.json` may keep its key under any name at all — one
+ *     without KEY/TOKEN/SECRET in it survives the shape strip untouched.
+ *     `savedCredentialEnvKeys()` is the exact list of what THIS process
+ *     loaded, so it is removed by name, not by guessing at its shape.
+ *
+ * The server's block is applied AFTER both strips, deliberately: an
+ * operator who writes `"env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"}` has asked
+ * for that key to go to that server, by name, in a file they wrote. The
+ * strips are about what leaks by default, not about overruling an explicit
+ * instruction — even when the name is one keryx itself loaded from saved
+ * config.
  */
 export function buildMcpChildEnv(input: McpChildEnvInput): Record<string, string> {
+  const saved = input.savedCredentialKeys ?? savedCredentialEnvKeys();
   const env: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(input.parent)) {
     if (value === undefined) continue;
+    if (saved.has(key)) continue;
     if (isDeniedForMcpChild(key, value)) continue;
     env[key] = value;
   }

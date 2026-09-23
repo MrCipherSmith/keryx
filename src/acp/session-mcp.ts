@@ -13,8 +13,11 @@
 //     the shell and `keryx mcp doctor` share, which spawns through
 //     `connectStdioMcpServer` (`../mcp-client/client.ts`) with the child's
 //     stderr piped and discarded, and builds the child's environment with
-//     `buildMcpChildEnv` — keryx's own credentials stripped, the entry's `env`
-//     applied on top.
+//     `buildMcpChildEnv` (`../mcp-servers/spawn-env.ts`) — keryx's own
+//     credential-SHAPED names stripped, every variable keryx itself loaded
+//     from its saved config stripped BY NAME too, the entry's `env` applied
+//     on top of both. One strip, used by every surface that launches an MCP
+//     server — this module no longer keeps its own copy of it.
 //   - `createMcpInteractiveTools` (`../mcp-servers/tools.ts`): the stable
 //     `search_tool`/`use_tool` pair. `use_tool` is `risk: "destructive"`, so
 //     every call goes through the agent's own approval branch — which in an ACP
@@ -38,7 +41,6 @@
 
 import { createHash } from "node:crypto";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
-import { savedCredentialEnvKeys } from "../lib/shell-config";
 import { mergeCatalogs, type ServerCatalog } from "../mcp-servers/catalog";
 import type { ResolvedMcpServer } from "../mcp-servers/config";
 import { closeServers, startServers, type ConnectFn, type ServerState } from "../mcp-servers/manager";
@@ -254,28 +256,6 @@ export function acpMcpSetKey(parsed: ParsedAcpMcpServers): string {
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
-/**
- * The parent environment a client server's own is derived from: keryx's,
- * minus every variable keryx itself loaded from its saved credentials.
- *
- * `keryx acp` resolves its provider the shell's way, which loads saved API
- * keys into `process.env` (`applySavedApiKeys`). `buildMcpChildEnv` strips
- * credential-SHAPED names, but a custom `llm-providers.json` provider may keep
- * its key under any name at all — one without KEY/TOKEN/SECRET in it would
- * reach a client's MCP server. `savedCredentialEnvKeys()` is the exact list of
- * what was loaded, so it is removed by name, not by shape.
- */
-export function acpMcpParentEnv(
-  env: Readonly<Record<string, string | undefined>>,
-  saved: ReadonlySet<string> = savedCredentialEnvKeys(),
-): Record<string, string | undefined> {
-  const out: Record<string, string | undefined> = {};
-  for (const [key, value] of Object.entries(env)) {
-    if (!saved.has(key)) out[key] = value;
-  }
-  return out;
-}
-
 /** The running servers of one ACP session. */
 export interface AcpSessionMcp {
   /** Settles once every dial (including a `revive`) has connected or failed. Never rejects. */
@@ -301,7 +281,12 @@ export interface AcpSessionMcp {
 }
 
 export interface StartAcpSessionMcpOptions {
-  /** The parent environment the child's is derived from (secrets stripped). `process.env` otherwise. */
+  /**
+   * The parent environment the child's is derived from. `process.env`
+   * otherwise. Credential-shaped names and keryx's own saved-config names are
+   * stripped downstream, inside `defaultConnect` → `buildMcpChildEnv` — not
+   * here; see that function's doc comment.
+   */
   readonly env?: Record<string, string | undefined>;
   /** Overridden in tests; the shared dial procedure otherwise. */
   readonly connect?: ConnectFn;
@@ -327,7 +312,7 @@ export function startAcpSessionMcp(parsed: ParsedAcpMcpServers, options: StartAc
   // The kills an abort starts — awaited by `close()`, so "stopped" means the
   // child is gone rather than signalled (see `runtime.ts`'s `KILL_GRACE_MS`).
   const kills: Array<Promise<void>> = [];
-  const env = acpMcpParentEnv(options.env ?? process.env);
+  const env = options.env ?? process.env;
   const connect: ConnectFn = options.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills));
 
   let states: readonly ServerState[] = parsed.stdio.map((server) => ({

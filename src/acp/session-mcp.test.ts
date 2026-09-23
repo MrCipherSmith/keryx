@@ -9,7 +9,6 @@ import type { ConnectFn } from "../mcp-servers/manager";
 import { MAX_TOOL_RESULT_BYTES } from "../mcp-servers/tools";
 import { AcpError } from "./jsonrpc";
 import {
-  acpMcpParentEnv,
   acpMcpSetKey,
   MIN_SCRUBBED_SECRET_LENGTH,
   parseAcpMcpServers,
@@ -179,12 +178,24 @@ describe("T13 — tool output is scrubbed too (AC6)", () => {
   });
 });
 
-describe("T13 — keryx's saved credentials never reach a client server's environment", () => {
-  test("every variable keryx loaded from its saved config is removed by name, whatever it is called", () => {
-    const env = { PATH: "/bin", MY_LLM_GATEWAY: "saved-value", HOME: "/h" };
-    expect(acpMcpParentEnv(env, new Set(["MY_LLM_GATEWAY"]))).toEqual({ PATH: "/bin", HOME: "/h" });
-  });
-});
+// T13/flow-296 AC3 — keryx's saved credentials never reach a client server's
+// environment.
+//
+// Flow 287 gave this module its OWN copy of the saved-credential strip
+// (`acpMcpParentEnv`, unit-tested right here). Flow 296 found `keryx shell`
+// had no equivalent at all — `createMcpRuntime` passed `process.env` straight
+// through to `defaultConnect` — and moved the strip into `buildMcpChildEnv`
+// (`../mcp-servers/spawn-env.ts`), the one function `defaultConnect` already
+// calls for every dial this module makes too (see `startAcpSessionMcp`
+// above: `options.connect ?? ((server) => defaultConnect(server, env, …))`,
+// with no pre-strip of `env` any more). There is no `acpMcpParentEnv` left to
+// unit-test in isolation here; the strip's own coverage now lives in
+// `spawn-env.test.ts` (`buildMcpChildEnv`, including the default parameter
+// that reaches keryx's real saved-credential record), and the end-to-end
+// proof that THIS path benefits — a custom-named provider key saved via
+// `auth.json`, an ACP client's own MCP server spawned for real, the child
+// never seeing it — is `mcp-servers.process.test.ts`'s
+// "flow 296 AC1" describe block.
 
 describe("T13 — the set key", () => {
   test("the same list gives the same key; a different env value, command or root does not", () => {

@@ -430,6 +430,38 @@ describe("AC1/AC2 — provider resolution with no --fixture", () => {
   }, TIMEOUT_MS);
 });
 
+describe("flow 296 AC1 — a saved credential under a name with none of KEY, TOKEN or SECRET never reaches a client server", () => {
+  test("a provider key keryx loaded from auth.json under a custom name is stripped before a client's MCP server is spawned", async () => {
+    const customEnvVar = "MY_LLM_GATEWAY";
+    // `XDG_DATA_HOME` is `root` (see the test above), so this is the config
+    // `applySavedApiKeys` reads. `keryx acp`'s `resolveTuiStartup` runs it at
+    // startup exactly as `keryx shell` does (`commands/acp.ts`'s own comment
+    // on the call) — `apiKeys` is a plain envKey → value map, so a name that
+    // is neither a known provider's nor KEY/TOKEN/SECRET-shaped is loaded
+    // into `process.env` and recorded by `noteSavedCredentialEnv` the same as
+    // any other saved key.
+    mkdirSync(path.join(root, "keryx"), { recursive: true });
+    writeFileSync(
+      path.join(root, "keryx", "auth.json"),
+      JSON.stringify({ provider: "ollama", model: "qwen3:8b", apiKeys: { [customEnvVar]: sentinel } }),
+    );
+    const client = new AcpProcessClient({ cwd: projectDir, dataDir, homeRoot: root, env: sandboxEnv() });
+    try {
+      await initialize(client);
+      await newSession(client, [echoEntry([{ name: "ECHO_SERVER_REPORT_VAR", value: customEnvVar }])]);
+      await fileAppears(pidFile);
+      const started = JSON.parse(readFileSync(pidFile, "utf8")) as { reportedVarPresent?: boolean };
+      // Fails without the fix: `buildMcpChildEnv` used to strip only
+      // credential-SHAPED names, and `MY_LLM_GATEWAY` matches none of them —
+      // the child saw it.
+      expect(started.reportedVarPresent).toBe(false);
+      await client.end();
+    } finally {
+      await client.kill();
+    }
+  }, TIMEOUT_MS);
+});
+
 describe("T13 — a server that only a signal stops (ECHO_SERVER_IGNORE_EOF=1)", () => {
   const stubborn = () => echoEntry([{ name: "ECHO_SERVER_IGNORE_EOF", value: "1" }]);
 

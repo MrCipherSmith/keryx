@@ -3761,13 +3761,32 @@ in them may be able to push the tool's identity out of view, and an
 "always" grant would store a pattern the model chose in your permission
 file.
 
-**Environment.** A server is spawned with your environment minus anything
-credential-shaped: provider keys (`ANTHROPIC_*`, `OPENAI_API_KEY`,
-`GEMINI_API_KEY`, …), forge and cloud tokens (`GITHUB_TOKEN`, `NPM_TOKEN`,
-`AWS_*`), `SSH_AUTH_SOCK`, the whole `KERYX_*` namespace, and any variable
-whose name says it holds a token, key, password or credential. A server that
-genuinely needs one takes it explicitly with `-e`, which is a decision you
-made rather than a default you inherited. Its stderr is captured, not
+**Environment.** A server is spawned with your environment minus two things,
+stripped independently and for independent reasons — the same strip, built
+once in `buildMcpChildEnv` and used by every surface that launches an MCP
+server (`keryx shell`, `keryx mcp doctor`, and an ACP client's own servers
+under `keryx acp`; see "MCP servers from the client" above):
+
+- **Anything credential-SHAPED**, by name or by value: provider keys
+  (`ANTHROPIC_*`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …), forge and cloud
+  tokens (`GITHUB_TOKEN`, `NPM_TOKEN`, `AWS_*`), agent sockets
+  (`SSH_AUTH_SOCK`), credential-file pointers (`NETRC`, `KUBECONFIG`, …), the
+  whole `KERYX_*` namespace, any variable whose name says it holds a token,
+  key, password or credential, and any value shaped like
+  `scheme://user:pass@host` wherever it turns up.
+- **Every variable keryx itself loaded from your saved config**, removed by
+  the exact NAME keryx recorded when it loaded it — whatever that name is
+  called. This catches what the shape rule cannot: a custom provider in
+  `llm-providers.json` may keep its key under a name with none of
+  KEY/TOKEN/SECRET in it (`MY_LLM_GATEWAY`, say), and keryx loaded it into its
+  own process so its provider could find it. That name would otherwise reach
+  every server you launch, indistinguishable from a variable you exported
+  yourself.
+
+A server that genuinely needs one of these takes it explicitly — `-e` for a
+stdio server, its own `env` entry either way — which is a decision you made
+rather than a default you inherited; an explicit entry always wins over both
+strips, even for a name keryx itself loaded. Its stderr is captured, not
 inherited, so it cannot write to your terminal.
 
 ```

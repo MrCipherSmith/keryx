@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from "../harness/external/env";
+import { noteSavedCredentialEnv, savedCredentialEnvKeys } from "../lib/shell-config";
 import { buildMcpChildEnv, isDeniedForMcpChild } from "./spawn-env";
 
 describe("a third-party MCP server does not inherit keryx's credentials", () => {
@@ -241,6 +242,63 @@ describe("what it does NOT do", () => {
   test("an undefined parent value is dropped, not copied as the string 'undefined'", () => {
     const env = buildMcpChildEnv({ parent: { A: undefined, B: "b" } });
     expect(env).toEqual({ B: "b" });
+  });
+});
+
+describe("keryx's own saved-credential names never reach a launched MCP server (flow 296 AC1/AC2)", () => {
+  // AC1: `keryx acp` and `keryx shell` both resolve providers by loading
+  // saved keys into `process.env` (`applySavedApiKeys`/`noteSavedCredentialEnv`
+  // in `../lib/shell-config`). A CUSTOM `llm-providers.json` provider may keep
+  // its key under any name at all — one with none of KEY/TOKEN/SECRET in it
+  // survives `isDeniedForMcpChild`'s shape sweep untouched, so this needs its
+  // own strip, by the exact name keryx recorded.
+  test("a saved provider key under a name with none of KEY, TOKEN or SECRET is stripped", () => {
+    const env = buildMcpChildEnv({
+      parent: { PATH: "/usr/bin", MY_LLM_GATEWAY: "saved-value", HOME: "/home/u" },
+      savedCredentialKeys: new Set(["MY_LLM_GATEWAY"]),
+    });
+    expect(env).toEqual({ PATH: "/usr/bin", HOME: "/home/u" });
+  });
+
+  test("an ordinary variable that merely happens to share no saved name still gets through", () => {
+    const env = buildMcpChildEnv({
+      parent: { PATH: "/usr/bin", OTHER_THING: "x" },
+      savedCredentialKeys: new Set(["MY_LLM_GATEWAY"]),
+    });
+    expect(env).toEqual({ PATH: "/usr/bin", OTHER_THING: "x" });
+  });
+
+  // AC2: an operator who writes the server's OWN `env` block by that exact
+  // name has asked for it, in a file they authored — explicit configuration
+  // wins over the saved-key strip, same as it already wins over the
+  // shape-based deny list (see "the server's own env block" below).
+  test("the server's own env block hands over a saved-credential name deliberately", () => {
+    const env = buildMcpChildEnv({
+      parent: { MY_LLM_GATEWAY: "saved-value" },
+      serverEnv: { MY_LLM_GATEWAY: "operator-chosen" },
+      savedCredentialKeys: new Set(["MY_LLM_GATEWAY"]),
+    });
+    expect(env.MY_LLM_GATEWAY).toBe("operator-chosen");
+  });
+
+  // Not an isolated Set this time: proves the REAL wiring — the function's
+  // default parameter reaches into `../lib/shell-config`'s live record of
+  // what THIS process loaded, the same record `keryx shell`'s provider
+  // resolution and `keryx acp`'s populate via `noteSavedCredentialEnv`. A
+  // uniquely-named variable, because that record is process-lifetime and
+  // add-only — this must not collide with a name another test in this
+  // process asserts about.
+  test("with no override, the default reaches keryx's real saved-credential record", () => {
+    // NOT `KERYX_`-prefixed: that namespace is already swept by
+    // `isDeniedForMcpChild` for an unrelated reason (AC10, the bus
+    // identity), which would mask whether THIS strip — the saved-credential
+    // one — is what removed it.
+    const marker = `TEST_MARKER_SAVED_GATEWAY_${Math.random().toString(36).slice(2)}`;
+    noteSavedCredentialEnv([marker]);
+    expect(savedCredentialEnvKeys().has(marker)).toBe(true);
+
+    const env = buildMcpChildEnv({ parent: { PATH: "/usr/bin", [marker]: "saved-value" } });
+    expect(env).toEqual({ PATH: "/usr/bin" });
   });
 });
 
