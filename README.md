@@ -38,12 +38,12 @@ recorded update with a reason, and completes only when every one is confirmed
 against recorded evidence — under a named owner, with every confirmation and
 the completion itself signed.
 
+## Quick start
+
+**Requirements:** `git` and `bun` (>= 1.3.14 — older Bun can close the terminal input of `keryx shell`; see [onboarding](docs/docs/onboarding.md#bun-version)).
+
 ```bash
 npm install -g @mrciphersmith/keryx
-
-cd path/to/your-project
-keryx init --yes
-keryx gdgraph build
 ```
 
 No bun, git, or node? Install the standalone binary instead — same CLI, no
@@ -53,7 +53,71 @@ runtime dependency:
 curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install-binary.sh | bash
 ```
 
+> **The package is scoped, and the scope matters.** The unscoped name `keryx` on
+> npm belongs to [an unrelated project](https://github.com/actionhero/keryx).
+> Install `@mrciphersmith/keryx`; the executable it installs is called `keryx`.
+
+All four install paths — the npm package above, the standalone binary, the
+managed installer (`~/.keryx` with a wrapper in `~/.local/bin`) and a
+project-local install — are compared side by side, with what each one needs on
+the machine first, in the [onboarding guide](docs/docs/onboarding.md).
+
 Local-first · deterministic core · offline by default · MIT
+
+```bash
+cd path/to/your-project
+keryx init --yes
+keryx gdgraph build          # code dependency graph
+keryx test analyze           # testing context report
+keryx health run --changed   # normalized health report
+keryx dash                   # human admin dashboard
+```
+
+`keryx init` creates the `.metaproject/` workspace and connects your existing
+`AGENTS.md` / `CLAUDE.md` entrypoints to it, so agents are routed to the right
+module automatically.
+
+### Connect a model provider
+
+`keryx shell` needs one configured provider. The first run with none
+configured opens a picker: choose a built-in provider (Anthropic, Ollama,
+OpenRouter, DeepSeek, Z.AI, Cerebras, Groq, Moonshot, Grok, …) or add a custom
+OpenAI-compatible endpoint, paste an API key if the provider needs one, then
+pick a model.
+
+To set one up before the first run, or add another later:
+
+```bash
+keryx providers list         # providers you already have configured
+keryx auth login <provider>  # subscription login (device code / OAuth) or API key
+```
+
+Inside a running session, `/provider` reopens the same add/reconfigure wizard
+and `/connect` switches between providers you already configured.
+
+### Your first session
+
+```bash
+keryx shell
+```
+
+Bare `keryx` prints the main commands; `keryx shell` starts the agent harness
+described [below](#the-agent-harness). A few commands worth knowing from the
+first session:
+
+- `/theme [name]` opens the theme picker; a choice applies immediately.
+- `/mode [ask|trust|auto]` shows or switches the permission mode for the rest
+  of the session — see [permission modes](docs/docs/guides/permission-modes.md).
+- `/help` lists every slash command available in the current mode.
+- `/resume`, `/sessions`, `/new` move between sessions from inside the shell;
+  `keryx sessions list` does the same from outside it.
+
+### Where to go next
+
+Full documentation site: **<https://mrciphersmith.github.io/keryx/>**, starting
+with [Onboarding](docs/docs/onboarding.md) for the complete first-run
+walkthrough. Run `keryx <command> --help` for the live flag surface of any
+command.
 
 ## Why keryx
 
@@ -177,6 +241,15 @@ keryx shell --no-tui                          # classic readline shell
 keryx shell --chat                            # chat without tools
 keryx shell --provider ollama --model gemma4:e4b     # fully local
 ```
+
+### Turn budgets
+
+Agent mode protects each user turn with nested unique-signature budgets: `48`
+total, including at most `40` risk-`read` signatures and `8` non-read (or
+unknown-risk) signatures. An identical `tool + normalized input` may retry up
+to three times while occupying one unique slot. Reaching a limit exactly still
+gives the model a normal round to answer; only a new signature beyond a pool or
+a no-progress repeat loop forces the final tool-free wrap-up.
 
 ### Version update advisory
 
@@ -553,44 +626,6 @@ Grouped by what you are trying to do, not by internal module layout.
 `keryx modules` toggles modules by manifest key; `keryx status` shows what is
 enabled. Nine modules are on after `init`; `mcp` is opt-in.
 
-## Quick start
-
-**Requirements:** `git` and `bun` (>= 1.3.14 — older Bun can close the terminal input of `keryx shell`; see [onboarding](docs/docs/onboarding.md#bun-version)).
-
-```bash
-npm install -g @mrciphersmith/keryx
-
-cd path/to/your-project
-keryx init
-keryx gdgraph build          # code dependency graph
-keryx test analyze           # testing context report
-keryx health run --changed   # normalized health report
-keryx dash                   # human admin dashboard
-```
-
-`keryx init` creates the `.metaproject/` workspace and connects your existing
-`AGENTS.md` / `CLAUDE.md` entrypoints to it, so agents are routed to the right
-module automatically.
-
-> **The package is scoped, and the scope matters.** The unscoped name `keryx` on
-> npm belongs to [an unrelated project](https://github.com/actionhero/keryx).
-> Install `@mrciphersmith/keryx`; the executable it installs is called `keryx`.
-
-All four install paths — the npm package above, the standalone binary, the
-managed installer (`~/.keryx` with a wrapper in `~/.local/bin`) and a
-project-local install — are compared side by side, with what each one needs on
-the machine first, in the [onboarding guide](docs/docs/onboarding.md).
-
-Bare `keryx` prints the main commands; `keryx shell` starts the agent harness
-described [above](#the-agent-harness).
-
-Agent mode protects each user turn with nested unique-signature budgets: `48`
-total, including at most `40` risk-`read` signatures and `8` non-read (or
-unknown-risk) signatures. An identical `tool + normalized input` may retry up
-to three times while occupying one unique slot. Reaching a limit exactly still
-gives the model a normal round to answer; only a new signature beyond a pool or
-a no-progress repeat loop forces the final tool-free wrap-up.
-
 ## Agent integrations
 
 | Runtime | Integration |
@@ -765,7 +800,7 @@ Run `keryx <command> --help` for the live flag surface of any command.
 ```bash
 bun ./src/cli.ts init
 bun ./src/cli.ts status
-bun run check      # typecheck + tests
+bun run check      # lint + typecheck (src and scripts) + tests
 ```
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).

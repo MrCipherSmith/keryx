@@ -296,6 +296,106 @@ The `security` module is enabled by default, so `init` asks whether to enable it
 
 Every command exposes more subcommands and flags — run `keryx <command> --help`, or `keryx` with no arguments for the full usage block.
 
+### Step 3 — Your first `keryx shell` session
+
+The workspace and the agent harness are separate things: `init` (above) sets
+up `.metaproject/`, and `keryx shell` is the interactive agent that reads it.
+Start it from the project root:
+
+```bash
+keryx shell
+```
+
+#### Connect a provider
+
+`keryx shell` needs one configured model provider before it can run a turn.
+
+- **No provider configured yet.** The first run opens a picker: choose a
+  built-in provider (Anthropic, Ollama, OpenRouter, DeepSeek, Z.AI, Cerebras,
+  Groq, Moonshot, Grok, or the offline `fake` provider for deterministic
+  runs) or select "add custom provider" to register any OpenAI-compatible
+  endpoint. If the provider needs a key, you are prompted for it before the
+  model list loads (so a gateway that 401s without one still shows a real
+  model list, not a stale fallback). Pick a model and the session starts.
+- **Set one up before the first run, or add another later**, from outside the
+  shell:
+
+  ```bash
+  keryx providers list         # every provider you already have configured,
+                                # and its model family
+  keryx auth login <provider>  # subscription login (device code / OAuth,
+                                # where the provider supports it) or API key
+  keryx auth status <provider> # is this provider currently authorized
+  keryx auth logout <provider> # revoke a stored credential
+  ```
+
+- **Inside a running session**, `/connect` switches between providers you
+  already configured (no key/URL prompts); `/provider` opens the same
+  add/reconfigure wizard the startup picker used, so it also covers a
+  provider you have not set up yet. `/model` opens a model picker for the
+  current provider; in chat mode (`--no-tui --chat`) it instead takes an
+  argument (`/model <name>`) and `/models` lists what is available as a
+  numbered menu.
+
+#### Pick a theme
+
+```
+/theme
+```
+
+opens the theme picker in the running session; `/theme <name>` applies one
+directly. The choice applies immediately — prose, headings, diffs and code
+fences repaint in the new palette without restarting the session.
+
+#### Choose a permission mode
+
+Every session starts in `ask` mode: a mutating tool call (shell, write,
+destructive) is confirmed before it runs. Switch it for the rest of the
+session with:
+
+```
+/mode
+```
+
+with no argument, `/mode` shows the current mode and what it means; `/mode
+trust` auto-approves safe calls but still asks before anything destructive or
+credential-touching; `/mode auto` skips confirmation for everything except a
+credential-touching command, which no mode ever auto-approves. This is a
+session-level control only — `keryx harness run`/`exec`, `keryx serve` and MCP
+sit above it, unconditionally policy-gated either way. See the
+[permission modes guide](guides/permission-modes.md) for the full picture,
+including `keryx shell --trust`/`--auto` to start in a given mode.
+
+#### Slash-command basics
+
+Every interactive command starts with `/`. `/help` lists what is available in
+the current mode (agent mode has tools and a TUI; chat mode is a plain
+conversation with no tools). A few you will reach for early, beyond the ones
+above:
+
+- `/status` — session identity, context window and limits, workspaces, flows.
+- `/compact [focus]` — compact the model context, keeping the full transcript
+  on disk.
+- `/interrupt` — stop the running main turn without losing the session.
+
+`keryx <command> --help`, or bare `keryx`, lists the full CLI surface outside
+the shell.
+
+#### Sessions
+
+Sessions are durable JSONL transcripts per project, so closing a session never
+loses it:
+
+- `/resume` — resume a prior session in this project (also `keryx shell -r
+  [id]`, or `-c`/`--continue` for the most recent one).
+- `/sessions` — open the session list and switch to one.
+- `/new` (or `/clear`) — start a new session; the old one stays on disk.
+
+From outside the shell, `keryx sessions list` shows the same sessions for the
+current project, `keryx sessions fork <id>` branches one into a new session
+that keeps its ancestry, and `keryx sessions export <id>` writes its
+transcript out.
+
 ## After pulling changes
 
 When you pull updates to the toolkit or your teammates' workspace changes, refresh the managed runtime and service layer:

@@ -1,6 +1,11 @@
 # Documentation remediation — README and the published docs site
 
-**Status.** Specification ready. Nothing implemented.
+**Status.** **Closed.** All nine findings verified fixed, against `main` on
+flow 302 (`docs/revision-onboarding`, base `d102d845`, release `0.2.157`).
+Verification method matches the one this package itself set: each fix was
+confirmed by running or reading the current code/docs, not by trusting a past
+commit message. See "Closure" below for where each finding was fixed and how
+it is now enforced against regression.
 **Date.** 2026-09-03, against `main` at `39b832f3` (release 0.2.76).
 **Trigger.** A README review that started from one observation — "installation
 via Homebrew, we don't have that" — and found the claim was not merely stale but
@@ -339,3 +344,79 @@ assets. Without it, making the formula correct once buys exactly one release of
 accuracy. It belongs in a distribution package, not a documentation one — but
 Phase 1 should not be read as closing the Homebrew question, only as ending the
 false claim.
+
+## Closure
+
+Verified during flow 302's documentation review (`docs/revision-onboarding`,
+base `d102d845`, release `0.2.157`). Each line below names where the fix lives
+today and, where one exists, the test that keeps it from regressing silently.
+
+- **F1 — Homebrew advertised, could not work.** `README.md` no longer offers
+  `brew install`; a grep for `homebrew`/`brew install` across `README.md` and
+  `docs/docs/` returns nothing (the one `brew install ripgrep` hit in
+  `docs/docs/limitations.md` is installing ripgrep, not keryx).
+  `CHANGELOG.md:2688` ("The Homebrew install is no longer advertised") amends
+  the original claim instead of rewriting history. AC1/AC2 satisfied.
+- **F2 — npm install path absent from the published site.** `docs/docs/onboarding.md`
+  ("### npm package (the default)") documents `npm install -g @mrciphersmith/keryx`
+  as the default path, with the standalone binary, managed clone and
+  project-local clone alongside it and each one's prerequisite named; `README.md`'s
+  Quick start (flow 302, AC1/AC2) leads with the same command. AC3/AC4 satisfied.
+- **F3 — Slate invisible outside its own guide.** `docs/docs/architecture.md`'s
+  module map has a `slate` row; `docs/docs/modules.md` has a `## slate` section;
+  `docs/docs/cli-reference.md`'s `## mcp` section documents `slate.open` /
+  `slate.writeSeed` / `slate.close` and their `slate_transport_denied` refusal
+  beside the `sac.*` tools; `docs/docs/index.md` links `guides/slate.md` (see F6).
+  AC5 satisfied.
+- **F4 — SAC under-documented, three concrete errors.** `modules.md`'s `## sac`
+  section states the actual classification (not a default `init` module,
+  toggled with `keryx modules enable sac`) rather than the false "no toggle"
+  claim. `cli-reference.md`'s `confirm-review` documents `--acknowledge-security`.
+  All five previously-undocumented subcommands (`archive`, `rename`,
+  `remove-resource`, `list-proposals`, `dismiss-candidate`) and `list
+  --include-archived` are documented, and `modules.md`'s table includes
+  `confirm-review`. AC6/AC7 satisfied and enforced by
+  `src/cli-reference-coverage.test.ts`'s `"the CLI reference documents every
+  keryx workspace subcommand"` test, which asserts `--acknowledge-security`
+  and every dispatched subcommand by name, deriving the expected set from
+  `commands/workspace.ts` rather than restating it.
+- **F5 — `MODULE_COMMANDS` stale for `sac` (code).** `src/commands/module-commands.ts`
+  lists all seventeen `sac` subcommands from one source of truth (no more
+  hand-written duplicates in `init.ts`/`update.ts`); `module-commands.test.ts`
+  derives the expected set from `workspace.ts`'s own dispatch and fails on
+  divergence — the same test that first found `dismiss-candidate` missing
+  everywhere. Item 13 of the Phase 3 plan satisfied (this finding predates
+  the plan's lettered ACs).
+- **F6 — `index.md` lists seven of ten guides.** `docs/docs/index.md` now lists
+  all thirteen guides in the `mkdocs.yml` nav, plus every one of the nine
+  top-level pages. Enforced by two tests in
+  `src/cli-reference-coverage.test.ts`: `"the docs index lists exactly the
+  guides the mkdocs nav publishes"` (pre-existing) and `"the docs index lists
+  exactly the top-level pages the mkdocs nav publishes"` (added by flow 302,
+  AC7 — the original test only ever covered `guides/*.md`, not the nine
+  top-level pages). AC8 satisfied.
+- **F7 — `architecture.md` warned about two fixed bugs.** The obsolete
+  `security`-module-toggle and `mcp`-dropped-on-toggle caveats are gone from
+  `architecture.md`; a grep for either claim returns nothing.
+- **F8 — Module map table broken by a stray blank line.** The `sac`/`harness`
+  gap is closed; `src/cli-reference-coverage.test.ts`'s `"the architecture
+  module map is one contiguous table"` test fails if a blank line splits the
+  table again.
+- **F9 — Command surfaces with no reference section.** `cli-reference.md` has
+  `## job` and `## sandbox` sections; the top-level usage banner names
+  `orient`, `workspace`, `metrics` and `job`. Enforced by
+  `src/cli-reference-coverage.test.ts`'s `"every top-level CLI verb has a
+  section in the CLI reference"` and `"the top-level usage banner names every
+  verb the CLI reference documents"` tests, which derive the expected verb
+  list from `CLI_ROUTES` rather than a manually maintained checklist — so a
+  verb added after this package closes still cannot ship undocumented. AC9
+  satisfied.
+
+Flow 302 additionally found and closed two gaps this package never listed,
+each real but neither one of the original nine: `architecture.md`'s and
+`modules.md`'s module maps had no entry at all for `trigger`/`schedule` or
+`governance` — both shipped after this package's 2026-09-03 survey — and
+`SECURITY.md`'s "Supported Versions" table still said `0.1.x`, three minor
+lines and well over a hundred releases behind `0.2.157`. Both are corrected;
+neither has a regression test, the same honest gap the rest of this package
+already argues against leaving open.

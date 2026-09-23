@@ -229,3 +229,28 @@ test("the docs index lists exactly the guides the mkdocs nav publishes", async (
 
   expect([...indexGuides].sort()).toEqual([...navGuides].sort());
 });
+
+// Flow 302 (AC7): the guides test above only ever covered `guides/*.md` — the
+// nine top-level pages (architecture, harness, modules, cli-reference, …)
+// were never checked against the nav at all, so one could be added to
+// `mkdocs.yml` and never linked from the index, or removed from the index
+// and left dangling in the nav, with nothing here noticing either way.
+test("the docs index lists exactly the top-level pages the mkdocs nav publishes", async () => {
+  const [index, mkdocs] = await Promise.all([readFile(DOCS_INDEX, "utf8"), readFile(MKDOCS, "utf8")]);
+
+  // Nav entries for top-level pages are indented exactly two spaces (nested
+  // "Guides:" entries are indented six); `index.md` is the current page and
+  // never links to itself, so it is excluded from the expectation.
+  const navPages = new Set(
+    Array.from(mkdocs.matchAll(/^ {2}- [^\n]*: ([a-z0-9-]+\.md)$/gm), (m) => m[1]).filter(
+      (name): name is string => name !== undefined && name !== "index.md",
+    ),
+  );
+
+  // Same scrape guard as above.
+  expect(navPages.size).toBeGreaterThan(5);
+
+  const indexPages = new Set(Array.from(index.matchAll(/\(\.\/([a-z0-9-]+\.md)\)/g), (m) => m[1]));
+
+  expect([...indexPages].sort()).toEqual([...navPages].sort());
+});
