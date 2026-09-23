@@ -65,6 +65,14 @@ export function hooksObject(settings: Settings): Settings {
  * security used the same key) is not ours and is not discarded: it is moved to
  * `unmigratedHooks` so a caller that wrote raw entries there does not lose them
  * to a wholesale replace.
+ *
+ * F6 (deliberate behaviour change, decision recorded by the orchestrator):
+ * every JSON surface built on this walker — including orient and claude
+ * security, which previously discarded a pre-existing legacy `hooks` array
+ * outright on that class of installer — now preserves it under
+ * `unmigratedHooks` instead. This is intentionally not "no behaviour change":
+ * the old discard-on-migrate behaviour was itself the bug this generalises
+ * away from.
  */
 export function mergeIntoHookArray(settings: Settings, key: string, group: Settings, sentinel: string): Settings {
   if (Array.isArray(settings.hooks) && settings.hooks.length > 0) {

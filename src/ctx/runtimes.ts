@@ -1,18 +1,17 @@
 import { buildBlockMessage, classifyCommand, type HookClassification } from "./hook-classify";
 import {
-  CTX_GUARD_ANTIGRAVITY,
-  CTX_GUARD_CLAUDE,
-  CTX_GUARD_CODEX,
-  CTX_GUARD_CURSOR,
-  CTX_GUARD_OPENCODE,
-  CTX_GUARD_WINDSURF,
   CTX_HOOK_SENTINEL,
+  HARNESS_ADAPTERS,
+  MANAGED_KEY,
   UNSUPPORTED_CTX_GUARD,
   allowAction,
+  ctxHookCommand,
   managedGroups,
   parseToolName,
   preToolUseMatcher as registryPreToolUseMatcher,
   refusalAction,
+  surfacesOf,
+  type Confidence as IntegrationConfidence,
   type HarnessAdapter,
   type HookAction,
   type Settings as IntegrationSettings,
@@ -20,12 +19,17 @@ import {
 } from "../integrations";
 
 // Multi-harness registry for the gdctx routing guard. This module is a VIEW
-// over `src/integrations` (flow 305, W5-a): every merge/strip/validate
-// function below is the SAME function object registered on the matching
-// `SurfaceAdapter` in `src/integrations/surfaces.ts` — there is exactly one
-// copy of the walker logic (`src/integrations/settings-json.ts`), and this
-// file only re-shapes it into the `CtxRuntime` interface every existing
-// caller and test already imports.
+// over `src/integrations` (flow 305, W5-a): `CTX_RUNTIMES` below is BUILT by
+// mapping over `HARNESS_ADAPTERS` + `surfacesOf(adapter, {subsystem:
+// "ctx-guard"})` (flow 305 review fix, F4) rather than a second hand-written
+// per-runtime literal list — every per-harness fact (confidence, label,
+// paths, group shape/key/container, native search tools, payload codec,
+// decision codec) lives on the `SurfaceAdapter` in
+// `src/integrations/surfaces.ts`, and every merge/strip/validate function
+// below is the SAME function object registered there. There is exactly one
+// copy of the walker logic (`src/integrations/settings-json.ts`) and exactly
+// one copy of the per-runtime facts; this file only re-shapes them into the
+// `CtxRuntime` interface every existing caller and test already imports.
 //
 // What differs per harness is only:
 //   1. WHERE the pre-exec hook is configured (settings path + schema),
@@ -41,12 +45,11 @@ import {
 // Sentinel discipline: managed JSON groups carry `_keryxManaged:"ctx-agent-hooks"`
 // so uninstall removes ONLY our entry and re-install is idempotent.
 
-export { CTX_HOOK_SENTINEL };
-export const MANAGED_KEY = "_keryxManaged";
+export { CTX_HOOK_SENTINEL, MANAGED_KEY };
 
 export type Settings = IntegrationSettings;
 export type { HookAction };
-export type Confidence = "verified" | "experimental";
+export type Confidence = IntegrationConfidence;
 
 /** How a runtime spells an installed hook — see `CtxRuntime.groupShape`. */
 export type GroupShape = "flat" | "nested";
@@ -72,10 +75,6 @@ export interface CtxRuntime {
   customUninstall?(projectRoot: string): Promise<boolean>;
 }
 
-function hookCommand(id: string): string {
-  return `keryx ctx hook ${id}`;
-}
-
 /** The matcher a runtime installs: the shell, plus its own native search tools. */
 export function preToolUseMatcher(runtime: Pick<CtxRuntime, "nativeSearchTools">): string {
   return registryPreToolUseMatcher(runtime.nativeSearchTools);
@@ -93,7 +92,7 @@ export function describeExistingGuard(settings: Settings, runtime: CtxRuntime): 
     container: runtime.groupContainer ?? "hooks",
     key: runtime.groupKey,
     shape: runtime.groupShape,
-    commandMatches: (c) => c === hookCommand(runtime.id),
+    commandMatches: (c) => c === ctxHookCommand(runtime.id),
   });
   if (present.length === 0) return null;
   const stale = present.some((g) => typeof g.matcher !== "string" || g.matcher !== expected);
@@ -121,160 +120,76 @@ export function nativeSearchMessage(tool: string): string {
 
 export { parseToolName, refusalAction, allowAction };
 
-// --- per-harness payload parsers (re-exported for direct callers/tests) ------
-
-import { parseAntigravityCommand, parseCursorCommand, parseToolInputCommand, parseWindsurfCommand } from "../integrations/codecs";
-
-// Exit-2 + stderr (Claude, Codex, Windsurf, OpenCode bridge).
-function exitCodeBlock(command: string, c: HookClassification): HookAction {
-  return refusalAction("claude", buildBlockMessage(command, c));
-}
-function exitCodeAllow(c: HookClassification): HookAction {
-  if (c.escapeReason !== undefined) {
-    const reason = c.escapeReason || "(no reason given)";
-    return { exitCode: 0, stderr: `[keryx ctx] raw command allowed via escape marker — reason: ${reason}\n` };
-  }
-  return { exitCode: 0 };
-}
-
-// Cursor: stdout { permission: "deny", agent_message } / { permission: "allow" }.
-function cursorBlock(command: string, c: HookClassification): HookAction {
-  return refusalAction("cursor", buildBlockMessage(command, c));
-}
-function cursorAllow(_c: HookClassification): HookAction {
-  return { exitCode: 0, stdout: `${JSON.stringify({ permission: "allow" })}\n` };
-}
-
-// Antigravity: stdout top-level { allow_tool, deny_reason }; always exit 0.
-function antigravityBlock(command: string, c: HookClassification): HookAction {
-  return refusalAction("antigravity", buildBlockMessage(command, c));
-}
-function antigravityAllow(_c: HookClassification): HookAction {
-  return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: true })}\n` };
-}
-
-// --- runtime definitions: shaped views over the registry's ctx-guard surfaces
-
-function asRuntime(opts: {
-  id: string;
-  label: string;
-  confidence: Confidence;
-  groupShape: GroupShape;
-  groupKey: string;
-  groupContainer?: string;
-  nativeSearchTools?: readonly string[];
-  parseCommand(payload: string): string | null;
-  block(command: string, c: HookClassification): HookAction;
-  allow(c: HookClassification): HookAction;
-  surface: SurfaceAdapter;
-}): CtxRuntime {
+// --- runtime definitions: built from the registry's ctx-guard surfaces ------
+//
+// One `CtxRuntime` per (adapter, ctx-guard surface) pair. A surface's `id` is
+// only unique WITHIN its own adapter (every JSON ctx-guard surface uses the
+// shared id `"ctx-guard"`), so the runtime's own `id` — the harness id every
+// caller keys off — comes from the adapter, never the surface.
+function runtimeFromSurface(adapterId: string, surface: SurfaceAdapter): CtxRuntime {
+  const decisionCodec = surface.decisionCodec;
   return {
-    id: opts.id,
-    label: opts.label,
-    confidence: opts.confidence,
-    groupShape: opts.groupShape,
-    groupKey: opts.groupKey,
-    ...(opts.groupContainer !== undefined ? { groupContainer: opts.groupContainer } : {}),
-    ...(opts.surface.relativePath !== undefined ? { relativePath: opts.surface.relativePath } : {}),
-    ...(opts.nativeSearchTools !== undefined ? { nativeSearchTools: opts.nativeSearchTools } : {}),
-    parseCommand: opts.parseCommand,
-    block: opts.block,
-    allow: opts.allow,
-    locate: (root) => opts.surface.settingsFile!(root),
-    ...(opts.surface.merge !== undefined ? { merge: opts.surface.merge } : {}),
-    ...(opts.surface.strip !== undefined ? { strip: opts.surface.strip } : {}),
-    ...(opts.surface.validate !== undefined ? { validate: opts.surface.validate } : {}),
+    id: adapterId,
+    label: surface.label ?? adapterId,
+    confidence: surface.confidence,
+    groupShape: surface.groupShape ?? "nested",
+    groupKey: surface.groupKey ?? "",
+    ...(surface.groupContainer !== undefined ? { groupContainer: surface.groupContainer } : {}),
+    ...(surface.relativePath !== undefined ? { relativePath: surface.relativePath } : {}),
+    ...(surface.nativeSearchTools !== undefined ? { nativeSearchTools: surface.nativeSearchTools } : {}),
+    parseCommand: surface.payloadCodec ?? (() => null),
+    block: (command, c) => {
+      const message = buildBlockMessage(command, c);
+      return decisionCodec ? decisionCodec.refuse(adapterId, message) : refusalAction(adapterId, message);
+    },
+    // The escape-reason stderr note only applies to the exit-code signalling
+    // style (claude/codex/windsurf/opencode): cursor/antigravity answer via
+    // `stdout` JSON instead, so a `stdout`-carrying allow action never gets
+    // the note appended — matching the pre-refactor `cursorAllow`/
+    // `antigravityAllow`, which ignored `escapeReason` outright.
+    allow: (c) => {
+      const base = decisionCodec ? decisionCodec.allow(adapterId) : allowAction(adapterId);
+      if (c.escapeReason !== undefined && base.stdout === undefined) {
+        const reason = c.escapeReason || "(no reason given)";
+        return { ...base, stderr: `[keryx ctx] raw command allowed via escape marker — reason: ${reason}\n` };
+      }
+      return base;
+    },
+    locate: (root) => surface.settingsFile!(root),
+    ...(surface.merge !== undefined ? { merge: surface.merge } : {}),
+    ...(surface.strip !== undefined ? { strip: surface.strip } : {}),
+    ...(surface.validate !== undefined ? { validate: surface.validate } : {}),
+    ...(surface.customInstall !== undefined ? { customInstall: surface.customInstall } : {}),
+    ...(surface.customUninstall !== undefined ? { customUninstall: surface.customUninstall } : {}),
   };
 }
 
-export const CLAUDE_RUNTIME: CtxRuntime = asRuntime({
-  id: "claude",
-  label: ".claude/settings.json (PreToolUse)",
-  confidence: "verified",
-  groupShape: "nested",
-  groupKey: "PreToolUse",
-  nativeSearchTools: ["Grep"],
-  parseCommand: parseToolInputCommand,
-  block: exitCodeBlock,
-  allow: exitCodeAllow,
-  surface: CTX_GUARD_CLAUDE,
-});
+const CTX_GUARD_SURFACES: ReadonlyArray<{ adapterId: string; surface: SurfaceAdapter }> = HARNESS_ADAPTERS.flatMap(
+  (adapter) => surfacesOf(adapter, { subsystem: "ctx-guard" }).map((surface) => ({ adapterId: adapter.id, surface })),
+);
 
-export const CODEX_RUNTIME: CtxRuntime = asRuntime({
-  id: "codex",
-  label: ".codex/hooks.json (PreToolUse)",
-  confidence: "verified",
-  groupShape: "nested",
-  groupKey: "PreToolUse",
-  parseCommand: parseToolInputCommand,
-  block: exitCodeBlock,
-  allow: exitCodeAllow,
-  surface: CTX_GUARD_CODEX,
-});
+export const CTX_RUNTIMES: CtxRuntime[] = CTX_GUARD_SURFACES.map(({ adapterId, surface }) =>
+  runtimeFromSurface(adapterId, surface),
+);
 
-export const CURSOR_RUNTIME: CtxRuntime = asRuntime({
-  id: "cursor",
-  label: ".cursor/hooks.json (beforeShellExecution)",
-  confidence: "verified",
-  groupShape: "flat",
-  groupKey: "beforeShellExecution",
-  parseCommand: parseCursorCommand,
-  block: cursorBlock,
-  allow: cursorAllow,
-  surface: CTX_GUARD_CURSOR,
-});
+function runtimeFor(id: string): CtxRuntime {
+  const runtime = CTX_RUNTIMES.find((r) => r.id === id);
+  if (!runtime) throw new Error(`integrations registry: no ctx-guard surface registered for "${id}"`);
+  return runtime;
+}
 
-export const WINDSURF_RUNTIME: CtxRuntime = asRuntime({
-  id: "windsurf",
-  label: ".windsurf/hooks.json (pre_run_command)",
-  confidence: "verified",
-  groupShape: "flat",
-  groupKey: "pre_run_command",
-  parseCommand: parseWindsurfCommand,
-  block: exitCodeBlock,
-  allow: exitCodeAllow,
-  surface: CTX_GUARD_WINDSURF,
-});
-
-export const ANTIGRAVITY_RUNTIME: CtxRuntime = asRuntime({
-  id: "antigravity",
-  label: ".agents/hooks.json (PreToolUse/run_command)",
-  confidence: "experimental",
-  groupShape: "nested",
-  groupKey: "PreToolUse",
-  groupContainer: "keryx-ctx-guard",
-  parseCommand: parseAntigravityCommand,
-  block: antigravityBlock,
-  allow: antigravityAllow,
-  surface: CTX_GUARD_ANTIGRAVITY,
-});
-
-export const OPENCODE_RUNTIME: CtxRuntime = {
-  id: "opencode",
-  label: ".opencode/plugin/keryx-ctx-guard.js",
-  confidence: "experimental",
-  groupShape: "nested",
-  groupKey: "PreToolUse",
-  parseCommand: parseToolInputCommand,
-  block: exitCodeBlock,
-  allow: exitCodeAllow,
-  locate: (root) => CTX_GUARD_OPENCODE.settingsFile!(root),
-  customInstall: (root) => CTX_GUARD_OPENCODE.customInstall!(root),
-  customUninstall: (root) => CTX_GUARD_OPENCODE.customUninstall!(root),
-};
+// Named exports every existing caller/test imports directly, derived from the
+// built list rather than declared a second time.
+export const CLAUDE_RUNTIME: CtxRuntime = runtimeFor("claude");
+export const CODEX_RUNTIME: CtxRuntime = runtimeFor("codex");
+export const CURSOR_RUNTIME: CtxRuntime = runtimeFor("cursor");
+export const WINDSURF_RUNTIME: CtxRuntime = runtimeFor("windsurf");
+export const ANTIGRAVITY_RUNTIME: CtxRuntime = runtimeFor("antigravity");
+export const OPENCODE_RUNTIME: CtxRuntime = runtimeFor("opencode");
 
 // Harnesses with NO scriptable pre-exec gate today. Registered only so the CLI
 // can give a precise "unsupported" message instead of "unknown runtime".
 export const UNSUPPORTED_RUNTIMES: Record<string, string> = UNSUPPORTED_CTX_GUARD;
-
-export const CTX_RUNTIMES: CtxRuntime[] = [
-  CLAUDE_RUNTIME,
-  CODEX_RUNTIME,
-  CURSOR_RUNTIME,
-  WINDSURF_RUNTIME,
-  ANTIGRAVITY_RUNTIME,
-  OPENCODE_RUNTIME,
-];
 
 export function runtimeIds(): string[] {
   return CTX_RUNTIMES.map((r) => r.id);

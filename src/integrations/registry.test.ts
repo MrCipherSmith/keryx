@@ -283,7 +283,11 @@ describe("AC3: every settings file targeted by 2+ surfaces has exactly one Setti
       }
     }
 
-    const multiTarget = [...byPath.entries()].filter(([, ids]) => ids.size >= 1);
+    // >= 2, not >= 1: this block's own claim is about files with more than one
+    // surface racing for ownership — a file with exactly one surface needs no
+    // owner to arbitrate between surfaces at all, so a filter of >= 1 would
+    // pass even if every file had only ever had a single surface.
+    const multiTarget = [...byPath.entries()].filter(([, ids]) => ids.size >= 2);
     expect(multiTarget.length).toBeGreaterThan(0);
 
     const atLeastFour = [".claude/settings.json", ".cursor/hooks.json", ".windsurf/hooks.json", ".codex/hooks.json"];
@@ -331,8 +335,9 @@ describe("AC4: assertRegistryCoherent()", () => {
       sourceDocs: ["test"],
       relativePath: ".cursor/hooks.json",
       // The pre-fix OQ-3 shape: `hooks` declared as an array here, while the
-      // real cursor ctx-guard surface on the same file declares it "object".
-      slots: [{ key: "hooks", type: "array" }],
+      // real cursor ctx-guard surface on the same file declares it "object" —
+      // both "owns", so this must still throw.
+      slots: [{ key: "hooks", type: "array", access: "owns" }],
       merge: (s) => s,
       strip: (s) => s,
       validate: () => [],
@@ -356,6 +361,161 @@ describe("AC4: assertRegistryCoherent()", () => {
   });
 });
 
+describe("F3: every surface's declared slots cover every top-level key its merge/strip actually touches", () => {
+  // Runs every JSON surface's merge AND strip over `{}` and over legacy /
+  // pre-populated fixtures (a raw `hooks` array from before any surface owned
+  // that key, with and without a managed security entry inside it; a
+  // pre-existing `hooks` object; a pre-populated `securityHooks` array; a
+  // pre-populated antigravity container), then asserts every top-level key
+  // whose value actually changed is declared in that surface's `slots` with
+  // a matching JSON type. This is what makes the coherence invariant
+  // non-vacuous: a surface could declare only its "obvious" key and still
+  // pass `assertRegistryCoherent()` while silently writing an undeclared
+  // `_keryxManaged`/`unmigratedHooks` key nothing checks (the gap fixed in
+  // this review round).
+  type JsonType = "object" | "array" | "number" | "string" | "boolean" | "null" | "undefined";
+
+  function jsonTypeOf(value: unknown): JsonType {
+    if (value === undefined) return "undefined";
+    if (value === null) return "null";
+    if (Array.isArray(value)) return "array";
+    return typeof value as JsonType;
+  }
+
+  const MANAGED_SECURITY_ENTRY = {
+    on: "input",
+    command: "keryx security check-input --source untrusted-external --runtime cursor",
+    _keryxManaged: "security-agent-hooks",
+  };
+
+  const FIXTURES: Record<string, Record<string, unknown>> = {
+    empty: {},
+    "hooks as a legacy flat array": { hooks: [{ on: "input", command: "user-entry" }] },
+    "hooks as a legacy flat array with a managed security entry": { hooks: [MANAGED_SECURITY_ENTRY] },
+    "hooks as an object (nested shape)": { hooks: {} },
+    "securityHooks pre-populated": { securityHooks: [{ on: "input", command: "user-entry" }] },
+    "antigravity container pre-populated": { "keryx-ctx-guard": {} },
+  };
+
+  test("non-vacuous and exhaustive over every JSON surface x fixture x op", () => {
+    let checkedKeys = 0;
+    for (const adapter of HARNESS_ADAPTERS) {
+      for (const surface of adapter.surfaces) {
+        if (!surface.merge || !surface.strip) continue; // non-JSON artifacts (opencode) own themselves
+        for (const [fixtureLabel, fixture] of Object.entries(FIXTURES)) {
+          for (const op of ["merge", "strip"] as const) {
+            const before = structuredClone(fixture);
+            const after = (op === "merge" ? surface.merge! : surface.strip!)(structuredClone(fixture)) as Record<
+              string,
+              unknown
+            >;
+            const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+            for (const key of keys) {
+              if (JSON.stringify(before[key]) === JSON.stringify(after[key])) continue; // untouched by this op
+              checkedKeys += 1;
+              const scenario = { adapter: adapter.id, surface: surface.id, op, fixture: fixtureLabel, key };
+              const declared = surface.slots.find((s) => s.key === key);
+              expect({ ...scenario, declared: declared !== undefined }).toEqual({ ...scenario, declared: true });
+              if (after[key] !== undefined) {
+                expect({ ...scenario, typeMatches: jsonTypeOf(after[key]) === declared?.type }).toEqual({
+                  ...scenario,
+                  typeMatches: true,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(checkedKeys).toBeGreaterThan(0);
+  });
+});
+
+describe("F4: the legacy views are BUILT from the registry, not a second hand-written list", () => {
+  // Function identity, not just equal behaviour: `CTX_RUNTIMES`/`ORIENT_RUNTIMES`/
+  // `RUNTIME_HOOKS` must carry the SAME merge/strip/validate function objects
+  // the registry's surfaces expose, so a mutation of the registry (e.g. a
+  // fixed bug in a surface's `merge`) is visible through the view without
+  // anyone remembering to also patch the view — the property a hand-copied
+  // second list cannot have.
+  test("CTX_RUNTIMES: confidence and merge/strip/validate are the registry surface's own functions", () => {
+    for (const adapter of HARNESS_ADAPTERS) {
+      for (const surface of surfacesOf(adapter, { subsystem: "ctx-guard" })) {
+        const runtime = CTX_RUNTIMES.find((r) => r.id === adapter.id)!;
+        expect({ adapter: adapter.id, confidence: runtime.confidence }).toEqual({
+          adapter: adapter.id,
+          confidence: surface.confidence,
+        });
+        if (surface.merge) expect({ adapter: adapter.id, mergeIsSurfaceMerge: runtime.merge === surface.merge }).toEqual({
+          adapter: adapter.id,
+          mergeIsSurfaceMerge: true,
+        });
+        if (surface.strip) expect({ adapter: adapter.id, stripIsSurfaceStrip: runtime.strip === surface.strip }).toEqual({
+          adapter: adapter.id,
+          stripIsSurfaceStrip: true,
+        });
+        if (surface.validate) expect({
+          adapter: adapter.id,
+          validateIsSurfaceValidate: runtime.validate === surface.validate,
+        }).toEqual({ adapter: adapter.id, validateIsSurfaceValidate: true });
+      }
+    }
+  });
+
+  test("ORIENT_RUNTIMES: confidence and relativePath match the registry surface", () => {
+    for (const adapter of HARNESS_ADAPTERS) {
+      for (const surface of surfacesOf(adapter, { subsystem: "orient" })) {
+        const runtime = ORIENT_RUNTIMES.find((r) => r.id === adapter.id)!;
+        expect({ adapter: adapter.id, confidence: runtime.confidence, relativePath: runtime.relativePath }).toEqual({
+          adapter: adapter.id,
+          confidence: surface.confidence,
+          relativePath: surface.relativePath!,
+        });
+      }
+    }
+  });
+
+  test("RUNTIME_HOOKS: validate delegates to the registry's own input/output surfaces (behavioural — the RuntimeHook shape composes two surfaces, so there is no single function to compare by identity)", () => {
+    for (const adapter of HARNESS_ADAPTERS) {
+      const input = surfacesOf(adapter, { subsystem: "security", flag: "prompt-gate" })[0];
+      const output = surfacesOf(adapter, { subsystem: "security", flag: "block" })[0];
+      if (!input || !output) continue;
+      const runtime = RUNTIME_HOOKS.find((r) => r.id === adapter.id)!;
+      const rendered = runtime.merge({});
+      expect({ adapter: adapter.id, inputValid: input.validate!(rendered) }).toEqual({ adapter: adapter.id, inputValid: [] });
+      expect({ adapter: adapter.id, outputValid: output.validate!(rendered) }).toEqual({ adapter: adapter.id, outputValid: [] });
+    }
+  });
+});
+
+describe("F6: two deliberately-kept behaviour changes (decision recorded by the orchestrator)", () => {
+  test("(a) orient preserves a pre-existing legacy `hooks` array under `unmigratedHooks` instead of discarding it", () => {
+    const claude = getHarnessAdapter("claude")!;
+    const orient = surfacesOf(claude, { subsystem: "orient" })[0]!;
+    const legacy = { hooks: [{ command: "the operator's own hook" }] };
+    const after = orient.merge!(legacy) as Record<string, unknown>;
+    expect(after.unmigratedHooks).toEqual([{ command: "the operator's own hook" }]);
+    expect(orient.validate!(after)).toEqual([]);
+  });
+
+  test("(b) claude security check-input/check-output validate now require the `_keryxManaged` sentinel on the matched group", () => {
+    const claude = getHarnessAdapter("claude")!;
+    const input = surfacesOf(claude, { subsystem: "security", flag: "prompt-gate" })[0]!;
+    const output = surfacesOf(claude, { subsystem: "security", flag: "block" })[0]!;
+    // Shaped exactly like a real managed entry (event key, matcher, command),
+    // but with NO `_keryxManaged` sentinel — an unmanaged/hostile entry that
+    // merely has the right command string.
+    const unmanaged = {
+      hooks: {
+        UserPromptSubmit: [{ hooks: [{ type: "command", command: "keryx security check-input --source untrusted-external" }] }],
+        PreToolUse: [{ matcher: "Write|Edit", hooks: [{ type: "command", command: "keryx security check-output" }] }],
+      },
+    };
+    expect(input.validate!(unmanaged).length).toBeGreaterThan(0);
+    expect(output.validate!(unmanaged).length).toBeGreaterThan(0);
+  });
+});
+
 describe("surfacesOf query helper", () => {
   test("filters by flag and subsystem, non-vacuously", () => {
     const claude = getHarnessAdapter("claude")!;
@@ -373,8 +533,9 @@ describe("the old view modules define no independent walker (no drifted second c
   // Cheap and robust: a plain substring check on the source text, not an AST
   // walk — brittle only if someone reintroduces a function with this EXACT
   // name for an unrelated reason, which the failure message makes obvious.
-  test("src/ctx/orient-runtimes.ts and src/security/agent-hooks/runtimes.ts have no `function stripManaged`/`function addSentinel`/`function hooksObject`", () => {
+  test("src/ctx/runtimes.ts, src/ctx/orient-runtimes.ts and src/security/agent-hooks/runtimes.ts have no `function stripManaged`/`function addSentinel`/`function hooksObject`", () => {
     const files = [
+      path.join(__dirname, "..", "ctx", "runtimes.ts"),
       path.join(__dirname, "..", "ctx", "orient-runtimes.ts"),
       path.join(__dirname, "..", "security", "agent-hooks", "runtimes.ts"),
     ];

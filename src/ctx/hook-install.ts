@@ -1,5 +1,10 @@
 import { pathExists } from "../lib/fs";
-import { installSurfaces, readSettingsFile, settingsFileOwnerFor, uninstallSurfaces } from "../integrations";
+import { installSurfaces, settingsFileOwnerFor, uninstallSurfaces } from "../integrations";
+// Deep import, deliberately (F10 — see the note on `src/integrations/index.ts`):
+// this is the one place outside `src/integrations` that reads the pre-merge
+// settings directly, to report what an install would upgrade
+// (`describeExistingGuard` below) before the write overwrites the evidence.
+import { readSettingsFile } from "../integrations/settings-json";
 import { describeExistingGuard, type CtxRuntime } from "./runtimes";
 
 // Opt-in, merge-safe installer for the gdctx routing guard across harnesses.
@@ -43,6 +48,10 @@ export async function installRuntimeHook(
 }
 
 // Remove ONLY the managed guard for one runtime; false if nothing was present.
+// Throws when the owner refuses the uninstall (it would leave a sibling
+// surface on the same settings file invalid) — the boolean-only success shape
+// is unchanged, but a caller must not treat a thrown error as "nothing to
+// remove"; see `commands/ctx.ts::handleUninstallHook`.
 export async function uninstallRuntimeHook(
   projectRoot: string,
   runtime: CtxRuntime,
@@ -61,6 +70,9 @@ export async function uninstallRuntimeHook(
   if (!owner) {
     return false;
   }
-  await uninstallSurfaces(projectRoot, runtime.relativePath, [CTX_GUARD_SURFACE_ID], owner);
+  const { errors } = await uninstallSurfaces(projectRoot, runtime.relativePath, [CTX_GUARD_SURFACE_ID], owner);
+  if (errors.length > 0) {
+    throw new Error(errors.join("; "));
+  }
   return true;
 }

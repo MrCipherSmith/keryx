@@ -611,10 +611,15 @@ async function handleUninstallHook(args: string[]): Promise<void> {
   console.log("# gdctx routing guard uninstall");
   console.log("");
   for (const runtime of runtimes) {
-    const removed = await uninstallRuntimeHook(cwd, runtime);
-    console.log(
-      `  ${removed ? "✓" : "·"} ${runtime.id} ${removed ? `-> ${path.relative(cwd, runtime.locate(cwd))}` : "nothing to remove"}`,
-    );
+    try {
+      const removed = await uninstallRuntimeHook(cwd, runtime);
+      console.log(
+        `  ${removed ? "✓" : "·"} ${runtime.id} ${removed ? `-> ${path.relative(cwd, runtime.locate(cwd))}` : "nothing to remove"}`,
+      );
+    } catch (error) {
+      console.error(`  ✗ ${error instanceof Error ? error.message : String(error)}`);
+      process.exitCode = 1;
+    }
   }
   reportUnsupported(unsupported);
 }

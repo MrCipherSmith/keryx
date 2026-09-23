@@ -26,10 +26,11 @@ import {
 import type { HarnessAdapter, SettingsFileOwner, SurfaceAdapter, SurfaceFlag } from "./types";
 import { createSettingsFileOwner } from "./settings-file";
 
-// Facts carried over verbatim from the pre-refactor registries; the code
-// itself did not change, only where it lives, so `lastVerified` records that
-// the confidences/reasons are as-of the last time those modules were checked
-// against first-party docs, not a fresh check performed by this refactor.
+// F11: `lastVerified` is the date this record was reconciled with its
+// `sourceDocs` during the flow-305 refactor — moving/re-deriving the facts
+// and checking them against the (already-cited) source docs still on file —
+// NOT the date any first-party documentation was re-fetched or re-read. No
+// doc lookup happened as part of carrying these facts over.
 const LAST_VERIFIED = "2026-09-23";
 
 export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
@@ -164,12 +165,23 @@ export function settingsFileOwnerFor(relativePath: string): SettingsFileOwner | 
   return SETTINGS_FILE_OWNERS.find((o) => o.relativePath === relativePath);
 }
 
+interface SlotRecord {
+  readonly owner: string;
+  readonly type: string;
+  readonly access: "owns" | "migrates-legacy";
+}
+
 /**
  * Fails the build/tests the moment two surfaces on one settings file declare
- * different JSON types for the same top-level key (the `hooks: object` vs
+ * incompatible JSON types for the same top-level key (the `hooks: object` vs
  * `hooks: array` collision, OQ-3's class of bug) or reuse a surface id within
  * one adapter. Takes an optional adapter list so a negative-control test can
  * prove it actually fires, without mutating the real registry.
+ *
+ * Only two `"owns"` slots disagreeing on `type` are a collision. An `"owns"`
+ * slot never conflicts with a `"migrates-legacy"` slot on the same key,
+ * whatever type the latter declares — see `SurfaceSlot.access` for why that
+ * pairing can never actually clobber anything.
  */
 export function assertRegistryCoherent(adapters: readonly HarnessAdapter[] = HARNESS_ADAPTERS): void {
   for (const adapter of adapters) {
@@ -181,24 +193,32 @@ export function assertRegistryCoherent(adapters: readonly HarnessAdapter[] = HAR
       seenIds.add(surface.id);
     }
   }
-  const slotTypesByFile = new Map<string, Map<string, string>>();
+  const slotsByFile = new Map<string, Map<string, SlotRecord[]>>();
   for (const adapter of adapters) {
     for (const surface of adapter.surfaces) {
       if (!surface.relativePath) continue;
-      let slotTypes = slotTypesByFile.get(surface.relativePath);
-      if (!slotTypes) {
-        slotTypes = new Map();
-        slotTypesByFile.set(surface.relativePath, slotTypes);
+      let byKey = slotsByFile.get(surface.relativePath);
+      if (!byKey) {
+        byKey = new Map();
+        slotsByFile.set(surface.relativePath, byKey);
       }
       for (const slot of surface.slots) {
-        const prior = slotTypes.get(slot.key);
-        if (prior !== undefined && prior !== slot.type) {
+        const records = byKey.get(slot.key) ?? [];
+        records.push({ owner: `${adapter.id}/${surface.id}`, type: slot.type, access: slot.access });
+        byKey.set(slot.key, records);
+      }
+    }
+  }
+  for (const [file, byKey] of slotsByFile) {
+    for (const [key, records] of byKey) {
+      const owns = records.filter((r) => r.access === "owns");
+      for (let i = 1; i < owns.length; i++) {
+        if (owns[i]!.type !== owns[0]!.type) {
           throw new Error(
-            `integrations registry: "${surface.relativePath}" has two surfaces declaring "${slot.key}" as both ` +
-              `"${prior}" and "${slot.type}" (${adapter.id}/${surface.id})`,
+            `integrations registry: "${file}" has two surfaces declaring "${key}" as both ` +
+              `"${owns[0]!.type}" (${owns[0]!.owner}) and "${owns[i]!.type}" (${owns[i]!.owner})`,
           );
         }
-        slotTypes.set(slot.key, slot.type);
       }
     }
   }

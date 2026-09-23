@@ -25,7 +25,7 @@ import { CTX_RUNTIMES, getRuntime as getCtxRuntime } from "../ctx/runtimes";
 import { installRuntimeHook, uninstallRuntimeHook } from "../ctx/hook-install";
 import { getRuntime as getSecurityRuntime, RUNTIME_HOOKS } from "../security/agent-hooks/runtimes";
 import { installRuntimeHooks, uninstallRuntimeHooks } from "../security/agent-hooks";
-import { installOrientRuntime, uninstallOrientRuntime } from "../ctx/orient-runtimes";
+import { getOrientRuntime, installOrientRuntime, uninstallOrientRuntime } from "../ctx/orient-runtimes";
 
 // --- small helpers -----------------------------------------------------------
 
@@ -63,37 +63,52 @@ describe("AC3/AC5: every SettingsFileOwner — install permutations and single-s
     expect(SETTINGS_FILE_OWNERS.length).toBeGreaterThan(0);
   });
 
+  // F9: seeded with more than the empty file — a legacy pre-populated `hooks`
+  // array (unmanaged user content, and empty) is exactly the shape the
+  // migration logic (`mergeIntoHookArray`'s `unmigratedHooks` move,
+  // `dropLegacyHooksArray`) has to cope with, and `{}` alone never exercises
+  // it.
+  const SEED_FIXTURES: ReadonlyArray<{ label: string; seed: Settings }> = [
+    { label: "empty file", seed: {} },
+    { label: "pre-populated legacy `hooks` array (user content)", seed: { hooks: [{ on: "custom", command: "user-owned-entry" }] } },
+    { label: "pre-populated legacy `hooks` array (empty)", seed: { hooks: [] } },
+  ];
+
   for (const owner of SETTINGS_FILE_OWNERS) {
     const ids = owner.surfaces().map((s) => s.id);
 
-    test(`${owner.relativePath}: every install order (${ids.length}! = ${factorial(ids.length)} permutations) is clean at every step`, () => {
-      expect(ids.length).toBeGreaterThan(0);
-      for (const order of permutations(ids)) {
-        let settings: Settings = {};
-        const installedSoFar: string[] = [];
-        for (const id of order) {
-          const { settings: next, errors } = owner.apply(settings, { install: [id] });
-          expect({ owner: owner.relativePath, order, id, errors }).toEqual({
-            owner: owner.relativePath,
-            order,
-            id,
-            errors: [],
-          });
-          settings = next;
-          installedSoFar.push(id);
+    for (const { label, seed } of SEED_FIXTURES) {
+      test(`${owner.relativePath} (${label}): every install order (${ids.length}! = ${factorial(ids.length)} permutations) is clean at every step`, () => {
+        expect(ids.length).toBeGreaterThan(0);
+        for (const order of permutations(ids)) {
+          let settings: Settings = structuredClone(seed);
+          const installedSoFar: string[] = [];
+          for (const id of order) {
+            const { settings: next, errors } = owner.apply(settings, { install: [id] });
+            expect({ owner: owner.relativePath, label, order, id, errors }).toEqual({
+              owner: owner.relativePath,
+              label,
+              order,
+              id,
+              errors: [],
+            });
+            settings = next;
+            installedSoFar.push(id);
+          }
+          // Every surface installed so far validates at the end of this order.
+          for (const surface of owner.surfaces()) {
+            if (!installedSoFar.includes(surface.id) || !surface.validate) continue;
+            expect({ owner: owner.relativePath, label, order, surface: surface.id, valid: surface.validate(settings) }).toEqual({
+              owner: owner.relativePath,
+              label,
+              order,
+              surface: surface.id,
+              valid: [],
+            });
+          }
         }
-        // Every surface installed so far validates at the end of this order.
-        for (const surface of owner.surfaces()) {
-          if (!installedSoFar.includes(surface.id) || !surface.validate) continue;
-          expect({ owner: owner.relativePath, order, surface: surface.id, valid: surface.validate(settings) }).toEqual({
-            owner: owner.relativePath,
-            order,
-            surface: surface.id,
-            valid: [],
-          });
-        }
-      }
-    });
+      });
+    }
 
     test(`${owner.relativePath}: uninstalling any ONE surface from the fully-installed file leaves every OTHER surface valid, and its own entries are gone`, () => {
       for (const targetId of ids) {
@@ -177,11 +192,11 @@ describe("AC5: ctx-guard vs security, for every runtime with both surfaces", () 
             }
 
             // Uninstall ctx: security surfaces survive, sentinel stops claiming ctx.
-            // `owner.apply` mutates the settings object it is given (the
-            // surfaces' merge/strip write through `settings` in place), so
-            // each branch below gets its OWN clone of the fully-installed
-            // state rather than compounding onto the previous branch's strip.
-            const afterCtxOut = owner.apply(structuredClone(settings), { uninstall: [ctxSurface.id] });
+            // `owner.apply` clones its input internally (flow 305 review fix,
+            // F7), so each branch below independently starts from the
+            // fully-installed state rather than compounding onto the previous
+            // branch's strip — no clone needed at the call site any more.
+            const afterCtxOut = owner.apply(settings, { uninstall: [ctxSurface.id] });
             expect({ runtimeId, order, errors: afterCtxOut.errors }).toEqual({ runtimeId, order, errors: [] });
             for (const s of securitySurfaces) {
               expect({ runtimeId, order, security: s.id, valid: s.validate!(afterCtxOut.settings) }).toEqual({
@@ -199,7 +214,7 @@ describe("AC5: ctx-guard vs security, for every runtime with both surfaces", () 
 
             // Uninstall security (both surfaces): ctx survives, sentinel stops
             // claiming the security surfaces once BOTH are gone.
-            const afterSecOut = owner.apply(structuredClone(settings), { uninstall: securityIds });
+            const afterSecOut = owner.apply(settings, { uninstall: securityIds });
             expect({ runtimeId, order, errors: afterSecOut.errors }).toEqual({ runtimeId, order, errors: [] });
             expect({ runtimeId, order, ctx: ctxSurface.validate!(afterSecOut.settings) }).toEqual({ runtimeId, order, ctx: [] });
             const securitySentinel = securitySurfaces[0]!.sentinel;
@@ -400,7 +415,7 @@ describe("negative control: the owner guard refuses a clobbering surface", () =>
       confidence: "experimental",
       sourceDocs: ["test"],
       relativePath: ".cursor/hooks.json",
-      slots: [{ key: "hooks", type: "array" }],
+      slots: [{ key: "hooks", type: "array", access: "owns" }],
       merge: (s) => {
         s.hooks = [];
         return s;
@@ -458,7 +473,8 @@ describe("on-disk end-to-end through the real installers", () => {
         const ctxInstall = await installRuntimeHook(root, ctxRuntime);
         expect({ runtimeId, errors: ctxInstall.errors }).toEqual({ runtimeId, errors: [] });
         const secInstall = await installRuntimeHooks(root, securityRuntime);
-        expect(secInstall).toBe(true);
+        expect(secInstall.ok).toBe(true);
+        expect(secInstall.errors).toEqual([]);
 
         const settingsAfterBoth = await readSettingsFile(ctxRuntime.locate(root));
         expect({ runtimeId, ctx: ctxRuntime.validate!(settingsAfterBoth) }).toEqual({ runtimeId, ctx: [] });
@@ -471,6 +487,22 @@ describe("on-disk end-to-end through the real installers", () => {
           runtimeId,
           securitySurvives: [],
         });
+
+        // F9: uninstall BOTH sides in turn, not only ctx — re-install ctx
+        // (back to both installed) and now uninstall security instead, so
+        // this test proves "leaves the OTHER valid" in both directions
+        // rather than leaving that half to a separate test that might not
+        // both be run.
+        const ctxReinstall = await installRuntimeHook(root, ctxRuntime);
+        expect({ runtimeId, errors: ctxReinstall.errors }).toEqual({ runtimeId, errors: [] });
+        const secUninstalled = await uninstallRuntimeHooks(root, securityRuntime);
+        expect(secUninstalled.ok).toBe(true);
+        expect(secUninstalled.errors).toEqual([]);
+        const settingsAfterSecOut = await readSettingsFile(ctxRuntime.locate(root));
+        expect({ runtimeId, ctxSurvives: ctxRuntime.validate!(settingsAfterSecOut) }).toEqual({
+          runtimeId,
+          ctxSurvives: [],
+        });
       });
     });
 
@@ -480,7 +512,8 @@ describe("on-disk end-to-end through the real installers", () => {
         const securityRuntime = getSecurityRuntime(runtimeId)!;
 
         const secInstall = await installRuntimeHooks(root, securityRuntime);
-        expect(secInstall).toBe(true);
+        expect(secInstall.ok).toBe(true);
+        expect(secInstall.errors).toEqual([]);
         const ctxInstall = await installRuntimeHook(root, ctxRuntime);
         expect({ runtimeId, errors: ctxInstall.errors }).toEqual({ runtimeId, errors: [] });
 
@@ -489,11 +522,26 @@ describe("on-disk end-to-end through the real installers", () => {
         expect({ runtimeId, security: securityRuntime.validate(settingsAfterBoth) }).toEqual({ runtimeId, security: [] });
 
         const secUninstalled = await uninstallRuntimeHooks(root, securityRuntime);
-        expect(secUninstalled).toBe(true);
+        expect(secUninstalled.ok).toBe(true);
+        expect(secUninstalled.errors).toEqual([]);
         const settingsAfterSecOut = await readSettingsFile(ctxRuntime.locate(root));
         expect({ runtimeId, ctxSurvives: ctxRuntime.validate!(settingsAfterSecOut) }).toEqual({
           runtimeId,
           ctxSurvives: [],
+        });
+
+        // F9: uninstall BOTH sides in turn (the other direction from the
+        // sibling test above) — re-install security, then uninstall ctx, and
+        // prove security still survives.
+        const secReinstall = await installRuntimeHooks(root, securityRuntime);
+        expect(secReinstall.ok).toBe(true);
+        expect(secReinstall.errors).toEqual([]);
+        const ctxUninstalled = await uninstallRuntimeHook(root, ctxRuntime);
+        expect(ctxUninstalled).toBe(true);
+        const settingsAfterCtxOut = await readSettingsFile(ctxRuntime.locate(root));
+        expect({ runtimeId, securitySurvives: securityRuntime.validate(settingsAfterCtxOut) }).toEqual({
+          runtimeId,
+          securitySurvives: [],
         });
       });
     });
@@ -503,15 +551,26 @@ describe("on-disk end-to-end through the real installers", () => {
   for (const runtimeId of orientRuntimes) {
     test(`${runtimeId}: installOrientRuntime on disk validates, and uninstall removes it cleanly`, async () => {
       await withRoot(async (root) => {
+        const runtime = getOrientRuntime(runtimeId)!;
         const errors = await installOrientRuntime(root, runtimeId);
         expect({ runtimeId, errors }).toEqual({ runtimeId, errors: [] });
+        const settingsAfterInstall = await readSettingsFile(runtime.locate(root));
+        expect({ runtimeId, installed: runtime.validate(settingsAfterInstall) }).toEqual({ runtimeId, installed: [] });
 
         await uninstallOrientRuntime(root, runtimeId);
-        // No public "validate" entry point for orient outside the runtime
-        // object itself, so re-install must be clean (idempotent) — the
-        // observable proof the uninstall actually removed the managed group
-        // rather than leaving a stale duplicate for the next install to trip
-        // over.
+        // F9: assert directly, on disk, that the orient surface no longer
+        // validates — not only indirectly via a clean re-install, which
+        // proves idempotency but not that the uninstall actually removed
+        // anything (a no-op strip would look identical to that test).
+        const settingsAfterUninstall = await readSettingsFile(runtime.locate(root));
+        expect({ runtimeId, stillValid: runtime.validate(settingsAfterUninstall).length === 0 }).toEqual({
+          runtimeId,
+          stillValid: false,
+        });
+
+        // And re-install is still clean (idempotent), the observable proof
+        // the uninstall did not leave a stale duplicate for the next install
+        // to trip over.
         const again = await installOrientRuntime(root, runtimeId);
         expect({ runtimeId, again }).toEqual({ runtimeId, again: [] });
       });
@@ -526,7 +585,8 @@ describe("on-disk end-to-end through the real installers", () => {
       const ctxInstall = await installRuntimeHook(root, ctxRuntime);
       expect(ctxInstall.errors).toEqual([]);
       const secInstall = await installRuntimeHooks(root, securityRuntime);
-      expect(secInstall).toBe(true);
+      expect(secInstall.ok).toBe(true);
+      expect(secInstall.errors).toEqual([]);
       const orientErrors = await installOrientRuntime(root, "claude");
       expect(orientErrors).toEqual([]);
 
@@ -539,5 +599,45 @@ describe("on-disk end-to-end through the real installers", () => {
       expect(ctxRuntime.validate!(afterOrientOut)).toEqual([]);
       expect(securityRuntime.validate(afterOrientOut)).toEqual([]);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F5 (flow 305 review round 1): flat security merge/strip must not leave
+// orphaned managed entries — a managed entry carrying the sentinel with an
+// `on` neither surface claims (probe P8's exact input: `on: "legacy"`).
+// ---------------------------------------------------------------------------
+
+describe("F5: flat security surfaces sweep up orphaned managed entries", () => {
+  test("strip removes an orphaned managed entry and clears the sentinel (probe P8)", () => {
+    const cursor = getSecurityRuntime("cursor")!;
+    const stripped = cursor.strip({
+      securityHooks: [{ on: "legacy", command: "keryx security x", _keryxManaged: "security-agent-hooks" }],
+      _keryxManaged: ["security-agent-hooks"],
+    });
+    expect(stripped).toEqual({});
+  });
+
+  test("merge removes an orphaned managed entry when installing either surface", () => {
+    const inputSurface = surfacesOf(getHarnessAdapter("cursor")!, { subsystem: "security", flag: "prompt-gate" })[0]!;
+    const before: Settings = {
+      securityHooks: [{ on: "legacy", command: "keryx security x", _keryxManaged: "security-agent-hooks" }],
+      _keryxManaged: ["security-agent-hooks"],
+    };
+    const after = inputSurface.merge!(before) as { securityHooks: Array<{ on?: string }> };
+    expect(after.securityHooks.some((g) => g.on === "legacy")).toBe(false);
+    expect(after.securityHooks.some((g) => g.on === "input")).toBe(true);
+  });
+
+  test("installing both surfaces then stripping both is byte-identical to the pre-refactor flatMerge/flatStrip result (empty)", () => {
+    const cursor = getSecurityRuntime("cursor")!;
+    const withOrphan: Settings = {
+      securityHooks: [{ on: "legacy", command: "keryx security x", _keryxManaged: "security-agent-hooks" }],
+      _keryxManaged: ["security-agent-hooks"],
+    };
+    const installed = cursor.merge(withOrphan);
+    expect(cursor.validate(installed)).toEqual([]);
+    const strippedBack = cursor.strip(installed);
+    expect(strippedBack).toEqual({});
   });
 });

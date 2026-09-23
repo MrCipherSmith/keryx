@@ -3,18 +3,12 @@ import {
   AGENT_CHECK_INPUT_COMMAND,
   AGENT_CHECK_OUTPUT_COMMAND,
   AGENT_HOOKS_SENTINEL,
-  SECURITY_CHECK_INPUT_CLAUDE,
-  SECURITY_CHECK_INPUT_CURSOR,
-  SECURITY_CHECK_INPUT_GENERIC_MCP,
-  SECURITY_CHECK_INPUT_WINDSURF,
-  SECURITY_CHECK_OUTPUT_CLAUDE,
-  SECURITY_CHECK_OUTPUT_CURSOR,
-  SECURITY_CHECK_OUTPUT_GENERIC_MCP,
-  SECURITY_CHECK_OUTPUT_WINDSURF,
+  HARNESS_ADAPTERS,
   SECURITY_HOOKS_KEY,
   checkInputCommand,
   checkOutputCommand,
   isManagedBy,
+  surfacesOf,
   type Settings as IntegrationSettings,
   type SurfaceAdapter,
 } from "../../integrations";
@@ -78,19 +72,26 @@ function composed(id: string, relativePath: string, input: SurfaceAdapter, outpu
   };
 }
 
-export const CLAUDE_RUNTIME: RuntimeHook = composed(
-  "claude",
-  ".claude/settings.json",
-  SECURITY_CHECK_INPUT_CLAUDE,
-  SECURITY_CHECK_OUTPUT_CLAUDE,
-);
+// Built by mapping over `HARNESS_ADAPTERS`, in registry order (flow 305
+// review fix, F4) — an adapter contributes a `RuntimeHook` only when it
+// registers BOTH a security "prompt-gate" (check-input) and a security
+// "block" (check-output) surface; every other adapter (codex, antigravity,
+// opencode, zed today) is silently skipped, so this list can never drift
+// from what the registry actually declares.
+export const RUNTIME_HOOKS: RuntimeHook[] = HARNESS_ADAPTERS.flatMap((adapter) => {
+  const input = surfacesOf(adapter, { subsystem: "security", flag: "prompt-gate" })[0];
+  const output = surfacesOf(adapter, { subsystem: "security", flag: "block" })[0];
+  if (!input || !output) return [];
+  return [composed(adapter.id, input.relativePath!, input, output)];
+});
 
-export const RUNTIME_HOOKS: RuntimeHook[] = [
-  CLAUDE_RUNTIME,
-  composed("cursor", ".cursor/hooks.json", SECURITY_CHECK_INPUT_CURSOR, SECURITY_CHECK_OUTPUT_CURSOR),
-  composed("windsurf", ".windsurf/hooks.json", SECURITY_CHECK_INPUT_WINDSURF, SECURITY_CHECK_OUTPUT_WINDSURF),
-  composed("generic-mcp", ".mcp/security-hooks.json", SECURITY_CHECK_INPUT_GENERIC_MCP, SECURITY_CHECK_OUTPUT_GENERIC_MCP),
-];
+function runtimeFor(id: string): RuntimeHook {
+  const runtime = RUNTIME_HOOKS.find((r) => r.id === id);
+  if (!runtime) throw new Error(`integrations registry: no security runtime registered for "${id}"`);
+  return runtime;
+}
+
+export const CLAUDE_RUNTIME: RuntimeHook = runtimeFor("claude");
 
 export function runtimeIds(): string[] {
   return RUNTIME_HOOKS.map((r) => r.id);

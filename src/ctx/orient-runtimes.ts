@@ -1,13 +1,14 @@
 import {
-  ORIENT_CLAUDE,
-  ORIENT_CODEX,
-  ORIENT_CURSOR,
+  HARNESS_ADAPTERS,
   ORIENT_SENTINEL,
   UNSUPPORTED_ORIENT,
   installSurfaces,
   settingsFileOwnerFor,
+  surfacesOf,
   uninstallSurfaces,
+  type Confidence as IntegrationConfidence,
   type Settings as IntegrationSettings,
+  type SurfaceAdapter,
 } from "../integrations";
 
 const ORIENT_SURFACE_ID = "orient";
@@ -19,10 +20,13 @@ const ORIENT_SURFACE_ID = "orient";
 // model's context. Only harnesses whose hooks can inject context are registered;
 // harnesses with block-only hooks (e.g. Windsurf) are listed as unsupported.
 //
-// This module is a VIEW over `src/integrations` (flow 305, W5-a): `merge` /
-// `strip` / `validate` below are the SAME function objects registered on the
-// matching `SurfaceAdapter` in `src/integrations/surfaces.ts` — the walker
-// logic lives once, in `src/integrations/settings-json.ts`.
+// This module is a VIEW over `src/integrations` (flow 305, W5-a): `ORIENT_RUNTIMES`
+// is BUILT by mapping over `HARNESS_ADAPTERS` + `surfacesOf(adapter,
+// {subsystem:"orient"})` (flow 305 review fix, F4) — `label`/`relativePath`
+// come from the surface, never a second hand-written literal — and
+// `merge`/`strip`/`validate` below are the SAME function objects registered
+// on the matching `SurfaceAdapter` in `src/integrations/surfaces.ts`. The
+// walker logic lives once, in `src/integrations/settings-json.ts`.
 //
 // Verified against current official docs:
 //   claude — UserPromptSubmit, stdout added as context (.claude/settings.json)
@@ -32,12 +36,15 @@ const ORIENT_SURFACE_ID = "orient";
 export { ORIENT_SENTINEL };
 
 export type Settings = IntegrationSettings;
-export type Confidence = "verified" | "experimental";
+export type Confidence = IntegrationConfidence;
 
 export interface OrientRuntime {
   readonly id: string;
   readonly label: string;
   readonly confidence: Confidence;
+  /** Path relative to the project root, for `SettingsFileOwner` lookup — the
+   *  one true source, so nothing derives it from a second per-id switch (F8). */
+  readonly relativePath: string;
   // Format the orientation Markdown for this harness's injection mechanism.
   format(orientation: string): string;
   locate(projectRoot: string): string;
@@ -57,46 +64,54 @@ function cursorAdditionalContext(orientation: string): string {
   return JSON.stringify({ additional_context: orientation });
 }
 
-// --- runtime definitions: shaped views over the registry's orient surfaces --
-
-export const CLAUDE_ORIENT: OrientRuntime = {
-  id: "claude",
-  label: ".claude/settings.json (UserPromptSubmit)",
-  confidence: "verified",
-  format: plainStdout,
-  locate: (root) => ORIENT_CLAUDE.settingsFile!(root),
-  merge: (s) => ORIENT_CLAUDE.merge!(s),
-  strip: (s) => ORIENT_CLAUDE.strip!(s),
-  validate: (s) => ORIENT_CLAUDE.validate!(s),
+// The injection-formatting mechanism differs per harness for a reason outside
+// the registry's own concerns (it is about rendering the orientation text,
+// not about the settings-file shape), so it stays a small local table keyed
+// by harness id rather than a field forced onto every surface.
+const FORMAT_BY_ID: Record<string, (orientation: string) => string> = {
+  cursor: cursorAdditionalContext,
 };
 
-export const CODEX_ORIENT: OrientRuntime = {
-  id: "codex",
-  label: ".codex/hooks.json (UserPromptSubmit)",
-  confidence: "verified",
-  format: plainStdout,
-  locate: (root) => ORIENT_CODEX.settingsFile!(root),
-  merge: (s) => ORIENT_CODEX.merge!(s),
-  strip: (s) => ORIENT_CODEX.strip!(s),
-  validate: (s) => ORIENT_CODEX.validate!(s),
-};
+// --- runtime definitions: built from the registry's orient surfaces --------
 
-export const CURSOR_ORIENT: OrientRuntime = {
-  id: "cursor",
-  label: ".cursor/hooks.json (sessionStart)",
-  confidence: "verified",
-  format: cursorAdditionalContext,
-  locate: (root) => ORIENT_CURSOR.settingsFile!(root),
-  merge: (s) => ORIENT_CURSOR.merge!(s),
-  strip: (s) => ORIENT_CURSOR.strip!(s),
-  validate: (s) => ORIENT_CURSOR.validate!(s),
-};
+function runtimeFromSurface(adapterId: string, surface: SurfaceAdapter): OrientRuntime {
+  const relativePath = surface.relativePath!;
+  return {
+    id: adapterId,
+    label: surface.label ?? `${relativePath} (orient)`,
+    confidence: surface.confidence,
+    relativePath,
+    format: FORMAT_BY_ID[adapterId] ?? plainStdout,
+    locate: (root) => surface.settingsFile!(root),
+    merge: (s) => surface.merge!(s),
+    strip: (s) => surface.strip!(s),
+    validate: (s) => surface.validate!(s),
+  };
+}
+
+const ORIENT_SURFACES: ReadonlyArray<{ adapterId: string; surface: SurfaceAdapter }> = HARNESS_ADAPTERS.flatMap(
+  (adapter) => surfacesOf(adapter, { subsystem: "orient" }).map((surface) => ({ adapterId: adapter.id, surface })),
+);
+
+export const ORIENT_RUNTIMES: OrientRuntime[] = ORIENT_SURFACES.map(({ adapterId, surface }) =>
+  runtimeFromSurface(adapterId, surface),
+);
+
+function runtimeFor(id: string): OrientRuntime {
+  const runtime = ORIENT_RUNTIMES.find((r) => r.id === id);
+  if (!runtime) throw new Error(`integrations registry: no orient surface registered for "${id}"`);
+  return runtime;
+}
+
+// Named exports every existing caller/test imports directly, derived from the
+// built list rather than declared a second time.
+export const CLAUDE_ORIENT: OrientRuntime = runtimeFor("claude");
+export const CODEX_ORIENT: OrientRuntime = runtimeFor("codex");
+export const CURSOR_ORIENT: OrientRuntime = runtimeFor("cursor");
 
 // Harnesses whose hooks CANNOT inject context (block-only / exit-code only), so
 // the availability-injection approach does not apply.
 export { UNSUPPORTED_ORIENT };
-
-export const ORIENT_RUNTIMES: OrientRuntime[] = [CLAUDE_ORIENT, CODEX_ORIENT, CURSOR_ORIENT];
 
 export function orientRuntimeIds(): string[] {
   return ORIENT_RUNTIMES.map((r) => r.id);
@@ -113,33 +128,25 @@ export function getOrientRuntime(id: string): OrientRuntime | undefined {
 export async function installOrientRuntime(projectRoot: string, runtimeId: string): Promise<string[]> {
   const runtime = getOrientRuntime(runtimeId);
   if (!runtime) return [`${runtimeId}: unknown orient runtime`];
-  const relativePath = relativePathFor(runtime);
-  const owner = settingsFileOwnerFor(relativePath);
-  if (!owner) return [`${runtimeId}: no settings-file owner registered for ${relativePath}`];
-  const { errors } = await installSurfaces(projectRoot, relativePath, [ORIENT_SURFACE_ID], owner);
+  const owner = settingsFileOwnerFor(runtime.relativePath);
+  if (!owner) return [`${runtimeId}: no settings-file owner registered for ${runtime.relativePath}`];
+  const { errors } = await installSurfaces(projectRoot, runtime.relativePath, [ORIENT_SURFACE_ID], owner);
   return errors;
 }
 
-/** The uninstall counterpart of `installOrientRuntime`. */
+/**
+ * The uninstall counterpart of `installOrientRuntime`. Throws when the owner
+ * refuses (it would leave a sibling surface on the same settings file
+ * invalid) — see `commands/orient.ts::handleUninstall`, which reports it.
+ */
 export async function uninstallOrientRuntime(projectRoot: string, runtimeId: string): Promise<void> {
   const runtime = getOrientRuntime(runtimeId);
   if (!runtime) return;
-  const relativePath = relativePathFor(runtime);
-  const owner = settingsFileOwnerFor(relativePath);
+  const owner = settingsFileOwnerFor(runtime.relativePath);
   if (!owner) return;
-  await uninstallSurfaces(projectRoot, relativePath, [ORIENT_SURFACE_ID], owner);
-}
-
-function relativePathFor(runtime: OrientRuntime): string {
-  switch (runtime.id) {
-    case "claude":
-      return ".claude/settings.json";
-    case "codex":
-      return ".codex/hooks.json";
-    case "cursor":
-      return ".cursor/hooks.json";
-    default:
-      return runtime.locate("");
+  const { errors } = await uninstallSurfaces(projectRoot, runtime.relativePath, [ORIENT_SURFACE_ID], owner);
+  if (errors.length > 0) {
+    throw new Error(errors.join("; "));
   }
 }
 

@@ -15,6 +15,8 @@ export type {
   SurfaceSlot,
 } from "./types";
 
+export { SUBSYSTEM_CTX_GUARD, SUBSYSTEM_ORIENT, SUBSYSTEM_SECURITY } from "./types";
+
 export {
   HARNESS_ADAPTERS,
   SETTINGS_FILE_OWNERS,
@@ -27,23 +29,33 @@ export {
 
 export { createSettingsFileOwner, installSurfaces, uninstallSurfaces } from "./settings-file";
 
-export {
-  MANAGED_KEY,
-  addSentinelTo,
-  arrayAt,
-  hooksObject,
-  isManagedBy,
-  managedGroups,
-  mergeIntoHookArray,
-  readSettingsFile,
-  removeSentinelFrom,
-  stripFromHookArray,
-  stripManagedBy,
-  writeSettingsFile,
-} from "./settings-json";
+// F10: NOT exported here — `mergeIntoHookArray`, `addSentinelTo`,
+// `removeSentinelFrom`, `stripFromHookArray`, `stripManagedBy` are raw
+// mutation primitives a caller outside this directory should never reach for
+// directly: every WRITE goes through a `SurfaceAdapter`'s own `merge`/`strip`
+// and then a `SettingsFileOwner` (`installSurfaces`/`uninstallSurfaces`
+// above), which is what actually enforces the coherence/validation
+// guarantees this registry exists for. `readSettingsFile`/`writeSettingsFile`
+// are held to the same bar for the same reason (a caller reading the file
+// itself, bypassing `installSurfaces`, is one step from also writing it
+// bypassing `SettingsFileOwner`) even though a read alone cannot corrupt
+// anything; `src/ctx/hook-install.ts` is the one documented exception (it
+// reads the pre-merge state to report what an install would upgrade) and
+// imports it from the deep path for exactly that reason. All of these stay
+// importable from the deep module path (`src/integrations/settings-json.ts`)
+// for this directory's own surfaces and for tests that need to construct
+// fixtures directly.
+export { MANAGED_KEY, arrayAt, hooksObject, isManagedBy, managedGroups } from "./settings-json";
 export type { GroupShape, ManagedGroupsQuery } from "./settings-json";
 
-export { allowAction, parseToolName, refusalAction } from "./codecs";
+export {
+  ANTIGRAVITY_DECISION_CODEC,
+  CURSOR_DECISION_CODEC,
+  EXIT_CODE_DECISION_CODEC,
+  allowAction,
+  parseToolName,
+  refusalAction,
+} from "./codecs";
 
 export {
   AGENT_CHECK_INPUT_COMMAND,

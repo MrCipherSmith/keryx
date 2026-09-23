@@ -21,6 +21,15 @@ import {
   stripFromHookArray,
   stripManagedBy,
 } from "./settings-json";
+import {
+  ANTIGRAVITY_DECISION_CODEC,
+  CURSOR_DECISION_CODEC,
+  EXIT_CODE_DECISION_CODEC,
+  parseAntigravityCommand,
+  parseCursorCommand,
+  parseToolInputCommand,
+  parseWindsurfCommand,
+} from "./codecs";
 import type { Settings, SurfaceAdapter } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -71,12 +80,13 @@ function nestedCtxSurface(opts: {
   id: string;
   relativePath: string;
   confidence: "verified" | "experimental";
-  matcher: string;
+  nativeSearchTools?: readonly string[];
   container?: string;
   key: string;
   sourceDocs: readonly string[];
 }): SurfaceAdapter {
-  const { id, relativePath, confidence, matcher, container, key, sourceDocs } = opts;
+  const { id, relativePath, confidence, nativeSearchTools, container, key, sourceDocs } = opts;
+  const matcher = preToolUseMatcher(nativeSearchTools);
   return {
     id: "ctx-guard",
     flag: "block",
@@ -86,10 +96,26 @@ function nestedCtxSurface(opts: {
     sourceDocs,
     settingsFile: (root) => path.join(root, ...relativePath.split("/")),
     relativePath,
-    slots: container ? [{ key: container, type: "object" }] : [{ key: "hooks", type: "object" }],
+    // `mergeIntoHookArray` also writes `_keryxManaged` and, when migrating a
+    // pre-existing legacy `hooks` array, `unmigratedHooks` — both must be
+    // declared or the coherence check (F3/OQ-3) cannot see collisions there.
+    slots: [
+      { key: container ?? "hooks", type: "object", access: "owns" },
+      { key: "_keryxManaged", type: "array", access: "owns" },
+      { key: "unmigratedHooks", type: "array", access: "owns" },
+    ],
     merge: (s) => mergeIntoHookArray(s, key, nestedPreToolUseGroup(id, matcher), CTX_HOOK_SENTINEL),
     strip: (s) => stripFromHookArray(s, key, CTX_HOOK_SENTINEL),
     validate: nestedCtxValidate(id, matcher, container, key),
+    // Per-runtime ctx-guard facts, carried here (F4) rather than duplicated
+    // in `src/ctx/runtimes.ts`'s own per-runtime literal.
+    label: `${relativePath} (${key})`,
+    groupShape: "nested",
+    groupKey: key,
+    ...(container !== undefined ? { groupContainer: container } : {}),
+    ...(nativeSearchTools !== undefined ? { nativeSearchTools } : {}),
+    payloadCodec: parseToolInputCommand,
+    decisionCodec: EXIT_CODE_DECISION_CODEC,
   };
 }
 
@@ -110,7 +136,7 @@ export const CTX_GUARD_CLAUDE: SurfaceAdapter = nestedCtxSurface({
   id: "claude",
   relativePath: ".claude/settings.json",
   confidence: "verified",
-  matcher: preToolUseMatcher(["Grep"]),
+  nativeSearchTools: ["Grep"],
   key: "PreToolUse",
   sourceDocs: ["src/ctx/runtimes.ts"],
 });
@@ -119,7 +145,6 @@ export const CTX_GUARD_CODEX: SurfaceAdapter = nestedCtxSurface({
   id: "codex",
   relativePath: ".codex/hooks.json",
   confidence: "verified",
-  matcher: preToolUseMatcher(undefined),
   key: "PreToolUse",
   sourceDocs: ["src/ctx/runtimes.ts", "docs/docs/harness.md"],
 });
@@ -134,8 +159,10 @@ export const CTX_GUARD_CURSOR: SurfaceAdapter = {
   settingsFile: (root) => path.join(root, ".cursor", "hooks.json"),
   relativePath: ".cursor/hooks.json",
   slots: [
-    { key: "hooks", type: "object" },
-    { key: "version", type: "number" },
+    { key: "hooks", type: "object", access: "owns" },
+    { key: "version", type: "number", access: "owns" },
+    { key: "_keryxManaged", type: "array", access: "owns" },
+    { key: "unmigratedHooks", type: "array", access: "owns" },
   ],
   merge: (s) => {
     s.version = typeof s.version === "number" ? s.version : 1;
@@ -148,6 +175,11 @@ export const CTX_GUARD_CURSOR: SurfaceAdapter = {
   },
   strip: (s) => stripFromHookArray(s, "beforeShellExecution", CTX_HOOK_SENTINEL),
   validate: flatCtxValidate("cursor", "beforeShellExecution", "cursor: missing beforeShellExecution guard"),
+  label: ".cursor/hooks.json (beforeShellExecution)",
+  groupShape: "flat",
+  groupKey: "beforeShellExecution",
+  payloadCodec: parseCursorCommand,
+  decisionCodec: CURSOR_DECISION_CODEC,
 };
 
 export const CTX_GUARD_WINDSURF: SurfaceAdapter = {
@@ -159,7 +191,11 @@ export const CTX_GUARD_WINDSURF: SurfaceAdapter = {
   sourceDocs: ["src/ctx/runtimes.ts"],
   settingsFile: (root) => path.join(root, ".windsurf", "hooks.json"),
   relativePath: ".windsurf/hooks.json",
-  slots: [{ key: "hooks", type: "object" }],
+  slots: [
+    { key: "hooks", type: "object", access: "owns" },
+    { key: "_keryxManaged", type: "array", access: "owns" },
+    { key: "unmigratedHooks", type: "array", access: "owns" },
+  ],
   merge: (s) =>
     mergeIntoHookArray(
       s,
@@ -169,6 +205,11 @@ export const CTX_GUARD_WINDSURF: SurfaceAdapter = {
     ),
   strip: (s) => stripFromHookArray(s, "pre_run_command", CTX_HOOK_SENTINEL),
   validate: flatCtxValidate("windsurf", "pre_run_command", "windsurf: missing pre_run_command guard"),
+  label: ".windsurf/hooks.json (pre_run_command)",
+  groupShape: "flat",
+  groupKey: "pre_run_command",
+  payloadCodec: parseWindsurfCommand,
+  decisionCodec: EXIT_CODE_DECISION_CODEC,
 };
 
 const ANTIGRAVITY_CONTAINER = "keryx-ctx-guard";
@@ -183,7 +224,10 @@ export const CTX_GUARD_ANTIGRAVITY: SurfaceAdapter = {
   sourceDocs: ["src/ctx/runtimes.ts"],
   settingsFile: (root) => path.join(root, ".agents", "hooks.json"),
   relativePath: ".agents/hooks.json",
-  slots: [{ key: ANTIGRAVITY_CONTAINER, type: "object" }],
+  slots: [
+    { key: ANTIGRAVITY_CONTAINER, type: "object", access: "owns" },
+    { key: "_keryxManaged", type: "array", access: "owns" },
+  ],
   merge: (s) => {
     const existing = typeof s[ANTIGRAVITY_CONTAINER] === "object" && s[ANTIGRAVITY_CONTAINER] !== null
       ? (s[ANTIGRAVITY_CONTAINER] as Settings)
@@ -225,6 +269,12 @@ export const CTX_GUARD_ANTIGRAVITY: SurfaceAdapter = {
     }).length === 0
       ? ["antigravity: missing run_command guard"]
       : [],
+  label: ".agents/hooks.json (PreToolUse/run_command)",
+  groupShape: "nested",
+  groupKey: "PreToolUse",
+  groupContainer: ANTIGRAVITY_CONTAINER,
+  payloadCodec: parseAntigravityCommand,
+  decisionCodec: ANTIGRAVITY_DECISION_CODEC,
 };
 
 // OpenCode has no JSON hook config — it loads JS/TS plugins. The bridge plugin
@@ -249,7 +299,12 @@ export const KeryxCtxGuard = async () => ({
 `;
 
 export const CTX_GUARD_OPENCODE: SurfaceAdapter = {
-  id: "opencode",
+  // "ctx-guard", like every other ctx-guard surface (F10) — opencode used to
+  // be the only one keying its surface id to the harness id instead of its
+  // subsystem; nothing depended on that (opencode owns its file outright, so
+  // there is no owner-map collision), and the CtxRuntime built from this
+  // surface still gets its `id` from the harness adapter, not the surface.
+  id: "ctx-guard",
   flag: "block",
   subsystem: "ctx-guard",
   sentinel: CTX_HOOK_SENTINEL,
@@ -259,6 +314,9 @@ export const CTX_GUARD_OPENCODE: SurfaceAdapter = {
   settingsFile: (root) => path.join(root, ".opencode", "plugin", "keryx-ctx-guard.js"),
   relativePath: ".opencode/plugin/keryx-ctx-guard.js",
   slots: [],
+  label: ".opencode/plugin/keryx-ctx-guard.js",
+  payloadCodec: parseToolInputCommand,
+  decisionCodec: EXIT_CODE_DECISION_CODEC,
   customInstall: async (root) => {
     const { mkdir, writeFile } = await import("node:fs/promises");
     const file = CTX_GUARD_OPENCODE.settingsFile!(root);
@@ -319,7 +377,11 @@ export const ORIENT_CLAUDE: SurfaceAdapter = {
   sourceDocs: ["src/ctx/orient-runtimes.ts"],
   settingsFile: (root) => path.join(root, ".claude", "settings.json"),
   relativePath: ".claude/settings.json",
-  slots: [{ key: "hooks", type: "object" }],
+  slots: [
+    { key: "hooks", type: "object", access: "owns" },
+    { key: "_keryxManaged", type: "array", access: "owns" },
+    { key: "unmigratedHooks", type: "array", access: "owns" },
+  ],
   merge: (s) =>
     mergeIntoHookArray(
       s,
@@ -329,6 +391,7 @@ export const ORIENT_CLAUDE: SurfaceAdapter = {
     ),
   strip: (s) => stripFromHookArray(s, "UserPromptSubmit", ORIENT_SENTINEL),
   validate: orientValidate("claude", "UserPromptSubmit", "claude: missing UserPromptSubmit orientation hook"),
+  label: ".claude/settings.json (UserPromptSubmit)",
 };
 
 export const ORIENT_CODEX: SurfaceAdapter = {
@@ -340,7 +403,11 @@ export const ORIENT_CODEX: SurfaceAdapter = {
   sourceDocs: ["src/ctx/orient-runtimes.ts"],
   settingsFile: (root) => path.join(root, ".codex", "hooks.json"),
   relativePath: ".codex/hooks.json",
-  slots: [{ key: "hooks", type: "object" }],
+  slots: [
+    { key: "hooks", type: "object", access: "owns" },
+    { key: "_keryxManaged", type: "array", access: "owns" },
+    { key: "unmigratedHooks", type: "array", access: "owns" },
+  ],
   merge: (s) =>
     mergeIntoHookArray(
       s,
@@ -350,6 +417,7 @@ export const ORIENT_CODEX: SurfaceAdapter = {
     ),
   strip: (s) => stripFromHookArray(s, "UserPromptSubmit", ORIENT_SENTINEL),
   validate: orientValidate("codex", "UserPromptSubmit", "codex: missing UserPromptSubmit orientation hook"),
+  label: ".codex/hooks.json (UserPromptSubmit)",
 };
 
 export const ORIENT_CURSOR: SurfaceAdapter = {
@@ -362,8 +430,10 @@ export const ORIENT_CURSOR: SurfaceAdapter = {
   settingsFile: (root) => path.join(root, ".cursor", "hooks.json"),
   relativePath: ".cursor/hooks.json",
   slots: [
-    { key: "hooks", type: "object" },
-    { key: "version", type: "number" },
+    { key: "hooks", type: "object", access: "owns" },
+    { key: "version", type: "number", access: "owns" },
+    { key: "_keryxManaged", type: "array", access: "owns" },
+    { key: "unmigratedHooks", type: "array", access: "owns" },
   ],
   merge: (s) => {
     s.version = typeof s.version === "number" ? s.version : 1;
@@ -376,6 +446,7 @@ export const ORIENT_CURSOR: SurfaceAdapter = {
   },
   strip: (s) => stripFromHookArray(s, "sessionStart", ORIENT_SENTINEL),
   validate: orientValidate("cursor", "sessionStart", "cursor: missing sessionStart orientation hook"),
+  label: ".cursor/hooks.json (sessionStart)",
 };
 
 // Harnesses whose hooks CANNOT inject context (block-only / undocumented).
@@ -419,7 +490,11 @@ export const SECURITY_CHECK_INPUT_CLAUDE: SurfaceAdapter = {
   sourceDocs: ["src/security/agent-hooks/runtimes.ts"],
   settingsFile: (root) => path.join(root, ".claude", "settings.json"),
   relativePath: ".claude/settings.json",
-  slots: [{ key: "hooks", type: "object" }],
+  slots: [
+    { key: "hooks", type: "object", access: "owns" },
+    { key: "_keryxManaged", type: "array", access: "owns" },
+    { key: "unmigratedHooks", type: "array", access: "owns" },
+  ],
   merge: (s) =>
     mergeIntoHookArray(
       s,
@@ -443,7 +518,11 @@ export const SECURITY_CHECK_OUTPUT_CLAUDE: SurfaceAdapter = {
   sourceDocs: ["src/security/agent-hooks/runtimes.ts"],
   settingsFile: (root) => path.join(root, ".claude", "settings.json"),
   relativePath: ".claude/settings.json",
-  slots: [{ key: "hooks", type: "object" }],
+  slots: [
+    { key: "hooks", type: "object", access: "owns" },
+    { key: "_keryxManaged", type: "array", access: "owns" },
+    { key: "unmigratedHooks", type: "array", access: "owns" },
+  ],
   merge: (s) =>
     mergeIntoHookArray(
       s,
@@ -462,6 +541,15 @@ export const SECURITY_CHECK_OUTPUT_CLAUDE: SurfaceAdapter = {
       : ["claude: missing PreToolUse check-output hook"],
 };
 
+/**
+ * F6 (deliberate behaviour change, decision recorded by the orchestrator):
+ * only entries carrying the `_keryxManaged` sentinel count towards "the check
+ * hook is installed" — an unmanaged entry whose `command` merely happens to
+ * start with the right base string no longer validates as installed. Before
+ * this, a hostile or accidental unmanaged entry with the right-shaped command
+ * (but none of the sentinel bookkeeping) could pass validation while never
+ * having gone through this installer at all.
+ */
 function hasStartsWithCommand(settings: Settings, container: string, key: string, base: string): boolean {
   const isManaged = isManagedBy(AGENT_HOOKS_SENTINEL);
   const holder = typeof settings[container] === "object" && settings[container] !== null ? (settings[container] as Settings) : undefined;
@@ -520,10 +608,26 @@ function flatOn(g: unknown): string | undefined {
   return typeof g === "object" && g !== null ? ((g as Record<string, unknown>).on as string | undefined) : undefined;
 }
 
+/**
+ * A managed entry carrying the security sentinel that neither the input nor
+ * the output surface claims — `on` is something other than `"input"`/
+ * `"output"`. Nothing in the two-surface model ever installs one, but
+ * nothing removed one either (probe P8): each surface's filter only matched
+ * its OWN `on`, so an entry with a stray `on` (or none) sat forever, and the
+ * strip-clears-the-sentinel check only looked at the sibling `on`, so it
+ * could leave the sentinel behind claiming an orphan that outlives both
+ * surfaces. Each surface's merge/strip below also sweeps these up, and the
+ * sentinel is cleared only when NO managed entry remains at all — matching
+ * the pre-refactor `flatStrip`, which cleared unconditionally.
+ */
+function isOrphanManagedEntry(g: unknown): boolean {
+  const on = flatOn(g);
+  return isManagedBy(AGENT_HOOKS_SENTINEL)(g) && on !== "input" && on !== "output";
+}
+
 function flatSecuritySurface(harnessId: string, on: "input" | "output", relativePath: string): SurfaceAdapter {
   const command = on === "input" ? checkInputCommand(harnessId) : checkOutputCommand(harnessId);
   const base = on === "input" ? AGENT_CHECK_INPUT_COMMAND : AGENT_CHECK_OUTPUT_COMMAND;
-  const siblingOn = on === "input" ? "output" : "input";
   return {
     id: on === "input" ? "security-check-input" : "security-check-output",
     flag: on === "input" ? "prompt-gate" : "block",
@@ -536,11 +640,19 @@ function flatSecuritySurface(harnessId: string, on: "input" | "output", relative
     sourceDocs: ["src/security/agent-hooks/runtimes.ts"],
     settingsFile: (root) => path.join(root, ...relativePath.split("/")),
     relativePath,
-    slots: [{ key: SECURITY_HOOKS_KEY, type: "array" }],
+    slots: [
+      { key: SECURITY_HOOKS_KEY, type: "array", access: "owns" },
+      { key: "_keryxManaged", type: "array", access: "owns" },
+      // `dropLegacyHooksArray` only ever touches a PRE-EXISTING `hooks`
+      // array (a shape written before `securityHooks` existed) and never
+      // creates the key — see `SurfaceSlot.access` — so it coexists with a
+      // ctx-guard/orient surface on the same file declaring `hooks: object`.
+      { key: "hooks", type: "array", access: "migrates-legacy" },
+    ],
     merge: (s) => {
       dropLegacyHooksArray(s);
       const existing = Array.isArray(s[SECURITY_HOOKS_KEY]) ? (s[SECURITY_HOOKS_KEY] as unknown[]) : [];
-      const kept = existing.filter((g) => !(isManagedBy(AGENT_HOOKS_SENTINEL)(g) && flatOn(g) === on));
+      const kept = existing.filter((g) => !(isManagedBy(AGENT_HOOKS_SENTINEL)(g) && flatOn(g) === on) && !isOrphanManagedEntry(g));
       s[SECURITY_HOOKS_KEY] = [...kept, { on, command, [MANAGED_KEY]: AGENT_HOOKS_SENTINEL }];
       addSentinelTo(s, AGENT_HOOKS_SENTINEL);
       return s;
@@ -548,11 +660,14 @@ function flatSecuritySurface(harnessId: string, on: "input" | "output", relative
     strip: (s) => {
       dropLegacyHooksArray(s);
       const existing = Array.isArray(s[SECURITY_HOOKS_KEY]) ? (s[SECURITY_HOOKS_KEY] as unknown[]) : [];
-      const remaining = existing.filter((g) => !(isManagedBy(AGENT_HOOKS_SENTINEL)(g) && flatOn(g) === on));
+      const remaining = existing.filter((g) => !(isManagedBy(AGENT_HOOKS_SENTINEL)(g) && flatOn(g) === on) && !isOrphanManagedEntry(g));
       if (remaining.length > 0) s[SECURITY_HOOKS_KEY] = remaining;
       else delete s[SECURITY_HOOKS_KEY];
-      const siblingPresent = remaining.some((g) => isManagedBy(AGENT_HOOKS_SENTINEL)(g) && flatOn(g) === siblingOn);
-      if (!siblingPresent) removeSentinelFrom(s, AGENT_HOOKS_SENTINEL);
+      // Clear the sentinel only when NO managed entry remains at all (not
+      // only the sibling's `on`) — an orphan must never keep the sentinel
+      // alive once both real surfaces are gone.
+      const anyManagedRemains = remaining.some((g) => isManagedBy(AGENT_HOOKS_SENTINEL)(g));
+      if (!anyManagedRemains) removeSentinelFrom(s, AGENT_HOOKS_SENTINEL);
       return s;
     },
     validate: (s) => {

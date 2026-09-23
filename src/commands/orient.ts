@@ -121,8 +121,13 @@ async function handleUninstall(args: string[]): Promise<void> {
       console.log(`  · ${runtime.id} ${present ? `-> would strip ${target}` : "nothing to remove"}`);
       continue;
     }
-    const removed = await uninstallOne(cwd, runtime);
-    console.log(`  ${removed ? "✓" : "·"} ${runtime.id} ${removed ? `-> ${target}` : "nothing to remove"}`);
+    try {
+      const removed = await uninstallOne(cwd, runtime);
+      console.log(`  ${removed ? "✓" : "·"} ${runtime.id} ${removed ? `-> ${target}` : "nothing to remove"}`);
+    } catch (error) {
+      console.error(`  ✗ ${error instanceof Error ? error.message : String(error)}`);
+      process.exitCode = 1;
+    }
   }
   reportUnsupported(unsupported);
 }
