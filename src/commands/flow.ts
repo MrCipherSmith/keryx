@@ -61,17 +61,42 @@ function positional(args: string[], index: number): string | undefined {
 }
 
 /**
- * Split `args` into positionals and `--flag [value]` / `--flag=value` pairs,
- * in one pass. Shared by {@link rejectUnusedAcArgs} — a flag's value is never
- * mistaken for a second positional, matching {@link optionValue}'s own rule
- * that the next token is a value only when it does not itself start with `--`.
+ * Tokenize, validate, and extract flag values for one `flow ac` subcommand,
+ * in a single pass — replacing `rejectUnusedAcArgs` + separate `optionValue`
+ * calls (flow 293 T9, review finding #4).
+ *
+ * The two-pass version had a `flow ac confirm <id> AC1 --note "--dry-run
+ * mode was used"` bug: `optionValue`'s generic rule — "the next token is a
+ * value only if it does not itself start with `--`" — exists to stop
+ * `--runtime --json` from reading `--json` as `--runtime`'s value, but it
+ * also means a value that legitimately STARTS WITH `--` (quoted text, here)
+ * is never consumed as one. The strict-argument check then saw that same
+ * unconsumed string as its own token, and because it too starts with `--`,
+ * reported it as an unrecognised flag — refusing a legitimate confirm with a
+ * misleading `unknown option --dry-run mode was used…`. Every flag `flow ac`
+ * accepts is a value flag (there are no booleans here), so this function
+ * knows that once and applies it once: a recognised flag ALWAYS consumes the
+ * very next token as its value, whatever that token looks like — UNLESS the
+ * next token is itself one of this subcommand's known flag names, which is
+ * refused by name (`missing value for --note`) rather than silently eating
+ * the next flag as if it were text.
+ *
+ * This is still the `rejectUnknownFlags` precedent from `keryx review`
+ * (`src/commands/review.ts:363-374`) — "refused rather than ignored" —
+ * extended to the positional count (an extra positional, e.g. the AC3
+ * regression's stray `AC1`, is the same failure as an unrecognised flag) and
+ * now also to value extraction, so the check and the value a caller reads
+ * can never disagree about what a flag's value was.
  */
-function tokenizeArgs(args: readonly string[]): {
-  positionals: string[];
-  flags: Array<{ name: string; value: string | undefined }>;
-} {
+function parseAcArgs(
+  args: readonly string[],
+  usage: string,
+  allowedFlags: readonly string[],
+  maxPositionals: number,
+): { positionals: string[]; values: Map<string, string> } {
   const positionals: string[] = [];
-  const flags: Array<{ name: string; value: string | undefined }> = [];
+  const values = new Map<string, string>();
+  const problems: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index] as string;
     if (!token.startsWith("--")) {
@@ -80,60 +105,40 @@ function tokenizeArgs(args: readonly string[]): {
     }
     const equals = token.indexOf("=");
     if (equals > 0) {
-      flags.push({ name: token.slice(0, equals), value: token.slice(equals + 1) });
+      const name = token.slice(0, equals);
+      if (allowedFlags.includes(name)) {
+        values.set(name, token.slice(equals + 1));
+      } else {
+        problems.push(`unknown option ${name}`);
+      }
+      continue;
+    }
+    if (!allowedFlags.includes(token)) {
+      problems.push(`unknown option ${token}`);
       continue;
     }
     const next = args[index + 1];
-    if (next !== undefined && !next.startsWith("--")) {
-      flags.push({ name: token, value: next });
-      index += 1;
+    if (next === undefined || allowedFlags.includes(next)) {
+      problems.push(`missing value for ${token}`);
       continue;
     }
-    flags.push({ name: token, value: undefined });
+    values.set(token, next);
+    index += 1;
   }
-  return { positionals, flags };
-}
-
-/**
- * Refuse anything a `flow ac` subcommand does not use — an extra positional
- * or an unknown flag — instead of dropping it silently (flow 293, AC3).
- *
- * `keryx flow ac update <id> AC1 --text "…" --reason "…"` used to be
- * accepted: `requireId` only scans for the first non-flag token, so `AC1`
- * fell out unnoticed, and `--text` had no consumer at all. The command
- * printed "Acceptance criteria re-frozen" and re-sealed the checksum over
- * whatever was already on disk — changing nothing the caller asked for while
- * reporting success. Two real flows ended up with amendments recorded in
- * `history` that never reached `acceptance-criteria.md`, one of them
- * completed against the unamended wording.
- *
- * This is the `rejectUnknownFlags` precedent from `keryx review`
- * (`src/commands/review.ts:363-374`) — "refused rather than ignored" —
- * extended to the positional count: a positional silently dropped is the
- * same failure as a flag silently dropped.
- */
-function rejectUnusedAcArgs(
-  args: readonly string[],
-  usage: string,
-  allowedFlags: readonly string[],
-  maxPositionals: number,
-): void {
-  const { positionals, flags } = tokenizeArgs(args);
-  const problems = [
+  const problemsWithPositionals = [
     ...positionals.slice(maxPositionals).map((value) => `unexpected argument "${value}"`),
-    ...[...new Set(flags.map((flag) => flag.name).filter((name) => !allowedFlags.includes(name)))].map(
-      (name) => `unknown option ${name}`,
-    ),
+    ...problems,
   ];
-  if (problems.length === 0) {
-    return;
+  if (problemsWithPositionals.length > 0) {
+    const positionalNote =
+      maxPositionals > 0 ? `, and ${maxPositionals} positional argument${maxPositionals > 1 ? "s" : ""}` : "";
+    throw new Error(
+      `Refused for \`keryx flow ac ${usage}\`: ${problemsWithPositionals.join(", ")}. ` +
+        `Accepted: ${allowedFlags.length > 0 ? allowedFlags.join(", ") : "(no flags)"}${positionalNote}. ` +
+        "Refused rather than ignored — an argument that is silently dropped changes nothing and reports success.",
+    );
   }
-  const positionalNote = maxPositionals > 0 ? `, and ${maxPositionals} positional argument${maxPositionals > 1 ? "s" : ""}` : "";
-  throw new Error(
-    `Refused for \`keryx flow ac ${usage}\`: ${problems.join(", ")}. ` +
-      `Accepted: ${allowedFlags.length > 0 ? allowedFlags.join(", ") : "(no flags)"}${positionalNote}. ` +
-      "Refused rather than ignored — an argument that is silently dropped changes nothing and reports success.",
-  );
+  return { positionals, values };
 }
 
 const AC_CONFIRM_FLAGS = ["--note", "--signed-by"] as const;
@@ -272,13 +277,21 @@ async function readGitUserEmail(cwd: string): Promise<string | undefined> {
   }
 }
 
-/** Signer identity inputs shared by `flow ac confirm` and `flow complete` (AC3, AC4). */
+/**
+ * Signer identity inputs shared by `flow ac confirm` and `flow complete`
+ * (AC3, AC4). Takes the already-resolved `--signed-by` value rather than
+ * re-parsing `args` itself: `flow complete` still resolves it via the
+ * generic `optionValue`, while `flow ac confirm` resolves it via
+ * {@link parseAcArgs} (flow 293 T9, review finding #4) — one function, two
+ * value sources, so the two commands' different flag-parsing rules never
+ * have to agree with each other, only each with its own caller.
+ */
 async function signerIdentityArgs(
   cwd: string,
-  args: string[],
+  signedBy: string | undefined,
 ): Promise<{ signedBy: string | undefined; signedByEnv: string | undefined; gitIdentity: string | undefined }> {
   return {
-    signedBy: optionValue(args, "--signed-by"),
+    signedBy,
     signedByEnv: process.env["KERYX_ACTOR"],
     gitIdentity: await readGitUserEmail(cwd),
   };
@@ -797,10 +810,9 @@ async function runOwner(args: string[]): Promise<void> {
 async function runAc(args: string[]): Promise<void> {
   const sub = args[0];
   if (sub === "confirm") {
-    const rest = args.slice(1);
-    rejectUnusedAcArgs(rest, "confirm", AC_CONFIRM_FLAGS, 2);
-    const id = args[1];
-    const criterion = args[2];
+    const { positionals, values } = parseAcArgs(args.slice(1), "confirm", AC_CONFIRM_FLAGS, 2);
+    const id = positionals[0];
+    const criterion = positionals[1];
     if (!id || !criterion) {
       throw new Error('Usage: keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]');
     }
@@ -809,8 +821,8 @@ async function runAc(args: string[]): Promise<void> {
       cwd,
       id,
       criterion,
-      note: optionValue(args, "--note"),
-      ...(await signerIdentityArgs(cwd, args)),
+      note: values.get("--note"),
+      ...(await signerIdentityArgs(cwd, values.get("--signed-by"))),
     });
     console.log(`  ${style.green(symbols.ok)} Confirmed ${style.bold(criterion.toUpperCase())} ${style.dim(`(${Object.keys(flow.acConfirmed).length} total)`)}`);
     const signature = flow.signatures?.at(-1);
@@ -820,12 +832,11 @@ async function runAc(args: string[]): Promise<void> {
     return;
   }
   if (sub === "update") {
-    const rest = args.slice(1);
-    rejectUnusedAcArgs(rest, "update", AC_UPDATE_FLAGS, 1);
-    const id = requireId(rest);
-    const reason = optionValue(args, "--reason");
-    const criterion = optionValue(args, "--criterion");
-    const text = optionValue(args, "--text");
+    const { positionals, values } = parseAcArgs(args.slice(1), "update", AC_UPDATE_FLAGS, 1);
+    const id = requireId(positionals);
+    const reason = values.get("--reason");
+    const criterion = values.get("--criterion");
+    const text = values.get("--text");
     if ((criterion === undefined) !== (text === undefined)) {
       throw new Error(
         'Usage: keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>" ' +
@@ -849,10 +860,9 @@ async function runAc(args: string[]): Promise<void> {
     return;
   }
   if (sub === "reseal") {
-    const rest = args.slice(1);
-    rejectUnusedAcArgs(rest, "reseal", AC_RESEAL_FLAGS, 1);
-    const id = requireId(rest);
-    const reason = optionValue(args, "--reason");
+    const { positionals, values } = parseAcArgs(args.slice(1), "reseal", AC_RESEAL_FLAGS, 1);
+    const id = requireId(positionals);
+    const reason = values.get("--reason");
     if (!reason) {
       throw new Error('Usage: keryx flow ac reseal <id> --reason "<why the checksum is stale>"');
     }
@@ -888,7 +898,7 @@ async function runComplete(args: string[]): Promise<void> {
     id,
     comment: args.includes("--comment"),
     mergedCommit: optionValue(args, "--merged"),
-    ...(await signerIdentityArgs(cwd, args)),
+    ...(await signerIdentityArgs(cwd, optionValue(args, "--signed-by"))),
   });
 
   heading(

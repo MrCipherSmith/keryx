@@ -139,6 +139,23 @@ function validateCriterionText(raw: string): string {
   return trimmed;
 }
 
+/**
+ * Validate `--reason` on `ac update`/`ac reseal` (flow 293 T9, review finding
+ * #3): `save()` writes `detail` — which embeds `reason` verbatim — as ONE
+ * `journal.md` bullet (`appendJournal`, `- <at> - <event>: <detail>\n`). A
+ * `reason` carrying its own `\n` therefore breaks that line into a second,
+ * unprefixed line, corrupting the journal for every reader after it. Refused
+ * rather than silently flattened, matching the rule `--text` already applies
+ * (`validateCriterionText` above) rather than inventing a second one.
+ */
+function validateSingleLineReason(reason: string): void {
+  if (reason.includes("\n") || reason.includes("\r")) {
+    throw new Error(
+      "--reason must fit on one line (no line breaks) — it is written as a single `journal.md` bullet.",
+    );
+  }
+}
+
 export function createFlowService(deps: FlowServiceDeps): FlowService {
   const now = () => deps.now().toISOString();
 
@@ -616,6 +633,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       if (!reason?.trim()) {
         throw new Error('flow ac update requires --reason "<why the criteria changed>"');
       }
+      validateSingleLineReason(reason);
       if ((criterion === undefined) !== (text === undefined)) {
         throw new Error(
           "flow ac update requires --criterion and --text together, or neither " +
@@ -631,10 +649,23 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           const highest = known.reduce((max, ac) => Math.max(max, Number(ac.slice(2)) || 0), 0);
           const nextUnused = `AC${highest + 1}`;
           if (!known.includes(normalizedCriterion) && normalizedCriterion !== nextUnused) {
+            const requestedNumber = Number(normalizedCriterion.slice(2));
+            // "Next unused" is always highest-known + 1, never the lowest gap:
+            // appending AC3 after AC4 exists would put it out of order in the
+            // file. A gap (AC1, AC2, AC4 — AC3 missing) is therefore never
+            // fillable through `--criterion`/`--text`; the refusal says so
+            // explicitly rather than repeating the generic "neither known nor
+            // next" message for a caller who has no way to satisfy it via a
+            // different --criterion value (flow 293 T9, review finding #5).
+            const gapNote =
+              requestedNumber < highest
+                ? ` ${normalizedCriterion} is a gap in the numbering — this command cannot fill a gap; edit ` +
+                  'acceptance-criteria.md directly and re-freeze with `flow ac update <id> --reason "..."` (no --criterion/--text).'
+                : "";
             throw new Error(
               `--criterion ${normalizedCriterion} is neither an existing criterion ` +
-                `(${known.join(", ") || "none yet"}) nor the next unused one (${nextUnused}). ` +
-                `Use an existing ACn to replace its text, or ${nextUnused} to add a new criterion.`,
+                `(${known.join(", ") || "none yet"}) nor the next unused one; the next number is ${nextUnused}.` +
+                `${gapNote} Use an existing ACn to replace its text, or ${nextUnused} to add a new criterion.`,
             );
           }
           const { previousText } = await writeAcCriterion(cwd, dir, normalizedCriterion, normalizedText);
@@ -665,6 +696,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       if (!reason?.trim()) {
         throw new Error('flow ac reseal requires --reason "<why the checksum is stale>"');
       }
+      validateSingleLineReason(reason);
       return mutate(cwd, id, async ({ dir, flow }) => {
         if (!flow.acChecksum) {
           throw new Error("flow ac reseal: the criteria are not frozen yet, so there is no checksum to re-seal.");

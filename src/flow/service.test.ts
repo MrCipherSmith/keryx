@@ -307,6 +307,83 @@ test("AC4: `acUpdate` validates --criterion and --text before writing anything",
   expect(afterFile).toBe(originalFile);
 });
 
+// Flow 293 T9, review finding #3: `save()` embeds `detail` (which carries
+// `reason` verbatim) as ONE `journal.md` bullet. A multi-line `--reason`
+// therefore breaks that bullet into a second, unprefixed line, corrupting
+// the journal for every reader after it — refused rather than silently
+// accepted, same rule `--text` already applies.
+test("review #3: `acUpdate` and `acReseal` refuse a --reason with a line break, and nothing is written", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps({ tracker: null }));
+  const { flow } = await service.init({ cwd: ROOT, title: "Multi-line reason" });
+  const dir = `001-2026-07-07-multi-line-reason`;
+  await writeAc(dir, ["Only criterion"]);
+  const frozen = await service.freeze({ cwd: ROOT, id: flow.id });
+  const journalPath = path.join(ROOT, ".metaproject", "flows", dir, "journal.md");
+  const journalBefore = await readFile(journalPath, "utf8");
+
+  await expect(
+    service.acUpdate({ cwd: ROOT, id: flow.id, reason: "line one\nline two" }),
+  ).rejects.toThrow(/one line/);
+  await expect(
+    service.acUpdate({ cwd: ROOT, id: flow.id, criterion: "AC1", text: "fine", reason: "line one\nline two" }),
+  ).rejects.toThrow(/one line/);
+
+  // acReseal needs a stale-but-unchanged checksum to reach its own reason
+  // check — force one the same way ac-reseal.test.ts does, by editing
+  // flow.json's acChecksum directly rather than the (untouchable) file.
+  const flowJsonPath = path.join(ROOT, ".metaproject", "flows", dir, "flow.json");
+  const raw = JSON.parse(await readFile(flowJsonPath, "utf8")) as { acChecksum: string };
+  raw.acChecksum = "sha256:0000000000000000000000000000000000000000000000000000000000000";
+  await writeFile(flowJsonPath, JSON.stringify(raw, null, 2));
+  await expect(
+    service.acReseal({ cwd: ROOT, id: flow.id, reason: "line one\nline two" }),
+  ).rejects.toThrow(/one line/);
+
+  expect((await readFile(journalPath, "utf8"))).toBe(journalBefore);
+  expect(frozen.acChecksum).toMatch(/^sha256:/); // sanity: freeze itself unaffected
+});
+
+// Flow 293 T9, review finding #5: "next unused" is always highest-known + 1
+// (filling the lowest GAP would put a new line out of numeric order), so a
+// gap can never be closed through `--criterion`/`--text` — the refusal says
+// so explicitly, naming the gap, rather than repeating the generic
+// "neither known nor next" message for a value the caller has no way to fix.
+test("review #5: `acUpdate --criterion` names a gap in the numbering, distinctly from a plain out-of-range value", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps({ tracker: null }));
+  const { flow } = await service.init({ cwd: ROOT, title: "Gap in numbering" });
+  const dir = `001-2026-07-07-gap-in-numbering`;
+  // AC1, AC2, AC4 -- AC3 is a gap.
+  await writeFile(
+    path.join(ROOT, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+    "# Acceptance Criteria\n\n## Criteria\n\n- AC1: First\n- AC2: Second\n- AC4: Fourth\n",
+    "utf8",
+  );
+  await service.freeze({ cwd: ROOT, id: flow.id });
+
+  await expect(
+    service.acUpdate({ cwd: ROOT, id: flow.id, criterion: "AC3", text: "Filling the gap", reason: "why" }),
+  ).rejects.toThrow(/gap/);
+  // The next unused number (AC5) is still reported, and still works.
+  await expect(
+    service.acUpdate({ cwd: ROOT, id: flow.id, criterion: "AC9", text: "Too far ahead", reason: "why" }),
+  ).rejects.toThrow(/AC5/);
+  const updated = await service.acUpdate({
+    cwd: ROOT,
+    id: flow.id,
+    criterion: "AC5",
+    text: "Fifth, appended",
+    reason: "why",
+  });
+  const acFile = await readFile(
+    path.join(ROOT, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+    "utf8",
+  );
+  expect(acFile).toContain("- AC5: Fifth, appended");
+  expect(updated.acChecksum).toMatch(/^sha256:/);
+});
+
 test("full happy path: start -> tasks -> implemented -> confirm -> complete(done) + issue comment", async () => {
   await fresh();
   const tracker = fakeTracker();

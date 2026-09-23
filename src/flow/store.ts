@@ -248,6 +248,56 @@ export async function readAcCriteria(
 }
 
 const AC_LINE_PATTERN = /^(\s*)[-*]\s*(AC\d+)\s*:\s?(.*)$/i;
+const HEADING_PATTERN = /^\s*#/;
+
+/**
+ * `\r\n` if the file uses it anywhere, `\n` otherwise. Read once per write
+ * so the whole rewritten file comes back in the ending it was found in
+ * (review finding #1, flow 293 T9): `content.split("\n")` alone leaves a
+ * trailing `\r` on every line of a CRLF file, which `AC_LINE_PATTERN`'s
+ * anchored `(.*)$` can never match (`.` excludes `\r`, and `$` demands the
+ * literal end of the line string) — every line silently failed to match, so
+ * `writeAcCriterion` found neither a line to replace nor a last AC line to
+ * insert after, and appended a duplicate `- ACn:` past the end of the
+ * Criteria section while leaving the real line untouched and reporting
+ * `(new)` in history for a criterion that already existed.
+ */
+function detectEol(content: string): "\r\n" | "\n" {
+  return content.includes("\r\n") ? "\r\n" : "\n";
+}
+
+/** Split on either ending, so no line ever carries a stray trailing `\r`. */
+function splitLines(content: string): string[] {
+  return content.length > 0 ? content.split(/\r\n|\n/) : [];
+}
+
+/**
+ * The end (exclusive) of the criterion block starting at `lines[start]`.
+ *
+ * A block is its `- ACn:` line plus every INDENTED, non-empty line that
+ * follows, stopping at (not including) whichever comes first: the next
+ * `- ACn:`/`* ACn:` line, a blank line, a Markdown heading, or a line that
+ * is no longer indented (review finding #2, flow 293 T9 — real drafts in
+ * this repo wrap a criterion onto continuation lines, and a replace used to
+ * touch only the first line, orphaning the rest under the new text).
+ *
+ * `readAcCriteria`'s own scan (`store.ts`, no indentation requirement) only
+ * ever matches a block's first line too — a continuation line is prose, not
+ * `- ACn:` text, so it never re-triggers that regex either. Same rule, two
+ * places: neither counts a continuation line as its own criterion.
+ */
+function acBlockEnd(lines: readonly string[], start: number): number {
+  let end = start + 1;
+  while (end < lines.length) {
+    const line = lines[end] as string;
+    if (line.trim() === "") break;
+    if (HEADING_PATTERN.test(line)) break;
+    if (AC_LINE_PATTERN.test(line)) break;
+    if (!/^\s/.test(line)) break; // not indented -> not a continuation of the block above
+    end += 1;
+  }
+  return end;
+}
 
 /**
  * Rewrite one criterion's text in `acceptance-criteria.md`, or append it as a
@@ -255,13 +305,17 @@ const AC_LINE_PATTERN = /^(\s*)[-*]\s*(AC\d+)\s*:\s?(.*)$/i;
  *
  * The caller (`acUpdate` in `./service.ts`) has already decided `criterion`
  * is either an existing `ACn` or the next unused one — this function only
- * does the line-level edit and hands back what the line said before, so the
- * caller can put "previous text" and "new text" side by side in `history`.
- * Matching reuses `readAcCriteria`'s own line pattern (`- ACn:` or `* ACn:`,
- * any case) so a replace always finds the line a read would have counted,
- * but the line it WRITES is always the canonical `- ACn: <text>` the rules
- * section of the file itself asks for — an update never perpetuates a
- * `* AC1:` bullet or mixed case into the frozen record.
+ * does the line-level edit and hands back what the block said before
+ * (every continuation line joined with a single space, so it is always safe
+ * to embed in one `history`/`journal.md` line), so the caller can put
+ * "previous text" and "new text" side by side in `history`. Matching reuses
+ * `readAcCriteria`'s own line pattern (`- ACn:` or `* ACn:`, any case) so a
+ * replace always finds the line a read would have counted, but the line it
+ * WRITES is always the canonical `- ACn: <text>` the rules section of the
+ * file itself asks for — a rewrite never perpetuates a `* AC1:` bullet,
+ * mixed case, or a multi-line block into the frozen record; a REPLACE
+ * always collapses to exactly one line, its continuation lines (if any)
+ * removed along with the text they belonged to.
  */
 export async function writeAcCriterion(
   cwd: string,
@@ -271,32 +325,45 @@ export async function writeAcCriterion(
 ): Promise<{ previousText: string | undefined }> {
   const file = acPath(cwd, dir);
   const content = (await pathExists(file)) ? await readFile(file, "utf8") : "";
-  const lines = content.length > 0 ? content.split("\n") : [];
+  const eol = detectEol(content);
+  const lines = splitLines(content);
   const rendered = `- ${criterion}: ${text}`;
 
   let previousText: string | undefined;
-  let matchedIndex = -1;
-  let lastAcIndex = -1;
-  lines.forEach((line, index) => {
+  let matchedStart = -1;
+  let matchedEnd = -1;
+  let lastBlockEnd = -1;
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index] as string;
     const match = line.match(AC_LINE_PATTERN);
     if (!match?.[2]) {
-      return;
+      index += 1;
+      continue;
     }
-    lastAcIndex = index;
+    const end = acBlockEnd(lines, index);
+    lastBlockEnd = end;
     if (match[2].toUpperCase() === criterion) {
-      matchedIndex = index;
-      previousText = match[3] ?? "";
+      matchedStart = index;
+      matchedEnd = end;
+      const firstLineText = (match[3] ?? "").trim();
+      const continuation = lines
+        .slice(index + 1, end)
+        .map((continuationLine) => continuationLine.trim())
+        .filter((continuationLine) => continuationLine.length > 0);
+      previousText = [firstLineText, ...continuation].join(" ").trim();
     }
-  });
+    index = end;
+  }
 
-  if (matchedIndex >= 0) {
-    lines[matchedIndex] = rendered;
-  } else if (lastAcIndex >= 0) {
-    lines.splice(lastAcIndex + 1, 0, rendered);
+  if (matchedStart >= 0) {
+    lines.splice(matchedStart, matchedEnd - matchedStart, rendered);
+  } else if (lastBlockEnd >= 0) {
+    lines.splice(lastBlockEnd, 0, rendered);
   } else {
     lines.push(rendered);
   }
-  await writeFileAtomic(file, lines.join("\n"));
+  await writeFileAtomic(file, lines.join(eol));
   return { previousText };
 }
 

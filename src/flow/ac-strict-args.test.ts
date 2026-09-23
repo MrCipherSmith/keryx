@@ -196,3 +196,67 @@ test("AC3: `ac reseal` refuses an unknown flag", async () => {
   expect(process.exitCode).toBe(1);
   expect(errors.join("\n")).toContain("--yolo");
 });
+
+// Flow 293 T9, review finding #4: a value flag's VALUE can legitimately start
+// with `--` (quoted shell text). The two-pass version disagreed with itself
+// — the strict check and `optionValue` used different "is the next token a
+// value" heuristics — so this exact confirm was refused as an unrecognised
+// flag, misleadingly, and blocked a legitimate confirm.
+test("review #4: `ac confirm --note` consumes a value that itself starts with --, instead of misreading it as an unknown flag", async () => {
+  const { id, dir } = await freshFrozenFlow();
+  process.chdir(ROOT);
+
+  captureErrors();
+  await flowCommand(["ac", "confirm", id, "AC1", "--note", "--dry-run mode was used"]);
+
+  expect(process.exitCode).toBe(0);
+  expect(errors.join("\n")).toBe("");
+  const { acConfirmed } = await flowJsonAcState(dir);
+  const confirmed = acConfirmed as Record<string, { note?: string }>;
+  expect(confirmed["AC1"]?.note).toBe("--dry-run mode was used");
+});
+
+test("review #4: `ac confirm --note=value` (the = form) still works", async () => {
+  const { id, dir } = await freshFrozenFlow();
+  process.chdir(ROOT);
+
+  captureErrors();
+  await flowCommand(["ac", "confirm", id, "AC1", "--note=evidence text"]);
+
+  expect(process.exitCode).toBe(0);
+  const { acConfirmed } = await flowJsonAcState(dir);
+  const confirmed = acConfirmed as Record<string, { note?: string }>;
+  expect(confirmed["AC1"]?.note).toBe("evidence text");
+});
+
+// The one case that IS still refused: the next token is itself one of this
+// subcommand's own known flags, which means the value was actually omitted
+// (`--note --signed-by "x"` is someone who forgot the note text), not text
+// that happens to look like a flag.
+test("review #4: `ac confirm --note` with no value (next token is a known flag) is refused as a missing value, not consumed", async () => {
+  const { id } = await freshFrozenFlow();
+  process.chdir(ROOT);
+
+  captureErrors();
+  await flowCommand(["ac", "confirm", id, "AC1", "--note", "--signed-by", "Priya"]);
+
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("missing value for --note");
+});
+
+test("review #4: `ac update --reason` also consumes a value starting with --, and `ac reseal --reason` too", async () => {
+  const { id } = await freshFrozenFlow();
+  process.chdir(ROOT);
+
+  captureErrors();
+  await flowCommand(["ac", "update", id, "--reason", "--dry-run mode was used"]);
+  expect(process.exitCode).toBe(0);
+
+  captureErrors();
+  await flowCommand(["ac", "reseal", id, "--reason", "--still a valid reason"]);
+  // Nothing is actually stale here (update above already re-sealed), so this
+  // specific call fails on ITS OWN business rule ("nothing is stale") — not
+  // on argument parsing. That is the point: the failure is not "unknown
+  // option --still a valid reason".
+  expect(errors.join("\n")).not.toContain("unknown option");
+});

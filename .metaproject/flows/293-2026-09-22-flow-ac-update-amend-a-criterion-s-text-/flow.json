@@ -10,7 +10,7 @@
   "title": "flow ac update: amend a criterion's text, and refuse arguments it does not use",
   "status": "in-progress",
   "createdAt": "2026-09-22T23:36:31.506Z",
-  "updatedAt": "2026-09-22T23:49:09.878Z",
+  "updatedAt": "2026-09-23T00:14:22.570Z",
   "source": {
     "type": "description",
     "ref": null
@@ -149,6 +149,26 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Review fixes: CRLF files, multi-line criteria, single-line reason, values that start with --",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-22T23:56:23.495Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -204,6 +224,21 @@
       "at": "2026-09-22T23:49:09.878Z",
       "event": "task-done",
       "detail": "T7: Docs: flow help and CLI reference"
+    },
+    {
+      "at": "2026-09-22T23:56:04.939Z",
+      "event": "task-added",
+      "detail": "T9: Review fixes: CRLF files, multi-line criteria, single-line reason, values that start with --"
+    },
+    {
+      "at": "2026-09-22T23:56:23.495Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T00:14:22.570Z",
+      "event": "task-done",
+      "detail": "T9: Review fixes: CRLF files, multi-line criteria, single-line reason, values that start with --"
     }
   ]
 }
