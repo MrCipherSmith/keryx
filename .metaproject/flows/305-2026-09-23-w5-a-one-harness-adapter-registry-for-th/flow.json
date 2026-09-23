@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "305",
   "slug": "w5-a-one-harness-adapter-registry-for-th",
   "title": "W5-a: one harness adapter registry for the ctx guard, orient injector and security hooks",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-23T21:26:30.854Z",
-  "updatedAt": "2026-09-23T21:26:30.854Z",
+  "updatedAt": "2026-09-23T21:32:32.026Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:2b228dc04ccae50e0cc3ef8d051fdb0ce40b8fe5fa6c57955973c991653bcd45",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,157 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Verify: targeted tests of every touched module, typecheck, eslint on changed files, import-policy tests",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Verify: end-to-end CLI install/uninstall of ctx guard, security hooks and orient in both orders in a temp project (bun ./src/cli.ts)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Docs: architecture note for src/integrations and W5 status pointer",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "PR review/fix loop, CI green, merge into feat/agent-platform-expansion",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-23T21:26:30.854Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-23T21:32:20.324Z",
+      "event": "task-added",
+      "detail": "T5: Verify: targeted tests of every touched module, typecheck, eslint on changed files, import-policy tests"
+    },
+    {
+      "at": "2026-09-23T21:32:20.414Z",
+      "event": "task-added",
+      "detail": "T6: Verify: end-to-end CLI install/uninstall of ctx guard, security hooks and orient in both orders in a temp project (bun ./src/cli.ts)"
+    },
+    {
+      "at": "2026-09-23T21:32:20.504Z",
+      "event": "task-added",
+      "detail": "T7: Docs: architecture note for src/integrations and W5 status pointer"
+    },
+    {
+      "at": "2026-09-23T21:32:20.607Z",
+      "event": "task-added",
+      "detail": "T8: PR review/fix loop, CI green, merge into feat/agent-platform-expansion"
+    },
+    {
+      "at": "2026-09-23T21:32:31.846Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T21:32:31.934Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T21:32:32.026Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
     }
   ]
 }
