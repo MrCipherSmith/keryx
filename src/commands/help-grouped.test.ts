@@ -86,4 +86,17 @@ describe("AC7: the ACP host's /help is grouped", () => {
     // own wording (commands.ts) is the longer, editor-specific sentence.
     expect(text).toContain("List the models this session can run, or switch to one from the next turn");
   });
+
+  // PR #669 review, LOW: an ACP command with no HELP_GROUPS entry used to
+  // fall into an "Other" bucket the render loop never visits — it vanished
+  // from the text silently. It now throws instead, naming the command.
+  test("a command with no HELP_GROUPS entry throws by name, instead of silently vanishing into an unrendered bucket", () => {
+    expect(() => acpCommandHelpText([{ name: "not-a-real-command", description: "made up for this test" }])).toThrow(
+      /not-a-real-command.*HELP_GROUPS/,
+    );
+  });
+
+  test("every REAL advertised ACP command has a HELP_GROUPS entry (the throw above never fires in production)", () => {
+    expect(() => acpCommandHelpText()).not.toThrow();
+  });
 });

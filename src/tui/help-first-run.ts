@@ -54,3 +54,42 @@ export function markHelpFirstRunShown(dir?: string): void {
     JSON.stringify({ shown: true, at: new Date().toISOString() }, null, 2),
   );
 }
+
+export interface ResolveFirstRunHelpOptions {
+  /** Has the first-run help modal already been shown, on a PRIOR launch? */
+  shown: boolean;
+  /**
+   * Count connected providers. A real network probe
+   * (`filterConnectedDetectedProviders`) — up to ~10s per configured
+   * provider, sequential — so this is called AT MOST ONCE, only on a
+   * genuine first run (`shown === false`); a later run never calls it.
+   */
+  probe: () => Promise<number>;
+  /** Record that first-run help has been resolved. Called on every first run — whether or not the modal ends up opening. */
+  mark: () => void;
+}
+
+/**
+ * The whole AC8 decision in one place (PR #669 review, HIGH 1): the marker
+ * used to be written only on the branch that actually opened the modal (no
+ * provider connected), so a user who already had a provider configured on
+ * their first run was NEVER marked — every later launch re-ran the network
+ * probe from scratch, forever. Folding the probe and the marker into one
+ * function makes that bug structurally impossible to reintroduce: `mark()`
+ * runs on every first run this function sees, unconditionally, whichever way
+ * the decision goes.
+ *
+ * Returns the group slug to open the modal on ("connect"), or `undefined`
+ * when nothing should open. Callers must NOT `await` this inline in the
+ * shell's startup sequence — the probe it calls can take real, user-visible
+ * time and must never delay the composer becoming interactive; see the
+ * `void resolveFirstRunHelp(...).then(...)` call site in `tui-shell.ts`.
+ */
+export async function resolveFirstRunHelp(opts: ResolveFirstRunHelpOptions): Promise<string | undefined> {
+  if (opts.shown) {
+    return undefined; // never probes, never marks again — already resolved
+  }
+  const connectedProviderCount = await opts.probe();
+  opts.mark(); // ALWAYS, on every first run — connected or not
+  return shouldOpenFirstRunHelp(false, connectedProviderCount) ? "connect" : undefined;
+}

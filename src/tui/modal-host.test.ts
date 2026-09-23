@@ -466,6 +466,86 @@ otuiTest("light themes repaint modal text that would otherwise inherit the termi
   }
 });
 
+// PR #669 review, LOW: `onThemeChange` used to recolour only the chrome
+// (backdrop/panel/header/tabs/footer) — every consumer's BODY content kept
+// whatever colour it was drawn in at mount time, because `renderTab` was
+// never re-run. The fix replays the ACTIVE tab's `renderTab` on every theme
+// change, so any consumer whose body reads `getTheme()` (every one that
+// exists today) recolours for free.
+otuiTest("a theme change repaints the modal BODY, not just the chrome", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const previousThemeId = getThemeId();
+  try {
+    applyThemeId("groknight");
+    let mounts = 0;
+    openModal(otui.core, h.chrome, {
+      title: "Inspector",
+      tabs: [{ id: "info", label: "Info" }],
+      renderTab: (_tabId, body) => {
+        mounts += 1;
+        const parent = body as { add: (child: unknown) => void };
+        // A real consumer's own shape: fg pulled from getTheme() AT MOUNT TIME.
+        parent.add(
+          new otui.core.TextRenderable(h.renderer, {
+            id: "body-theme-probe",
+            content: "x",
+            fg: resolveTheme(getThemeId()).text,
+          }),
+        );
+      },
+    });
+    await h.flush();
+    expect(mounts).toBe(1);
+    const node = h.renderer.root.findDescendantById("body-theme-probe") as unknown as { fg: unknown };
+    expect(themeColorToHex(node.fg)).toBe(resolveTheme("groknight").text);
+
+    applyThemeId("paper"); // real theme change, distinct `text` colour
+    await h.flush();
+
+    // The tab was re-mounted (not just left alone) …
+    expect(mounts).toBe(2);
+    // … and the NEW node reflects the NEW theme, not the one it was built in.
+    const repainted = h.renderer.root.findDescendantById("body-theme-probe") as unknown as { fg: unknown };
+    expect(themeColorToHex(repainted.fg)).toBe(resolveTheme("paper").text);
+    expect(themeColorToHex(repainted.fg)).not.toBe(resolveTheme("groknight").text);
+  } finally {
+    applyThemeId(previousThemeId);
+    h.destroy();
+  }
+});
+
+otuiTest("a theme change while the modal is CLOSED does not remount a stale body", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const previousThemeId = getThemeId();
+  try {
+    applyThemeId("groknight");
+    let mounts = 0;
+    const handle = openModal(otui.core, h.chrome, {
+      title: "Inspector",
+      tabs: [{ id: "info", label: "Info" }],
+      renderTab: () => {
+        mounts += 1;
+      },
+    });
+    await h.flush();
+    expect(mounts).toBe(1);
+
+    handle?.close({ restoreFocus: false });
+    await h.flush();
+
+    applyThemeId("paper");
+    await h.flush();
+
+    // Closed: no remount happened (the body was already torn down).
+    expect(mounts).toBe(1);
+  } finally {
+    applyThemeId(previousThemeId);
+    h.destroy();
+  }
+});
+
 otuiTest("clicking [x] closes the modal", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 24 });

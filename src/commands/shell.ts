@@ -3378,25 +3378,6 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // packets silently would otherwise hang a scripted run for good. Only the
   // provider the flags name, when they name one — the TUI picker may choose any.
   //
-  // Flow 303 (AC14): both this grant refresh and `resolveTuiStartup` further
-  // down run BEFORE OpenTUI's renderer exists — no splash, no chrome, nothing
-  // mounted yet, on a plain terminal. Reordering this well-tested startup
-  // sequence to run credential refresh and provider detection only AFTER the
-  // renderer starts would be a much larger, riskier change than the gap it
-  // closes is worth; a single plain-terminal line instead guarantees the
-  // terminal is never silently inert from the very first moment. Gated on a
-  // real interactive TTY so a scripted / `--print` / CI run's output stays
-  // exactly what it was.
-  if (runtime.isTty ?? process.stdout.isTTY === true) {
-    process.stderr.write("keryx: starting…\n");
-  }
-  {
-    const { refreshSavedGrants } = await import("../lib/oauth/login");
-    const oauthFetch = (input: string, init?: RequestInit) => globalThis.fetch(input, init);
-    const http = { fetch: oauthFetch, signal: AbortSignal.timeout(GRANT_REFRESH_TIMEOUT_MS) };
-    const warnings = await refreshSavedGrants(http, runtime.cacheDir, providerArg === undefined ? undefined : [providerArg]);
-    for (const warning of warnings) process.stderr.write(`keryx: ${warning}\n`);
-  }
   // flow 268 T16 (AC11): the `/reasoning <level>` shell command's session
   // override — shared between the TUI (`makeAgentDeps` below, and the
   // `setReasoningOverride` threaded through `opts` to `tui-shell.ts`) and the
@@ -3408,6 +3389,38 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // `ShellConfig.reasoningEffort` the command also writes, so the choice
   // survives a restart even though this in-memory override does not.
   let reasoningSessionOverride: string | undefined;
+  // Flow 303 (AC14): both this grant refresh and `resolveTuiStartup` further
+  // down run BEFORE OpenTUI's renderer exists — no splash, no chrome, nothing
+  // mounted yet, on a plain terminal. Reordering this well-tested startup
+  // sequence to run credential refresh and provider detection only AFTER the
+  // renderer starts would be a much larger, riskier change than the gap it
+  // closes is worth; a single plain-terminal line instead guarantees the
+  // terminal is never silently inert from the very first moment.
+  //
+  // Gated on the SURFACE (PR #669 review, HIGH 2 fix) — NOT raw `isTty` as
+  // before, which printed even under `--print` on a real TTY.
+  // `chooseShellSurface` sends `--print` to "readline" unconditionally, so
+  // gating on it excludes that case by construction, along with every other
+  // readline path (`--no-tui`, no TTY, CI). Called here a second time,
+  // deliberately, rather than hoisting the OFFICIAL `const surface =`
+  // assignment below earlier: it is pure and cheap, and hoisting it would
+  // reorder it ahead of the grant refresh, breaking
+  // `shell-grant-refresh.test.ts`'s "refresh before surface" pin (K-013 —
+  // the refresh must run before ANY surface-specific branch is reachable in
+  // the source, so a future edit cannot accidentally nest it inside one).
+  // One `write` call, the trailing `\n` included in the same string, so a
+  // later failure can never leave a partial line for something else to print
+  // onto.
+  if (chooseShellSurface(flags, runtime.isTty ?? process.stdout.isTTY === true) !== "readline") {
+    process.stderr.write("keryx: starting…\n");
+  }
+  {
+    const { refreshSavedGrants } = await import("../lib/oauth/login");
+    const oauthFetch = (input: string, init?: RequestInit) => globalThis.fetch(input, init);
+    const http = { fetch: oauthFetch, signal: AbortSignal.timeout(GRANT_REFRESH_TIMEOUT_MS) };
+    const warnings = await refreshSavedGrants(http, runtime.cacheDir, providerArg === undefined ? undefined : [providerArg]);
+    for (const warning of warnings) process.stderr.write(`keryx: ${warning}\n`);
+  }
   const surface = chooseShellSurface(flags, runtime.isTty ?? process.stdout.isTTY === true);
   if (surface !== "readline") {
     const cwd = process.cwd();

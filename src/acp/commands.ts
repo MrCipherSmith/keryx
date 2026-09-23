@@ -22,7 +22,7 @@ import type { AcpAvailableCommand } from "./protocol";
 // ACP keeps its OWN editor-specific descriptions (see the file header on
 // `ACP_SLASH_COMMANDS`); only the GROUP an entry falls under, and the order
 // groups print in, come from the shared table.
-import { findSlashEntry, HELP_GROUP_ORDER } from "../standard/service";
+import { findSlashEntry, HELP_GROUP_ORDER, type HelpGroupName } from "../standard/service";
 
 export interface AcpSlashCommandSpec {
   /** Without the leading slash, as ACP's `AvailableCommand.name` carries it. */
@@ -158,14 +158,33 @@ function acpCommandLine(command: AcpSlashCommandSpec): string {
  * modal group everything — by the onboarding task table — because a modal
  * cannot render over ACP. Only four commands are advertised here at all, so
  * most groups are empty and printed nothing; that is expected, not a bug.
+ *
+ * PR #669 review, LOW: an ACP command with no `HELP_GROUPS` entry used to
+ * fall into a synthetic "Other" bucket that `HELP_GROUP_ORDER`'s render loop
+ * below never visits — it would vanish from `/help` silently, with nothing
+ * to say why. Throwing here instead turns "a future ACP command silently
+ * disappears" into "the build fails, naming exactly which command and where
+ * to fix it" — every advertised command MUST have a real home in the shared
+ * task table, same as every CLI verb and shell slash command already must
+ * (AC1).
+ *
+ * `commands` defaults to the real registry; overridable only so a test can
+ * prove the throw fires for a synthetic unclassified command without
+ * needing one to actually exist in `ACP_SLASH_COMMANDS`.
  */
-export function acpCommandHelpText(): string {
-  const byGroup = new Map<string, AcpSlashCommandSpec[]>();
-  for (const command of ACP_SLASH_COMMANDS) {
-    const group = findSlashEntry(`/${command.name}`)?.group ?? "Other";
-    const list = byGroup.get(group) ?? [];
+export function acpCommandHelpText(commands: readonly AcpSlashCommandSpec[] = ACP_SLASH_COMMANDS): string {
+  const byGroup = new Map<HelpGroupName, AcpSlashCommandSpec[]>();
+  for (const command of commands) {
+    const entry = findSlashEntry(`/${command.name}`);
+    if (entry === undefined) {
+      throw new Error(
+        `acpCommandHelpText: "/${command.name}" is in ACP_SLASH_COMMANDS but has no HELP_GROUPS entry — ` +
+          "add it to src/standard/help-groups.ts so it has a real group instead of silently vanishing from /help.",
+      );
+    }
+    const list = byGroup.get(entry.group) ?? [];
     list.push(command);
-    byGroup.set(group, list);
+    byGroup.set(entry.group, list);
   }
   const lines: string[] = [];
   for (const group of HELP_GROUP_ORDER) {

@@ -442,6 +442,70 @@ describe("mountStartupIndicator (AC14)", () => {
 
     setup.renderer.destroy();
   });
+
+  // PR #669 review, HIGH 2: nothing guarded the region between mounting this
+  // indicator and the chrome existing — if a startup step threw, the
+  // `setInterval` kept firing forever and the spinner box stayed on screen.
+  // This proves the fix's SHAPE (try/…/finally { handle.remove() }), the
+  // exact pattern `launchTuiAgentShell` now wraps `opts.makeAgentDeps` and
+  // `createShellChrome` in.
+  otuiTest("a rejecting startup step still removes the indicator, stops its timer, and the error propagates", async () => {
+    const otui = requireOtui();
+    const setup = await otui.testing.createTestRenderer({ width: 60, height: 20 });
+
+    const cleared: unknown[] = [];
+    const handle = mountStartupIndicator(otui.core, setup.renderer, "Loading agent tools and MCP servers…", {
+      setInterval: () => "timer-handle",
+      clearInterval: (h) => cleared.push(h),
+    });
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("Loading agent tools and MCP servers…");
+
+    const failingStep = Promise.reject(new Error("makeAgentDeps blew up"));
+
+    const run = async (): Promise<void> => {
+      try {
+        await failingStep;
+      } finally {
+        handle.remove();
+      }
+    };
+
+    await expect(run()).rejects.toThrow("makeAgentDeps blew up");
+    await setup.flush();
+
+    // The indicator is gone, not just logically removed — nothing left on screen.
+    expect(setup.captureCharFrame()).not.toContain("Loading agent tools and MCP servers…");
+    // Its timer was torn down — a leaked `setInterval` is exactly what used
+    // to keep the process from exiting.
+    expect(cleared).toEqual(["timer-handle"]);
+
+    setup.renderer.destroy();
+  });
+});
+
+// PR #669 review, HIGH 2: the real wiring in `launchTuiAgentShell` really
+// does wrap `opts.makeAgentDeps` and `createShellChrome` in try/finally —
+// pinned against the source, the same idiom `boot-animation.test.ts`
+// already uses for `createSplashLifecycle`'s call sites, because neither of
+// those two awaits is reachable from a test without driving the whole shell.
+test("tui-shell.ts wraps makeAgentDeps/createShellChrome in try/finally that always removes the startup indicator", () => {
+  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const mountIdx = source.indexOf("const startupIndicator = mountStartupIndicator(");
+  expect(mountIdx).toBeGreaterThan(-1);
+  const tryIdx = source.indexOf("try {", mountIdx);
+  const makeAgentDepsIdx = source.indexOf("await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);", mountIdx);
+  const createChromeIdx = source.indexOf("await createShellChrome(otui, r, {", mountIdx);
+  const finallyIdx = source.indexOf("} finally {", mountIdx);
+  const removeIdx = source.indexOf("startupIndicator.remove();", finallyIdx);
+
+  expect(tryIdx).toBeGreaterThan(mountIdx);
+  expect(makeAgentDepsIdx).toBeGreaterThan(tryIdx);
+  expect(createChromeIdx).toBeGreaterThan(makeAgentDepsIdx);
+  expect(finallyIdx).toBeGreaterThan(createChromeIdx);
+  expect(removeIdx).toBeGreaterThan(finallyIdx);
+  // Exactly one call site — no leftover unconditional `.remove()` outside the finally.
+  expect((source.match(/startupIndicator\.remove\(\);/g) ?? []).length).toBe(1);
 });
 
 otuiTest("a resize re-wraps the splash at the NEW width instead of leaving it clipped", async () => {
