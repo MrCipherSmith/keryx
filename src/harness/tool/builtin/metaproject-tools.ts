@@ -173,7 +173,10 @@ function withSearchFallback(port: MetaprojectPort, run: KeryxRunner, root: strin
       if (!result.isError) {
         return result;
       }
-      const args = ["ctx", "rg", input.pattern];
+      // `--` first: the pattern is model-supplied, and a pattern such as
+      // `--follow` must stay a pattern — as a flag it would make ripgrep walk
+      // symlinks out of the root (flow 292 T13).
+      const args = ["ctx", "rg", "--", input.pattern];
       if (input.path !== undefined) {
         // Same confinement as the non-port path: this fallback is reachable
         // from the model whenever the port has no in-process backing, so
@@ -237,7 +240,8 @@ export function builtinMetaprojectTools(
         return pattern.error;
       }
       const path = typeof input.path === "string" && input.path.length > 0 ? input.path : undefined;
-      const args = ["ctx", "rg", pattern.value];
+      // `--` first, for the reason given in the port fallback above.
+      const args = ["ctx", "rg", "--", pattern.value];
       if (path !== undefined) {
         // Confine the model-supplied path exactly as `read_file` does. Without
         // this, `search_code {pattern: ".", path: "<any readable file>"}` returns

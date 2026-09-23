@@ -26,9 +26,10 @@ export async function serveMcpCommand(
   }
 
   const http = args.includes("--http");
+  const readOnly = args.includes("--read-only");
   const projectRoot = path.resolve(resolveServeRoot(optionValue(args, "--cwd"), cwd, process.env));
   try {
-    await serveMcp({ cwd: projectRoot, http });
+    await serveMcp({ cwd: projectRoot, http, readOnly });
   } catch (error) {
     // AC10: the single opt-in command allowed to hard-fail. Print the
     // actionable message and exit non-zero.
@@ -46,10 +47,15 @@ export function printServeMcpHelp(): void {
   helpUsage([
     "keryx serve-mcp [--cwd <project-root>]          # stdio JSON-RPC MCP server (default)",
     "keryx serve-mcp --http [--cwd <project-root>]   # HTTP/SSE opt-in (requires capabilities.http.enabled)",
+    "keryx serve-mcp --read-only [--cwd <project-root>]  # expose only tools that change nothing",
   ]);
   helpOptions([
     { flag: "--http", desc: "Use the isolated HTTP/SSE transport (localhost only) instead of stdio." },
     { flag: "--cwd", desc: "Project root whose .metaproject workspace should be exposed. Defaults to the process cwd." },
+    {
+      flag: "--read-only",
+      desc: "Hide every tool marked mutating. keryx uses this when it hands its own MCP server to a foreign ACP agent, whose MCP calls never pass keryx's permission bridge.",
+    },
   ]);
   heading("Notes");
   console.log(

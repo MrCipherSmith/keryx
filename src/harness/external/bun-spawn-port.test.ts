@@ -2,7 +2,10 @@
 // No operating-system process is created: `Bun.spawn` itself is substituted, so
 // what is under test is this file's line framing and stdin discipline.
 import { describe, expect, test } from "bun:test";
-import { createBunSpawnPort, type BunSpawnLike } from "./bun-spawn-port";
+import { superviseAcpRun } from "./acp-client";
+import { clampForeignMode } from "./acp-permission";
+import { createBunSpawnPort, DEFAULT_EXTERNAL_MAX_LINE_BYTES, ExternalLineTooLongError, type BunSpawnLike } from "./bun-spawn-port";
+import { ACP_DEFAULT_MAX_LINE_BYTES } from "../../acp/framing";
 
 function streamOf(chunks: readonly string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -174,5 +177,101 @@ describe("process options", () => {
     proc.kill();
     expect(fake.killed()).toBe(1);
     expect(await proc.exited).toBe(137);
+  });
+});
+
+describe("the line-size ceiling (flow 292 T13)", () => {
+  test("defaults to the same 64 MiB ceiling keryx's own ACP agent side applies", () => {
+    expect(DEFAULT_EXTERNAL_MAX_LINE_BYTES).toBe(ACP_DEFAULT_MAX_LINE_BYTES);
+  });
+
+  test("a newline-less stream past a small injected ceiling throws a named error and kills the child", async () => {
+    const fake = fakeBun(["a".repeat(600), "b".repeat(600), "c".repeat(600), "\n"]);
+    const proc = createBunSpawnPort(fake.impl, { maxLineBytes: 1024 }).spawn(["agent"], OPTS);
+    let caught: unknown;
+    try {
+      await collect(proc.stdout);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ExternalLineTooLongError);
+    expect(String((caught as Error).message)).toContain("more than 1024 bytes without a newline");
+    expect(fake.killed()).toBe(1);
+  });
+
+  test("lines under the ceiling still pass, however many chunks they span", async () => {
+    const fake = fakeBun(["x".repeat(500), "y".repeat(500), "\n", "z".repeat(1000), "\n"]);
+    const proc = createBunSpawnPort(fake.impl, { maxLineBytes: 1024 }).spawn(["agent"], OPTS);
+    expect(await collect(proc.stdout)).toEqual(["x".repeat(500) + "y".repeat(500), "z".repeat(1000)]);
+    expect(fake.killed()).toBe(0);
+  });
+
+  test("stderr is capped too", async () => {
+    const fake = fakeBun([], ["e".repeat(2000)]);
+    const proc = createBunSpawnPort(fake.impl, { maxLineBytes: 1024 }).spawn(["agent"], OPTS);
+    await expect(collect(proc.stderr)).rejects.toBeInstanceOf(ExternalLineTooLongError);
+    expect(fake.killed()).toBe(1);
+  });
+
+  test("an ACP run fails with the named reason when its agent overflows the ceiling", async () => {
+    const fake = fakeBun(["{".repeat(5000)]);
+    const outcome = await superviseAcpRun(
+      {
+        argv: ["agent"],
+        cwd: "/nowhere",
+        env: {},
+        prompt: "p",
+        mcpServers: [],
+        write: false,
+        timeoutMs: 30_000,
+        killGraceMs: 50,
+        permission: { mode: clampForeignMode("ask"), unattended: true },
+      },
+      { spawn: createBunSpawnPort(fake.impl, { maxLineBytes: 1024 }) },
+    );
+    expect(outcome.status).toBe("failed");
+    expect(outcome.failure).toContain("more than 1024 bytes without a newline");
+    expect(outcome.killed).toBe(true);
+    expect(fake.killed()).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("line framing stays linear in its input (flow 292 T14)", () => {
+  /** Sum of characters every `indexOf("\\n")` call covered while `body` ran — measured, not self-reported. */
+  async function scannedDuring(body: () => Promise<void>): Promise<number> {
+    const original = String.prototype.indexOf;
+    let scanned = 0;
+    String.prototype.indexOf = function (this: string, search: string, from?: number): number {
+      if (search === "\n") scanned += this.length - (from ?? 0);
+      return original.call(this, search, from);
+    } as typeof String.prototype.indexOf;
+    try {
+      await body();
+    } finally {
+      String.prototype.indexOf = original;
+    }
+    return scanned;
+  }
+
+  test("one long line built from many small chunks is scanned about once, not once per chunk", async () => {
+    const chunks = Array.from({ length: 2000 }, () => "x".repeat(100));
+    const fake = fakeBun([...chunks, "\nnext\n"]);
+    const reported: number[] = [];
+    const proc = createBunSpawnPort(fake.impl, { onScan: (chars) => reported.push(chars) }).spawn(["agent"], OPTS);
+    let lines: string[] = [];
+    const scanned = await scannedDuring(async () => {
+      lines = await collect(proc.stdout);
+    });
+    expect(lines).toEqual(["x".repeat(200_000), "next"]);
+    const total = 200_000 + "\nnext\n".length;
+    // Re-scanning the pending buffer per chunk would cover ~200 million characters.
+    expect(scanned).toBeLessThanOrEqual(2 * total);
+    expect(reported.reduce((a, b) => a + b, 0)).toBe(total);
+  });
+
+  test("a line split exactly at chunk boundaries, and a final line with no newline, still frame correctly", async () => {
+    const fake = fakeBun(["ab", "c\r", "\nd", "e\n\n", "tail"]);
+    const proc = createBunSpawnPort(fake.impl).spawn(["agent"], OPTS);
+    expect(await collect(proc.stdout)).toEqual(["abc", "de", "", "tail"]);
   });
 });

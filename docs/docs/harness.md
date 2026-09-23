@@ -260,10 +260,17 @@ so there is no second spawn path and no second ledger.
 /delegate <agent> <task>
 keryx agents external list [--json] [--no-probe]
 keryx agents external probe <id> [--json]
+keryx agents external run <id> --task "<text>" [--unattended] [--write]
 ```
 
-Both `agents external` subcommands are read-only and spend no quota — the only
-process either starts is `--version`. Full reference:
+`list` and `probe` are read-only and spend no quota — the only process either
+starts is `--version`. `run` drives an ACP agent (`transport: acp`, today
+`gemini-acp`) with keryx as its ACP **client**: a third transport beside the
+line-stream codecs and the codex MCP supervisor, on the same spawn seam,
+worktree and gates. Its permission questions go through keryx's approval gate
+with the mode lowered to `ask`, its `fs/*` requests are served by keryx inside
+the worktree, and its own internal tools stay outside keryx's view — see the
+[ACP client guide](./guides/acp-client.md). Full reference:
 [CLI reference](./cli-reference.md#agents-external).
 
 External children appear in the subagent sidebar with a `⤳` marker and open a

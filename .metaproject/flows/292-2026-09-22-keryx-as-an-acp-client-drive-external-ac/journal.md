@@ -1,0 +1,46 @@
+# Flow Journal
+
+- 2026-09-22T23:36:27.199Z - flow created
+- 2026-09-23T00:12:30.792Z - frozen: 12 criteria; checksum recorded
+- 2026-09-23T00:12:30.914Z - started
+- 2026-09-23T00:12:31.030Z - task-added: T5: ACP supervisor on the external-agent spawn seam; registry transport acp; handshake and update fold
+- 2026-09-23T00:12:31.155Z - task-added: T6: Permission bridge through resolveApprovalDecision; unattended fails closed; modes clamped to ask
+- 2026-09-23T00:12:31.274Z - task-added: T7: Advertised capabilities; fs read/write confined by real path; terminal and elicitation refused
+- 2026-09-23T00:12:31.392Z - task-added: T8: Context via serve-mcp --read-only launched from the running build
+- 2026-09-23T00:12:31.510Z - task-added: T9: Session record, decisions, usage and cost; keryx agents external run
+- 2026-09-23T00:12:31.626Z - task-added: T10: Scripted fake ACP agent fixture; process tests incl. keryx-as-client driving keryx acp
+- 2026-09-23T00:12:31.740Z - task-added: T11: Docs: ACP client page, limits, external-runtime requirements note
+- 2026-09-23T00:12:31.855Z - task-added: T12: Verification: CI green, keryx health run
+- 2026-09-23T00:12:31.973Z - task-attempt: T5: started (attempt 1)
+- 2026-09-23T00:40:15Z - implementation T5-T11 (uncommitted, not staged). The ACP client is a third supervision path, `superviseAcpRun` (src/harness/external/acp-client.ts), on the existing ExternalSpawnPort. The registry gains `transport: "acp"` (gemini-acp), and runExternalChild routes to it (src/harness/external/runtime.ts, acp-run.ts). The permission bridge is src/harness/external/acp-permission.ts: resolveApprovalDecision, with the mode clamped to ask, allow_once only, never allow_always, and fail-closed with the reason recorded. The fs handlers are in acp-fs.ts. The shared `confineToRoot` now resolves a not-yet-existing path through its nearest existing ancestor and refuses dangling symlinks. The only existing write caller is apply_patch, and it was not exposed: `git apply` itself refuses "affected file ... is beyond a symbolic link" (reproduced). Added `serve-mcp --read-only`, and `keryx agents external run <id> --task [--unattended] [--write]`. Tests: 152 new or updated, all passing. Fix-reverted runs were done for AC2 (clamp), AC3 (unattended deny) and AC5 (ancestor confinement), and each one failed as expected. The docs guide is docs/docs/guides/acp-client.md. Checks: typecheck clean, eslint clean on the changed files, keryx health run PASS (94).
+- 2026-09-23T00:41:24.672Z - task-done: T5: ACP supervisor on the external-agent spawn seam; registry transport acp; handshake and update fold
+- 2026-09-23T00:41:24.795Z - task-done: T6: Permission bridge through resolveApprovalDecision; unattended fails closed; modes clamped to ask
+- 2026-09-23T00:41:24.914Z - task-done: T7: Advertised capabilities; fs read/write confined by real path; terminal and elicitation refused
+- 2026-09-23T00:41:25.030Z - task-done: T8: Context via serve-mcp --read-only launched from the running build
+- 2026-09-23T00:41:25.147Z - task-done: T9: Session record, decisions, usage and cost; keryx agents external run
+- 2026-09-23T00:41:25.262Z - task-done: T10: Scripted fake ACP agent fixture; process tests incl. keryx-as-client driving keryx acp
+- 2026-09-23T00:41:25.374Z - task-done: T11: Docs: ACP client page, limits, external-runtime requirements note
+- 2026-09-23T00:53:03.954Z - task-added: T13: Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding
+- 2026-09-23T00:53:04.078Z - task-attempt: T13: started (attempt 1)
+- 2026-09-23T01:04:35Z - T13 security review fixes (uncommitted, not staged).
+  1. `search_code`: `metaproject-adapter.ts` `confineToProject` now confines by real path through `confineToRoot` and hands ripgrep the resolved path, never the name of a symlink. ripgrep runs without `--follow`. The `ctx rg` fallbacks in `builtin/metaproject-tools.ts` now put `--` before the model's pattern, which is an extra fix: a pattern such as `--follow` was being parsed as a flag.
+  2. `bun-spawn-port.ts`: lines are capped at 64 MiB, the same as `ACP_DEFAULT_MAX_LINE_BYTES`, and the cap can be injected. An overflow kills the child and throws `ExternalLineTooLongError`. The ACP client closes its pending requests with that reason; the line-stream codecs see a failed stream read and a killed child.
+  3. `acp-fs.ts`: after mkdir, the parent's real path is checked again, and the file is opened with `fs.constants.O_NOFOLLOW`.
+  4. The terminal approver closes its readline when `ApprovalMeta.signal` is aborted; the bridge aborts it on timeout.
+  5. `acp-client.ts` answers only for the bound session and only while a turn is running. The turn counts as ended as soon as its answer line arrives. Requests for another session are refused and recorded, and updates for another session are ignored.
+  6. The guide now has a warning that the MCP server's reads cover the whole real project, skip the bridge, and that some read tools write `.metaproject/data/**`.
+  Every mutation broke its test. Wide affected set: 4843 pass, 13 skip, 0 fail. Typecheck and eslint clean, health PASS.
+- 2026-09-23T01:05:24.677Z - task-done: T13: Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding
+- 2026-09-23T01:09:40.837Z - task-added: T14: Bound the agent's total output: stderr tail, capped transcript, linear line buffering, named stderr overflow
+- 2026-09-23T01:09:40.950Z - task-attempt: T14: started (attempt 1)
+- 2026-09-23T01:16:44Z - T14 security re-probe fixes (uncommitted, not staged).
+  1. New `src/harness/external/bounded.ts`:
+     - `BoundedTranscript` keeps the head and tail of diagnostic streams (stderr: 16 KiB head + 48 KiB tail) and counts the dropped bytes.
+     - `OutputBudget` caps a run's output at 16 MiB (assistant text + events, 64 B overhead per event).
+     - The ACP client keeps stderr in a `BoundedTranscript`, budgets assistant text and events, and on overflow calls `abortRun`: named reason, agent killed, pending requests closed. The terminal event is exempt from the budget.
+     - The line-stream supervisor used by claude/codex is bounded the same way: stdout 256 KiB head + 768 KiB tail, stderr 16+48 KiB, events budgeted. On overflow the child is killed and `outcome.overflow` becomes the runtime's cause.
+     - The codex MCP path is not affected: its stderr is inherited or drained, not retained.
+  2. `readLines` is linear: pending pieces are kept in an array with a running length, each chunk is scanned once, and the line is joined once. Checked with an `indexOf` spy and an `onScan` counter.
+  3. A stderr line past the line cap now aborts the ACP run with that reason, instead of reporting "closed its stdout".
+  Every mutation broke its test. Wide affected set: 4706 pass, 13 skip, 0 fail. Typecheck and eslint clean, doc links 0 broken, health PASS.
+- 2026-09-23T01:17:24.857Z - task-done: T14: Bound the agent's total output: stderr tail, capped transcript, linear line buffering, named stderr overflow

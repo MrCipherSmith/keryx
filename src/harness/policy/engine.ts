@@ -89,7 +89,7 @@ function isHardDeny(risk: ToolRisk, defaults: PolicyProfileDefaults): boolean {
  * the harness, even with a present, matching approval
  * (SC_R09_DIRECT_FLOW_FILE_EDIT_DENIED). Pure string inspection — no fs access.
  */
-function isManagedFlowFile(targetPath: string | undefined): boolean {
+export function isManagedFlowFile(targetPath: string | undefined): boolean {
   if (targetPath === undefined || targetPath.length === 0) return false;
   if (path.basename(targetPath) === "flow.json") return true;
   return /(^|[\\/])flows[\\/].+\.json$/.test(targetPath);

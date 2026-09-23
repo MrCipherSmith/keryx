@@ -27,8 +27,9 @@ export async function agentsCommand(args: string[] = []): Promise<void> {
     return;
   }
 
-  // Flow 176: the external agent registry surface. Read-only and quota-free —
-  // it runs `--version` and nothing else (see agents-external.ts).
+  // Flow 176: the external agent registry surface. `list`/`probe` are read-only
+  // and quota-free — they run `--version` and nothing else. Flow 292 adds `run`,
+  // which drives one ACP agent with keryx as its client (see agents-external.ts).
   if (subcommand === "external") {
     await agentsExternalCommand(args.slice(1));
     return;
@@ -204,6 +205,7 @@ function printAgentsHelp(): void {
     "keryx agents monitor <events-file> [--json]",
     "keryx agents external list [--json] [--no-probe]",
     "keryx agents external probe <id> [--json]",
+    'keryx agents external run <id> --task "<text>" [--unattended] [--write]',
   ]);
 }
 

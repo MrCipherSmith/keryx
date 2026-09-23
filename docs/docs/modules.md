@@ -1234,6 +1234,7 @@ other runtime surface (`shell`, `serve`, `sessions`) sits on.
 | `harness wave --spec <path>` | plan and run a declared multi-agent wave |
 | `harness replay --record <path> [--fixture <p>] [--write-fixture <p>] [--json]` | validate a replay fixture against a recorded run |
 | `agents external list [--json] [--no-probe]` / `probe <id> [--json]` | inspect the external agent registry and its three-state availability; read-only, spends no quota (`src/commands/agents-external.ts`) |
+| `agents external run <id> --task "<text>" [--unattended] [--write]` | drive one ACP agent (`transport: acp`) with keryx as its client, in a disposable worktree, under keryx's approval gate with the mode lowered to `ask`; spends the operator's quota ([ACP client guide](guides/acp-client.md)) |
 
 **Key files.**
 - `src/harness/run/run.ts` — `runOffline`, the assembled loop: startup → context manifest → provider stream → policy decision → budget/loop guards → tool executor → redaction + append-only session → completion gate.

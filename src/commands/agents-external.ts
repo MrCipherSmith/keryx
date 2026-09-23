@@ -3,8 +3,12 @@
 //
 //   keryx agents external list  [--json] [--no-probe]
 //   keryx agents external probe <id> [--json]
+//   keryx agents external run <id> --task "<text>" [--unattended] [--write]   (flow 292)
 //
-// Both are read-only and neither spends subscription quota: the only process
+// `run` is the one subcommand that starts a real agent, and it spends the
+// operator's quota; it drives an ACP agent with keryx as its CLIENT, through
+// `runExternalChild` and every gate the runtime already has. `list` and `probe`
+// are read-only and neither spends subscription quota: the only process
 // either starts is the registry entry's own `detect` argv, which is
 // `--version`. keryx never opens a vendor credential store, not even to answer
 // "is the operator logged in?" (security-policy §1, `provider-auth` D-01).
@@ -24,15 +28,36 @@
 // many words, and `resolveAvailability` from the runtime registry is the only
 // availability model used; this file adds none of its own.
 
+import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { createInterface, type Interface } from "node:readline";
 import { createVersionProbe, type VersionProbe } from "../harness/external-agent-probe";
 import {
   EXTERNAL_AGENTS,
   getExternalAgent,
   resolveAvailability,
+  transportOf,
   type AgentAvailability,
 } from "../harness/external/registry";
 import type { ExternalAgentEntry } from "../harness/external/types";
-import { resolveExternalAgentsCapability } from "../capability/external-agents";
+import {
+  agentConfig,
+  resolveExternalAgentsCapability,
+  type ExternalAgentsConfig,
+} from "../capability/external-agents";
+import { createGitWorktreePort } from "../harness/child/git-worktree-port";
+import type { WorktreePort } from "../harness/child/worktree";
+import { createBunSpawnPort } from "../harness/external/bun-spawn-port";
+import { readExternalDepth } from "../harness/external/env";
+import { runExternalChild, type ExternalChildOutcome } from "../harness/external/runtime";
+import type { ExternalSpawnPort } from "../harness/external/supervise";
+import type { AcpChildOptions } from "../harness/external/acp-run";
+import { DEFAULT_MAX_EXTERNAL_DEPTH } from "../harness/run-external-factory";
+import type { AgentIO } from "./agent";
+import { getProjectPermissionMode } from "../lib/permission-mode-config";
+import { optionValue } from "../lib/args";
 import { helpOptions, helpTitle, helpUsage, style } from "../lib/ui";
 
 /** Injectable seams so the whole surface is testable with no CLI on the machine. */
@@ -47,6 +72,23 @@ export interface AgentsExternalDeps {
   readonly configDir?: string;
   /** Line sink. Defaults to `console.log`. */
   readonly log?: (line: string) => void;
+  /** Seams for `run` (flow 292). Every one defaults to the real thing. */
+  readonly run?: AgentsExternalRunSeams;
+}
+
+/** What `keryx agents external run` can have substituted, for tests. */
+export interface AgentsExternalRunSeams {
+  readonly config?: ExternalAgentsConfig;
+  readonly spawn?: ExternalSpawnPort;
+  readonly worktree?: WorktreePort;
+  /** `null` skips the version probe (`not-probed`). */
+  readonly detect?: VersionProbe | null;
+  /** Whether a human is at a terminal. Defaults to `process.stdin.isTTY`. */
+  readonly isTTY?: boolean;
+  readonly requestApproval?: AgentIO["requestApproval"];
+  /** Everything ACP-specific the runtime forwards (argv override, context, data dir…). */
+  readonly acp?: AcpChildOptions;
+  readonly onOutcome?: (outcome: ExternalChildOutcome) => void;
 }
 
 /** One registry entry paired with what detection was allowed to learn about it. */
@@ -125,6 +167,7 @@ export interface ExternalAgentsJson {
     readonly resumable: boolean;
     readonly reportsCost: boolean;
     readonly budgetFlag: boolean;
+    readonly transport: "line-stream" | "acp";
     readonly availability: AgentAvailability;
   }[];
 }
@@ -149,6 +192,7 @@ export function buildExternalAgentsJson(
       resumable: entry.resumable,
       reportsCost: entry.reportsCost,
       budgetFlag: entry.budgetFlag,
+      transport: transportOf(entry),
       availability,
     })),
   };
@@ -170,7 +214,7 @@ export function renderExternalAgents(
     lines.push(`  ${marker(row.availability)} ${row.entry.id}  ${row.entry.label}`);
     lines.push(`      ${describeAvailability(row.entry, row.availability)}`);
     lines.push(
-      `      sandbox: ${row.entry.sandboxModes.join(", ")}  streaming: ${row.entry.streamingInput}  ` +
+      `      transport: ${transportOf(row.entry)}  sandbox: ${row.entry.sandboxModes.join(", ")}  streaming: ${row.entry.streamingInput}  ` +
         `resumable: ${row.entry.resumable}  reports cost: ${row.entry.reportsCost}`,
     );
   }
@@ -245,17 +289,206 @@ export async function agentsExternalCommand(args: string[], deps: AgentsExternal
     return;
   }
 
+  if (subcommand === "run") {
+    await runCommand(args.slice(1), deps, log);
+    return;
+  }
+
   console.error(`Unknown agents external command: ${subcommand}`);
   printExternalHelp();
   process.exitCode = 1;
 }
 
+/**
+ * An approver that asks on the terminal. The answer is bound to the prompt's
+ * fingerprint — the permission bridge accepts nothing less.
+ *
+ * The readline is closed on EVERY path: an answer, or the bridge abandoning the
+ * question (`meta.signal`, aborted when its approval timeout wins). Closing only
+ * in the answer callback leaked one open interface per timed-out prompt, each
+ * holding stdin — the CLI could hang after the run had ended (flow 292 T13).
+ */
+export function terminalApprover(
+  io: { readonly input?: NodeJS.ReadableStream; readonly output?: NodeJS.WritableStream; readonly onInterface?: (rl: Interface) => void } = {},
+): NonNullable<AgentIO["requestApproval"]> {
+  return (tool, input, meta) =>
+    new Promise((resolve) => {
+      const rl = createInterface({ input: io.input ?? process.stdin, output: io.output ?? process.stderr });
+      io.onInterface?.(rl);
+      let settled = false;
+      const finish = (approved: boolean): void => {
+        if (settled) return;
+        settled = true;
+        meta?.signal?.removeEventListener("abort", onAbort);
+        rl.close();
+        resolve(meta === undefined ? approved : { approved, fingerprint: meta.fingerprint });
+      };
+      const onAbort = (): void => finish(false);
+      if (meta?.signal?.aborted === true) {
+        finish(false);
+        return;
+      }
+      meta?.signal?.addEventListener("abort", onAbort, { once: true });
+      const risk = meta?.destructive === true ? " (destructive)" : "";
+      rl.question(`\n${tool}${risk}\n  ${input}\nAllow once? [y/N] `, (answer) => {
+        finish(answer.trim().toLowerCase() === "y");
+      });
+    });
+}
+
+/**
+ * `keryx agents external run <id> --task "<text>" [--unattended] [--write]`
+ * (flow 292): drive one registry ACP agent, with keryx as its client.
+ *
+ * The same gates as every other external run: the capability (with its
+ * transport/CI hard disable), the per-agent config, the depth marker, the
+ * version probe, the disposable worktree. No human at a terminal, or
+ * `--unattended`, means every permission that would need one is refused.
+ */
+async function runCommand(args: string[], deps: AgentsExternalDeps, log: (line: string) => void): Promise<void> {
+  // A question, never a run: `run <id> --task x --help` must not start an agent.
+  if (args.includes("--help") || args.includes("-h")) {
+    printExternalHelp();
+    return;
+  }
+  const seams = deps.run ?? {};
+  const json = args.includes("--json");
+  const id = args.find((arg, index) => !arg.startsWith("-") && !["--task", "--timeout"].includes(args[index - 1] ?? ""));
+  const task = optionValue(args, "--task");
+  if (id === undefined || task === undefined || task.trim().length === 0) {
+    console.error('Usage: keryx agents external run <id> --task "<text>" [--unattended] [--write] [--timeout <ms>] [--json]');
+    process.exitCode = 1;
+    return;
+  }
+  const entry = getExternalAgent(id);
+  if (entry === undefined) {
+    console.error(`Unknown external agent "${id}". Known: ${EXTERNAL_AGENTS.map((e) => e.id).join(", ")}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (transportOf(entry) !== "acp") {
+    console.error(
+      `\`run\` drives ACP agents only; "${id}" speaks the one-way line stream. Delegate to it from \`keryx shell\` with /delegate.`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const cwd = deps.cwd ?? process.cwd();
+  const env = deps.env ?? process.env;
+  const gate = await resolveExternalAgentsCapability({
+    cwd,
+    env,
+    ...(seams.config === undefined ? {} : { config: seams.config }),
+    ...(deps.configDir === undefined ? {} : { configDir: deps.configDir }),
+  });
+  if (!gate.ok) {
+    console.error(`refused: ${gate.reason}`);
+    process.exitCode = 1;
+    return;
+  }
+  const perAgent = agentConfig(gate.config, id);
+  if (!perAgent.enabled) {
+    console.error(`refused: external agent "${id}" is disabled; enable it under \`externalAgents.agents.${id}\` in the keryx user config`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const write = args.includes("--write");
+  const isTTY = seams.isTTY ?? process.stdin.isTTY === true;
+  const unattended = args.includes("--unattended") || !isTTY;
+  const requestApproval = unattended ? undefined : (seams.requestApproval ?? terminalApprover());
+  const timeoutRaw = optionValue(args, "--timeout");
+  const timeoutMs =
+    timeoutRaw !== undefined && Number.isInteger(Number(timeoutRaw)) && Number(timeoutRaw) > 0
+      ? Number(timeoutRaw)
+      : gate.config.defaultTimeoutMs;
+  const worktreesDir = path.join(tmpdir(), "keryx-external-worktrees");
+  const worktree = seams.worktree ?? createGitWorktreePort({ repoRoot: cwd, worktreesDir });
+  if (seams.worktree === undefined) await mkdir(worktreesDir, { recursive: true });
+  const detect = seams.detect === null ? undefined : (seams.detect ?? createVersionProbe());
+
+  const outcome = await runExternalChild(
+    {
+      runtime: {
+        kind: "external",
+        agent: id,
+        sandbox: write ? "worktree-write" : "read-only",
+        model: perAgent.model,
+      },
+      allowedActions: write ? ["read-file", "write"] : ["read-file"],
+      taskTitle: task.length > 80 ? `${task.slice(0, 77)}...` : task,
+      taskDescription: task,
+      acceptanceCriteria: [],
+      worktreeId: `acp-${randomUUID()}`,
+      maxPromptBytes: gate.config.maxPromptBytes,
+      timeoutMs,
+      parentEnv: env,
+      depth: readExternalDepth(env) + 1,
+      projectRoot: cwd,
+    },
+    {
+      spawn: seams.spawn ?? createBunSpawnPort(),
+      worktree,
+      capability: () => ({ enabled: true }),
+      ...(detect === undefined ? {} : { detect }),
+      maxExternalDepth: DEFAULT_MAX_EXTERNAL_DEPTH,
+      onWarning: (warning) => console.error(`warning: ${warning}`),
+      acp: {
+        ...seams.acp,
+        mode: seams.acp?.mode ?? getProjectPermissionMode(cwd) ?? "ask",
+        unattended,
+        ...(requestApproval === undefined ? {} : { requestApproval }),
+      },
+    },
+  );
+  seams.onOutcome?.(outcome);
+
+  if (json) {
+    log(JSON.stringify(outcome, null, 2));
+  } else {
+    for (const line of renderRunOutcome(outcome)) log(line);
+  }
+  if (outcome.status !== "Completed") process.exitCode = 1;
+}
+
+/** The text report for one run. Pure. */
+export function renderRunOutcome(outcome: ExternalChildOutcome): string[] {
+  const lines = [`# agents external run`, "", `status: ${outcome.status}`];
+  const record = outcome.acp;
+  if (record !== undefined) {
+    const info = record.agentInfo === "unreported" ? "unreported" : `${record.agentInfo.name} ${record.agentInfo.version}`;
+    lines.push(`agent: ${record.agentId} (${info})`);
+    lines.push(
+      `mode: ${record.mode.effective}${record.mode.clamped ? ` (lowered from ${record.mode.requested}: a foreign agent's tool calls are self-described)` : ""}` +
+        `${record.unattended ? ", unattended — every permission that needs a human is refused" : ""}`,
+    );
+    lines.push(`context: ${record.context.offered ? "keryx serve-mcp --read-only offered" : `not offered — ${record.context.reason}`}`);
+    const denied = record.decisions.filter((d) => d.verdict === "deny").length;
+    lines.push(`permissions: ${record.decisions.length} asked, ${denied} refused`);
+    lines.push(`fs/terminal requests: ${record.fsRequests.length} (${record.fsRequests.filter((r) => r.outcome === "refused").length} refused)`);
+    lines.push(`cost: ${record.cost === "missing" ? "missing (not reported by the agent)" : `${record.cost.amount} ${record.cost.currency}`}`);
+    if (record.patchArtifact !== undefined) lines.push(`patch (never applied): ${record.patchArtifact}`);
+    if (record.sessionId !== undefined) lines.push(`session: ${record.sessionId}`);
+  }
+  lines.push("", outcome.output);
+  return lines;
+}
+
 /** `--help` for the external surface. */
 export function printExternalHelp(): void {
-  helpTitle("keryx agents external", "inspect the external agent registry (read-only, spends no quota)");
-  helpUsage(["keryx agents external list [--json] [--no-probe]", "keryx agents external probe <id> [--json]"]);
+  helpTitle("keryx agents external", "inspect the external agent registry, or drive one ACP agent");
+  helpUsage([
+    "keryx agents external list [--json] [--no-probe]",
+    "keryx agents external probe <id> [--json]",
+    'keryx agents external run <id> --task "<text>" [--unattended] [--write] [--timeout <ms>] [--json]',
+  ]);
   helpOptions([
-    { flag: "--json", desc: "Emit the registry + availability document as JSON." },
+    { flag: "--json", desc: "Emit the registry + availability document (list/probe) or the run outcome (run) as JSON." },
     { flag: "--no-probe", desc: "Skip detection entirely; every entry reports `not-probed`." },
+    { flag: "--task", desc: "run: what the agent should do. It runs in a disposable worktree; your tree is never touched." },
+    { flag: "--unattended", desc: "run: refuse every permission that would need a human (also implied without a TTY)." },
+    { flag: "--write", desc: "run: advertise fs.writeTextFile; writes land in the worktree and leave as a never-applied patch." },
+    { flag: "--timeout", desc: "run: wall-clock ceiling in ms (default: externalAgents.defaultTimeoutMs)." },
   ]);
 }

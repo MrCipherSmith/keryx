@@ -1,0 +1,379 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "292",
+  "slug": "keryx-as-an-acp-client-drive-external-ac",
+  "title": "keryx as an ACP client: drive external ACP agents with keryx context and policy",
+  "status": "in-progress",
+  "createdAt": "2026-09-22T23:36:27.199Z",
+  "updatedAt": "2026-09-23T01:17:24.857Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:60ba40c776ab11956c27a1191cc22b2bcb4c04e1f1d1294e8c77cf767e0db5e2",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "ACP supervisor on the external-agent spawn seam; registry transport acp; handshake and update fold",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T00:12:31.973Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Permission bridge through resolveApprovalDecision; unattended fails closed; modes clamped to ask",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Advertised capabilities; fs read/write confined by real path; terminal and elicitation refused",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Context via serve-mcp --read-only launched from the running build",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Session record, decisions, usage and cost; keryx agents external run",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Scripted fake ACP agent fixture; process tests incl. keryx-as-client driving keryx acp",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Docs: ACP client page, limits, external-runtime requirements note",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T00:53:04.078Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Bound the agent's total output: stderr tail, capped transcript, linear line buffering, named stderr overflow",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T01:09:40.950Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-22T23:36:27.199Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-23T00:12:30.792Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T00:12:30.914Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T00:12:31.030Z",
+      "event": "task-added",
+      "detail": "T5: ACP supervisor on the external-agent spawn seam; registry transport acp; handshake and update fold"
+    },
+    {
+      "at": "2026-09-23T00:12:31.155Z",
+      "event": "task-added",
+      "detail": "T6: Permission bridge through resolveApprovalDecision; unattended fails closed; modes clamped to ask"
+    },
+    {
+      "at": "2026-09-23T00:12:31.274Z",
+      "event": "task-added",
+      "detail": "T7: Advertised capabilities; fs read/write confined by real path; terminal and elicitation refused"
+    },
+    {
+      "at": "2026-09-23T00:12:31.392Z",
+      "event": "task-added",
+      "detail": "T8: Context via serve-mcp --read-only launched from the running build"
+    },
+    {
+      "at": "2026-09-23T00:12:31.510Z",
+      "event": "task-added",
+      "detail": "T9: Session record, decisions, usage and cost; keryx agents external run"
+    },
+    {
+      "at": "2026-09-23T00:12:31.626Z",
+      "event": "task-added",
+      "detail": "T10: Scripted fake ACP agent fixture; process tests incl. keryx-as-client driving keryx acp"
+    },
+    {
+      "at": "2026-09-23T00:12:31.740Z",
+      "event": "task-added",
+      "detail": "T11: Docs: ACP client page, limits, external-runtime requirements note"
+    },
+    {
+      "at": "2026-09-23T00:12:31.855Z",
+      "event": "task-added",
+      "detail": "T12: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T00:12:31.973Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T00:41:24.672Z",
+      "event": "task-done",
+      "detail": "T5: ACP supervisor on the external-agent spawn seam; registry transport acp; handshake and update fold"
+    },
+    {
+      "at": "2026-09-23T00:41:24.795Z",
+      "event": "task-done",
+      "detail": "T6: Permission bridge through resolveApprovalDecision; unattended fails closed; modes clamped to ask"
+    },
+    {
+      "at": "2026-09-23T00:41:24.914Z",
+      "event": "task-done",
+      "detail": "T7: Advertised capabilities; fs read/write confined by real path; terminal and elicitation refused"
+    },
+    {
+      "at": "2026-09-23T00:41:25.030Z",
+      "event": "task-done",
+      "detail": "T8: Context via serve-mcp --read-only launched from the running build"
+    },
+    {
+      "at": "2026-09-23T00:41:25.147Z",
+      "event": "task-done",
+      "detail": "T9: Session record, decisions, usage and cost; keryx agents external run"
+    },
+    {
+      "at": "2026-09-23T00:41:25.262Z",
+      "event": "task-done",
+      "detail": "T10: Scripted fake ACP agent fixture; process tests incl. keryx-as-client driving keryx acp"
+    },
+    {
+      "at": "2026-09-23T00:41:25.374Z",
+      "event": "task-done",
+      "detail": "T11: Docs: ACP client page, limits, external-runtime requirements note"
+    },
+    {
+      "at": "2026-09-23T00:53:03.954Z",
+      "event": "task-added",
+      "detail": "T13: Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding"
+    },
+    {
+      "at": "2026-09-23T00:53:04.078Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T01:05:24.677Z",
+      "event": "task-done",
+      "detail": "T13: Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding"
+    },
+    {
+      "at": "2026-09-23T01:09:40.837Z",
+      "event": "task-added",
+      "detail": "T14: Bound the agent's total output: stderr tail, capped transcript, linear line buffering, named stderr overflow"
+    },
+    {
+      "at": "2026-09-23T01:09:40.950Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T01:17:24.857Z",
+      "event": "task-done",
+      "detail": "T14: Bound the agent's total output: stderr tail, capped transcript, linear line buffering, named stderr overflow"
+    }
+  ]
+}
