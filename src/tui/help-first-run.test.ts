@@ -152,5 +152,35 @@ describe("resolveFirstRunHelp (AC8, HIGH 1 fix)", () => {
     const source = readFileSync(new URL("./tui-shell.ts", import.meta.url), "utf8");
     expect(source).toContain("void resolveFirstRunHelp({");
     expect(source).not.toContain("await resolveFirstRunHelp(");
+    // The background task must neither open a modal on a closed shell nor end
+    // the process as an unhandled rejection (PR #669 re-review).
+    const call = source.slice(source.indexOf("void resolveFirstRunHelp({"));
+    const chain = call.slice(0, call.indexOf("// --- Per-project session"));
+    expect(chain).toContain("!destroyed");
+    expect(chain).toContain(".catch(");
+  });
+
+  test("a probe that throws opens nothing and marks nothing, so the next launch asks again", async () => {
+    const marked: number[] = [];
+    const tab = await resolveFirstRunHelp({
+      shown: false,
+      probe: async () => {
+        throw new Error("network down");
+      },
+      mark: () => marked.push(1),
+    });
+    expect(tab).toBeUndefined();
+    expect(marked).toEqual([]);
+  });
+
+  test("a marker that cannot be written never throws out of the first run", async () => {
+    const tab = await resolveFirstRunHelp({
+      shown: false,
+      probe: async () => 0,
+      mark: () => {
+        throw new Error("EROFS: read-only file system");
+      },
+    });
+    expect(tab).toBe("connect");
   });
 });

@@ -89,7 +89,18 @@ export async function resolveFirstRunHelp(opts: ResolveFirstRunHelpOptions): Pro
   if (opts.shown) {
     return undefined; // never probes, never marks again — already resolved
   }
-  const connectedProviderCount = await opts.probe();
-  opts.mark(); // ALWAYS, on every first run — connected or not
+  let connectedProviderCount: number;
+  try {
+    connectedProviderCount = await opts.probe();
+  } catch {
+    // An unknown answer opens nothing and marks nothing: the next launch asks again.
+    return undefined;
+  }
+  try {
+    opts.mark(); // ALWAYS, on every first run — connected or not
+  } catch {
+    // A marker that cannot be written (read-only home, full disk) must not take
+    // the shell down; the worst case is that the next launch probes once more.
+  }
   return shouldOpenFirstRunHelp(false, connectedProviderCount) ? "connect" : undefined;
 }

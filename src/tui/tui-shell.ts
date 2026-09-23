@@ -4589,11 +4589,17 @@ export async function launchTuiAgentShell(opts: {
       shown: helpFirstRunShown(),
       probe: async () => (await filterConnectedDetectedProviders(opts.detected, { env: process.env })).length,
       mark: markHelpFirstRunShown,
-    }).then((tab) => {
-      if (tab !== undefined) {
-        openHelp(tab);
-      }
-    });
+    })
+      .then((tab) => {
+        // The probe can outlive the shell: never open a modal on a renderer the user already closed.
+        if (tab !== undefined && !destroyed) {
+          openHelp(tab);
+        }
+      })
+      .catch((error: unknown) => {
+        // Onboarding help is a courtesy — nothing here may end the shell as an unhandled rejection.
+        debugEvent("help.first-run-failed", { error: error instanceof Error ? error.message : String(error) });
+      });
 
     // --- Per-project session (isolated by git root / cwd) --------------------
     const sessionCwd = opts.session?.cwd ?? process.cwd();
