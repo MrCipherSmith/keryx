@@ -10,7 +10,7 @@
 // No test waits on the wall clock: ticks are fired by hand, renders are flushed.
 
 import { afterEach, expect, test } from "bun:test";
-import { chmodSync, copyFileSync, mkdtempSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdtempSync, realpathSync } from "node:fs";
 import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -320,7 +320,8 @@ otuiTest("AC11: four tabs — Overview, Grants, Runs, Report — each led by its
     await settle(h);
     expect(detail.visibleLines()[0]).toBe(DETAIL_KEYS);
     expect(detail.visibleLines().join("\n")).toContain("network   off");
-    expect(detail.visibleLines().join("\n")).toContain(`  - gh.pr.list: ${GH}`);
+    // The Grants tab shows the pinned realpath (macOS temp dirs sit behind the /var -> /private/var link).
+    expect(detail.visibleLines().join("\n")).toContain(`  - gh.pr.list: ${realpathSync(GH)}`);
     detail.setTab("runs");
     await settle(h);
     expect(detail.visibleLines().join("\n")).toContain("ok — report written  [cost: $0.0042]");

@@ -261,6 +261,9 @@ test("flow 295 AC14: a scheduled agent-task run's cost is included in project tr
     runsWithCostRecorded: 1,
     runsWithCostNotRecorded: 0,
     runsTotal: 1,
+    // The run closed its reservation, so nothing is left open (flow 300 N8).
+    openReservations: 0,
+    openReservedUsd: 0,
     // A scheduled agent task names no flow, so none of its cost is attributed to one (flow 297).
     attributedToFlowsUsd: undefined,
   });
