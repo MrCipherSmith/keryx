@@ -1,76 +1,73 @@
-import path from "node:path";
 import { buildBlockMessage, classifyCommand, type HookClassification } from "./hook-classify";
+import {
+  CTX_GUARD_ANTIGRAVITY,
+  CTX_GUARD_CLAUDE,
+  CTX_GUARD_CODEX,
+  CTX_GUARD_CURSOR,
+  CTX_GUARD_OPENCODE,
+  CTX_GUARD_WINDSURF,
+  CTX_HOOK_SENTINEL,
+  UNSUPPORTED_CTX_GUARD,
+  allowAction,
+  managedGroups,
+  parseToolName,
+  preToolUseMatcher as registryPreToolUseMatcher,
+  refusalAction,
+  type HarnessAdapter,
+  type HookAction,
+  type Settings as IntegrationSettings,
+  type SurfaceAdapter,
+} from "../integrations";
 
-// Multi-harness registry for the gdctx routing guard. The command CLASSIFIER is
-// harness-agnostic (hook-classify.ts). What differs per harness is only:
+// Multi-harness registry for the gdctx routing guard. This module is a VIEW
+// over `src/integrations` (flow 305, W5-a): every merge/strip/validate
+// function below is the SAME function object registered on the matching
+// `SurfaceAdapter` in `src/integrations/surfaces.ts` — there is exactly one
+// copy of the walker logic (`src/integrations/settings-json.ts`), and this
+// file only re-shapes it into the `CtxRuntime` interface every existing
+// caller and test already imports.
+//
+// What differs per harness is only:
 //   1. WHERE the pre-exec hook is configured (settings path + schema),
 //   2. HOW the harness hands the command to the hook (payload format),
 //   3. HOW the hook signals BLOCK vs ALLOW back to the harness,
 //   4. WHAT install artifact is written (a JSON config group, or a plugin file).
 //
-// Each CtxRuntime encapsulates exactly those concerns, verified against that
-// harness's documented hook contract. Contracts confirmed against first-party
-// docs are `confidence: "verified"`; those from community docs are
-// `confidence: "experimental"` and print a warning at install time. Harnesses
-// with no scriptable pre-exec gate (e.g. Zed today) are NOT registered.
+// Contracts confirmed against first-party docs are `confidence: "verified"`;
+// those from community docs are `confidence: "experimental"` and print a
+// warning at install time. Harnesses with no scriptable pre-exec gate (e.g.
+// Zed today) are NOT registered.
 //
 // Sentinel discipline: managed JSON groups carry `_keryxManaged:"ctx-agent-hooks"`
 // so uninstall removes ONLY our entry and re-install is idempotent.
 
-export const CTX_HOOK_SENTINEL = "ctx-agent-hooks";
+export { CTX_HOOK_SENTINEL };
 export const MANAGED_KEY = "_keryxManaged";
 
-export type Settings = Record<string, unknown>;
-
-// What the hook process should do for one classified command. `exitCode` plus
-// optional `stdout`/`stderr` covers every block style harnesses use: exit-code
-// blocking (Claude/Codex/Windsurf: exit 2 + stderr) and stdout-JSON decisions
-// (Cursor: `{permission:"deny"}`, Antigravity: `{allow_tool:false}`).
-export interface HookAction {
-  exitCode: number;
-  stdout?: string;
-  stderr?: string;
-}
-
+export type Settings = IntegrationSettings;
+export type { HookAction };
 export type Confidence = "verified" | "experimental";
+
+/** How a runtime spells an installed hook — see `CtxRuntime.groupShape`. */
+export type GroupShape = "flat" | "nested";
 
 export interface CtxRuntime {
   readonly id: string;
   readonly label: string;
   readonly confidence: Confidence;
-  // --- hook side (invoked by `keryx ctx hook <id>`) ---
   parseCommand(payload: string): string | null;
-  /**
-   * Tool names that are a code search in their own right, bypassing the shell.
-   *
-   * The matcher used to be `Bash` alone and `parseCommand` returned null for
-   * everything else, so an agent that reached for its runtime's own search tool
-   * was not guarded at all — and the Bash guard then reported a clean run,
-   * which is worse than no guard, because the routing audit records compliance
-   * that did not happen.
-   *
-   * An explicit list, never a heuristic: anything not named here keeps failing
-   * open, and that is the property that makes the guard safe to leave installed.
-   */
   readonly nativeSearchTools?: readonly string[];
-  /** How this runtime spells an installed hook — see `GroupShape`. */
   readonly groupShape: GroupShape;
-  /** The key its hook groups live under. */
   readonly groupKey: string;
-  /** A top-level container other than `hooks`, when the runtime uses one. */
   readonly groupContainer?: string;
+  /** Path relative to the project root, for `SettingsFileOwner` lookup. Absent for non-JSON artifacts. */
+  readonly relativePath?: string;
   block(command: string, classification: HookClassification): HookAction;
   allow(classification: HookClassification): HookAction;
-  // --- install side ---
-  // Path of the artifact this runtime installs (for reporting).
   locate(projectRoot: string): string;
-  // For JSON-config runtimes: merge/strip a parsed settings object. Runtimes
-  // that write a non-JSON artifact (e.g. OpenCode plugin) leave these undefined
-  // and implement customInstall/customUninstall instead.
   merge?(settings: Settings): Settings;
   strip?(settings: Settings): Settings;
   validate?(settings: Settings): string[];
-  // For non-JSON runtimes: fully own install/uninstall. Returns errors ([] = ok).
   customInstall?(projectRoot: string): Promise<string[]>;
   customUninstall?(projectRoot: string): Promise<boolean>;
 }
@@ -79,191 +76,30 @@ function hookCommand(id: string): string {
   return `keryx ctx hook ${id}`;
 }
 
-// --- shared sentinel helpers (JSON-config runtimes) --------------------------
-
-function isManagedGroup(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<string, unknown>)[MANAGED_KEY] === CTX_HOOK_SENTINEL
-  );
-}
-
-function stripManaged(existing: unknown): unknown[] {
-  return Array.isArray(existing) ? existing.filter((g) => !isManagedGroup(g)) : [];
-}
-
-function addSentinel(settings: Settings): void {
-  const managed = Array.isArray(settings[MANAGED_KEY])
-    ? (settings[MANAGED_KEY] as unknown[]).filter((v) => v !== CTX_HOOK_SENTINEL)
-    : [];
-  settings[MANAGED_KEY] = [...managed, CTX_HOOK_SENTINEL];
-}
-
-function removeSentinel(settings: Settings): void {
-  if (!Array.isArray(settings[MANAGED_KEY])) return;
-  const managed = (settings[MANAGED_KEY] as unknown[]).filter((v) => v !== CTX_HOOK_SENTINEL);
-  if (managed.length > 0) settings[MANAGED_KEY] = managed;
-  else delete settings[MANAGED_KEY];
-}
-
-function hooksObject(settings: Settings): Settings {
-  return typeof settings.hooks === "object" &&
-    settings.hooks !== null &&
-    !Array.isArray(settings.hooks)
-    ? { ...(settings.hooks as Settings) }
-    : {};
-}
-
-// Merge/strip a managed group into a named array under `settings.hooks[key]`.
-function mergeIntoHookArray(settings: Settings, key: string, group: Settings): Settings {
-  // A legacy ARRAY under `hooks` is not ours and is not discarded.
-  //
-  // `hooksObject` returns `{}` for anything that is not a plain object, so an
-  // array — the shape the security installer used before the two were split —
-  // was replaced wholesale, taking the operator's own entries with it. The
-  // security side grew a careful migration for the same collision and this side
-  // did not, so whichever installer ran first still lost everything when the
-  // other one ran. The coexistence test drove four orderings and never drove
-  // this one.
-  //
-  // Foreign entries are preserved under a key that says what they are, rather
-  // than being merged into an event map they were never keyed by.
-  if (Array.isArray(settings.hooks) && settings.hooks.length > 0) {
-    settings.unmigratedHooks = [
-      ...(Array.isArray(settings.unmigratedHooks) ? settings.unmigratedHooks : []),
-      ...settings.hooks,
-    ];
-    delete settings.hooks;
-  }
-  const hooks = hooksObject(settings);
-  hooks[key] = [...stripManaged(hooks[key]), group];
-  settings.hooks = hooks;
-  addSentinel(settings);
-  return settings;
-}
-
-function stripFromHookArray(settings: Settings, key: string): Settings {
-  if (typeof settings.hooks !== "object" || settings.hooks === null || Array.isArray(settings.hooks)) {
-    removeSentinel(settings);
-    return settings;
-  }
-  const hooks = { ...(settings.hooks as Settings) };
-  if (Array.isArray(hooks[key])) {
-    const remaining = stripManaged(hooks[key]);
-    if (remaining.length > 0) hooks[key] = remaining;
-    else delete hooks[key];
-  }
-  if (Object.keys(hooks).length > 0) settings.hooks = hooks;
-  else delete settings.hooks;
-  removeSentinel(settings);
-  return settings;
+/** The matcher a runtime installs: the shell, plus its own native search tools. */
+export function preToolUseMatcher(runtime: Pick<CtxRuntime, "nativeSearchTools">): string {
+  return registryPreToolUseMatcher(runtime.nativeSearchTools);
 }
 
 /**
- * Managed groups that own `command`, flat (cursor/windsurf) or nested (claude).
- *
- * One walker, because the flat-vs-nested ownership test is the subtle part and
- * two copies of it drift: when a fourth settings shape arrives, one copy gets
- * updated and the other keeps reporting the install clean.
+ * What an install would REPLACE, read before the merge — or null if nothing
+ * stale is there. See `src/integrations/settings-json.ts::managedGroups` for
+ * the shared presence/staleness walker this is built from.
  */
-/**
- * How a runtime spells an installed hook.
- *
- * `nested` is a group carrying `hooks: [{ type, command }]` (claude, codex,
- * antigravity); `flat` is a group whose `command` sits on the group itself
- * (cursor, windsurf). It is declared per runtime rather than accepted either
- * way, because "either shape counts for everyone" let a flat-shaped group
- * validate clean for claude — which executes only nested groups, so the guard
- * was reported installed and never ran.
- */
-export type GroupShape = "flat" | "nested";
-
-/** Where a runtime keeps its hook groups: `settings.hooks[key]` unless stated. */
-function groupContainer(settings: Settings, runtime: CtxRuntime): unknown[] {
-  const container = runtime.groupContainer
-    ? (settings[runtime.groupContainer] as Settings | undefined)
-    : (settings.hooks as Settings | undefined);
-  const list = container?.[runtime.groupKey];
-  return Array.isArray(list) ? (list as unknown[]) : [];
-}
-
-/**
- * Managed groups that own this runtime's hook command, in THIS runtime's shape.
- *
- * One walker for every runtime. The comment that used to sit here predicted its
- * own failure — "when a fourth settings shape arrives, one copy gets updated and
- * the other keeps reporting the install clean" — and the fourth shape
- * (antigravity, nested under a named top-level key) was already in the file,
- * with its own hand-rolled validate that still matched on `command` alone.
- */
-function managedGroupsFor(settings: Settings, runtime: CtxRuntime): Array<Record<string, unknown>> {
-  const command = hookCommand(runtime.id);
-  return groupContainer(settings, runtime).filter((group): group is Record<string, unknown> => {
-    if (!isManagedGroup(group)) return false;
-    const entry = group as { hooks?: unknown; command?: unknown };
-    if (runtime.groupShape === "flat") {
-      return entry.command === command;
-    }
-    return (
-      Array.isArray(entry.hooks) &&
-      (entry.hooks as Array<{ command?: unknown; type?: unknown }>).some(
-        // `type` matters: a harness executes only `type: "command"` entries, so
-        // a group whose entry says "prompt" is installed and inert.
-        (hook) => hook?.command === command && hook?.type === "command",
-      )
-    );
-  });
-}
-
-/** True when this runtime's guard is installed in a shape that will actually run. */
-function hasRunnableGuard(settings: Settings, runtime: CtxRuntime): boolean {
-  return managedGroupsFor(settings, runtime).length > 0;
-}
-
-
-
-/**
- * True when an installed guard's matcher no longer covers what this build
- * installs.
- *
- * An absent or non-string matcher counts as stale rather than clean: the module
- * fails toward reporting, because a guard that silently covers less than it
- * claims is the defect this whole check exists to surface.
- */
-function hasStalePreToolUseMatcher(settings: Settings, runtime: CtxRuntime): boolean {
+export function describeExistingGuard(settings: Settings, runtime: CtxRuntime): string | null {
   const expected = preToolUseMatcher(runtime);
-  return managedGroupsFor(settings, runtime).some(
-    (group) => typeof group.matcher !== "string" || group.matcher !== expected,
-  );
-}
-
-// --- payload parsers ---------------------------------------------------------
-
-function parseJson(payload: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(payload) as unknown;
-    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
-// Claude Code / Codex / OpenCode bridge: { tool_name:"Bash", tool_input.command }.
-function parseToolInputCommand(payload: string): string | null {
-  const record = parseJson(payload);
-  if (!record || record.tool_name !== "Bash") return null;
-  const input = record.tool_input;
-  if (typeof input !== "object" || input === null) return null;
-  const command = (input as Record<string, unknown>).command;
-  return typeof command === "string" ? command : null;
-}
-
-/** The `tool_name` of a PreToolUse payload, for runtimes that shape it that way. */
-export function parseToolName(payload: string): string | null {
-  const record = parseJson(payload);
-  const name = record?.tool_name;
-  return typeof name === "string" ? name : null;
+  const present = managedGroups(settings, {
+    sentinel: CTX_HOOK_SENTINEL,
+    container: runtime.groupContainer ?? "hooks",
+    key: runtime.groupKey,
+    shape: runtime.groupShape,
+    commandMatches: (c) => c === hookCommand(runtime.id),
+  });
+  if (present.length === 0) return null;
+  const stale = present.some((g) => typeof g.matcher !== "string" || g.matcher !== expected);
+  if (!stale) return null;
+  const found = present.map((group) => (typeof group.matcher === "string" ? group.matcher : "(no matcher)")).join(", ");
+  return `upgraded an existing guard: ${found} -> ${expected}`;
 }
 
 /**
@@ -283,79 +119,11 @@ export function nativeSearchMessage(tool: string): string {
   ].join("\n");
 }
 
-// Cursor beforeShellExecution: top-level { command }.
-function parseCursorCommand(payload: string): string | null {
-  const record = parseJson(payload);
-  const command = record?.command;
-  return typeof command === "string" ? command : null;
-}
+export { parseToolName, refusalAction, allowAction };
 
-// Windsurf pre_run_command: { tool_info: { command_line } }.
-function parseWindsurfCommand(payload: string): string | null {
-  const record = parseJson(payload);
-  const info = record?.tool_info;
-  if (typeof info !== "object" || info === null) return null;
-  const command = (info as Record<string, unknown>).command_line;
-  return typeof command === "string" ? command : null;
-}
+// --- per-harness payload parsers (re-exported for direct callers/tests) ------
 
-// Antigravity run_command: { toolCall: { args: { CommandLine } } }.
-function parseAntigravityCommand(payload: string): string | null {
-  const record = parseJson(payload);
-  const call = record?.toolCall;
-  const args = call && typeof call === "object" ? (call as Record<string, unknown>).args : undefined;
-  const command = args && typeof args === "object" ? (args as Record<string, unknown>).CommandLine : undefined;
-  return typeof command === "string" ? command : null;
-}
-
-// --- block/allow signalers ---------------------------------------------------
-
-/**
- * How a runtime says NO, given the message. The one owner of that fact.
- *
- * Exported because a second keryx surface needs it and got it wrong: the
- * security agent hooks refused with `exit 1`, which every runtime here treats
- * as a non-blocking error — stderr is surfaced and the call proceeds. The
- * guard reported and did not refuse, and two modules in one repository
- * disagreed about the block signal while only one of them had looked it up.
- *
- * `runtimeId` is the id under `CTX_RUNTIMES`. An unknown id returns the
- * exit-code form, which is the majority shape and fails toward refusing.
- */
-export function refusalAction(runtimeId: string, message: string): HookAction {
-  switch (runtimeId) {
-    case "cursor":
-      return { exitCode: 0, stdout: `${JSON.stringify({ permission: "deny", agent_message: message })}\n` };
-    case "antigravity":
-      return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: false, deny_reason: message })}\n` };
-    default:
-      return { exitCode: 2, stderr: `${message}\n` };
-  }
-}
-
-/**
- * How a runtime says YES. The other half of the same fact.
- *
- * `refusalAction` was exported for the security hooks and the CLI copied it; the allow side was left behind, so on a passing check a
- * stdout-JSON runtime received ZERO BYTES and had to fall back on whatever it
- * does with an empty hook response. That is the same "copied the document and
- * not the contract" defect as the refusal path, one branch over, and it was
- * found by a review of the commit that fixed the refusal path.
- *
- * The exit-code runtimes genuinely say yes with silence and exit 0, which is
- * why this returns a bare `{ exitCode: 0 }` for them rather than inventing
- * something. The two that decide from stdout get a document.
- */
-export function allowAction(runtimeId: string): HookAction {
-  switch (runtimeId) {
-    case "cursor":
-      return { exitCode: 0, stdout: `${JSON.stringify({ permission: "allow" })}\n` };
-    case "antigravity":
-      return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: true })}\n` };
-    default:
-      return { exitCode: 0 };
-  }
-}
+import { parseAntigravityCommand, parseCursorCommand, parseToolInputCommand, parseWindsurfCommand } from "../integrations/codecs";
 
 // Exit-2 + stderr (Claude, Codex, Windsurf, OpenCode bridge).
 function exitCodeBlock(command: string, c: HookClassification): HookAction {
@@ -385,70 +153,41 @@ function antigravityAllow(_c: HookClassification): HookAction {
   return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: true })}\n` };
 }
 
-// --- JSON group builders (install artifacts) ---------------------------------
+// --- runtime definitions: shaped views over the registry's ctx-guard surfaces
 
-// Claude/Codex PreToolUse group: { matcher, hooks:[{type,command}], _keryxManaged }.
-/**
- * The matcher a runtime installs: the shell, plus whatever native search tools
- * that runtime actually has.
- *
- * Derived rather than declared. It used to be a module-level constant beside a
- * per-runtime `nativeSearchTools` list with nothing tying them together, so
- * adding a tool to the list without editing the constant meant the refusal code
- * never ran and `validate` still reported the install clean — the same
- * "reported a clean run, which is worse than no guard" failure the tool list was
- * added to close, one field over.
- */
-export function preToolUseMatcher(runtime: Pick<CtxRuntime, "nativeSearchTools">): string {
-  return ["Bash", ...(runtime.nativeSearchTools ?? [])].join("|");
-}
-
-function validatePreToolUse(settings: Settings, runtime: CtxRuntime): string[] {
-  const expected = preToolUseMatcher(runtime);
-  if (!hasRunnableGuard(settings, runtime)) {
-    return [`${runtime.id}: missing PreToolUse(${expected}) guard`];
-  }
-  if (hasStalePreToolUseMatcher(settings, runtime)) {
-    return [
-      `${runtime.id}: PreToolUse guard does not match ${expected}; a tool it should cover bypasses it. ` +
-        `Re-run \`keryx ctx install-hook --runtime ${runtime.id}\`.`,
-    ];
-  }
-  return [];
-}
-
-/**
- * What an install would REPLACE, read before the merge — or null if nothing
- * stale is there.
- *
- * `installRuntimeHook` merges and then validates what it just wrote, so
- * `validate` never sees a pre-install state and the stale-matcher branch could
- * not fire in production at all. The tests reached it only by calling `validate`
- * directly with a hand-built object the installer can never produce. A drift
- * check that runs only after the drift has been overwritten reports nothing,
- * forever.
- */
-export function describeExistingGuard(settings: Settings, runtime: CtxRuntime): string | null {
-  if (!hasRunnableGuard(settings, runtime)) return null;
-  if (!hasStalePreToolUseMatcher(settings, runtime)) return null;
-  const found = managedGroupsFor(settings, runtime)
-    .map((group) => (typeof group.matcher === "string" ? group.matcher : "(no matcher)"))
-    .join(", ");
-  return `upgraded an existing guard: ${found} -> ${preToolUseMatcher(runtime)}`;
-}
-
-/** The managed PreToolUse group this runtime installs. */
-function preToolUseGroup(runtime: CtxRuntime): Settings {
+function asRuntime(opts: {
+  id: string;
+  label: string;
+  confidence: Confidence;
+  groupShape: GroupShape;
+  groupKey: string;
+  groupContainer?: string;
+  nativeSearchTools?: readonly string[];
+  parseCommand(payload: string): string | null;
+  block(command: string, c: HookClassification): HookAction;
+  allow(c: HookClassification): HookAction;
+  surface: SurfaceAdapter;
+}): CtxRuntime {
   return {
-    matcher: preToolUseMatcher(runtime),
-    hooks: [{ type: "command", command: hookCommand(runtime.id) }],
-    [MANAGED_KEY]: CTX_HOOK_SENTINEL,
+    id: opts.id,
+    label: opts.label,
+    confidence: opts.confidence,
+    groupShape: opts.groupShape,
+    groupKey: opts.groupKey,
+    ...(opts.groupContainer !== undefined ? { groupContainer: opts.groupContainer } : {}),
+    ...(opts.surface.relativePath !== undefined ? { relativePath: opts.surface.relativePath } : {}),
+    ...(opts.nativeSearchTools !== undefined ? { nativeSearchTools: opts.nativeSearchTools } : {}),
+    parseCommand: opts.parseCommand,
+    block: opts.block,
+    allow: opts.allow,
+    locate: (root) => opts.surface.settingsFile!(root),
+    ...(opts.surface.merge !== undefined ? { merge: opts.surface.merge } : {}),
+    ...(opts.surface.strip !== undefined ? { strip: opts.surface.strip } : {}),
+    ...(opts.surface.validate !== undefined ? { validate: opts.surface.validate } : {}),
   };
 }
 
-// --- runtime definitions -----------------------------------------------------
-
-export const CLAUDE_RUNTIME: CtxRuntime = {
+export const CLAUDE_RUNTIME: CtxRuntime = asRuntime({
   id: "claude",
   label: ".claude/settings.json (PreToolUse)",
   confidence: "verified",
@@ -458,33 +197,22 @@ export const CLAUDE_RUNTIME: CtxRuntime = {
   parseCommand: parseToolInputCommand,
   block: exitCodeBlock,
   allow: exitCodeAllow,
-  locate: (root) => path.join(root, ".claude", "settings.json"),
-  merge: (s) => mergeIntoHookArray(s, "PreToolUse", preToolUseGroup(CLAUDE_RUNTIME)),
-  strip: (s) => stripFromHookArray(s, "PreToolUse"),
-  validate: (s) => validatePreToolUse(s, CLAUDE_RUNTIME),
-};
+  surface: CTX_GUARD_CLAUDE,
+});
 
-export const CODEX_RUNTIME: CtxRuntime = {
+export const CODEX_RUNTIME: CtxRuntime = asRuntime({
   id: "codex",
   label: ".codex/hooks.json (PreToolUse)",
   confidence: "verified",
   groupShape: "nested",
   groupKey: "PreToolUse",
-  // No `nativeSearchTools`: nothing in this repo evidences that codex names a
-  // search tool `Grep`. The only `--tools Read Grep Glob` reference is about
-  // `claude` (docs/docs/harness.md). Declaring a tool a runtime may not have is
-  // the unverified claim this module exists to stop, and it would widen the
-  // installed matcher for something that never fires. Add it with a citation.
   parseCommand: parseToolInputCommand,
   block: exitCodeBlock,
   allow: exitCodeAllow,
-  locate: (root) => path.join(root, ".codex", "hooks.json"),
-  merge: (s) => mergeIntoHookArray(s, "PreToolUse", preToolUseGroup(CODEX_RUNTIME)),
-  strip: (s) => stripFromHookArray(s, "PreToolUse"),
-  validate: (s) => validatePreToolUse(s, CODEX_RUNTIME),
-};
+  surface: CTX_GUARD_CODEX,
+});
 
-export const CURSOR_RUNTIME: CtxRuntime = {
+export const CURSOR_RUNTIME: CtxRuntime = asRuntime({
   id: "cursor",
   label: ".cursor/hooks.json (beforeShellExecution)",
   confidence: "verified",
@@ -493,19 +221,10 @@ export const CURSOR_RUNTIME: CtxRuntime = {
   parseCommand: parseCursorCommand,
   block: cursorBlock,
   allow: cursorAllow,
-  locate: (root) => path.join(root, ".cursor", "hooks.json"),
-  merge: (s) => {
-    s.version = typeof s.version === "number" ? s.version : 1;
-    return mergeIntoHookArray(s, "beforeShellExecution", {
-      command: hookCommand("cursor"),
-      [MANAGED_KEY]: CTX_HOOK_SENTINEL,
-    });
-  },
-  strip: (s) => stripFromHookArray(s, "beforeShellExecution"),
-  validate: (s) => (hasRunnableGuard(s, CURSOR_RUNTIME) ? [] : ["cursor: missing beforeShellExecution guard"]),
-};
+  surface: CTX_GUARD_CURSOR,
+});
 
-export const WINDSURF_RUNTIME: CtxRuntime = {
+export const WINDSURF_RUNTIME: CtxRuntime = asRuntime({
   id: "windsurf",
   label: ".windsurf/hooks.json (pre_run_command)",
   confidence: "verified",
@@ -514,18 +233,10 @@ export const WINDSURF_RUNTIME: CtxRuntime = {
   parseCommand: parseWindsurfCommand,
   block: exitCodeBlock,
   allow: exitCodeAllow,
-  locate: (root) => path.join(root, ".windsurf", "hooks.json"),
-  merge: (s) =>
-    mergeIntoHookArray(s, "pre_run_command", {
-      command: hookCommand("windsurf"),
-      show_output: true,
-      [MANAGED_KEY]: CTX_HOOK_SENTINEL,
-    }),
-  strip: (s) => stripFromHookArray(s, "pre_run_command"),
-  validate: (s) => (hasRunnableGuard(s, WINDSURF_RUNTIME) ? [] : ["windsurf: missing pre_run_command guard"]),
-};
+  surface: CTX_GUARD_WINDSURF,
+});
 
-export const ANTIGRAVITY_RUNTIME: CtxRuntime = {
+export const ANTIGRAVITY_RUNTIME: CtxRuntime = asRuntime({
   id: "antigravity",
   label: ".agents/hooks.json (PreToolUse/run_command)",
   confidence: "experimental",
@@ -535,60 +246,8 @@ export const ANTIGRAVITY_RUNTIME: CtxRuntime = {
   parseCommand: parseAntigravityCommand,
   block: antigravityBlock,
   allow: antigravityAllow,
-  locate: (root) => path.join(root, ".agents", "hooks.json"),
-  merge: (s) => {
-    // Antigravity groups PreToolUse under a named top-level key.
-    const key = "keryx-ctx-guard";
-    const existing = typeof s[key] === "object" && s[key] !== null ? (s[key] as Settings) : {};
-    existing.PreToolUse = [
-      ...stripManaged((existing as Settings).PreToolUse),
-      {
-        matcher: "run_command",
-        hooks: [{ type: "command", command: hookCommand("antigravity") }],
-        [MANAGED_KEY]: CTX_HOOK_SENTINEL,
-      },
-    ];
-    s[key] = existing;
-    addSentinel(s);
-    return s;
-  },
-  strip: (s) => {
-    const key = "keryx-ctx-guard";
-    if (typeof s[key] === "object" && s[key] !== null) {
-      const group = s[key] as Settings;
-      const remaining = stripManaged(group.PreToolUse);
-      if (remaining.length > 0) group.PreToolUse = remaining;
-      else delete s[key];
-    }
-    removeSentinel(s);
-    return s;
-  },
-  // Was a second hand-rolled walker matching on `command` alone, so an inert
-  // `type: "prompt"` entry validated clean. Routed through the shared one.
-  validate: (s) => (hasRunnableGuard(s, ANTIGRAVITY_RUNTIME) ? [] : ["antigravity: missing run_command guard"]),
-};
-
-// OpenCode has no JSON hook config — it loads JS/TS plugins. We ship a small
-// bridge plugin that shells out to `keryx ctx hook opencode` and throws to
-// block. Its hook-side contract is the Claude-shaped payload WE author in the
-// plugin, so it reuses parseToolInputCommand + exit-2 blocking.
-const OPENCODE_PLUGIN = `// keryx gdctx routing guard — generated by \`keryx ctx install-hook --runtime opencode\`.
-// Bridges OpenCode's tool.execute.before to \`keryx ctx hook opencode\`.
-import { spawnSync } from "node:child_process";
-
-export const KeryxCtxGuard = async () => ({
-  "tool.execute.before": async (input, output) => {
-    if (input?.tool !== "bash") return;
-    const command = output?.args?.command;
-    if (typeof command !== "string") return;
-    const payload = JSON.stringify({ tool_name: "Bash", tool_input: { command } });
-    const res = spawnSync("keryx", ["ctx", "hook", "opencode"], { input: payload, encoding: "utf8" });
-    if (res.status === 2) {
-      throw new Error(res.stderr?.trim() || "[keryx ctx] blocked: route this through keryx ctx …");
-    }
-  },
+  surface: CTX_GUARD_ANTIGRAVITY,
 });
-`;
 
 export const OPENCODE_RUNTIME: CtxRuntime = {
   id: "opencode",
@@ -599,29 +258,14 @@ export const OPENCODE_RUNTIME: CtxRuntime = {
   parseCommand: parseToolInputCommand,
   block: exitCodeBlock,
   allow: exitCodeAllow,
-  locate: (root) => path.join(root, ".opencode", "plugin", "keryx-ctx-guard.js"),
-  customInstall: async (root) => {
-    const { mkdir, writeFile } = await import("node:fs/promises");
-    const file = OPENCODE_RUNTIME.locate(root);
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, OPENCODE_PLUGIN, "utf8");
-    return [];
-  },
-  customUninstall: async (root) => {
-    const { rm } = await import("node:fs/promises");
-    const { pathExists } = await import("../lib/fs");
-    const file = OPENCODE_RUNTIME.locate(root);
-    if (!(await pathExists(file))) return false;
-    await rm(file, { force: true });
-    return true;
-  },
+  locate: (root) => CTX_GUARD_OPENCODE.settingsFile!(root),
+  customInstall: (root) => CTX_GUARD_OPENCODE.customInstall!(root),
+  customUninstall: (root) => CTX_GUARD_OPENCODE.customUninstall!(root),
 };
 
 // Harnesses with NO scriptable pre-exec gate today. Registered only so the CLI
 // can give a precise "unsupported" message instead of "unknown runtime".
-export const UNSUPPORTED_RUNTIMES: Record<string, string> = {
-  zed: "Zed has no scriptable pre-exec hook yet (tracking: zed-industries/zed#57943). Use its static agent tool_permissions (always_allow/always_deny) instead.",
-};
+export const UNSUPPORTED_RUNTIMES: Record<string, string> = UNSUPPORTED_CTX_GUARD;
 
 export const CTX_RUNTIMES: CtxRuntime[] = [
   CLAUDE_RUNTIME,
@@ -659,3 +303,4 @@ export function resolveRuntimes(ids: string[]): {
 }
 
 export { classifyCommand, buildBlockMessage, type HookClassification };
+export type { HarnessAdapter };

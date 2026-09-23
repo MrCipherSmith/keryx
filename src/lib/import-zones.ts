@@ -164,6 +164,14 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // `sync`/`forgetting`/`trigger` above; `src/commands/governance.ts`
   // (adapter) is what actually writes the report artifacts and prints.
   { segment: "governance", zone: "core" },
+  // Flow 305, W5-a: the host-harness surface registry (which harnesses
+  // support which hook surfaces, and the JSON walkers that install them).
+  // Deterministic project-state bookkeeping over hand-authored settings
+  // files, no provider registry and no model call — same shape as
+  // `sync`/`forgetting`/`trigger` above. `src/ctx` and `src/security`
+  // (both core) are its only intended importers; `src/commands` reaches it
+  // only indirectly, through those two.
+  { segment: "integrations", zone: "core" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(

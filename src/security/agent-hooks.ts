@@ -1,14 +1,14 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { installSurfaces, settingsFileOwnerFor, uninstallSurfaces } from "../integrations";
 import {
   CLAUDE_RUNTIME,
   MANAGED_KEY,
   getRuntime,
   runtimeIds,
   type RuntimeHook,
-  type Settings,
 } from "./agent-hooks/runtimes";
+
+const SECURITY_SURFACE_IDS = ["security-check-input", "security-check-output"] as const;
 
 // Merge-safe installer for the Metaproject Security agent guard hooks. Block E
 // generalizes the shipped Claude-Code installer over a multi-runtime registry
@@ -51,36 +51,21 @@ export function securityAgentHookEntries(): {
   };
 }
 
-async function readSettings(file: string): Promise<Settings> {
-  if (!(await pathExists(file))) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(await readFile(file, "utf8")) as unknown;
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-      return parsed as Settings;
-    }
-    return {};
-  } catch {
-    throw new Error(`Cannot parse ${file}: file is not valid JSON`);
-  }
-}
-
-async function writeSettings(file: string, settings: Settings): Promise<void> {
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-}
-
-// Install the managed guard hooks for one runtime, creating the settings file if
-// absent, preserving every pre-existing key/entry, and staying idempotent.
+// Install the managed guard hooks for one runtime, creating the settings file
+// if absent, preserving every pre-existing key/entry, and staying idempotent.
+// Routes through the runtime's `SettingsFileOwner` so this install can never
+// silently invalidate a ctx-guard/orient surface sharing the same file.
 export async function installRuntimeHooks(
   projectRoot: string,
   runtime: RuntimeHook,
 ): Promise<boolean> {
-  const file = runtime.settingsPath(projectRoot);
-  const settings = await readSettings(file);
-  const merged = runtime.merge(settings);
-  await writeSettings(file, merged);
+  const owner = settingsFileOwnerFor(runtime.relativePath);
+  if (!owner) {
+    // Every registered runtime's file has an owner (derived from the same
+    // registry these surfaces come from) — unreachable in practice.
+    throw new Error(`${runtime.id}: no settings-file owner registered for ${runtime.relativePath}`);
+  }
+  await installSurfaces(projectRoot, runtime.relativePath, [...SECURITY_SURFACE_IDS], owner);
   return true;
 }
 
@@ -93,9 +78,11 @@ export async function uninstallRuntimeHooks(
   if (!(await pathExists(file))) {
     return false;
   }
-  const settings = await readSettings(file);
-  const stripped = runtime.strip(settings);
-  await writeSettings(file, stripped);
+  const owner = settingsFileOwnerFor(runtime.relativePath);
+  if (!owner) {
+    return false;
+  }
+  await uninstallSurfaces(projectRoot, runtime.relativePath, [...SECURITY_SURFACE_IDS], owner);
   return true;
 }
 

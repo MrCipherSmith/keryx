@@ -1,15 +1,15 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { optionValue } from "../lib/args";
 import { buildOrientation } from "../ctx/orient";
 import {
   getOrientRuntime,
+  installOrientRuntime,
   orientRuntimeIds,
   resolveOrientRuntimes,
+  uninstallOrientRuntime,
   UNSUPPORTED_ORIENT,
   type OrientRuntime,
-  type Settings,
 } from "../ctx/orient-runtimes";
 
 // `keryx orient` — the graph+wiki orientation injector and its installer.
@@ -53,35 +53,14 @@ function isDryRun(args: string[]): boolean {
   return args.includes("--dry-run");
 }
 
-async function readSettings(file: string): Promise<Settings> {
-  if (!(await pathExists(file))) return {};
-  try {
-    const parsed = JSON.parse(await readFile(file, "utf8")) as unknown;
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Settings)
-      : {};
-  } catch {
-    throw new Error(`Cannot parse ${file}: file is not valid JSON`);
-  }
-}
-
-async function writeSettings(file: string, settings: Settings): Promise<void> {
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-}
-
 async function installOne(cwd: string, runtime: OrientRuntime): Promise<string[]> {
-  const file = runtime.locate(cwd);
-  const settings = await readSettings(file);
-  await writeSettings(file, runtime.merge(settings));
-  return runtime.validate(await readSettings(file));
+  return installOrientRuntime(cwd, runtime.id);
 }
 
 async function uninstallOne(cwd: string, runtime: OrientRuntime): Promise<boolean> {
   const file = runtime.locate(cwd);
   if (!(await pathExists(file))) return false;
-  const settings = await readSettings(file);
-  await writeSettings(file, runtime.strip(settings));
+  await uninstallOrientRuntime(cwd, runtime.id);
   return true;
 }
 
