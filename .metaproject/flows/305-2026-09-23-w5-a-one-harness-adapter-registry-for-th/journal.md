@@ -9,3 +9,24 @@
 - 2026-09-23T21:32:31.846Z - frozen: 8 criteria; checksum recorded
 - 2026-09-23T21:32:31.934Z - started
 - 2026-09-23T21:32:32.026Z - task-done: T1: Collect remaining context
+- 2026-09-23T21:32:44.132Z - task-attempt: T2: started (attempt 1) — 305-T2 sonnet implementation dispatch
+- 2026-09-23T21:57:26.498Z - task-done: T2: Implement per plan
+- 2026-09-23T21:57:26Z - T2 DONE_WITH_CONCERNS: (1) orient validator kept lenient (flat-or-nested command match) — decision: accept, it matches pre-refactor behaviour; (2) orient install routed via new installOrientRuntime in ctx/orient-runtimes.ts to avoid a new commands->integrations edge — accept; (3) security split surfaces lack direct tests — covered by T3; (4) 5 pre-existing env test failures (git author mismatch in fixtures) reproduced on unmodified HEAD — not caused by this flow.
+- 2026-09-23T21:57:46.149Z - task-attempt: T3: started (attempt 1) — 305-T3 sonnet tests
+- 2026-09-23T21:57:46.237Z - task-attempt: T7: started (attempt 1) — 305-T7 haiku docs
+- 2026-09-23T22:00:12.054Z - task-done: T7: Docs: architecture note for src/integrations and W5 status pointer
+- 2026-09-23T22:15:07.990Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-23T22:15:12.883Z - task-attempt: T4: started (attempt 1) — 305-T4 opus adversarial review of branch diff
+- 2026-09-23T22:16:55.922Z - task-added: T9: Fix: add src/integrations/ to the test:core script so the new tests run in CI (core-package.test.ts gap check)
+- 2026-09-23T22:16:56.012Z - task-attempt: T9: started (attempt 1) — 305-T9 haiku
+- 2026-09-23T22:17:41.925Z - task-done: T9: Fix: add src/integrations/ to the test:core script so the new tests run in CI (core-package.test.ts gap check)
+- 2026-09-23T22:19:10Z - T5 verification: 38 related test files, 730 pass / 8 fail; 1 fail was a real gap (src/integrations missing from test:core, core-package.test.ts) fixed in T9; the other 7 (trigger-hooks-coexist x3, ctx/orient.test.ts graphContext x4) fail identically on unmodified HEAD because `git commit` in a temp fixture repo exits 1 in this sandbox — environment, not this flow; CI is the judge. tsc --noEmit clean; eslint clean on all 14 changed/new source files.
+- 2026-09-23T22:19:10Z - T6 CLI smoke (scratchpad/t6-smoke.ts, bun ./src/cli.ts in temp git projects): every permutation of ctx install-hook / security hooks install / orient install-hook for claude (6), codex (2), cursor (6), windsurf (2), then each single uninstall: 248 checks, 0 failures, all exit codes 0; the uninstalled surface stops validating and every other stays valid.
+- 2026-09-23T22:19:10.520Z - task-done: T5: Verify: targeted tests of every touched module, typecheck, eslint on changed files, import-policy tests
+- 2026-09-23T22:19:10.610Z - task-done: T6: Verify: end-to-end CLI install/uninstall of ctx guard, security hooks and orient in both orders in a temp project (bun ./src/cli.ts)
+- 2026-09-23T22:31:59.895Z - task-added: T10: Fix review round 1 findings F1-F11 (owner refusal propagation, round-trip validation, honest slots + slot-coverage test, registry-derived runtime lists, flat security orphan cleanup, owner input hygiene, test mutations, interface gaps)
+- 2026-09-23T22:31:59.978Z - task-attempt: T10: started (attempt 1) — 305-T10 sonnet fix round 1
+- 2026-09-23T22:31:59Z - T4 review round 1 (opus): 5 major, 5 minor, 1 info (ingested: reviews/2026-09-23-ingest-feat-agent-platform-expansion). Decisions: fix F1-F5, F7-F10; F6 keep both changes as deliberate improvements (legacy array preserved in unmigratedHooks instead of discarded; claude security validate requires the sentinel, closing the same hostile-entry class the flat .some fix closed) and pin them with tests; F11 clarify the lastVerified meaning. Out of scope, noted for W5-b/W8: MCP client-config files (src/mcp/client-config.ts) not yet under SETTINGS_FILE_OWNERS; install-state probe on surfaces.
+- 2026-09-23T23:07:24.893Z - task-done: T10: Fix review round 1 findings F1-F11 (owner refusal propagation, round-trip validation, honest slots + slot-coverage test, registry-derived runtime lists, flat security orphan cleanup, owner input hygiene, test mutations, interface gaps)
+- 2026-09-23T23:07:33Z - T10 round-1 fixes committed. Worker concern: refusalAction/allowAction for the dynamic --runtime path (security CLI) still switch on ids inside codecs.ts to avoid a codecs->registry cycle; ctx-guard surfaces themselves carry decisionCodec. Left for round-2 review to judge.
+- 2026-09-23T23:07:33.658Z - task-done: T4: Self-review and prepare draft PR

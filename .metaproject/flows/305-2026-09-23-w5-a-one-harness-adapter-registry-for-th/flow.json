@@ -9,7 +9,7 @@
   "title": "W5-a: one harness adapter registry for the ctx guard, orient injector and security hooks",
   "status": "in-progress",
   "createdAt": "2026-09-23T21:26:30.854Z",
-  "updatedAt": "2026-09-23T21:32:32.026Z",
+  "updatedAt": "2026-09-23T23:07:33.658Z",
   "source": {
     "type": "description",
     "ref": null
@@ -42,51 +42,72 @@
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T21:32:44.132Z",
+            "outcome": "started",
+            "detail": "305-T2 sonnet implementation dispatch"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T21:57:46.149Z",
+            "outcome": "started",
+            "detail": "305-T3 sonnet tests"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T22:15:12.883Z",
+            "outcome": "started",
+            "detail": "305-T4 opus adversarial review of branch diff"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
       "title": "Verify: targeted tests of every touched module, typecheck, eslint on changed files, import-policy tests",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -94,13 +115,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Verify: end-to-end CLI install/uninstall of ctx guard, security hooks and orient in both orders in a temp project (bun ./src/cli.ts)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -108,21 +130,29 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Docs: architecture note for src/integrations and W5 status pointer",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T21:57:46.237Z",
+            "outcome": "started",
+            "detail": "305-T7 haiku docs"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -137,6 +167,48 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Fix: add src/integrations/ to the test:core script so the new tests run in CI (core-package.test.ts gap check)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T22:16:56.012Z",
+            "outcome": "started",
+            "detail": "305-T9 haiku"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Fix review round 1 findings F1-F11 (owner refusal propagation, round-trip validation, honest slots + slot-coverage test, registry-derived runtime lists, flat security orphan cleanup, owner input hygiene, test mutations, interface gaps)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T22:31:59.978Z",
+            "outcome": "started",
+            "detail": "305-T10 sonnet fix round 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -177,6 +249,86 @@
       "at": "2026-09-23T21:32:32.026Z",
       "event": "task-done",
       "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T21:32:44.132Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — 305-T2 sonnet implementation dispatch"
+    },
+    {
+      "at": "2026-09-23T21:57:26.498Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T21:57:46.149Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — 305-T3 sonnet tests"
+    },
+    {
+      "at": "2026-09-23T21:57:46.237Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 305-T7 haiku docs"
+    },
+    {
+      "at": "2026-09-23T22:00:12.054Z",
+      "event": "task-done",
+      "detail": "T7: Docs: architecture note for src/integrations and W5 status pointer"
+    },
+    {
+      "at": "2026-09-23T22:15:07.990Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T22:15:12.883Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — 305-T4 opus adversarial review of branch diff"
+    },
+    {
+      "at": "2026-09-23T22:16:55.922Z",
+      "event": "task-added",
+      "detail": "T9: Fix: add src/integrations/ to the test:core script so the new tests run in CI (core-package.test.ts gap check)"
+    },
+    {
+      "at": "2026-09-23T22:16:56.012Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 305-T9 haiku"
+    },
+    {
+      "at": "2026-09-23T22:17:41.925Z",
+      "event": "task-done",
+      "detail": "T9: Fix: add src/integrations/ to the test:core script so the new tests run in CI (core-package.test.ts gap check)"
+    },
+    {
+      "at": "2026-09-23T22:19:10.520Z",
+      "event": "task-done",
+      "detail": "T5: Verify: targeted tests of every touched module, typecheck, eslint on changed files, import-policy tests"
+    },
+    {
+      "at": "2026-09-23T22:19:10.610Z",
+      "event": "task-done",
+      "detail": "T6: Verify: end-to-end CLI install/uninstall of ctx guard, security hooks and orient in both orders in a temp project (bun ./src/cli.ts)"
+    },
+    {
+      "at": "2026-09-23T22:31:59.895Z",
+      "event": "task-added",
+      "detail": "T10: Fix review round 1 findings F1-F11 (owner refusal propagation, round-trip validation, honest slots + slot-coverage test, registry-derived runtime lists, flat security orphan cleanup, owner input hygiene, test mutations, interface gaps)"
+    },
+    {
+      "at": "2026-09-23T22:31:59.978Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 305-T10 sonnet fix round 1"
+    },
+    {
+      "at": "2026-09-23T23:07:24.893Z",
+      "event": "task-done",
+      "detail": "T10: Fix review round 1 findings F1-F11 (owner refusal propagation, round-trip validation, honest slots + slot-coverage test, registry-derived runtime lists, flat security orphan cleanup, owner input hygiene, test mutations, interface gaps)"
+    },
+    {
+      "at": "2026-09-23T23:07:33.658Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
