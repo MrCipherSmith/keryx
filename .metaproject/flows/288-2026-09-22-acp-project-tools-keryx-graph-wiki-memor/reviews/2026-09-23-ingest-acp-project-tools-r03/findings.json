@@ -1,0 +1,37 @@
+[
+  {
+    "id": "F-008",
+    "reviewer": "code-reviewer (acp, round 2)",
+    "severity": "minor",
+    "problem": "When a session's model list times out (F-001's bound), that session starts on the launch model only. If the background listing later succeeds, `listedChoices` is cached for future sessions, but the session that already timed out and replied was never sent a `config_option_update` with the fuller list — it only got the extra choices if it asked again some other way (e.g. session/load).",
+    "impact": "A user on a session whose model list happened to arrive just after the 8s bound saw only the launch model as a config option for the rest of that session, even though the fuller list became available moments later, with no session/update telling them anything changed.",
+    "suggested_fix": "Push exactly one config_option_update, with the complete options and the current model still selected, to a session left on the launch-only list once the late list resolves — built the same way the set_config_option answer is; never resend to a session that already has the full list; send nothing when the late list itself fails or the connection has already closed.",
+    "evidence": "src/acp/server.ts:504-533 (modelChoices), pre-fix, cached a successful late listing into `listedChoices` for future calls but never iterated live sessions to push config_option_update when that happened.",
+    "confidence": "high",
+    "file": "src/acp/server.ts",
+    "line": null,
+    "quote": "the next session asks again",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/acp/server.ts modelChoices (the timeout/background-listing path)"
+      ],
+      "enumeration_method": "The only site that resolves a model list after a session has already answered session/new or session/load is modelChoices' background startListing(source) continuation; there is exactly one such site."
+    },
+    "global_id": "2026-09-22-ingest-acp-project-tools#F-008",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "the single config_option_update push on late list arrival in src/acp/server.ts (task T15), commit c84e0991; merged to main in 93ac7a74 via PR #655. Supersedes this global_id's prior `dismissed-deprioritised` recording in round 2026-09-22-ingest-acp-project-tools: the operator chose to fix rather than defer it."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c84e0991, merged to main in 93ac7a74 via PR #655, on top of bd1dbe96 (merged PR #651). src/acp/server-models.test.ts describe(\"7 — a late model list reaches sessions left on the launch-only one\") has 4 passing tests, including the one that fails without the fix ('a session offered only the launch model is told once, with the full list, when it arrives late'). bun test src/acp/server-models.test.ts: 10 pass, 0 fail. CI 18/18 green on PR #655 at head c84e0991d9a709e2455dcfb841ec04246ef81d3d.",
+      "verifier": "round-3 (code-reviewer (acp))"
+    }
+  }
+]

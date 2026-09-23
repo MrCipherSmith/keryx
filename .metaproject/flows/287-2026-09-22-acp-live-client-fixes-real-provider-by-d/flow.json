@@ -7,17 +7,54 @@
   "id": "287",
   "slug": "acp-live-client-fixes-real-provider-by-d",
   "title": "ACP live-client fixes: real provider by default, accept client MCP servers",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-22T22:20:42.968Z",
-  "updatedAt": "2026-09-22T23:11:02.977Z",
+  "updatedAt": "2026-09-22T23:24:24.580Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:2c612d84e63fa371f71fe6b00337e81d9a64de1ab8134fa4907125423a51b10f",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-22T23:18:32.333Z",
+      "note": "src/commands/acp.test.ts describe(AC1): tests 'the saved keryx shell selection is used, and it is exactly what resolveTuiStartup answers', 'the default path builds a real provider through the shell's factory — never FakeProvider', 'a factory result that is FakeProvider (no credential, unknown name) is refused, never run', '--provider fake is refused: the scripted provider is reachable only through --fixture', '--fixture is the one way to the scripted provider'; plus src/acp/mcp-servers.process.test.ts describe(AC1/AC2 — provider resolution with no --fixture) test 'keryx shell's saved selection is used with no flags: session/new is accepted'. AC amended 2026-09-22T22:38:14Z per journal (fake-provider construction inside shell's own makeProvider is unavoidable; the asserted property is that acp discards it and never runs a turn against it)."
+    },
+    "AC2": {
+      "at": "2026-09-22T23:18:36.650Z",
+      "note": "src/commands/acp.test.ts describe(AC2 — nothing configured is an answer that says what to configure): tests 'no saved selection and no flags: unconfigured, naming keryx shell and --provider/--model', 'half a pair is refused rather than silently ignored'. Plus src/acp/mcp-servers.process.test.ts test 'nothing configured: initialize answers, session/new and session/load are refused naming the remedy, stderr says it once' — proves initialize still answers, session/new and session/load are refused with a named JSON-RPC error, and the stderr line is written once at startup."
+    },
+    "AC3": {
+      "at": "2026-09-22T23:18:38.913Z",
+      "note": "src/acp/mcp-servers.process.test.ts describe(AC3/AC5/AC6/AC7 — a client's stdio MCP server, end to end over the real pipe) test 'started with its env, tool offered, asked, run on allow; failures reported by name; secrets nowhere; process gone after close' — proves stdio server started with command/args/env via keryx's MCP client, tools offered to the session's turns, process gone after connection closes. Plus src/acp/session-mcp.test.ts test 'session/load starts the list it carries, and closing the connection stops it' and describe(startAcpSessionMcp) test 'one server fails, the other connects; the failure names the server and carries no secret (AC5/AC6)'."
+    },
+    "AC4": {
+      "at": "2026-09-22T23:18:40.641Z",
+      "note": "src/acp/mcp-servers.process.test.ts test 'AC4: a denied call does not run and ends exactly as a local denial does' — process test over real pipe proving a client-supplied MCP tool call goes through session/request_permission and a denial ends the call exactly as a local denial. Plus src/acp/session-mcp.test.ts test 'use_tool is destructive, so every call reaches the agent's approval branch (AC4)'."
+    },
+    "AC5": {
+      "at": "2026-09-22T23:18:42.954Z",
+      "note": "src/acp/session-mcp.test.ts describe(parseAcpMcpServers — what is refused per entry, and what fails the call (AC5)): tests 'http and sse entries are refused per entry, by name, with the reason — and their header values are secrets', 'a stdio entry with no command, bad args, bad env or a reused name is refused per entry', 'a list that is not a list, or an entry with no name, fails the whole call with -32602'. Plus test 'one server fails, the other connects; the failure names the server and carries no secret (AC5/AC6)' and process test 'session/new accepts a non-empty mcpServers and reports a server that cannot start, rather than refusing the session (flow 287)' in src/commands/acp.process.test.ts — proves session creation succeeds despite a failing server and http/sse entries are refused per-entry with reason."
+    },
+    "AC6": {
+      "at": "2026-09-22T23:18:47.955Z",
+      "note": "src/acp/session-mcp.test.ts describe(scrub (AC6)): tests 'every occurrence of every secret is replaced, a longer secret before a shorter one it contains', 'a value shorter than the minimum is not a secret: DEBUG=1 does not mangle 15000ms'. Plus describe(T13 — tool output is scrubbed too (AC6)) test 'a server that echoes its credential in a result or an error reaches the model redacted'; describe(T14 — the scrub survives JSON escaping and the truncation cap) tests 'a secret with a quote and a backslash (db\"pass\\\\word42) is redacted in its escaped form', 'a secret straddling the 20,000-byte cap leaves no prefix behind'. Plus src/acp/mcp-servers.process.test.ts describe(T13 — AC6 against a server that echoes its own credential) test 'the leaked value is redacted in the tool result, and appears in no artifact' and describe(T14 — escaped secrets, and a shared set that recovers) test testing a credential with quote/backslash redacted in JSON-escaped result. Together these prove env/header values from mcpServers never reach transcripts, records, logs, stdout/stderr, including escaped and truncated forms."
+    },
+    "AC7": {
+      "at": "2026-09-22T23:18:50.088Z",
+      "note": "src/acp/mcp-servers.process.test.ts describe(AC3/AC5/AC6/AC7 — a client's stdio MCP server, end to end over the real pipe) main test 'started with its env, tool offered, asked, run on allow; failures reported by name; secrets nowhere; process gone after close' — drives the built keryx acp CLI over a real stdio pipe against a real stdio MCP server fixture from the repo (echo-server fixture): session/new with that server succeeds, its tool is offered, the permission ask arrives, the call runs on allow and returns its result, and the server process is gone after the connection closes. No network involved (stdio fixture only)."
+    },
+    "AC8": {
+      "at": "2026-09-22T23:18:53.155Z",
+      "note": "docs/docs/cli-reference.md acp section (lines 168-405): describes provider/model resolution with no flags ('keryx acp uses the provider and model' the saved selection resolves to, line 181), what happens when nothing is configured (line 201: 'keryx acp still starts and still answers'), which mcpServers transports are accepted vs refused (line 392-393: 'No transport but stdio... only ever speaks newline-delimited JSON-RPC over the pipes'), and how a failed server is reported (line 236+ client MCP servers section). README.md lines 251-277 (Agent Client Protocol server bullet) states the same and links to the cli-reference for the full table; line 268 states servers are stopped when the connection ends or on SIGTERM/SIGINT, and http/sse entries are refused."
+    },
+    "AC9": {
+      "at": "2026-09-22T23:18:55.634Z",
+      "note": "CI 18/18 green on PR MrCipherSmith/keryx#648 at head a559059d84ae10c20d92bc3f1366cfa0a530ff6e, merged 2026-09-22 as squash commit 4aba62bc into main. Local 'keryx health run' in /home/altsay/keryx: PASS, project score 94 (stable trend), 320 findings, no gate conditions triggered."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/648"
   },
   "tasks": [
     {
@@ -25,7 +62,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -33,14 +70,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -48,14 +86,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -63,14 +102,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -78,7 +118,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -194,7 +235,7 @@
       "id": "T12",
       "title": "Verification: CI green, keryx health run",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -202,7 +243,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
@@ -373,6 +415,91 @@
       "at": "2026-09-22T23:11:02.977Z",
       "event": "task-done",
       "detail": "T14: Re-review fixes: scrub escaped and truncated secrets, redial failed shared sets, refuse work after shutdown"
+    },
+    {
+      "at": "2026-09-22T23:18:32.333Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/commands/acp.test.ts describe(AC1): tests 'the saved keryx shell selection is used, and it is exactly what resolveTuiStartup answers', 'the default path builds a real provider through the shell's factory — never FakeProvider', 'a factory result that is FakeProvider (no credential, unknown name) is refused, never run', '--provider fake is refused: the scripted provider is reachable only through --fixture', '--fixture is the one way to the scripted provider'; plus src/acp/mcp-servers.process.test.ts describe(AC1/AC2 — provider resolution with no --fixture) test 'keryx shell's saved selection is used with no flags: session/new is accepted'. AC amended 2026-09-22T22:38:14Z per journal (fake-provider construction inside shell's own makeProvider is unavoidable; the asserted property is that acp discards it and never runs a turn against it)."
+    },
+    {
+      "at": "2026-09-22T23:18:36.650Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/commands/acp.test.ts describe(AC2 — nothing configured is an answer that says what to configure): tests 'no saved selection and no flags: unconfigured, naming keryx shell and --provider/--model', 'half a pair is refused rather than silently ignored'. Plus src/acp/mcp-servers.process.test.ts test 'nothing configured: initialize answers, session/new and session/load are refused naming the remedy, stderr says it once' — proves initialize still answers, session/new and session/load are refused with a named JSON-RPC error, and the stderr line is written once at startup."
+    },
+    {
+      "at": "2026-09-22T23:18:38.913Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/acp/mcp-servers.process.test.ts describe(AC3/AC5/AC6/AC7 — a client's stdio MCP server, end to end over the real pipe) test 'started with its env, tool offered, asked, run on allow; failures reported by name; secrets nowhere; process gone after close' — proves stdio server started with command/args/env via keryx's MCP client, tools offered to the session's turns, process gone after connection closes. Plus src/acp/session-mcp.test.ts test 'session/load starts the list it carries, and closing the connection stops it' and describe(startAcpSessionMcp) test 'one server fails, the other connects; the failure names the server and carries no secret (AC5/AC6)'."
+    },
+    {
+      "at": "2026-09-22T23:18:40.641Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/acp/mcp-servers.process.test.ts test 'AC4: a denied call does not run and ends exactly as a local denial does' — process test over real pipe proving a client-supplied MCP tool call goes through session/request_permission and a denial ends the call exactly as a local denial. Plus src/acp/session-mcp.test.ts test 'use_tool is destructive, so every call reaches the agent's approval branch (AC4)'."
+    },
+    {
+      "at": "2026-09-22T23:18:42.954Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/acp/session-mcp.test.ts describe(parseAcpMcpServers — what is refused per entry, and what fails the call (AC5)): tests 'http and sse entries are refused per entry, by name, with the reason — and their header values are secrets', 'a stdio entry with no command, bad args, bad env or a reused name is refused per entry', 'a list that is not a list, or an entry with no name, fails the whole call with -32602'. Plus test 'one server fails, the other connects; the failure names the server and carries no secret (AC5/AC6)' and process test 'session/new accepts a non-empty mcpServers and reports a server that cannot start, rather than refusing the session (flow 287)' in src/commands/acp.process.test.ts — proves session creation succeeds despite a failing server and http/sse entries are refused per-entry with reason."
+    },
+    {
+      "at": "2026-09-22T23:18:47.955Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/acp/session-mcp.test.ts describe(scrub (AC6)): tests 'every occurrence of every secret is replaced, a longer secret before a shorter one it contains', 'a value shorter than the minimum is not a secret: DEBUG=1 does not mangle 15000ms'. Plus describe(T13 — tool output is scrubbed too (AC6)) test 'a server that echoes its credential in a result or an error reaches the model redacted'; describe(T14 — the scrub survives JSON escaping and the truncation cap) tests 'a secret with a quote and a backslash (db\"pass\\\\word42) is redacted in its escaped form', 'a secret straddling the 20,000-byte cap leaves no prefix behind'. Plus src/acp/mcp-servers.process.test.ts describe(T13 — AC6 against a server that echoes its own credential) test 'the leaked value is redacted in the tool result, and appears in no artifact' and describe(T14 — escaped secrets, and a shared set that recovers) test testing a credential with quote/backslash redacted in JSON-escaped result. Together these prove env/header values from mcpServers never reach transcripts, records, logs, stdout/stderr, including escaped and truncated forms."
+    },
+    {
+      "at": "2026-09-22T23:18:50.088Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/acp/mcp-servers.process.test.ts describe(AC3/AC5/AC6/AC7 — a client's stdio MCP server, end to end over the real pipe) main test 'started with its env, tool offered, asked, run on allow; failures reported by name; secrets nowhere; process gone after close' — drives the built keryx acp CLI over a real stdio pipe against a real stdio MCP server fixture from the repo (echo-server fixture): session/new with that server succeeds, its tool is offered, the permission ask arrives, the call runs on allow and returns its result, and the server process is gone after the connection closes. No network involved (stdio fixture only)."
+    },
+    {
+      "at": "2026-09-22T23:18:53.155Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: docs/docs/cli-reference.md acp section (lines 168-405): describes provider/model resolution with no flags ('keryx acp uses the provider and model' the saved selection resolves to, line 181), what happens when nothing is configured (line 201: 'keryx acp still starts and still answers'), which mcpServers transports are accepted vs refused (line 392-393: 'No transport but stdio... only ever speaks newline-delimited JSON-RPC over the pipes'), and how a failed server is reported (line 236+ client MCP servers section). README.md lines 251-277 (Agent Client Protocol server bullet) states the same and links to the cli-reference for the full table; line 268 states servers are stopped when the connection ends or on SIGTERM/SIGINT, and http/sse entries are refused."
+    },
+    {
+      "at": "2026-09-22T23:18:55.634Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: CI 18/18 green on PR MrCipherSmith/keryx#648 at head a559059d84ae10c20d92bc3f1366cfa0a530ff6e, merged 2026-09-22 as squash commit 4aba62bc into main. Local 'keryx health run' in /home/altsay/keryx: PASS, project score 94 (stable trend), 320 findings, no gate conditions triggered."
+    },
+    {
+      "at": "2026-09-22T23:19:00.337Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-22T23:19:00.442Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-22T23:19:00.550Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-22T23:19:00.654Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-22T23:19:02.996Z",
+      "event": "task-done",
+      "detail": "T12: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-22T23:24:17.455Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/648 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-22T23:24:19.131Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-22T23:24:24.580Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }

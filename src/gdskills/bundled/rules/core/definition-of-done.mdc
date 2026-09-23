@@ -93,7 +93,9 @@ not done either.
 When a frozen criterion genuinely conflicts with the bar — it asks for
 something that cannot be delivered without failing a clause — the criterion is
 not quietly reworded to match what was built. It changes through
-`keryx flow ac update <id> --reason "<why>"`, with the conflict as the reason,
+`keryx flow ac update <id> --reason "<why>"` (or `--criterion ACn --text
+"<criterion>" --reason "<why>"` to rewrite the line itself), with the conflict
+as the reason,
 per `.metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md`.
 Rewriting a criterion to describe the work is how a flow loses the only record
 of what it set out to do.

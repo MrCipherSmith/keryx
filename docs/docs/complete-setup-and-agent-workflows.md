@@ -637,14 +637,16 @@ entries.
 | `keryx flow start <id>` | Start implementation. |
 | `keryx flow task add <id> --title "<title>" --kind <kind>` | Add an atomic flow task. |
 | `keryx flow task done <id> <taskId>` | Complete a flow task. |
-| `keryx flow ac confirm <id> <ACn> --note "<evidence>"` | Confirm an acceptance criterion. |
+| `keryx flow owner set <id> --owner "<name>" --reason "<reason>"` | Set or change the flow's owner (accountable human, never inferred). |
+| `keryx flow ac confirm <id> <ACn> --note "<evidence>" [--signed-by "<name>"]` | Confirm an acceptance criterion; appends a signature. |
 | `keryx flow ac update <id> --reason "<reason>"` | Re-freeze changed criteria (as already edited). |
 | `keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<reason>"` | Rewrite/append one criterion's text, then re-freeze. |
 | `keryx flow implemented <id> --pr <url>` | Record implementation and PR. |
-| `keryx flow complete <id> [--comment]` | Run completion gates and finish. |
+| `keryx flow complete <id> [--comment] [--signed-by "<name>"]` | Run completion gates and finish; appends a completion signature. |
 | `keryx flow block <id> --reason "<reason>"` | Block a flow. |
 | `keryx flow unblock <id>` | Restore the previous status. |
 | `keryx flow check` | Audit all flow packages. |
+| `keryx governance report [--flow <id>] [--owner <name>]` | Read-only report of spend, confirmations, signatures and gate outcomes across flows. |
 
 Task kinds: `context`, `implement`, `test`, `review`, and `docs`.
 

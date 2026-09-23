@@ -196,6 +196,9 @@ export function renderIndexMarkdown({
     enableTasks
       ? "| Start, resume, track, or finish managed work | `flow` / `flow-orchestrator` | `skills/flow/SKILL.md`; `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` | Use Task Manager state and never edit flow files by hand. |"
       : "",
+    enableTasks
+      ? "| Report spend, confirmations, signatures, or gate outcomes across flows | `governance` | `keryx governance report` | Read-only: never re-runs a gate or calls a model. |"
+      : "",
   ].filter(Boolean).join("\n");
 
   const workflowItems = [
@@ -393,6 +396,9 @@ export function renderIndexGateMarkdown({
     enableTesting ? "| what tests to run, test context | `keryx test related <file>` |" : "",
     enableHealth ? "| lint/type/test/quality status | `keryx health run` |" : "",
     enableTasks ? "| current work state | `keryx flow status` |" : "",
+    enableTasks
+      ? "| spend, confirmations, signatures, gate outcomes across flows | `keryx governance report` |"
+      : "",
     enableSecurity ? "| secrets, PII, prompt injection | `keryx security check-output` |" : "",
     enableGdskills ? "| implement, review, refactor, plan | `skills/catalog.md` |" : "",
   ]

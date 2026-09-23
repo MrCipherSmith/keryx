@@ -8,17 +8,62 @@
   "id": "291",
   "slug": "governance-report-spend-confirmations-si",
   "title": "Governance report: spend, confirmations, signatures and gate outcomes across flows",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-22T23:17:46.032Z",
-  "updatedAt": "2026-09-23T00:00:37.616Z",
+  "updatedAt": "2026-09-23T00:24:12.866Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-23T00:16:19.967Z",
+      "note": "src/governance/report.test.ts: AC1: summarizeReviewSpend sums only what rounds reported, never coercing absence to 0; AC1: a flow where no round ever recorded cost reports spend as not-recorded, never 0; AC1: the report aggregates review-round cost from real manifest.json files under a flow, across rounds. bun test src/governance/ -> 47 pass, 0 fail."
+    },
+    "AC2": {
+      "at": "2026-09-23T00:16:25.421Z",
+      "note": "src/governance/report.test.ts: AC2: an absent trigger ledger reports a demonstrated $0, not an unknown; AC2: trigger spend sums recorded runs and counts unrecorded ones separately, never folding them into $0; AC2: a trigger run record carries no flow reference, so project-wide spend is never folded into any flow's total. bun test src/governance/ -> 47 pass, 0 fail."
+    },
+    "AC3": {
+      "at": "2026-09-23T00:16:29.449Z",
+      "note": "src/governance/report.test.ts: AC3: a flow with no signatures field at all reports confirmations as not recorded (predates signing); AC3: confirmations join acConfirmed with the matching ac-confirm signature, identity basis included, unmatched confirmations show identity undefined, never a fabricated verified confirmer. bun test src/governance/ -> 47 pass, 0 fail."
+    },
+    "AC4": {
+      "at": "2026-09-23T00:16:34.497Z",
+      "note": "src/governance/report.test.ts: AC4: a flow with no completionAttempts reports gate outcomes as not recorded; AC4: every recorded completion attempt (pass or fail) is surfaced, with every gate it evaluated. src/flow/completion-attempts.test.ts: AC4: a failing attempt then a passing one both land on completionAttempts, in order, each with its own gate outcomes; AC4: a completion attempt is recorded even on a pre-change fixture that never had completionAttempts or gates; AC4 review fix: a tamper caught between gate evaluation and persistence is still recorded on disk, as a failed attempt naming the tamper. bun test src/governance/ src/flow/completion-attempts.test.ts -> 47 pass, 0 fail (part of same run)."
+    },
+    "AC5": {
+      "at": "2026-09-23T00:16:40.826Z",
+      "note": "src/governance/report.test.ts: AC5: building and writing the report never modifies anything under .metaproject/flows or .metaproject/data/trigger. bun test src/governance/ -> 47 pass, 0 fail."
+    },
+    "AC6": {
+      "at": "2026-09-23T00:16:41.225Z",
+      "note": "src/governance/report.test.ts: AC6: writing the report produces latest.md and a schema-versioned latest.json, both readable back; AC6: no report yet reads as absent, never a crash; AC6: a malformed stored report reads as malformed, not a crash and not an empty valid report. bun test src/governance/ -> 47 pass, 0 fail."
+    },
+    "AC7": {
+      "at": "2026-09-23T00:16:46.872Z",
+      "note": "src/governance/report.test.ts: AC7: --flow narrows to the one flow; AC7: --owner narrows to flows with that exact owner, excluding flows with no owner; AC7: --since/--until narrow by each flow's own updatedAt. bun test src/governance/ -> 47 pass, 0 fail."
+    },
+    "AC8": {
+      "at": "2026-09-23T00:16:47.267Z",
+      "note": "src/governance/report.test.ts: AC8: --all-projects covers the current project plus every registered project; a missing one is listed skipped, never failing the whole report. bun test src/governance/ -> 47 pass, 0 fail."
+    },
+    "AC9": {
+      "at": "2026-09-23T00:16:53.534Z",
+      "note": "src/governance/report.test.ts: AC9: policy allow/ask/deny decisions are reported as not recorded, with a reason, never omitted. bun test src/governance/ -> 47 pass, 0 fail."
+    },
+    "AC10": {
+      "at": "2026-09-23T00:16:53.924Z",
+      "note": "README.md line 444 lists governance under project capabilities (keryx governance report); docs/docs/cli-reference.md lines 1490-1530+ document keryx governance report/show, every flag (--flow/--owner/--since/--until/--all-projects/--json), where it writes (.metaproject/data/governance/artifacts/latest.md and latest.json), what it reads, gate-outcome persistence, and the not-recorded-never-zero rule matching review budget and trigger status conventions."
+    },
+    "AC11": {
+      "at": "2026-09-23T00:16:59.350Z",
+      "note": "gh pr checks 652 --repo MrCipherSmith/keryx: 18/18 required checks pass (client matrix cancel-resume/runtime/streaming/terminal, dependency-audit, linux sandbox bubblewrap live smoke, macOS real-host legs, metrics-contract, mkdocs build --strict, opentui native x4, standard-baseline, standard-pr, typecheck-and-tests, vscode-extension, wiki validate+freshness), 1 skipped (deploy to GitHub Pages, non-required) at PR head 97d6c189, merged as 1ce98384. bun run src/cli.ts health run: PASS, project score 94 (trend: stable), findings 324, no gate conditions triggered."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/652"
   },
   "owner": {
     "value": "altsay",
@@ -31,7 +76,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -39,14 +84,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T12; scaffold task not used"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -54,14 +101,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T12; scaffold task not used"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -69,14 +118,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T12; scaffold task not used"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +135,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T12; scaffold task not used"
     },
     {
       "id": "T5",
@@ -185,7 +238,7 @@
       "id": "T11",
       "title": "Verification: CI green, keryx health run",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -193,7 +246,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -304,6 +358,355 @@
       "at": "2026-09-23T00:00:37.616Z",
       "event": "task-done",
       "detail": "T12: Review and CI fixes: governance facade, command descriptors, tamper-safe attempt persistence, one USD formatter"
+    },
+    {
+      "at": "2026-09-23T00:16:19.967Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/governance/report.test.ts: AC1: summarizeReviewSpend sums only what rounds reported, never coercing absence to 0; AC1: a flow where no round ever recorded cost reports spend as not-recorded, never 0; AC1: the report aggregates review-round cost from real manifest.json files under a flow, across rounds. bun test src/governance/ -> 47 pass, 0 fail. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:16:25.422Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/governance/report.test.ts: AC2: an absent trigger ledger reports a demonstrated $0, not an unknown; AC2: trigger spend sums recorded runs and counts unrecorded ones separately, never folding them into $0; AC2: a trigger run record carries no flow reference, so project-wide spend is never folded into any flow's total. bun test src/governance/ -> 47 pass, 0 fail. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:16:29.450Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/governance/report.test.ts: AC3: a flow with no signatures field at all reports confirmations as not recorded (predates signing); AC3: confirmations join acConfirmed with the matching ac-confirm signature, identity basis included, unmatched confirmations show identity undefined, never a fabricated verified confirmer. bun test src/governance/ -> 47 pass, 0 fail. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:16:34.497Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/governance/report.test.ts: AC4: a flow with no completionAttempts reports gate outcomes as not recorded; AC4: every recorded completion attempt (pass or fail) is surfaced, with every gate it evaluated. src/flow/completion-attempts.test.ts: AC4: a failing attempt then a passing one both land on completionAttempts, in order, each with its own gate outcomes; AC4: a completion attempt is recorded even on a pre-change fixture that never had completionAttempts or gates; AC4 review fix: a tamper caught between gate evaluation and persistence is still recorded on disk, as a failed attempt naming the tamper. bun test src/governance/ src/flow/completion-attempts.test.ts -> 47 pass, 0 fail (part of same run). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:16:40.826Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/governance/report.test.ts: AC5: building and writing the report never modifies anything under .metaproject/flows or .metaproject/data/trigger. bun test src/governance/ -> 47 pass, 0 fail. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:16:41.225Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/governance/report.test.ts: AC6: writing the report produces latest.md and a schema-versioned latest.json, both readable back; AC6: no report yet reads as absent, never a crash; AC6: a malformed stored report reads as malformed, not a crash and not an empty valid report. bun test src/governance/ -> 47 pass, 0 fail. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:16:46.872Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/governance/report.test.ts: AC7: --flow narrows to the one flow; AC7: --owner narrows to flows with that exact owner, excluding flows with no owner; AC7: --since/--until narrow by each flow's own updatedAt. bun test src/governance/ -> 47 pass, 0 fail. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:16:47.267Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/governance/report.test.ts: AC8: --all-projects covers the current project plus every registered project; a missing one is listed skipped, never failing the whole report. bun test src/governance/ -> 47 pass, 0 fail. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:16:53.534Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: src/governance/report.test.ts: AC9: policy allow/ask/deny decisions are reported as not recorded, with a reason, never omitted. bun test src/governance/ -> 47 pass, 0 fail. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:16:53.925Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: README.md line 444 lists governance under project capabilities (keryx governance report); docs/docs/cli-reference.md lines 1490-1530+ document keryx governance report/show, every flag (--flow/--owner/--since/--until/--all-projects/--json), where it writes (.metaproject/data/governance/artifacts/latest.md and latest.json), what it reads, gate-outcome persistence, and the not-recorded-never-zero rule matching review budget and trigger status conventions. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:16:59.350Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: gh pr checks 652 --repo MrCipherSmith/keryx: 18/18 required checks pass (client matrix cancel-resume/runtime/streaming/terminal, dependency-audit, linux sandbox bubblewrap live smoke, macOS real-host legs, metrics-contract, mkdocs build --strict, opentui native x4, standard-baseline, standard-pr, typecheck-and-tests, vscode-extension, wiki validate+freshness), 1 skipped (deploy to GitHub Pages, non-required) at PR head 97d6c189, merged as 1ce98384. bun run src/cli.ts health run: PASS, project score 94 (trend: stable), findings 324, no gate conditions triggered. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:17:04.200Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T00:17:04.423Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T00:17:07.967Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T00:17:08.190Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-23T00:17:12.831Z",
+      "event": "task-done",
+      "detail": "T11: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T00:19:10.084Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/652 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-23T00:19:13.415Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T00:19:18.796Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-23T00:19:18.797Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 5 finding(s) at or above `minor` are not terminal: 2026-09-22-ingest-governance#F-001 (minor, round 2026-09-22-ingest-governance): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-22-ingest-governance#F-002 (minor, round 2026-09-22-ingest-governance): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-22-ingest-governance#F-003 (major, round 2026-09-22-ingest-governance): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-22-ingest-governance#F-004 (minor, round 2026-09-22-ingest-governance): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-22-ingest-governance#F-005 (minor, round 2026-09-22-ingest-governance): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+    },
+    {
+      "at": "2026-09-23T00:23:38.695Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/652 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-23T00:24:07.565Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T00:24:12.865Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-23T00:24:12.866Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-23T00:16:19.967Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:16:25.421Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:16:29.449Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:16:34.497Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:16:40.826Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:16:41.225Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:16:46.872Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:16:47.267Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:16:53.534Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:16:53.924Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:16:59.350Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:24:12.865Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea",
+      "headCommit": "97d6c189904852d25b0e6ba45ed241c99a921249"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-23T00:19:18.796Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "12 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 5 finding(s) at or above `minor` are not terminal: 2026-09-22-ingest-governance#F-001 (minor, round 2026-09-22-ingest-governance): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-22-ingest-governance#F-002 (minor, round 2026-09-22-ingest-governance): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-22-ingest-governance#F-003 (major, round 2026-09-22-ingest-governance): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-22-ingest-governance#F-004 (minor, round 2026-09-22-ingest-governance): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-22-ingest-governance#F-005 (minor, round 2026-09-22-ingest-governance): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
+    },
+    {
+      "at": "2026-09-23T00:24:12.865Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "12 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:27bdc7533a900415267e4dcb98ffa4712fd232011fd6b50ddeb2b683e471a4ea"
     }
   ]
 }

@@ -123,10 +123,15 @@ tracker reporting.
 - \`keryx flow list | status <id>\`
 - \`keryx flow freeze <id>\` / \`flow start <id>\`
 - \`keryx flow task add|done ...\`
-- \`keryx flow ac confirm|update ...\`
+- \`keryx flow owner set <id> --owner "<name>" --reason "<why>"\`
+- \`keryx flow ac confirm|update ...\` (\`ac update\` also takes \`--criterion ACn
+  --text "<criterion>"\` to rewrite/append one line)
 - \`keryx flow implemented <id> --pr <url>\`
-- \`keryx flow complete <id> [--comment]\`
+- \`keryx flow complete <id> [--comment] [--signed-by "<name>"]\`
 - \`keryx flow block|unblock <id>\` / \`flow check\`
+
+Spend, confirmations, signatures and gate outcomes across flows:
+\`keryx governance report\`.
 
 ## Entry
 
@@ -175,10 +180,16 @@ the work.
 
 - flow.json is CLI-owned. Never edit it by hand.
 - Acceptance criteria are frozen after \`flow freeze\`; edits only via
-  \`keryx flow ac update <id> --reason\`. Implementors NEVER touch them.
+  \`keryx flow ac update <id> --reason "<why>"\` (re-freezes as edited) or
+  \`keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"\`
+  (rewrites/appends one line). Implementors NEVER touch them. Every \`ac\`
+  subcommand refuses an argument it does not use.
 - Status changes only through the CLI; invalid transitions are rejected.
 - Only flow-manager declares implementation complete (\`flow implemented\`),
   and only after a reviewed PR has merged into the recorded base branch.
+- \`flow init --owner "<name>"\` / \`flow owner set <id> --owner "<name>" --reason
+  "<why>"\` names who is accountable; never inferred. Opted-in flows fail
+  \`flow complete\` while no owner is set.
 `;
 }
 
@@ -204,8 +215,10 @@ line is \`STATUS:\` (\`.metaproject/rules/core/subagent-status-protocol.md\`). S
 ## Workflow
 
 1. Create the package: \`keryx flow init --issue <url>\` or
-   \`--title "<problem>"\`. The CLI scaffolds the package and collects
-   deterministic context (issue body, memory search, gdgraph artifacts, health).
+   \`--title "<problem>"\`, adding \`--owner "<name>"\` when the accountable human
+   is already known (never inferred; set later with \`flow owner set\` if not).
+   The CLI scaffolds the package and collects deterministic context (issue
+   body, memory search, gdgraph artifacts, health).
 2. Enrich context - dispatch \`context-collector\` with \`context_refs\` to the
    flow package; it writes compact findings, not raw dumps. For an issue also
    dispatch \`issue-analyzer\`; for a described feature, \`feature-analyzer\`.
@@ -249,7 +262,9 @@ data and status.
 3. If genuinely stuck: \`keryx flow block <id> --reason\`; resume with
    \`flow unblock <id>\`.
 4. Acceptance criteria change ONLY when requirements truly changed:
-   \`keryx flow ac update <id> --reason "<why>"\` (logged; audit trail).
+   \`keryx flow ac update <id> --reason "<why>"\` re-freezes the file as edited;
+   \`keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"\`
+   rewrites or appends one line itself (logged; audit trail either way).
 5. Completion decision is yours alone: after the user selects the PR path,
    create the PR, run the bounded review/fix loop, and merge it only after the
    review is clean and required checks are green. The merge target must be the
@@ -279,10 +294,17 @@ whose status is \`implemented\`.
 1. Re-verify the package: description matches the result; plan followed or
    deviations journaled; all tasks done.
 2. Confirm every acceptance criterion after actually checking it:
-   \`keryx flow ac confirm <id> ACn --note "<evidence>"\`.
+   \`keryx flow ac confirm <id> ACn --note "<evidence>"\`. This appends a
+   signature (who, when, what was confirmed); pass \`--signed-by "<name>"\` to
+   name the signer explicitly - otherwise it falls back to \`KERYX_ACTOR\`, then
+   local git identity, and is recorded with that weaker basis.
 3. Verify that the PR was merged into the base branch recorded for the flow,
-   then run \`keryx flow complete <id>\`. Gates: AC confirmed + checksum intact;
-   merged PR exists with green checks; code-health gate passes.
+   then run \`keryx flow complete <id> [--signed-by "<name>"]\`. Gates: AC
+   confirmed + checksum intact; merged PR exists with green checks; code-health
+   gate passes; and, for a flow that opted in (\`flow init --owner\` set the
+   flag), an owner recorded - fails naming
+   \`keryx flow owner set <id> --owner "<name>" --reason "<why>"\` if not. On
+   pass this also appends a completion signature.
 4. Gates fail -> flow auto-returns to in-progress with fix notes:
    - small fixes: run a fix agent, then re-run the review/fix loop from step 2;
    - large fixes: describe what is wrong in the journal and relaunch the

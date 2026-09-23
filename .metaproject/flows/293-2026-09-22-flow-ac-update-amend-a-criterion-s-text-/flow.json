@@ -8,17 +8,42 @@
   "id": "293",
   "slug": "flow-ac-update-amend-a-criterion-s-text-",
   "title": "flow ac update: amend a criterion's text, and refuse arguments it does not use",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-22T23:36:31.506Z",
-  "updatedAt": "2026-09-23T00:34:13.491Z",
+  "updatedAt": "2026-09-23T00:45:35.215Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:5e6942a5dfa2a58b543bb2d80762ff0c1bce4e81ca73839ec2770e9e4fc7d71f",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-23T00:41:39.751Z",
+      "note": "service.test.ts:159 'AC1: acUpdate with --criterion/--text rewrites an existing criterion's line, re-freezes, and records old+new text in history' and :206 '...appends when ACn is the next unused number' prove replace+append+history(criterion,previous,new,reason). AC1's contract covers criteria in the documented single-line '- ACn:' format (Rules section); such criteria ARE replaced. T10's refusal (store.ts, write-ac-criterion.test.ts 'a criterion wrapped across two lines is refused, and the file is byte-identical') only fires when the target already has continuation lines in the file -- an input shape AC1 never promises to handle -- so it is a safety refusal outside AC1's scope, consistent with AC1 as written, not a violation."
+    },
+    "AC2": {
+      "at": "2026-09-23T00:41:44.001Z",
+      "note": "service.test.ts:248 'AC2: acUpdate with --reason alone still re-freezes the file as edited, unchanged from before flow 293' writes the file directly, calls acUpdate with only --reason, and asserts the operator-edited text is re-frozen and the history detail is exactly the reason string -- matching pre-293 behaviour byte for byte."
+    },
+    "AC3": {
+      "at": "2026-09-23T00:41:48.168Z",
+      "note": "ac-strict-args.test.ts:89 'AC3: ac update <id> AC1 --text ... --reason ... (the pre-293 syntax) is refused, and nothing changes' runs the exact invocation that was silently accepted before flow 293 and asserts refusal plus byte-identical file/checksum. Plus :107 refuses --text without --criterion, :119 refuses --criterion without --text, :131 refuses an unknown flag, :155/:166 ac confirm refuses extra positional/unknown flag, :177/:189 ac reseal refuses extra positional/unknown flag -- covering every flow ac subcommand."
+    },
+    "AC4": {
+      "at": "2026-09-23T00:41:51.973Z",
+      "note": "service.test.ts:271 'AC4: acUpdate validates --criterion and --text before writing anything' asserts rejection for empty text, multi-line text, text carrying its own '- AC1:' prefix, a criterion name not matching AC\\d+, and undefined text -- each rejection message names the broken rule (see :294 assertion on the criterion-name error message)."
+    },
+    "AC5": {
+      "at": "2026-09-23T00:41:56.156Z",
+      "note": "docs/docs/cli-reference.md:2074-2077 documents both 'ac update <id> --reason' and '--criterion ACn --text \"<criterion>\" together with --reason' rows, and states every ac subcommand refuses an argument it does not use. src/commands/flow.ts:1064,1066 CLI help text states the same: the --criterion/--text usage line and 'every flow ac subcommand refuses an argument it does not use...'. Verified via bun run src/cli.ts flow ac --help and direct read of both files."
+    },
+    "AC6": {
+      "at": "2026-09-23T00:42:00.985Z",
+      "note": "gh pr checks 653 --repo MrCipherSmith/keryx: 18/18 passed, 0 failed, at head 9ebbb1b00942f9034330e0a7dcd58d26fd9eacfa (merged as 1b38143a). keryx health run: '# Code Health: PASS', project score 94, 'PASS: no gate conditions triggered' (report: .metaproject/data/health/artifacts/latest.md)."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/653"
   },
   "owner": {
     "value": "altsay",
@@ -31,7 +56,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -39,14 +64,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T10; scaffold task not used"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -54,14 +81,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T10; scaffold task not used"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -69,14 +98,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T10; scaffold task not used"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +115,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T10; scaffold task not used"
     },
     {
       "id": "T5",
@@ -140,7 +173,7 @@
       "id": "T8",
       "title": "Verification: CI green, keryx health run",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -148,7 +181,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "CI 18/18 green on PR 653 at head 9ebbb1b0 (merged 1b38143a); keryx health run: PASS, score 94, no gate conditions triggered"
     },
     {
       "id": "T9",
@@ -274,6 +309,209 @@
       "at": "2026-09-23T00:34:13.491Z",
       "event": "task-done",
       "detail": "T10: Refuse to replace a multi-line criterion; keep every line's original ending"
+    },
+    {
+      "at": "2026-09-23T00:41:39.751Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: service.test.ts:159 'AC1: acUpdate with --criterion/--text rewrites an existing criterion's line, re-freezes, and records old+new text in history' and :206 '...appends when ACn is the next unused number' prove replace+append+history(criterion,previous,new,reason). AC1's contract covers criteria in the documented single-line '- ACn:' format (Rules section); such criteria ARE replaced. T10's refusal (store.ts, write-ac-criterion.test.ts 'a criterion wrapped across two lines is refused, and the file is byte-identical') only fires when the target already has continuation lines in the file -- an input shape AC1 never promises to handle -- so it is a safety refusal outside AC1's scope, consistent with AC1 as written, not a violation. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:41:44.001Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: service.test.ts:248 'AC2: acUpdate with --reason alone still re-freezes the file as edited, unchanged from before flow 293' writes the file directly, calls acUpdate with only --reason, and asserts the operator-edited text is re-frozen and the history detail is exactly the reason string -- matching pre-293 behaviour byte for byte. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:41:48.168Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: ac-strict-args.test.ts:89 'AC3: ac update <id> AC1 --text ... --reason ... (the pre-293 syntax) is refused, and nothing changes' runs the exact invocation that was silently accepted before flow 293 and asserts refusal plus byte-identical file/checksum. Plus :107 refuses --text without --criterion, :119 refuses --criterion without --text, :131 refuses an unknown flag, :155/:166 ac confirm refuses extra positional/unknown flag, :177/:189 ac reseal refuses extra positional/unknown flag -- covering every flow ac subcommand. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:41:51.973Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: service.test.ts:271 'AC4: acUpdate validates --criterion and --text before writing anything' asserts rejection for empty text, multi-line text, text carrying its own '- AC1:' prefix, a criterion name not matching AC\\d+, and undefined text -- each rejection message names the broken rule (see :294 assertion on the criterion-name error message). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:41:56.156Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: docs/docs/cli-reference.md:2074-2077 documents both 'ac update <id> --reason' and '--criterion ACn --text \"<criterion>\" together with --reason' rows, and states every ac subcommand refuses an argument it does not use. src/commands/flow.ts:1064,1066 CLI help text states the same: the --criterion/--text usage line and 'every flow ac subcommand refuses an argument it does not use...'. Verified via bun run src/cli.ts flow ac --help and direct read of both files. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:42:00.986Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: gh pr checks 653 --repo MrCipherSmith/keryx: 18/18 passed, 0 failed, at head 9ebbb1b00942f9034330e0a7dcd58d26fd9eacfa (merged as 1b38143a). keryx health run: '# Code Health: PASS', project score 94, 'PASS: no gate conditions triggered' (report: .metaproject/data/health/artifacts/latest.md). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T00:42:11.415Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T00:42:11.526Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T00:42:11.642Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T00:42:11.759Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-23T00:42:15.118Z",
+      "event": "task-done",
+      "detail": "T8: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T00:45:27.305Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/653 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-23T00:45:30.022Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T00:45:35.214Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-23T00:45:35.215Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-23T00:41:39.751Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:5e6942a5dfa2a58b543bb2d80762ff0c1bce4e81ca73839ec2770e9e4fc7d71f"
+    },
+    {
+      "at": "2026-09-23T00:41:44.001Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:5e6942a5dfa2a58b543bb2d80762ff0c1bce4e81ca73839ec2770e9e4fc7d71f"
+    },
+    {
+      "at": "2026-09-23T00:41:48.168Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:5e6942a5dfa2a58b543bb2d80762ff0c1bce4e81ca73839ec2770e9e4fc7d71f"
+    },
+    {
+      "at": "2026-09-23T00:41:51.973Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:5e6942a5dfa2a58b543bb2d80762ff0c1bce4e81ca73839ec2770e9e4fc7d71f"
+    },
+    {
+      "at": "2026-09-23T00:41:56.156Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:5e6942a5dfa2a58b543bb2d80762ff0c1bce4e81ca73839ec2770e9e4fc7d71f"
+    },
+    {
+      "at": "2026-09-23T00:42:00.985Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:5e6942a5dfa2a58b543bb2d80762ff0c1bce4e81ca73839ec2770e9e4fc7d71f"
+    },
+    {
+      "at": "2026-09-23T00:45:35.215Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:5e6942a5dfa2a58b543bb2d80762ff0c1bce4e81ca73839ec2770e9e4fc7d71f",
+      "headCommit": "9ebbb1b00942f9034330e0a7dcd58d26fd9eacfa"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-23T00:45:35.214Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "6 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "10 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:5e6942a5dfa2a58b543bb2d80762ff0c1bce4e81ca73839ec2770e9e4fc7d71f"
     }
   ]
 }
