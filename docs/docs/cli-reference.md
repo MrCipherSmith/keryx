@@ -1538,17 +1538,38 @@ Per flow (`.metaproject/flows/<id>/flow.json` and its `reviews/*/manifest.json`)
 
 Per project (`.metaproject/data/trigger/runs.jsonl`):
 
-- **Trigger spend** — USD summed over fired-trigger runs whose cost was
+- **Trigger spend** — USD summed over every fired-trigger run whose cost was
   recorded, plus the count of runs whose cost was not recorded (never folded
-  into the sum as `$0`). Never attributed to any individual flow: a fired-
-  trigger record carries no flow reference, so this is always a project-wide
-  figure, stated as such. An absent ledger reports a demonstrated `$0`
-  (nothing has ever fired); an unreadable one reports `not recorded` with the
-  reason.
-- **Policy decisions** — allow/ask/deny decisions and unattended-run denials
-  have no durable project-wide record in this build, so this section always
-  reads `not recorded (no durable log exists yet)`. (Flow 290, unattended
-  denials, is a future source for this — not a dependency of this report.)
+  into the sum as `$0`). Project-wide across every trigger and every action
+  kind, whether or not the run named a flow. An absent ledger reports a
+  demonstrated `$0` (nothing has ever fired); an unreadable one reports `not
+  recorded` with the reason.
+- **Policy decisions** — an INTERACTIVE session's own allow/ask/deny decisions
+  have no durable record in this build, so this section always reads `not
+  recorded` with that reason. An UNATTENDED dispatch run is different: flow 290
+  records every such run's denials, and this report reads them — see "Dispatch
+  runs" below, not this line.
+
+Per flow, also from `runs.jsonl` (flow 297):
+
+- **Dispatch runs** — every unattended `flow-next` dispatch run that named
+  this flow (`TriggerDispatchRecord.flow`), joined by `runId`: the trigger,
+  the time, the outcome (`ok`, `failed`, `dispatch-refused`, `budget-refused`,
+  or an operator's `reservation-resolved`), the cost, and every call its
+  unattended approval gate denied — the tool and the reason, timed by the
+  run's own `at`. Spend is summed only over these CLOSED runs, the same
+  "never folded into `$0`" rule trigger spend keeps.
+- **Open reservations** — a spend reservation this flow's dispatch opened
+  (`keryx trigger run`, before its first model call) that no closing record —
+  and no `keryx trigger resolve` — has closed yet: a killed run. Shown as
+  "reserved, not spent", on its own line, never added into the spend figure
+  above. A reservation recorded before this change carries no flow reference
+  and stays out of every flow's section — it is still counted at the
+  project-wide trigger-spend line, unchanged from before.
+- A report-only `flow-next` entry (no `dispatch` block — it only reports the
+  next task, no model call) writes no `dispatch` record at all, so it never
+  appears in either list here; it is still counted at the project-wide
+  trigger-spend line, exactly as before this change.
 
 The report never re-runs `flow complete`, `review ingest`/`budget`, `health
 run`, or any security scan, and never calls a model or a network service. The

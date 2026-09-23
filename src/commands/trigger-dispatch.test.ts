@@ -691,6 +691,34 @@ describe("AC14: spend is reserved before the first model call and never fails op
     if (after.allowed) expect(after.remainingUsd).toBeCloseTo(0.75, 10);
   });
 
+  // Flow 297 (AC2): an operator-resolved reservation stays attributed to the
+  // flow it was opened for — `keryx trigger resolve` copies the "reserved"
+  // record's own `dispatch` block onto the `reservation-resolved` record it
+  // writes, additively, exactly as the dispatcher does for the reservation itself.
+  test("a killed run's dispatch attribution survives `trigger resolve` — the closing record carries the same flow/task", async () => {
+    await writeTriggers([dispatchEntry({ ceilingUsd: 1 })]);
+    const reserved = await reserveTriggerSpend(root, {
+      runId: "killed-run-297",
+      trigger: "overnight",
+      ...entryBits,
+      perTrigger: { name: "overnight", ceilingUsd: 1 },
+      dispatch: { flow: flowId, task: "T1" },
+    });
+    expect(reserved.reserved).toBe(true);
+
+    await acquireCwd(root);
+    try {
+      await triggerCommand(["resolve", "killed-run-297", "--spent", "0.25"]);
+    } finally {
+      releaseCwd();
+    }
+    expect(process.exitCode ?? 0).toBe(0);
+
+    const all = await records();
+    const resolved = all.find((r) => r.outcome === "reservation-resolved" && r.resolves === "killed-run-297");
+    expect(resolved?.dispatch).toEqual({ runId: "killed-run-297", flow: flowId, task: "T1" });
+  });
+
   test("a response with no usage stops the run, fails the attempt, and charges the whole reservation", async () => {
     await writeTriggers([dispatchEntry({ ceilingUsd: 0.4 })]);
     const provider = scripted([[...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }]]);

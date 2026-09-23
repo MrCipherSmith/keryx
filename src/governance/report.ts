@@ -8,7 +8,7 @@ import { pathExists } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { listProjects } from "../lib/project-registry";
 import { collectProjectGovernance } from "./aggregate";
-import type { GovernanceFilters, GovernanceReport, GovernanceReportRead, ProjectGovernance } from "./types";
+import type { FlowDispatch, GovernanceFilters, GovernanceReport, GovernanceReportRead, ProjectGovernance } from "./types";
 
 export const GOVERNANCE_SCHEMA_VERSION = 1 as const;
 
@@ -189,11 +189,53 @@ export function renderGovernanceMarkdown(report: GovernanceReport): string {
           );
         });
       }
+      lines.push(...renderFlowDispatchLines(flow.dispatch));
       lines.push("");
     }
   }
 
   return `${lines.join("\n").trimEnd()}\n`;
+}
+
+/**
+ * AC1, AC2: this flow's unattended trigger-dispatch runs — spend, outcome and
+ * denials, joined from the same ledger `renderTriggerSpendLine` reads at the
+ * project level. An open reservation is its own line, "reserved, not spent"
+ * — never folded into `spent=`.
+ */
+function renderFlowDispatchLines(dispatch: FlowDispatch): string[] {
+  if (dispatch.state === "absent") {
+    return ["dispatch runs: none (no trigger has ever fired for this flow)"];
+  }
+  if (dispatch.state === "unreadable") {
+    return [`dispatch runs: not recorded (${dispatch.reason})`];
+  }
+  const { spend, runs, openReservations } = dispatch;
+  if (runs.length === 0 && openReservations.length === 0) {
+    return ["dispatch runs: none"];
+  }
+  const lines = [
+    `dispatch runs: spent=${usd(spend.spentUsd)} across ${spend.runsWithCostRecorded} run(s) with recorded cost; ` +
+      `${spend.runsWithCostNotRecorded} run(s) with cost not recorded (never counted as $0); ` +
+      `${openReservations.length} open reservation(s) totaling ${usd(spend.openReservedUsd)} (reserved, not spent); ` +
+      `${spend.runsTotal} run(s) total`,
+  ];
+  for (const run of runs) {
+    lines.push(
+      `  ${run.trigger} run ${run.runId}${run.task !== undefined ? ` (task ${run.task})` : ""} at ${run.at}: ` +
+        `outcome=${run.outcome} cost=${run.cost.recorded ? usd(run.cost.usd) : "not recorded"}` +
+        (run.denials.length > 0 ? `, ${run.denials.length} denial(s)` : ""),
+    );
+    for (const denial of run.denials) {
+      lines.push(`    denied: ${denial.tool} — ${denial.reason}`);
+    }
+  }
+  for (const reservation of openReservations) {
+    lines.push(
+      `  ${reservation.trigger} run ${reservation.runId} at ${reservation.at}: ${usd(reservation.usd)} reserved, not spent (no closing record yet)`,
+    );
+  }
+  return lines;
 }
 
 /** Same `usd()` formatter review spend uses — one place a figure becomes a string, not two. */

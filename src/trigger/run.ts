@@ -299,6 +299,16 @@ export async function reserveTriggerSpend(
     readonly perTrigger: PerTriggerCeiling;
     readonly options?: SpendCapOptions;
     readonly now?: () => Date;
+    /**
+     * Flow 297 (AC2): the flow/task this dispatch is working, written onto the
+     * "reserved" record itself (additively — `TriggerRunRecord.dispatch` was
+     * already optional on every outcome kind) so an OPEN reservation is
+     * attributable to its flow, not only the closing record that resolves it.
+     * A caller that omits this (there is none in this codebase today — every
+     * dispatch reservation is for a `flow-next` run, which always names a
+     * flow) leaves the reservation project-level, exactly as before.
+     */
+    readonly dispatch?: { readonly flow: string; readonly task?: string };
   },
 ): Promise<SpendReservation> {
   await ensureLocksDir(projectRoot);
@@ -322,6 +332,15 @@ export async function reserveTriggerSpend(
         detail: `reserved $${roundUsd(budget.remainingUsd)} for dispatch run ${input.runId} before its first model call`,
         cost: { recorded: false, reason: "a reservation — the run's own record carries what it spent" },
         reservation: { runId: input.runId, usd: budget.remainingUsd },
+        ...(input.dispatch !== undefined
+          ? {
+              dispatch: {
+                runId: input.runId,
+                flow: input.dispatch.flow,
+                ...(input.dispatch.task !== undefined ? { task: input.dispatch.task } : {}),
+              },
+            }
+          : {}),
       });
       if (append.status === "failed") {
         return { reserved: false, reason: `the spend reservation could not be written, so no model call is made: ${append.reason}` };

@@ -6,9 +6,9 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { flowsRoot } from "../flow/store";
-import { readTriggerRuns } from "../trigger/record";
+import { openReservations, readTriggerRuns, type TriggerRunsRead } from "../trigger/record";
 import type { ManagedReviewManifest } from "../review/types";
-import type { FlowReviewSpend, ProjectTriggerSpend } from "./types";
+import type { FlowDispatch, FlowDispatchRun, FlowOpenReservation, FlowReviewSpend, ProjectTriggerSpend } from "./types";
 
 /**
  * Every review round manifest recorded under one flow's `reviews/` directory.
@@ -97,7 +97,11 @@ export function summarizeReviewSpend(manifests: readonly ManagedReviewManifest[]
  * `unreadable` with the reason rather than guessing.
  */
 export async function readProjectTriggerSpend(cwd: string): Promise<ProjectTriggerSpend> {
-  const read = await readTriggerRuns(cwd);
+  return summarizeProjectTriggerSpend(await readTriggerRuns(cwd));
+}
+
+/** Pure half of `readProjectTriggerSpend` — split out so `collectProjectGovernance` reads the ledger once and shares it with the per-flow dispatch view below (AC5: still read-only, just one read). */
+export function summarizeProjectTriggerSpend(read: TriggerRunsRead): ProjectTriggerSpend {
   if (read.state === "absent") {
     return { state: "absent" };
   }
@@ -121,5 +125,76 @@ export async function readProjectTriggerSpend(cwd: string): Promise<ProjectTrigg
     runsWithCostRecorded,
     runsWithCostNotRecorded,
     runsTotal: read.records.length,
+  };
+}
+
+/**
+ * Flow 297 (AC1, AC2): one flow's slice of the same trigger ledger — every
+ * CLOSING record (`outcome !== "reserved"`) whose `dispatch.flow` names this
+ * flow, plus every reservation still open for it. A record with no `dispatch`
+ * at all (every non-`flow-next` trigger action, and every record written
+ * before flow 290) never matches any flow and stays out of this view — it is
+ * still counted in the project-wide `ProjectTriggerSpend` above, exactly as
+ * before this change.
+ *
+ * One ledger line is one fact, never double-counted: a completed dispatch run
+ * writes a "reserved" line and then exactly one closing line for the same
+ * `runId` — only the closing line becomes a `FlowDispatchRun` here (its cost
+ * supersedes the reservation). A KILLED run has only the "reserved" line, no
+ * closing one — `openReservations()` is what surfaces that, as "reserved, not
+ * spent", never folded into `spentUsd`.
+ */
+export function collectFlowDispatch(read: TriggerRunsRead, flowId: string): FlowDispatch {
+  if (read.state === "absent") {
+    return { state: "absent" };
+  }
+  if (read.state === "unreadable") {
+    return { state: "unreadable", reason: read.reason };
+  }
+
+  const runs: FlowDispatchRun[] = read.records
+    .filter((record) => record.outcome !== "reserved" && record.dispatch?.flow === flowId)
+    .map((record) => ({
+      runId: record.dispatch!.runId,
+      trigger: record.trigger,
+      at: record.at,
+      task: record.dispatch!.task,
+      outcome: record.outcome,
+      cost: record.cost,
+      denials: record.dispatch!.denials ?? [],
+    }));
+
+  let spentUsd: number | undefined;
+  let runsWithCostRecorded = 0;
+  let runsWithCostNotRecorded = 0;
+  for (const run of runs) {
+    if (run.cost.recorded) {
+      spentUsd = (spentUsd ?? 0) + run.cost.usd;
+      runsWithCostRecorded += 1;
+    } else {
+      runsWithCostNotRecorded += 1;
+    }
+  }
+
+  const openForFlow = openReservations(read.records).filter((reservation) => reservation.flow === flowId);
+  const openReservationsOut: FlowOpenReservation[] = openForFlow.map((reservation) => ({
+    runId: reservation.runId,
+    trigger: reservation.trigger,
+    at: reservation.at,
+    usd: reservation.usd,
+  }));
+  const openReservedUsd = openForFlow.reduce((sum, reservation) => sum + reservation.usd, 0);
+
+  return {
+    state: "present",
+    spend: {
+      runsTotal: runs.length + openForFlow.length,
+      spentUsd,
+      runsWithCostRecorded,
+      runsWithCostNotRecorded,
+      openReservedUsd,
+    },
+    runs,
+    openReservations: openReservationsOut,
   };
 }
