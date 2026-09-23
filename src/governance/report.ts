@@ -264,7 +264,8 @@ function renderTriggerSpendLine(spend: ProjectGovernance["triggerSpend"]): strin
   return (
     `${usd(spend.spentUsd)} across ${spend.runsWithCostRecorded} run(s) with recorded cost; ` +
     `${spend.runsWithCostNotRecorded} run(s) fired with cost not recorded (never counted as $0); ` +
-    `${spend.runsTotal} run(s) total; ` +
+    `${spend.openReservations} open reservation(s) totaling ${usd(spend.openReservedUsd)} (reserved, not spent — open until the run closes it or \`keryx trigger resolve\`); ` +
+    `${spend.runsTotal} run(s) total (${spend.openReservations} open); ` +
     `of which ${usd(spend.attributedToFlowsUsd)} is shown under flows below (not additive — do not sum project + flows)`
   );
 }

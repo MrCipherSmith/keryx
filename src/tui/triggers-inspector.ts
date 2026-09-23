@@ -31,6 +31,7 @@ import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } fro
 import { onThemeChange } from "./theme";
 import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
 import { dimChunk, roleChunk } from "./theme-text";
+import { formatUsd } from "../governance/service";
 import { formatAge, formatTriggerSpend } from "./triggers-panel";
 import { eventEntries, loadTriggerLedgerView, scheduledEntries, type TriggerEntryView, type TriggerLedgerView } from "./trigger-ledger";
 import type { TriggerRunNow, TriggerRunNowResult } from "./trigger-run-now";
@@ -139,7 +140,9 @@ export function formatTriggerDetailLines(
 export function formatTriggerListLines(items: readonly TriggerModalItem[], view: TriggerLedgerView, selected: number, now: Date): string[] {
   const lines: string[] = [];
   const spend = formatTriggerSpend(view.spend);
-  lines.push(`${spend.text} · ${view.openReservations.length} open reservation${view.openReservations.length === 1 ? "" : "s"}`);
+  const open = view.openReservations;
+  const held = formatUsd(open.reduce((sum, r) => sum + r.usd, 0));
+  lines.push(`${spend.text} · ${open.length} open reservation${open.length === 1 ? "" : "s"} (${held} reserved, not spent)`);
   if (items.length === 0) lines.push("  No event-fired triggers.");
   items.forEach((item, index) => {
     const mark = index === selected ? ">" : " ";

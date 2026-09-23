@@ -80,6 +80,8 @@ test("entries join their records newest-first; isScheduledEntry partitions them"
     runsTotal: 3,
     // No record is a flow dispatch, so none of it is shown under a flow.
     attributedToFlowsUsd: undefined,
+    openReservations: 0,
+    openReservedUsd: 0,
   });
 });
 

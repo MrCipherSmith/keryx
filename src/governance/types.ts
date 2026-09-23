@@ -55,11 +55,22 @@ export type ProjectTriggerSpend =
       /** Sum of `cost.usd` over every run whose cost WAS recorded — the project's true total, flow-attributed runs included. */
       spentUsd: number;
       runsWithCostRecorded: number;
-      /** Runs that fired but whose cost was never recorded — counted, never folded into the $0. */
+      /** Runs that CLOSED without their cost recorded — counted, never folded into the $0. An open reservation is not one of these (see `openReservations`). */
       runsWithCostNotRecorded: number;
+      /** Every run: closed ones plus `openReservations` — the same definition as `FlowDispatchSpend.runsTotal`. */
       runsTotal: number;
       /** Flow 297 (AC2 follow-up): the part of `spentUsd` also shown under a flow's own `dispatch.spend` — never additive with it. */
       attributedToFlowsUsd: number | undefined;
+      /**
+       * Flow 300 (N8): runs whose spend reservation nothing has closed yet — in
+       * flight, or killed and not yet `keryx trigger resolve`d. Counted in
+       * `runsTotal`, never in `runsWithCostNotRecorded`, never in `spentUsd`:
+       * the same "open reservation, reserved not spent" name the flow view uses
+       * (`FlowDispatch.openReservations`).
+       */
+      openReservations: number;
+      /** Flow 300 (N8): USD held by those open reservations — reserved, not spent (flow view: `openReservedUsd`). */
+      openReservedUsd: number;
     };
 
 /**
