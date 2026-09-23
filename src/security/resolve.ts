@@ -163,17 +163,22 @@ function queryParamNames(query: string): string[] {
 function queryIsSafeForTrustedOverride(url: string): boolean {
   try {
     const renderable = renderableUrl(url);
-    // Userinfo (`user:pass@host`) only parses on an absolute URL; `new URL`
-    // throws for a relative/protocol-relative destination, which has no such
-    // syntax to fail closed over — fall through to the plain query-string
-    // extraction below for those.
-    try {
-      const parsed = new URL(renderable);
-      if (parsed.username || parsed.password) {
-        return false;
-      }
-    } catch {
-      // Not an absolute URL: no userinfo is possible.
+    // Userinfo (`user:pass@host`) is checked by resolving against a fixed
+    // dummy base (`new URL(renderable, "https://base.invalid/")`) rather than
+    // parsing `renderable` alone. A bare `new URL(renderable)` throws for any
+    // relative destination — including a PROTOCOL-RELATIVE one
+    // (`//user:pass@evil.com/a.png`), which a renderer fetches exactly like an
+    // absolute URL and which DOES carry userinfo — and the earlier version's
+    // catch treated that throw as "no userinfo is possible", letting
+    // `//user:pass@evil.com/a.png` read as query-free and fall through to
+    // `allow`. Resolving against the dummy base instead makes `new URL` fill
+    // in the missing scheme (and authority, for `//…`) the same way a browser
+    // would, so userinfo on a protocol-relative destination is exposed here.
+    // A genuinely relative path (`./docs/logo.png`) resolves under the dummy
+    // base with no userinfo at all, so it is unaffected.
+    const parsed = new URL(renderable, "https://base.invalid/");
+    if (parsed.username || parsed.password) {
+      return false;
     }
     const query = extractQueryString(renderable);
     if (!query) return true;
