@@ -7,13 +7,20 @@
 // developer's own `auth.json`.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import { OllamaProvider } from "../harness/provider/ollama/ollama-provider";
 import type { ProviderPort } from "../harness/provider/types";
-import { parseAcpArgs, resolveAcpProvider, shellGrantRefresh, type ResolveAcpProviderDeps } from "./acp";
+import {
+  parseAcpArgs,
+  resolveAcpProvider,
+  shellGrantRefresh,
+  shellModelSource,
+  type ResolveAcpProviderDeps,
+} from "./acp";
+import type { DetectedProvider } from "./select";
 import { resolveTuiStartup } from "./shell";
 
 const dirs: string[] = [];
@@ -240,6 +247,149 @@ describe("T13 — per-turn settings resolved the way keryx shell resolves them",
     } finally {
       if (envMax !== undefined) process.env.KERYX_MAX_OUTPUT_TOKENS = envMax;
       if (envEffort !== undefined) process.env.KERYX_REASONING_EFFORT = envEffort;
+    }
+  });
+});
+
+// Flow 288, AC5/AC6: the models an editor may switch to are keryx shell's own
+// picker source narrowed to what can run, and a switch is built through the
+// shell's provider path — refresh first, the shell factory, no fake — without
+// touching the shell's saved selection.
+describe("flow 288 — model choices and switching come from keryx shell's sources", () => {
+  const detected: DetectedProvider[] = [
+    { name: "ollama", models: ["qwen3:8b", "llama3:8b"], baseUrl: "http://127.0.0.1:11434" },
+    { name: "deepseek", models: ["deepseek-chat"], baseUrl: "https://api.deepseek.com" },
+    { name: "groq", models: ["llama-3.3-70b"], baseUrl: "https://api.groq.com/openai" },
+    { name: "fake", models: ["fake-echo"] },
+  ];
+  /** groq has no credential here: the shell factory would hand back the offline fake. */
+  const make: NonNullable<ResolveAcpProviderDeps["makeProvider"]> = (name) =>
+    name === "groq" ? new FakeProvider([]) : ({ describe: () => ({}) } as unknown as ProviderPort);
+
+  test("choices: the launch model first, every runnable provider's picker list, never fake or a provider with no credential", async () => {
+    const source = shellModelSource(
+      { providerId: "ollama", modelId: "qwen3:8b" },
+      {
+        makeProvider: make,
+        detect: async () => detected,
+        // The picker's live list, stood in: what `resolveModelsForPicker` would answer.
+        modelsFor: async (provider) => (provider.name === "deepseek" ? ["deepseek-chat", "deepseek-reasoner"] : provider.models),
+      },
+    );
+    expect((await source.choices()).map((choice) => choice.value)).toEqual([
+      "ollama/qwen3:8b",
+      "ollama/llama3:8b",
+      "deepseek/deepseek-chat",
+      "deepseek/deepseek-reasoner",
+    ]);
+  });
+
+  test("choices: the launch provider is offered even when detection does not list it (an OAuth-only login)", async () => {
+    const source = shellModelSource(
+      { providerId: "grok", modelId: "grok-5" },
+      { makeProvider: make, detect: async () => [], modelsFor: async (provider) => provider.models },
+    );
+    expect((await source.choices()).map((choice) => choice.value)).toEqual(["grok/grok-5"]);
+  });
+
+  test("bind: grants refreshed for the chosen provider BEFORE it is built, settings resolved for it, nothing saved", async () => {
+    const dir = configDir({ provider: "ollama", model: "qwen3:8b", modelParams: { deepseek: { maxOutputTokens: 1234 } } });
+    const before = readFileSync(path.join(dir, "auth.json"), "utf8");
+    const order: string[] = [];
+    const source = shellModelSource(
+      { providerId: "ollama", modelId: "qwen3:8b" },
+      {
+        configDir: dir,
+        makeProvider: (name, model, baseUrl) => {
+          order.push(`make ${name} ${model} ${baseUrl ?? "-"}`);
+          return make(name, model, baseUrl);
+        },
+        refreshGrants: async (provider) => {
+          order.push(`refresh ${provider ?? "*"}`);
+          return [];
+        },
+        detect: async () => detected,
+        modelsFor: async (provider) => provider.models,
+      },
+    );
+    const choice = (await source.choices()).find((entry) => entry.value === "deepseek/deepseek-chat");
+    expect(choice).toBeDefined();
+    order.length = 0;
+    const bound = await source.bind(choice!);
+    expect(typeof bound).not.toBe("string");
+    if (typeof bound === "string") return;
+    expect(order).toEqual(["refresh deepseek", "make deepseek deepseek-chat https://api.deepseek.com"]);
+    expect({ providerId: bound.providerId, modelId: bound.modelId }).toEqual({ providerId: "deepseek", modelId: "deepseek-chat" });
+    // The NEW provider's settings, not the launch provider's.
+    expect(bound.turnSettings.maxOutputTokens).toBe(1234);
+    // keryx shell's saved selection is untouched.
+    expect(readFileSync(path.join(dir, "auth.json"), "utf8")).toBe(before);
+  });
+
+  test("bind: a provider the factory can only build as the offline fake is refused with the reason", async () => {
+    const source = shellModelSource(
+      { providerId: "ollama", modelId: "qwen3:8b" },
+      { makeProvider: make, detect: async () => detected, modelsFor: async (provider) => provider.models },
+    );
+    const refused = await source.bind({ value: "groq/llama-3.3-70b", name: "llama-3.3-70b", providerId: "groq", modelId: "llama-3.3-70b" });
+    expect(refused).toContain('provider "groq" has no usable credential');
+  });
+
+  test("a ready resolution carries the model source", async () => {
+    const dir = configDir({ provider: "ollama", model: "qwen3:8b" });
+    const resolution = await resolveAcpProvider({}, { configDir: dir, makeProvider: make, loadFixture: neverFixture });
+    expect(resolution.kind === "ready" && resolution.models !== undefined).toBe(true);
+  });
+});
+
+// Flow 288, T14 — the review's two endpoint findings.
+describe("flow 288 T14 — model choices use the endpoints keryx shell would", () => {
+  const make: NonNullable<ResolveAcpProviderDeps["makeProvider"]> = () =>
+    ({ describe: () => ({}) } as unknown as ProviderPort);
+
+  test("a saved per-provider endpoint (auth.json baseUrls) is what a switch is built against", async () => {
+    const dir = configDir({ provider: "ollama", model: "qwen3:8b", baseUrls: { deepseek: "https://deepseek.internal.example" } });
+    const built: (string | undefined)[] = [];
+    const source = shellModelSource(
+      { providerId: "ollama", modelId: "qwen3:8b" },
+      {
+        configDir: dir,
+        makeProvider: (name, model, baseUrl) => {
+          if (name === "deepseek") built.push(baseUrl);
+          return make(name, model, baseUrl);
+        },
+        detect: async () => [{ name: "deepseek", models: ["deepseek-chat"], baseUrl: "https://api.deepseek.com" }],
+        modelsFor: async (provider) => provider.models,
+      },
+    );
+    const choice = (await source.choices()).find((entry) => entry.value === "deepseek/deepseek-chat");
+    expect(choice?.baseUrl).toBe("https://deepseek.internal.example");
+    built.length = 0;
+    await source.bind(choice!);
+    expect(built).toEqual(["https://deepseek.internal.example"]);
+  });
+
+  test("the Ollama probe uses the --base-url flag only — never the saved launch provider's endpoint — and is bounded", async () => {
+    const dir = configDir({});
+    const probed: string[] = [];
+    const signals: (AbortSignal | undefined)[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      probed.push(String(input));
+      signals.push(init?.signal ?? undefined);
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    try {
+      const launch = { providerId: "deepseek", modelId: "deepseek-chat", baseUrl: "https://gateway.example" };
+      const deps = { configDir: dir, makeProvider: make, modelsFor: async () => [] as string[] };
+      await shellModelSource(launch, deps).choices();
+      expect(probed.filter((url) => url.endsWith("/api/tags"))).toEqual(["http://localhost:11434/api/tags"]);
+      expect(signals[0]).toBeInstanceOf(AbortSignal);
+      probed.length = 0;
+      await shellModelSource(launch, { ...deps, probeBaseUrl: "http://127.0.0.1:9" }).choices();
+      expect(probed.filter((url) => url.endsWith("/api/tags"))).toEqual(["http://127.0.0.1:9/api/tags"]);
+    } finally {
+      globalThis.fetch = realFetch;
     }
   });
 });

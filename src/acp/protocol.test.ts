@@ -19,7 +19,12 @@ import {
   requireObjectParams,
   requireStringField,
   unsupportedProtocolVersion,
+  type AcpAvailableCommand,
   type AcpPermissionOption,
+  type AcpSessionConfigOption,
+  type AcpSessionUpdate,
+  type AcpSetSessionConfigOptionRequest,
+  type AcpSetSessionConfigOptionResponse,
 } from "./protocol";
 
 // AC7: the version and the wire shapes are pinned HERE, in one file, so a
@@ -53,7 +58,6 @@ test("every capability keryx does not advertise has a refusal that names it", ()
     ACP_AGENT_METHODS.sessionClose,
     ACP_AGENT_METHODS.sessionDelete,
     ACP_AGENT_METHODS.sessionSetMode,
-    ACP_AGENT_METHODS.sessionSetConfigOption,
     ACP_AGENT_METHODS.authenticate,
     ACP_AGENT_METHODS.logout,
   ]) {
@@ -203,4 +207,34 @@ test("no file outside protocol.ts names a protocol version or an ACP method", ()
   }
 
   expect(offenders).toEqual([]);
+});
+
+// Flow 288, AC7: the shapes the published docs define for slash commands and
+// session config options ("Slash Commands", "Session Config Options"), typed
+// rather than `unknown[]`. Written out as typed literals so a drift in either
+// direction fails the typecheck, and asserted at runtime so this file says what
+// the wire carries.
+test("session/set_config_option is implemented, not refused (flow 288)", () => {
+  expect(ACP_IMPLEMENTED_AGENT_METHODS).toContain(ACP_AGENT_METHODS.sessionSetConfigOption);
+  expect(ACP_REFUSED_AGENT_METHODS.has(ACP_AGENT_METHODS.sessionSetConfigOption)).toBe(false);
+});
+
+test("available commands, config options and their updates carry the published fields", () => {
+  const command: AcpAvailableCommand = { name: "model", description: "Switch", input: { hint: "model id" } };
+  const option: AcpSessionConfigOption = {
+    id: "model",
+    name: "Model",
+    category: "model",
+    type: "select",
+    currentValue: "a/b",
+    options: [{ value: "a/b", name: "b", description: "a" }],
+  };
+  const request: AcpSetSessionConfigOptionRequest = { sessionId: "s", configId: "model", value: "a/b" };
+  const response: AcpSetSessionConfigOptionResponse = { configOptions: [option] };
+  const commandsUpdate: AcpSessionUpdate = { sessionUpdate: "available_commands_update", availableCommands: [command] };
+  const optionsUpdate: AcpSessionUpdate = { sessionUpdate: "config_option_update", configOptions: [option] };
+  expect(Object.keys(request).sort()).toEqual(["configId", "sessionId", "value"]);
+  expect(response.configOptions[0]?.category).toBe("model");
+  expect(commandsUpdate).toMatchObject({ availableCommands: [{ name: "model", input: { hint: "model id" } }] });
+  expect(optionsUpdate).toMatchObject({ configOptions: [{ type: "select", currentValue: "a/b" }] });
 });

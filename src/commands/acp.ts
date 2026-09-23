@@ -2,21 +2,24 @@
 //
 // Speaks newline-delimited JSON-RPC 2.0 on stdin/stdout (`../acp/framing.ts`)
 // and answers `initialize`, `session/new`, `session/prompt`, `session/cancel`,
-// `session/list` and `session/load` (`../acp/server.ts`); every other agent
+// `session/list`, `session/load` and `session/set_config_option`
+// (`../acp/server.ts`); every other agent
 // method ACP defines is refused with `-32601` (`../acp/protocol.ts`'s
 // `ACP_REFUSED_AGENT_METHODS`). Nothing but protocol frames may ever reach
 // stdout — every diagnostic below goes to stderr, matching the transport's
 // own MUST NOT ("a stray console.log corrupts the stream", `context.md` §0).
 
 import { randomUUID } from "node:crypto";
-import { runAcpServer, type AcpTurnSettings } from "../acp/server";
-import { loadAcpFixtureProvider } from "../acp/fixture-provider";
+import { runAcpServer } from "../acp/server";
+import { loadAcpFixture } from "../acp/fixture-provider";
+import { acpModelChoice, type AcpModelChoice, type AcpModelSource, type AcpTurnSettings } from "../acp/models";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import type { ProviderPort } from "../harness/provider/types";
-import { loadShellConfig, shellConfigPath } from "../lib/shell-config";
+import { envWithSavedApiKeys, loadShellConfig, shellConfigPath } from "../lib/shell-config";
 import { resolveAgentMaxOutputTokens, resolveReasoningEffort } from "./agent";
-import { resolveProviderModelParamsByName } from "./providers";
-import { GRANT_REFRESH_TIMEOUT_MS, realMakeProvider, resolveTuiStartup } from "./shell";
+import { resolveModelsForPicker, resolveProviderModelParamsByName } from "./providers";
+import { detectProviders, type DetectedProvider } from "./select";
+import { GRANT_REFRESH_TIMEOUT_MS, realMakeProvider, resolveTuiStartup, withSavedBaseUrls } from "./shell";
 import packageJson from "../../package.json" with { type: "json" };
 
 export interface ParsedAcpArgs {
@@ -75,6 +78,8 @@ export type AcpProviderResolution =
        * by the shell's own resolvers (see `resolveAcpTurnSettings`).
        */
       readonly turnSettings: AcpTurnSettings;
+      /** The models a session may switch to, and how one is built (flow 288). */
+      readonly models?: AcpModelSource;
     }
   | { readonly kind: "unconfigured"; readonly message: string };
 
@@ -126,14 +131,37 @@ export async function resolveAcpProvider(
   deps: ResolveAcpProviderDeps = {},
 ): Promise<AcpProviderResolution> {
   if (parsed.fixture !== undefined) {
-    const load = deps.loadFixture ?? loadAcpFixtureProvider;
+    const providerId = parsed.provider ?? "fixture";
+    if (deps.loadFixture !== undefined) {
+      return {
+        kind: "ready",
+        provider: deps.loadFixture(parsed.fixture),
+        providerId,
+        modelId: parsed.model ?? "fixture-model",
+        source: "fixture",
+        turnSettings: {},
+      };
+    }
+    const fixture = loadAcpFixture(parsed.fixture);
+    const modelId = parsed.model ?? fixture.models[0] ?? "fixture-model";
     return {
       kind: "ready",
-      provider: load(parsed.fixture),
-      providerId: parsed.provider ?? "fixture",
-      modelId: parsed.model ?? "fixture-model",
+      provider: fixture.providerFor(modelId),
+      providerId,
+      modelId,
       source: "fixture",
       turnSettings: {},
+      // The fixture's own model list, switched through the same server path a
+      // real provider is — only the provider construction is scripted.
+      models: {
+        choices: async () => fixture.models.map((model) => acpModelChoice(providerId, model)),
+        bind: async (choice) => ({
+          provider: fixture.providerFor(choice.modelId),
+          providerId: choice.providerId,
+          modelId: choice.modelId,
+          turnSettings: {},
+        }),
+      },
     };
   }
 
@@ -214,6 +242,141 @@ export async function resolveAcpProvider(
     modelId: initial.model,
     source,
     turnSettings: resolveAcpTurnSettings(initial.provider, deps.configDir),
+    models: shellModelSource(
+      { providerId: initial.provider, modelId: initial.model, ...(initial.baseUrl !== undefined ? { baseUrl: initial.baseUrl } : {}) },
+      {
+        ...deps,
+        makeProvider: make,
+        ...(parsed.baseUrl !== undefined ? { probeBaseUrl: parsed.baseUrl } : {}),
+      },
+    ),
+  };
+}
+
+export interface ShellModelSourceDeps extends ResolveAcpProviderDeps {
+  /** `keryx shell`'s picker detection (`detectProviders` over the env with saved keys) otherwise. */
+  readonly detect?: () => Promise<readonly DetectedProvider[]>;
+  /** `keryx shell`'s picker model listing (`resolveModelsForPicker`) otherwise. */
+  readonly modelsFor?: (provider: DetectedProvider) => Promise<readonly string[]>;
+  /**
+   * The `--base-url` FLAG, and only the flag: the shell's picker probes Ollama
+   * at exactly that (`realSelectProviderModel`, `redetect`). Never the saved
+   * launch provider's endpoint — that is a gateway's URL, not an Ollama.
+   */
+  readonly probeBaseUrl?: string;
+}
+
+/**
+ * How long one network call behind the choice list may take — the Ollama
+ * probe and each provider's live model list. The WHOLE list is bounded again
+ * by the server (`AcpServerOptions.modelListTimeoutMs`), so a session is never
+ * held by it for longer than that.
+ */
+const MODEL_LIST_TIMEOUT_MS = 5_000;
+
+/**
+ * The models an ACP session may switch to, and how one is built (flow 288,
+ * AC5/AC6) — `keryx shell`'s own sources, called rather than copied.
+ *
+ * CHOICES are the shell picker's: `detectProviders` over the environment with
+ * the saved API keys merged in (what `realSelectProviderModel` detects with),
+ * then each provider's `resolveModelsForPicker` list (what the picker shows
+ * after a provider is chosen). Narrowed to what this machine can actually RUN:
+ * `fake` is never offered, and a provider whose factory would fall back to
+ * the offline `FakeProvider` (no credential) is dropped — the picker lists
+ * such a provider so the operator can enter a key; an editor has nowhere to
+ * enter one. The launch provider is always included with its launch model.
+ *
+ * BIND is the shell's provider path as `resolveAcpProvider` takes it: grants
+ * refreshed FIRST (for the chosen provider), then `realMakeProvider`, a
+ * `FakeProvider` refused, and the per-turn settings resolved for the NEW
+ * provider (`resolveAcpTurnSettings`) — a switch from one provider to another
+ * must not keep the old one's temperature or token budget. Nothing is saved:
+ * `keryx shell`'s selection in `auth.json` is left as it was.
+ */
+export function shellModelSource(
+  launch: { readonly providerId: string; readonly modelId: string; readonly baseUrl?: string },
+  deps: ShellModelSourceDeps = {},
+): AcpModelSource {
+  const make = deps.makeProvider ?? realMakeProvider(() => {});
+  const detect =
+    deps.detect ??
+    (() =>
+      detectProviders({
+        // `detectProviders`' Ollama probe has no timeout of its own.
+        fetch: ((input: string | URL | Request, init?: RequestInit) =>
+          globalThis.fetch(input, { ...init, signal: AbortSignal.timeout(MODEL_LIST_TIMEOUT_MS) })) as typeof fetch,
+        env: envWithSavedApiKeys(process.env, deps.configDir),
+        platform: process.platform,
+        ...(deps.probeBaseUrl !== undefined ? { baseUrl: deps.probeBaseUrl } : {}),
+      }));
+  const modelsFor =
+    deps.modelsFor ??
+    (async (provider: DetectedProvider) =>
+      (
+        await resolveModelsForPicker(globalThis.fetch, provider, envWithSavedApiKeys(process.env, deps.configDir), {
+          timeoutMs: MODEL_LIST_TIMEOUT_MS,
+        })
+      ).models);
+  const runnable = (provider: DetectedProvider): boolean => {
+    if (provider.name === "fake") return false;
+    if (provider.name === launch.providerId) return true;
+    const probeModel = provider.models[0] ?? launch.modelId;
+    return !(make(provider.name, probeModel, provider.baseUrl) instanceof FakeProvider);
+  };
+  return {
+    choices: async () => {
+      // The endpoints the shell saved per provider, overlaid by the shell's own rule.
+      const detected = withSavedBaseUrls(await detect(), loadShellConfig(deps.configDir));
+      const launchEntry: DetectedProvider = detected.find((entry) => entry.name === launch.providerId) ?? {
+        name: launch.providerId,
+        models: [launch.modelId],
+      };
+      const providers = [launchEntry, ...detected.filter((entry) => entry.name !== launch.providerId && runnable(entry))];
+      const listed = await Promise.all(
+        providers.map(async (entry) => {
+          let models: readonly string[];
+          try {
+            models = await modelsFor(entry);
+          } catch {
+            models = entry.models;
+          }
+          const baseUrl = entry.name === launch.providerId ? launch.baseUrl : entry.baseUrl;
+          return models.map((model) => acpModelChoice(entry.name, model, baseUrl));
+        }),
+      );
+      const seen = new Set<string>();
+      const choices: AcpModelChoice[] = [acpModelChoice(launch.providerId, launch.modelId, launch.baseUrl)];
+      seen.add(choices[0]?.value ?? "");
+      for (const choice of listed.flat()) {
+        if (!seen.has(choice.value)) {
+          seen.add(choice.value);
+          choices.push(choice);
+        }
+      }
+      return choices;
+    },
+    bind: async (choice) => {
+      const refresh = deps.refreshGrants;
+      if (refresh !== undefined) {
+        for (const warning of await refresh(choice.providerId, deps.configDir)) {
+          deps.warn?.(warning);
+        }
+      }
+      const provider = make(choice.providerId, choice.modelId, choice.baseUrl);
+      if (provider instanceof FakeProvider) {
+        return (
+          `provider "${choice.providerId}" has no usable credential — export its API key, or save one with ` +
+          `\`/connect\` or \`keryx auth login ${choice.providerId}\``
+        );
+      }
+      return {
+        provider,
+        providerId: choice.providerId,
+        modelId: choice.modelId,
+        turnSettings: resolveAcpTurnSettings(choice.providerId, deps.configDir),
+      };
+    },
   };
 }
 
@@ -316,6 +479,7 @@ export async function acpCommand(args: string[]): Promise<void> {
             providerId: resolution.providerId,
             modelId: resolution.modelId,
             turnSettings: resolution.turnSettings,
+            ...(resolution.models !== undefined ? { models: resolution.models } : {}),
           }
         : { providerUnavailable: resolution.message, providerId: "", modelId: "" }),
       agentInfo: { name: "keryx", version: packageJson.version },
@@ -339,15 +503,25 @@ Speak the Agent Client Protocol (ACP) v1 over stdio: newline-delimited
 JSON-RPC 2.0 on stdin, the same framing on stdout. Launch this as a
 subprocess from an ACP client (an editor, e.g.) — it answers initialize,
 session/new, session/prompt (streaming session/update notifications as a
-turn runs rather than only at the end), session/cancel, session/list and
-session/load; every other agent method ACP defines is refused with -32601.
+turn runs rather than only at the end), session/cancel, session/list,
+session/load and session/set_config_option; every other agent method ACP
+defines is refused with -32601.
 
 Provider and model: --provider and --model (both, or neither) pick the
 backend. Without them keryx acp uses the provider and model keryx shell
 last saved, with the shell's saved per-provider settings — run keryx shell
 once and pick one. With nothing saved or no
 credential for it, initialize still works and session/new is refused with
-a message saying what to configure.
+a message saying what to configure. That is where a session starts: its
+model is a configOptions entry (category "model") listing what keryx can
+run here, switched from the editor (session/set_config_option) or with
+/model, from the next turn on. keryx shell's saved choice is not changed.
+
+Tools: keryx's read-only project tools (graph, wiki, memory, flow status,
+skills, repomap, test_related, health status, search_code) wherever keryx
+shell would offer them, plus get_cwd, list_dir, read_file, shell_exec and
+apply_patch. Web tools, keryx's own MCP servers, subagents and bus tools are
+not offered. Commands advertised: /help, /model, /reasoning, /status.
 
 MCP servers: stdio entries in session/new / session/load mcpServers are
 started (sessions sending the same list share one set) and stopped when

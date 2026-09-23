@@ -224,8 +224,10 @@ describe("keryx acp (real stdio process)", () => {
     const reply = await conn.replyTo(2);
     expect(reply.error).toBeUndefined();
     expect(typeof (reply.result as { sessionId?: unknown }).sessionId).toBe("string");
-    // The report follows the reply: an agent message naming the server.
-    const frames = await conn.waitForFrameCount(3);
+    // The report follows the reply: an agent message naming the server. Four
+    // frames: two replies, the commands update every new session gets (flow
+    // 288), and the report.
+    const frames = await conn.waitForFrameCount(4);
     const report = frames.find(
       (f) =>
         f.method === "session/update" &&
