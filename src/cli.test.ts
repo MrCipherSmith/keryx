@@ -56,6 +56,63 @@ test("dash alias is advertised in CLI help", async () => {
   expect(output).toContain("dash      Rebuild and open .metaproject/keryx-dashboard.html");
 });
 
+test("flow 303 AC5: --help, -h and bare `keryx` print the identical flat usage, and `keryx help` (grouped) differs from all three", async () => {
+  const cliPath = path.join(import.meta.dir, "cli.ts");
+  const [helpFlag, hFlag, bare, grouped] = await Promise.all([
+    runBun([cliPath, "--help"]),
+    runBun([cliPath, "-h"]),
+    runBun([cliPath]),
+    runBun([cliPath, "help"]),
+  ]);
+  expect(helpFlag).toBe(hFlag);
+  expect(helpFlag).toBe(bare);
+  expect(grouped).not.toBe(helpFlag);
+  expect(grouped).toMatch(/Start here:/);
+  expect(grouped).toMatch(/Maintenance and diagnostics:/);
+});
+
+// PR #669 review, MEDIUM (AC5, amended): comparing the three flat forms to
+// EACH OTHER (above) proves they agree with one another, but not that any of
+// them still says what they said before this flow — a bug that changed all
+// three identically would sail through unnoticed. These pin the flat block
+// against a fixture captured by actually RUNNING `src/cli.ts` at commit
+// 0d6ac030 (the last main commit before flow 303, per the operator) —
+// `fixtures/cli-help-pre-flow-303/*.txt` — so the comparison is against real
+// captured stdout, not a hand-transcribed copy that could itself drift.
+describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned against their pre-flow output", () => {
+  const FIXTURES_ROOT = path.join(import.meta.dir, "../fixtures/cli-help-pre-flow-303");
+
+  // The ONLY two lines this flow is allowed to have added to the flat block —
+  // one in USAGE_BODY, one in the Commands: summary table.
+  const NEW_LINES = [
+    "  keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)\n",
+    "  help      Grouped command help by task: every verb, in nine onboarding-ordered groups\n",
+  ];
+
+  test("the flat --help block is the pre-flow fixture plus exactly those two lines, nothing else", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const current = await runBun([cliPath, "--help"]);
+    const preFlow = readFileSync(path.join(FIXTURES_ROOT, "flat-help.txt"), "utf8");
+
+    let reconstructed = current;
+    for (const line of NEW_LINES) {
+      expect(reconstructed).toContain(line);
+      reconstructed = reconstructed.replace(line, "");
+    }
+    expect(reconstructed).toBe(preFlow);
+  });
+
+  test.each(["flow", "trigger", "serve-mcp", "governance"] as const)(
+    "the rich `%s --help` output is byte-identical to its pre-flow fixture (unchanged by this flow)",
+    async (verb) => {
+      const cliPath = path.join(import.meta.dir, "cli.ts");
+      const current = await runBun([cliPath, verb, "--help"]);
+      const preFlow = readFileSync(path.join(FIXTURES_ROOT, `${verb}-help.txt`), "utf8");
+      expect(current).toBe(preFlow);
+    },
+  );
+});
+
 test("agents bootstrap help is available without touching global files", async () => {
   const cliPath = path.join(import.meta.dir, "cli.ts");
   const output = await runBun([cliPath, "agents", "bootstrap", "--help"]);

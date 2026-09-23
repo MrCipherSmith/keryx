@@ -1073,6 +1073,22 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   // ---- core (toolkit itself) --------------------------------------------
   {
     module: "core",
+    command: "help",
+    summary: "Grouped command help by task: every group, a group, or one command's/slash-command's full usage.",
+    intent: ["keryx help", "покажи команды", "list commands", "how do I use keryx", "какие есть команды"],
+    args: [
+      {
+        name: "<group-or-command>",
+        type: "string",
+        required: false,
+        desc: "group slug, CLI verb, or slash-command name; omit for the full grouped listing",
+      },
+    ],
+    json: false,
+    read: true,
+  },
+  {
+    module: "core",
     command: "status",
     summary: "Metaproject workspace status: enabled modules and artifact freshness.",
     intent: ["статус проекта", "project status", "keryx status", "что включено"],

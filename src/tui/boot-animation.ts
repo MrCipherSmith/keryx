@@ -51,6 +51,13 @@ const WORDMARK = ["========================", "       K E R Y X        ", "=====
 export const SPLASH_HINT = "type a message to start · / for commands";
 
 /**
+ * Flow 303 (AC13): a second line under {@link SPLASH_HINT}, naming `/help` and
+ * what it opens, so a new user's very first screen already points at the
+ * grouped command help instead of only "/ for commands".
+ */
+export const SPLASH_HELP_HINT = "Type /help to see every command, grouped by the steps to get started.";
+
+/**
  * Mount the animation on `r.root`, run it to completion (or until skipped),
  * then unmount. Resolves once the box is gone — the caller's next mount
  * (the provider/model picker, or the chrome) is safe to proceed immediately.
@@ -105,6 +112,107 @@ export async function playBootAnimation(otui: OpenTui, r: Renderer, opts: BootAn
     const doneTimer = setTimeout(finish, durationMs);
     const unsubscribe = opts.onKeypress(() => finish());
   });
+}
+
+// ---------------------------------------------------------------------------
+// Startup loading indicator (flow 303, AC14).
+//
+// The operator reported the boot animation above disappearing after ~350ms
+// and "loading then continues on a black screen". Traced in
+// `launchTuiAgentShell` (`tui-shell.ts`): after `playBootAnimation` resolves
+// and removes its box, the renderer's root is briefly EMPTY while
+// `opts.makeAgentDeps(...)` builds the tool registry and MCP wiring — nothing
+// is mounted yet, because `createShellChrome` (which paints the header,
+// transcript and focused composer) does not run until that finishes. This
+// indicator fills exactly that gap: mounted right after the boot animation,
+// updated with a short label as the caller's own startup steps run, and
+// removed once `createShellChrome` resolves and the composer is visible.
+//
+// The provider/model PICKER (`selectProviderModelInTui`, when `opts.initial`
+// is absent) is deliberately NOT covered by this indicator — that overlay
+// IS the on-screen content while it waits on the operator, not a blank gap.
+
+/** One already-mounted startup indicator: update its label, or tear it down. */
+export interface StartupIndicatorHandle {
+  /** Replace the shown label — a short present-participle phrase, e.g. "Loading agent tools…". */
+  setStep(label: string): void;
+  /** Tear the indicator down. Safe to call twice. */
+  remove(): void;
+}
+
+/** How often the spinner glyph advances. Exposed so a test can inject a manual driver instead of waiting real time. */
+export const STARTUP_INDICATOR_TICK_MS = 120;
+
+const SPINNER_FRAMES = ["◐", "◓", "◑", "◒"];
+
+export interface StartupIndicatorOptions {
+  /** Injectable scheduler for the spinner glyph, so a test never waits on real time. Default: the real timer. */
+  setInterval?: (fn: () => void, ms: number) => unknown;
+  clearInterval?: (handle: unknown) => void;
+}
+
+/**
+ * Mount a small, theme-coloured "<spinner glyph> <label>" line, centred like
+ * the boot animation it follows. Call {@link StartupIndicatorHandle.setStep}
+ * as each real startup step begins, and {@link StartupIndicatorHandle.remove}
+ * once the composer is ready to take input.
+ */
+export function mountStartupIndicator(
+  otui: OpenTui,
+  r: Renderer,
+  initialLabel: string,
+  opts: StartupIndicatorOptions = {},
+): StartupIndicatorHandle {
+  const theme = getTheme();
+  const box: Box = new otui.BoxRenderable(r, {
+    id: "startup-indicator",
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: theme.bg,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  });
+  r.root.add(box);
+  const text = new otui.TextRenderable(r, { id: "startup-indicator-text", content: "" });
+  box.add(text);
+
+  let label = initialLabel;
+  let frame = 0;
+  let removed = false;
+  const paint = (): void => {
+    if (removed) {
+      return;
+    }
+    text.content = otui.t`${dimChunk(otui, `${SPINNER_FRAMES[frame % SPINNER_FRAMES.length]} ${label}`)}`;
+  };
+  paint();
+
+  const schedule = opts.setInterval ?? ((fn: () => void, ms: number) => setInterval(fn, ms));
+  const unschedule = opts.clearInterval ?? ((handle: unknown) => clearInterval(handle as ReturnType<typeof setInterval>));
+  const timer = schedule(() => {
+    frame += 1;
+    paint();
+  }, STARTUP_INDICATOR_TICK_MS);
+
+  return {
+    setStep(next: string): void {
+      label = next;
+      frame = 0;
+      paint();
+    },
+    remove(): void {
+      if (removed) {
+        return;
+      }
+      removed = true;
+      unschedule(timer);
+      r.root.remove(box);
+    },
+  };
 }
 
 /** Rows the shell spends outside the transcript (header, composer, footer). */
@@ -237,11 +345,18 @@ export function mountEmptyTranscriptSplash(otui: OpenTui, r: Renderer, transcrip
       box.remove(child);
     }
     painted = [];
+    // `idSlot` namespaces the mounted node ids: two separate `emit()` calls
+    // sharing the same `kind` (e.g. two "hint" lines, or two "status" lines
+    // from separate `addStatus` calls) would otherwise both start their row
+    // index at 0 and collide on `splash-hint-0` — distinct slots keep every
+    // mounted id unique within this box.
+    let idSlot = 0;
     const emit = (text: string, kind: "logo" | "hint" | "status"): void => {
+      const slot = idSlot++;
       const lines = kind === "logo" ? hardWrapLines(text, width) : centerWrappedLines(text, width);
       for (const [index, line] of lines.entries()) {
         const node = new otui.TextRenderable(r, {
-          id: `splash-${kind}-${index}`,
+          id: `splash-${kind}-${slot}-${index}`,
           // Load-bearing: a row of exactly `width` columns can still be
           // re-wrapped by the renderer, putting half of it back at the left edge.
           wrapMode: "none",
@@ -256,6 +371,7 @@ export function mountEmptyTranscriptSplash(otui: OpenTui, r: Renderer, transcrip
       emit(line, "logo");
     }
     emit(SPLASH_HINT, "hint");
+    emit(SPLASH_HELP_HINT, "hint");
     for (const status of statusTexts) {
       emit(status, "status");
     }

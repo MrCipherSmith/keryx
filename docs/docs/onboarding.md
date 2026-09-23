@@ -370,16 +370,19 @@ including `keryx shell --trust`/`--auto` to start in a given mode.
 
 Every interactive command starts with `/`. `/help` lists what is available in
 the current mode (agent mode has tools and a TUI; chat mode is a plain
-conversation with no tools). A few you will reach for early, beyond the ones
-above:
+conversation with no tools), grouped by task — in the TUI it opens a tabbed
+modal, arrow keys to move between groups and commands, Enter for a command's
+detail. A few you will reach for early, beyond the ones above:
 
 - `/status` — session identity, context window and limits, workspaces, flows.
 - `/compact [focus]` — compact the model context, keeping the full transcript
   on disk.
 - `/interrupt` — stop the running main turn without losing the session.
 
-`keryx <command> --help`, or bare `keryx`, lists the full CLI surface outside
-the shell.
+`keryx help` groups the full CLI surface the same way, outside the shell
+(`keryx <command> --help`, or bare `keryx`, for the flat list); the same
+table is also a generated reference page: [Commands by
+task](commands-by-task.md).
 
 #### Sessions
 

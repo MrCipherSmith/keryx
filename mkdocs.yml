@@ -92,6 +92,7 @@ nav:
   - The agent harness: harness.md
   - Modules: modules.md
   - CLI reference: cli-reference.md
+  - Commands by task: commands-by-task.md
   - Workspace and lifecycle: workspace-and-lifecycle.md
   - Limitations: limitations.md
   - Complete setup and agent workflows: complete-setup-and-agent-workflows.md

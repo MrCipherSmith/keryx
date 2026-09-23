@@ -16,7 +16,17 @@ four audit blocks to `commands/shell.test.ts` and its own
 `tui/tui-hold.test.ts` — see [audits-commands.md](audits-commands.md) and
 [audits-tui-other.md](audits-tui-other.md). 17 test files, 51 read sites.
 
-**P2 is converting these. Current: 12 test files, 34 read sites** — the
+**P2 is converting these. Current: 15 test files, 38 read sites** — flow 303
+(keryx help) added four new source-text sites while its own review round was
+still open: `commands/shell-starting-line.test.ts` (pins the pre-renderer
+"keryx: starting…" print's `chooseShellSurface` gate), `tui/busy-dispatch.test.ts`
+(pins that the busy-branch "help" case opens the help modal rather than a
+static notice), `tui/help-first-run.test.ts` (pins that `resolveFirstRunHelp`
+is dispatched as a background task, never awaited inline), and a second site
+in `tui/boot-animation.test.ts` (pins that `opts.makeAgentDeps`/
+`createShellChrome` are wrapped in try/finally around the startup indicator).
+All four are genuinely structural at the moment they were written — none of
+the three properties above has an exported seam yet — the
 manifest at the bottom is the live count, checked by
 `src/shell-source-audits.test.ts`, and it is the progress signal. Converted so
 far: `/goal`, `/plan` and `/reasoning` (including T26's configDir threading)
@@ -334,12 +344,15 @@ against. They live in the detail files, which assert nothing.
 commands/shell-bus.test.ts | commands/shell.ts | 2
 commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
+commands/shell-starting-line.test.ts | commands/shell.ts | 1
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
 commands/shell.test.ts | commands/shell.ts | 5
 harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
-tui/boot-animation.test.ts | tui/tui-shell.ts | 1
+tui/boot-animation.test.ts | tui/tui-shell.ts | 2
+tui/busy-dispatch.test.ts | tui/tui-shell.ts | 1
 tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
+tui/help-first-run.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
 tui/tui-bus.test.ts | tui/tui-shell.ts | 1
 tui/tui-hold.test.ts | tui/tui-shell.ts | 1

@@ -138,6 +138,7 @@ function moduleStems(module: string): string[] {
  * a core command means adding it here, which is the point.
  */
 const CORE_COMMANDS: readonly string[] = [
+  "help",
   "status",
   "modules status",
   "projects list",

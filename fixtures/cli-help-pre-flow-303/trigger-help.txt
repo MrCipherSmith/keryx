@@ -1,0 +1,74 @@
+keryx trigger — fire, install and inspect this project's declared triggers
+
+Usage:
+  keryx trigger run <name>        Perform exactly one pass of <name>'s action
+  keryx trigger run --schedule <name>
+                                  The same, resolving only a local schedule (`keryx schedule add`)
+  keryx trigger install           Install a git hook block for every event-fired entry
+  keryx trigger uninstall         Remove those hook blocks (other managed blocks are untouched)
+  keryx trigger list              List declared entries: enabled state, fire, action, hook status
+  keryx trigger status [<name>]   Show the last recorded outcome for one or every entry
+  keryx trigger schedule <name>   Print the cron line / systemd timer unit (real OnCalendar=) for a schedule entry
+  keryx trigger resolve <runId> --spent <usd>
+                                  Close a killed dispatch's spend reservation with what it really spent
+
+Triggers are declared by hand in .metaproject/triggers.json (keryx never
+writes it) and loaded by name, together with the schedules `keryx schedule add`
+created (the per-machine store .metaproject/data/trigger/schedules.json). `run`:
+  - exits 0 and says "nothing to do" when there is no trigger config, or the
+    named trigger is disabled;
+  - exits non-zero when the name is unknown, the matching entry is malformed,
+    or the action itself fails;
+  - refuses cleanly (exit 0, recorded) when another keryx run holds this
+    project's maintenance lock — the same lock a manual `keryx sync --apply`
+    or `keryx gdgraph build` takes (those WAIT for it, bounded; a triggered
+    run refuses at once) — or when a spend ceiling (project-wide, or the
+    trigger's own dispatch.ceilingUsd) is already reached.
+
+Actions:
+  reconcile   -> `keryx sync --apply`
+  rebuild     -> `keryx gdgraph build`
+  open-flow   opens a flow from action.template (skipIfOpen: no second one while
+              an equivalent flow is open)
+  flow-next   without a "dispatch" block: REPORT-ONLY — records action.flow's
+              next task. With a "dispatch" block: DISPATCHES a keryx agent to
+              work that task, unattended:
+                dispatch: { provider, model, permissionMode ("ask" default |
+                "trust"; "auto" is rejected), rates: { inputUsdPerMTok,
+                outputUsdPerMTok } (both > 0), ceilingUsd, maxSeconds (1800),
+                maxAttempts (3), network (false), baseUrl? (loopback only) }
+              network: true gives the agent's shell commands the host's FULL
+              network — the internet and every host loopback service. The model
+              call is made outside the sandbox and never needs it.
+              "trust" runs commands only inside the hardened Linux sandbox
+              (bwrap: network off, home hidden, allow-listed env) and refuses
+              to start without it; "ask" is read-only.
+              The agent works in a throwaway git worktree on branch
+              trigger/<flow>-<task> (committed, never pushed). The dispatcher
+              records "task attempt started" before the model, then exactly one
+              closing fact: "task done" only when the turn ended normally, the
+              branch has a commit and `keryx health gate` passes there;
+              otherwise "attempt failed|blocked" with the reason. It refuses
+              (exit 0, "dispatch-refused") when the flow is not in progress or
+              not frozen, nothing is ready, the task has an open attempt or hit
+              maxAttempts, or another dispatch is on the same flow.
+              Unattended means: every call that would ask is DENIED and
+              recorded; the saved shell allowlist and the project's stored
+              permission mode are ignored; no web, MCP, subagent or ask_user
+              tools; a text floor (defence in depth, not the boundary) refuses
+              git push/merge/tag/update-ref, publishing, mutating gh api,
+              keryx flow state changes, nested trigger runs, and writes to
+              flow.json, acceptance-criteria.md, triggers.json or the record.
+              Cost: spend is RESERVED before the first model call; tokens
+              always, USD from the declared rates; the run stops at its
+              reservation. A killed run's reservation stays counted until
+              `keryx trigger resolve <runId> --spent <usd>`.
+
+  agent-task  (flow 295) a free-form scheduled agent task: one unattended turn on
+              the operator's prompt, a report in .metaproject/data/trigger/reports/.
+              Created only by `keryx schedule add` / /schedule, never by hand.
+
+`install` writes hooks for event-fired entries only; a schedule entry's line
+comes from `trigger schedule` (or `keryx schedule add` installs a timer), and
+keryx never runs a daemon of its own.
+

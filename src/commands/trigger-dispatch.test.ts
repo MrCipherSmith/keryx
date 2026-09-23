@@ -762,8 +762,8 @@ describe("AC14: spend is reserved before the first model call and never fails op
     expect(providerReportsUsage("openai")).toBe(true);
     expect(providerReportsUsage("gemini")).toBe(true);
     expect(providerReportsUsage("grok")).toBe(true); // registry: streamUsage
+    expect(providerReportsUsage("deepseek")).toBe(true); // registry: streamUsage, measured live (0.2.158)
     expect(providerReportsUsage("ollama")).toBe(false);
-    expect(providerReportsUsage("deepseek")).toBe(false);
     expect(providerReportsUsage("no-such-provider")).toBe(false);
   });
 });

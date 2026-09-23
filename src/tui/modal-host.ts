@@ -584,6 +584,21 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     state.closeText.fg = theme.muted;
     state.footerText.fg = theme.text;
     paintTabs(state);
+    // PR #669 review, LOW: this used to recolour only the CHROME (backdrop,
+    // panel, header, tab strip, footer) — every consumer's own BODY content
+    // (`renderTab`'s own `TextRenderable`s, built with whatever theme chunk
+    // helper was current at mount time) kept the OLD theme's colours until
+    // something else caused that tab to remount. Re-running the active tab's
+    // own `renderTab` is the general fix: every modal-host consumer already
+    // hands `renderTab` a callback that reads `getTheme()` fresh each time it
+    // runs (the same call `mountTab` already makes on an ordinary tab
+    // switch), so replaying it repaints the body in the new theme without
+    // modal-host needing to know anything about what any one consumer drew.
+    // Only while genuinely open — a closed host's body is already torn down
+    // and its `state.input` may be stale from a PRIOR open.
+    if (state.open && state.input !== undefined) {
+      mountTab(state, state.input, state.active);
+    }
   });
   return state;
 }

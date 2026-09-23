@@ -120,7 +120,15 @@ import {
   type VersionCheckResult,
 } from "../lib/version-check";
 import packageJson from "../../package.json" with { type: "json" };
-import { describeUnavailableCommand, parseDemoteCommand, renderCommandHelp } from "./agent-commands";
+import { commandsForMode, describeUnavailableCommand, parseDemoteCommand } from "./agent-commands";
+// Flow 303 (AC7): grouped `/help` text for the readline surfaces — reached
+// ONLY through this core facade (see the zone note in
+// `src/standard/help-groups.ts`), never `../standard/help-groups` directly.
+// `renderGroupedNamedHelp` groups by the shared table but takes ITS
+// descriptions from the caller, so chat/agent wording keeps coming from
+// `AGENT_SLASH_COMMANDS` (mode-resolved by `commandsForMode`), never a second,
+// independently-drifting copy in `help-groups.ts`.
+import { renderGroupedNamedHelp } from "../standard/service";
 // Flow 266 (AC8): the demote EFFECT lives with the registry, not with either
 // shell, so both dispatch into the same rule instead of growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
@@ -192,12 +200,15 @@ const CONNECT_GUIDANCE = [
 ].join("\n");
 
 /**
- * Help text for chat mode. The command list is DERIVED from the shared registry
- * (`agent-commands.ts`) rather than duplicated here, so chat's menu and the TUI's
- * can never drift; only the session footer is chat-specific.
+ * Help text for chat mode. Flow 303 (AC7): grouped the same way `keryx help`
+ * and the TUI's `/help` modal group everything — by the onboarding task table
+ * in `src/standard/help-groups.ts` — because a modal cannot render here. The
+ * NAMES still come from the shared registry (`agent-commands.ts`'s
+ * `commandsForMode`), so chat's menu and the TUI's can never drift on WHICH
+ * commands chat mode has; only the session footer is chat-specific.
  */
 const HELP_TEXT = [
-  renderCommandHelp("chat"),
+  renderGroupedNamedHelp(commandsForMode("chat")),
   "Sessions are per-project. Resume: keryx shell -c | -r [id]",
   "Context counter is an estimate (~4 chars/token); chat has no provider usage hook.",
   "",
@@ -227,12 +238,16 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/exit",
 ];
 
-/** Agent-REPL help: registry-derived command list + the agent-specific preamble. */
+/**
+ * Agent-REPL help: registry-derived command list, grouped the same way
+ * `keryx help` and the TUI's `/help` modal group everything (AC7), plus the
+ * agent-specific preamble.
+ */
 export function readlineAgentHelpText(): string {
   return (
     "Agent mode — describe a task; tools: get_cwd, list_dir, read_file, search_code, " +
     "graph_affected, memory_search, web_fetch, web_search, shell_exec (approval).\n" +
-    renderCommandHelp("agent", READLINE_AGENT_COMMANDS) +
+    renderGroupedNamedHelp(commandsForMode("agent").filter((c) => READLINE_AGENT_COMMANDS.includes(c.name))) +
     "Sessions are per-project: keryx shell -c | -r [id] | keryx sessions list\n"
   );
 }
@@ -3362,13 +3377,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // Bounded, because it runs before anything else and a network that drops
   // packets silently would otherwise hang a scripted run for good. Only the
   // provider the flags name, when they name one — the TUI picker may choose any.
-  {
-    const { refreshSavedGrants } = await import("../lib/oauth/login");
-    const oauthFetch = (input: string, init?: RequestInit) => globalThis.fetch(input, init);
-    const http = { fetch: oauthFetch, signal: AbortSignal.timeout(GRANT_REFRESH_TIMEOUT_MS) };
-    const warnings = await refreshSavedGrants(http, runtime.cacheDir, providerArg === undefined ? undefined : [providerArg]);
-    for (const warning of warnings) process.stderr.write(`keryx: ${warning}\n`);
-  }
+  //
   // flow 268 T16 (AC11): the `/reasoning <level>` shell command's session
   // override — shared between the TUI (`makeAgentDeps` below, and the
   // `setReasoningOverride` threaded through `opts` to `tui-shell.ts`) and the
@@ -3380,6 +3389,38 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // `ShellConfig.reasoningEffort` the command also writes, so the choice
   // survives a restart even though this in-memory override does not.
   let reasoningSessionOverride: string | undefined;
+  // Flow 303 (AC14): both this grant refresh and `resolveTuiStartup` further
+  // down run BEFORE OpenTUI's renderer exists — no splash, no chrome, nothing
+  // mounted yet, on a plain terminal. Reordering this well-tested startup
+  // sequence to run credential refresh and provider detection only AFTER the
+  // renderer starts would be a much larger, riskier change than the gap it
+  // closes is worth; a single plain-terminal line instead guarantees the
+  // terminal is never silently inert from the very first moment.
+  //
+  // Gated on the SURFACE (PR #669 review, HIGH 2 fix) — NOT raw `isTty` as
+  // before, which printed even under `--print` on a real TTY.
+  // `chooseShellSurface` sends `--print` to "readline" unconditionally, so
+  // gating on it excludes that case by construction, along with every other
+  // readline path (`--no-tui`, no TTY, CI). Called here a second time,
+  // deliberately, rather than hoisting the OFFICIAL `const surface =`
+  // assignment below earlier: it is pure and cheap, and hoisting it would
+  // reorder it ahead of the grant refresh, breaking
+  // `shell-grant-refresh.test.ts`'s "refresh before surface" pin (K-013 —
+  // the refresh must run before ANY surface-specific branch is reachable in
+  // the source, so a future edit cannot accidentally nest it inside one).
+  // One `write` call, the trailing `\n` included in the same string, so a
+  // later failure can never leave a partial line for something else to print
+  // onto.
+  if (chooseShellSurface(flags, runtime.isTty ?? process.stdout.isTTY === true) !== "readline") {
+    process.stderr.write("keryx: starting…\n");
+  }
+  {
+    const { refreshSavedGrants } = await import("../lib/oauth/login");
+    const oauthFetch = (input: string, init?: RequestInit) => globalThis.fetch(input, init);
+    const http = { fetch: oauthFetch, signal: AbortSignal.timeout(GRANT_REFRESH_TIMEOUT_MS) };
+    const warnings = await refreshSavedGrants(http, runtime.cacheDir, providerArg === undefined ? undefined : [providerArg]);
+    for (const warning of warnings) process.stderr.write(`keryx: ${warning}\n`);
+  }
   const surface = chooseShellSurface(flags, runtime.isTty ?? process.stdout.isTTY === true);
   if (surface !== "readline") {
     const cwd = process.cwd();

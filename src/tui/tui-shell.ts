@@ -70,7 +70,13 @@ import { describeDetachedRuns } from "./trigger-run-now";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
-import { createSplashLifecycle, mountEmptyTranscriptSplash, playBootAnimation, type SplashLifecycle } from "./boot-animation";
+import {
+  createSplashLifecycle,
+  mountEmptyTranscriptSplash,
+  mountStartupIndicator,
+  playBootAnimation,
+  type SplashLifecycle,
+} from "./boot-animation";
 import {
   catchUpItems,
   loadInspectorCatchUp,
@@ -109,6 +115,8 @@ import {
   openSessionInfo,
 } from "./session-info";
 import { openModal, type ModalChrome, type ModalFooterAction } from "./modal-host";
+import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
+import { helpFirstRunShown, markHelpFirstRunShown, resolveFirstRunHelp } from "./help-first-run"; // flow 303 AC8
 import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import type { SearchFieldDescriptor } from "../harness/search/types";
@@ -3335,6 +3343,12 @@ export async function launchTuiAgentShell(opts: {
     }
     // Persist the chosen provider/model (opencode-style) so the next launch reuses it.
     saveShellConfig(sel.baseUrl === undefined ? { provider: sel.provider, model: sel.model } : { provider: sel.provider, model: sel.model, baseUrl: sel.baseUrl });
+    // Flow 303 (AC14): from here until `createShellChrome` paints the header,
+    // transcript and focused composer below, the renderer's root would
+    // otherwise be empty — the reported "black screen" gap. Kept up across
+    // `opts.makeAgentDeps` (tool registry + MCP wiring), removed the moment
+    // the chrome exists.
+    const startupIndicator = mountStartupIndicator(otui, r, "Preparing your session…");
     // Mutable: `/connect` and `/model` rebuild these mid-session.
     let currentSel: TuiSelection = sel;
     // AC14 (flow 268): the next-step suggestion's in-flight request gate.
@@ -3357,8 +3371,6 @@ export async function launchTuiAgentShell(opts: {
     // at the write) rather than writing into it until the next heartbeat.
     const liveSlateSession = (): SlateSessionRef | undefined =>
       whilePersisting(slateSession, () => sessionLease.canPersist());
-    let deps = await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);
-    liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
     // Flow 268 T16 (AC11): local mirror of `opts.setReasoningOverride`'s
     // target, so the `/reasoning` no-arg status line can name the source
     // ("this session") without needing a getter back from `commands/shell.ts`.
@@ -3373,25 +3385,44 @@ export async function launchTuiAgentShell(opts: {
     const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
 
-    // The mode-agnostic chrome (flow 112, S1): layout, header, transcript,
-    // choice dock, `/`-menu, composer, footer/spinner, toast, overlay guard and
-    // copy-on-select. Everything below is agent-specific and mounts ON it.
-    const chrome = await createShellChrome(otui, r, {
-      title: `keryx · agent · ${sel.provider}/${sel.model}`,
-      status: `${sel.provider}/${sel.model}`,
-      footerHint: FOOTER_IDLE,
-      placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
-      commands: commandsForMode("agent"),
-      headerMeta: "↑0 ↓0",
-      // Closure-only: `permissionMode` is declared later in this function —
-      // TDZ is a call-time concern for a closure (the same pattern as the
-      // `() => slateSession` ref documented above).
-      permissionMode: () => permissionMode,
-      // The shared registry stays the single source of truth for the dropdown,
-      // resolved through THIS surface's mode so the wording is agent-mode's.
-      filterCommands: (query) => filterCommands(query, "agent"),
-      ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
-    });
+    // Flow 303 (AC14 follow-up, PR #669 review HIGH 2): `startupIndicator`
+    // must come down even if either await below throws — otherwise its
+    // `setInterval` keeps firing forever (the process never exits cleanly)
+    // and the spinner box is left mounted on screen while whatever error
+    // propagates. `deps`/`chrome` are declared OUTSIDE the try (both are read
+    // for the rest of this very long function) and assigned inside it.
+    let deps: AgentDeps;
+    let chrome: ShellChrome;
+    try {
+      startupIndicator.setStep("Loading agent tools and MCP servers…");
+      deps = await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);
+      liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
+
+      // The mode-agnostic chrome (flow 112, S1): layout, header, transcript,
+      // choice dock, `/`-menu, composer, footer/spinner, toast, overlay guard
+      // and copy-on-select. Everything below is agent-specific and mounts ON it.
+      chrome = await createShellChrome(otui, r, {
+        title: `keryx · agent · ${sel.provider}/${sel.model}`,
+        status: `${sel.provider}/${sel.model}`,
+        footerHint: FOOTER_IDLE,
+        placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
+        commands: commandsForMode("agent"),
+        headerMeta: "↑0 ↓0",
+        // Closure-only: `permissionMode` is declared later in this function —
+        // TDZ is a call-time concern for a closure (the same pattern as the
+        // `() => slateSession` ref documented above).
+        permissionMode: () => permissionMode,
+        // The shared registry stays the single source of truth for the dropdown,
+        // resolved through THIS surface's mode so the wording is agent-mode's.
+        filterCommands: (query) => filterCommands(query, "agent"),
+        ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
+      });
+    } finally {
+      // Flow 303 (AC14): the chrome (header, transcript, focused composer) is
+      // now on screen, or the startup failed outright — either way the gap
+      // the indicator was covering is over.
+      startupIndicator.remove();
+    }
     mountedChrome = chrome;
     // Flow 170 T6, PRD FR-14: the composer has keyboard focus the moment the
     // shell finishes launching, no click required. `createShellChrome`
@@ -4530,27 +4561,45 @@ export async function launchTuiAgentShell(opts: {
       const mainWidth = chrome.main.width > 0 ? chrome.main.width : r.width - SIDEBAR_WIDTH;
       return renderCommandHelp("agent", undefined, Math.max(HELP_MIN_COLS, mainWidth - TRANSCRIPT_CHROME_COLS));
     };
-    const openHelp = (): void => {
-      const content = helpText().trimEnd();
-      openModal(otui, chrome, {
-        title: "/help",
-        tabs: [{ id: "commands", label: "Commands" }],
-        initialTab: "commands",
-        footer: [
-          { key: "↑/↓", label: "scroll" },
-          { key: "esc", label: "close" },
-        ],
-        contentRows: Math.max(1, content.split("\n").length),
-        renderTab: (_tabId, body) => {
-          (body as Box).add(
-            new otui.TextRenderable(r, {
-              id: `help-${uid++}`,
-              content,
-            }),
-          );
-        },
+    // Flow 303 (AC6): `/help` opens the grouped, tabbed modal — one tab per
+    // onboarding group, ↑/↓ selects a command, Enter shows its detail, ←/→
+    // and Esc are `modal-host.ts`'s own. `initialGroupSlug` lets AC8's
+    // first-run wiring (below) open straight to "Connect a model provider".
+    const openHelp = (initialGroupSlug?: string): void => {
+      openHelpModal(otui, chrome, {
+        onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        ...(initialGroupSlug !== undefined ? { initialGroupSlug } : {}),
       });
     };
+
+    // Flow 303 (AC8; HIGH 1 fix, PR #669 review): first-run onboarding —
+    // opens `/help` on the "Connect a model provider" tab exactly once, only
+    // when no provider is connected yet, and never again. Dispatched in the
+    // BACKGROUND, never `await`ed here: `filterConnectedDetectedProviders` is
+    // a real network probe, up to ~10s per configured provider, run
+    // sequentially — awaiting it inline used to delay every later step of
+    // this function (session load, sidebar mount, the composer actually
+    // taking input), not just the visual chrome. `resolveFirstRunHelp` marks
+    // the "shown" flag on every first run regardless of outcome (the bug this
+    // replaces: the marker used to be written only on the branch that opened
+    // the modal, so a user who already had a provider configured was marked
+    // NEVER — every later launch re-ran the same slow probe from scratch).
+    void resolveFirstRunHelp({
+      shown: helpFirstRunShown(),
+      probe: async () => (await filterConnectedDetectedProviders(opts.detected, { env: process.env })).length,
+      mark: markHelpFirstRunShown,
+    })
+      .then((tab) => {
+        // The probe can outlive the shell: never open a modal on a renderer the user already closed.
+        if (tab !== undefined && !destroyed) {
+          openHelp(tab);
+        }
+      })
+      .catch((error: unknown) => {
+        // Onboarding help is a courtesy — nothing here may end the shell as an unhandled rejection.
+        debugEvent("help.first-run-failed", { error: error instanceof Error ? error.message : String(error) });
+      });
 
     // --- Per-project session (isolated by git root / cwd) --------------------
     const sessionCwd = opts.session?.cwd ?? process.cwd();
@@ -6232,17 +6281,14 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "help": {
-            transcript.add(
-              new otui.TextRenderable(r, {
-                id: `c${uid++}`,
-                content: otui.t`${roleChunk(otui, "accent", `❯ ${line}`)}`,
-                marginTop: 1,
-              }),
-            );
-            io.onSystem?.(
-              "Main agent is busy. Type a normal question to spawn a side worker " +
-                "(sees main status + recent context; read-only). /status и /flows still open info panels. /exit still works.\n",
-            );
+            // PR #669 review, LOW: `/help` is read-only, same reasoning as
+            // `session-info`/`flows`/`workspace`/`review` right below — a
+            // main turn in progress is exactly when an operator most wants
+            // to check what else they can do, and opening the modal never
+            // touches the turn. It used to print a busy notice instead
+            // (with a stray Cyrillic "и" where the sentence needed "and"),
+            // never actually showing the commands it named.
+            openHelp();
             return;
           }
           case "interrupt": {

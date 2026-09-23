@@ -2366,7 +2366,12 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   });
 
   test("slateSession is declared before the FIRST opts.makeAgentDeps call, which passes a live getter", () => {
-    const callIndex = fnBody.indexOf("let deps = await opts.makeAgentDeps(");
+    // PR #669 review, HIGH 2: `deps`'s declaration and its first assignment
+    // split apart (`let deps: AgentDeps;` outside a try, `deps = await
+    // opts.makeAgentDeps(...)` inside it — a `finally` always tears the
+    // startup indicator down even if this call throws), so the FIRST call
+    // site is no longer spelled with a leading `let`.
+    const callIndex = fnBody.indexOf("deps = await opts.makeAgentDeps(");
     expect(callIndex).toBeGreaterThanOrEqual(0);
     const declIndex = fnBody.indexOf("let slateSession: SlateSessionRef | undefined;");
     expect(declIndex).toBeGreaterThanOrEqual(0);
