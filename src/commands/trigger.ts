@@ -860,6 +860,19 @@ async function scheduleSubcommand(args: string[]): Promise<void> {
   }
 }
 
+/**
+ * The single source of truth for `keryx trigger`'s own help — also called
+ * directly by `src/cli.ts` for the top-level `keryx trigger --help` (AC5,
+ * flow 294): the static `USAGE_BODY` slice `groupUsage` used to intercept
+ * with named only `run <name>`, silently omitting
+ * `list`/`status`/`schedule`/`install`/`uninstall`/`resolve` and every word
+ * of the action/dispatch semantics below — a second copy of this same
+ * subcommand list that had already drifted from it.
+ */
+export function printTriggerHelp(): void {
+  printHelp();
+}
+
 function printHelp(): void {
   console.log(`keryx trigger — fire, install and inspect this project's declared triggers
 

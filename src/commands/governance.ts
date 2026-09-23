@@ -96,6 +96,18 @@ export async function governanceCommand(args: string[] = []): Promise<void> {
   process.exitCode = 1;
 }
 
+/**
+ * The single source of truth for `keryx governance`'s own help — also called
+ * directly by `src/cli.ts` for the top-level `keryx governance --help` (AC5,
+ * flow 294): the static `USAGE_BODY` slice `groupUsage` used to intercept with
+ * dropped every paragraph below the two usage lines (what is read, what
+ * `report` writes, `--all-projects` semantics) — a second, thinner copy of
+ * this same text.
+ */
+export function printGovernanceHelp(): void {
+  printHelp();
+}
+
 function printHelp(): void {
   console.log(`keryx governance — spend, confirmations, signatures and gate outcomes, unified
 

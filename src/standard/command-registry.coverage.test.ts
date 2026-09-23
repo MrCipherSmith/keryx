@@ -20,6 +20,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { CLI_ROUTES } from "../cli";
+import { triggerCommand } from "../commands/trigger";
 import { COMMAND_DESCRIPTORS, isAutoAllowable, listDescriptors } from "./command-registry";
 
 /**
@@ -157,5 +158,50 @@ describe("command registry coverage", () => {
       "status",
       "version check",
     ]);
+  });
+});
+
+// AC3 (flow 294): the `trigger run` descriptor once claimed "open-flow"/
+// "flow-next" refuse cleanly and named a `.run.lock` path neither is true of
+// this build any more (flows 286/290 made both actions run, and flow-next
+// with a "dispatch" block DISPATCHES an agent; the lock moved to
+// `.metaproject/data/.locks/`). Nothing caught that drift because the
+// descriptor and the CLI's own help text are two independent copies of the
+// same belief. This test pins the descriptor against `keryx trigger`'s own
+// help text — the actual behaviour, as `triggerCommand` states it — so the
+// two cannot drift apart again unnoticed.
+describe("trigger run descriptor pinned against the trigger help", () => {
+  async function captureTriggerHelp(): Promise<string> {
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = ((...args: unknown[]) => {
+      lines.push(args.map((arg) => String(arg)).join(" "));
+    }) as typeof console.log;
+    try {
+      await triggerCommand(["--help"]);
+    } finally {
+      console.log = original;
+    }
+    return lines.join("\n");
+  }
+
+  test("the help itself no longer claims open-flow/flow-next refuse, and describes dispatch", async () => {
+    const help = await captureTriggerHelp();
+    // Sanity on the pin's own premise: if the CLI's help stopped saying
+    // flow-next dispatches, or started claiming a clean refusal again, that
+    // is a real behaviour change the descriptor would then have to follow —
+    // not a false positive in this test.
+    expect(help).toContain("DISPATCHES a keryx agent");
+    expect(help).not.toMatch(/open-flow[^.]*flow-next[^.]*refuse/i);
+    expect(help).not.toContain(".metaproject/data/trigger/.run.lock");
+  });
+
+  test("the descriptor matches: no refusal claim, no stale lock path, and it mentions dispatch", () => {
+    const descriptor = COMMAND_DESCRIPTORS.find((entry) => entry.command === "trigger run");
+    expect(descriptor).toBeDefined();
+    const text = `${descriptor!.summary} ${(descriptor!.sideEffects ?? []).join(" ")}`;
+    expect(text).not.toMatch(/open-flow[^.]*flow-next[^.]*refuse/i);
+    expect(text).not.toContain(".metaproject/data/trigger/.run.lock");
+    expect(text.toLowerCase()).toContain("dispatch");
   });
 });

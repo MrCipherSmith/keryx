@@ -79,6 +79,20 @@ function captureErrors(): void {
   console.log = () => {};
 }
 
+let logs: string[] = [];
+
+/** Like {@link captureErrors}, but also keeps `console.log` output instead of discarding it. */
+function captureLogsAndErrors(): void {
+  errors = [];
+  logs = [];
+  console.error = (...args: unknown[]) => {
+    errors.push(args.map(String).join(" "));
+  };
+  console.log = (...args: unknown[]) => {
+    logs.push(args.map(String).join(" "));
+  };
+}
+
 async function flowJsonAcState(dir: string): Promise<{ acChecksum: unknown; acConfirmed: unknown }> {
   const raw = JSON.parse(
     await readFile(path.join(ROOT, ".metaproject", "flows", dir, "flow.json"), "utf8"),
@@ -259,4 +273,37 @@ test("review #4: `ac update --reason` also consumes a value starting with --, an
   // on argument parsing. That is the point: the failure is not "unknown
   // option --still a valid reason".
   expect(errors.join("\n")).not.toContain("unknown option");
+});
+
+// The wording bug (flow 294, AC5's small extra): `ac update --criterion
+// ACn --text …` printed "ACn rewritten" unconditionally, even when ACn was
+// the NEXT UNUSED criterion and the call therefore APPENDED a new line to
+// acceptance-criteria.md rather than replacing an existing one.
+test("`ac update --criterion <existing> --text ...` prints \"rewritten\", not \"appended\"", async () => {
+  const { id, acFile } = await freshFrozenFlow();
+  process.chdir(ROOT);
+
+  captureLogsAndErrors();
+  await flowCommand(["ac", "update", id, "--criterion", "AC1", "--text", "Rewritten text", "--reason", "why"]);
+
+  expect(process.exitCode).toBe(0);
+  expect(await readFile(acFile, "utf8")).toContain("- AC1: Rewritten text");
+  expect(logs.join("\n")).toContain("AC1 rewritten");
+  expect(logs.join("\n")).not.toContain("AC1 appended");
+});
+
+test("`ac update --criterion <next unused> --text ...` prints \"appended\", not \"rewritten\"", async () => {
+  const { id, acFile } = await freshFrozenFlow();
+  process.chdir(ROOT);
+  // freshFrozenFlow seeds only AC1, so AC2 is the next unused criterion.
+  const before = await readFile(acFile, "utf8");
+  expect(before).not.toContain("AC2");
+
+  captureLogsAndErrors();
+  await flowCommand(["ac", "update", id, "--criterion", "AC2", "--text", "New criterion", "--reason", "scope grew"]);
+
+  expect(process.exitCode).toBe(0);
+  expect(await readFile(acFile, "utf8")).toContain("- AC2: New criterion");
+  expect(logs.join("\n")).toContain("AC2 appended");
+  expect(logs.join("\n")).not.toContain("AC2 rewritten");
 });

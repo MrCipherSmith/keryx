@@ -848,10 +848,24 @@ async function runAc(args: string[]): Promise<void> {
         'Usage: keryx flow ac update <id> --reason "<why>" [--criterion ACn --text "<criterion>"]',
       );
     }
-    await getService().acUpdate({ cwd: process.cwd(), id, reason, criterion, text });
+    // Was `criterion` already one of the known ACs, or is this call about to
+    // APPEND the next unused one? Read before the mutation — `acUpdate`
+    // itself makes exactly this same check internally (service.ts) to decide
+    // whether to replace a line or append one, but its return value is a
+    // plain `FlowState` with nowhere to report which one happened, so the
+    // caller re-asks the same read-only question rather than the service
+    // widening its return shape for one CLI print line.
+    const cwd = process.cwd();
+    let wasKnownCriterion = false;
+    if (criterion !== undefined) {
+      const { readAcCriteria, resolveFlowDir } = await import("../flow/store");
+      const dir = await resolveFlowDir(cwd, id);
+      wasKnownCriterion = (await readAcCriteria(cwd, dir)).includes(criterion.toUpperCase());
+    }
+    await getService().acUpdate({ cwd, id, reason, criterion, text });
     if (criterion && text) {
       console.log(
-        `  ${style.green(symbols.ok)} ${style.bold(criterion.toUpperCase())} rewritten; ` +
+        `  ${style.green(symbols.ok)} ${style.bold(criterion.toUpperCase())} ${wasKnownCriterion ? "rewritten" : "appended"}; ` +
           `${style.dim("acceptance criteria re-frozen, prior confirmations cleared")}.`,
       );
     } else {
@@ -1043,6 +1057,19 @@ function requireId(args: string[]): string {
     throw new Error("Missing flow id. Run: keryx flow list");
   }
   return id;
+}
+
+/**
+ * The single source of truth for `keryx flow`'s own help — also called
+ * directly by `src/cli.ts` for the top-level `keryx flow --help` (AC5, flow
+ * 294): the static `USAGE_BODY` slice `groupUsage` used to intercept with
+ * listed only `init`/`list`/`status`/`complete`, silently omitting
+ * `freeze`/`start`/`next`/`task`/`owner`/`ac`/`implemented`/`block`/`unblock`/
+ * `check`/`renumber`/`repair-reviews`/`plan`/`schema` — a second copy of this
+ * same list that had already drifted from it.
+ */
+export function printFlowHelp(): void {
+  printHelp();
 }
 
 function printHelp(): void {
