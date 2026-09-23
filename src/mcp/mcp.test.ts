@@ -407,6 +407,47 @@ test("AC-security: security.scan treats inline content as untrusted-external, no
   expect(egressFinding?.action).not.toBe("allow");
 });
 
+// R3-2 (flow 304, fix round 3): `security.scan`'s `path` handling passed the
+// ABSOLUTE realpath `resolveContainedPath` returns straight through to
+// `runScan`, which lands verbatim on `finding.source.path` in the
+// committable report at `.metaproject/data/security/artifacts/latest.json`.
+// That report is meant to be committed and diffed like any other project
+// artifact, but an absolute path bakes in the machine it was generated on
+// (home directory, worktree location, CI runner tmpdir, …) — a path scanned
+// from two different checkouts of the same repo would report as two
+// different files. It must be relative to the project root instead, exactly
+// like `commands/security.ts`'s `handleScan` already reports it.
+test("R3-2: security.scan reports a path RELATIVE to the project root, not the absolute realpath", async () => {
+  await writeFile(
+    path.join(root, ".metaproject", "metaproject.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      standardVersion: "0.1.0",
+      name: "fixture",
+      createdBy: "keryx",
+      paths: {},
+      modules: { security: { enabled: true }, mcp: { enabled: true } },
+    }),
+    "utf8",
+  );
+  await mkdir(path.join(root, "notes"), { recursive: true });
+  await writeFile(
+    path.join(root, "notes", "todo.txt"),
+    `<img src="https://github.com/o/r/actions/workflows/ci.yml/badge.svg">\n`,
+    "utf8",
+  );
+  const ctx = await buildMcpContext(root);
+  const result = await dispatchCallTool(ctx, "security.scan", { path: "notes/todo.txt" });
+  expect(result.isError).toBe(false);
+  const { report } = JSON.parse(result.text) as {
+    report: { findings: Array<{ source?: { path?: string } }> };
+  };
+  const finding = report.findings.find((f) => f.source?.path !== undefined);
+  expect(finding).toBeDefined();
+  expect(finding?.source?.path).toBe("notes/todo.txt");
+  expect(path.isAbsolute(finding!.source!.path!)).toBe(false);
+});
+
 // --- AC1/AC2 stdio round-trip (SDK-gated) ------------------------------------
 
 test("stdio round-trip over the real SDK transport (skips if SDK unavailable)", async () => {

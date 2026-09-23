@@ -18,7 +18,8 @@ import { createCodeHealthService } from "../health/service";
 import { createGdWikiService } from "../wiki/service";
 import { createFlowService } from "../flow/service";
 import { runValidate } from "../standard/service";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, realpath, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
 import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, requireWorkspaceReference, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
@@ -697,13 +698,22 @@ export function buildToolRegistry(): ToolEntry[] {
         // `read-source.ts` uses (never a module internal — `lib/contained-path`
         // is a shared lib), and its actual trust is derived from
         // `sourceForFileRead`: tracked-by-git inside the root is
-        // `trusted-project`, everything else (untracked, ignored, a directory)
-        // is `untrusted-external`. A path that resolves outside the root is
+        // `trusted-project`, everything else untracked or ignored is
+        // `untrusted-external`. A path that resolves outside the root is
         // refused outright rather than silently scanned as untrusted, so a
-        // traversal attempt is surfaced instead of quietly downgraded.
+        // traversal attempt is surfaced instead of quietly downgraded. A
+        // directory never reaches `sourceForFileRead` at all — the
+        // `readFile` call just above it throws EISDIR first, so this tool
+        // rejects a directory path outright rather than classifying it as
+        // any particular source.
         let content: string;
         let source: SecuritySource;
-        let resolvedPath: string | undefined;
+        // R3-2 (flow 304, fix round 3): reported RELATIVE to the project
+        // root, exactly like `commands/security.ts`'s `handleScan` does — the
+        // absolute realpath `resolveContainedPath` returns is machine-specific
+        // (home directory, worktree location, …) and this report is committed
+        // to `.metaproject/data/security/artifacts/latest.json`.
+        let reportPath: string | undefined;
         if (inline !== undefined) {
           content = inline;
           source = "untrusted-external";
@@ -713,9 +723,18 @@ export function buildToolRegistry(): ToolEntry[] {
           if (!contained.ok) {
             throw new Error(`security.scan: ${contained.message}`);
           }
-          resolvedPath = contained.path;
           content = await readFile(contained.path, "utf8");
           source = await sourceForFileRead(cwd, contained.path);
+          // `contained.path` is realpath'd (`lib/contained-path.ts`), but
+          // `projectRoot` is not — on a host where the project root itself
+          // sits behind a symlink (e.g. macOS's tmpdir, `/var` -> `/private/
+          // var`), relativizing against the non-realpath'd root produces a
+          // path that walks back OUT through the symlink and in again
+          // (`../../../private/var/...`) instead of a short in-project
+          // relative path. Realpath `projectRoot` too so both sides of the
+          // comparison agree.
+          const projectRootReal = await realpath(projectRoot).catch(() => projectRoot);
+          reportPath = path.relative(projectRootReal, contained.path) || ".";
         } else {
           content = "";
           source = "untrusted-external";
@@ -723,7 +742,7 @@ export function buildToolRegistry(): ToolEntry[] {
         const result = await runScan(cwd, {
           content,
           source,
-          ...(resolvedPath ?? filePath ? { path: resolvedPath ?? (filePath as string) } : {}),
+          ...(reportPath ? { path: reportPath } : {}),
         });
         return { decision: result.decision, report: result.report };
       },

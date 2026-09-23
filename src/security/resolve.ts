@@ -38,148 +38,56 @@ const SEVERITY_ORDER: Record<SecuritySeverity, number> = {
   info: 1,
 };
 
-// Query-parameter NAMES that are credential-shaped regardless of their value
-// (GDCTX-2 design §2), normalized (lowercased, non-alphanumeric stripped) so
-// `api_key`, `API-Key` and `apikey` all match one entry. This list is
-// deliberately broader than the four examples the design doc gives
-// (`token`/`key`/`auth`) so the common spellings of the same idea (
-// `access_token` vs `accessToken`, `client_secret`, `session_id`, …) do not
-// each need their own regression before they are caught.
-const CREDENTIAL_QUERY_PARAM_NAMES: ReadonlySet<string> = new Set([
-  "token",
-  "key",
-  "auth",
-  "secret",
-  "sig",
-  "signature",
-  "password",
-  "pass",
-  "pwd",
-  "passwd",
-  "session",
-  "credential",
-  "credentials",
-  "accesstoken",
-  "apikey",
-  "accesskey",
-  "authtoken",
-  "secretkey",
-  "clientsecret",
-  "apisecret",
-  "sessionid",
-  "sessiontoken",
-  "refreshtoken",
-  "idtoken",
-  "csrftoken",
-  "csrf",
-  "bearer",
-  "jwt",
-  "code",
-  // R2-5 (flow 304, fix round 2): exact spellings seen in the wild that the
-  // segment/stem machinery below does not already reach on its own —
-  // `?APIToken=` (an unseparated acronym+word compound the OLD camelCase
-  // split missed; also caught independently by the acronym split added
-  // below), `?XTOKEN=` (all-caps, no separator to split on at all), `?pw=`
-  // (too short/ambiguous a stem to add to the suffix/prefix set — "pw" alone
-  // would risk matching unrelated short params — so it is listed by name
-  // instead), and `?sid=` (the common short spelling of `sessionid`).
-  "apitoken",
-  "xtoken",
-  "pw",
-  "sid",
-]);
-
-// F2 (review round 1): a param name compounded with an UNRELATED word around a
-// credential stem — `x_token`, `access_key_id`, `oauth_code` — normalizes (whole
-// string, non-alphanumeric stripped) to something `CREDENTIAL_QUERY_PARAM_NAMES`
-// does not list, and enumerating every compound is the same losing game the
-// exfil detector's own header comment warns against. So the name is also split
-// into SEGMENTS — on any non-alphanumeric run and on a lower→upper camelCase
-// boundary — and each segment is checked against this smaller STEM set. A
-// segment is a whole word the split produced, never a substring match, which is
-// why an unrelated word merely containing a stem's letters in a single
-// no-separator token (`areacode`, `barcode`) does NOT match: nothing split it,
-// so it is one segment, "areacode", which is not itself a listed stem.
-const CREDENTIAL_QUERY_PARAM_STEMS: ReadonlySet<string> = new Set([
-  "token",
-  "key",
-  "secret",
-  "sig",
-  "signature",
-  "auth",
-  "pass",
-  "password",
-  "pwd",
-  "passwd",
-  "session",
-  "code",
-  "credential",
-  "credentials",
-  "jwt",
-  "bearer",
-  "csrf",
-]);
-
-function normalizeQueryParamName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-const CAMEL_CASE_BOUNDARY = /([a-z0-9])([A-Z])/g;
-// R2-5 (flow 304, fix round 2): the boundary above only splits a lower-
-// case/digit run followed by an uppercase letter, so an ACRONYM immediately
-// followed by a titlecase word — `APIToken`, `OAuthCode` — never splits: the
-// transition it needs (`I` -> `T`, upper -> upper) is not lower -> upper.
-// This second boundary catches exactly that shape: a run of two or more
-// uppercase letters followed by an uppercase letter that starts a titlecase
-// word, splitting `APIToken` into `API` + `Token` the same way plain
-// camelCase already splits `apiToken`.
-const ACRONYM_CASE_BOUNDARY = /([A-Z]+)([A-Z][a-z])/g;
-const NON_ALPHANUMERIC_RUN = /[^a-zA-Z0-9]+/g;
-
-function queryParamNameSegments(name: string): string[] {
-  return name
-    .replace(ACRONYM_CASE_BOUNDARY, "$1_$2")
-    .replace(CAMEL_CASE_BOUNDARY, "$1_$2")
-    .replace(NON_ALPHANUMERIC_RUN, "_")
-    .split("_")
-    .map((segment) => segment.toLowerCase())
-    .filter((segment) => segment.length > 0);
-}
-
-// R2-5: a smaller set than the segment stems above, and checked only as a
-// SUFFIX or PREFIX of the whole normalized (lowercased) name — never a bare
-// substring — so it catches an unseparated compound that segmentation cannot
-// reach at all (nothing splits `oldpassword` or `userapikey`; there is no
-// separator and no case change to split on). Restricted to stems that are
-// long and specific enough not to false-positive on an ordinary word:
-// deliberately excludes `key` and `code`, which stay segment-only so
-// `areacode`, `monkey` and `barcode` keep passing (they contain the letters
-// but are not a `key`/`code` segment or a `token`/`secret`/`password`/
-// `passwd`/`apikey` affix).
-const CREDENTIAL_QUERY_PARAM_AFFIXES: readonly string[] = [
-  "token",
-  "secret",
-  "password",
-  "passwd",
-  "apikey",
-];
-
-function isCredentialShapedParamName(name: string): boolean {
-  const normalized = normalizeQueryParamName(name);
-  if (CREDENTIAL_QUERY_PARAM_NAMES.has(normalized)) {
-    return true;
-  }
-  if (
-    CREDENTIAL_QUERY_PARAM_AFFIXES.some(
-      (affix) => normalized.startsWith(affix) || normalized.endsWith(affix),
-    )
-  ) {
-    return true;
-  }
-  return queryParamNameSegments(name).some((segment) =>
-    CREDENTIAL_QUERY_PARAM_STEMS.has(segment),
-  );
-}
+// R3-1 (flow 304, fix round 3): three review rounds running found a
+// credential-shaped query PARAMETER NAME the denylist this replaced did not
+// cover — round 1 shipped `token`/`key`/`auth`/… plus a segment/stem/affix
+// splitter for compounds, round 2 added `APIToken`/`XTOKEN`/`pw`/`sid`, and
+// round 3's own review still found `authorization`, `Authorization`,
+// `privatekey`, `authkey`, `accesskeyid` and `accesskey_id` slipping through.
+// A denylist of credential-shaped names is an unwinnable game against
+// attacker- or model-chosen spellings — there is always one more compound or
+// casing to add. This is the opposite shape: a small, explicit ALLOWLIST of
+// the query parameters a real status-badge renderer (shields.io, GitHub
+// Actions workflow badges, and similar) actually accepts. The override may
+// keep `allow` only when EVERY query parameter name is on this list; anything
+// else — a name this list does not recognize, not just one that looks
+// credential-shaped — keeps the policy's stricter action. Compared
+// case-insensitively (`?Style=flat` and `?style=flat` are the same control).
+const SAFE_BADGE_QUERY_PARAMS: ReadonlySet<string> = new Set(
+  [
+    "style",
+    "logo",
+    "logoColor",
+    "logoWidth",
+    "label",
+    "labelColor",
+    "color",
+    "colorA",
+    "colorB",
+    "branch",
+    "event",
+    "cacheSeconds",
+    "link",
+    "maxAge",
+    "v",
+    "version",
+    "include_prereleases",
+    "sort",
+    "display_name",
+    "query",
+    "prefix",
+    "suffix",
+    "service",
+    "workflow",
+    "status",
+    "flat",
+    "compact",
+    "width",
+    "height",
+    "s",
+    "size",
+  ].map((name) => name.toLowerCase()),
+);
 
 // The query string of a URL that may not itself be absolute (a relative or
 // protocol-relative `src`/`href` still fetches, and `<img>`/markdown-image
@@ -228,47 +136,61 @@ function queryParamNames(query: string): string[] {
  * Is `url` safe to release from under a `redact`/`block` egress finding
  * despite a matching source override (GDCTX-2 design §2)?
  *
- * Judgement call, recorded here rather than left implicit: the gate is on
- * CREDENTIAL-SHAPED query content, not on "has a query string at all". A
- * badge URL routinely carries a harmless query (`?style=flat`, `?branch=main`,
- * a cache-busting `?v=3`) and the design doc's own examples require those to
- * pass, so refusing every URL with any `?` would fail the acceptance criteria
- * this override exists to satisfy. What must still redact is a query that
- * could itself be the leak — a credential-shaped PARAMETER NAME (checked
- * against `CREDENTIAL_QUERY_PARAM_NAMES`/`CREDENTIAL_QUERY_PARAM_STEMS` above,
- * independent of that parameter's value), or a query string whose bytes trip
- * the existing secret/PII detectors (an attacker- or model-controlled URL with
- * a token pasted into an unrelated-looking parameter, or a leaked email/phone).
- * Only the query component is scanned — the host/path of an exfil destination
- * is already what `detectExfil` classified the match on, and is not sensitive
- * by itself.
+ * R3-1 (flow 304, fix round 3) replaced a credential-shaped-name DENYLIST
+ * here with the opposite shape: the override may keep `allow` only when the
+ * URL has NO query string at all, or EVERY query parameter name is one of the
+ * small, explicit `SAFE_BADGE_QUERY_PARAMS` a real status-badge renderer
+ * actually accepts (`?style=flat`, `?branch=main&event=push`, a cache-busting
+ * `?v=3`, …). Anything else — a name this list does not recognize (not just
+ * one that happens to look credential-shaped), an empty parameter name, a
+ * malformed query, or userinfo in the URL itself (`https://user:pass@host/…`)
+ * — keeps the policy's stricter action. Only the query/userinfo components are
+ * scanned — the host/path of an exfil destination is already what
+ * `detectExfil` classified the match on, and is not sensitive by itself.
  *
- * F2 (review round 1): this used to parse `match.value` — the RAW span as
- * written — while `detectExfil`/a real renderer classify and fetch the
- * DECODED destination (`exfil.ts#renderableUrl`: HTML character references
- * resolved, tab/LF/CR stripped, leading/trailing C0-or-space trimmed). A
- * credential-shaped param survives entity-encoding it (`?a=1&amp;amp;token=…`,
- * `?&amp;#116;oken=…`, a markdown `?t&amp;#111;ken=…`) and reaches a renderer
- * unmasked while reading as query-free bytes to this gate. `renderableUrl` is
- * reused rather than re-derived, so the two ever agree on what the request
- * actually is. A raw-value fallback would be UNSOUND here in the direction
- * this gate must never err (letting a credential-shaped query through as
- * `allow`), so a decoding failure falls through to the `catch` below instead —
- * fail-closed, keeping the policy's stricter action.
+ * A SAFE-named parameter can still carry a credential in its VALUE (a
+ * confused or attacker-controlled `?color=<secret>`), so the query string is
+ * additionally run through the existing secret/PII detectors regardless of
+ * how its names checked out — this is unchanged from the denylist version.
+ *
+ * This reads the DECODED destination a renderer would actually fetch
+ * (`exfil.ts#renderableUrl`: HTML character references resolved, tab/LF/CR
+ * stripped, leading/trailing C0-or-space trimmed), not `match.value`'s raw
+ * span, so a credential-shaped param cannot survive entity-encoding it
+ * (`?a=1&amp;amp;token=…`, `?&amp;#116;oken=…`) into reading as query-free to
+ * this gate while still reaching a renderer unmasked (F2, review round 1).
  */
-function hasCredentialShapedQuery(url: string): boolean {
+function queryIsSafeForTrustedOverride(url: string): boolean {
   try {
-    const query = extractQueryString(renderableUrl(url));
-    if (!query) return false;
-    if (queryParamNames(query).some((name) => isCredentialShapedParamName(name))) {
-      return true;
+    const renderable = renderableUrl(url);
+    // Userinfo (`user:pass@host`) only parses on an absolute URL; `new URL`
+    // throws for a relative/protocol-relative destination, which has no such
+    // syntax to fail closed over — fall through to the plain query-string
+    // extraction below for those.
+    try {
+      const parsed = new URL(renderable);
+      if (parsed.username || parsed.password) {
+        return false;
+      }
+    } catch {
+      // Not an absolute URL: no userinfo is possible.
     }
-    return detectSecrets(query).length > 0 || detectPii(query).length > 0;
+    const query = extractQueryString(renderable);
+    if (!query) return true;
+    const names = queryParamNames(query);
+    for (const name of names) {
+      // An empty parameter name (`?=x`, `?&=y`) is malformed enough to fail
+      // closed rather than guess at what it names.
+      if (name.length === 0 || !SAFE_BADGE_QUERY_PARAMS.has(name.toLowerCase())) {
+        return false;
+      }
+    }
+    return detectSecrets(query).length === 0 && detectPii(query).length === 0;
   } catch {
     // Fail-closed: an unexpected decoding/parsing failure must never be read
-    // as "no credential-shaped query" — it keeps the policy's ordinary
-    // (stricter) action, exactly like a positive match would.
-    return true;
+    // as "safe" — it keeps the policy's stricter action, exactly like a
+    // disallowed name would.
+    return false;
   }
 }
 
@@ -283,14 +205,16 @@ function hasCredentialShapedQuery(url: string): boolean {
  *
  * Returns the override action to apply, or `undefined` when no override
  * applies and the caller should fall back to the policy's own `action`. An
- * `allow` override is additionally gated on `hasCredentialShapedQuery`: a
- * credential-shaped query string keeps the policy's ordinary (stricter)
- * action even though a `trusted-project -> allow` entry exists, because the
- * override exists to stop static badge markup from being masked, not to widen
- * what an attacker-controlled or model-generated URL can carry unmasked.
- * Non-`allow` overrides (a project tightening its own policy, e.g. forcing
- * `redact` for a source that would otherwise be more permissive) are not
- * gated — there is nothing unsafe about a project asking for MORE redaction.
+ * `allow` override is additionally gated on `queryIsSafeForTrustedOverride`: a
+ * query string that is not entirely made of known-safe badge parameters (or a
+ * safe-named parameter carrying a flagged value, or userinfo in the URL)
+ * keeps the policy's ordinary (stricter) action even though a
+ * `trusted-project -> allow` entry exists, because the override exists to
+ * stop static badge markup from being masked, not to widen what an
+ * attacker-controlled or model-generated URL can carry unmasked. Non-`allow`
+ * overrides (a project tightening its own policy, e.g. forcing `redact` for a
+ * source that would otherwise be more permissive) are not gated — there is
+ * nothing unsafe about a project asking for MORE redaction.
  *
  * F1 (review round 1): `policy.sourceOverrides` is now ONLY what the operator
  * actually wrote in `security.config.json` (see `config.ts#mergeEgressPolicy`
@@ -314,7 +238,7 @@ export function egressSourceOverrideAction(
   );
   const overrideAction = effectiveOverrides?.[match.policyId]?.[source];
   if (overrideAction === undefined) return undefined;
-  if (overrideAction === "allow" && hasCredentialShapedQuery(match.value)) {
+  if (overrideAction === "allow" && !queryIsSafeForTrustedOverride(match.value)) {
     return undefined;
   }
   return overrideAction;

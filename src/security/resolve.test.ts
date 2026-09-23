@@ -19,10 +19,16 @@ import type { SecurityConfig } from "./types";
 // read with `source: "trusted-project"` — `resolve.ts` selected a policy by
 // category alone and never looked at `source`. These tests cover the fix at
 // the `resolveDecision`/`buildFinding` level: the data-driven
-// `policies.egress.sourceOverrides` table, the credential-shaped-query gate
-// that keeps an attacker/model-controlled URL redacted even from a trusted
-// file, and that a finding is still recorded (never silently skipped) when
-// the resolved action becomes `allow`.
+// `policies.egress.sourceOverrides` table, the query-safety gate
+// (`resolve.ts#queryIsSafeForTrustedOverride`) that keeps an attacker/model-
+// controlled URL redacted even from a trusted file, and that a finding is
+// still recorded (never silently skipped) when the resolved action becomes
+// `allow`. R3-1 (flow 304, fix round 3) rewrote that gate from a
+// credential-shaped-name DENYLIST (three review rounds running found gaps in
+// it) to a small, explicit ALLOWLIST of known safe badge-rendering query
+// parameters — most tests below still read the same (a credential-shaped
+// name still keeps redaction), but for a different reason: it is simply not
+// on the allowlist, not because it matched a denylist entry.
 
 function exfilMatch(content: string) {
   const matches = detectExfil(content);
@@ -110,8 +116,11 @@ test("a harmless query string (?style=flat, ?branch=main) does not block the ove
 // handful of real-world spellings entirely — `?APIToken=` (acronym+titlecase
 // compound the old camelCase split never broke apart), `?XTOKEN=` (all-caps,
 // no separator at all), `?apitoken=` (already-lowercase, no separator), and
-// `?pw=hunter2` (a short exact name that was never listed). Each must still
-// gate the override exactly like `?token=`/`?key=`/`?auth=` already do.
+// `?pw=hunter2` (a short exact name that was never listed). R3-1 (fix round
+// 3) then replaced the whole denylist/segmenter with an ALLOWLIST of known
+// safe badge parameters — none of these names are on it, so each still keeps
+// redaction, but now because it is simply not a recognized name, not because
+// it matched a credential shape.
 test("credential-shaped query param NAME (round 2 spellings) keeps redaction even from trusted-project", () => {
   for (const query of ["?APIToken=abc123", "?XTOKEN=abc123", "?apitoken=abc123", "?pw=hunter2", "?sid=abc123"]) {
     const content = `<img src="https://img.shields.io/npm/v/x.svg${query}">`;
@@ -127,10 +136,37 @@ test("credential-shaped query param NAME (round 2 spellings) keeps redaction eve
   }
 });
 
+// R3-1 (flow 304, fix round 3): a third review round still found spellings a
+// credential-name DENYLIST missed (`authorization`, `Authorization`,
+// `privatekey`, `authkey`, `accesskeyid`, `accesskey_id`). None of these are
+// safe badge parameters either, so the allowlist that replaced the denylist
+// keeps redacting them too — for the same reason as any other unrecognized
+// name, which is the point: there is no more enumerating to do.
+test("credential-shaped query param NAME (round 3 spellings) keeps redaction even from trusted-project", () => {
+  for (const query of [
+    "?authorization=abc123",
+    "?Authorization=abc123",
+    "?privatekey=abc123",
+    "?authkey=abc123",
+    "?accesskeyid=abc123",
+    "?accesskey_id=abc123",
+  ]) {
+    const content = `<img src="https://img.shields.io/npm/v/x.svg${query}">`;
+    const urlMatch = detectExfil(content).find((m) => m.policyId === "egress.html-image-exfil");
+    expect(urlMatch).toBeDefined();
+    const action = egressSourceOverrideAction(
+      DEFAULT_SECURITY_CONFIG.policies.egress,
+      urlMatch!,
+      "trusted-project",
+    );
+    expect(action).toBeUndefined();
+  }
+});
+
 // R2-5: an unseparated compound built on a long, unambiguous stem — no
 // camelCase, no delimiter for segmentation to split on at all — must still be
-// caught as a suffix/prefix of the whole name, the gap plain segmentation
-// cannot close on its own (nothing splits "oldpassword" into two segments).
+// caught. Under R3-1's allowlist this needs no segmenter at all: none of
+// these names are a recognized safe badge parameter, full stop.
 test("an unseparated credential-shaped compound (suffix/prefix) keeps redaction", () => {
   for (const query of ["?oldpassword=hunter2", "?userapikey=abc123", "?mytoken=abc123"]) {
     const content = `<img src="https://img.shields.io/npm/v/x.svg${query}">`;
@@ -145,20 +181,21 @@ test("an unseparated credential-shaped compound (suffix/prefix) keeps redaction"
   }
 });
 
-// R2-5: `key`/`code` stay SEGMENT-ONLY on purpose (never a suffix/prefix
-// match), so an ordinary word that merely contains those letters must keep
-// passing — same for the shields.io badge params that are routinely present
-// on a trusted README badge and must never be treated as credential-shaped.
-test("false-positive controls: ordinary words and shields.io badge params still allow", () => {
+// R3-1: the known SAFE badge-rendering parameters (shields.io, GitHub
+// Actions workflow badges, …) — the ones the design doc's own examples and
+// this repo's own README badges rely on — must still resolve to `allow`.
+// Compared case-insensitively.
+test("known safe badge query params still allow", () => {
   for (const query of [
-    "?areacode=555",
-    "?monkey=1",
-    "?barcode=123",
     "?style=flat",
     "?logo=npm",
     "?label=build",
     "?color=blue",
     "?branch=main",
+    "?Style=FLAT",
+    "?event=push",
+    "?cacheSeconds=3600",
+    "?v=3",
   ]) {
     const content = `<img src="https://img.shields.io/npm/v/x.svg${query}">`;
     const urlMatch = detectExfil(content).find((m) => m.policyId === "egress.html-image-exfil");
@@ -172,11 +209,62 @@ test("false-positive controls: ordinary words and shields.io badge params still 
   }
 });
 
-test("a query VALUE that a secret detector flags keeps redaction even with a benign param name", () => {
-  // `note` is not in the credential-shaped name list, but the value itself is
-  // an AWS-shaped key — the design's "value is hit by the existing secret
-  // detectors" half of the gate.
-  const content = `<img src="https://example.com/x.svg?note=AKIAIOSFODNN7EXAMPLE">`;
+// R3-1: an ordinary word that is not itself a recognized badge parameter is
+// no longer treated as automatically safe just because it fails to LOOK
+// credential-shaped — the allowlist is deliberately the opposite of a
+// denylist. `areacode`/`monkey`/`barcode` were false-positive CONTROLS for
+// the old segment/stem/affix denylist (proving it did not over-match); under
+// the allowlist they are simply unrecognized names, so the override no
+// longer applies to them either. This is an intentional narrowing, not a
+// regression: nothing observed in this repo's own badges or the design doc's
+// examples uses a parameter outside `SAFE_BADGE_QUERY_PARAMS`.
+test("R3-1: an arbitrary unrecognized param name no longer gets the override, even though it is not credential-shaped", () => {
+  for (const query of ["?areacode=555", "?monkey=1", "?barcode=123", "?note=hello"]) {
+    const content = `<img src="https://img.shields.io/npm/v/x.svg${query}">`;
+    const urlMatch = detectExfil(content).find((m) => m.policyId === "egress.html-image-exfil");
+    expect(urlMatch).toBeDefined();
+    const action = egressSourceOverrideAction(
+      DEFAULT_SECURITY_CONFIG.policies.egress,
+      urlMatch!,
+      "trusted-project",
+    );
+    expect(action).toBeUndefined();
+  }
+});
+
+// R3-1: a SAFE-named parameter can still carry a credential in its VALUE — the
+// value-based secret/PII check applies regardless of how the names checked
+// out, unchanged from the denylist version of this gate.
+test("R3-1: a safe-named param carrying a detector-flagged secret value still keeps redaction", () => {
+  const content = `<img src="https://example.com/x.svg?color=AKIAIOSFODNN7EXAMPLE">`;
+  const match = detectExfil(content)[0]!;
+  const action = egressSourceOverrideAction(
+    DEFAULT_SECURITY_CONFIG.policies.egress,
+    match,
+    "trusted-project",
+  );
+  expect(action).toBeUndefined();
+});
+
+// R3-1: userinfo in the URL itself (`user:pass@host`) must fail closed even
+// with no query string at all — a denylist over query PARAMETER NAMES never
+// looked at the authority component, so a credential smuggled there sailed
+// through unexamined.
+test("R3-1: userinfo in the URL fails closed even with no query string", () => {
+  const content = `<img src="https://user:hunter2@img.shields.io/npm/v/x.svg">`;
+  const match = detectExfil(content)[0]!;
+  const action = egressSourceOverrideAction(
+    DEFAULT_SECURITY_CONFIG.policies.egress,
+    match,
+    "trusted-project",
+  );
+  expect(action).toBeUndefined();
+});
+
+// R3-1: an empty query parameter name is malformed enough to fail closed
+// rather than guess at what it names, even alongside otherwise-safe names.
+test("R3-1: an empty query parameter name fails closed", () => {
+  const content = `<img src="https://img.shields.io/npm/v/x.svg?style=flat&=abc123">`;
   const match = detectExfil(content)[0]!;
   const action = egressSourceOverrideAction(
     DEFAULT_SECURITY_CONFIG.policies.egress,
@@ -278,14 +366,16 @@ test("an action other than allow is never gated on the query string", () => {
   expect(action).toBe("warn");
 });
 
-// F2 (review round 1): `hasCredentialShapedQuery` used to parse the RAW
-// `match.value` span while `detectExfil`/a real renderer classify and fetch
-// the DECODED destination (`exfil.ts#renderableUrl`). Every case below is a
-// query string that reads as credential-free to a naive raw-bytes parse but
-// decodes (or splits, or stem-matches) to a credential-shaped one — each was a
-// confirmed bypass that returned `allow` before the fix. All must now keep the
-// policy's stricter (redacting) action, i.e. `egressSourceOverrideAction`
-// returns `undefined`.
+// F2 (review round 1): `queryIsSafeForTrustedOverride` (named
+// `hasCredentialShapedQuery` before R3-1's allowlist rewrite) used to parse
+// the RAW `match.value` span while `detectExfil`/a real renderer classify and
+// fetch the DECODED destination (`exfil.ts#renderableUrl`). Every case below
+// is a query string that reads as query-free (or as only recognized-safe
+// names) to a naive raw-bytes parse but decodes/splits to an unrecognized (or,
+// under the old denylist, credential-shaped) one — each was a confirmed
+// bypass that returned `allow` before the F2 fix. All must keep the policy's
+// stricter (redacting) action, i.e. `egressSourceOverrideAction` returns
+// `undefined`.
 const EGRESS_POLICY = DEFAULT_SECURITY_CONFIG.policies.egress;
 
 function overrideActionFor(content: string): ReturnType<typeof egressSourceOverrideAction> {
@@ -328,13 +418,13 @@ test("F2 bypass: an OAuth-shaped `code` param name", () => {
   expect(overrideActionFor(content)).toBeUndefined();
 });
 
-// Control: a param name that merely CONTAINS a stem's letters with no word
-// boundary (no separator, no camelCase transition) is NOT a false positive —
-// otherwise ordinary benign badge query params would stop passing at all.
-test("F2 control: a param name containing stem letters with no word boundary stays allowed", () => {
-  const content = `<img src="https://img.shields.io/npm/v/x.svg?barcode=123&areacode=1">`;
-  expect(overrideActionFor(content)).toBe("allow");
-});
+// F2's control used to prove `barcode`/`areacode` were NOT false positives
+// for the old segment/stem denylist (they merely contain a stem's letters
+// with no word boundary). R3-1's allowlist has no such false-positive class
+// to guard against — an unrecognized name is simply unrecognized — so this
+// now documents the (intentional) narrowing instead: see "R3-1: an arbitrary
+// unrecognized param name…" above, which covers the same two names and
+// expects `undefined`, not `allow`.
 
 // F10 (review round 1): `egressSourceHasOverride` is what `guard.ts#redactRaw`
 // now consults to skip its second, config-aware detection pass. It must read

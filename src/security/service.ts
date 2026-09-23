@@ -60,7 +60,7 @@ export { redactSensitiveText } from "./redact";
  * Re-exported here for the same reason as `redactSensitiveText` above: this is
  * the facade, and a caller that needs to know whether a file read is
  * `trusted-project` or `untrusted-external` (`ctx.ts`'s `redactRaw` call,
- * `security/tools.ts`'s `security.scan` path handling) must go through it
+ * `mcp/tools.ts`'s `security.scan` path handling) must go through it
  * instead of reaching past it into `./read-source` directly, which the import
  * policy counts as a bypass.
  */
