@@ -1,7 +1,44 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from "../harness/external/env";
 import { noteSavedCredentialEnv, savedCredentialEnvKeys } from "../lib/shell-config";
 import { buildMcpChildEnv, isDeniedForMcpChild } from "./spawn-env";
+
+/** A fresh temp config dir with its own `auth.json` declaring one custom envKey. */
+function configDirDeclaring(envKey: string, value = "unused-declared-value"): string {
+  const dir = mkdtempSync(path.join(tmpdir(), "keryx-spawn-env-declared-"));
+  writeFileSync(path.join(dir, "auth.json"), JSON.stringify({ apiKeys: { [envKey]: value } }));
+  return dir;
+}
+
+// `buildMcpChildEnv` now defaults its by-name strip to a UNION that includes
+// `declaredCredentialEnvKeys(configDir)` (flow 296 follow-up) — a real disk
+// read of `auth.json` whenever a call in this file omits `configDir`, which
+// every pre-existing test here does. `keryxConfigDir` (`../lib/config-dir.ts`)
+// resolves `dir === undefined` through `XDG_DATA_HOME`/`APPDATA`, so pointing
+// THOSE at an isolated, empty, never-written temp directory for the run of
+// this file — restored after — makes every such call hermetic without
+// touching two dozen call sites individually: "a unit test has no business
+// opening the operator's credential file" (review of the flow 296 follow-up).
+// Tests that specifically exercise the disk-based half pass their own
+// `configDir` (`configDirDeclaring` above), which always wins over this.
+let savedXdgDataHome: string | undefined;
+let savedAppData: string | undefined;
+beforeAll(() => {
+  savedXdgDataHome = process.env.XDG_DATA_HOME;
+  savedAppData = process.env.APPDATA;
+  const isolated = mkdtempSync(path.join(tmpdir(), "keryx-spawn-env-isolated-xdg-"));
+  process.env.XDG_DATA_HOME = isolated;
+  process.env.APPDATA = isolated;
+});
+afterAll(() => {
+  if (savedXdgDataHome === undefined) delete process.env.XDG_DATA_HOME;
+  else process.env.XDG_DATA_HOME = savedXdgDataHome;
+  if (savedAppData === undefined) delete process.env.APPDATA;
+  else process.env.APPDATA = savedAppData;
+});
 
 describe("a third-party MCP server does not inherit keryx's credentials", () => {
   test("every name on the shared deny list is stripped", () => {
@@ -298,6 +335,66 @@ describe("keryx's own saved-credential names never reach a launched MCP server (
     expect(savedCredentialEnvKeys().has(marker)).toBe(true);
 
     const env = buildMcpChildEnv({ parent: { PATH: "/usr/bin", [marker]: "saved-value" } });
+    expect(env).toEqual({ PATH: "/usr/bin" });
+  });
+});
+
+describe("the by-name strip holds even when nothing has loaded the key into THIS process yet (PR #657 review of flow 296)", () => {
+  // The singleton (`savedCredentialEnvKeys()`) is populated only by
+  // `applySavedApiKeys()`/`noteSavedCredentialEnv` — TUI startup,
+  // `serve-runner.ts`, `keryx acp`. The `keryx shell` READLINE surface
+  // (`--no-tui`/`--print`/non-TTY) never calls it, and `keryx mcp doctor`
+  // resolves no provider at all, so on those paths the singleton was EMPTY
+  // and the by-name strip removed nothing — protection by coincidence, not
+  // by construction. `buildMcpChildEnv` now also unions in
+  // `declaredCredentialEnvKeys(configDir)`: the same names read straight off
+  // `auth.json`, independent of whether this run loaded them.
+  test("a custom envKey declared in a temp config dir's auth.json is stripped, with an EMPTY singleton", () => {
+    const envKey = `DECLARED_UNIT_GATEWAY_${Math.random().toString(36).slice(2)}`;
+    expect(savedCredentialEnvKeys().has(envKey)).toBe(false); // never noted — the singleton knows nothing of it
+    const configDir = configDirDeclaring(envKey);
+
+    const env = buildMcpChildEnv({
+      parent: { PATH: "/usr/bin", [envKey]: "sentinel-parent-value" },
+      configDir,
+    });
+    // Fails without the fix: an empty singleton and a shape that matches no
+    // pattern rule used to mean nothing was stripped.
+    expect(env).toEqual({ PATH: "/usr/bin" });
+  });
+
+  test("a name the config dir does NOT declare still gets through — the union does not over-strip", () => {
+    const declaredKey = `DECLARED_UNIT_GATEWAY_${Math.random().toString(36).slice(2)}`;
+    const configDir = configDirDeclaring(declaredKey);
+
+    const env = buildMcpChildEnv({
+      parent: { PATH: "/usr/bin", UNRELATED_THING: "x" },
+      configDir,
+    });
+    expect(env).toEqual({ PATH: "/usr/bin", UNRELATED_THING: "x" });
+  });
+
+  test("an explicit savedCredentialKeys override replaces the union entirely — the disk lookup is skipped", () => {
+    const declaredKey = `DECLARED_UNIT_GATEWAY_${Math.random().toString(36).slice(2)}`;
+    const configDir = configDirDeclaring(declaredKey);
+
+    // The override names a DIFFERENT key; `declaredKey` is present in the
+    // parent but the disk lookup this `configDir` would trigger is bypassed
+    // entirely once `savedCredentialKeys` is given — full test isolation.
+    const env = buildMcpChildEnv({
+      parent: { PATH: "/usr/bin", [declaredKey]: "x" },
+      configDir,
+      savedCredentialKeys: new Set(["SOME_OTHER_NAME"]),
+    });
+    expect(env).toEqual({ PATH: "/usr/bin", [declaredKey]: "x" });
+  });
+
+  test("an unreadable config dir fails closed: no throw, and the singleton + shape strip still run", () => {
+    const configDir = path.join(tmpdir(), "keryx-spawn-env-declared-does-not-exist");
+    expect(() =>
+      buildMcpChildEnv({ parent: { PATH: "/usr/bin", GITHUB_TOKEN: "shape-caught" }, configDir }),
+    ).not.toThrow();
+    const env = buildMcpChildEnv({ parent: { PATH: "/usr/bin", GITHUB_TOKEN: "shape-caught" }, configDir });
     expect(env).toEqual({ PATH: "/usr/bin" });
   });
 });

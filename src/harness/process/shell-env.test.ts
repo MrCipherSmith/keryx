@@ -65,7 +65,10 @@ test("agent bus D-13: every shell_exec env carries KERYX_TOOL_CALL=1; external a
 
   // Even when the parent itself runs inside a tool call, the sweep drops it.
   expect(buildExternalChildEnv({ parent: env, depth: 1 }).KERYX_TOOL_CALL).toBeUndefined();
-  expect(buildMcpChildEnv({ parent: env }).KERYX_TOOL_CALL).toBeUndefined();
+  // `configDir: dir` — the isolated temp dir already in scope (`savedKeys`
+  // above) — so `buildMcpChildEnv`'s disk-based half (flow 296 follow-up)
+  // reads that empty `auth.json` rather than the developer's real one.
+  expect(buildMcpChildEnv({ parent: env, configDir: dir }).KERYX_TOOL_CALL).toBeUndefined();
 });
 
 test("KERYX_SHELL_PASS_SAVED_KEYS=1 hands the saved keys over, as before", async () => {

@@ -14,10 +14,11 @@
 //     `connectStdioMcpServer` (`../mcp-client/client.ts`) with the child's
 //     stderr piped and discarded, and builds the child's environment with
 //     `buildMcpChildEnv` (`../mcp-servers/spawn-env.ts`) — keryx's own
-//     credential-SHAPED names stripped, every variable keryx itself loaded
-//     from its saved config stripped BY NAME too, the entry's `env` applied
-//     on top of both. One strip, used by every surface that launches an MCP
-//     server — this module no longer keeps its own copy of it.
+//     credential-SHAPED names stripped, every variable the saved config
+//     DECLARES (whether or not this process has already loaded it) stripped
+//     BY NAME too, the entry's `env` applied on top of both. One strip, used
+//     by every surface that launches an MCP server — this module no longer
+//     keeps its own copy of it.
 //   - `createMcpInteractiveTools` (`../mcp-servers/tools.ts`): the stable
 //     `search_tool`/`use_tool` pair. `use_tool` is `risk: "destructive"`, so
 //     every call goes through the agent's own approval branch — which in an ACP
