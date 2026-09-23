@@ -1,10 +1,12 @@
 # Architecture
 
-> Reviewed against the source on **2026-08-03** for `0.2.3`. Where this document
-> and the code disagree, the code wins and the disagreement is a bug in this
-> file — the
+> Reviewed against the source on **2026-09-23** for `0.2.157`. Where this
+> document and the code disagree, the code wins and the disagreement is a bug
+> in this file — the
 > [documentation audit](https://github.com/MrCipherSmith/keryx/blob/main/docs/report/release-readiness-2026-08-03/documentation-audit.md)
-> lists the ones found so far.
+> and the
+> [documentation remediation package](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-docs-remediation/README.md)
+> list the ones found so far.
 
 ## System overview
 
@@ -118,6 +120,8 @@ Two invariants define the system and recur across every module:
 | **testing** | `src/testing/` | `test` | Detect the test stack, run the project's existing runner (optionally changed-scoped), normalize results into a report. |
 | **memory** | `src/memory/` | `memory` | Long-term typed project memory (lessons/decisions/constraints); deterministic search, dedup, ingest, reflect. |
 | **flow** | `src/flow/` | `flow` (manifest id `tasks`) | Agent-first work lifecycle: scaffold a "flow" package, drive a status state machine, enforce completion gates. |
+| **trigger** | `src/trigger/`, `src/commands/trigger.ts`, `src/commands/schedule.ts` | `trigger` / `schedule` | Not a module in the manifest sense — commands, like `serve`. Declared automation over `.metaproject/triggers.json`: a repository event or a cron/systemd schedule reconciles the graph/wiki, opens Task Manager work, or dispatches an unattended agent inside a hardened sandbox. `schedule` is the human-confirmed entry point that installs a `systemd --user` timer (launchd/cron elsewhere) running `trigger run` unattended; both share one spend ledger and the same unattended refusal floor. |
+| **governance** | `src/governance/`, `src/commands/governance.ts` | `governance` | Not a module in the manifest sense — a command, like `serve`. Read-only report unifying what is already recorded elsewhere: review-round spend per flow, project-wide trigger/schedule spend, who confirmed each acceptance criterion and who signed completion, and every `flow complete` attempt's gate outcomes. Writes `.metaproject/data/governance/artifacts/latest.{md,json}`; never re-runs a gate or calls a model itself. |
 | **review** | `src/review/`, `src/commands/review.ts` | `review` | Managed review packages: standalone, flow-attached, or report-ingested review state with explicit coverage, findings, decisions, learning handoff, and completion validation. |
 | **security** | `src/security/` | `security` | Agent input/output + artifact security: deterministic secret/PII/injection/egress detectors, policy resolution, redaction, and a pass/needs-approval/fail gate (`status`/`scan`/`check-input`/`check-output`/`redact`/`report`/`policy`); MCP-manifest scanning (`scan-mcp`); merge-safe agent security-hook install (`hooks`); labeled-corpus FN-rate evaluation (`eval`, optionally `--with-model`); incident log (`incidents`); plus a config-checksum self-protect tamper guard. |
 | **orientation** | `src/ctx/orient.ts`, `src/ctx/orient-runtimes.ts`, `src/commands/orient.ts` | `orient` | Build a bounded project-root Metaproject excerpt + graph + wiki startup context and install/remove compatible turn-start hooks for Claude, Codex, and Cursor. |
@@ -140,17 +144,18 @@ Two invariants define the system and recur across every module:
 `src/<feature>` behind a verb. Nine are enabled by `init`; `mcp` and `sac` are a
 tenth and eleventh, real and **off by default** — both toggleable with
 `keryx modules enable <name>`, which is what separates them from the commands
-below. `review`, `serve`, `orient` and `sync` are commands — no manifest entry,
-not toggleable by `keryx modules`. Conflating the two is a recurring
-documentation error, including in earlier revisions of this file.
+below. `review`, `serve`, `orient`, `sync`, `trigger`, `schedule` and
+`governance` are commands — no manifest entry, not toggleable by
+`keryx modules`. Conflating the two is a recurring documentation error,
+including in earlier revisions of this file.
 
 `slate` is a third shape again: a real feature with an `expose.modules` entry
 and no CLI verb of its own, reached only through its MCP tools.
 
 The product modules are joined by cross-cutting command surfaces (`agents`,
-`orient`, and `review`), three opt-in substrates (`capability`, `assets`, and
-`harness`), and the MCP protocol adapter. See "Capability System — opt-in
-layers" below.
+`orient`, `review`, `trigger`, `schedule`, and `governance`), three opt-in
+substrates (`capability`, `assets`, and `harness`), and the MCP protocol
+adapter. See "Capability System — opt-in layers" below.
 
 ## Capability System — opt-in layers
 
