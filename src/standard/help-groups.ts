@@ -46,19 +46,37 @@ export interface HelpGroupDef {
   readonly name: HelpGroupName;
   /** CLI-addressable token: `keryx help <slug>`. Never collides with a verb name. */
   readonly slug: string;
+  /**
+   * Readable label for the TUI `/help` modal's tab STRIP — the full `name`
+   * ran all nine together into a visually collided mess, but a whole-word
+   * label reads far better than an abbreviation for a new user. `help-
+   * modal.ts` uses this when all nine fit the modal's available width (about
+   * 82 columns total — fits a 100-column modal); `tabShort` is the fallback
+   * for a narrower modal. `renderGroupLines` and
+   * `docs/docs/commands-by-task.md` keep using `name`, unabbreviated, as the
+   * heading — only the tab STRIP ever reads `tab`/`tabShort`.
+   */
+  readonly tab: string;
+  /**
+   * Short fallback label for the TUI `/help` modal's tab strip, used only
+   * when the readable `tab` labels don't all fit the modal's available
+   * width (e.g. at `modal-host.ts`'s `MODAL_PANEL_MIN_WIDTH` floor). Unique
+   * across the table, like `tab` — `help-modal.test.ts` pins both.
+   */
+  readonly tabShort: string;
 }
 
 /** Onboarding order (AC1, AC3): the order both `keryx help` and the TUI modal's tabs use. */
 export const HELP_GROUP_ORDER: readonly HelpGroupDef[] = [
-  { name: "Start here", slug: "start-here" },
-  { name: "Connect a model provider", slug: "connect" },
-  { name: "Look and feel", slug: "look-and-feel" },
-  { name: "Working in keryx shell", slug: "shell-work" },
-  { name: "Project knowledge", slug: "project-knowledge" },
-  { name: "Managed work", slug: "managed-work" },
-  { name: "Automation", slug: "automation" },
-  { name: "External agents, ACP and MCP", slug: "external-agents" },
-  { name: "Maintenance and diagnostics", slug: "maintenance" },
+  { name: "Start here", slug: "start-here", tab: "Start", tabShort: "Start" },
+  { name: "Connect a model provider", slug: "connect", tab: "Connect", tabShort: "Conn" },
+  { name: "Look and feel", slug: "look-and-feel", tab: "Look", tabShort: "Look" },
+  { name: "Working in keryx shell", slug: "shell-work", tab: "Shell", tabShort: "Shell" },
+  { name: "Project knowledge", slug: "project-knowledge", tab: "Knowledge", tabShort: "Know" },
+  { name: "Managed work", slug: "managed-work", tab: "Work", tabShort: "Work" },
+  { name: "Automation", slug: "automation", tab: "Automate", tabShort: "Auto" },
+  { name: "External agents, ACP and MCP", slug: "external-agents", tab: "Agents", tabShort: "Agents" },
+  { name: "Maintenance and diagnostics", slug: "maintenance", tab: "Maintain", tabShort: "Maint" },
 ];
 
 export type HelpEntryKind = "cli" | "slash";
@@ -603,30 +621,56 @@ function renderEntryRows(entries: readonly HelpEntry[], maxColumns: number | und
   return rows;
 }
 
+/** Sub-heading marking a group's slash rows as shell-only commands (AC3, AC4: every group must appear, even slash-only ones). */
+const SHELL_SUBHEADING = "  in keryx shell:";
+
 /**
- * `keryx help` with no argument (AC3): every group, in onboarding order, CLI
- * verbs only (the slash commands belong to the shell surfaces — AC7 —, not
- * the plain CLI listing), each with its one-line summary, word-wrapped to
- * `maxColumns` so no rendered line exceeds it.
+ * One group's full listing: its CLI verbs first, then (if any) its slash
+ * commands under a `SHELL_SUBHEADING` sub-heading so they read as clearly
+ * shell-only, never confused with a standalone CLI verb. A group with only
+ * slash commands (e.g. "Look and feel") still renders — CLI-only used to be
+ * the sole criterion for a group appearing at all, which made such groups
+ * (and every command in them, including `/theme`) invisible in the terminal.
+ */
+function renderGroupLines(group: HelpGroupDef, maxColumns: number | undefined): string[] {
+  const cliEntries = entriesInGroup(group.name, "cli");
+  const slashEntries = entriesInGroup(group.name, "slash");
+  if (cliEntries.length === 0 && slashEntries.length === 0) {
+    return [];
+  }
+  const lines: string[] = [`${group.name}:`];
+  lines.push(...renderEntryRows(cliEntries, maxColumns));
+  if (slashEntries.length > 0) {
+    lines.push(SHELL_SUBHEADING);
+    lines.push(...renderEntryRows(slashEntries, maxColumns));
+  }
+  return lines;
+}
+
+/**
+ * `keryx help` with no argument (AC3): every group, in onboarding order —
+ * its CLI verbs, then its slash commands marked as shell-only (AC7 covers
+ * the shell surfaces' OWN command lists; this is the terminal's one-stop
+ * listing so a new user sees every command, including a slash-only group
+ * like "Look and feel"/`/theme`) — each with its one-line summary,
+ * word-wrapped to `maxColumns` so no rendered line exceeds it.
  */
 export function renderGroupedCliHelp(maxColumns: number = HELP_DEFAULT_COLUMNS): string {
   const lines: string[] = [];
   for (const group of HELP_GROUP_ORDER) {
-    const entries = entriesInGroup(group.name, "cli");
-    if (entries.length === 0) {
+    const groupLines = renderGroupLines(group, maxColumns);
+    if (groupLines.length === 0) {
       continue;
     }
-    lines.push(`${group.name}:`);
-    lines.push(...renderEntryRows(entries, maxColumns));
+    lines.push(...groupLines);
     lines.push("");
   }
   return lines.join("\n").replace(/\n+$/, "\n");
 }
 
-/** `keryx help <group>` (AC4): one group's CLI verbs, same row format as the full table. */
+/** `keryx help <group>` (AC4): one group's CLI verbs and slash commands, same row format as the full table. */
 export function renderCliGroupHelp(group: HelpGroupDef, maxColumns: number = HELP_DEFAULT_COLUMNS): string {
-  const entries = entriesInGroup(group.name, "cli");
-  const lines = [`${group.name}:`, ...renderEntryRows(entries, maxColumns)];
+  const lines = renderGroupLines(group, maxColumns);
   return lines.join("\n") + "\n";
 }
 
@@ -680,16 +724,24 @@ export function renderGroupedNamedHelp(options: readonly NamedHelpOption[], maxC
   return lines.join("\n") + "\n";
 }
 
-/** One entry's detail block (AC6's modal "Enter shows the selected command's detail"). */
-export function renderEntryDetail(entry: HelpEntry): string {
-  const lines = [`${entry.name}`, "", entry.summary, ""];
+/**
+ * One entry's detail block (AC6's modal "Enter shows the selected command's
+ * detail"). Word-wrapped to `maxColumns` (default 80) — the fixed slash-
+ * command explainer sentence alone runs to 94 unwrapped columns, well past
+ * the terminal's 80-column budget every other `keryx help` surface holds to.
+ */
+export function renderEntryDetail(entry: HelpEntry, maxColumns: number = HELP_DEFAULT_COLUMNS): string {
+  const lines = [`${entry.name}`, "", ...wrapWords(entry.summary, maxColumns), ""];
   if (entry.kind === "slash") {
     lines.push(
-      "This is a keryx shell command — type it inside `keryx shell` (readline chat/agent mode, or the",
-      "TUI's `/`-menu). It has no standalone CLI form.",
+      ...wrapWords(
+        "This is a keryx shell command — type it inside `keryx shell` (readline chat/agent mode, or " +
+          "the TUI's `/`-menu). It has no standalone CLI form.",
+        maxColumns,
+      ),
     );
   } else {
-    lines.push(`Run \`keryx ${entry.name} --help\` (or \`keryx help ${entry.name}\`) for its full usage.`);
+    lines.push(...wrapWords(`Run \`keryx ${entry.name} --help\` (or \`keryx help ${entry.name}\`) for its full usage.`, maxColumns));
   }
   return lines.join("\n") + "\n";
 }

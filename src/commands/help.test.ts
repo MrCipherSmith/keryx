@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { helpCommand } from "./help";
 import { printFlowHelp } from "./flow";
+import { HELP_GROUP_ORDER, HELP_GROUPS } from "../standard/service";
 
 let logged: string[] = [];
 let errored: string[] = [];
@@ -104,6 +105,33 @@ describe("AC4: an unknown name", () => {
     await helpCommand(["zzzzzzzzzzzzzzzzzzzz"]);
     expect(process.exitCode).toBe(1);
     expect(errored.join("\n")).toContain("Unknown help topic");
+  });
+});
+
+describe("every `keryx help <anything>` output stays within 80 columns", () => {
+  // No-argument listing, every group slug (renderCliGroupHelp), and every
+  // slash command's detail (renderEntryDetail): the three surfaces
+  // HELP_GROUPS actually renders text for. A bare CLI verb name (e.g.
+  // `keryx help init`) instead prints that verb's OWN rich `--help` usage
+  // block (AC5: "rich group helps unchanged") — a pre-existing, separate
+  // surface this flow does not touch, so it is deliberately not in this list.
+  test("no argument, every group slug, and every slash command in the table", async () => {
+    const inputs: string[] = [
+      "",
+      ...HELP_GROUP_ORDER.map((g) => g.slug),
+      ...HELP_GROUPS.filter((e) => e.kind === "slash").map((e) => e.name),
+    ];
+    for (const arg of inputs) {
+      logged = [];
+      await helpCommand(arg === "" ? [] : [arg]);
+      for (const block of logged) {
+        for (const line of block.split("\n")) {
+          if (line.length > 80) {
+            throw new Error(`line too wide for \`keryx help ${arg}\`: ${JSON.stringify(line)}`);
+          }
+        }
+      }
+    }
   });
 });
 

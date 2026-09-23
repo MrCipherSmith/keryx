@@ -22,7 +22,15 @@ import {
   type HelpGroupDef,
 } from "../standard/service";
 import { clampScroll, scrollToReveal, windowLines, wrapLines } from "./flow-inspector";
-import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } from "./modal-host";
+import {
+  MODAL_PANEL_CHROME_X,
+  modalBodyRows,
+  openModal,
+  resolveModalAvailableWidth,
+  resolveModalPanelSize,
+  type ModalChrome,
+  type ModalHandle,
+} from "./modal-host";
 import { dimChunk } from "./theme-text";
 
 type OpenTui = typeof import("@opentui/core");
@@ -32,8 +40,80 @@ export const HELP_MODAL_TITLE = "/help";
 /** The keys, shown as the first line of every tab (mirrors `schedules-inspector.ts`'s `DETAIL_KEYS`/`LIST_KEYS`). */
 export const HELP_MODAL_KEYS = "keys: ↑/↓ select · enter details · ←/→ tabs · esc close";
 
-/** Every group tab, in onboarding order — `id` is the group's CLI-addressable slug. */
-export const HELP_MODAL_TABS = HELP_GROUP_ORDER.map((g) => ({ id: g.slug, label: g.name }));
+/**
+ * Every group tab, in onboarding order — `id` is the group's CLI-addressable
+ * slug, `label` is the group's READABLE `tab` label (`HelpGroupDef.tab`),
+ * not its full `name`: nine full names (e.g. "External agents, ACP and MCP")
+ * rendered side by side in `modal-host.ts`'s one-row tab strip ran well past
+ * a 100-column modal and visually collided. The full name is still shown as
+ * the heading inside each tab's own body (`tabLines`, below) — `keryx help`
+ * and `docs/docs/commands-by-task.md` (`renderGroupLines`,
+ * `renderCommandsByTaskMarkdown`) keep using `name`, unabbreviated, too.
+ *
+ * This is the PREFERRED set — `pickTabs` below falls back to
+ * `HELP_MODAL_TABS_SHORT` only when the readable strip doesn't fit the
+ * modal's available width.
+ */
+export const HELP_MODAL_TABS = HELP_GROUP_ORDER.map((g) => ({ id: g.slug, label: g.tab }));
+
+/** The same nine tabs, using each group's short `tabShort` label — the fallback for a narrow modal. */
+export const HELP_MODAL_TABS_SHORT = HELP_GROUP_ORDER.map((g) => ({ id: g.slug, label: g.tabShort }));
+
+/**
+ * Mirrors `modal-host.ts`'s `paintTabs`: each tab renders as `[label]`
+ * (active) or ` label ` (inactive) — either way `label.length + 2` — plus a
+ * one-space separator before every tab but the first. Both forms are the
+ * same width, so which tab is active does not change the total.
+ */
+export function tabStripWidth(labels: readonly string[]): number {
+  return labels.reduce((total, label, i) => total + label.length + 2 + (i === 0 ? 0 : 1), 0);
+}
+
+const READABLE_TAB_STRIP_WIDTH = tabStripWidth(HELP_MODAL_TABS.map((t) => t.label));
+
+/**
+ * Which tab-label set fits the modal's available width right now. Chosen
+ * ONCE, at open time — `modal-host.ts` fixes `input.tabs` for the life of
+ * that `openModal` call (re-picking on a live resize is real but out of
+ * scope here: the operator can close and reopen `/help` after resizing).
+ *
+ * An explicit `options.renderer` hint (test-only override, no sidebar to
+ * account for) is trusted as-is. Otherwise this reads the REAL chrome
+ * through `resolveModalAvailableWidth` — the same function `modal-host.ts`
+ * itself uses to size the panel — because the shell's sidebar (`SIDEBAR_
+ * WIDTH`, `sidebar-metrics.ts`) already eats a third of a typical terminal;
+ * a naive `chrome.renderer.width` (ignoring the sidebar, the way
+ * `bodyRowsFor` below approximates ROW count) picked the readable strip in
+ * cases where the actual panel — clamped to `resolveModalAvailableWidth`'s
+ * narrower number — had no room for it, and the tab strip visibly broke.
+ * The `Math.min(availWidth, size.width)` here mirrors `openModal`'s own
+ * panel-width clamp exactly, so this predicts the real rendered width, not
+ * an unclamped approximation of it. An unknown/unmeasurable width picks the
+ * short set — never risk an overflow silently.
+ */
+function pickTabs(
+  chrome: unknown,
+  options: Pick<HelpModalOptions, "renderer">,
+): readonly { readonly id: string; readonly label: string }[] {
+  let cols: number | undefined;
+  let rows: number | undefined;
+  if (options.renderer !== undefined) {
+    cols = options.renderer.width;
+    rows = options.renderer.height;
+  } else {
+    const c = chrome as Partial<ModalChrome> | undefined;
+    if (c?.renderer !== undefined) {
+      cols = resolveModalAvailableWidth(c as ModalChrome);
+      rows = c.renderer.height;
+    }
+  }
+  if (typeof cols !== "number" || typeof rows !== "number") {
+    return HELP_MODAL_TABS_SHORT;
+  }
+  const panelWidth = Math.min(cols, resolveModalPanelSize(cols, rows).width);
+  const innerWidth = panelWidth - MODAL_PANEL_CHROME_X;
+  return READABLE_TAB_STRIP_WIDTH <= innerWidth ? HELP_MODAL_TABS : HELP_MODAL_TABS_SHORT;
+}
 
 /** A group's commands in list order: CLI verbs first, then slash commands. */
 function entriesForGroup(group: HelpGroupDef): HelpEntry[] {
@@ -41,6 +121,8 @@ function entriesForGroup(group: HelpGroupDef): HelpEntry[] {
 }
 
 interface TabState {
+  /** The group's full name (never the short `tab` label) — shown as this tab's own body heading. */
+  readonly groupName: string;
   readonly entries: readonly HelpEntry[];
   selected: number;
   detail: boolean;
@@ -80,10 +162,11 @@ export function openHelpModal(otui: unknown, chrome: unknown, options: HelpModal
   const core = otui as OpenTui;
   const r = (chrome as { renderer?: unknown } | undefined)?.renderer;
   const bodyRows = bodyRowsFor(chrome, options);
+  const tabs = pickTabs(chrome, options);
   const states = new Map<string, TabState>(
     HELP_GROUP_ORDER.map((group) => [
       group.slug,
-      { entries: entriesForGroup(group), selected: 0, detail: false, scroll: 0 },
+      { groupName: group.name, entries: entriesForGroup(group), selected: 0, detail: false, scroll: 0 },
     ]),
   );
   let width: number | undefined;
@@ -93,30 +176,40 @@ export function openHelpModal(otui: unknown, chrome: unknown, options: HelpModal
   const host: { handle?: ModalHandle } = {};
 
   const activeState = (): TabState => {
-    const id = host.handle?.activeTab() ?? (HELP_MODAL_TABS[0]?.id ?? "");
+    const id = host.handle?.activeTab() ?? (tabs[0]?.id ?? "");
     const existing = states.get(id);
     if (existing !== undefined) {
       return existing;
     }
-    const fallback: TabState = { entries: [], selected: 0, detail: false, scroll: 0 };
+    const fallback: TabState = { groupName: "", entries: [], selected: 0, detail: false, scroll: 0 };
     states.set(id, fallback);
     return fallback;
   };
 
   const tabLines = (state: TabState): string[] => {
+    // The tab strip shows only a short-ish label (`pickTabs`'s `tab` or
+    // `tabShort`) — the group's full name (never abbreviated) is this tab's
+    // own heading, so a new user still sees it, just one row down instead of
+    // in the crowded strip.
+    const heading = `${state.groupName}:`;
     if (state.entries.length === 0) {
-      return [HELP_MODAL_KEYS, "", "(no commands in this group)"];
+      return [heading, HELP_MODAL_KEYS, "", "(no commands in this group)"];
     }
     if (state.detail) {
       const entry = state.entries[state.selected];
-      return [HELP_MODAL_KEYS, "", ...(entry === undefined ? ["(nothing selected)"] : wrapLines(renderEntryDetail(entry), width).split("\n"))];
+      return [
+        heading,
+        HELP_MODAL_KEYS,
+        "",
+        ...(entry === undefined ? ["(nothing selected)"] : wrapLines(renderEntryDetail(entry), width).split("\n")),
+      ];
     }
     const rows = state.entries.map((entry, i) => {
       const marker = i === state.selected ? ">" : " ";
       const line = `${marker} ${entry.name}  ${entry.summary}`;
       return wrapLines(line, width).split("\n").join("\n");
     });
-    return [HELP_MODAL_KEYS, "", ...rows];
+    return [heading, HELP_MODAL_KEYS, "", ...rows];
   };
 
   const paint = (): void => {
@@ -126,8 +219,9 @@ export function openHelpModal(otui: unknown, chrome: unknown, options: HelpModal
     const state = activeState();
     const lines = tabLines(state);
     if (!state.detail) {
-      // Keep the cursor row in view (AC6: up/down must visibly move the selection).
-      state.scroll = scrollToReveal(state.selected + 2, state.scroll, bodyRows);
+      // Keep the cursor row in view (AC6: up/down must visibly move the
+      // selection). Row offset 3: heading, HELP_MODAL_KEYS, blank, then rows.
+      state.scroll = scrollToReveal(state.selected + 3, state.scroll, bodyRows);
     }
     state.scroll = clampScroll(state.scroll, lines.length, bodyRows);
     if (bodyNode !== undefined) {
@@ -142,7 +236,7 @@ export function openHelpModal(otui: unknown, chrome: unknown, options: HelpModal
 
   const handle = openModal(core, chrome as never, {
     title: HELP_MODAL_TITLE,
-    tabs: HELP_MODAL_TABS,
+    tabs,
     ...(initialTab !== undefined ? { initialTab } : {}),
     footer: [
       { key: "↑/↓", label: "select" },

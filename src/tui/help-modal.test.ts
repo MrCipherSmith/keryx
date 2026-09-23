@@ -6,7 +6,8 @@
 
 import { expect, test } from "bun:test";
 import { HELP_GROUP_ORDER } from "../standard/service";
-import { openHelpModal, HELP_MODAL_TABS } from "./help-modal";
+import { openHelpModal, HELP_MODAL_TABS, HELP_MODAL_TABS_SHORT, tabStripWidth } from "./help-modal";
+import { MODAL_PANEL_CHROME_X, MODAL_PANEL_MIN_WIDTH } from "./modal-host";
 import { keypressSource, loadOpenTui, mountChrome } from "./ops-sidebar.test-helpers";
 import { themeColorToHex } from "./shell-chrome";
 import { applyThemeId, getThemeId, resolveTheme } from "./theme";
@@ -29,9 +30,92 @@ async function pressEscapeAndSettle(h: { mockInput: { pressEscape(): void }; flu
   await h.flush();
 }
 
-test("HELP_MODAL_TABS is exactly the nine onboarding groups, in order", () => {
-  expect(HELP_MODAL_TABS.map((t) => t.label)).toEqual(HELP_GROUP_ORDER.map((g) => g.name));
+test("HELP_MODAL_TABS is exactly the nine onboarding groups, in order, using each group's READABLE tab label", () => {
+  expect(HELP_MODAL_TABS.map((t) => t.label)).toEqual(HELP_GROUP_ORDER.map((g) => g.tab));
   expect(HELP_MODAL_TABS.map((t) => t.id)).toEqual(HELP_GROUP_ORDER.map((g) => g.slug));
+});
+
+test("HELP_MODAL_TABS_SHORT is the same nine groups, using each group's SHORT tab label", () => {
+  expect(HELP_MODAL_TABS_SHORT.map((t) => t.label)).toEqual(HELP_GROUP_ORDER.map((g) => g.tabShort));
+  expect(HELP_MODAL_TABS_SHORT.map((t) => t.id)).toEqual(HELP_GROUP_ORDER.map((g) => g.slug));
+});
+
+test("every tab label is unique and non-empty, in both the readable and short sets", () => {
+  for (const tabs of [HELP_MODAL_TABS, HELP_MODAL_TABS_SHORT]) {
+    const labels = tabs.map((t) => t.label);
+    expect(labels.length).toBe(9);
+    for (const label of labels) {
+      expect(label.length).toBeGreaterThan(0);
+    }
+    expect(new Set(labels).size).toBe(labels.length);
+  }
+});
+
+test("the readable tab strip fits a 100-column modal with no truncation", () => {
+  const width = tabStripWidth(HELP_MODAL_TABS.map((t) => t.label));
+  expect(width).toBeLessThanOrEqual(100);
+});
+
+test("the short tab strip fits the modal's own enforced minimum width", () => {
+  // `modal-host.ts` floors the panel at MODAL_PANEL_MIN_WIDTH regardless of
+  // terminal size (its docstring: "a 24-row test TTY still fits");
+  // MODAL_PANEL_CHROME_X (border + padding) is what the tab strip actually
+  // has to fit inside. The READABLE strip does not need to fit this floor —
+  // `pickTabs` falls back to the short strip whenever it doesn't.
+  const innerWidth = MODAL_PANEL_MIN_WIDTH - MODAL_PANEL_CHROME_X;
+  const width = tabStripWidth(HELP_MODAL_TABS_SHORT.map((t) => t.label));
+  expect(width).toBeLessThanOrEqual(innerWidth);
+});
+
+otuiTest("a tab's body still shows the group's FULL name as a heading, even though the tab strip shows a shorter label", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 100, height: 30 });
+  const handle = openHelpModal(otui.core, h.chrome, {
+    onKeypress: keypressSource(h.renderer),
+    initialGroupSlug: "external-agents",
+  });
+  await h.flush();
+  expect(handle?.activeTab()).toBe("external-agents");
+  const tab = HELP_MODAL_TABS.find((t) => t.id === "external-agents");
+  expect(tab?.label).toBe("Agents"); // the readable strip label (same as tabShort for this group)
+  const body = handle?.visibleLines().join("\n") ?? "";
+  expect(body).toContain("External agents, ACP and MCP:"); // the full name, still shown
+  h.destroy();
+});
+
+otuiTest("a wide terminal (readable strip fits) shows the full word \"Connect\" on the tab strip", async () => {
+  const otui = requireOtui();
+  // 140 columns, minus the shell's own SIDEBAR_WIDTH (34) that `pickTabs`
+  // accounts for via `resolveModalAvailableWidth`: available ~106, panel
+  // ~101, inner width ~97 — comfortably over the readable strip's 82, so
+  // `pickTabs` picks HELP_MODAL_TABS.
+  const h = await mountChrome(otui, { width: 140, height: 30 });
+  const handle = openHelpModal(otui.core, h.chrome, { onKeypress: keypressSource(h.renderer) });
+  await h.flush();
+  expect(handle).toBeDefined();
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("Connect");
+  h.destroy();
+});
+
+otuiTest("a terminal at the modal's minimum width shows the short labels, not the readable ones", async () => {
+  const otui = requireOtui();
+  // 110 columns, minus SIDEBAR_WIDTH (34): available 76, which floors
+  // `resolveModalPanelSize` at MODAL_PANEL_MIN_WIDTH (72) — the modal's own
+  // enforced floor — for an inner width of 68: under the readable strip's
+  // 82 (falls back to HELP_MODAL_TABS_SHORT) but still comfortably over the
+  // short strip's 67 (renders fully, not clipped mid-label).
+  const h = await mountChrome(otui, { width: 110, height: 30 });
+  const handle = openHelpModal(otui.core, h.chrome, { onKeypress: keypressSource(h.renderer) });
+  await h.flush();
+  expect(handle).toBeDefined();
+  const frame = h.captureCharFrame();
+  // The short label "Conn" IS a prefix of the readable "Connect", but the
+  // full word never appears unless the readable set was chosen — "Conn" is
+  // always followed by a space/bracket, never "ect".
+  expect(frame).not.toContain("Connect");
+  expect(frame).toContain("Conn");
+  h.destroy();
 });
 
 otuiTest("opens on the first group's tab, with its first command selected", async () => {

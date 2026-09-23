@@ -107,6 +107,16 @@ describe("AC1: every CLI_ROUTES verb and every AGENT_SLASH_COMMANDS entry is pla
       expect(cliNames.has(slug)).toBe(false);
     }
   });
+
+  test("every group's `tab` and `tabShort` labels (the TUI modal's tab-strip text) are non-empty and each set is unique", () => {
+    const tabs = HELP_GROUP_ORDER.map((g) => g.tab);
+    const tabsShort = HELP_GROUP_ORDER.map((g) => g.tabShort);
+    for (const label of [...tabs, ...tabsShort]) {
+      expect(label.length).toBeGreaterThan(0);
+    }
+    expect(new Set(tabs).size).toBe(tabs.length);
+    expect(new Set(tabsShort).size).toBe(tabsShort.length);
+  });
 });
 
 describe("AC2: every entry has a one-line description", () => {
@@ -120,17 +130,27 @@ describe("AC2: every entry has a one-line description", () => {
 });
 
 describe("AC3: `keryx help` prints every group in onboarding order, within 80 columns", () => {
-  test("renders every group heading in order, and every CLI verb", () => {
+  test("renders every group heading in order — including a group with only slash commands — and every CLI verb", () => {
     const text = renderGroupedCliHelp();
     let lastIndex = -1;
     for (const group of HELP_GROUP_ORDER) {
-      const cliInGroup = HELP_GROUPS.some((e) => e.kind === "cli" && e.group === group.name);
-      if (!cliInGroup) continue;
+      // Every group in HELP_GROUP_ORDER has at least one entry (cli or
+      // slash), so every heading must appear — a group whose only commands
+      // are slash commands (e.g. "Look and feel") used to vanish entirely
+      // because the old check gated the heading on CLI verbs alone.
       const idx = text.indexOf(`${group.name}:`);
       expect(idx).toBeGreaterThan(lastIndex);
       lastIndex = idx;
     }
     for (const entry of HELP_GROUPS.filter((e) => e.kind === "cli")) {
+      expect(text).toContain(entry.name);
+    }
+  });
+
+  test("every slash command in HELP_GROUPS also appears in the terminal's `keryx help` output, marked as a shell command", () => {
+    const text = renderGroupedCliHelp();
+    expect(text).toContain("in keryx shell:");
+    for (const entry of HELP_GROUPS.filter((e) => e.kind === "slash")) {
       expect(text).toContain(entry.name);
     }
   });
@@ -170,6 +190,27 @@ describe("AC4: group view, command detail, and closest-match", () => {
     expect(text).not.toContain("Start here:");
   });
 
+  test("`keryx help look-and-feel` lists /theme — a group with no CLI verbs at all must still render its slash commands", () => {
+    const group = HELP_GROUP_ORDER.find((g) => g.slug === "look-and-feel");
+    expect(group).toBeDefined();
+    const text = renderCliGroupHelp(group!);
+    expect(text).toContain("Look and feel:");
+    expect(text).toContain("in keryx shell:");
+    expect(text).toContain("/theme");
+    expect(text).toContain("/model");
+  });
+
+  test("`keryx help connect` lists both the CLI verbs and the slash commands for that group", () => {
+    const group = HELP_GROUP_ORDER.find((g) => g.slug === "connect");
+    expect(group).toBeDefined();
+    const text = renderCliGroupHelp(group!);
+    expect(text).toContain("auth");
+    expect(text).toContain("providers");
+    expect(text).toContain("in keryx shell:");
+    expect(text).toContain("/connect");
+    expect(text).toContain("/provider");
+  });
+
   test("groupBySlug resolves a known slug and refuses an unknown one", () => {
     expect(groupBySlug("automation")?.name).toBe("Automation");
     expect(groupBySlug("nope")).toBeUndefined();
@@ -187,6 +228,30 @@ describe("AC4: group view, command detail, and closest-match", () => {
     const detail = renderEntryDetail(entry!);
     expect(detail).toContain("init");
     expect(detail).toContain(entry!.summary);
+  });
+
+  test("renderEntryDetail wraps the slash-command explainer sentence to 80 columns (unwrapped it runs to 94)", () => {
+    const entry = findSlashEntry("/connect");
+    expect(entry).toBeDefined();
+    const detail = renderEntryDetail(entry!);
+    for (const line of detail.split("\n")) {
+      expect(line.length).toBeLessThanOrEqual(80);
+    }
+    expect(detail).toContain("keryx shell");
+    expect(detail).toContain("no standalone CLI form");
+  });
+
+  test("every `keryx help <anything>` output stays within 80 columns: every group, every CLI verb, every slash command", () => {
+    for (const group of HELP_GROUP_ORDER) {
+      for (const line of renderCliGroupHelp(group).split("\n")) {
+        expect(line.length).toBeLessThanOrEqual(80);
+      }
+    }
+    for (const entry of HELP_GROUPS) {
+      for (const line of renderEntryDetail(entry).split("\n")) {
+        expect(line.length).toBeLessThanOrEqual(80);
+      }
+    }
   });
 
   test("closestHelpTopics suggests near misses for a typo'd topic", () => {
