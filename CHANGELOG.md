@@ -5,18 +5,20 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [0.2.155] — 2026-09-23
 
-Six flows landed the day after 0.2.154 first reached a real editor and a real
-trigger: the operator's own Zed session and the first `flow-next` dispatch
-each found what a scripted test suite could not. `keryx acp` now runs the
-model it is actually configured for, accepts the MCP servers the editor
-already knows about, gives that session keryx's own project tools and slash
-commands, and switches models on request. A `flow-next` trigger can now
-dispatch an agent to work the next task completely unattended, inside a
-hardened sandbox with a spend ceiling it cannot raise. A flow can name the
-human accountable for it, and every confirmation and completion carries a
-signature. `keryx governance report` brings spend, confirmations, signatures
-and gate outcomes together in one place, and `flow ac update` can finally
-amend a criterion's own wording instead of silently doing nothing.
+Seven flows landed the day after 0.2.154 first reached a real editor and a
+real trigger: the operator's own Zed session and the first `flow-next`
+dispatch each found what a scripted test suite could not. `keryx acp` now
+runs the model it is actually configured for, accepts the MCP servers the
+editor already knows about, gives that session keryx's own project tools and
+slash commands, and switches models on request. keryx can now also drive an
+*external* ACP agent as its client, inside a disposable worktree, under its
+own approval gate. A `flow-next` trigger can now dispatch an agent to work
+the next task completely unattended, inside a hardened sandbox with a spend
+ceiling it cannot raise. A flow can name the human accountable for it, and
+every confirmation and completion carries a signature. `keryx governance
+report` brings spend, confirmations, signatures and gate outcomes together in
+one place, and `flow ac update` can finally amend a criterion's own wording
+instead of silently doing nothing.
 
 ### Added
 - **`keryx acp` runs the provider and model `keryx shell` would run, not a
@@ -78,8 +80,30 @@ amend a criterion's own wording instead of silently doing nothing.
   recording the before/after text in history. Every `flow ac` subcommand now
   refuses an argument it does not use, rather than accepting and silently
   dropping it. (#653, flow 293)
-- <!-- 292 placeholder: ACP client / `keryx agents external run` is not
-  merged for this release. Add its Added entry here once it lands. -->
+- **`keryx agents external run <id> --task "<text>" [--unattended] [--write]`
+  — keryx as an ACP client, driving a foreign agent under its own policy.**
+  A registry agent whose transport is `acp` (today `gemini-acp`, `gemini
+  --experimental-acp`) runs as a subprocess in a disposable git worktree,
+  with keryx answering every `session/request_permission` through the same
+  approval gate its own tools use — the mode is always lowered to `ask`
+  (`trust`/`auto` mean nothing for a foreign agent's own description of a
+  call), only an explicit allow selects `allow_once`, `allow_always` is
+  never chosen, and `--unattended` (or no TTY, or no approver) fails closed.
+  keryx advertises and serves only `fs.readTextFile` (plus
+  `fs.writeTextFile` under `--write`, landing in the worktree only and left
+  as a patch that is never applied) — never `terminal` or `elicitation` —
+  and confines every path to the worktree by its real, resolved path. The
+  agent gets keryx's project context through a read-only `serve-mcp
+  --cwd <project-root>` launched from the running build; each run is
+  recorded as a keryx session with the agent's reported usage and cost (or
+  `missing` — never coerced to zero). Honest limits, stated in the [ACP
+  client guide](docs/docs/guides/acp-client.md): the agent's own internal
+  tools (shell, edits, its own MCP calls) are invisible to keryx and reach
+  outside the permission bridge; the agent process itself runs without an OS
+  sandbox in this release; the disposable worktree, not process isolation,
+  is what contains it. Verified against a scripted fake ACP agent fixture
+  and this repo's own `keryx acp` as the driven agent, end to end — **not
+  yet exercised against a real Gemini CLI**. (#654, flow 292)
 
 ### Fixed
 - **`keryx acp` no longer runs on a stale OAuth token.**
@@ -119,6 +143,25 @@ amend a criterion's own wording instead of silently doing nothing.
   there is no way to tell which from the bytes), and preserves each line's
   own ending in a CRLF or mixed-ending file instead of rewriting it wholesale.
   (flow 293)
+- **A symlinked directory inside the project could let `search_code` read
+  outside it — in `keryx shell` and ACP sessions too, not only the new ACP
+  client.** `confineToProject` now confines by the path's real, resolved
+  location before handing it to ripgrep, ripgrep itself runs without
+  `--follow`, and a not-yet-existing path (the write-time case) is checked
+  through its nearest existing ancestor so a symlink further down the
+  directory chain can't be used to escape confinement. (flow 292)
+- **A search pattern starting with `--` (e.g. `--follow`) was parsed as a
+  flag, not as the pattern.** The `keryx ctx rg` fallback in the built-in
+  metaproject tools now puts `--` before the model-supplied pattern. (flow 292)
+- **Output from an external agent — including `claude-cli` and
+  `codex-cli`, not only the new ACP client — could grow keryx's own memory
+  without bound.** A single line with no newline, or a flood of assistant
+  text and events, was previously unbounded; a line now caps at 64 MiB
+  (aborting the run and killing the agent past that), stderr keeps only its
+  first 16 KiB and last 48 KiB (counting what it dropped), and a run's
+  recorded assistant text plus events are capped at 16 MiB, with the same
+  bounds applied to the line-stream supervisor the Claude and Codex agents
+  use. (flow 292)
 
 ### Security
 - **An unattended trigger dispatch is now sandboxed, not just

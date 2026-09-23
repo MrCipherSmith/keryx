@@ -7,17 +7,78 @@
   "id": "290",
   "slug": "triggers-wave-2-flow-next-dispatches-an-",
   "title": "Triggers wave 2: flow-next dispatches an agent, per-trigger spend ceiling, shared lock with manual commands",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-22T22:30:55.848Z",
-  "updatedAt": "2026-09-22T23:50:39.116Z",
+  "updatedAt": "2026-09-23T00:04:49.667Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:0900772432f0eb9007ba8221d92529f9f854eb784c5f23845a63340ee704ed1f",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-22T23:59:22.358Z",
+      "note": "src/commands/trigger-dispatch.test.ts: describe(AC1/AC2/AC5/AC6) test 'success: attempt started before the model, task done with a runLink, commit on trigger/<flow>-<task>, cost recorded, AC untouched' drives a fake-provider dispatch end to end; describe(AC1: list/status say report-only) test 'report-only vs dispatch are both named' proves no-dispatch entries stay report-only. bun test run today: 181 pass / 0 fail across 10 files incl. this one."
+    },
+    "AC2": {
+      "at": "2026-09-22T23:59:28.857Z",
+      "note": "src/commands/trigger-dispatch.test.ts describe(AC1/AC2/AC5/AC6): 'success: attempt started before the model, task done with a runLink...' + 'provider failure: attempt failed with the reason, tokens still recorded, exit 1' + 'timeout: the wall-clock limit aborts the turn; attempt failed as timed out' + 'health-gate failure: the commit stays on the branch but the task is NOT done — attempt failed'. Fresh run today: 181 pass / 0 fail."
+    },
+    "AC3": {
+      "at": "2026-09-22T23:59:28.970Z",
+      "note": "src/commands/trigger-dispatch.test.ts describe(AC3: refusals happen before any model call, are recorded, exit 0): 7 tests — 'flow not in progress', 'flow not frozen', 'flow next is none (nothing left to do)', 'flow next is blocked', 'the ready task has an open attempt', 'the task's attempt count reached the cap', 'another dispatch holds the flow's dispatch lock (real overlap)'. Fresh run today: 181 pass / 0 fail."
+    },
+    "AC4": {
+      "at": "2026-09-22T23:59:29.080Z",
+      "note": "src/commands/trigger-dispatch.test.ts test 'seeded stored auto + saved bash*/echo*: under entry mode ask every non-read call is denied and recorded' (stored auto + saved shell allowlist proven inert) + src/commands/trigger-unattended.test.ts describe(AC4) test 'a command touching the agent's credential files' (credential floor reaches approver under trust, denied, never run). Fresh run today: 181 pass / 0 fail."
+    },
+    "AC5": {
+      "at": "2026-09-22T23:59:39.750Z",
+      "note": "src/commands/trigger-unattended.test.ts describe(AC5: floor checked before the mode): test.each over FORBIDDEN_SHELL (28 cases incl. sh -c quoting, gh api -X POST/--method/-f body, git update-ref/branch -f/-D, flow start/task skip, nested trigger run, writes to flow.json/acceptance-criteria.md/triggers.json/runs.jsonl) and FORBIDDEN_PATCH (4 cases) all denied under trust; controls prove read-only gh api/git branch and ordinary work still run (not a blanket deny). describe(AC5: unattended tool roster) test 'is exactly the enumerated set...' asserts roster == [apply_patch, get_cwd, list_dir, read_file, shell_exec], excluding web/MCP/subagent/ask_user. trigger-dispatch.test.ts success test also asserts the flow's AC checksum, status and acceptance-criteria.md are unchanged after a dispatch. Fresh run today: 181 pass / 0 fail (unattended.test.ts alone: part of that 181)."
+    },
+    "AC6": {
+      "at": "2026-09-22T23:59:39.857Z",
+      "note": "src/trigger/config.test.ts describe(flow-next dispatch block): 'AC6: a dispatch without rates is rejected' + 'AC6: a dispatch without ceilingUsd is rejected' + 'malformed rates, a zero ceiling and a missing model are each named'; src/trigger/run.test.ts 'AC6: a pre-flow-290 record without tokens still reads and counts' (TriggerRunCost tokens additive, old runs.jsonl lines still read); trigger-dispatch.test.ts success test asserts cost recorded. Fresh run today: 181 pass / 0 fail."
+    },
+    "AC7": {
+      "at": "2026-09-22T23:59:39.967Z",
+      "note": "src/trigger/run.test.ts describe(evaluateTriggerBudget: per-trigger ceiling): 'AC7: a trigger at its own ceiling is refused, naming the per-trigger ceiling, while the project is under' + 'AC7: another trigger under its own ceiling still runs, and its allowance is the tighter of the two' + 'AC7: the project-wide refusal still applies even when the trigger is under its own ceiling' + 'AC7: an unreadable ledger still refuses, with or without a per-trigger ceiling'; src/commands/trigger-dispatch.test.ts 'AC7: a trigger at its own ceiling is refused before any model call (seeded runs.jsonl), exit 0; another trigger still runs'. Fresh run today: 181 pass / 0 fail."
+    },
+    "AC8": {
+      "at": "2026-09-22T23:59:40.074Z",
+      "note": "src/commands/trigger-dispatch.test.ts 'AC8: the run stops at the remaining allowance — attempt failed spend cap reached, overshoot at most one response' (fake provider with fixed usage proves the stop); src/trigger/run.test.ts 'AC8: the project-wide remaining allowance wins when it is the tighter one'. Fresh run today: 181 pass / 0 fail."
+    },
+    "AC9": {
+      "at": "2026-09-22T23:59:46.218Z",
+      "note": "src/commands/maintenance-lock.e2e.test.ts: two real cross-process tests — 'AC9: interactive gdgraph build holds the lock -> a triggered rebuild refuses (recorded lock-refused, exit 0); only one builds' and 'AC9: a triggered rebuild holds the lock -> interactive gdgraph build waits its bound, then names the holder pid and exits 75 (not a build failure)'; src/lib/maintenance-lock.test.ts 'AC9: an interactive caller that finds the lock held past its wait says who holds it and exits 75 — not a build failure'. Fresh run today: 181 pass / 0 fail."
+    },
+    "AC10": {
+      "at": "2026-09-22T23:59:46.317Z",
+      "note": "src/commands/maintenance-lock.e2e.test.ts 'AC10: sync --apply (gdgraph build nested in-process) and a triggered reconcile complete with a ZERO wait bound — no self-refusal'; src/lib/maintenance-lock.test.ts 'AC10: a nested acquire in the holder's own async context runs straight through (no self-refusal, no wait)' + 'AC10: two unrelated concurrent acquires in ONE process still exclude each other'; src/commands/trigger-dispatch.test.ts describe(AC10: the maintenance lock is not held across a dispatch) 'a separate process can take the project's maintenance lock while the agent is running'. Fresh run today: 181 pass / 0 fail."
+    },
+    "AC11": {
+      "at": "2026-09-22T23:59:53.981Z",
+      "note": "docs/docs/cli-reference.md lines ~888-912 document the dispatch block fields (provider, model, permissionMode, rates, ceilingUsd, maxSeconds, maxAttempts, network, baseUrl), the worktree/trigger branch, sandbox behaviour under trust/ask, and per-trigger ceiling; lines 1225-1242 document the shared maintenance lock (interactive waits+exit 75, triggered refuses+lock-refused) and explicitly correct the stale 286 claim ('Flow 286 described its trigger lock as the one the interactive commands take; until this change they took none.'). src/commands/trigger.ts printHelp() (lines 863-912, shown by keryx trigger --help) documents the same dispatch block/worktree/sandbox/ceiling text. README.md line 412 references the shared lock and 'triggered refuses' behaviour, pointing at the CLI reference. Verified by reading the files and running keryx trigger --help directly."
+    },
+    "AC12": {
+      "at": "2026-09-22T23:59:54.086Z",
+      "note": "CI: gh pr checks 650 --repo MrCipherSmith/keryx run today shows 18 checks pass and 1 (deploy to GitHub Pages) skipping — 18/18 green — at PR head 2c5afcb10f4a2f3514fd0223819091aa97a92527, merged into main as 4752910c. keryx health run in this worktree today: '# Code Health: PASS', project score 94 (trend: stable), findings 324, 'PASS: no gate conditions triggered'."
+    },
+    "AC13": {
+      "at": "2026-09-23T00:00:03.466Z",
+      "note": "src/harness/process/sandbox/unattended.test.ts: 23 real-launcher tests (bwrap) — KERYX_DANGEROUSLY_DISABLE_SANDBOX=1 refuses; non-Linux host refuses; no launcher refuses; a launcher that cannot create a namespace refuses; env allowlist-only (HOME/XDG/TMPDIR point at scratch home, tokens/SSH_AUTH_SOCK absent); filesystem home hidden wholesale, private /tmp, network unshared by default; T14: /run hidden wholesale, resolv.conf bound back only for network:true; dispatch.network:true is the only way to keep the network; toolchain roots from PATH under home; credential dir under /home/altsay invisible; exported token/SSH_AUTH_SOCK not in env; host /tmp not visible; network off = loopback only; worktree+scratch home writable, real home not; T14: find / -type s empty, /run empty; T14: a socket the test itself listens on under host /run is unreachable; T14: abstract-namespace sockets invisible with network off, visible with network on. src/commands/trigger-dispatch.test.ts describe(AC13: trust never runs uncontained; ask is read-only): 'trust with no sandbox refuses before any model call, reservation, worktree or attempt' + 'ask with no sandbox runs, but every command and patch is refused — nothing lands' + 'the default health gate runs keryx health run and health gate INSIDE the sandbox, with its env' + 'with no sandbox the health gate does not run the worktree's code at all' + 'shell_exec under the real sandbox takes the worktree's maintenance lock; the lock dir is never committed'. These are live-sandbox tests that skip cleanly where bwrap cannot create namespaces (e.g. CI); on this machine they did not skip — bun test src/harness/process/sandbox/unattended.test.ts run today: 23 pass / 0 fail, 64 expect() calls, confirming bwrap is functional here and every boundary probe (credential file, env token, network) actually ran and passed, not vacuously. This matches journal T13/T14 notes recording the same live probes during implementation, and the T14 security re-review (hiding /run, abstract sockets) which found and fixed the /run AF_UNIX gap live. Full 10-file run today: 181 pass / 0 fail."
+    },
+    "AC14": {
+      "at": "2026-09-23T00:00:08.394Z",
+      "note": "src/commands/trigger-dispatch.test.ts describe(AC14: spend is reserved before the first model call and never fails open): 'two concurrent reservations for one trigger: exactly one gets the allowance (real overlap under the spend lock)' + 'a killed run's reservation keeps counting until an operator resolves it with the real spend' + 'a response with no usage stops the run, fails the attempt, and charges the whole reservation' + 'a throw while writing the closing attempt still records the cost and closes the reservation' + 'only providers known to report usage are accepted'. Fresh run today: 181 pass / 0 fail."
+    },
+    "AC15": {
+      "at": "2026-09-23T00:00:08.498Z",
+      "note": "src/commands/trigger-dispatch.test.ts describe(AC15: a killed run's worktree does not wedge the trigger branch): 'a live stale worktree left on trigger/<flow>-<task> under the dispatcher's parent is recovered' + 'a registration whose directory is already gone is pruned' + 'the branch checked out somewhere the dispatcher did not create is never touched — refused as a conflict'. Fresh run today: 181 pass / 0 fail."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/650"
   },
   "tasks": [
     {
@@ -25,7 +86,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -33,14 +94,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T14; scaffold task not used"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -48,14 +111,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T14; scaffold task not used"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -63,14 +128,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T14; scaffold task not used"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -78,7 +145,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "covered by T5-T14; scaffold task not used"
     },
     {
       "id": "T5",
@@ -194,7 +263,7 @@
       "id": "T12",
       "title": "Verification: CI green, keryx health run",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -202,7 +271,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
@@ -393,6 +463,121 @@
       "at": "2026-09-22T23:50:39.116Z",
       "event": "task-done",
       "detail": "T14: Security re-review fixes: hide host /run daemon sockets, state what network:true grants"
+    },
+    {
+      "at": "2026-09-22T23:59:22.358Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/commands/trigger-dispatch.test.ts: describe(AC1/AC2/AC5/AC6) test 'success: attempt started before the model, task done with a runLink, commit on trigger/<flow>-<task>, cost recorded, AC untouched' drives a fake-provider dispatch end to end; describe(AC1: list/status say report-only) test 'report-only vs dispatch are both named' proves no-dispatch entries stay report-only. bun test run today: 181 pass / 0 fail across 10 files incl. this one."
+    },
+    {
+      "at": "2026-09-22T23:59:28.857Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/commands/trigger-dispatch.test.ts describe(AC1/AC2/AC5/AC6): 'success: attempt started before the model, task done with a runLink...' + 'provider failure: attempt failed with the reason, tokens still recorded, exit 1' + 'timeout: the wall-clock limit aborts the turn; attempt failed as timed out' + 'health-gate failure: the commit stays on the branch but the task is NOT done — attempt failed'. Fresh run today: 181 pass / 0 fail."
+    },
+    {
+      "at": "2026-09-22T23:59:28.970Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/commands/trigger-dispatch.test.ts describe(AC3: refusals happen before any model call, are recorded, exit 0): 7 tests — 'flow not in progress', 'flow not frozen', 'flow next is none (nothing left to do)', 'flow next is blocked', 'the ready task has an open attempt', 'the task's attempt count reached the cap', 'another dispatch holds the flow's dispatch lock (real overlap)'. Fresh run today: 181 pass / 0 fail."
+    },
+    {
+      "at": "2026-09-22T23:59:29.080Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/commands/trigger-dispatch.test.ts test 'seeded stored auto + saved bash*/echo*: under entry mode ask every non-read call is denied and recorded' (stored auto + saved shell allowlist proven inert) + src/commands/trigger-unattended.test.ts describe(AC4) test 'a command touching the agent's credential files' (credential floor reaches approver under trust, denied, never run). Fresh run today: 181 pass / 0 fail."
+    },
+    {
+      "at": "2026-09-22T23:59:39.750Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/commands/trigger-unattended.test.ts describe(AC5: floor checked before the mode): test.each over FORBIDDEN_SHELL (28 cases incl. sh -c quoting, gh api -X POST/--method/-f body, git update-ref/branch -f/-D, flow start/task skip, nested trigger run, writes to flow.json/acceptance-criteria.md/triggers.json/runs.jsonl) and FORBIDDEN_PATCH (4 cases) all denied under trust; controls prove read-only gh api/git branch and ordinary work still run (not a blanket deny). describe(AC5: unattended tool roster) test 'is exactly the enumerated set...' asserts roster == [apply_patch, get_cwd, list_dir, read_file, shell_exec], excluding web/MCP/subagent/ask_user. trigger-dispatch.test.ts success test also asserts the flow's AC checksum, status and acceptance-criteria.md are unchanged after a dispatch. Fresh run today: 181 pass / 0 fail (unattended.test.ts alone: part of that 181)."
+    },
+    {
+      "at": "2026-09-22T23:59:39.857Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/trigger/config.test.ts describe(flow-next dispatch block): 'AC6: a dispatch without rates is rejected' + 'AC6: a dispatch without ceilingUsd is rejected' + 'malformed rates, a zero ceiling and a missing model are each named'; src/trigger/run.test.ts 'AC6: a pre-flow-290 record without tokens still reads and counts' (TriggerRunCost tokens additive, old runs.jsonl lines still read); trigger-dispatch.test.ts success test asserts cost recorded. Fresh run today: 181 pass / 0 fail."
+    },
+    {
+      "at": "2026-09-22T23:59:39.967Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/trigger/run.test.ts describe(evaluateTriggerBudget: per-trigger ceiling): 'AC7: a trigger at its own ceiling is refused, naming the per-trigger ceiling, while the project is under' + 'AC7: another trigger under its own ceiling still runs, and its allowance is the tighter of the two' + 'AC7: the project-wide refusal still applies even when the trigger is under its own ceiling' + 'AC7: an unreadable ledger still refuses, with or without a per-trigger ceiling'; src/commands/trigger-dispatch.test.ts 'AC7: a trigger at its own ceiling is refused before any model call (seeded runs.jsonl), exit 0; another trigger still runs'. Fresh run today: 181 pass / 0 fail."
+    },
+    {
+      "at": "2026-09-22T23:59:40.074Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/commands/trigger-dispatch.test.ts 'AC8: the run stops at the remaining allowance — attempt failed spend cap reached, overshoot at most one response' (fake provider with fixed usage proves the stop); src/trigger/run.test.ts 'AC8: the project-wide remaining allowance wins when it is the tighter one'. Fresh run today: 181 pass / 0 fail."
+    },
+    {
+      "at": "2026-09-22T23:59:46.218Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: src/commands/maintenance-lock.e2e.test.ts: two real cross-process tests — 'AC9: interactive gdgraph build holds the lock -> a triggered rebuild refuses (recorded lock-refused, exit 0); only one builds' and 'AC9: a triggered rebuild holds the lock -> interactive gdgraph build waits its bound, then names the holder pid and exits 75 (not a build failure)'; src/lib/maintenance-lock.test.ts 'AC9: an interactive caller that finds the lock held past its wait says who holds it and exits 75 — not a build failure'. Fresh run today: 181 pass / 0 fail."
+    },
+    {
+      "at": "2026-09-22T23:59:46.317Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: src/commands/maintenance-lock.e2e.test.ts 'AC10: sync --apply (gdgraph build nested in-process) and a triggered reconcile complete with a ZERO wait bound — no self-refusal'; src/lib/maintenance-lock.test.ts 'AC10: a nested acquire in the holder's own async context runs straight through (no self-refusal, no wait)' + 'AC10: two unrelated concurrent acquires in ONE process still exclude each other'; src/commands/trigger-dispatch.test.ts describe(AC10: the maintenance lock is not held across a dispatch) 'a separate process can take the project's maintenance lock while the agent is running'. Fresh run today: 181 pass / 0 fail."
+    },
+    {
+      "at": "2026-09-22T23:59:53.982Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: docs/docs/cli-reference.md lines ~888-912 document the dispatch block fields (provider, model, permissionMode, rates, ceilingUsd, maxSeconds, maxAttempts, network, baseUrl), the worktree/trigger branch, sandbox behaviour under trust/ask, and per-trigger ceiling; lines 1225-1242 document the shared maintenance lock (interactive waits+exit 75, triggered refuses+lock-refused) and explicitly correct the stale 286 claim ('Flow 286 described its trigger lock as the one the interactive commands take; until this change they took none.'). src/commands/trigger.ts printHelp() (lines 863-912, shown by keryx trigger --help) documents the same dispatch block/worktree/sandbox/ceiling text. README.md line 412 references the shared lock and 'triggered refuses' behaviour, pointing at the CLI reference. Verified by reading the files and running keryx trigger --help directly."
+    },
+    {
+      "at": "2026-09-22T23:59:54.087Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: CI: gh pr checks 650 --repo MrCipherSmith/keryx run today shows 18 checks pass and 1 (deploy to GitHub Pages) skipping — 18/18 green — at PR head 2c5afcb10f4a2f3514fd0223819091aa97a92527, merged into main as 4752910c. keryx health run in this worktree today: '# Code Health: PASS', project score 94 (trend: stable), findings 324, 'PASS: no gate conditions triggered'."
+    },
+    {
+      "at": "2026-09-23T00:00:03.466Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: src/harness/process/sandbox/unattended.test.ts: 23 real-launcher tests (bwrap) — KERYX_DANGEROUSLY_DISABLE_SANDBOX=1 refuses; non-Linux host refuses; no launcher refuses; a launcher that cannot create a namespace refuses; env allowlist-only (HOME/XDG/TMPDIR point at scratch home, tokens/SSH_AUTH_SOCK absent); filesystem home hidden wholesale, private /tmp, network unshared by default; T14: /run hidden wholesale, resolv.conf bound back only for network:true; dispatch.network:true is the only way to keep the network; toolchain roots from PATH under home; credential dir under /home/altsay invisible; exported token/SSH_AUTH_SOCK not in env; host /tmp not visible; network off = loopback only; worktree+scratch home writable, real home not; T14: find / -type s empty, /run empty; T14: a socket the test itself listens on under host /run is unreachable; T14: abstract-namespace sockets invisible with network off, visible with network on. src/commands/trigger-dispatch.test.ts describe(AC13: trust never runs uncontained; ask is read-only): 'trust with no sandbox refuses before any model call, reservation, worktree or attempt' + 'ask with no sandbox runs, but every command and patch is refused — nothing lands' + 'the default health gate runs keryx health run and health gate INSIDE the sandbox, with its env' + 'with no sandbox the health gate does not run the worktree's code at all' + 'shell_exec under the real sandbox takes the worktree's maintenance lock; the lock dir is never committed'. These are live-sandbox tests that skip cleanly where bwrap cannot create namespaces (e.g. CI); on this machine they did not skip — bun test src/harness/process/sandbox/unattended.test.ts run today: 23 pass / 0 fail, 64 expect() calls, confirming bwrap is functional here and every boundary probe (credential file, env token, network) actually ran and passed, not vacuously. This matches journal T13/T14 notes recording the same live probes during implementation, and the T14 security re-review (hiding /run, abstract sockets) which found and fixed the /run AF_UNIX gap live. Full 10-file run today: 181 pass / 0 fail."
+    },
+    {
+      "at": "2026-09-23T00:00:08.394Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: src/commands/trigger-dispatch.test.ts describe(AC14: spend is reserved before the first model call and never fails open): 'two concurrent reservations for one trigger: exactly one gets the allowance (real overlap under the spend lock)' + 'a killed run's reservation keeps counting until an operator resolves it with the real spend' + 'a response with no usage stops the run, fails the attempt, and charges the whole reservation' + 'a throw while writing the closing attempt still records the cost and closes the reservation' + 'only providers known to report usage are accepted'. Fresh run today: 181 pass / 0 fail."
+    },
+    {
+      "at": "2026-09-23T00:00:08.499Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: src/commands/trigger-dispatch.test.ts describe(AC15: a killed run's worktree does not wedge the trigger branch): 'a live stale worktree left on trigger/<flow>-<task> under the dispatcher's parent is recovered' + 'a registration whose directory is already gone is pruned' + 'the branch checked out somewhere the dispatcher did not create is never touched — refused as a conflict'. Fresh run today: 181 pass / 0 fail."
+    },
+    {
+      "at": "2026-09-23T00:00:13.020Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T00:00:13.120Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T00:00:13.225Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T00:00:13.330Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-23T00:00:16.469Z",
+      "event": "task-done",
+      "detail": "T12: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T00:04:39.290Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/650 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-23T00:04:43.283Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T00:04:49.667Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }

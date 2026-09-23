@@ -1,0 +1,167 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "CI guard (src/lib/import-policy.live.test.ts)",
+    "severity": "minor",
+    "problem": "The new `src/governance/` core zone had no `service.ts` facade, so the live import-policy test's facade rule had no file to point adapters at and failed as unsatisfiable for the zone.",
+    "impact": "`src/commands/governance.ts` imported the governance zone's internals directly, the same layering gap every other core zone (e.g. `src/forgetting/`) already closes with a facade — left open, it would have let later adapters accumulate direct internal imports with nothing to catch it.",
+    "suggested_fix": "Add `src/governance/service.ts` as the zone's facade, following `src/forgetting/service.ts`'s precedent, and route `src/commands/governance.ts` through it.",
+    "evidence": "CI job `typecheck-and-tests` failed `src/lib/import-policy.live.test.ts`'s facade rule for the governance zone before the fix.",
+    "confidence": "high",
+    "file": "src/governance/",
+    "line": null,
+    "quote": "import-policy.live.test.ts",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/governance/service.ts (new)",
+        "src/commands/governance.ts"
+      ],
+      "enumeration_method": "The live import-policy test enumerates every core zone lacking a service.ts facade and every adapter importing zone internals directly; governance was the only new violation it reported."
+    },
+    "global_id": "2026-09-22-ingest-governance#F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "src/governance/service.ts added as the zone's facade; src/commands/governance.ts routed through it; merged to main in 1ce98384 via PR #652."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "bun test src/lib/import-policy.live.test.ts -> included in 47 pass / 0 fail across src/governance/, src/flow/completion-attempts.test.ts, src/lib/import-policy.live.test.ts, src/standard/command-registry.coverage.test.ts. Test \"some core zones have no service.ts, so the facade rule is unsatisfiable for them\" passes at head 97d6c189, merged to main in 1ce98384 via PR #652.",
+      "verifier": "orchestrator (governance ingest)"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "CI guard (src/standard/command-registry.coverage.test.ts)",
+    "severity": "minor",
+    "problem": "The new `governance report` and `governance show` verbs had no entry in the agent-facing command registry.",
+    "impact": "An agent driving keryx through the command registry had no descriptor for the new governance verbs and could not discover them, and the coverage test that enforces full registry coverage failed.",
+    "suggested_fix": "Add `governance report` and `governance show` descriptors to src/standard/command-registry.ts.",
+    "evidence": "CI job `typecheck-and-tests` failed `command-registry.coverage.test.ts`'s \"every CLI verb is either described or excluded with a reason\" before the fix.",
+    "confidence": "high",
+    "file": "src/standard/command-registry.ts",
+    "line": null,
+    "quote": "every CLI verb is either described or excluded with a reason",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/standard/command-registry.ts (governance report, governance show entries)"
+      ],
+      "enumeration_method": "The coverage test enumerates every CLI verb against the registry and every excluded verb against its reason list; the two governance verbs were the only ones missing both."
+    },
+    "global_id": "2026-09-22-ingest-governance#F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "governance report and governance show descriptors added to src/standard/command-registry.ts; merged to main in 1ce98384 via PR #652."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "bun test src/standard/command-registry.coverage.test.ts -> included in 47 pass / 0 fail. Test \"every CLI verb is either described or excluded with a reason\" passes at head 97d6c189, merged to main in 1ce98384 via PR #652.",
+      "verifier": "orchestrator (governance ingest)"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "code-reviewer (governance)",
+    "severity": "major",
+    "problem": "`flow complete`'s final `transition()` re-checks the acceptance-criteria checksum unguarded before persisting the completion attempt, so a criteria file tampered with while the gates were running threw out of `transition()` before the attempt — and every gate outcome it recorded — was ever saved to `flow.json`.",
+    "impact": "AC4 promises that gate outcomes are persisted \"for passing, failing and skipped gates alike ... on every completion attempt from now on, pass or fail\". A tamper caught at the unguarded re-check silently violated that: the attempt vanished instead of landing as a recorded failure, so an operator investigating a completion that never happened would find no trace of what was evaluated.",
+    "suggested_fix": "Re-check AC intactness explicitly before the final transition, persist the attempt via a plain save() (no AC re-check) BEFORE that transition, and record a caught tamper as a failed attempt naming the mismatch.",
+    "evidence": "The final transition() call wrapped assertAcIntact with no surrounding try around the attempt-append; a criteria-file mutation between gate evaluation and that call threw before saveFlow persisted the attempt.",
+    "confidence": "high",
+    "file": "src/flow/service.ts",
+    "line": null,
+    "quote": "assertAcIntact",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/flow/service.ts completeFlow (final transition)",
+        "src/flow/service.ts assertAcIntact call site"
+      ],
+      "enumeration_method": "Traced every call to assertAcIntact inside completeFlow and every place a completion attempt is appended to flow.json; the final transition's unguarded re-check was the only site where a throw could occur after gate evaluation but before the attempt was saved."
+    },
+    "global_id": "2026-09-22-ingest-governance#F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "the tamper-safe attempt persistence in src/flow/service.ts (explicit re-check, save() before the final transition, failed attempt naming the tamper) with its regression test; merged to main in 1ce98384 via PR #652."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/flow/completion-attempts.test.ts test \"AC4 review fix: a tamper caught between gate evaluation and persistence is still recorded on disk, as a failed attempt naming the tamper\" mutates the AC file from inside a healthGate stub mid-complete() and asserts the attempt lands on disk with a failed gate naming the checksum mismatch; verified to fail without the fix, restored after. bun test src/flow/completion-attempts.test.ts -> included in 47 pass / 0 fail at head 97d6c189, merged to main in 1ce98384 via PR #652.",
+      "verifier": "orchestrator (governance ingest)"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "code-reviewer (governance)",
+    "severity": "minor",
+    "problem": "`FlowState.completionAttempts` is an append-only array with no cap or pruning, so it grows without bound across repeated completion attempts on a long-lived flow.",
+    "impact": "A flow that fails `flow complete` repeatedly (e.g. during iterative fix cycles) accumulates one entry per attempt forever, growing flow.json indefinitely. No functional defect today, but an undocumented growth path that a future reader could mistake for an oversight.",
+    "suggested_fix": "Document the unbounded growth as a deliberate design choice, matching the existing precedent set by `signatures`, in the FlowState doc comment and the CLI reference.",
+    "evidence": "No cap, truncation or pruning logic exists anywhere `completionAttempts` is appended to in src/flow/service.ts.",
+    "confidence": "high",
+    "file": "src/flow/types.ts",
+    "line": null,
+    "quote": "completionAttempts",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-22-ingest-governance#F-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "documented as unbounded by design in src/flow/types.ts and docs/docs/cli-reference.md; merged to main in 1ce98384 via PR #652. No behavior change: unbounded growth remains the intended contract."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "src/flow/types.ts's FlowState doc comment and docs/docs/cli-reference.md now state that completionAttempts grows unboundedly by design, matching signatures' existing precedent, at head 97d6c189, merged to main in 1ce98384 via PR #652.",
+      "verifier": "orchestrator (governance ingest)"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "code-reviewer (governance)",
+    "severity": "minor",
+    "problem": "Trigger spend was rendered from the raw summed float rather than through the same USD rounding helper review spend uses, so an accumulation like 0.1 + 0.2 printed as 0.30000000000000004 instead of $0.30.",
+    "impact": "A governance report reader would see a jarring raw floating-point artifact in the trigger spend line, undermining the report's credibility as an accountability document, while the review spend line right next to it was correctly rounded.",
+    "suggested_fix": "Route renderTriggerSpendLine's spend figure through the same usd() formatter review spend already uses.",
+    "evidence": "renderTriggerSpendLine formatted its total directly with no usd() call, unlike the review-spend renderer beside it.",
+    "confidence": "high",
+    "file": "src/governance/report.ts",
+    "line": null,
+    "quote": "renderTriggerSpendLine",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-22-ingest-governance#F-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "renderTriggerSpendLine now formats through usd() with a regression test; merged to main in 1ce98384 via PR #652."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/governance/report.test.ts test \"review-fix: trigger spend is formatted through the same usd() rounding as review spend, not printed raw\" sums 0.1 + 0.2 and asserts the rendered line reads $0.30, not the raw float; verified to fail without the fix. bun test src/governance/ -> included in 47 pass / 0 fail at head 97d6c189, merged to main in 1ce98384 via PR #652.",
+      "verifier": "orchestrator (governance ingest)"
+    }
+  }
+]

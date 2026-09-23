@@ -7,17 +7,58 @@
   "id": "288",
   "slug": "acp-project-tools-keryx-graph-wiki-memor",
   "title": "ACP project tools: keryx graph, wiki, memory and flow tools, slash commands and model switching in the editor",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-22T22:22:26.709Z",
-  "updatedAt": "2026-09-22T23:52:54.313Z",
+  "updatedAt": "2026-09-23T04:41:20.326Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:b009ea3d89176a09f02a26f4475deb8e43b0eddcbc3ed48103598dbc011fb7b5",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-23T00:07:19.868Z",
+      "note": "src/commands/project-tools.ts:buildProjectTools (gated by offersIndexTools) is the single assembly used by both the shell (interactive-agent-tools.ts:198) and ACP roster (acp/roster.ts:72); roster.test.ts asserts both project states and the search_code exception. bun test: roster.test.ts passes (bd1dbe96, merged PR #651)."
+    },
+    "AC2": {
+      "at": "2026-09-23T00:07:19.978Z",
+      "note": "src/acp/agent-io.ts:53 TOOL_KIND_BY_NAME maps every roster tool; ACP_TOOL_KIND_OTHER_EXCEPTIONS (line 91) is empty; roster.test.ts:114 fails any tool falling back to other without being a declared exception. bun test roster.test.ts passes (bd1dbe96, merged PR #651)."
+    },
+    "AC3": {
+      "at": "2026-09-23T00:07:20.087Z",
+      "note": "src/acp/roster.test.ts (AC3 block, line 7 comment) pins the literal roster list; asserts spawn_subagent (delegation) and bus_* (bus) tools absent from ACP roster while present in shell roster, and untrusted-result tools excluded per InteractiveToolResult.untrusted comment at line 137-138. bun test roster.test.ts passes (bd1dbe96, merged PR #651)."
+    },
+    "AC4": {
+      "at": "2026-09-23T00:07:29.203Z",
+      "note": "src/acp/server.ts:635 sends one available_commands_update after session/new and session/load; commands.ts handles leading-/ prompt text without reaching the model (T14 hardened: single-line, no leading whitespace). project-tools.process.test.ts:135 'commands: one update after session/new, a / command never reaches the model, an unlisted one gets the list' passes. bun test: 42 pass (bd1dbe96, merged PR #651)."
+    },
+    "AC5": {
+      "at": "2026-09-23T00:07:29.386Z",
+      "note": "src/acp/models.ts:74-84 builds the one select configOption of category model (shellModelSource, narrowed to providers the shell factory builds); session/new and session/load await this before answering (protocol.ts configOptions field). bun test: 42 pass (bd1dbe96, merged PR #651)."
+    },
+    "AC6": {
+      "at": "2026-09-23T00:07:29.599Z",
+      "note": "src/acp/server.ts: set_config_option and /model both call bind (refresh grants -> realMakeProvider -> resolveAcpTurnSettings) which applies from the NEXT turn (per-session model map read once at turn start), never mid-turn; unknown value refused with reason; nothing written to keryx shell's saved default (journal T9). T14 fixed cancel-aware switch (session/cancel aborts /model, nothing applied) and overlapping-switch sequence numbers so a later failure doesn't discard an earlier success. project-tools.process.test.ts:180 'model: configOptions on session/new, switched by set_config_option and /model from the next turn, never mid-turn' passes. bun test: 42 pass (bd1dbe96, merged PR #651)."
+    },
+    "AC7": {
+      "at": "2026-09-23T00:07:38.954Z",
+      "note": "src/acp/protocol.ts types AvailableCommand (line ~600s), AcpSessionConfigOptionCategory/AcpSessionConfigOption (601,617), AcpSetSessionConfigOptionRequest (628), config_option_update.configOptions (637); session/set_config_option moved from refused to implemented in server.ts (comment at 431 notes it is not refused while a turn runs). protocol.test.ts (version/partition tests present, ACP_PROTOCOL_VERSION etc.) passes. bun test: 42 pass (bd1dbe96, merged PR #651)."
+    },
+    "AC8": {
+      "at": "2026-09-23T00:07:39.068Z",
+      "note": "src/acp/project-tools.process.test.ts describe block 'AC8 — project tools, commands and model switching over a real pipe' (line 88) with 3 tests: 'the project tools are offered, and one is called in a turn' (89), 'commands: one update after session/new, a / command never reaches the model, an unlisted one gets the list' (135), 'model: configOptions on session/new, switched by set_config_option and /model from the next turn, never mid-turn' (180) — over a real stdio pipe with the fixture provider, waits on wire events not timers. bun test: 42 pass, 0 fail (bd1dbe96, merged PR #651)."
+    },
+    "AC9": {
+      "at": "2026-09-23T00:07:39.180Z",
+      "note": "docs/docs/cli-reference.md has a '## acp' section (line 168) documenting the tool roster/exclusions, commands, and configOptions model switching (lines 202-262); README.md lines 256-266 describe the ACP server, advertised commands, and roster. No remaining text claims only five tools or a launch-fixed model (both greps for those phrases returned zero hits in README.md and docs/docs/cli-reference.md). (bd1dbe96, merged PR #651)."
+    },
+    "AC10": {
+      "at": "2026-09-23T00:07:45.338Z",
+      "note": "CI green 18/18 on PR #651 (gh pr checks 651 --repo MrCipherSmith/keryx) at head 7e0809a2a2b170ded9d3ecf307e1c0f6f298a19a, merged squash bd1dbe96 into main. keryx health run: PASS, project score 94, 0 gate conditions triggered (report: .metaproject/data/health/artifacts/latest.md)."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/651"
   },
   "tasks": [
     {
@@ -25,7 +66,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -33,14 +74,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -48,14 +90,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -63,14 +106,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -78,7 +122,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -209,7 +254,7 @@
       "id": "T13",
       "title": "Verification: CI green, keryx health run",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -217,7 +262,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
@@ -230,6 +276,26 @@
         "log": [
           {
             "at": "2026-09-22T23:42:17.385Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Push config_option_update when a late model list arrives after a timed-out session replied",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T04:21:59.948Z",
             "outcome": "started"
           }
         ]
@@ -358,6 +424,139 @@
       "at": "2026-09-22T23:52:54.313Z",
       "event": "task-done",
       "detail": "T14: Review fixes: bounded model probe on the shell's base URL, saved per-provider endpoints, literal roster pin, stricter command parsing, cancel-aware switch, load restores the switched model"
+    },
+    {
+      "at": "2026-09-23T00:07:19.868Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/commands/project-tools.ts:buildProjectTools (gated by offersIndexTools) is the single assembly used by both the shell (interactive-agent-tools.ts:198) and ACP roster (acp/roster.ts:72); roster.test.ts asserts both project states and the search_code exception. bun test: roster.test.ts passes (bd1dbe96, merged PR #651)."
+    },
+    {
+      "at": "2026-09-23T00:07:19.978Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/acp/agent-io.ts:53 TOOL_KIND_BY_NAME maps every roster tool; ACP_TOOL_KIND_OTHER_EXCEPTIONS (line 91) is empty; roster.test.ts:114 fails any tool falling back to other without being a declared exception. bun test roster.test.ts passes (bd1dbe96, merged PR #651)."
+    },
+    {
+      "at": "2026-09-23T00:07:20.087Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/acp/roster.test.ts (AC3 block, line 7 comment) pins the literal roster list; asserts spawn_subagent (delegation) and bus_* (bus) tools absent from ACP roster while present in shell roster, and untrusted-result tools excluded per InteractiveToolResult.untrusted comment at line 137-138. bun test roster.test.ts passes (bd1dbe96, merged PR #651)."
+    },
+    {
+      "at": "2026-09-23T00:07:29.203Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/acp/server.ts:635 sends one available_commands_update after session/new and session/load; commands.ts handles leading-/ prompt text without reaching the model (T14 hardened: single-line, no leading whitespace). project-tools.process.test.ts:135 'commands: one update after session/new, a / command never reaches the model, an unlisted one gets the list' passes. bun test: 42 pass (bd1dbe96, merged PR #651)."
+    },
+    {
+      "at": "2026-09-23T00:07:29.386Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/acp/models.ts:74-84 builds the one select configOption of category model (shellModelSource, narrowed to providers the shell factory builds); session/new and session/load await this before answering (protocol.ts configOptions field). bun test: 42 pass (bd1dbe96, merged PR #651)."
+    },
+    {
+      "at": "2026-09-23T00:07:29.599Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/acp/server.ts: set_config_option and /model both call bind (refresh grants -> realMakeProvider -> resolveAcpTurnSettings) which applies from the NEXT turn (per-session model map read once at turn start), never mid-turn; unknown value refused with reason; nothing written to keryx shell's saved default (journal T9). T14 fixed cancel-aware switch (session/cancel aborts /model, nothing applied) and overlapping-switch sequence numbers so a later failure doesn't discard an earlier success. project-tools.process.test.ts:180 'model: configOptions on session/new, switched by set_config_option and /model from the next turn, never mid-turn' passes. bun test: 42 pass (bd1dbe96, merged PR #651)."
+    },
+    {
+      "at": "2026-09-23T00:07:38.954Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/acp/protocol.ts types AvailableCommand (line ~600s), AcpSessionConfigOptionCategory/AcpSessionConfigOption (601,617), AcpSetSessionConfigOptionRequest (628), config_option_update.configOptions (637); session/set_config_option moved from refused to implemented in server.ts (comment at 431 notes it is not refused while a turn runs). protocol.test.ts (version/partition tests present, ACP_PROTOCOL_VERSION etc.) passes. bun test: 42 pass (bd1dbe96, merged PR #651)."
+    },
+    {
+      "at": "2026-09-23T00:07:39.068Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/acp/project-tools.process.test.ts describe block 'AC8 — project tools, commands and model switching over a real pipe' (line 88) with 3 tests: 'the project tools are offered, and one is called in a turn' (89), 'commands: one update after session/new, a / command never reaches the model, an unlisted one gets the list' (135), 'model: configOptions on session/new, switched by set_config_option and /model from the next turn, never mid-turn' (180) — over a real stdio pipe with the fixture provider, waits on wire events not timers. bun test: 42 pass, 0 fail (bd1dbe96, merged PR #651)."
+    },
+    {
+      "at": "2026-09-23T00:07:39.180Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: docs/docs/cli-reference.md has a '## acp' section (line 168) documenting the tool roster/exclusions, commands, and configOptions model switching (lines 202-262); README.md lines 256-266 describe the ACP server, advertised commands, and roster. No remaining text claims only five tools or a launch-fixed model (both greps for those phrases returned zero hits in README.md and docs/docs/cli-reference.md). (bd1dbe96, merged PR #651)."
+    },
+    {
+      "at": "2026-09-23T00:07:45.338Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: CI green 18/18 on PR #651 (gh pr checks 651 --repo MrCipherSmith/keryx) at head 7e0809a2a2b170ded9d3ecf307e1c0f6f298a19a, merged squash bd1dbe96 into main. keryx health run: PASS, project score 94, 0 gate conditions triggered (report: .metaproject/data/health/artifacts/latest.md)."
+    },
+    {
+      "at": "2026-09-23T00:07:49.927Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T00:07:50.035Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T00:07:50.145Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T00:07:50.254Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-23T00:07:54.389Z",
+      "event": "task-done",
+      "detail": "T13: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T00:12:21.593Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/651 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-23T00:12:24.882Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T00:12:30.159Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-09-22-ingest-acp-project-tools#F-008 (minor, round 2026-09-22-ingest-acp-project-tools): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`)"
+    },
+    {
+      "at": "2026-09-23T04:21:59.697Z",
+      "event": "task-added",
+      "detail": "T15: Push config_option_update when a late model list arrives after a timed-out session replied"
+    },
+    {
+      "at": "2026-09-23T04:21:59.948Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T04:30:49.324Z",
+      "event": "task-done",
+      "detail": "T15: Push config_option_update when a late model list arrives after a timed-out session replied"
+    },
+    {
+      "at": "2026-09-23T04:38:23.700Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/651 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-23T04:38:26.987Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T04:38:33.338Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-09-22-ingest-acp-project-tools#F-008 (minor, round 2026-09-22-ingest-acp-project-tools): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`)"
+    },
+    {
+      "at": "2026-09-23T04:41:11.726Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/651 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-23T04:41:14.933Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T04:41:20.326Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }

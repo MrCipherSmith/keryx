@@ -1,0 +1,248 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "code-reviewer (acp)",
+    "severity": "major",
+    "problem": "session/new and session/load awaited the model list with no bound, and the Ollama probe behind it carried no per-fetch timeout and targeted the saved launch provider's base URL rather than the shell picker's own `--base-url` flag.",
+    "impact": "An unreachable or slow gateway could stall every new editor thread on the OS connect timeout — the exact failure the operator flagged from the live Zed session on 0.2.154 (flow 287/288 release-decision journal entry) — with no way for the client to make progress until the OS gave up.",
+    "suggested_fix": "Bound how long a session waits for the list, start the session on the launch model when the bound is hit, and give the probe its own timeout on the same `--base-url` the shell uses.",
+    "evidence": "Pre-fix, `modelChoices()` had no `Promise.race` against a timer and the Ollama probe fetch carried no `AbortSignal.timeout`.",
+    "confidence": "high",
+    "file": "src/acp/server.ts",
+    "line": 493,
+    "quote": "const modelListTimeoutMs = options.modelListTimeoutMs ?? DEFAULT_MODEL_LIST_TIMEOUT_MS;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/acp/server.ts modelChoices (session/new, session/load)",
+        "src/acp/models.ts Ollama probe fetch"
+      ],
+      "enumeration_method": "Both call sites that await a model list before answering an ACP request were enumerated by tracing every caller of `modelChoices()`; the probe is the sole network fetch in the model-listing path."
+    },
+    "global_id": "2026-09-22-ingest-acp-project-tools#F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "the bounded model-list race and the --base-url-only probe in src/acp/server.ts and src/acp/models.ts, commit e633d4b9; merged to main in bd1dbe96 via PR #651."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at e633d4b9, merged to main in bd1dbe96 via PR #651. src/acp/server.ts:493-533 races modelChoices() against setTimeout(modelListTimeoutMs) (default 8s DEFAULT_MODEL_LIST_TIMEOUT_MS), returning [launchChoice] and logging to stderr on timeout without caching the failure; the Ollama probe (src/acp/models.ts) uses only the shell's --base-url flag with AbortSignal.timeout on every fetch. bun test src/acp/server-models.test.ts and src/acp/ suite: 185 pass, 0 fail.",
+      "verifier": "round-2 (code-reviewer (acp))"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "code-reviewer (acp)",
+    "severity": "major",
+    "problem": "Switching the ACP session's model built providers from the detected defaults only; it did not apply the per-provider endpoints the shell itself saves (the TUI endpoint picker, the Copilot login), so an ACP switch to a provider with a saved non-default endpoint silently used the wrong one.",
+    "impact": "A user who had pointed the shell at a private/self-hosted endpoint for a provider would have their ACP session's model switch silently reach the default endpoint instead, potentially the wrong deployment or an unreachable one.",
+    "suggested_fix": "Route the ACP model source through the same saved-endpoint overlay `resolveTuiStartup` uses, rather than a copy of the detection logic.",
+    "evidence": "`shellModelSource` in src/commands/acp.ts built its provider list from `detectProviders` directly, with no saved-baseUrls overlay applied.",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "line": 2926,
+    "quote": "export function withSavedBaseUrls<T extends { name: string; baseUrl?: string }>(",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/acp.ts shellModelSource",
+        "src/commands/shell.ts resolveTuiStartup"
+      ],
+      "enumeration_method": "Enumerated every caller of `detectProviders` that builds a provider list a user-facing surface picks from: the TUI startup path (already applied the overlay) and the new ACP model source (did not)."
+    },
+    "global_id": "2026-09-22-ingest-acp-project-tools#F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "withSavedBaseUrls shared between TUI startup and the ACP model source, commit e633d4b9; merged to main in bd1dbe96 via PR #651."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at e633d4b9, merged to main in bd1dbe96 via PR #651. withSavedBaseUrls is extracted in src/commands/shell.ts:2926 (called at :2914) and shellModelSource in src/commands/acp.ts now applies the same overlay instead of a copy. bun test src/commands/acp.test.ts 'a saved per-provider endpoint (auth.json baseUrls)...': passes, part of 36 pass / 0 fail.",
+      "verifier": "round-2 (code-reviewer (acp))"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "code-reviewer (acp)",
+    "severity": "minor",
+    "problem": "AC3's roster pin was derived from iterating the live metaproject operations list rather than asserting a literal, hand-written set of tool names.",
+    "impact": "A new metaproject operation added elsewhere in the codebase could silently widen what the ACP roster offers, with the test still passing because it recomputed its expectation from the same source it was meant to check.",
+    "suggested_fix": "Pin the roster test against a literal array of tool names, so a new operation requires a deliberate test edit to be included.",
+    "evidence": "The pre-fix AC3 assertion built its expected set from the same enumeration `buildProjectTools` uses, rather than a fixed list.",
+    "confidence": "high",
+    "file": "src/acp/roster.test.ts",
+    "line": null,
+    "quote": "PROJECT_TOOL_NAMES",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-22-ingest-acp-project-tools#F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "the literal PROJECT_TOOL_NAMES pin in src/acp/roster.test.ts, commit e633d4b9; merged to main in bd1dbe96 via PR #651."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at e633d4b9, merged to main in bd1dbe96 via PR #651. src/acp/roster.test.ts:103 asserts the roster against a literal PROJECT_TOOL_NAMES constant rather than a recomputed enumeration, plus a check that every pinned read-risk tool is a known read-only builtin/metaproject op. bun test src/acp/roster.test.ts: passes, part of 185 pass / 0 fail across src/acp/.",
+      "verifier": "round-2 (code-reviewer (acp))"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "code-reviewer (acp)",
+    "severity": "minor",
+    "problem": "Command parsing dropped trailing text on a multi-line prompt starting with a command, echoed back any attachment sent alongside a command, and did not react to session/cancel arriving mid-switch.",
+    "impact": "A client sending a command plus extra text or an attachment got silently incomplete handling rather than a refusal explaining why, and a user who cancelled during /model had no way to stop the switch from completing anyway.",
+    "suggested_fix": "Accept a command only when its first block is a single, non-indented text line; refuse (rather than silently drop) extra text or an attachment on a no-arg command; wire session/cancel into the /model bind so it aborts cleanly.",
+    "evidence": "Pre-fix, multi-block prompts and trailing text past the first line were parsed inconsistently, and there was no cancel-aware path in the /model handler.",
+    "confidence": "high",
+    "file": "src/acp/commands.ts",
+    "line": null,
+    "quote": "taken from that line alone, so an attachment's content never becomes",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-22-ingest-acp-project-tools#F-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "stricter single-line command parsing, attachment refusal and cancel-aware /model bind in src/acp/commands.ts and src/acp/server.ts, commit e633d4b9; merged to main in bd1dbe96 via PR #651."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at e633d4b9, merged to main in bd1dbe96 via PR #651. src/acp/commands.ts accepts a command only from a single, non-indented first text line, refuses extra text and any attachment on a no-arg command without echoing it, and src/acp/server.ts wires session/cancel into the /model bind so a cancelled switch applies nothing. bun test src/acp/commands.test.ts and project-tools.process.test.ts: part of 185 pass / 0 fail across src/acp/.",
+      "verifier": "round-2 (code-reviewer (acp))"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "code-reviewer (acp)",
+    "severity": "minor",
+    "problem": "session/load after an agent restart did not restore the model a session had been switched to; it reverted to the launch model even when the switched-to model was still a valid choice.",
+    "impact": "A user who switched models mid-session and then reconnected after a restart would silently lose that choice with no explanation, having to re-issue /model.",
+    "suggested_fix": "Read the recorded provider/model from the session summary before openSession overwrites it, and restore it on load when it is still an available choice; otherwise fall back to the launch model with a message saying why.",
+    "evidence": "Pre-fix, session/load rebuilt the session from the launch configuration alone, with no read of the last-recorded provider/model.",
+    "confidence": "high",
+    "file": "src/acp/session.ts",
+    "line": null,
+    "quote": "Set by `load()` only: the provider/model the durable session last ran, as",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-22-ingest-acp-project-tools#F-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "the last-ran provider/model restore in src/acp/session.ts, commit e633d4b9; merged to main in bd1dbe96 via PR #651."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at e633d4b9, merged to main in bd1dbe96 via PR #651. src/acp/session.ts:46 documents and reads the provider/model the durable session last ran before openSession overwrites it; session/load restores it when still a valid choice, else falls back to the launch model with a message saying why. bun test src/acp/session.test.ts and server-models.test.ts: part of 185 pass / 0 fail across src/acp/.",
+      "verifier": "round-2 (code-reviewer (acp))"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "code-reviewer (acp)",
+    "severity": "minor",
+    "problem": "Two overlapping model switches were not ordered: if a later switch failed after an earlier one had already succeeded, the failure could discard the earlier success.",
+    "impact": "A user issuing two rapid /model or set_config_option calls could end up on neither the model they successfully switched to nor the one they asked for last, with no indication of what happened.",
+    "suggested_fix": "Give each switch an issued sequence number and only let a later request's outcome overwrite an earlier one's; a finished switch is applied only if no later-started one has been applied already.",
+    "evidence": "Pre-fix, the switch handler applied whichever provider/model resolution finished last, regardless of which was issued last.",
+    "confidence": "high",
+    "file": "src/acp/server.ts",
+    "line": null,
+    "quote": "LATER-started one has been applied already. So the later request wins when",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-22-ingest-acp-project-tools#F-006",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "the issued/applied sequence-number guard in src/acp/server.ts, commit e633d4b9; merged to main in bd1dbe96 via PR #651."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at e633d4b9, merged to main in bd1dbe96 via PR #651. src/acp/server.ts:441-442 documents and implements the issued/applied sequence-number rule so a finished switch is applied only if no later-started one has been applied already. bun test src/acp/server-models.test.ts and project-tools.process.test.ts 'model: configOptions on session/new, switched by set_config_option and /model from the next turn, never mid-turn': part of 185 pass / 0 fail across src/acp/.",
+      "verifier": "round-2 (code-reviewer (acp))"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "code-reviewer (acp, round 2)",
+    "severity": "minor",
+    "problem": "A comment describing the dispatcher's synchrony was stale after the T5-T12 changes, no longer matching the code it documented.",
+    "impact": "A future reader trusting the comment could misjudge which parts of the request-handling path run synchronously versus after an await, risking a reintroduction of a timing bug the comment was meant to prevent.",
+    "suggested_fix": "Correct the comment to match the current synchronous/asynchronous boundary.",
+    "evidence": "The comment's description of what ran before the first await no longer matched the post-T5-T12 code path.",
+    "confidence": "medium",
+    "file": "src/acp/server.ts",
+    "line": null,
+    "quote": "everything up to here is synchronous",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-22-ingest-acp-project-tools#F-007",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "the corrected synchrony comment in src/acp/server.ts, commit e633d4b9; merged to main in bd1dbe96 via PR #651."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at e633d4b9, merged to main in bd1dbe96 via PR #651. src/acp/server.ts:780 and :925 now correctly describe the synchronous portion of the dispatch path, matching the current post-T5-T12 code.",
+      "verifier": "round-2 (code-reviewer (acp))"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "code-reviewer (acp, round 2)",
+    "severity": "minor",
+    "problem": "When a session's model list times out (F-001's bound), that session starts on the launch model only. If the background listing later succeeds, `listedChoices` is cached for future sessions, but the session that already timed out and replied is never sent a `config_option_update` with the fuller list — it only gets the extra choices if it asks again some other way (e.g. session/load).",
+    "impact": "A user on a session whose model list happened to arrive just after the 8s bound sees only the launch model as a config option for the rest of that session, even though the fuller list became available moments later; no session/update tells them anything changed.",
+    "suggested_fix": "Not proposed for this flow: pushing a late config_option_update after a session has already answered session/new would need new protocol machinery this flow's AC set does not ask for (AC4-AC6 cover advertising and switching, not asynchronous late-arrival pushes). Deferred as an accepted limitation rather than acted on now.",
+    "evidence": "src/acp/server.ts:504-533 (modelChoices) caches a successful late listing into `listedChoices` for future calls but does not iterate live sessions to push config_option_update when that happens.",
+    "confidence": "high",
+    "file": "src/acp/server.ts",
+    "line": null,
+    "quote": "the next session asks again",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-22-ingest-acp-project-tools#F-008",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "recorded here as an accepted limitation rather than acted on; not in scope of flow 288's AC1-AC10 (AC5/AC6 cover session/new, session/load, set_config_option and /model, not an asynchronous late-arrival push), and left for a future flow if it proves to matter in practice. bd1dbe96, merged PR #651."
+    },
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Read at bd1dbe96 (merged PR #651, head 7e0809a2): src/acp/server.ts:504-533 shows the timeout path returns [launchChoice] and logs to stderr; the background `startListing(source)` promise (line 496-503) continues and, on success, sets `listedChoices` for later `modelChoices()` calls, but nothing in server.ts iterates active sessions or calls sendUpdate with a fresh configOptions when that resolution lands after a session already replied. No config_option_update push exists for this path in the merged code.",
+      "verifier": "round-2 (code-reviewer (acp))"
+    }
+  }
+]
