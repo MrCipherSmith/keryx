@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "300",
+  "slug": "tui-sidebar-and-modals-for-the-governanc",
+  "title": "TUI: sidebar and modals for the governance report, triggers and external agent runs",
+  "status": "in-progress",
+  "createdAt": "2026-09-23T05:32:20.810Z",
+  "updatedAt": "2026-09-23T05:40:55.681Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:26e861486b9d3b35dc2939fae4c240bbf6b5f1d3432d840a2a56432793ab8e6a",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Shared trigger-ledger watcher and extracted trigger formatters",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T05:40:55.681Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Governance sidebar section, background run, report modal, /governance",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Triggers sidebar section, list+detail modal, run-now as a child process, /triggers",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Sessions: acp rows tagged, -c does not continue an external session",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Layout, themes, keyboard path, docs",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-23T05:32:20.810Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-23T05:40:54.709Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T05:40:54.829Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T05:40:54.948Z",
+      "event": "task-added",
+      "detail": "T5: Shared trigger-ledger watcher and extracted trigger formatters"
+    },
+    {
+      "at": "2026-09-23T05:40:55.068Z",
+      "event": "task-added",
+      "detail": "T6: Governance sidebar section, background run, report modal, /governance"
+    },
+    {
+      "at": "2026-09-23T05:40:55.188Z",
+      "event": "task-added",
+      "detail": "T7: Triggers sidebar section, list+detail modal, run-now as a child process, /triggers"
+    },
+    {
+      "at": "2026-09-23T05:40:55.309Z",
+      "event": "task-added",
+      "detail": "T8: Sessions: acp rows tagged, -c does not continue an external session"
+    },
+    {
+      "at": "2026-09-23T05:40:55.425Z",
+      "event": "task-added",
+      "detail": "T9: Layout, themes, keyboard path, docs"
+    },
+    {
+      "at": "2026-09-23T05:40:55.556Z",
+      "event": "task-added",
+      "detail": "T10: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T05:40:55.681Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    }
+  ]
+}

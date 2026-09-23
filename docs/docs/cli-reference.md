@@ -332,7 +332,8 @@ its model.
 | `/status` | The session id, project root, model, reasoning effort, the tools the session's turns are offered, and whether the client's MCP servers are running. |
 
 Every other shell command is left out because it needs the terminal UI —
-`/workspace`, `/review`, `/integrations`, `/mcp`, `/game` and the pickers — or
+`/workspace`, `/review`, `/governance`, `/triggers`, `/integrations`, `/mcp`,
+`/game` and the pickers — or
 a session feature this wire does not carry. One typed anyway is answered with
 the list above rather than sent to the model.
 
@@ -589,7 +590,70 @@ Refusals print their code and exit non-zero (except where noted):
   given an argument. `/status` and `/flows` remain usable even while the main
   turn is busy.
 - `/sessions` opens an interactive session picker in the TUI and switches the
-  live shell to the chosen session.
+  live shell to the chosen session. Sessions written by `keryx agents external
+  run` appear there too. They are marked `acp:<agent>` in the row's description,
+  and typing `acp` in the filter finds them. `keryx shell -c` never continues
+  one: it continues the newest session of the shell's own kind.
+- **Governance** (TUI sidebar, always present, below Jobs). The row shows one of
+  four states:
+  - `no report — click to run`: there is no stored report, or it is malformed.
+  - `running…`: a report is being built.
+  - `last report <YYYY-MM-DD HH:MM>`: taken from `generated_at`, in UTC.
+  - `failed — click to retry`.
+
+  With no report, clicking the row runs the same `buildGovernanceReport` +
+  `writeGovernanceArtifacts` pair that bare `keryx governance report` runs:
+  current project, no filters. The run happens in the shell's own process, in
+  the background. The composer stays usable, a second click starts nothing, and
+  one toast appears when it finishes. It never goes through the agent's task
+  registry, so it never starts an agent turn. With a report, clicking the row
+  opens the report modal. `/governance` does the same from the keyboard.
+
+  The modal shows the stored report's `generated_at`, filters and
+  `all_projects`, above `latest.md` wrapped to the panel. `↑/↓` and `j/k` scroll
+  one line, `PgUp/PgDn` scroll one page, `r` re-runs the report in the
+  background and refreshes the modal when it finishes, and `Esc` closes it. A
+  malformed stored report reads as "no report" in the sidebar; the modal gives
+  the reason.
+- **Triggers** (TUI sidebar, below Governance). The section is hidden when
+  `.metaproject/triggers.json` does not exist, and shows one error row when the
+  file cannot be read. It shows:
+  - Project trigger spend, as `keryx governance report` computes it. Runs whose
+    cost was not recorded are counted separately and never added in as $0.
+  - The number of open spend reservations, when there are any.
+  - One row per event-fired trigger: its name, `enabled` or `disabled`, and
+    either the last outcome with its age or `never fired`. A trigger whose
+    dispatch has `network: true` is marked `NET`.
+
+  Schedule-fired triggers get no rows here, only an `N scheduled` line; the
+  Schedules section owns them.
+
+  Clicking a row, or `/triggers [name]`, opens a list+detail modal:
+  - **List keys:** `↑/↓` to select, `Enter` to open Detail, `[`/`]` for the
+    previous or next trigger.
+  - **Detail** shows the entry exactly as `keryx trigger list`/`status` print it
+    (they share the same formatter) and whether its hook is installed. For a
+    dispatching `flow-next` it also shows provider/model, permission mode,
+    ceiling, max seconds, max attempts, the unattended roster, and network with
+    the full NETWORK ON warning.
+  - **Detail also lists** the last ledger records (outcome, cost, refusal code,
+    denials) and every open reservation with its exact
+    `keryx trigger resolve <runId> --spent <usd>` command. The TUI never
+    resolves a reservation itself.
+  - **Run now:** `r` arms it, `y` confirms, and any other key cancels. A
+    disabled or malformed entry cannot be armed, and the modal says why. A
+    confirmed run is `keryx trigger run <name>` executed as a child process of
+    the same keryx build the shell runs (its own interpreter and entry script,
+    not whatever `keryx` is on `PATH`), in the project root. It is therefore
+    bound by exactly the CLI's locks, budgets, spend reservations, refusals and
+    unattended floor. The modal shows `running…`, then the new ledger record and
+    the tail of the child's output, and one toast appears.
+
+  Both sections poll `runs.jsonl`, `triggers.json` and the governance
+  `latest.json` every few seconds, and again after every settled turn. They
+  repaint only when one of those files changed, so a run finished by a git hook,
+  CI or another shell shows up without a restart. `/governance` and `/triggers`
+  also work while a turn is busy.
 - `/theme` (chat and agent) with no argument opens a picker modal: a theme
   list on the left, a live preview (assistant markdown, a code block, tool/
   side/chip/ok/error samples) on the right. Arrow keys move the highlight and

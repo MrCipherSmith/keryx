@@ -11,7 +11,8 @@
 // narrows that registry, it does not invent a second vocabulary — but its
 // description is written for the editor, because several shell descriptions
 // promise a TUI picker that does not exist here. A command whose whole meaning
-// is a TUI surface (`/workspace`, `/review`, `/integrations`, `/mcp`, `/game`,
+// is a TUI surface (`/workspace`, `/review`, `/governance`, `/triggers`,
+// `/integrations`, `/mcp`, `/game`,
 // and every picker or transcript command) is not advertised.
 
 import type { AcpAvailableCommand } from "./protocol";
@@ -43,7 +44,15 @@ export const ACP_SLASH_COMMANDS: readonly AcpSlashCommandSpec[] = [
  * Shell commands that exist only as a TUI surface. Never advertised over ACP;
  * pinned so a later widening of `ACP_SLASH_COMMANDS` cannot pick one up.
  */
-export const ACP_TUI_ONLY_COMMANDS: readonly string[] = ["workspace", "review", "integrations", "mcp", "game"];
+export const ACP_TUI_ONLY_COMMANDS: readonly string[] = [
+  "workspace",
+  "review",
+  "governance",
+  "triggers",
+  "integrations",
+  "mcp",
+  "game",
+];
 
 /** The `availableCommands` payload, in the published shape (`name`, `description`, optional `input.hint`). */
 export function acpAvailableCommands(): AcpAvailableCommand[] {

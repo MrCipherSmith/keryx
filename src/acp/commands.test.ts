@@ -32,6 +32,13 @@ describe("advertised commands", () => {
     expect(ACP_TUI_ONLY_COMMANDS.filter((name) => !registry.has(`/${name}`))).toEqual([]);
   });
 
+  test("flow 300: /governance and /triggers are TUI-only — pinned, never advertised to an editor", () => {
+    expect(ACP_TUI_ONLY_COMMANDS).toContain("governance");
+    expect(ACP_TUI_ONLY_COMMANDS).toContain("triggers");
+    expect(acpAvailableCommands().map((command) => command.name)).not.toContain("governance");
+    expect(acpAvailableCommands().map((command) => command.name)).not.toContain("triggers");
+  });
+
   test("the payload has the published shape: name without a slash, description, optional input.hint", () => {
     const commands = acpAvailableCommands();
     expect(commands.map((command) => command.name)).toEqual(["help", "model", "reasoning", "status"]);

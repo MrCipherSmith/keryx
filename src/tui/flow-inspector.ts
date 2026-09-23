@@ -132,7 +132,7 @@ export type PresentFlowsOptions = {
 // same diff for the new flex-scaling modal panel); this file's tabs never
 // picked up the equivalent plumbing, so /flows content overflows unwrapped
 // on a narrow terminal while /status wraps correctly right next to it.
-function wrapLines(text: string, width: number | undefined): string {
+export function wrapLines(text: string, width: number | undefined): string {
   if (width === undefined || width < 8) {
     return text;
   }

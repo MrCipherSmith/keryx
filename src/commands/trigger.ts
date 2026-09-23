@@ -43,7 +43,6 @@ import {
   triggersConfigPath,
   type TriggerAction,
   type TriggerEntry,
-  type TriggerFire,
 } from "../trigger/config";
 import {
   appendTriggerRunRecord,
@@ -53,14 +52,20 @@ import {
   readTriggerRuns,
   type TriggerRunCost,
   type TriggerRunOutcomeKind,
-  type TriggerRunRecord,
 } from "../trigger/record";
-import { hasGitHooksRoot, installTriggerHooks, isTriggerHookInstalled, uninstallTriggerHooks } from "../trigger/hooks";
+import { hasGitHooksRoot, installTriggerHooks, uninstallTriggerHooks } from "../trigger/hooks";
 import { renderScheduleLines, resolveKeryxInvocation, resolveScheduleEntry } from "../trigger/schedule";
 import type { FlowService } from "../flow/types";
 import type { NextTaskDecision } from "../flow/machine";
 import type { TriggerDispatchRecord } from "../trigger/record";
-import { NETWORK_ON_WARNING, runFlowNextDispatch, type DispatchDeps, type DispatchResult } from "./trigger-dispatch";
+import { runFlowNextDispatch, type DispatchDeps, type DispatchResult } from "./trigger-dispatch";
+import {
+  describeEntry,
+  describeFire,
+  describeHookInstalled,
+  describeOpenReservation,
+  describeRecord,
+} from "../trigger/describe";
 
 /**
  * Flow 290: in-process seams for `keryx trigger run` — the flow service and
@@ -639,22 +644,12 @@ async function listSubcommand(): Promise<void> {
   for (const entry of triggers) {
     const hookNote = await describeHookInstalled(cwd, entry);
     console.log(
-      `  - ${entry.name}  [${entry.enabled ? "enabled" : "disabled"}]  ${describeFire(entry.fire)}  -> ${describeAction(entry.action)}  hook: ${hookNote}`,
+      `  - ${describeEntry(entry)}  hook: ${hookNote}`,
     );
   }
   for (const bad of rejected) {
     console.log(`  - ${bad.name ?? `(entry #${bad.index})`}  [REJECTED]  ${bad.reasons.join("; ")}`);
   }
-}
-
-async function describeHookInstalled(cwd: string, entry: TriggerEntry): Promise<string> {
-  if (entry.fire.kind === "schedule") {
-    return `n/a (schedule — see \`keryx trigger schedule ${entry.name}\`)`;
-  }
-  if (entry.fire.event === "ci") {
-    return "n/a (ci — fired by a CI job's own `keryx trigger run` call)";
-  }
-  return (await isTriggerHookInstalled(cwd, entry)) ? `installed (${entry.fire.event})` : `NOT installed (${entry.fire.event})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -700,40 +695,13 @@ async function statusSubcommand(args: string[]): Promise<void> {
   // by a killed run — still counts against both ceilings.
   const open = openReservations(runsRead.state === "present" ? runsRead.records : []);
   for (const reservation of open) {
-    console.log(
-      `  ! open spend reservation: run ${reservation.runId} (trigger ${reservation.trigger}) holds $${reservation.usd.toFixed(4)} ` +
-        `since ${reservation.at} — if that run is no longer alive, close it with \`keryx trigger resolve ${reservation.runId} --spent <usd>\``,
-    );
+    console.log(`  ${describeOpenReservation(reservation)}`);
   }
   for (const entry of entries) {
-    console.log(`  - ${entry.name}  [${entry.enabled ? "enabled" : "disabled"}]  ${describeFire(entry.fire)}  -> ${describeAction(entry.action)}`);
+    console.log(`  - ${describeEntry(entry)}`);
     const record = latest.get(entry.name);
     console.log(`      ${record ? describeRecord(record) : "never fired — no record yet"}`);
   }
-}
-
-function describeRecord(record: TriggerRunRecord): string {
-  const cost = record.cost.recorded ? `cost: $${record.cost.usd.toFixed(4)}` : `cost: n/a (${record.cost.reason})`;
-  return `last: ${record.at} — ${record.outcome} — ${record.detail} [${cost}]`;
-}
-
-function describeFire(fire: TriggerFire): string {
-  return fire.kind === "event" ? `event:${fire.event}` : `schedule:"${fire.cron}"`;
-}
-
-function describeAction(action: TriggerAction): string {
-  if (action.kind === "open-flow") return `open-flow(${action.template}${action.skipIfOpen ? ", skipIfOpen" : ""})`;
-  if (action.kind === "flow-next") {
-    if (action.dispatch === undefined) return `flow-next(${action.flow}, report-only)`;
-    const d = action.dispatch;
-    return (
-      `flow-next(${action.flow}, dispatch: ${d.provider}/${d.model}, mode ${d.permissionMode}, ` +
-      `ceiling $${d.ceilingUsd}, max ${d.maxSeconds}s, ${d.maxAttempts} attempts` +
-      (d.network ? `, NETWORK ON — ${NETWORK_ON_WARNING}` : ", network off") +
-      ")"
-    );
-  }
-  return action.kind;
 }
 
 // ---------------------------------------------------------------------------

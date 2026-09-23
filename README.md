@@ -455,7 +455,14 @@ Grouped by what you are trying to do, not by internal module layout.
   `update` already write into; `keryx trigger schedule` prints a cron line or
   systemd unit pair and runs no daemon of its own. Triggered runs and a manual
   `sync --apply`/`gdgraph build` share one maintenance lock (manual waits,
-  triggered refuses). See the [CLI reference](docs/docs/cli-reference.md#trigger).
+  triggered refuses). In the TUI, the sidebar's **Triggers** section lists the
+  event-fired triggers. Each row shows the last outcome and its age, and a `NET`
+  marker when the agent gets the host network. The section also shows project
+  trigger spend and any open spend reservations. `/triggers` (or a click)
+  opens a list+detail modal with the full unattended posture. There, `r` then
+  `y` runs one now as `keryx trigger run <name>` in a child process of the same
+  build, bound by the same locks, budgets and refusals as the CLI. See the
+  [CLI reference](docs/docs/cli-reference.md#trigger).
 - **governance** — `keryx governance report`, one read-only report unifying what
   is already recorded: review-round spend per flow (USD and tokens, with a
   rounds-with-cost/rounds-total count for partial coverage), project-wide
@@ -465,7 +472,13 @@ Grouped by what you are trying to do, not by internal module layout.
   outcomes. A figure nobody recorded is reported as "not recorded", never as
   zero. Writes `.metaproject/data/governance/artifacts/latest.{md,json}`, the
   same convention `keryx health run` uses; `--all-projects` also covers every
-  project in the user-global registry. See the
+  project in the user-global registry. In the TUI, the sidebar's
+  **Governance** row shows `no report — click to run`, `running…`,
+  `last report <date>` or `failed — click to retry`. With no report, a click
+  (or `/governance`) runs the report in the background, and the row updates
+  when it finishes. With a report, a click opens it in a scrollable modal,
+  where `r` re-runs it. Sessions written by `keryx agents external run` appear
+  in `/sessions` marked `acp:<agent>`. See the
   [CLI reference](docs/docs/cli-reference.md#governance).
 - **security** — deterministic secrets / PII / prompt-injection / egress
   scanning, redaction, and a policy gate at agent write seams, with a committed

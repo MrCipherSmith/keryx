@@ -65,6 +65,7 @@ import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/typ
 import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
+import { isOpsCommand, mountOpsSidebar, type OpsSidebar } from "./ops-sidebar";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
 import { createSplashLifecycle, mountEmptyTranscriptSplash, playBootAnimation, type SplashLifecycle } from "./boot-animation";
@@ -184,6 +185,7 @@ import {
   compactSession,
   exportSessionMarkdown,
   findSession,
+  isExternalRunSession,
   type SessionSummary,
   listSessions,
   persistCompacted,
@@ -2844,11 +2846,14 @@ export function sessionPickerOptions(
     const title = s.title.length > 52 ? `${s.title.slice(0, 49)}…` : s.title;
     const label = withLeaseMarker(`${title}  ·  ${short}`, leaseState(s.id));
     const messages = `${s.messageCount} ${s.messageCount === 1 ? "message" : "messages"}`;
+    // Flow 300 (AC9): a session `keryx agents external run` wrote is another
+    // agent's run record — say so, and let the filter find it by `acp:`.
+    const external = isExternalRunSession(s) ? `${s.provider} · ` : "";
     return {
       value: s.id,
       label,
-      description: `updated ${updated} · created ${created} · ${messages}`,
-      search: `${s.id} ${label} ${s.projectPath} ${s.title} ${created} ${updated}`.toLowerCase(),
+      description: `${external}updated ${updated} · created ${created} · ${messages}`,
+      search: `${s.id} ${label} ${s.projectPath} ${s.title} ${created} ${updated} ${external}`.toLowerCase(),
     };
   });
 }
@@ -3112,6 +3117,9 @@ export async function launchTuiAgentShell(opts: {
   let liveDeps: AgentDeps | undefined;
   let liveJobs: BackgroundJobStore | undefined;
   let disposeExecutionPlanPanel: (() => void) | undefined;
+  // Flow 300: same nullable-ref idiom — the Governance/Triggers sections own a
+  // poller and possibly a running `keryx trigger run` child to stop on exit.
+  let liveOps: OpsSidebar | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
   // is installed before the operator exists, and leaving the module-level
   // external bridge pointing at a destroyed shell would let a still-settling
@@ -3205,6 +3213,7 @@ export async function launchTuiAgentShell(opts: {
     const r = (renderer = await createShellRenderer(otui, {
     onDestroy: () => {
         disposeExecutionPlanPanel?.();
+        liveOps?.dispose();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
         foregroundOperation.dispose();
@@ -3562,6 +3571,20 @@ export async function launchTuiAgentShell(opts: {
       marginTop: 1,
     });
     sidebar.add(sbJobs);
+    // Flow 300: Governance, then Triggers — fixed order after Jobs, at the
+    // bottom of the scrollable `sidebarTop`, so neither can push Model/Context/
+    // Tools/Status off a 24-row terminal. Flow 295's Schedules section mounts
+    // after these and can subscribe to `ops.watcher` rather than poll again.
+    const ops = mountOpsSidebar({
+      otui,
+      chrome,
+      parent: sidebar,
+      cwd: opts.session?.cwd ?? process.cwd(),
+      width: SIDEBAR_TEXT_WIDTH,
+      onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+      notice: (text) => io.onSystem?.(text),
+    });
+    liveOps = ops;
     const fleet = new WorkerFleet();
     const sessions = new SubagentSessionStore();
     const jobs = new BackgroundJobStore();
@@ -6194,6 +6217,11 @@ export async function launchTuiAgentShell(opts: {
             showReview();
             return;
           }
+          case "governance":
+          case "triggers": {
+            ops.handleCommand(line);
+            return;
+          }
           case "mcp": {
             showTools();
             return;
@@ -6544,6 +6572,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isReviewCommand(command.name)) {
           showReview();
+          return;
+        }
+        if (isOpsCommand(command.name)) {
+          ops.handleCommand(line);
           return;
         }
         if (isMcpConsumerCommand(command.name)) {
@@ -7038,6 +7070,9 @@ export async function launchTuiAgentShell(opts: {
         // just run — the "keryx itself periodically figures out what needs
         // review" behavior this badge exists for.
         void refreshReviewSidebar();
+        // Flow 300 (AC7): whatever the turn wrote — a trigger record, a new
+        // governance report — reaches the sidebar now, not on the next tick.
+        void ops.afterTurn();
         setMainAgent(turnFailed ? "failed" : "done", turnFailed ? "error" : "idle");
         try {
           flushSessionCheckpoint();
