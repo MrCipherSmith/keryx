@@ -346,10 +346,10 @@ its own:
   started with their `command`, `args` and `env`, through the same MCP client
   and dial procedure `keryx shell` uses for its configured servers. The child
   gets the entry's `env` on top of keryx's own environment, with keryx's
-  credentials stripped from it — credential-shaped names, and every variable
-  keryx loaded from its own saved keys, by name; its stderr is discarded. The
-  session is answered at once; its first `session/prompt` waits for the
-  servers to finish starting.
+  credentials stripped from it — credential-shaped names, and every name
+  saved in your config (`auth.json`), whether or not this run has actually
+  loaded it; its stderr is discarded. The session is answered at once; its
+  first `session/prompt` waits for the servers to finish starting.
 - **One running set per distinct list.** Zed sends its whole list with every
   new thread; sessions on one connection that send the same list (same
   entries, same project root) share one set of server processes rather than
@@ -3791,14 +3791,36 @@ in them may be able to push the tool's identity out of view, and an
 "always" grant would store a pattern the model chose in your permission
 file.
 
-**Environment.** A server is spawned with your environment minus anything
-credential-shaped: provider keys (`ANTHROPIC_*`, `OPENAI_API_KEY`,
-`GEMINI_API_KEY`, …), forge and cloud tokens (`GITHUB_TOKEN`, `NPM_TOKEN`,
-`AWS_*`), `SSH_AUTH_SOCK`, the whole `KERYX_*` namespace, and any variable
-whose name says it holds a token, key, password or credential. A server that
-genuinely needs one takes it explicitly with `-e`, which is a decision you
-made rather than a default you inherited. Its stderr is captured, not
-inherited, so it cannot write to your terminal.
+**Environment.** A server is spawned with your environment minus two things,
+stripped independently and for independent reasons — the same strip, built
+once in `buildMcpChildEnv` and used by every surface that launches an MCP
+server (`keryx shell`, `keryx mcp doctor`, and an ACP client's own servers
+under `keryx acp`; see "MCP servers from the client" above):
+
+- **Anything credential-SHAPED**, by name or by value: provider keys
+  (`ANTHROPIC_*`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …), forge and cloud
+  tokens (`GITHUB_TOKEN`, `NPM_TOKEN`, `AWS_*`), agent sockets
+  (`SSH_AUTH_SOCK`), credential-file pointers (`NETRC`, `KUBECONFIG`, …), the
+  whole `KERYX_*` namespace, any variable whose name says it holds a token,
+  key, password or credential, and any value shaped like
+  `scheme://user:pass@host` wherever it turns up.
+- **Every variable your saved config (`auth.json`) declares**, removed by the
+  exact NAME it is saved under — whatever that name is. This catches what
+  the shape rule cannot: the "add custom provider" wizard saves an API key
+  under whatever env-var name it is given, which may carry none of
+  KEY/TOKEN/SECRET (`MY_LLM_GATEWAY`, say). That name would otherwise reach
+  every server you launch, indistinguishable from a variable you exported
+  yourself — and it holds whether or not THIS run has actually loaded the
+  key into its own process yet: `keryx mcp doctor` and `keryx shell --print`/
+  `--no-tui`/non-TTY never call the function that would, but the strip reads
+  the same saved names straight off disk, so it applies there too, not only
+  on a path that happened to load them first.
+
+A server that genuinely needs one of these takes it explicitly — `-e` for a
+stdio server, its own `env` entry either way — which is a decision you made
+rather than a default you inherited; an explicit entry always wins over both
+strips, even for a name your saved config declares. Its stderr is captured,
+not inherited, so it cannot write to your terminal.
 
 ```
 $ keryx mcp add fs -- npx -y @modelcontextprotocol/server-filesystem ~/notes

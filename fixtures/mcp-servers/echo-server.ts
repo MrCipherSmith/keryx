@@ -26,6 +26,13 @@
 //                           a test can prove an `env` value reached the child
 //                           while it planted that very value as a secret that
 //                           must appear in no artifact.
+//   ECHO_SERVER_REPORT_VAR=<name> — adds `reportedVarPresent` to the pid file:
+//                           whether THAT variable name is present in the
+//                           child's own environment. Never its value — flow
+//                           296 needs to prove a variable's ABSENCE (a saved
+//                           credential stripped before the parent env reached
+//                           this process), which a hash cannot distinguish
+//                           from "present but empty".
 //   ECHO_SERVER_IGNORE_EOF=1 — do NOT exit when stdin ends, and keep a timer
 //                           alive: a server that only a signal stops, so a
 //                           test can tell "keryx stopped it" from "it left".
@@ -56,7 +63,12 @@ if (failOnceMarker !== undefined && failOnceMarker.length > 0 && !existsSync(fai
 const pidFile = process.env.ECHO_SERVER_PID_FILE;
 if (pidFile !== undefined && pidFile.length > 0) {
   const probeSha256 = createHash("sha256").update(process.env.ECHO_SERVER_PROBE ?? "").digest("hex");
-  writeFileSync(pidFile, JSON.stringify({ pid: process.pid, probeSha256 }));
+  const reportVar = process.env.ECHO_SERVER_REPORT_VAR;
+  const reported =
+    reportVar !== undefined && reportVar.length > 0
+      ? { reportedVarPresent: Object.prototype.hasOwnProperty.call(process.env, reportVar) }
+      : {};
+  writeFileSync(pidFile, JSON.stringify({ pid: process.pid, probeSha256, ...reported }));
 }
 
 const TOOLS: Record<string, unknown>[] = [

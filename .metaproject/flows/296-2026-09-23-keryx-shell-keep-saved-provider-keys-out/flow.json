@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "296",
+  "slug": "keryx-shell-keep-saved-provider-keys-out",
+  "title": "keryx shell: keep saved provider keys out of MCP server environments",
+  "status": "in-progress",
+  "createdAt": "2026-09-23T05:23:48.097Z",
+  "updatedAt": "2026-09-23T05:39:33.784Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:500ea358669c3f87b56c22b226a2da6e78c5d64d5823bd1d755d9b7c146d0c41",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Implement the frozen criteria",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T05:24:40.867Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-23T05:23:48.097Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-23T05:24:39.832Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T05:24:40.073Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T05:24:40.345Z",
+      "event": "task-added",
+      "detail": "T5: Implement the frozen criteria"
+    },
+    {
+      "at": "2026-09-23T05:24:40.601Z",
+      "event": "task-added",
+      "detail": "T6: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T05:24:40.867Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T05:39:33.784Z",
+      "event": "task-done",
+      "detail": "T5: Implement the frozen criteria"
+    }
+  ]
+}
