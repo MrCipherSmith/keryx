@@ -554,6 +554,9 @@ async function dispatchLocked(
     action: entry.action,
     perTrigger: { name: triggerName, ceilingUsd: dispatch.ceilingUsd },
     now,
+    // Flow 297 (AC2): the reservation itself is attributable to the flow it
+    // is working, not only the closing record that resolves it.
+    dispatch: { flow, task: task.id },
   });
   if (!reservation.reserved) {
     return {

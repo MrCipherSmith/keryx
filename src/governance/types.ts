@@ -9,6 +9,7 @@
 // `Identity` for the precedent this mirrors.
 
 import type { FlowCompletionAttempt, GateOutcome, Identity } from "../flow/types";
+import type { TriggerRunCost, TriggerRunOutcomeKind, UnattendedDenial } from "../trigger/record";
 
 export type { GateOutcome, Identity };
 
@@ -33,10 +34,16 @@ export type FlowReviewSpend = {
 };
 
 /**
- * Project-wide spend from fired triggers (AC2). Never flow-attributed — a
- * `TriggerRunRecord` carries no flow reference, so this is reported once per
- * project, alongside a note explaining why it cannot be folded into any
- * flow's total.
+ * Project-wide spend from fired triggers (AC2). `spentUsd` is the TRUE total
+ * — every run's cost, project-wide, whether or not it named a flow.
+ *
+ * Flow 297 gave some runs a flow reference (`TriggerDispatchRecord.flow`),
+ * and THOSE runs are also shown individually under their flow's own
+ * `FlowGovernance.dispatch.spend` (below). `attributedToFlowsUsd` is how much
+ * of `spentUsd` that is — a SUBSET, not a separate figure: a reader must
+ * never compute `spentUsd + sum(flow.dispatch.spend.spentUsd)`, because that
+ * double-counts every flow-attributed dollar. `undefined` (never `0` by
+ * coercion) when no flow-attributed run recorded a cost.
  */
 export type ProjectTriggerSpend =
   /** `runs.jsonl` has never been written: a demonstrated $0, not an unknown. */
@@ -45,12 +52,79 @@ export type ProjectTriggerSpend =
   | { state: "unreadable"; reason: string }
   | {
       state: "present";
-      /** Sum of `cost.usd` over every run whose cost WAS recorded. */
+      /** Sum of `cost.usd` over every run whose cost WAS recorded — the project's true total, flow-attributed runs included. */
       spentUsd: number;
       runsWithCostRecorded: number;
       /** Runs that fired but whose cost was never recorded — counted, never folded into the $0. */
       runsWithCostNotRecorded: number;
       runsTotal: number;
+      /** Flow 297 (AC2 follow-up): the part of `spentUsd` also shown under a flow's own `dispatch.spend` — never additive with it. */
+      attributedToFlowsUsd: number | undefined;
+    };
+
+/**
+ * Flow 297 (AC1, AC2): one unattended trigger-dispatch run this flow named
+ * (`TriggerDispatchRecord.flow` — flow 290), joined from the same ledger
+ * `ProjectTriggerSpend` reads. Its outcome and cost are the CLOSING record's
+ * own — a run still open (only a "reserved" record, no closing one yet) never
+ * appears here; see `FlowDispatch.openReservations` for that case.
+ */
+export type FlowDispatchRun = {
+  runId: string;
+  trigger: string;
+  at: string;
+  task: string | undefined;
+  outcome: TriggerRunOutcomeKind;
+  cost: TriggerRunCost;
+  /** AC1: every call this run's unattended approval gate denied — the tool, the reason; this run's own `at` is the time. */
+  denials: readonly UnattendedDenial[];
+};
+
+/** Flow 297 (AC2): a spend reservation this flow's dispatch opened that no closing record (or `keryx trigger resolve`) has closed yet — shown as reserved, never as spent. */
+export type FlowOpenReservation = {
+  runId: string;
+  trigger: string;
+  at: string;
+  usd: number;
+};
+
+/**
+ * Flow 297 (AC2): figures over `runs` only — an open reservation is tracked
+ * separately (`openReservedUsd`) and never folded into `spentUsd`, the same
+ * "reserved, not spent" rule the project-wide trigger ledger already keeps.
+ *
+ * `includedInProjectTriggerSpend` is always `true`: every dispatch run here
+ * is also part of `ProjectGovernance.triggerSpend.spentUsd` (and of that
+ * figure's own `attributedToFlowsUsd` subset) — this flow's `spentUsd` is a
+ * SLICE of the project total, not an addition to it. A consumer summing
+ * `triggerSpend.spentUsd` across every flow's `dispatch.spend.spentUsd`
+ * double-counts every dollar shown here.
+ */
+export type FlowDispatchSpend = {
+  runsTotal: number;
+  spentUsd: number | undefined;
+  runsWithCostRecorded: number;
+  runsWithCostNotRecorded: number;
+  openReservedUsd: number;
+  readonly includedInProjectTriggerSpend: true;
+};
+
+/**
+ * Flow 297 (AC1, AC2): this flow's slice of the trigger ledger — mirrors
+ * `ProjectTriggerSpend`'s own `absent | unreadable | present` discipline, for
+ * the identical reason: "no dispatch run has ever named this flow" (a
+ * demonstrated absence, when the ledger itself is absent) and "the ledger
+ * could not be read" are different facts, and neither is ever presented as a
+ * silent `spentUsd: 0`/empty `runs: []`.
+ */
+export type FlowDispatch =
+  | { readonly state: "absent" }
+  | { readonly state: "unreadable"; readonly reason: string }
+  | {
+      readonly state: "present";
+      readonly spend: FlowDispatchSpend;
+      readonly runs: readonly FlowDispatchRun[];
+      readonly openReservations: readonly FlowOpenReservation[];
     };
 
 /** One AC's confirmation, joined from `acConfirmed` and the matching `ac-confirm` signature. */
@@ -102,9 +176,19 @@ export type FlowGovernance = {
   spend: FlowReviewSpend;
   confirmations: FlowConfirmations;
   gateOutcomes: FlowGateOutcomes;
+  /** Flow 297 (AC1, AC2): unattended trigger-dispatch runs this flow named, plus their denials and open reservations. */
+  dispatch: FlowDispatch;
 };
 
-/** AC9: no durable record of policy allow/ask/deny decisions exists today. */
+/**
+ * Flow 297 (AC1): narrowed from "no durable record of policy allow/ask/deny
+ * decisions exists" — that was true project-wide before flow 290. Since flow
+ * 290 shipped in the same release, every UNATTENDED dispatch run's denials
+ * (tool, reason, time) ARE recorded (`TriggerDispatchRecord.denials`,
+ * surfaced above in `FlowDispatch`/`FlowDispatchRun.denials`); what remains
+ * unrecorded is specifically an INTERACTIVE session's own allow/ask/deny
+ * decisions, which still have no durable log anywhere in this build.
+ */
 export type PolicyDecisionsSummary = {
   recorded: false;
   reason: string;

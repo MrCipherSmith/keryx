@@ -785,6 +785,10 @@ async function resolveSubcommand(args: string[]): Promise<void> {
     detail: `operator closed run ${runId}'s $${open.usd.toFixed(4)} reservation, stating it spent $${spent}`,
     cost: { recorded: true, usd: spent },
     resolves: runId,
+    // Flow 297 (AC2): the reservation carried the flow/task it was opened
+    // for (additive on `reserveTriggerSpend`) — carry it onto the record that
+    // closes it too, so an operator-resolved run stays attributed.
+    ...(reservedRecord.dispatch !== undefined ? { dispatch: reservedRecord.dispatch } : {}),
   });
   if (append.status === "failed") {
     console.error(`keryx trigger resolve: ${append.reason}`);
