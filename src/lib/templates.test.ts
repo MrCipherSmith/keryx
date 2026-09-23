@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile, copyFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile, copyFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -32,6 +32,9 @@ const ALL_MODULES = {
   enableSecurity: true,
   ruleSources: [] as string[],
 };
+
+/** Token budget for the index gate (pointer-only routing table). */
+const INDEX_GATE_TOKEN_BUDGET = 400;
 
 test("generated index uses supported refresh commands only", () => {
   const index = renderIndexMarkdown({
@@ -151,8 +154,9 @@ test("the index gate stays small, because its size is multiplied by task length"
   // router's size, the split has quietly undone itself and nothing else would
   // say so.
   const gate = renderIndexGateMarkdown({ ...ALL_MODULES });
+  const tokenEstimate = Math.ceil(gate.length / 4);
 
-  expect(gate.length).toBeLessThan(2000); // ~500 tokens, against ~3,226 before
+  expect(tokenEstimate).toBeLessThanOrEqual(INDEX_GATE_TOKEN_BUDGET);
   expect(gate).toContain(ROUTING_FILENAME);
 });
 
@@ -183,6 +187,67 @@ test("the gate names only the modules that are enabled", () => {
   expect(gate).toContain("keryx ctx rg");
   expect(gate).not.toContain("wiki/index.md");
   expect(gate).not.toContain("keryx memory search");
+});
+
+test("the live .metaproject/index.md matches the rendered gate with the repository's enabled modules", async () => {
+  // Pinning the live file to the template means `keryx update` cannot
+  // silently diverge: the test will catch any regeneration that produces
+  // a different gate.
+  const indexPath = new URL("../../.metaproject/index.md", import.meta.url);
+  const metaprojectPath = new URL("../../.metaproject/metaproject.json", import.meta.url);
+
+  const liveIndexContent = await readFile(indexPath, "utf8");
+  const metaprojectContent = await readFile(metaprojectPath, "utf8");
+  const metaproject = JSON.parse(metaprojectContent) as {
+    modules: Record<
+      string,
+      {
+        enabled: boolean;
+      }
+    >;
+  };
+
+  // Extract module flags from metaproject.json
+  const flags = {
+    enableGdgraph: metaproject.modules.gdgraph?.enabled ?? false,
+    enableGdctx: metaproject.modules.gdctx?.enabled ?? false,
+    enableGdwiki: metaproject.modules.gdwiki?.enabled ?? false,
+    enableGdskills: metaproject.modules.gdskills?.enabled ?? false,
+    enableHealth: metaproject.modules.health?.enabled ?? false,
+    enableTesting: metaproject.modules.testing?.enabled ?? false,
+    enableMemory: metaproject.modules.memory?.enabled ?? false,
+    enableTasks: metaproject.modules.tasks?.enabled ?? false,
+    enableSecurity: metaproject.modules.security?.enabled ?? false,
+  };
+
+  const renderedGate = renderIndexGateMarkdown(flags);
+  const tokenEstimate = Math.ceil(liveIndexContent.length / 4);
+
+  // Assert the live file is within the token budget
+  expect(tokenEstimate).toBeLessThanOrEqual(INDEX_GATE_TOKEN_BUDGET);
+
+  // Assert the live file matches the rendered gate
+  expect(liveIndexContent, `Live index.md diverged from template`).toBe(renderedGate);
+});
+
+test("the index gate is pointer-only: no subsections or code blocks", () => {
+  const gate = renderIndexGateMarkdown({ ...ALL_MODULES });
+
+  // Pointer-only means: a heading, intro line, pointer table, and bullet rules.
+  // No subsections (##), no fenced code blocks.
+  expect(gate).not.toContain("## ");
+  expect(gate).not.toContain("```");
+
+  // Must have exactly one top-level heading (the gate title)
+  const headingCount = (gate.match(/^# /m) || []).length;
+  expect(headingCount).toBe(1);
+
+  // Must have the pointer table
+  expect(gate).toMatch(/\| need \| use \|/);
+  expect(gate).toMatch(/\|---|---\|/);
+
+  // Must have the binding rules (bullet points starting the line)
+  expect(gate).toMatch(/^- /m);
 });
 
 test("subagents are not all made to read the full routing index", () => {
