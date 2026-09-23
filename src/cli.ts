@@ -229,6 +229,8 @@ export const USAGE_BODY = `Usage:
   keryx sync install-hooks | uninstall-hooks
   keryx providers list [--json]
   keryx providers cross-family [--opt-in] [--json]
+  keryx providers test <name> [--json]
+  keryx providers remove <name> [--yes] [--json]
   keryx auth list [--json]
   keryx auth login <provider>
   keryx auth logout <provider>

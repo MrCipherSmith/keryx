@@ -9,7 +9,7 @@
 // unit-testable against a temp directory.
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "./config-dir";
 
 export interface ShellConfig {
   provider?: string;
@@ -159,10 +159,14 @@ export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void
     // of the operator's primary group. See `config-dir.permissions.test.ts`.
     ensureKeryxConfigDir(dir);
     const next: ShellConfig = { ...loadShellConfig(dir), ...patch };
-    // Same creation-only trap as the directory mode: an `auth.json` that already
-    // exists 0664 keeps that mode through every write, and this file holds
-    // plaintext provider API keys.
-    writeOwnerOnlyFile(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`);
+    // Atomic (temp file + rename), not a direct overwrite (flow 304 review
+    // finding #6): a crash or a second concurrent write mid-write must never
+    // leave `auth.json` half-written — this file holds plaintext provider API
+    // keys and OAuth grants, and a reader that gets a truncated/corrupt parse
+    // has no recovery. Rename also sidesteps the "existing file keeps its old
+    // mode" trap `writeOwnerOnlyFile` had to `chmodSync` around: the renamed-in
+    // temp file's 0600 mode becomes the destination's mode outright.
+    writeOwnerOnlyFileAtomic(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`);
   } catch {
     // best-effort persistence — a failure just means the user re-enters next time
   }
@@ -197,6 +201,38 @@ export function saveProviderModelParams(
   const existing = loadShellConfig(dir).modelParams ?? {};
   const merged = { ...(existing[provider] ?? {}), ...patch };
   saveShellConfig({ modelParams: { ...existing, [provider]: merged } }, dir);
+}
+
+/**
+ * Remove one provider's saved API key (flow 304, the `/connect` Disconnect
+ * button + `keryx providers remove`). Merge-and-rewrite, same shape as
+ * `saveApiKey`'s own read-modify-write — siblings under `apiKeys` are left
+ * untouched. A no-op (not an error) when `envKey` was never saved: disconnect
+ * is idempotent, and a caller that already classified the credential as
+ * "saved" before calling this never hits the absent case in practice.
+ * Best-effort; never throws.
+ */
+export function removeApiKey(envKey: string, dir?: string): void {
+  const existing = loadShellConfig(dir).apiKeys ?? {};
+  if (!(envKey in existing)) return;
+  const { [envKey]: _removed, ...rest } = existing;
+  saveShellConfig({ apiKeys: rest }, dir);
+}
+
+/** Remove a provider's saved endpoint override, if any. Best-effort; never throws. Mirrors {@link removeApiKey}. */
+export function removeProviderBaseUrl(provider: string, dir?: string): void {
+  const existing = loadShellConfig(dir).baseUrls ?? {};
+  if (!(provider in existing)) return;
+  const { [provider]: _removed, ...rest } = existing;
+  saveShellConfig({ baseUrls: rest }, dir);
+}
+
+/** Remove a provider's saved sampling/budget/timeout overrides, if any. Best-effort; never throws. Mirrors {@link removeApiKey}. */
+export function removeProviderModelParams(provider: string, dir?: string): void {
+  const existing = loadShellConfig(dir).modelParams ?? {};
+  if (!(provider in existing)) return;
+  const { [provider]: _removed, ...rest } = existing;
+  saveShellConfig({ modelParams: rest }, dir);
 }
 
 /**

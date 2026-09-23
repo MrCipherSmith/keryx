@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   isCustomCompatProvider,
   loadCustomCompatProviders,
   llmProvidersConfigPath,
+  removeCustomCompatProvider,
   saveCustomCompatProvider,
   type CustomCompatProvider,
 } from "./provider-config";
@@ -37,6 +38,21 @@ describe("llm-providers.json custom provider registry", () => {
     });
   });
 
+  // flow 304 review finding #6: llm-providers.json now writes atomically too.
+  test("writes atomically: same content and mode as before, and no temp file survives a save or a remove", () => {
+    const dir = tempDir();
+    saveCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [] }, dir);
+    saveCustomCompatProvider({ name: "b", baseUrl: "http://localhost:2", models: [] }, dir);
+    const file = llmProvidersConfigPath(dir);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(readdirSync(dir)).toEqual(["llm-providers.json"]);
+
+    removeCustomCompatProvider("a", dir);
+    expect(loadCustomCompatProviders(dir).map((p) => p.name)).toEqual(["b"]);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(readdirSync(dir)).toEqual(["llm-providers.json"]); // no `*.tmp` sibling left behind
+  });
+
   test("saving a second provider preserves the first (merge)", () => {
     const dir = tempDir();
     saveCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [] }, dir);
@@ -50,6 +66,26 @@ describe("llm-providers.json custom provider registry", () => {
 
   test("absent file loads as an empty list (never throws)", () => {
     expect(loadCustomCompatProviders(tempDir())).toEqual([]);
+  });
+
+  // flow 304 (AC5): the `/connect` Disconnect button + `keryx providers remove`.
+  test("removeCustomCompatProvider deletes exactly the named entry, leaving siblings intact", () => {
+    const dir = tempDir();
+    saveCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [] }, dir);
+    saveCustomCompatProvider({ name: "b", baseUrl: "http://localhost:2", models: [] }, dir);
+    removeCustomCompatProvider("a", dir);
+    expect(loadCustomCompatProviders(dir).map((p) => p.name)).toEqual(["b"]);
+  });
+
+  test("removeCustomCompatProvider on an unknown name is a no-op, not an error", () => {
+    const dir = tempDir();
+    saveCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [] }, dir);
+    removeCustomCompatProvider("never-existed", dir);
+    expect(loadCustomCompatProviders(dir).map((p) => p.name)).toEqual(["a"]);
+  });
+
+  test("removeCustomCompatProvider against an absent file never throws", () => {
+    expect(() => removeCustomCompatProvider("a", tempDir())).not.toThrow();
   });
 
   test("malformed entries (missing baseUrl) are dropped", () => {

@@ -91,6 +91,11 @@ const OAUTH_ENV_KEYS: ReadonlyArray<{ provider: string; envKey: string }> = [
   { provider: "github-copilot", envKey: "GITHUB_COPILOT_TOKEN" },
 ];
 
+/** The env var an OAuth grant for `provider` is copied onto (`envWithOAuthAccess`), if any. */
+export function oauthEnvKeyFor(provider: string): string | undefined {
+  return OAUTH_ENV_KEYS.find((entry) => entry.provider === provider)?.envKey;
+}
+
 /**
  * Copy OAuth access tokens into an env map under the provider's API-key name
  * so existing Bearer construction works. Does not overwrite a non-empty env

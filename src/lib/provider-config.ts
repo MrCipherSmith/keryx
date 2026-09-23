@@ -9,7 +9,7 @@
 // stay denied on both.
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "./config-dir";
 
 /** One operator-defined OpenAI-compatible provider, as persisted on disk. */
 export interface CustomCompatProvider {
@@ -467,11 +467,37 @@ export function saveCustomCompatProvider(provider: CustomCompatProvider, dir?: s
       return acc;
     }, {});
     current[provider.name] = provider;
-    writeOwnerOnlyFile(
+    // Atomic (flow 304 review finding #6) — same reasoning as `saveShellConfig`.
+    writeOwnerOnlyFileAtomic(
       llmProvidersConfigPath(dir),
       `${JSON.stringify({ schemaVersion: 1, providers: current }, null, 2)}\n`,
     );
   } catch {
     // best-effort persistence — a failure just means the provider is re-entered
+  }
+}
+
+/**
+ * Remove one custom provider from the persisted registry (flow 304, the
+ * `/connect` Disconnect button + `keryx providers remove`). Merge-and-rewrite
+ * over the other entries, mirroring {@link saveCustomCompatProvider}'s own
+ * read-modify-write. A no-op when `name` is not a custom provider (nothing to
+ * remove — a built-in has no `llm-providers.json` entry at all). Best-effort;
+ * never throws.
+ */
+export function removeCustomCompatProvider(name: string, dir?: string): void {
+  try {
+    const current = loadCustomCompatProviders(dir).reduce<Record<string, CustomCompatProvider>>((acc, p) => {
+      acc[p.name] = p;
+      return acc;
+    }, {});
+    if (!(name in current)) return;
+    delete current[name];
+    writeOwnerOnlyFileAtomic(
+      llmProvidersConfigPath(dir),
+      `${JSON.stringify({ schemaVersion: 1, providers: current }, null, 2)}\n`,
+    );
+  } catch {
+    // best-effort persistence — a failure just means the entry is removed again next time
   }
 }

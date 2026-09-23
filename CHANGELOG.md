@@ -3,6 +3,39 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.161] — 2026-09-23
+
+A provider can be tested and disconnected from where it was connected.
+
+### Added
+- **`/connect` rows carry `[Test]` and `[Disconnect]` buttons**, built like
+  the queue's Force/Edit/Delete and reachable from the keyboard the same way
+  (up and down pick a row, left and right pick the action, Enter fires). Test
+  asks the provider for its model list and shows `ok - N models` or the
+  reason it failed on that row. Disconnect asks for confirmation, then removes
+  exactly what keryx saved: an API key, an OAuth grant, or a custom provider
+  with its base URL and model parameters. Selecting a provider works as
+  before; `/provider` is unchanged.
+- **`keryx providers test <name> [--json]` and `keryx providers remove <name>
+  [--yes]`** do the same from the CLI. `remove` asks on a terminal, refuses
+  without one unless `--yes`, and refuses a name it does not know.
+
+### Notes
+- **Disconnecting is local.** keryx deletes its own copy of the credential;
+  nothing is revoked at the vendor, OAuth grants included.
+- **A key the operator exported is left alone**, and Disconnect names the
+  variable to unset.
+- **Providers that share one key are named before they go.** The built-in
+  `zai` and `zai-coding` both read `ZAI_API_KEY`; disconnecting either says
+  that the other loses its credential too, before confirmation and after.
+- **Disconnecting the session's own provider switches nothing and interrupts
+  nothing**; the running session keeps the credential it loaded until
+  `/connect` or a restart.
+
+### Fixed
+- **`auth.json` and `llm-providers.json` are written atomically**, so a
+  crash mid-write can no longer leave either truncated.
+
 ## [0.2.160] — 2026-09-23
 
 A patch to `keryx help`, found by the 0.2.159 smoke run.

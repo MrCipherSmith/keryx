@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { uniqueTestRoot } from "./test-tmp";
@@ -7,6 +7,9 @@ import {
   applySavedApiKeys,
   envWithSavedApiKeys,
   loadShellConfig,
+  removeApiKey,
+  removeProviderBaseUrl,
+  removeProviderModelParams,
   saveApiKey,
   saveProviderBaseUrl,
   saveProviderModelParams,
@@ -40,6 +43,19 @@ test("saveShellConfig writes the file mode 0600 (owner-only)", () => {
   saveShellConfig({ openrouterKey: "sk-or-secret" }, dir);
   const mode = statSync(shellConfigPath(dir)).mode & 0o777;
   expect(mode).toBe(0o600);
+});
+
+// flow 304 review finding #6: auth.json now writes atomically (temp + rename)
+// so a crash or a racing second write can never leave it half-written.
+test("saveShellConfig writes atomically: same content and mode as before, and no temp file survives", () => {
+  const dir = tempDir();
+  saveShellConfig({ provider: "openrouter" }, dir);
+  saveShellConfig({ model: "openai/gpt-4o-mini" }, dir); // a second, merging write
+  const file = shellConfigPath(dir);
+  expect(loadShellConfig(dir)).toEqual({ provider: "openrouter", model: "openai/gpt-4o-mini" });
+  expect(statSync(file).mode & 0o777).toBe(0o600);
+  const entries = readdirSync(dir);
+  expect(entries).toEqual(["auth.json"]); // no `*.tmp` sibling left behind
 });
 
 test("shellConfigPath honors XDG_DATA_HOME on non-Windows (cross-platform dir)", () => {
@@ -111,6 +127,38 @@ test("saveProviderModelParams merges a second patch into the SAME provider's exi
   expect(loadShellConfig(dir).modelParams).toEqual({
     openrouter: { temperature: 0.2, maxOutputTokens: 4096 },
   });
+});
+
+// flow 304 (AC5): the `/connect` Disconnect button + `keryx providers remove`.
+test("removeApiKey deletes exactly the named key, leaving its siblings intact", () => {
+  const dir = tempDir();
+  saveApiKey("DEEPSEEK_API_KEY", "sk-ds", dir);
+  saveApiKey("GROQ_API_KEY", "gsk-x", dir);
+  removeApiKey("DEEPSEEK_API_KEY", dir);
+  expect(loadShellConfig(dir).apiKeys).toEqual({ GROQ_API_KEY: "gsk-x" });
+});
+
+test("removeApiKey on a key that was never saved is a no-op, not an error", () => {
+  const dir = tempDir();
+  saveApiKey("GROQ_API_KEY", "gsk-x", dir);
+  removeApiKey("DEEPSEEK_API_KEY", dir); // never saved
+  expect(loadShellConfig(dir).apiKeys).toEqual({ GROQ_API_KEY: "gsk-x" });
+});
+
+test("removeProviderBaseUrl deletes exactly one provider's override, leaving siblings intact", () => {
+  const dir = tempDir();
+  saveProviderBaseUrl("rapid-mlx", "http://127.0.0.1:8010", dir);
+  saveProviderBaseUrl("openrouter", "https://openrouter.ai/api/v1", dir);
+  removeProviderBaseUrl("rapid-mlx", dir);
+  expect(loadShellConfig(dir).baseUrls).toEqual({ openrouter: "https://openrouter.ai/api/v1" });
+});
+
+test("removeProviderModelParams deletes exactly one provider's overrides, leaving siblings intact", () => {
+  const dir = tempDir();
+  saveProviderModelParams("openrouter", { temperature: 0.2 }, dir);
+  saveProviderModelParams("deepseek", { timeoutMs: 60_000 }, dir);
+  removeProviderModelParams("openrouter", dir);
+  expect(loadShellConfig(dir).modelParams).toEqual({ deepseek: { timeoutMs: 60_000 } });
 });
 
 test("applySavedApiKeys sets env for saved keys without overwriting an existing env var", () => {

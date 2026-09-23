@@ -82,14 +82,20 @@ test("flow 303 AC5: --help, -h and bare `keryx` print the identical flat usage, 
 describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned against their pre-flow output", () => {
   const FIXTURES_ROOT = path.join(import.meta.dir, "../fixtures/cli-help-pre-flow-303");
 
-  // The ONLY two lines this flow is allowed to have added to the flat block —
-  // one in USAGE_BODY, one in the Commands: summary table.
+  // The ONLY lines these two flows are allowed to have added to the flat
+  // block. Flow 303: one in USAGE_BODY, one in the Commands: summary table.
+  // Flow 304 (review finding #5): `keryx --help` never listed the new
+  // `providers test`/`providers remove` subcommands — both added here, in
+  // USAGE_BODY only (they are subcommands of an existing verb, so no new
+  // Commands: summary row is needed, unlike flow 303's brand-new `help` verb).
   const NEW_LINES = [
     "  keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)\n",
     "  help      Grouped command help by task: every verb, in nine onboarding-ordered groups\n",
+    "  keryx providers test <name> [--json]\n",
+    "  keryx providers remove <name> [--yes] [--json]\n",
   ];
 
-  test("the flat --help block is the pre-flow fixture plus exactly those two lines, nothing else", async () => {
+  test("the flat --help block is the pre-flow fixture plus exactly those lines, nothing else", async () => {
     const cliPath = path.join(import.meta.dir, "cli.ts");
     const current = await runBun([cliPath, "--help"]);
     const preFlow = readFileSync(path.join(FIXTURES_ROOT, "flat-help.txt"), "utf8");

@@ -127,7 +127,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Connect a model provider",
     summary: "Providers this operator has configured, and cross-family review eligibility.",
   },
-  { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider / API key." },
+  { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider; row buttons test/disconnect it." },
   {
     kind: "slash",
     name: "/search-provider",

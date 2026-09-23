@@ -15,7 +15,10 @@ Scope: `src/tui/tui-session-lease.test.ts`, `src/tui/tui-bus.test.ts`,
 Flow 303 (keryx help) added `src/tui/busy-dispatch.test.ts` and
 `src/tui/help-first-run.test.ts` to this scope while its own PR review round
 was open — both are otherwise pure/behavioural test files that gained exactly
-one structural source-text pin each; see their own sections below.
+one structural source-text pin each; see their own sections below. Flow 304
+(`/connect`'s Test/Disconnect row buttons) added `src/tui/connect-provider-buttons.test.ts`
+the same way — one structural pin for the closure-internal session-comparison
+half of AC7, alongside its own otherwise-behavioural mouse/keyboard coverage.
 
 `tui-shell.ts` is 6853 lines (`wc -l`). Production line numbers below are from
 `keryx ctx rg` against the current worktree.
@@ -136,6 +139,17 @@ Production region pinned: the AC8 first-run-help call site in `launchTuiAgentShe
 | test | technique | literal(s) / window | behaviour it actually protects | observable today? | proposed conversion | what cosmetic edit breaks it |
 |---|---|---|---|---|---|---|
 | `the shell dispatches it as a background task, never awaited inline in the startup sequence` | whole-file substring presence/absence check | `"void resolveFirstRunHelp({"` must be present; `"await resolveFirstRunHelp("` must be absent | The first-run-help decision's probe (`filterConnectedDetectedProviders`) is a real, sequential, up-to-~10s-per-provider network call; `await`ing it inline in `launchTuiAgentShell`'s startup sequence delayed every later step (session load, sidebar mount, the composer actually taking input) — the exact HIGH 1 regression (a user who already has a provider configured was never marked as "shown", so the slow probe re-ran on every single launch, forever) this pins against reintroducing. | no — same reason as the row above: `launchTuiAgentShell` itself is never driven in a test. `resolveFirstRunHelp` IS exported and behaviourally tested (its 3 named cases, plus a slow-probe case and a probe-never-called case, all in this same file). | Once `launchTuiAgentShell`'s startup sequence has an injectable "background task" seam (the same shape P2 proposes for the `makeAgentDeps`/busy-dispatch rows elsewhere in this inventory), assert against a recorded call log instead of the literal `void …then(` spelling. | Reformatting the call across multiple lines such that `"void resolveFirstRunHelp({"` no longer appears as one contiguous substring (e.g. inserting a line break immediately before `resolveFirstRunHelp`). |
+
+---
+
+## `src/tui/connect-provider-buttons.test.ts` (structural pin added alongside the behavioural row-button tests)
+
+### `the /connect command handler prints the active-provider-disconnected line` — added by flow 304
+Production region pinned: the `/connect`/`/provider` command handler's `onDisconnected` callback, `if (command.name === "/connect" || command.name === "/provider") { … }`.
+
+| test | technique | literal(s) / window | behaviour it actually protects | observable today? | proposed conversion | what cosmetic edit breaks it |
+|---|---|---|---|---|---|---|
+| `onDisconnected compares the disconnected name against the session's OWN provider` / `the system line names 'already-loaded credential'...` / `the line is NOT a forced switch` | `indexOf` window (1500 chars from the `/connect`\|`/provider` branch's `if`) + substring presence/absence | window must contain `onDisconnected: (name) => {`, `if (name === currentSel.provider) {`, `already-loaded credential`, `/connect another provider or restart`, `io.onSystem?.(`; the callback's own sub-slice must NOT contain `switchTo(` | Disconnecting the provider the session is CURRENTLY using (AC7) must neither force a provider switch nor interrupt an in-flight turn — it only prints one system line naming the provider and explaining the session keeps its already-loaded credential until `/connect` or a restart. This comparison (`name === currentSel.provider`) lives inside `launchTuiAgentShell`'s closure with no exported seam, the same reason every other row in this table exists. | no — same reason as the `busy-dispatch`/`help-first-run` rows above: `launchTuiAgentShell` is never driven end-to-end in any test. The row-list step's OWN contract — `onDisconnected` fires with the right name, exactly once, only on a CONFIRMED disconnect — IS behavioural and IS proven in the same file, driving the real `selectProviderModelInTui` (see the AC4 describe block). Only the closure-internal session-name comparison and the system line's wording needed a text audit. | Once `SelectProviderModelOptions.onDisconnected` (or the `/connect` handler itself) is extracted so the session-provider comparison is an injectable/exported decision (mirroring `busy-dispatch.ts`'s `classifyBusyDispatch` extraction proposed above), this becomes a direct unit test of that decision instead of a source slice. | Reordering the `/connect`/`/provider` if-branch's contents such that `onDisconnected` moves more than 1500 characters past the `if`; renaming `currentSel` or rewording the system line's "already-loaded credential"/"restart" phrasing (a legitimate UI copy edit that would need the audit's literals updated alongside it). |
 
 ---
 
