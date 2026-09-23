@@ -57,6 +57,28 @@ const SHELL_ARGS = ["shell", "--provider", "deepseek", "--model", "unused", "--n
 
 /** Bound on waiting for anything in this file (polled, never slept a fixed time). */
 const WAIT_MS = 15_000;
+/**
+ * Bound for a wait that depends on a PEER shell's own poll cycle noticing and
+ * RENDERING a bus event — a pause-request notice, a held notice, a resume/
+ * override broadcast line, or a queued turn actually starting once released
+ * (every `nudgeUntil` use, and every `waitFor` reading the OTHER shell's
+ * `output()` for text a peer's action caused). `WAIT_MS` covers a LOCAL
+ * confirmation the SAME process prints synchronously off its own command
+ * (`shell.ts`'s `emit()` inside the `/bus pause`/`resume`/`override` handlers
+ * — no polling involved, so no reason to budget for it). The peer kind
+ * crosses three extra scheduling hops a local wait does not: the other
+ * process's `KERYX_BUS_POLL_MS` timer (`POLL_ENV` below) actually firing,
+ * its poll reading the shared bus root from disk, and this test's own stdout
+ * pipe read noticing the bytes it wrote — any one of which can be starved for
+ * seconds at a time on a loaded or throttled CI runner without the process
+ * itself being stuck. `WAIT_MS`'s 15s is 60 nominal poll cycles of margin
+ * unloaded, which measured CI flakiness (flow flaky-tests, 2026-09; this file
+ * failed one such wait at exactly its own ~16s ceiling) shows is not always
+ * enough; doubling it costs nothing on a passing run (`waitFor` returns the
+ * moment its condition is true, never waits out the ceiling) and stays well
+ * inside the 45s per-test timeout.
+ */
+const PEER_EVENT_WAIT_MS = 30_000;
 /** Fast poll so a pause/resume/override propagates to the other shell quickly. */
 const POLL_ENV = { KERYX_BUS_POLL_MS: "250" };
 /** One {@link nudgeUntil} Enter per poll interval: a fresh drain attempt each time the lease view can have moved. */
@@ -213,8 +235,8 @@ async function waitFor<T>(
  * before a single Enter would not, since the window is not bounded by
  * anything this test can observe.
  */
-async function nudgeUntil(shell: Shell, what: string, ready: () => boolean): Promise<void> {
-  const deadline = Date.now() + WAIT_MS;
+async function nudgeUntil(shell: Shell, what: string, ready: () => boolean, timeoutMs = PEER_EVENT_WAIT_MS): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
   for (;;) {
     if (ready()) return;
     await writeLine(shell, "");
@@ -285,8 +307,10 @@ describe.skipIf(process.platform === "win32")("readline pause leases across proc
     await waitFor(`A's pause confirmation\n${a.output()}`, () =>
       /bus: paused turns for @all/.test(a.output()) ? true : undefined,
     );
-    await waitFor(`B's pause-request notice\n${b.output()}`, () =>
-      /pause-request: holding for release/.test(b.output()) ? true : undefined,
+    await waitFor(
+      `B's pause-request notice\n${b.output()}`,
+      () => (/pause-request: holding for release/.test(b.output()) ? true : undefined),
+      PEER_EVENT_WAIT_MS,
     );
     // `leaseViewInstance.refresh()` runs right after the notice is printed,
     // in the same poll tick (`client.ts`'s `doPoll`) but as its own awaited
@@ -296,12 +320,16 @@ describe.skipIf(process.platform === "win32")("readline pause leases across proc
 
     const beforeHeldLen = b.output().length;
     await writeLine(b, "hello while held");
-    await waitFor(`B's held notice\n${b.output()}`, () => {
-      const added = b.output().slice(beforeHeldLen);
-      return /turns held by @alpha/.test(added) && /Your line is queued and will run once released/.test(added)
-        ? true
-        : undefined;
-    });
+    await waitFor(
+      `B's held notice\n${b.output()}`,
+      () => {
+        const added = b.output().slice(beforeHeldLen);
+        return /turns held by @alpha/.test(added) && /Your line is queued and will run once released/.test(added)
+          ? true
+          : undefined;
+      },
+      PEER_EVENT_WAIT_MS,
+    );
     // No turn started for the held line: give the (nonexistent) turn a
     // window it would need to print its start marker in, then confirm it
     // never did.
@@ -312,8 +340,10 @@ describe.skipIf(process.platform === "win32")("readline pause leases across proc
     await waitFor(`A's resume confirmation\n${a.output()}`, () =>
       /bus: resumed lease/.test(a.output()) ? true : undefined,
     );
-    await waitFor(`B reports the release\n${b.output()}`, () =>
-      /⇄ \[#\d+\] @alpha resume:/.test(b.output()) ? true : undefined,
+    await waitFor(
+      `B reports the release\n${b.output()}`,
+      () => (/⇄ \[#\d+\] @alpha resume:/.test(b.output()) ? true : undefined),
+      PEER_EVENT_WAIT_MS,
     );
 
     // The drain happens "at the next prompt or poll" — nudged until it does,
@@ -333,15 +363,19 @@ describe.skipIf(process.platform === "win32")("readline pause leases across proc
     await waitFor(`A's pause confirmation\n${a.output()}`, () =>
       /bus: paused turns for @all/.test(a.output()) ? true : undefined,
     );
-    await waitFor(`B's pause-request notice\n${b.output()}`, () =>
-      /pause-request: overriding test/.test(b.output()) ? true : undefined,
+    await waitFor(
+      `B's pause-request notice\n${b.output()}`,
+      () => (/pause-request: overriding test/.test(b.output()) ? true : undefined),
+      PEER_EVENT_WAIT_MS,
     );
     await Bun.sleep(Number(POLL_ENV.KERYX_BUS_POLL_MS) * 3);
 
     const beforeHeldLen = b.output().length;
     await writeLine(b, "line while held");
-    await waitFor(`B's held notice\n${b.output()}`, () =>
-      /turns held by @alpha/.test(b.output().slice(beforeHeldLen)) ? true : undefined,
+    await waitFor(
+      `B's held notice\n${b.output()}`,
+      () => (/turns held by @alpha/.test(b.output().slice(beforeHeldLen)) ? true : undefined),
+      PEER_EVENT_WAIT_MS,
     );
     expect(b.output().slice(beforeHeldLen)).not.toMatch(TURN_STARTED);
 
@@ -382,8 +416,10 @@ describe.skipIf(process.platform === "win32")("readline pause leases across proc
     await waitFor(`A's pause confirmation\n${a.output()}`, () =>
       /bus: paused turns for @all/.test(a.output()) ? true : undefined,
     );
-    await waitFor(`B's pause-request notice\n${b.output()}`, () =>
-      /pause-request: holder going away/.test(b.output()) ? true : undefined,
+    await waitFor(
+      `B's pause-request notice\n${b.output()}`,
+      () => (/pause-request: holder going away/.test(b.output()) ? true : undefined),
+      PEER_EVENT_WAIT_MS,
     );
     await Bun.sleep(Number(POLL_ENV.KERYX_BUS_POLL_MS) * 3);
 
@@ -397,8 +433,10 @@ describe.skipIf(process.platform === "win32")("readline pause leases across proc
     // line actually runs.
     const beforeHeldLen = b.output().length;
     await writeLine(b, "queued before the kill");
-    await waitFor(`B's held notice\n${b.output()}`, () =>
-      /turns held by @alpha/.test(b.output().slice(beforeHeldLen)) ? true : undefined,
+    await waitFor(
+      `B's held notice\n${b.output()}`,
+      () => (/turns held by @alpha/.test(b.output().slice(beforeHeldLen)) ? true : undefined),
+      PEER_EVENT_WAIT_MS,
     );
 
     kill(a, "SIGKILL");
@@ -500,8 +538,10 @@ console.log(JSON.stringify({ publishLease, decision }));
     await waitFor(`A's pause confirmation\n${a.output()}`, () =>
       /bus: paused git-publish for @all/.test(a.output()) ? true : undefined,
     );
-    await waitFor(`B's pause-request notice\n${b.output()}`, () =>
-      /pause-request: cutting a release/.test(b.output()) ? true : undefined,
+    await waitFor(
+      `B's pause-request notice\n${b.output()}`,
+      () => (/pause-request: cutting a release/.test(b.output()) ? true : undefined),
+      PEER_EVENT_WAIT_MS,
     );
 
     // The floor: `auto` still asks for a publish command while the lease applies.

@@ -231,13 +231,53 @@ describe.skipIf(!liveAvailable)("AC13 (live): what a command inside the unattend
   // PATH sockets. /run is where the host's services listen — it must be hidden.
   // -------------------------------------------------------------------------
 
-  test("T14: no unix socket anywhere is visible inside the sandbox (find / -type s is empty); /run is empty", () => {
-    const control = runInside("echo alive");
-    expect(control.code).toBe(0);
-    const found = runInside("find / \\( -path /proc -o -path /sys \\) -prune -o -type s -print 2>/dev/null; echo end");
-    expect(found.out.trim()).toBe("end");
-    expect(runInside("ls -A /run").out.trim()).toBe("");
-  });
+  test(
+    "T14: no unix socket anywhere is visible inside the sandbox (find / -type s is empty); /run is empty",
+    () => {
+      const control = runInside("echo alive");
+      expect(control.code).toBe(0);
+      // Still scans the WHOLE sandbox root — this is a security regression
+      // test (flow 290's re-review: `--unshare-net` does not isolate AF_UNIX
+      // PATH sockets), and a host socket could in principle sit anywhere
+      // reachable through `planUnattendedSandbox`'s `--ro-bind / /` — under
+      // `/var/lib` (docker, containerd, snapd runtime state), `/srv`, `/opt`,
+      // `/mnt`, the project directory itself, and so on. Narrowing the scan to
+      // "the paths we already believe matter" would make this a test of our
+      // own assumptions rather than a closure over the filesystem, which is
+      // exactly what a deny-list (the profile this replaced, see
+      // `unattended.ts`'s own header) gets wrong.
+      //
+      // What IS pruned is chosen because it cannot hold a LIVE HOST socket
+      // reachable through the read-only bind, not because it seems unlikely:
+      //   /proc, /sys  pseudo-filesystems (synthetic per-process/per-device
+      //                state), not on-disk trees a socket file lives in.
+      //   /usr         a static, read-only installed-package tree; nothing
+      //                binds a listening socket under a package prefix.
+      //   /dev         `planUnattendedSandbox` passes `--dev /dev`, bwrap's
+      //                OWN fresh devtmpfs — never the host's `/dev` — so
+      //                anything under it reflects the sandbox, not the host,
+      //                by construction, whether or not this fix is correct.
+      //   /nix/store,
+      //   /snap        present only on some hosts; when present, the same
+      //                static-read-only-package-tree reasoning as `/usr`.
+      // These are also the large, expensive-to-walk trees, so pruning them is
+      // both correctness-preserving and most of why the unpruned scan was
+      // slow. Everywhere else — `/run`, `/var/run`, `/home`, `/var/lib`,
+      // `/opt`, `/srv`, `/mnt`, the worktree, etc. — is walked in full.
+      const found = runInside(
+        "find / \\( -path /proc -o -path /sys -o -path /usr -o -path /dev -o -path /nix/store -o -path /snap \\) -prune -o -type s -print 2>/dev/null; echo end",
+      );
+      expect(found.out.trim()).toBe("end");
+      expect(runInside("ls -A /run").out.trim()).toBe("");
+    },
+    // This still shells out to a real bwrap sandbox and a real `find` over
+    // live filesystem state (not test-controlled), so it is not a pure
+    // in-process assertion bun's 5s default was sized for — kept generous to
+    // absorb a genuinely slower or busier CI host without masking a real
+    // hang; a sandbox or `find` that is actually stuck would still fail
+    // loudly well before this.
+    20_000,
+  );
 
   test.each([
     ["resolvectl", "resolvectl query github.com"],
