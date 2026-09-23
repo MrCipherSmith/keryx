@@ -733,3 +733,81 @@ describe("AC10 — the honest limit: the agent's own tools never reach keryx", (
     TIMEOUT_MS,
   );
 });
+
+describe("flow 292 T13 — keryx answers only for this run's session, and only during its turn", () => {
+  test(
+    "a permission or fs request naming another session is refused by name and recorded; an update for another session is ignored",
+    async () => {
+      const s = scenario({
+        steps: [
+          {
+            request: {
+              method: "session/request_permission",
+              params: {
+                sessionId: "other-session",
+                toolCall: { toolCallId: "o1", title: "read", kind: "read" },
+                options: ALL_OPTIONS,
+              },
+            },
+            as: "foreign-permission",
+          },
+          {
+            request: { method: "fs/read_text_file", params: { sessionId: "other-session", path: "{{cwd}}/README.md" } },
+            as: "foreign-read",
+          },
+          { update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "INJECTED-BY-OTHER-SESSION" } }, session: "other-session" },
+          { update: { sessionUpdate: "tool_call", toolCallId: "o2", title: "ghost", kind: "execute" }, session: "other-session" },
+          ...SAY_RESULT,
+        ],
+      });
+      const outcome = await run(s);
+      expect(outcome.status).toBe("Completed");
+      const log = s.log();
+      for (const as of ["foreign-permission", "foreign-read"]) {
+        const error = responseAs(log, as)?.error;
+        expect(error?.code).toBe(-32602);
+        expect(error?.message).toContain('names session "other-session"');
+      }
+      // Recorded, and never decided: no permission decision exists for it.
+      expect(outcome.acp?.decisions).toEqual([]);
+      expect(outcome.acp?.fsRequests.map((r) => [r.method, r.outcome])).toEqual([
+        ["session/request_permission", "refused"],
+        ["fs/read_text_file", "refused"],
+      ]);
+      // The foreign updates were ignored: nothing folded, nothing recorded.
+      expect(outcome.output).not.toContain("INJECTED-BY-OTHER-SESSION");
+      expect(outcome.acp?.toolCalls.find((call) => call.toolCallId === "o2")).toBeUndefined();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a permission or fs request sent after the prompt was answered is refused and recorded, never decided",
+    async () => {
+      const s = scenario({
+        steps: SAY_RESULT,
+        afterPrompt: [
+          {
+            method: "session/request_permission",
+            params: {
+              sessionId: "fake-session-1",
+              toolCall: { toolCallId: "late", title: "late", kind: "read" },
+              options: ALL_OPTIONS,
+            },
+          },
+          { method: "fs/read_text_file", params: { sessionId: "fake-session-1", path: "{{cwd}}/README.md" } },
+        ],
+      });
+      const outcome = await run(s);
+      expect(outcome.status).toBe("Completed");
+      expect(outcome.acp?.decisions).toEqual([]);
+      const refused = outcome.acp?.fsRequests ?? [];
+      expect(refused.map((r) => r.method)).toEqual(["session/request_permission", "fs/read_text_file"]);
+      for (const record of refused) {
+        expect(record.outcome).toBe("refused");
+        expect(record.reason).toContain("turn has ended");
+      }
+    },
+    TIMEOUT_MS,
+  );
+});

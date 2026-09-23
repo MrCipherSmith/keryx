@@ -32,7 +32,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createInterface } from "node:readline";
+import { createInterface, type Interface } from "node:readline";
 import { createVersionProbe, type VersionProbe } from "../harness/external-agent-probe";
 import {
   EXTERNAL_AGENTS,
@@ -302,16 +302,36 @@ export async function agentsExternalCommand(args: string[], deps: AgentsExternal
 /**
  * An approver that asks on the terminal. The answer is bound to the prompt's
  * fingerprint — the permission bridge accepts nothing less.
+ *
+ * The readline is closed on EVERY path: an answer, or the bridge abandoning the
+ * question (`meta.signal`, aborted when its approval timeout wins). Closing only
+ * in the answer callback leaked one open interface per timed-out prompt, each
+ * holding stdin — the CLI could hang after the run had ended (flow 292 T13).
  */
-function terminalApprover(): AgentIO["requestApproval"] {
+export function terminalApprover(
+  io: { readonly input?: NodeJS.ReadableStream; readonly output?: NodeJS.WritableStream; readonly onInterface?: (rl: Interface) => void } = {},
+): NonNullable<AgentIO["requestApproval"]> {
   return (tool, input, meta) =>
     new Promise((resolve) => {
-      const rl = createInterface({ input: process.stdin, output: process.stderr });
+      const rl = createInterface({ input: io.input ?? process.stdin, output: io.output ?? process.stderr });
+      io.onInterface?.(rl);
+      let settled = false;
+      const finish = (approved: boolean): void => {
+        if (settled) return;
+        settled = true;
+        meta?.signal?.removeEventListener("abort", onAbort);
+        rl.close();
+        resolve(meta === undefined ? approved : { approved, fingerprint: meta.fingerprint });
+      };
+      const onAbort = (): void => finish(false);
+      if (meta?.signal?.aborted === true) {
+        finish(false);
+        return;
+      }
+      meta?.signal?.addEventListener("abort", onAbort, { once: true });
       const risk = meta?.destructive === true ? " (destructive)" : "";
       rl.question(`\n${tool}${risk}\n  ${input}\nAllow once? [y/N] `, (answer) => {
-        rl.close();
-        const approved = answer.trim().toLowerCase() === "y";
-        resolve(meta === undefined ? approved : { approved, fingerprint: meta.fingerprint });
+        finish(answer.trim().toLowerCase() === "y");
       });
     });
 }

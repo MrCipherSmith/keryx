@@ -264,6 +264,31 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
     ...(input.permission.approvalTimeoutMs === undefined ? {} : { approvalTimeoutMs: input.permission.approvalTimeoutMs }),
   };
 
+  // Session binding (flow 292 T13). The run owns exactly ONE ACP session, and
+  // keryx answers permission and fs questions only for it and only while its
+  // prompt is in flight: before `session/new` answered there is nothing to ask
+  // about, and after the prompt's answer the turn is over. A request naming any
+  // other session id, or arriving outside the turn, is refused by name and
+  // recorded; a `session/update` for another session is ignored.
+  let phase: "handshake" | "prompting" | "ended" = "handshake";
+  let promptRequestId: string | undefined;
+  let boundSessionId: string | undefined;
+  const guardSession = (method: string, params: unknown): void => {
+    const claimed = isObject(params) ? params["sessionId"] : undefined;
+    let reason: string | undefined;
+    if (phase !== "prompting") {
+      reason =
+        phase === "handshake"
+          ? "no prompt is in progress yet; keryx answers only during this run's turn"
+          : "this run's turn has ended; keryx no longer answers for it";
+    } else if (claimed !== boundSessionId) {
+      reason = `the request names session ${JSON.stringify(claimed ?? null)}, not this run's session ${JSON.stringify(boundSessionId)}`;
+    }
+    if (reason === undefined) return;
+    recordFs({ method, outcome: "refused", reason });
+    throw new AcpError(JSON_RPC_ERROR_CODES.invalidParams, `${method} refused: ${reason}`, { reason: "session-mismatch" });
+  };
+
   const served = [
     ACP_CLIENT_METHODS.sessionRequestPermission,
     ACP_CLIENT_METHODS.fsReadTextFile,
@@ -287,6 +312,7 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
 
   // session/request_permission — the policy bridge.
   dispatcher.onRequest(ACP_CLIENT_METHODS.sessionRequestPermission, async (params, context) => {
+    guardSession(ACP_CLIENT_METHODS.sessionRequestPermission, params);
     const p = isObject(params) ? params : {};
     const rawToolCall = p["toolCall"];
     const toolCall: AcpToolCallUpdate =
@@ -304,6 +330,7 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
   // fs/read_text_file — served from the worktree only.
   dispatcher.onRequest(ACP_CLIENT_METHODS.fsReadTextFile, async (params) => {
     const method = ACP_CLIENT_METHODS.fsReadTextFile;
+    guardSession(method, params);
     const p = isObject(params) ? params : {};
     try {
       const { content } = await readTextFileInWorktree(input.cwd, p);
@@ -318,6 +345,7 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
   // fs/write_text_file — refused unless advertised; then confined AND gated.
   dispatcher.onRequest(ACP_CLIENT_METHODS.fsWriteTextFile, async (params, context) => {
     const method = ACP_CLIENT_METHODS.fsWriteTextFile;
+    guardSession(method, params);
     const p = isObject(params) ? params : {};
     const requested = typeof p["path"] === "string" ? p["path"] : String(p["path"]);
     if (!input.write) {
@@ -352,7 +380,7 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
           { reason: "permission-denied", decision: decision.reason },
         );
       }
-      await writeTextFileInWorktree(target, p["content"], requested);
+      await writeTextFileInWorktree(input.cwd, target, p["content"], requested);
       recordFs({ method, path: requested, outcome: "served", bytes: Buffer.byteLength(p["content"], "utf8") });
       return {};
     } catch (error) {
@@ -379,6 +407,10 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
   // session/update — folded into ExternalEvents and the side records.
   dispatcher.onNotification(ACP_CLIENT_METHODS.sessionUpdate, (params) => {
     if (!isObject(params) || !isObject(params["update"])) return;
+    if (boundSessionId === undefined || params["sessionId"] !== boundSessionId) {
+      stderr.push(`[keryx] ignored a session/update for session ${JSON.stringify(params["sessionId"] ?? null)}`);
+      return;
+    }
     foldUpdate(params["update"] as unknown as AcpSessionUpdate);
   });
 
@@ -455,6 +487,18 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
   const inflight = new Set<Promise<void>>();
   const onLine = (line: string): void => {
     if (line.trim().length === 0) return;
+    // The turn ends the moment its answer ARRIVES, decided here, synchronously
+    // and in arrival order — not when the awaiting code resumes a few
+    // microtasks later, by which time a request the agent sent right behind its
+    // answer could already have been treated as mid-turn.
+    if (phase === "prompting" && promptRequestId !== undefined && line.includes(promptRequestId)) {
+      try {
+        const value: unknown = JSON.parse(line);
+        if (isObject(value) && !("method" in value) && value["id"] === promptRequestId) phase = "ended";
+      } catch {
+        // Not JSON: the dispatcher answers it with a parse error.
+      }
+    }
     // Not awaited: a permission question may wait on a human, and the agent's
     // other messages must keep flowing meanwhile. Notifications are folded
     // synchronously inside `handleLine`, so arrival order is preserved.
@@ -473,12 +517,18 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
     void handled.finally(() => inflight.delete(handled));
   };
   const stdoutDone = (async (): Promise<void> => {
+    let closeReason = "the agent closed its stdout before answering";
     try {
       for await (const line of child.stdout) onLine(line);
     } catch (error) {
-      stderr.push(`[keryx] stdout read failed: ${error instanceof Error ? error.message : String(error)}`);
+      // A read failure — the line-size ceiling above all — is the NAMED reason
+      // every pending request settles with, so the run's failure says why.
+      const message = error instanceof Error ? error.message : String(error);
+      stderr.push(`[keryx] stdout read failed: ${message}`);
+      closeReason = message;
+      killed = true;
     } finally {
-      requests.close("the agent closed its stdout before answering");
+      requests.close(closeReason);
     }
   })();
   void (async (): Promise<void> => {
@@ -561,6 +611,7 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
       return await finish();
     }
     sessionId = created.result["sessionId"];
+    boundSessionId = sessionId;
     emit({ kind: "child_started", sessionRef: sessionId });
 
     // 3. session/prompt
@@ -581,8 +632,12 @@ export async function superviseAcpRun(input: SuperviseAcpInput, deps: SuperviseA
         }
       }
     }
-    const turn = requests.request(ACP_AGENT_METHODS.sessionPrompt, { sessionId, prompt });
+    phase = "prompting";
+    const turn = requests.request(ACP_AGENT_METHODS.sessionPrompt, { sessionId, prompt }, (id) => {
+      promptRequestId = id;
+    });
     const answered = await withDeadline(turn);
+    phase = "ended";
     if (answered === TIMEOUT) {
       // Ask the agent to stop, give it the grace window to say so, then kill.
       status = "timeout";

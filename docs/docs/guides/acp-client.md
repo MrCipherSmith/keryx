@@ -13,6 +13,18 @@ Each run is recorded as a keryx session. keryx does **not** contain what the
 agent does with its own tools. The [limits](#what-keryx-cannot-control) section
 says exactly what that means.
 
+!!! warning "The MCP server keryx hands the agent reads the whole real project"
+    The agent works in a throwaway worktree, but the read-only MCP server keryx
+    offers it is started for the **real project root**, not the worktree. Its
+    reads cover the whole live project — including uncommitted files the
+    worktree does not have — and they go straight to that server, so they
+    **bypass the permission bridge**: no prompt, no decision entry. "Read-only"
+    means no tool marked mutating is offered. It does not mean nothing is
+    written: some of those read tools refresh keryx's own cache and report files
+    under `.metaproject/data/**`. If the project holds anything the foreign agent
+    must not read, turn the MCP module off for the run (`modules.mcp.enabled`)
+    and the agent gets no MCP server at all.
+
 ## Run one
 
 ```bash
@@ -75,7 +87,12 @@ decides the risk:
 | `other`, `switch_mode`, missing | destructive shell | prompt |
 | anything that targets a managed flow-state file | — | **denied** |
 
-Three rules apply on top of the table.
+Four rules apply on top of the table.
+
+- **Only this run's session, only during its turn.** A permission or `fs/*`
+  request naming any other session id, or arriving before the prompt starts or
+  after its answer, is refused with a named error and recorded; a
+  `session/update` for another session is ignored.
 
 - **The permission mode is always `ask`.** The tool kind, input and locations
   come from the foreign agent's own description of the call. keryx's `trust`
@@ -114,7 +131,10 @@ Three rules apply on top of the table.
 
   `--read-only` hides every tool the registry marks as mutating, because the
   agent's MCP calls go straight to that server and never pass the permission
-  bridge. If the MCP module is disabled for the project, or the optional
+  bridge. Keep in mind what that server sees: the **whole real project** at
+  `<project-root>`, not the worktree, with no per-call approval, and some of
+  its read tools still write keryx's own `.metaproject/data/**` cache and
+  report files. If the MCP module is disabled for the project, or the optional
   `@modelcontextprotocol/sdk` is not installed, the run still goes ahead and
   the record says `context: not offered — <reason>`.
 
@@ -164,7 +184,10 @@ before trusting a run:
   the agent mis-describes is mis-classified. This is why the mode is always
   `ask`.
 - **The agent's MCP calls skip the permission bridge.** They go straight to the
-  MCP servers keryx handed it. keryx's own server is read-only for that reason.
+  MCP servers keryx handed it. keryx's own server offers no mutating tool for
+  that reason — but it reads the **whole real project**, not the worktree, and
+  some of its read tools write keryx's own `.metaproject/data/**` cache and
+  report files.
 - **The agent process runs without an OS sandbox in this release.** It needs
   the network to reach its model and its own credential directory under
   `$HOME`.

@@ -283,10 +283,14 @@ export async function answerAcpPermission(
       locations: locationPaths(toolCall),
       reasons: classification.reasons,
     });
+    // Aborted when the timeout wins, so an approver holding a terminal prompt
+    // (or any other resource) for this question can release it.
+    const abandon = new AbortController();
     const approval = ctx.requestApproval(`acp:${toolCall.title ?? toolCall.kind ?? "tool"}`, inputJson, {
       fingerprint,
       destructive: classification.destructive,
       ...(classification.credentials ? { credentials: true } : {}),
+      signal: abandon.signal,
     });
     let timer: ReturnType<typeof setTimeout> | undefined;
     const expired = new Promise<"timeout">((resolve) => {
@@ -295,6 +299,7 @@ export async function answerAcpPermission(
     try {
       const settled = await Promise.race([approval.catch((): ApprovalResponse => false), expired]);
       if (settled === "timeout") {
+        abandon.abort();
         verdict = "deny";
         reason = "timeout";
         timedOut = true;

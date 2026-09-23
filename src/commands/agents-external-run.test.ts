@@ -14,7 +14,10 @@ import { CI_ENV_VARS, ENV_KERYX_TRANSPORT, EXTERNAL_AGENTS_DEFAULTS, type Extern
 import type { CreatedWorktree, WorktreeMergeResult, WorktreePort } from "../harness/child/worktree";
 import type { ExternalChildOutcome } from "../harness/external/runtime";
 import { withoutGitDiscoveryOverrides } from "../lib/git-env";
-import { agentsExternalCommand, type AgentsExternalDeps } from "./agents-external";
+import { PassThrough } from "node:stream";
+import type { Interface } from "node:readline";
+import { answerAcpPermission, clampForeignMode } from "../harness/external/acp-permission";
+import { agentsExternalCommand, terminalApprover, type AgentsExternalDeps } from "./agents-external";
 
 const FAKE_AGENT = fileURLToPath(new URL("../../fixtures/external/acp/fake-acp-agent.ts", import.meta.url));
 const ENABLED: ExternalAgentsConfig = { ...EXTERNAL_AGENTS_DEFAULTS, enabled: true };
@@ -242,5 +245,63 @@ describe("AC11 — list shows the transport", () => {
     const text = deps();
     await agentsExternalCommand(["list", "--no-probe"], text);
     expect(text.lines.join("\n")).toContain("transport: acp");
+  });
+});
+
+describe("flow 292 T13 — the terminal approver never leaks its readline", () => {
+  function approverUnderTest(): { approver: ReturnType<typeof terminalApprover>; input: PassThrough; interfaces: Interface[]; closed: () => number } {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const interfaces: Interface[] = [];
+    let closed = 0;
+    const approver = terminalApprover({
+      input,
+      output,
+      onInterface: (rl) => {
+        interfaces.push(rl);
+        rl.on("close", () => {
+          closed += 1;
+        });
+      },
+    });
+    return { approver, input, interfaces, closed: () => closed };
+  }
+
+  test("an answered prompt closes its readline and carries the fingerprint", async () => {
+    const t = approverUnderTest();
+    const answer = t.approver("acp:x", "{}", { fingerprint: "fp-1", destructive: false });
+    t.input.write("y\n");
+    expect(await answer).toEqual({ approved: true, fingerprint: "fp-1" });
+    expect(t.closed()).toBe(1);
+  });
+
+  test("when the bridge's approval timeout wins, the readline is closed and nothing waits on stdin", async () => {
+    const t = approverUnderTest();
+    const { decision } = await answerAcpPermission(
+      {
+        requestId: 1,
+        toolCall: { toolCallId: "c", kind: "edit", title: "edit" },
+        options: [
+          { optionId: "a", name: "Allow", kind: "allow_once" },
+          { optionId: "r", name: "Reject", kind: "reject_once" },
+        ],
+      },
+      { worktree: root, mode: clampForeignMode("ask"), unattended: false, requestApproval: t.approver, approvalTimeoutMs: 30 },
+    );
+    expect(decision).toMatchObject({ verdict: "deny", reason: "timeout", timedOut: true });
+    expect(t.interfaces).toHaveLength(1);
+    expect(t.closed()).toBe(1);
+    // A late keystroke reaches nobody: the interface is gone.
+    t.input.write("y\n");
+    expect(t.closed()).toBe(1);
+  });
+
+  test("an already-aborted question never opens a prompt it cannot close", async () => {
+    const t = approverUnderTest();
+    const controller = new AbortController();
+    controller.abort();
+    const answer = await t.approver("acp:x", "{}", { fingerprint: "fp", destructive: false, signal: controller.signal });
+    expect(answer).toEqual({ approved: false, fingerprint: "fp" });
+    expect(t.closed()).toBe(1);
   });
 });

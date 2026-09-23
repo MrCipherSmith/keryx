@@ -20,10 +20,47 @@
 //     reference implementation's `npx`-wrapped runs hung past their timeout.
 //     This port kills the process directly (no wrapper) and aborts its readers,
 //     so the abandoned generators terminate instead of leaking.
+import { ACP_DEFAULT_MAX_LINE_BYTES } from "../../acp/framing";
 import type { ExternalSpawnOptions, ExternalSpawnPort, SpawnedProcess } from "./supervise";
 
-/** Decode a byte stream and yield complete lines, newline stripped. */
-async function* readLines(stream: ReadableStream<Uint8Array> | undefined): AsyncGenerator<string> {
+/**
+ * The longest line this port buffers before giving up (flow 292 T13).
+ *
+ * The same 64 MiB ceiling keryx's own ACP agent side applies to its input
+ * (`ACP_DEFAULT_MAX_LINE_BYTES`, `src/acp/framing.ts`), measured the same way:
+ * UTF-16 code units in the undelimited buffer. A child that streams hundreds of
+ * megabytes without a newline — hostile or broken — otherwise grows this buffer
+ * until the keryx process dies of memory. Shared by every external transport:
+ * the claude/codex codecs see the overflow as a failed stream read plus a killed
+ * child; the ACP client sees its pending requests closed with this reason.
+ */
+export const DEFAULT_EXTERNAL_MAX_LINE_BYTES = ACP_DEFAULT_MAX_LINE_BYTES;
+
+/** Thrown from a line stream whose undelimited buffer passed the ceiling. */
+export class ExternalLineTooLongError extends Error {
+  constructor(
+    readonly stream: "stdout" | "stderr",
+    readonly maxLineBytes: number,
+  ) {
+    super(
+      `the child's ${stream} sent more than ${maxLineBytes} bytes without a newline; ` +
+        "the run was stopped and the child killed",
+    );
+    this.name = "ExternalLineTooLongError";
+  }
+}
+
+/**
+ * Decode a byte stream and yield complete lines, newline stripped. Over
+ * `maxLineBytes` without a newline, `onOverflow` runs (the port kills the child
+ * there) and the generator throws {@link ExternalLineTooLongError}.
+ */
+async function* readLines(
+  stream: ReadableStream<Uint8Array> | undefined,
+  name: "stdout" | "stderr",
+  maxLineBytes: number,
+  onOverflow: () => void,
+): AsyncGenerator<string> {
   if (stream === undefined) return;
   const decoder = new TextDecoder();
   let buffer = "";
@@ -41,6 +78,12 @@ async function* readLines(stream: ReadableStream<Uint8Array> | undefined): Async
         // inside JSON that then fails to parse and is counted as version drift.
         yield line.endsWith("\r") ? line.slice(0, -1) : line;
         newline = buffer.indexOf("\n");
+      }
+      if (buffer.length > maxLineBytes) {
+        buffer = "";
+        onOverflow();
+        void reader.cancel().catch(() => undefined);
+        throw new ExternalLineTooLongError(name, maxLineBytes);
       }
     }
     // A final line without a trailing newline is still a line. Dropping it would
@@ -80,7 +123,11 @@ export interface BunSpawnLike {
  * Note this is NOT the subsystem's test seam — that is `ExternalSpawnPort`
  * itself, which every other test substitutes wholesale.
  */
-export function createBunSpawnPort(spawnImpl: BunSpawnLike = Bun.spawn as unknown as BunSpawnLike): ExternalSpawnPort {
+export function createBunSpawnPort(
+  spawnImpl: BunSpawnLike = Bun.spawn as unknown as BunSpawnLike,
+  options: { readonly maxLineBytes?: number } = {},
+): ExternalSpawnPort {
+  const maxLineBytes = options.maxLineBytes ?? DEFAULT_EXTERNAL_MAX_LINE_BYTES;
   return {
     spawn(argv: readonly string[], opts: ExternalSpawnOptions): SpawnedProcess {
       const proc = spawnImpl(argv, {
@@ -93,9 +140,16 @@ export function createBunSpawnPort(spawnImpl: BunSpawnLike = Bun.spawn as unknow
         stderr: "pipe",
       });
 
+      const killOnOverflow = (): void => {
+        try {
+          proc.kill();
+        } catch {
+          // Already gone: nothing left to stop.
+        }
+      };
       return {
-        stdout: readLines(proc.stdout),
-        stderr: readLines(proc.stderr),
+        stdout: readLines(proc.stdout, "stdout", maxLineBytes, killOnOverflow),
+        stderr: readLines(proc.stderr, "stderr", maxLineBytes, killOnOverflow),
         writeStdin(text: string): void {
           // A one-shot run has no stdin writer; the handle refuses the call
           // before it reaches here, so silence is correct rather than a throw.

@@ -17,6 +17,7 @@ import { freshnessReportPath, readWikiFreshnessMetric } from "../../health/metri
 import type { Dirent } from "node:fs";
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
+import { confineToRoot } from "./builtin/interactive-tools";
 import { isNotFound, isPathInside, toPosix } from "../../lib/fs";
 import { readContainedFile } from "../../lib/contained-read";
 import { collectPages, WikiCollectionError } from "../../wiki/collect";
@@ -234,20 +235,32 @@ function isMissingExecutable(cause: unknown): boolean {
 }
 
 /**
- * Confine a caller-supplied search path to the project root. `searchCode` is
- * classified `read` and auto-approved, so an unconfined `path` would be an
- * arbitrary read behind a read-only tool — the identical check the interactive
- * tools already apply (`confineToRoot`, `./builtin/interactive-tools.ts`),
- * re-derived here rather than imported so this pure adapter keeps no dependency
- * on the interactive tool layer.
+ * Confine a caller-supplied search path to the project root, BY REAL PATH.
+ * `searchCode` is classified `read` and auto-approved, so an unconfined `path`
+ * would be an arbitrary read behind a read-only tool.
+ *
+ * Until flow 292 T13 this was re-derived LEXICALLY (resolve + relative), and
+ * ripgrep follows a symlink it is NAMED explicitly even without `--follow`: a
+ * `path` naming an in-root symlink to an outside directory (or file) passed the
+ * check and ripgrep printed the outside content. It now reuses `confineToRoot`
+ * (`./builtin/interactive-tools.ts`), which resolves real paths — through the
+ * nearest existing ancestor for a path that does not exist yet — and returns the
+ * RESOLVED path. What ripgrep is handed is that resolved path, never the link
+ * name, so an in-root symlink to an in-root directory still searches (its real
+ * target), and nothing ripgrep is given can itself be a symlink leading out.
+ * Inside the walk, ripgrep runs without `--follow`, so links it meets are not
+ * traversed.
+ *
+ * Returns the resolved path RELATIVE to the real project root (`""` for the root
+ * itself), or `null` when it escapes.
  */
 function confineToProject(cwd: string, candidate: string): string | null {
-  const target = resolve(cwd, candidate);
-  const rel = relative(cwd, target);
-  if (rel.startsWith("..") || isAbsolute(rel)) {
-    return null;
-  }
-  return target;
+  const confined = confineToRoot(cwd, candidate);
+  if (confined === null) return null;
+  const rootReal = confineToRoot(cwd, ".") ?? cwd;
+  const rel = relative(rootReal, confined);
+  if (rel.startsWith("..") || isAbsolute(rel)) return null;
+  return rel;
 }
 
 /**
@@ -601,7 +614,8 @@ export function createMetaprojectAdapter(
         // Relative, so ripgrep prints project-relative paths — the form every
         // other tool takes. Passed absolute, every match line carried the
         // checkout's absolute root, ~65 bytes of noise per line in the arena.
-        argv.push(relative(cwd, confined) || ".");
+        // It is the REAL path's relative form, never the caller's link name.
+        argv.push(confined || ".");
       }
       let run: { stdout: string; stderr: string; exitCode: number };
       try {

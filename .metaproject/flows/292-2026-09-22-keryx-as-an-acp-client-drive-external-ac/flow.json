@@ -10,7 +10,7 @@
   "title": "keryx as an ACP client: drive external ACP agents with keryx context and policy",
   "status": "in-progress",
   "createdAt": "2026-09-22T23:36:27.199Z",
-  "updatedAt": "2026-09-23T00:41:25.374Z",
+  "updatedAt": "2026-09-23T01:05:24.677Z",
   "source": {
     "type": "description",
     "ref": null
@@ -209,6 +209,26 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T00:53:04.078Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -304,6 +324,21 @@
       "at": "2026-09-23T00:41:25.374Z",
       "event": "task-done",
       "detail": "T11: Docs: ACP client page, limits, external-runtime requirements note"
+    },
+    {
+      "at": "2026-09-23T00:53:03.954Z",
+      "event": "task-added",
+      "detail": "T13: Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding"
+    },
+    {
+      "at": "2026-09-23T00:53:04.078Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T01:05:24.677Z",
+      "event": "task-done",
+      "detail": "T13: Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding"
     }
   ]
 }

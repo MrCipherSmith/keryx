@@ -20,3 +20,14 @@
 - 2026-09-23T00:41:25.147Z - task-done: T9: Session record, decisions, usage and cost; keryx agents external run
 - 2026-09-23T00:41:25.262Z - task-done: T10: Scripted fake ACP agent fixture; process tests incl. keryx-as-client driving keryx acp
 - 2026-09-23T00:41:25.374Z - task-done: T11: Docs: ACP client page, limits, external-runtime requirements note
+- 2026-09-23T00:53:03.954Z - task-added: T13: Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding
+- 2026-09-23T00:53:04.078Z - task-attempt: T13: started (attempt 1)
+- 2026-09-23T01:04:35Z - T13 security review fixes (uncommitted, not staged).
+  1. `search_code`: `metaproject-adapter.ts` `confineToProject` now confines by real path through `confineToRoot` and hands ripgrep the resolved path, never the name of a symlink. ripgrep runs without `--follow`. The `ctx rg` fallbacks in `builtin/metaproject-tools.ts` now put `--` before the model's pattern, which is an extra fix: a pattern such as `--follow` was being parsed as a flag.
+  2. `bun-spawn-port.ts`: lines are capped at 64 MiB, the same as `ACP_DEFAULT_MAX_LINE_BYTES`, and the cap can be injected. An overflow kills the child and throws `ExternalLineTooLongError`. The ACP client closes its pending requests with that reason; the line-stream codecs see a failed stream read and a killed child.
+  3. `acp-fs.ts`: after mkdir, the parent's real path is checked again, and the file is opened with `fs.constants.O_NOFOLLOW`.
+  4. The terminal approver closes its readline when `ApprovalMeta.signal` is aborted; the bridge aborts it on timeout.
+  5. `acp-client.ts` answers only for the bound session and only while a turn is running. The turn counts as ended as soon as its answer line arrives. Requests for another session are refused and recorded, and updates for another session are ignored.
+  6. The guide now has a warning that the MCP server's reads cover the whole real project, skip the bridge, and that some read tools write `.metaproject/data/**`.
+  Every mutation broke its test. Wide affected set: 4843 pass, 13 skip, 0 fail. Typecheck and eslint clean, health PASS.
+- 2026-09-23T01:05:24.677Z - task-done: T13: Security review fixes: real-path confine for search_code, client line cap, write-time ancestor check, readline leak, session binding

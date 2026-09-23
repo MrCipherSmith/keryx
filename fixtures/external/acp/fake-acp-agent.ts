@@ -17,6 +17,10 @@
 //   steps             run on session/prompt, in order (see `runStep`)
 //   stopReason        the prompt's answer (default "end_turn")
 //   hang              never answer session/prompt, and ignore session/cancel
+//   afterPrompt       raw requests ({method, params}) written in the same write
+//                     as, and right behind, the prompt's answer
+//
+// An `update` step may carry `session` to send it for another session id.
 //
 // The string "{{cwd}}" anywhere in a step is replaced with the cwd keryx sent in
 // session/new — the disposable worktree.
@@ -65,8 +69,8 @@ function request(method, params) {
   });
 }
 
-function update(body) {
-  send({ method: "session/update", params: { sessionId, update: substitute(body) } });
+function update(body, session) {
+  send({ method: "session/update", params: { sessionId: session ?? sessionId, update: substitute(body) } });
 }
 
 async function runSteps(steps) {
@@ -75,7 +79,7 @@ async function runSteps(steps) {
 
 async function runStep(step) {
   if (step.update !== undefined) {
-    update(step.update);
+    update(step.update, step.session);
     return;
   }
   if (step.say !== undefined) {
@@ -146,7 +150,15 @@ async function onRequest(message) {
     promptId = id;
     await runSteps(scenario.steps);
     if (scenario.hang === true) return;
-    send({ id, result: { stopReason: scenario.stopReason ?? "end_turn" } });
+    // `afterPrompt` requests go out in the SAME write as the prompt's answer,
+    // right behind it: they are in the pipe before keryx can stop the agent.
+    const answer = { jsonrpc: "2.0", id, result: { stopReason: scenario.stopReason ?? "end_turn" } };
+    const late = (scenario.afterPrompt ?? []).map((message, index) => ({
+      jsonrpc: "2.0",
+      id: `late-${index}`,
+      ...substitute(message),
+    }));
+    process.stdout.write([answer, ...late].map((message) => `${JSON.stringify(message)}\n`).join(""));
     return;
   }
   send({ id, error: { code: -32601, message: `Method not found: ${method}` } });

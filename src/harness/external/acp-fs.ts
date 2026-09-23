@@ -22,8 +22,8 @@
 // advertise a capability is a request to the agent, not a boundary. The
 // disposable worktree is the containment for that (D-08).
 
-import { lstatSync, statSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { constants, realpathSync, statSync } from "node:fs";
+import { mkdir, open, readFile } from "node:fs/promises";
 import path from "node:path";
 import { touchesAgentCredentials } from "../../lib/command-risk";
 import { AcpError, JSON_RPC_ERROR_CODES } from "../../acp/jsonrpc";
@@ -131,24 +131,64 @@ export async function readTextFileInWorktree(
   return { content: lines.slice(start, end).join("\n"), target };
 }
 
+/** Test seam for {@link writeTextFileInWorktree}: runs between the caller's check and the write. */
+export interface AcpWriteHooks {
+  readonly beforeWrite?: () => void | Promise<void>;
+}
+
 /**
  * Write `content` to a worktree path keryx already confined and the bridge
- * already approved. Refuses a symlink at the target itself — a write through it
- * lands wherever it points.
+ * already approved.
+ *
+ * The confinement was checked BEFORE the approval wait, which can be long; an
+ * agent that owns the worktree can swap an ancestor directory for an outward
+ * symlink in between (flow 292 T13). So, immediately before writing — after the
+ * parent directories exist — the parent's REAL path is re-checked against the
+ * worktree's, and the target is opened with `O_NOFOLLOW` (`fs.constants`, which
+ * Node and Bun expose on Linux and macOS) so a symlink planted AT the target is
+ * refused by the kernel rather than followed. A swap between the re-check and
+ * the open remains possible in principle: Node offers no `openat` to pin the
+ * directory. The disposable worktree bounds even that: a write that escaped
+ * would still need a parent the agent can already reach.
  */
-export async function writeTextFileInWorktree(target: string, content: string, requested: string): Promise<void> {
+export async function writeTextFileInWorktree(
+  worktree: string,
+  target: string,
+  content: string,
+  requested: string,
+  hooks: AcpWriteHooks = {},
+): Promise<void> {
   const method = ACP_CLIENT_METHODS.fsWriteTextFile;
   if (Buffer.byteLength(content, "utf8") > ACP_MAX_WRITE_BYTES) {
     throw new AcpError(JSON_RPC_ERROR_CODES.invalidParams, `${method} refused: content is over the ${ACP_MAX_WRITE_BYTES}-byte ceiling`);
   }
+  await hooks.beforeWrite?.();
+  const parent = path.dirname(target);
+  await mkdir(parent, { recursive: true });
+  const rootReal = realpathSync(worktree);
+  const parentReal = realpathSync(parent);
+  const rel = path.relative(rootReal, parentReal);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new AcpError(
+      JSON_RPC_ERROR_CODES.invalidParams,
+      `${method} refused: ${requested} resolves outside the disposable worktree at write time`,
+      { reason: "outside-worktree" },
+    );
+  }
+  const finalTarget = path.join(parentReal, path.basename(target));
+  let handle: Awaited<ReturnType<typeof open>>;
   try {
-    if (lstatSync(target).isSymbolicLink()) {
+    handle = await open(finalTarget, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o644);
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "ELOOP" || code === "EMLINK") {
       throw new AcpError(JSON_RPC_ERROR_CODES.invalidParams, `${method} refused: ${requested} is a symbolic link`);
     }
-  } catch (error) {
-    if (error instanceof AcpError) throw error;
-    // Absent: a new file, which is fine.
+    throw error;
   }
-  await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, content, "utf8");
+  try {
+    await handle.writeFile(content, "utf8");
+  } finally {
+    await handle.close();
+  }
 }

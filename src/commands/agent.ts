@@ -124,6 +124,13 @@ export interface ApprovalMeta {
    * in for that answer, and no remembered grant does either.
    */
   untrustedOrigin?: boolean;
+  /**
+   * Aborted when the caller stops waiting for this answer — the ACP client's
+   * approval timeout (flow 292 T13). An approver holding a resource for the
+   * question (a terminal readline, a dialog) releases it here. Optional: an
+   * approver that ignores it is still correct, only slower to clean up.
+   */
+  signal?: AbortSignal;
 }
 
 /**
