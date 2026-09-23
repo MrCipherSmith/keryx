@@ -315,6 +315,18 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     envKey: "DEEPSEEK_API_KEY",
     models: ["deepseek-chat", "deepseek-reasoner"],
     note: "cheap per-token",
+    // Verified live against api.deepseek.com (2026-09-23): a stream carries
+    // usage chunks even WITHOUT this field (one-word reply: input=11,
+    // output=1), and the field itself is accepted rather than rejected
+    // (HTTP 200, same usage). So unlike x.ai — which returns zero usage
+    // chunks without it — DeepSeek does not have to be ASKED for usage.
+    // It is set anyway because this flag is also the registry's only
+    // evidence of "this gateway can be priced", which is what
+    // `providerReportsUsage` (`src/commands/trigger-dispatch.ts`) reads to
+    // decide whether an unattended run may start: without it every schedule
+    // and `flow-next` dispatch refuses with `provider-usage-unknown` before
+    // any model call, whatever the gateway actually does on the wire.
+    streamUsage: true,
     // GET /user/balance -> { is_available, balance_infos: [{ currency, total_balance, granted_balance, topped_up_balance }] }
     balancePath: "/user/balance",
     balanceKind: "deepseek",

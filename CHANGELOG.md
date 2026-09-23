@@ -3,6 +3,41 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.158] — 2026-09-23
+
+DeepSeek can be priced, so an unattended run may use it. The dispatcher accepts
+only providers known to report token usage on every response, and the registry
+named `grok` alone — not because the others had been measured and failed, but
+because they had never been measured. DeepSeek has now been measured, live.
+
+### Fixed
+- **A `deepseek` schedule no longer refuses every fire with
+  `dispatch-refused (provider-usage-unknown)`.** The built-in `deepseek`
+  registry entry now sets `streamUsage`, which is what
+  `providerReportsUsage` reads to decide whether an unattended run may start,
+  so a scheduled `agent-task` and a `flow-next` dispatch can both run on it.
+  Measured against `api.deepseek.com`, not assumed: a streaming request
+  carrying `stream_options.include_usage` answers HTTP 200 and reports usage,
+  and one **without** the field reports usage anyway (`input=11, output=1` on
+  a one-word reply) — unlike x.ai, which returns zero usage chunks without
+  it. So the flag is set here because it is the registry's only evidence that
+  a gateway can be priced, not because this gateway has to be asked. End to
+  end: a real `branch-state` run wrote its report and reserved $0.0057 of its
+  $0.05 ceiling (19,360 in / 759 out tokens).
+
+### Known
+- **A confirmation card still does not check that the provider it names can be
+  priced.** `schedule_create` and `/schedule` take the session's provider as
+  a default — here, `deepseek` before this release — and store the entry and
+  install its timer before any run has refused. Nothing on the draft path asks
+  whether `providerReportsUsage` will accept the provider, so a card can leave
+  a schedule installed whose every fire refuses. The refusal is fail-closed and
+  costs nothing (no model call, `cost: not recorded`), and it is visible in
+  `keryx schedule show` and in `runs.jsonl`. The same gap means the CLI
+  reference's promise that "a provider with no usable credential is refused
+  before anything is written" is not implemented at draft time. A follow-up,
+  not a change in this release.
+
 ## [0.2.157] — 2026-09-23
 
 A patch for the test suite, found by the 0.2.156 smoke run: a scheduler test
