@@ -714,6 +714,44 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
   },
   {
+    module: "governance",
+    command: "governance report",
+    summary:
+      "Spend, confirmations, signatures and gate outcomes, unified across flows (and optionally projects). " +
+      'Read-only over already-recorded artifacts; a figure nobody recorded is "not recorded", never zero.',
+    intent: [
+      "governance report",
+      "отчёт по governance",
+      "сколько потрачено на флоу",
+      "who confirmed this flow",
+      "gate outcomes",
+      "spend per flow",
+    ],
+    args: [
+      { name: "flow", type: "string", required: false, desc: "narrow to one flow id, e.g. 291" },
+      { name: "owner", type: "string", required: false, desc: "narrow to flows whose owner identity matches exactly" },
+      { name: "since", type: "string", required: false, desc: "ISO timestamp lower bound, applied to each record's own timestamp" },
+      { name: "until", type: "string", required: false, desc: "ISO timestamp upper bound, applied to each record's own timestamp" },
+      { name: "all-projects", type: "bool", required: false, desc: "also cover every project in the user-global registry (keryx projects)" },
+      { name: "json", type: "bool", required: false, desc: "print the report as JSON instead of markdown" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "writes .metaproject/data/governance/artifacts/latest.md",
+      "writes .metaproject/data/governance/artifacts/latest.json",
+    ],
+  },
+  {
+    module: "governance",
+    command: "governance show",
+    summary: "Reprint the most recently written governance report, without regenerating it.",
+    intent: ["show governance report", "покажи governance report", "last governance report"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the stored report as JSON instead of markdown" }],
+    json: true,
+    read: true,
+  },
+  {
     module: "testing",
     command: "test analyze",
     summary: "Analyze the test suite and refresh the testing context report.",

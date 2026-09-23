@@ -126,6 +126,13 @@
         "$ref": "#/definitions/flowSignature"
       }
     },
+    "completionAttempts": {
+      "type": "array",
+      "description": "flow 291: append-only record of every `flow complete` attempt's gate outcomes — every gate evaluated, passing, failing and skipped alike — written on every attempt from now on, pass or fail. Absent means no attempt has been recorded under this field's existence (including every flow.json written before it existed).",
+      "items": {
+        "$ref": "#/definitions/completionAttempt"
+      }
+    },
     "acConfirmed": {
       "type": "object",
       "description": "Per-AC confirmation records keyed by AC id (e.g. AC1).",
@@ -443,6 +450,75 @@
         "headCommit": {
           "type": "string",
           "description": "The commit the completion gates evaluated, when known. Present only for kind complete."
+        }
+      }
+    },
+    "completionAttempt": {
+      "type": "object",
+      "description": "flow 291: one `flow complete` attempt, on the record — every gate it evaluated, whether the attempt passed overall, and the AC checksum in force. Never mutated once written.",
+      "additionalProperties": true,
+      "required": [
+        "at",
+        "gates",
+        "passed",
+        "acChecksum"
+      ],
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "gates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/gateOutcome"
+          }
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "acChecksum": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The acceptance-criteria checksum in force when this attempt ran."
+        }
+      }
+    },
+    "gateOutcome": {
+      "type": "object",
+      "description": "flow 291: the outcome of one gate `flow complete` evaluated during one attempt.",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "status",
+        "detail"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "acceptance-criteria",
+            "pull-request",
+            "main-merge",
+            "tasks",
+            "health",
+            "security",
+            "review",
+            "base-branch",
+            "owner"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "skipped"
+          ]
+        },
+        "detail": {
+          "type": "string"
         }
       }
     }
