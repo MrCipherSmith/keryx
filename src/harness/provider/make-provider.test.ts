@@ -273,11 +273,23 @@ describe("stream usage is opt-in per provider", () => {
     );
   });
 
+  test("deepseek asks for it too, verified against api.deepseek.com", () => {
+    // Verified live 2026-09-23: a one-word reply carries usage either way
+    // (input=11, output=1), and the field is accepted (HTTP 200) rather than
+    // rejected — so this gateway is safe to ask, and the flag is what makes an
+    // unattended dispatch start at all: `providerReportsUsage` reads it as
+    // "this gateway can be priced against a ceiling".
+    expect(providerByName("deepseek")?.streamUsage).toBe(true);
+    expect(makeProvider("deepseek", "deepseek-chat", makeOpts({ env: { DEEPSEEK_API_KEY: "k" } }))).toBeInstanceOf(
+      OpenAiCompatEngine,
+    );
+  });
+
   test("an unchecked gateway does not ask — absent means unverified, not unsupported", () => {
     // A non-conformant gateway may reject an unknown top-level field outright and
     // break a path that works today, so the flag is confirmed per provider rather
     // than switched on for the whole family.
-    for (const name of ["deepseek", "openrouter", "cerebras", "groq", "moonshot", "zai"]) {
+    for (const name of ["openrouter", "cerebras", "groq", "moonshot", "zai"]) {
       expect(providerByName(name)?.streamUsage).toBeUndefined();
     }
   });
