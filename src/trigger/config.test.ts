@@ -454,7 +454,7 @@ describe("flow 295: agent-task entries", () => {
     if (entry.action.kind !== "agent-task") throw new Error("expected an agent-task");
     expect(entry.action.dispatch.permissionMode).toBe("ask");
     expect(entry.action.dispatch.maxSeconds).toBe(600);
-    expect(entry.action.grants).toEqual({ network: "off", tools: ["gh.pr.list"], repos: ["MrCipherSmith/keryx"], bins: { gh: "/usr/bin/gh" }, binDigests: {} });
+    expect(entry.action.grants).toEqual({ network: "off", domains: [], tools: ["gh.pr.list"], repos: ["MrCipherSmith/keryx"], bins: { gh: "/usr/bin/gh" }, binDigests: {} });
     expect(entry.action.report.keep).toBe(20);
   });
 
@@ -498,14 +498,68 @@ describe("flow 295: agent-task entries", () => {
     expect(grantedToolProblems(GRANTED_TOOL_CATALOGUE.map((s) => s.id))).toEqual([]);
   });
 
-  test('AC4: network "allowlist" is refused as not yet available (flow 301); "full" and "off" load', async () => {
+  test('flow 301 AC1: network "allowlist" loads with a non-empty domains list; "full" and "off" load unchanged', async () => {
     const root = await storeWith([
-      agentTask({ grants: { network: "allowlist", tools: [], repos: [] } }, "allow"),
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com", "*.example.com"], tools: [], repos: [] } }, "allow"),
       agentTask({ grants: { network: "full", tools: [], repos: [] } }, "full"),
       agentTask({ grants: { network: "off", tools: [], repos: [] } }, "off"),
     ]);
-    expect(reasonsOf(root, "allow")).toContain("not yet available — it is delivered by flow 301");
-    expect(loadTriggersConfig(root).triggers.map((t) => t.name)).toEqual(["full", "off"]);
+    expect(reasonsOf(root, "allow")).toBe("");
+    expect(loadTriggersConfig(root).triggers.map((t) => t.name).sort()).toEqual(["allow", "full", "off"].sort());
+    const allow = loadTriggersConfig(root).triggers.find((t) => t.name === "allow")!.action;
+    if (allow.kind !== "agent-task") throw new Error("expected an agent-task");
+    expect(allow.grants.domains).toEqual(["api.github.com", "*.example.com"]);
+  });
+
+  test('flow 301 AC1: "allowlist" with an empty, malformed, IP-literal or bare-"*" domain is refused with the reason', async () => {
+    const root = await storeWith([
+      agentTask({ grants: { network: "allowlist", domains: [], tools: [], repos: [] } }, "empty"),
+      agentTask({ grants: { network: "allowlist", domains: ["not a domain!"], tools: [], repos: [] } }, "malformed"),
+      agentTask({ grants: { network: "allowlist", domains: ["169.254.169.254"], tools: [], repos: [] } }, "ip-literal"),
+      agentTask({ grants: { network: "allowlist", domains: ["::1"], tools: [], repos: [] } }, "ipv6-literal"),
+      agentTask({ grants: { network: "allowlist", domains: ["*"], tools: [], repos: [] } }, "bare-star"),
+    ]);
+    expect(reasonsOf(root, "empty")).toContain('required and non-empty when network is "allowlist"');
+    expect(reasonsOf(root, "malformed")).toContain("does not look like a domain");
+    expect(reasonsOf(root, "ip-literal")).toContain("is an IP literal");
+    expect(reasonsOf(root, "ipv6-literal")).toContain("is an IP literal");
+    expect(reasonsOf(root, "bare-star")).toContain('"*" is not a domain');
+    expect(loadTriggersConfig(root).triggers).toEqual([]);
+  });
+
+  test("flow 301 F3 (security review): inet_aton short/mixed-radix forms and a numeric final label are refused", async () => {
+    const root = await storeWith([
+      agentTask({ grants: { network: "allowlist", domains: ["127.1"], tools: [], repos: [] } }, "short-form"),
+      agentTask({ grants: { network: "allowlist", domains: ["10.1.2"], tools: [], repos: [] } }, "three-part"),
+      agentTask({ grants: { network: "allowlist", domains: ["0x7f.0.0.1"], tools: [], repos: [] } }, "hex-octet"),
+      agentTask({ grants: { network: "allowlist", domains: ["example.123"], tools: [], repos: [] } }, "numeric-final-label"),
+      agentTask({ grants: { network: "allowlist", domains: ["example.0x1a"], tools: [], repos: [] } }, "hex-final-label"),
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], tools: [], repos: [] } }, "still-loads"),
+    ]);
+    expect(reasonsOf(root, "short-form")).toContain("inet_aton");
+    expect(reasonsOf(root, "three-part")).toContain("inet_aton");
+    expect(reasonsOf(root, "hex-octet")).toContain("inet_aton");
+    expect(reasonsOf(root, "numeric-final-label")).toContain("final label is numeric");
+    expect(reasonsOf(root, "hex-final-label")).toContain("final label is numeric");
+    expect(loadTriggersConfig(root).triggers.map((t) => t.name)).toEqual(["still-loads"]);
+  });
+
+  test("flow 301 F2 (security review): an agent-task grant's ports must be a non-empty array of integers 1-65535", async () => {
+    const root = await storeWith([
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], ports: [], tools: [], repos: [] } }, "empty-ports"),
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], ports: [0], tools: [], repos: [] } }, "zero-port"),
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], ports: [70000], tools: [], repos: [] } }, "too-big"),
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], ports: [443.5], tools: [], repos: [] } }, "non-integer"),
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], ports: [443, 8443], tools: [], repos: [] } }, "valid"),
+    ]);
+    expect(reasonsOf(root, "empty-ports")).toContain("action.grants.ports");
+    expect(reasonsOf(root, "zero-port")).toContain("action.grants.ports");
+    expect(reasonsOf(root, "too-big")).toContain("action.grants.ports");
+    expect(reasonsOf(root, "non-integer")).toContain("action.grants.ports");
+    expect(reasonsOf(root, "valid")).toBe("");
+    const valid = loadTriggersConfig(root).triggers.find((t) => t.name === "valid")!.action;
+    if (valid.kind !== "agent-task") throw new Error("expected an agent-task");
+    expect(valid.grants.ports).toEqual([443, 8443]);
   });
 
   test("an agent-task in the committed triggers.json is refused — it lives only in the per-machine store", async () => {
@@ -524,6 +578,14 @@ describe("flow 295: agent-task entries", () => {
     expect(scheduleContentCanonical(reordered)).toBe(scheduleContentCanonical(a));
     const widened = agentTask({ grants: { network: "full", tools: ["gh.pr.list"], repos: ["MrCipherSmith/keryx"], bins: { gh: "/usr/bin/gh" } } });
     expect(scheduleContentCanonical(widened)).not.toBe(scheduleContentCanonical(a));
+  });
+
+  test("flow 301 AC8: the domain list is part of the signed content — changing it changes the hash", () => {
+    const base = agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], tools: [], repos: [] } });
+    const sameDomains = agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], tools: [], repos: [] } });
+    const differentDomains = agentTask({ grants: { network: "allowlist", domains: ["api.github.com", "evil.example.com"], tools: [], repos: [] } });
+    expect(scheduleContentCanonical(base)).toBe(scheduleContentCanonical(sameDomains));
+    expect(scheduleContentCanonical(base)).not.toBe(scheduleContentCanonical(differentDomains));
   });
 
   // --- flow 295 security review --------------------------------------------------

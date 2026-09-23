@@ -51,11 +51,12 @@ import { promisify } from "node:util";
 import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
-import { makeCommandRunner, shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
+import { makeCommandRunner, shellExecTool, type CommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 import { makeProvider } from "../harness/provider/make-provider";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import type { NormalizedEvent, NormalizedMessage, NormalizedUsage, ProviderPort } from "../harness/provider/types";
 import { planUnattendedSandbox, type UnattendedSandboxInput, type UnattendedSandboxPlan } from "../harness/process/sandbox/unattended";
+import { ensureScratchParent } from "./unattended-scratch";
 import { providerByName } from "./providers";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir, keryxLocksDir } from "../lib/maintenance-lock";
@@ -119,7 +120,7 @@ export { NETWORK_ON_WARNING, UNATTENDED_ROSTER_DESCRIPTION } from "../trigger/de
  */
 export function buildUnattendedRoster(
   worktree: string,
-  runner: (command: string) => Promise<{ output: string; isError: boolean }> = async () => ({
+  runner: CommandRunner = async () => ({
     output: "shell_exec is unavailable in this unattended run",
     isError: true,
   }),
@@ -271,6 +272,18 @@ function realOr(p: string): string {
   }
 }
 
+/**
+ * Flow 301 (AC12): where flow-next's throwaway worktrees live, mirroring
+ * `agentTaskScratchParent` in `./trigger-agent-task.ts` (same per-uid-or-runtime-dir
+ * shape, a different keryx-owned name so the two never collide).
+ */
+export function triggerDispatchScratchParent(env: Record<string, string | undefined> = process.env): string {
+  const uid = typeof process.getuid === "function" ? process.getuid() : 0;
+  const runtime = env["XDG_RUNTIME_DIR"];
+  if (runtime !== undefined && runtime.length > 0 && path.isAbsolute(runtime)) return path.join(runtime, "keryx-trigger-worktrees");
+  return path.join(tmpdir(), `keryx-trigger-worktrees-${uid}`);
+}
+
 /** How to invoke this keryx from inside the sandbox, and which roots that needs readable. */
 export function keryxInvocation(): { readonly argv: readonly string[]; readonly roots: readonly string[] } {
   const script = process.argv[1];
@@ -339,17 +352,24 @@ function usageTokens(usage: NormalizedUsage): { input: number; output: number } 
 }
 
 /** The sandboxed `shell_exec` runner: the hardened plan, or a refusal of every command when there is none. */
-function unattendedRunner(worktree: string, plan: UnattendedSandboxPlan): (command: string) => Promise<{ output: string; isError: boolean }> {
+function unattendedRunner(worktree: string, plan: UnattendedSandboxPlan): CommandRunner {
   if (!plan.ok) {
     return async () => ({
       output: `shell_exec refused: this unattended run has no sandbox (${plan.reason})`,
       isError: true,
     });
   }
-  return makeCommandRunner(worktree, async (command) => ({
-    ok: true,
-    plan: { spawnArgs: plan.wrap(["/bin/sh", "-c", command]), env: plan.env, netClose: async () => {} },
-  }));
+  return makeCommandRunner(
+    worktree,
+    async (command) => ({
+      ok: true,
+      plan: { spawnArgs: plan.wrap(["/bin/sh", "-c", command]), env: plan.env, netClose: async () => {} },
+    }),
+    // Flow 301 (F5c): this run has no terminal to hang up on, and every reason to
+    // want a sandboxed process tree fully gone on abort/timeout — opts in to the
+    // process-group kill `makeCommandRunner` otherwise leaves off by default.
+    { processGroup: true },
+  );
 }
 
 /**
@@ -565,9 +585,29 @@ async function dispatchLocked(
     );
   }
 
-  // --- 3. containment (AC13) — decided before anything is written --------------
+  // --- 3. containment (AC13, and flow 301 AC12) — decided before anything is written --
+  // Flow 301 (AC12): every run's worktree lives under one 0700 parent, and that parent
+  // is hidden inside the sandbox below — the same protection `agentTaskScratchParent`/
+  // `ensureScratchParent` already give scheduled `agent-task` runs. Before this, a
+  // shared `TMPDIR` outside `/tmp` left one run's worktree visible (read-only, via
+  // `--ro-bind / /`) to another's sandbox.
   const branch = triggerBranchName(flow, task.id);
-  const parent = deps.worktreeParent ?? path.join(tmpdir(), "keryx-trigger-worktrees");
+  const parent = deps.worktreeParent ?? triggerDispatchScratchParent();
+  // The 0700/owned/non-symlink check runs only for the DEFAULT (computed) parent — an
+  // explicit `deps.worktreeParent` is a trusted test/caller seam, not attacker-reachable
+  // input, and every existing caller of that seam (tests) manages its own directory.
+  if (deps.worktreeParent === undefined) {
+    const parentSafe = await ensureScratchParent(parent);
+    if (!parentSafe.ok) {
+      return {
+        outcome: "failed",
+        detail: `dispatch for flow ${flow} not started: ${parentSafe.reason}`,
+        cost: { recorded: false, reason: "no model was called — the worktree parent was not safe" },
+        dispatch: { runId, flow, task: task.id },
+        exitCode: 1,
+      };
+    }
+  }
   const worktree = path.join(parent, `${flow}-${task.id}-${runId}`.replace(/[^A-Za-z0-9._-]/g, "-"));
   const scratchHome = `${worktree}-home`;
   const invocation = keryxInvocation();
@@ -581,6 +621,7 @@ async function dispatchLocked(
       ...invocation.roots,
       path.join(projectRoot, "node_modules"),
     ],
+    hide: [parent],
     env: process.env,
     home: homedir(),
     ...(typeof process.getuid === "function" ? { uid: process.getuid() } : {}),

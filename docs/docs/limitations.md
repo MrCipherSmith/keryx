@@ -10,7 +10,7 @@ each gap actually costs you, and what to use instead.
 | Limitation | Impact | Alternative |
 |------------|--------|-------------|
 | No remote approval transport | A remote turn whose policy decision is `ask` ends in a recorded denial | Run approval-requiring turns locally |
-| Domain allowlist is macOS-only | Domain-level egress policy, credential masking and TLS termination refuse to run on Linux | Filesystem containment and network on/off work on both |
+| `harness exec --allowed-domains` is macOS-only | The interactive/general sandbox's domain-level egress policy, credential masking and TLS termination refuse to run on Linux | Filesystem containment and network on/off work on both; a *scheduled agent-task*'s own `network: "allowlist"` (flow 301) is a separate mechanism, Linux-only |
 | No bundled embedding runtime | No semantic ranking in memory search | Lexical memory search remains fully available |
 | No bundled ML security classifiers | Detection is rules plus entropy, not a model | Deterministic detectors run on the full corpus and are evaluated in CI |
 | ripgrep is external | `keryx ctx rg` exits non-zero without `rg` on `PATH` | Install ripgrep, or let the agent read files directly |
@@ -106,8 +106,27 @@ for what has been verified on a real host.
 - **Logged out:** without linger, a systemd `--user` timer does not run while you are
   logged out. keryx shows the linger state on the confirmation card and never
   enables it.
-- **Network:** an allowlist network mode for the scheduled agent's shell is not
-  available yet (flow 301); the choices are `off` and `full`.
+- **Network:** `off`, `full`, or `allowlist` (flow 301, Linux only — a macOS or
+  non-Linux schedule refuses `allowlist` with the reason, never silently falling
+  back to `off` or `full`). `allowlist` reaches only the domains you name, through a
+  loopback proxy keryx runs outside the sandbox, and governs ONLY the agent's own
+  `shell_exec` commands — the model call and every granted tool already run outside
+  the sandbox on your own network, unaffected by this grant. Honest limits of
+  `allowlist` itself:
+  - A tool that ignores `HTTP_PROXY`/`HTTPS_PROXY` gets no network at all (the
+    sandbox's netns has no other route out) — this can look like `off` even though
+    the mode is `allowlist`.
+  - HTTPS is a blind `CONNECT` relay by default (no TLS termination), so the proxy
+    cannot see the TLS SNI or an in-tunnel `Host` header — only the CONNECT
+    authority is checked. A client could in principle address something else once
+    inside an allowed tunnel; termination (already used for credential masking
+    elsewhere) would close this but is not the default here.
+  - DNS resolution happens once, outside the sandbox, and the proxy connects to the
+    exact address it checked — a deliberate defence against DNS rebinding — but this
+    also means a domain that legitimately changes IP between confirmation and a run
+    is resolved fresh each run, not pinned across runs.
+  - HTTP/2 and WebSockets over the blind relay are not specially handled; most CLI
+    tools (curl, git, npm, pip) negotiate HTTP/1.1 and work as expected.
 - **Platform:** the hardened unattended sandbox is Linux-only, so a macOS schedule
   runs in `ask` mode with granted tools only.
 - **The signing key and an interactive agent:** each confirmed schedule is signed

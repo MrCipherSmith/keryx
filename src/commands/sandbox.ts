@@ -90,10 +90,23 @@ export function buildSandboxReport(deps: SandboxCommandDeps = {}): SandboxReport
 
     const status = capabilityStatusFor(row, platform);
     if (status === "not-implemented") {
+      // Flow 301 (AC13): this row is about `keryx harness exec --allowed-domains`
+      // (flow 098/142) — the general, interactive sandbox, which shares the host's
+      // network namespace and so cannot enforce a domain allowlist on Linux at all.
+      // It is a DIFFERENT capability from the unattended scheduler's own
+      // `agent-task` grant `network: "allowlist"` (flow 301), which runs its
+      // `shell_exec` in a hardened `--unshare-net` netns with its own domain proxy
+      // and needs no entry in this matrix. Without this note the two surfaces would
+      // silently disagree — this one says "not implemented" while a schedule's own
+      // card and TUI say "allowlist" is available — so the note names the split.
+      const separateNote =
+        row.capability === "Domain allowlist"
+          ? " (a SEPARATE capability from a scheduled agent-task's own `network: \"allowlist\"` grant, which runs in the hardened unattended sandbox and is unaffected by this row — see `keryx schedule add --network allowlist`.)"
+          : "";
       return makeRow(
         row,
         "not-implemented",
-        `${NOT_IMPLEMENTED_ON_PLATFORM} — installing the OS sandbox launcher would not change this.`,
+        `${NOT_IMPLEMENTED_ON_PLATFORM} — installing the OS sandbox launcher would not change this.${separateNote}`,
       );
     }
 

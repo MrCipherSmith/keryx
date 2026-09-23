@@ -141,9 +141,13 @@ test("every dispatched group either has its own usage lines or falls back to the
   const missing = Object.keys(CLI_ROUTES).filter((name) => groupUsage(name) === undefined);
   // `session` is the singular ALIAS of `sessions` (`CLI_ROUTES.session ===
   // sessionsCommand`), and the usage block lists the canonical spelling only —
-  // so it is the one route answered by the full-help fallback, and this pins
-  // that it stays the ONLY one rather than an unwatched list that grows.
-  expect(missing).toEqual(["session"]);
+  // so it is one route answered by the full-help fallback.
+  // `__sandbox-net-forward` (flow 301, AC5) is `planUnattendedSandbox.wrap()`'s hidden
+  // internal helper — no operator ever types it, so it has no usage lines to give, and
+  // none belong in `USAGE_BODY` (that would defeat "hidden"). Both are named here, on
+  // purpose, so a THIRD undocumented route still fails this pin rather than growing
+  // the exception list unwatched.
+  expect(missing.sort()).toEqual(["__sandbox-net-forward", "session"]);
 });
 
 // AC5 (flow 294): `keryx flow --help` (and trigger/governance/agents external)

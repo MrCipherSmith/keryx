@@ -53,6 +53,11 @@ function strings(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
+/** Flow 301 (F2): integers only — a malformed port is dropped rather than passed through; `draftSchedule`'s own validation is the real gate. */
+function numbers(v: unknown): number[] {
+  return Array.isArray(v) ? v.filter((x): x is number => typeof x === "number" && Number.isInteger(x)) : [];
+}
+
 /** Turn the model's input into a request, or say what is missing. */
 export function requestFromToolInput(input: Record<string, unknown>, binding: ScheduleToolBinding): ScheduleRequest | { error: string } {
   const defaults = binding.defaults?.();
@@ -76,6 +81,8 @@ export function requestFromToolInput(input: Record<string, unknown>, binding: Sc
   if (missing.length > 0) return { error: `missing ${missing.join(", ")} — ask the operator for what you do not know` };
   const mode = input["permissionMode"];
   const network = input["network"];
+  const domains = strings(input["domains"]);
+  const ports = numbers(input["ports"]);
   const maxSeconds = num(input["maxSeconds"]);
   return {
     name: name!,
@@ -87,7 +94,9 @@ export function requestFromToolInput(input: Record<string, unknown>, binding: Sc
     ceilingUsd: ceiling!,
     ...(maxSeconds !== undefined ? { maxSeconds } : {}),
     ...(mode === "ask" || mode === "trust" ? { permissionMode: mode } : {}),
-    ...(network === "off" || network === "full" ? { network } : {}),
+    ...(network === "off" || network === "full" || network === "allowlist" ? { network } : {}),
+    ...(domains.length > 0 ? { domains } : {}),
+    ...(ports.length > 0 ? { ports } : {}),
     tools: strings(input["tools"]),
     repos: strings(input["repos"]),
   };
@@ -128,7 +137,25 @@ export function scheduleTools(binding: ScheduleToolBinding): InteractiveTool[] {
           ceilingUsd: { type: "number", description: "this schedule's own spend ceiling in USD" },
           maxSeconds: { type: "number", description: "per-run wall-clock limit (default 600)" },
           permissionMode: { type: "string", enum: ["ask", "trust"], description: "ask (default, read-only) or trust" },
-          network: { type: "string", enum: ["off", "full"], description: "the scheduled agent's shell network; default off" },
+          network: {
+            type: "string",
+            enum: ["off", "full", "allowlist"],
+            description:
+              'the scheduled agent\'s shell network; default off. "allowlist" (Linux only) reaches only `domains`, through a ' +
+              "loopback proxy keryx runs, and governs only the agent's shell_exec calls — never the model call or granted tools.",
+          },
+          domains: {
+            type: "array",
+            items: { type: "string" },
+            description: 'required, non-empty when network is "allowlist": exact hostnames or "*.domain" wildcards; never an IP literal',
+          },
+          ports: {
+            type: "array",
+            items: { type: "integer" },
+            description:
+              'only meaningful when network is "allowlist": restricts every domain to these ports. Default (omitted): 443 for ' +
+              "CONNECT/HTTPS, 80 for plain HTTP — the allowlist restricts host AND port, not every port on an allowed host.",
+          },
           tools: { type: "array", items: { type: "string", enum: GRANTED_TOOL_CATALOGUE.map((s) => s.id) } },
           repos: { type: "array", items: { type: "string" }, description: "owner/name repositories the granted tools may touch" },
         },

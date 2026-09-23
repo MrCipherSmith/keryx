@@ -100,8 +100,8 @@ const USAGE = `keryx schedule — scheduled agent tasks that run in the backgrou
 Usage:
   keryx schedule add --name <name> --every "<cadence>" --prompt "<task>" \\
       --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \\
-      [--max-seconds 600] [--mode ask|trust] [--network off|full] \\
-      [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
+      [--max-seconds 600] [--mode ask|trust] [--network off|full|allowlist] \\
+      [--domain example.com]... [--port 443]... [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
   keryx schedule list
   keryx schedule show <name>
   keryx schedule pause <name>
@@ -118,8 +118,12 @@ Cadence: a 5-field cron expression, "every N hours", "every N minutes", "hourly"
 "daily at HH:MM", "weekdays at HH:MM", "every monday at HH:MM".
 Granted tools (run by keryx OUTSIDE the sandbox with your credentials; the model sees
 only redacted output): ${GRANTED_TOOL_CATALOGUE.map((s) => s.id).join(", ")}.
-Network: "off" (default) or "full" (the host's whole network). A domain allowlist
-is not available yet (flow 301).
+Network: "off" (default), "full" (the host's whole network) or "allowlist" (the agent's
+shell reaches only --domain names, through a loopback proxy keryx runs; Linux only).
+"allowlist" governs ONLY the agent's own shell_exec commands inside the sandbox — the
+model call and every granted tool already run outside the sandbox on your network.
+The allowlist restricts host AND port: 443 (CONNECT/HTTPS) and 80 (plain HTTP) by
+default, or exactly the --port list when you give one (applies to every --domain).
 
 Keryx runs no daemon. The OS scheduler (systemd --user, launchd, or cron) calls
 \`keryx trigger run <name>\`. The machine must be on. systemd and launchd catch up one
@@ -204,8 +208,17 @@ export function requestFromArgs(args: readonly string[]): ScheduleRequest {
   const mode = flag(args, "--mode");
   if (mode !== undefined && mode !== "ask" && mode !== "trust") throw new Error('--mode must be "ask" or "trust" ("auto" is never allowed unattended)');
   const network = flag(args, "--network");
+  if (network !== undefined && network !== "off" && network !== "full" && network !== "allowlist") {
+    throw new Error('--network must be "off", "full" or "allowlist"');
+  }
   const tools = flagValues(args, "--tool").flatMap((t) => t.split(",")).filter((t) => t.length > 0);
   const repos = flagValues(args, "--repo").flatMap((t) => t.split(",")).filter((t) => t.length > 0);
+  const domains = flagValues(args, "--domain").flatMap((t) => t.split(",")).filter((t) => t.length > 0);
+  const portStrings = flagValues(args, "--port").flatMap((t) => t.split(",")).filter((t) => t.length > 0);
+  const ports = portStrings.map((p) => Number(p));
+  if (ports.some((p) => !Number.isInteger(p) || p < 1 || p > 65535)) {
+    throw new Error("--port must be an integer 1-65535 (repeatable, or comma-separated)");
+  }
   const maxSeconds = numberFlag(args, "--max-seconds");
   return {
     name: flag(args, "--name")!,
@@ -217,9 +230,11 @@ export function requestFromArgs(args: readonly string[]): ScheduleRequest {
     ceilingUsd: numberFlag(args, "--ceiling")!,
     ...(maxSeconds !== undefined ? { maxSeconds } : {}),
     ...(mode !== undefined ? { permissionMode: mode } : {}),
-    ...(network !== undefined ? { network: network as "off" | "full" } : {}),
+    ...(network !== undefined ? { network } : {}),
     tools,
     repos,
+    ...(domains.length > 0 ? { domains } : {}),
+    ...(ports.length > 0 ? { ports } : {}),
   };
 }
 
@@ -280,7 +295,10 @@ async function showSubcommand(cwd: string, name: string | undefined, host: Sched
   console.log(formatSummary(row));
   console.log(`    prompt: ${a.prompt}`);
   console.log(`    runner: ${a.dispatch.provider}/${a.dispatch.model}, mode ${a.dispatch.permissionMode}, ceiling $${a.dispatch.ceilingUsd}, max ${a.dispatch.maxSeconds}s`);
-  console.log(`    network: ${a.grants.network}; granted tools: ${a.grants.tools.join(", ") || "none"}; repos: ${a.grants.repos.join(", ") || "none"}`);
+  console.log(
+    `    network: ${a.grants.network}${a.grants.network === "allowlist" ? ` [${a.grants.domains.join(", ")}] port ${a.grants.ports !== undefined && a.grants.ports.length > 0 ? a.grants.ports.join("/") : "443/80 default"}` : ""}; ` +
+      `granted tools: ${a.grants.tools.join(", ") || "none"}; repos: ${a.grants.repos.join(", ") || "none"}`,
+  );
   const read = await readTriggerRuns(cwd);
   const runs = read.state === "present" ? read.records.filter((r) => r.trigger === name && r.outcome !== "reserved").slice(-5) : [];
   for (const r of runs) console.log(`    run ${r.at}: ${r.outcome}${r.agentTask?.refusal ? ` (${r.agentTask.refusal})` : ""} — ${r.detail}`);

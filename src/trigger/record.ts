@@ -177,7 +177,18 @@ export interface TriggerAgentTaskRecord {
   readonly grantedCalls?: readonly GrantedCallRecord[];
   readonly denials?: readonly UnattendedDenial[];
   readonly permissionMode?: "ask" | "trust";
-  readonly network?: "off" | "full";
+  readonly network?: "off" | "full" | "allowlist";
+  /** Flow 301: every proxy allow/deny decision this run made (empty unless `network === "allowlist"`). */
+  readonly networkDecisions?: readonly NetworkDecisionEntry[];
+}
+
+/** Flow 301 (AC7): one allowlist-proxy decision, as recorded in a run's ledger entry. */
+export interface NetworkDecisionEntry {
+  readonly host: string;
+  readonly port?: number;
+  readonly allowed: boolean;
+  readonly reason?: string;
+  readonly at: string;
 }
 
 export const NO_MODEL_COST: TriggerRunCost = {

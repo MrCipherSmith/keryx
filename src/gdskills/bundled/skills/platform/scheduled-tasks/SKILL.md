@@ -44,9 +44,10 @@ operator reads in the shell's Schedules section.
   wrapper is pinned together with its interpreter, but its own global config
   (its own config directory) stays outside what keryx pins.
 - `repos`: every repository those tools may touch (`owner/name`).
-- `network`: leave it `off`. Checking GitHub needs no sandbox network, because the
-  granted tools cover it. `full` hands the agent's shell the host's whole
-  network; propose it only when the task truly needs it, and say why.
+- `network`: leave it `off`. Checking GitHub needs no sandbox network — the granted
+  tools cover it. `full` hands the shell the whole host network; say why. `allowlist`
+  (Linux only, `domains` required) reaches only the named domains, and governs only
+  the agent's own shell — never the model call or a granted tool.
 - `permissionMode`: `ask` (the default) is read-only, and granted tools still run.
   Propose `trust` only when the scheduled agent must run shell commands.
 
@@ -75,8 +76,7 @@ that nothing was written. Point to `/schedules` for the list and the reports.
 - NEVER run `loginctl enable-linger`. If linger is off, tell the operator the
   timer runs only while they are logged in and that the command is theirs to run.
 - State the limits when they matter: the machine must be on; systemd and launchd
-  catch up one missed run after sleep and cron none; the allowlist network mode
-  does not exist yet.
+  catch up one missed run after sleep and cron none; `allowlist` is Linux only.
 
 ## Red Flags
 

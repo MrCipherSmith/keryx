@@ -141,7 +141,13 @@ export function grantsLines(item: TriggerEntryView): string[] {
   if (task === undefined) return ["This schedule is not an agent task; it has no grants."];
   const g = task.grants;
   const lines = [
-    `network   ${g.network === "full" ? `NETWORK ON — ${NETWORK_ON_WARNING}` : "off (the agent's shell has no network)"}`,
+    `network   ${
+      g.network === "full"
+        ? `NETWORK ON — ${NETWORK_ON_WARNING}`
+        : g.network === "allowlist"
+          ? `allowlist — ${g.domains.join(", ") || "(no domains)"}, port ${g.ports !== undefined && g.ports.length > 0 ? g.ports.join("/") : "443 (CONNECT) / 80 (HTTP) default"} (governs only the agent's shell commands, never the model call or granted tools)`
+          : "off (the agent's shell has no network)"
+    }`,
     `account   ${g.account ?? "unknown"}`,
     `repos     ${g.repos.join(", ") || "none"}`,
     "",

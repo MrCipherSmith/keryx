@@ -1,0 +1,35 @@
+# Flow Journal
+
+- 2026-09-23T05:35:33.070Z - flow created
+- 2026-09-23T08:20:35.510Z - frozen: 15 criteria; checksum recorded
+- 2026-09-23T08:20:41.109Z - started
+- 2026-09-23T08:26:48.565Z - task-added: T5: config: AgentTaskGrants allowlist+domains (AC1)
+- 2026-09-23T08:26:48.675Z - task-added: T6: guard.ts: exported private/reserved address classifier (AC3 reuse)
+- 2026-09-23T08:26:48.783Z - task-added: T7: proxy.ts: unix-socket listen, IP-literal refusal, DNS pin+refuse (AC3,AC4)
+- 2026-09-23T08:26:48.902Z - task-added: T8: sandbox-net-forward hidden CLI cmd + forwarder (AC5)
+- 2026-09-23T08:26:49.008Z - task-added: T9: unattended.ts: allowlist network mode wiring (AC2,AC5,AC11)
+- 2026-09-23T08:26:49.112Z - task-added: T10: trigger-agent-task.ts: proxy lifecycle + report + record (AC6,AC7)
+- 2026-09-23T08:26:49.215Z - task-added: T11: schedule hash coverage test (AC8)
+- 2026-09-23T08:26:49.319Z - task-added: T12: confirmation card + TUI grants/runs (AC9,AC10)
+- 2026-09-23T08:26:49.423Z - task-added: T13: trigger-dispatch.ts TMPDIR/worktree scratch-parent fix (AC12)
+- 2026-09-23T08:26:49.528Z - task-added: T14: sandbox status note (AC13)
+- 2026-09-23T08:26:49.632Z - task-added: T15: docs: cli-reference, limitations, README, scheduled-tasks skill (AC14)
+- 2026-09-23T08:26:49.738Z - task-added: T16: real bwrap integration test (AC6) + revert-checks for security fixes
+- 2026-09-23T08:26:49.846Z - task-added: T17: full verification suite + report
+- 2026-09-23T08:26:54.756Z - task-done: T1: Collect remaining context
+- 2026-09-23T08:26:54.869Z - task-done: T2: Implement per plan
+- 2026-09-23T08:26:54.972Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-23T08:26:55.080Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-23T08:45:58.499Z - task-done: T6: guard.ts: exported private/reserved address classifier (AC3 reuse)
+- 2026-09-23T08:45:58.606Z - task-done: T7: proxy.ts: unix-socket listen, IP-literal refusal, DNS pin+refuse (AC3,AC4)
+- 2026-09-23T08:45:58.709Z - task-done: T8: sandbox-net-forward hidden CLI cmd + forwarder (AC5)
+- 2026-09-23T08:45:58.813Z - task-done: T9: unattended.ts: allowlist network mode wiring (AC2,AC5,AC11)
+- 2026-09-23T08:45:58.918Z - task-done: T10: trigger-agent-task.ts: proxy lifecycle + report + record (AC6,AC7)
+- 2026-09-23T08:46:49.488Z - task-done: T5: config: AgentTaskGrants allowlist+domains (AC1)
+- 2026-09-23T08:46:49.592Z - task-done: T11: schedule hash coverage test (AC8)
+- 2026-09-23T08:48:17.097Z - task-done: T12: confirmation card + TUI grants/runs (AC9,AC10)
+- 2026-09-23T08:56:00.288Z - task-done: T13: trigger-dispatch.ts TMPDIR/worktree scratch-parent fix (AC12)
+- 2026-09-23T08:57:03.924Z - task-done: T14: sandbox status note (AC13)
+- 2026-09-23T08:59:07.473Z - task-done: T15: docs: cli-reference, limitations, README, scheduled-tasks skill (AC14)
+- 2026-09-23T08:59:07.576Z - task-done: T16: real bwrap integration test (AC6) + revert-checks for security fixes
+- 2026-09-23T09:07:38.319Z - task-done: T17: full verification suite + report

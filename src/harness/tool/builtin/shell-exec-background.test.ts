@@ -213,6 +213,44 @@ test("shell_exec background:false behaves exactly like an absent background fiel
   expect(result.output).toBe("sync result");
 });
 
+// Flow 301 (F5b, security review): WITH a registry, an abort must still only end the
+// WAIT, never the task — flow 266 (D-15, AC7)'s rule, untouched by F5b's fix (that
+// fix lives entirely in the `jobRegistry === undefined` branch this suite's own
+// header calls out — "must NEVER be called when a registry is present"). Confirms
+// no regression rather than a new behaviour: this exact shape (an abort racing
+// `jobRegistry.waitForExit`, promoting rather than killing) already existed and is
+// provably unchanged by this file's line-for-line-identical source.
+test("F5b regression guard: WITH a registry, an abort promotes the task (still running) instead of killing it — the synchronous runner is still never touched", async () => {
+  let syncRunnerCalled = false;
+  const syncRun: CommandRunner = async () => {
+    syncRunnerCalled = true;
+    return { output: "should never run", isError: false };
+  };
+  const { spawn, kills } = scriptedSpawner(() => ({ kind: "hang" }));
+  const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+  const tool = shellExecTool("/proj", syncRun, registry, { yieldMs: 5_000 }); // long yield the abort must cut short
+
+  const controller = new AbortController();
+  const invokePromise = tool.invoke({ command: "sleep 999" }, { signal: controller.signal });
+  await new Promise((r) => setTimeout(r, 20));
+  const started = performance.now();
+  controller.abort();
+  const result = await invokePromise;
+  const elapsed = performance.now() - started;
+
+  expect(syncRunnerCalled).toBe(false); // the registry branch never falls through to it
+  expect(elapsed).toBeLessThan(1_000); // the abort ended the wait — nowhere near the 5s yieldMs
+  expect(result.isError).toBe(false); // NOT an error — the task is still running, not failed
+  const parsed = JSON.parse(result.output) as TaskHandleJson;
+  expect(parsed.status).toBe("running");
+  expect(parsed.notice).toContain("STILL RUNNING");
+  expect(parsed.notice).toContain("it was not killed");
+  // The fake spawner's `kill` was never invoked for any pid — the process was
+  // promoted, not stopped (`scriptedSpawner` registers an empty signal list per
+  // pid at spawn time, so the check is "no signals recorded", not "no entry").
+  expect([...kills.values()].every((signals) => signals.length === 0)).toBe(true);
+});
+
 // ===========================================================================
 // flow 263 — every shell_exec is a supervised task (RED)
 // ===========================================================================

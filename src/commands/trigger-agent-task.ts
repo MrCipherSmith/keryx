@@ -35,15 +35,21 @@
 
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { lstatSync } from "node:fs";
 import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { ensureScratchParent } from "./unattended-scratch";
 import { builtinReadOnlyTools, type InteractiveTool, type InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
-import { makeCommandRunner, shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
+import { makeCommandRunner, shellExecTool, type CommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
-import { planUnattendedSandbox, type UnattendedSandboxInput, type UnattendedSandboxPlan } from "../harness/process/sandbox/unattended";
+import {
+  planUnattendedSandbox,
+  type UnattendedNetworkAllowlist,
+  type UnattendedSandboxInput,
+  type UnattendedSandboxPlan,
+} from "../harness/process/sandbox/unattended";
+import { createAllowlistProxy } from "../harness/process/sandbox/proxy";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir } from "../lib/maintenance-lock";
 import { redactSensitiveText } from "../security/service";
@@ -59,6 +65,7 @@ import {
 import type {
   DispatchRefusalCode,
   GrantedCallRecord,
+  NetworkDecisionEntry,
   TriggerAgentTaskRecord,
   TriggerRunCost,
   TriggerRunOutcomeKind,
@@ -246,7 +253,13 @@ export function buildAgentTaskPrompt(entry: TriggerEntry, action: AgentTaskActio
       ? `Granted tools (the operator's own credentials, run by keryx outside your sandbox): ${granted.join(", ")}. ` +
         `Repositories: ${action.grants.repos.join(", ")}.`
       : "No granted tools: you have only read access to the project.",
-    `Your shell runs in a sandbox with network ${action.grants.network === "full" ? "ON (host network)" : "OFF"} and no credentials. The project is read-only.`,
+    `Your shell runs in a sandbox with network ${
+      action.grants.network === "full"
+        ? "ON (host network)"
+        : action.grants.network === "allowlist"
+          ? `restricted to: ${action.grants.domains.join(", ")} (nothing else is reachable)`
+          : "OFF"
+    } and no credentials. The project is read-only.`,
     "Do not try to change the repository, push, merge, publish or change any schedule. Such calls are refused.",
     "Your FINAL message is the report the operator reads later. Make it a concise summary of what needs their attention.",
   ].join("\n");
@@ -282,25 +295,6 @@ export function agentTaskScratchParent(env: Record<string, string | undefined> =
   const runtime = env["XDG_RUNTIME_DIR"];
   if (runtime !== undefined && runtime.length > 0 && path.isAbsolute(runtime)) return path.join(runtime, "keryx-agent-tasks");
   return path.join(tmpdir(), `keryx-agent-tasks-${uid}`);
-}
-
-async function ensureScratchParent(): Promise<{ readonly ok: true; readonly dir: string } | { readonly ok: false; readonly reason: string }> {
-  const dir = agentTaskScratchParent();
-  try {
-    await mkdir(dir, { mode: 0o700 });
-  } catch (error) {
-    if (!(typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST")) {
-      return { ok: false, reason: `could not create the scratch parent ${dir} (${error instanceof Error ? error.message : String(error)})` };
-    }
-  }
-  const st = lstatSync(dir);
-  const uid = typeof process.getuid === "function" ? process.getuid() : undefined;
-  if (st.isSymbolicLink() || !st.isDirectory()) return { ok: false, reason: `the scratch parent ${dir} is not a plain directory (a symlink?) — refusing` };
-  if (uid !== undefined && st.uid !== uid) return { ok: false, reason: `the scratch parent ${dir} is owned by uid ${st.uid}, not by you (${uid}) — refusing` };
-  if (process.platform !== "win32" && (st.mode & 0o777) !== 0o700) {
-    return { ok: false, reason: `the scratch parent ${dir} has mode ${(st.mode & 0o777).toString(8)}, not 700 — refusing; remove it and rerun` };
-  }
-  return { ok: true, dir };
 }
 
 function lastAssistantText(history: readonly NormalizedMessage[]): string {
@@ -361,7 +355,7 @@ async function runLocked(
   // Every run's scratch lives under one 0700 parent, and that parent is hidden inside
   // the sandbox (only this run's own directories are bound back), so one run cannot
   // read another's scratch however TMPDIR is set.
-  const parent = await ensureScratchParent();
+  const parent = await ensureScratchParent(agentTaskScratchParent());
   if (!parent.ok) {
     return {
       outcome: "failed",
@@ -387,13 +381,55 @@ async function runLocked(
   const cleanup = async (): Promise<void> => {
     await rm(scratch, { recursive: true, force: true }).catch(() => {});
   };
+  // Flow 301: set only when `grants.network === "allowlist"` successfully starts its
+  // proxy; closed in the outer `finally` below whichever way this run ends (a refusal
+  // before any command runs, a crash, or a normal finish), same as `cleanup`.
+  let closeProxy: () => Promise<void> = async () => {};
+  const networkDecisions: NetworkDecisionEntry[] = [];
   try {
     const invocation = keryxInvocation();
-    const network = action.grants.network === "full";
+    let networkInput: boolean | UnattendedNetworkAllowlist = action.grants.network === "full";
+    if (action.grants.network === "allowlist") {
+      // Flow 301 (AC2): the proxy is created and listening OUTSIDE the sandbox, on a
+      // unix socket under this run's own 0700 scratch directory, BEFORE the sandbox
+      // plan is built — the socket file must exist for bwrap to bind-mount it, and no
+      // shell_exec may run before the proxy that governs it is up. A failure here
+      // refuses the whole run; it never falls back to `off` or `full`.
+      const proxySocketPath = path.join(scratch, "net-proxy.sock");
+      try {
+        const proxy = await createAllowlistProxy({
+          allowedDomains: [...action.grants.domains],
+          unixSocketPath: proxySocketPath,
+          refuseReservedAddresses: true,
+          // Flow 301 (F2): absent, the proxy's own default applies (443 CONNECT / 80
+          // plain HTTP) — the allowlist restricts host AND port, not "any port on an
+          // allowed host".
+          ...(action.grants.ports !== undefined ? { allowedPorts: action.grants.ports } : {}),
+          onDecision: (d) => {
+            networkDecisions.push({
+              host: d.host,
+              allowed: d.allowed,
+              at: d.at ?? new Date().toISOString(),
+              ...(d.port !== undefined ? { port: d.port } : {}),
+              ...(d.reason !== undefined ? { reason: d.reason } : {}),
+            });
+          },
+        });
+        closeProxy = proxy.close;
+        networkInput = { mode: "allowlist", proxySocketPath, forwarderArgv: [...invocation.argv, "__sandbox-net-forward"] };
+      } catch (error) {
+        return refusal(
+          runId,
+          "sandbox-unavailable",
+          `network "allowlist" needs its domain proxy, which could not start: ${error instanceof Error ? error.message : String(error)}`,
+          action,
+        );
+      }
+    }
     const sandbox = (deps.planSandbox ?? planUnattendedSandbox)({
       worktree: workdir,
       scratchHome,
-      network,
+      network: networkInput,
       readOnly: [projectRoot, ...invocation.roots],
       hide: [scratchParent],
       env: process.env,
@@ -410,7 +446,13 @@ async function runLocked(
       );
     }
     const sandboxNote = sandbox.ok
-      ? `hardened sandbox, network ${network ? `ON — ${NETWORK_ON_WARNING}` : "off"}`
+      ? `hardened sandbox, network ${
+          action.grants.network === "full"
+            ? `ON — ${NETWORK_ON_WARNING}`
+            : action.grants.network === "allowlist"
+              ? `allowlist (${action.grants.domains.join(", ")}, port ${action.grants.ports !== undefined ? action.grants.ports.join("/") : "443 (CONNECT) / 80 (HTTP) default"}) — governs only shell_exec`
+              : "off"
+        }`
       : `none (${sandbox.reason}) — "ask" mode, every shell_exec refused`;
 
     // --- 4. provider, then the reservation (AC14) ----------------------------
@@ -543,7 +585,7 @@ async function runLocked(
       const file = path.join(dir, `${runId}.md`);
       await writeFile(
         file,
-        renderReport({ entry, action, runId, at: now().toISOString(), outcome, why, cost, grantedCalls, denials, sandboxNote, summary }),
+        renderReport({ entry, action, runId, at: now().toISOString(), outcome, why, cost, grantedCalls, denials, sandboxNote, summary, networkDecisions }),
         "utf8",
       );
       await pruneReports(dir, action.report.keep);
@@ -552,11 +594,13 @@ async function runLocked(
       reportNote = ` (report NOT written: ${error instanceof Error ? error.message : String(error)})`;
     }
 
+    const networkRefusals = networkDecisions.filter((d) => !d.allowed).length;
     return {
       outcome,
       detail:
         `${outcome === "ok" ? "report written" : `run ${outcome}: ${why}`}${reportPath !== undefined ? ` → ${reportPath}` : ""}${reportNote} ` +
-        `[sandbox: ${sandboxNote}; ${grantedCalls.length} granted call(s); ${denials.length} denial(s); ` +
+        `[sandbox: ${sandboxNote}; ${grantedCalls.length} granted call(s); ${denials.length} denial(s)` +
+        `${action.grants.network === "allowlist" ? `; ${networkRefusals} network refusal(s)` : ""}; ` +
         `$${cost.recorded ? cost.usd.toFixed(4) : "?"} of $${reservation.usd.toFixed(4)} reserved]`,
       cost,
       agentTask: {
@@ -566,22 +610,31 @@ async function runLocked(
         ...(denials.length > 0 ? { denials } : {}),
         permissionMode: dispatch.permissionMode,
         network: action.grants.network,
+        ...(networkDecisions.length > 0 ? { networkDecisions } : {}),
       },
       exitCode: outcome === "ok" ? 0 : 1,
     };
   } finally {
+    await closeProxy();
     await cleanup();
   }
 }
 
-function sandboxedRunner(workdir: string, plan: UnattendedSandboxPlan): (command: string) => Promise<{ output: string; isError: boolean }> {
+function sandboxedRunner(workdir: string, plan: UnattendedSandboxPlan): CommandRunner {
   if (!plan.ok) {
     return async () => ({ output: `shell_exec refused: this unattended run has no sandbox (${plan.reason})`, isError: true });
   }
-  return makeCommandRunner(workdir, async (command) => ({
-    ok: true,
-    plan: { spawnArgs: plan.wrap(["/bin/sh", "-c", command]), env: plan.env, netClose: async () => {} },
-  }));
+  return makeCommandRunner(
+    workdir,
+    async (command) => ({
+      ok: true,
+      plan: { spawnArgs: plan.wrap(["/bin/sh", "-c", command]), env: plan.env, netClose: async () => {} },
+    }),
+    // Flow 301 (F5c): this run has no terminal to hang up on, and every reason to
+    // want a sandboxed process tree fully gone on abort/timeout — opts in to the
+    // process-group kill `makeCommandRunner` otherwise leaves off by default.
+    { processGroup: true },
+  );
 }
 
 function renderReport(input: {
@@ -596,6 +649,7 @@ function renderReport(input: {
   denials: readonly UnattendedDenial[];
   sandboxNote: string;
   summary: string;
+  networkDecisions: readonly NetworkDecisionEntry[];
 }): string {
   const cost = input.cost.recorded
     ? `$${input.cost.usd.toFixed(4)} (${input.cost.tokens?.input ?? 0} in / ${input.cost.tokens?.output ?? 0} out tokens)`
@@ -613,6 +667,12 @@ function renderReport(input: {
     ...input.grantedCalls.map((c) => `  - ${c.tool}: \`${c.argv.slice(1).join(" ")}\` → ${c.ok ? "ok" : `exit ${c.exitCode ?? "?"}`}`),
     `- denials: ${input.denials.length === 0 ? "none" : ""}`,
     ...input.denials.map((d) => `  - ${d.tool}: ${d.reason}`),
+    ...(input.action.grants.network === "allowlist"
+      ? [
+          `- network decisions (allowlist: ${input.action.grants.domains.join(", ")}): ${input.networkDecisions.length === 0 ? "none" : ""}`,
+          ...input.networkDecisions.map((d) => `  - ${d.at} ${d.allowed ? "ALLOW" : "DENY "} ${d.host}${d.port !== undefined ? `:${d.port}` : ""}${d.reason !== undefined ? ` (${d.reason})` : ""}`),
+        ]
+      : []),
     "",
     "## Report",
     "",

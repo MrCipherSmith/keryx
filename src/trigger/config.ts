@@ -124,13 +124,94 @@ export interface AgentTaskAction {
   readonly report: { readonly keep: number };
 }
 
-/** Flow 295 (AC4): `allowlist` is named so it can be refused with a reason; it is delivered by flow 301. */
-export const AGENT_TASK_NETWORK_MODES = ["off", "full"] as const;
+/**
+ * Flow 301: `allowlist` reaches only `domains` through the loopback domain proxy —
+ * `off`/`full` never touch it. The sandbox still runs `--unshare-net` (same as `off`);
+ * only the agent's own `shell_exec` traffic is governed — the model call and every
+ * granted tool already run outside the sandbox (`trigger-agent-task.ts`).
+ */
+export const AGENT_TASK_NETWORK_MODES = ["off", "full", "allowlist"] as const;
 export type AgentTaskNetworkMode = (typeof AGENT_TASK_NETWORK_MODES)[number];
+
+/**
+ * Flow 301 (F3): parse one `inet_aton`-style dotted part (decimal, `0x`-hex, or
+ * leading-`0` octal) into a non-negative integer, or `null`. A CORE-zone module may
+ * not import `src/harness/mutation/guard.ts` (client zone — no exception, see
+ * `src/lib/import-zones.ts`), so this mirrors that module's `parseFlatInt` by hand;
+ * keep the two in step if either changes.
+ */
+function parseFlatIntForDomainCheck(s: string): number | null {
+  let value: number;
+  if (/^0x[0-9a-f]+$/i.test(s)) value = parseInt(s.slice(2), 16);
+  else if (/^0[0-7]+$/.test(s)) value = parseInt(s.slice(1), 8);
+  else if (/^[0-9]+$/.test(s)) value = parseInt(s, 10);
+  else return null;
+  return Number.isFinite(value) && value >= 0 && value <= 0xffffffff ? value : null;
+}
+
+/**
+ * Flow 301 (F3): true when `value` parses as an `inet_aton` IPv4 address — 2 to 4
+ * dotted parts, each decimal/hex/octal, in the short/mixed-radix forms a strict
+ * dotted-quad regex misses (`127.1` == 127.0.0.1, `10.1.2` == 10.1.0.2). Mirrors
+ * `guard.ts`'s `decodeDottedIPv4` by hand — see {@link parseFlatIntForDomainCheck}.
+ */
+function looksLikeInetAton(value: string): boolean {
+  const parts = value.split(".");
+  if (parts.length < 2 || parts.length > 4) return false;
+  const nums = parts.map(parseFlatIntForDomainCheck);
+  if (nums.some((n) => n === null)) return false;
+  const n = nums as number[];
+  if (parts.length === 4) return n.every((x) => x <= 255);
+  if (parts.length === 3) return (n[0] as number) <= 255 && (n[1] as number) <= 255 && (n[2] as number) <= 0xffff;
+  return (n[0] as number) <= 255 && (n[1] as number) <= 0xffffff;
+}
+
+/**
+ * One allowed `allowlist` entry: an exact hostname, or a `*.domain` wildcard covering
+ * the apex and every subdomain (the grammar `matchesAllowlist` enforces at proxy time).
+ * Rejects an IP literal (v4 or v6, including `inet_aton` short/mixed-radix forms like
+ * `127.1`), a domain whose final label is numeric or hex-numeric (no real public TLD
+ * is), and a bare `*` — see {@link agentTaskDomainProblem}. The proxy
+ * (`src/harness/process/sandbox/proxy.ts`) enforces the SAME rule at connect time,
+ * via `looksLikeIpHost` — this is defence in depth at the data-entry point, not the
+ * only gate.
+ */
+export function agentTaskDomainProblem(domain: unknown): string | undefined {
+  if (typeof domain !== "string" || domain.trim().length === 0) return "must be a non-empty string";
+  const value = domain.trim().toLowerCase();
+  if (value === "*") return '"*" is not a domain — every allowlist entry names a specific domain or "*.domain"';
+  if (value.includes(":")) {
+    return `"${domain}" is an IP literal — the allowlist is domains only (the proxy refuses an IP-literal target at connect time too)`;
+  }
+  const name = value.startsWith("*.") ? value.slice(2) : value;
+  if (name.length === 0) return `"${domain}" has no domain after the wildcard`;
+  if (looksLikeInetAton(name)) {
+    return `"${domain}" is an IP literal (inet_aton form) — the allowlist is domains only (the proxy refuses an IP-literal target at connect time too)`;
+  }
+  const LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+  const labels = name.split(".");
+  if (labels.length < 2 || labels.some((label) => !LABEL.test(label))) {
+    return `"${domain}" does not look like a domain (expected labels like "example.com" or "*.example.com")`;
+  }
+  const lastLabel = labels[labels.length - 1] ?? "";
+  if (/^\d+$/.test(lastLabel) || /^0x[0-9a-f]+$/i.test(lastLabel)) {
+    return `"${domain}"'s final label is numeric — no real public domain ends that way (this is how an IP address like "example.123" would slip past a domain check)`;
+  }
+  return undefined;
+}
 
 export interface AgentTaskGrants {
   /** `off` (default) keeps `--unshare-net`; `full` is the host network, always shown with NETWORK_ON_WARNING. */
   readonly network: AgentTaskNetworkMode;
+  /** Flow 301: required, non-empty when `network === "allowlist"`; empty otherwise. */
+  readonly domains: readonly string[];
+  /**
+   * Flow 301 (F2): restricts every domain in `domains` to these ports, for both plain
+   * HTTP and CONNECT. Absent (undefined): the proxy's own default — 443 for CONNECT,
+   * 80 for plain HTTP. "The allowlist is domains only" would otherwise mean every
+   * port on an allowed host is reachable, not just the API endpoint the grant intended.
+   */
+  readonly ports?: readonly number[];
   /** Granted-tool catalogue ids (`./granted-tools.ts`). */
   readonly tools: readonly string[];
   /** Repositories every repo-scoped granted tool is limited to. */
@@ -354,14 +435,30 @@ function agentTaskProblems(raw: Record<string, unknown>): string[] {
 function grantsProblems(grants: Record<string, unknown>): string[] {
   const problems: string[] = [];
   const network = grants.network ?? "off";
-  if (network === "allowlist") {
-    problems.push(
-      'action.grants.network: "allowlist" (shell commands reaching only listed domains through the loopback proxy) is ' +
-        "not yet available — it is delivered by flow 301. Use \"off\" (the default); granted tools run outside the " +
-        "sandbox and need no sandbox network.",
-    );
-  } else if (typeof network !== "string" || !(AGENT_TASK_NETWORK_MODES as readonly string[]).includes(network)) {
+  if (typeof network !== "string" || !(AGENT_TASK_NETWORK_MODES as readonly string[]).includes(network)) {
     problems.push(`action.grants.network: must be one of ${AGENT_TASK_NETWORK_MODES.join(", ")}`);
+  }
+  const domains = grants.domains ?? [];
+  if (!Array.isArray(domains) || !domains.every((d) => typeof d === "string")) {
+    problems.push("action.grants.domains: must be an array of strings");
+  } else if (network === "allowlist") {
+    if (domains.length === 0) {
+      problems.push('action.grants.domains: required and non-empty when network is "allowlist" — a name or "*.domain" wildcard for every domain the agent\'s shell may reach');
+    }
+    for (const domain of domains) {
+      const problem = agentTaskDomainProblem(domain);
+      if (problem !== undefined) problems.push(`action.grants.domains: ${problem}`);
+    }
+  }
+  // Flow 301 (F2): the allowlist restricts host AND port. Absent `ports` keeps the
+  // proxy's own default (443 for CONNECT, 80 for plain HTTP); present, it REPLACES
+  // that default for every listed domain, so it must not be empty (an empty list
+  // would silently mean "no port at all," not "the default").
+  if (grants.ports !== undefined) {
+    const ports = grants.ports;
+    if (!Array.isArray(ports) || ports.length === 0 || !ports.every((p) => Number.isInteger(p) && (p as number) >= 1 && (p as number) <= 65535)) {
+      problems.push("action.grants.ports: when present, must be a non-empty array of integers 1-65535");
+    }
   }
   const tools = grants.tools ?? [];
   if (!Array.isArray(tools)) {
@@ -552,6 +649,8 @@ function normalizeAgentTask(action: AgentTaskAction): AgentTaskAction {
     },
     grants: {
       network: grants.network ?? "off",
+      domains: [...(grants.domains ?? [])],
+      ...(grants.ports !== undefined ? { ports: [...grants.ports] } : {}),
       tools: [...(grants.tools ?? [])],
       repos: [...(grants.repos ?? [])],
       bins: { ...(grants.bins ?? {}) },

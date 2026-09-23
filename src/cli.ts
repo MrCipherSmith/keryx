@@ -47,6 +47,7 @@ import { forgettingCommand } from "./commands/forgetting";
 import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
+import { sandboxNetForwardCommand } from "./commands/sandbox-net-forward";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -115,6 +116,10 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   trigger: triggerCommand,
   schedule: scheduleCommand,
   governance: governanceCommand,
+  // Flow 301 (AC5): internal helper only — `planUnattendedSandbox.wrap()` invokes this
+  // from inside the sandbox; no operator ever types it. Excluded from the CLI
+  // reference with a reason (`DOCUMENTED_ELSEWHERE` in `cli-reference-coverage.test.ts`).
+  "__sandbox-net-forward": sandboxNetForwardCommand,
 };
 
 export async function main(): Promise<void> {

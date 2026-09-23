@@ -33,8 +33,20 @@ export {
 } from "../../process/shell-spawn";
 export type { SandboxSpawnPlan, ShellSandboxMode } from "../../process/shell-spawn";
 
+/**
+ * Flow 301 (F5b): additive — every existing `(command: string) => Promise<...>`
+ * runner (a plain arrow function, a test double) is still a valid {@link CommandRunner}:
+ * a function that declares fewer parameters is assignable wherever more may be
+ * supplied, so nothing that implements the old shape needs to change. Only a runner
+ * that WANTS to honour an abort has to read `options.signal`.
+ */
+export interface CommandRunOptions {
+  /** Aborted when the run that owns this command should stop it, not merely stop waiting on it (flow 301 F5b — see `makeCommandRunner`). */
+  readonly signal?: AbortSignal;
+}
+
 /** Runs a shell command string and returns bounded output (or an error result). */
-export type CommandRunner = (command: string) => Promise<InteractiveToolResult>;
+export type CommandRunner = (command: string, options?: CommandRunOptions) => Promise<InteractiveToolResult>;
 
 const MAX_OUTPUT_BYTES = 20_000;
 
@@ -150,6 +162,29 @@ export async function resolveSandboxedSpawn(
  * bounded stdout/stderr. Never throws — a non-zero exit or a spawn failure becomes
  * `{ isError: ... }`. OS-contained when `KERYX_SANDBOX_SHELL` opts in.
  */
+export interface MakeCommandRunnerOptions {
+  /**
+   * Flow 301 (F5c): spawn the command DETACHED (POSIX `setsid()`, its own process
+   * group) and, on the per-command deadline or an external abort, SIGTERM then
+   * SIGKILL the whole GROUP (`process.kill(-pid, …)`) rather than only the one
+   * directly-spawned process. This is what lets a kill reach a plain shell's own
+   * children, or, inside the hardened sandbox, bwrap's whole contained tree.
+   *
+   * Default `false` — spawn and kill exactly as before flow 301 (F5b): a plain
+   * (non-detached) child, killed directly by pid. That default matters for a
+   * REAL regression F5b introduced and F5c fixes: `detached: true` makes the
+   * child its own session too, so it stops inheriting the TERMINAL's process
+   * group — a terminal hangup (SIGHUP to the foreground group) used to take an
+   * interactive `shell_exec` command down with it, and no longer would have.
+   * `src/acp/roster.ts`'s `shellExecTool(root)` and any other interactive,
+   * no-job-registry caller must keep that inherited behaviour; only the two
+   * unattended dispatchers (`trigger-agent-task.ts`, `trigger-dispatch.ts`),
+   * which have no terminal to hang up on and every reason to want a sandboxed
+   * process tree fully gone, opt in.
+   */
+  readonly processGroup?: boolean;
+}
+
 export function makeCommandRunner(
   root: string,
   /**
@@ -159,8 +194,10 @@ export function makeCommandRunner(
    * interactive resolution (`resolveShellEnv` + `resolveShellSpawn`).
    */
   spawnPlan?: (command: string) => Promise<{ ok: true; plan: SandboxSpawnPlan } | { ok: false; error: string }>,
+  runnerOptions?: MakeCommandRunnerOptions,
 ): CommandRunner {
-  return async (command) => {
+  const processGroup = runnerOptions?.processGroup === true;
+  return async (command, options) => {
     // Closes the restricted-network proxy worker (no-op unless restricted). Run
     // exactly once in the finally, after success or failure.
     let netClose: () => Promise<void> = async () => {};
@@ -177,32 +214,82 @@ export function makeCommandRunner(
         stdout: "pipe",
         stderr: "pipe",
         env: resolved.plan.env,
+        // Flow 301 (F5c): opt-in only. `detached: true` (POSIX `setsid()`) makes
+        // the child its own process group AND SESSION — the price is that it stops
+        // inheriting the caller's terminal process group, so a terminal hangup
+        // (SIGHUP to the foreground group) no longer takes it down. That is fine,
+        // even desirable, for the two unattended dispatchers (no terminal to hang
+        // up on; every reason to want a sandboxed tree fully gone) but was a real
+        // regression for every OTHER caller of this shared function (`src/acp/
+        // roster.ts`'s `shellExecTool(root)`, and any interactive setup with no
+        // job registry) when F5b made it unconditional. Default `false`: spawn
+        // exactly as before F5b.
+        detached: processGroup,
       });
 
-      // Deadline. On expiry: SIGTERM, then SIGKILL if the process ignores it,
-      // so a command that traps TERM cannot outlive its deadline either. The
-      // output collected so far is still reported — a timeout with no context
-      // is much harder to act on than a truncated transcript.
+      // Flow 301 (F5b/F5c): SIGTERM then SIGKILL after a grace period if it ignores
+      // TERM. `processGroup` decides WHAT is signalled: the whole process GROUP
+      // (`-proc.pid` — valid only because `detached` above made this process its
+      // own group leader) when opted in, so the kill reaches every descendant — a
+      // plain shell's own children (`sh -c 'x & y'`), or, inside the hardened
+      // sandbox, bwrap's whole contained tree via `--die-with-parent`; otherwise
+      // (default) just the one process this call directly spawned, `proc.kill()`,
+      // exactly as before F5b. Shared by the per-command deadline below and by an
+      // external abort (`options.signal`) — same mechanism, different trigger, so
+      // the two paths cannot drift into killing different things.
+      let forceTimer: ReturnType<typeof setTimeout> | undefined;
+      const kill = (signal: "SIGTERM" | "SIGKILL"): void => {
+        try {
+          if (processGroup) process.kill(-proc.pid, signal);
+          else proc.kill(signal);
+        } catch {
+          // already gone
+        }
+      };
+      const killWithGrace = (): void => {
+        kill("SIGTERM");
+        forceTimer = setTimeout(() => kill("SIGKILL"), 2_000);
+      };
+
+      // Deadline. On expiry: SIGTERM (the group when opted in, else just this
+      // process), then SIGKILL if it ignores TERM, so a command that traps TERM (or
+      // forks a grandchild that ignores it, when `processGroup` reaches it at all)
+      // cannot outlive its deadline either. The output collected so far is still
+      // reported — a timeout with no context is much harder to act on than a
+      // truncated transcript.
       const timeoutMs = resolveShellTimeoutMs(process.env);
       let timedOut = false;
       let killTimer: ReturnType<typeof setTimeout> | undefined;
-      let forceTimer: ReturnType<typeof setTimeout> | undefined;
       if (timeoutMs > 0) {
         killTimer = setTimeout(() => {
           timedOut = true;
-          try {
-            proc.kill("SIGTERM");
-          } catch {
-            // already gone
-          }
-          forceTimer = setTimeout(() => {
-            try {
-              proc.kill("SIGKILL");
-            } catch {
-              // already gone
-            }
-          }, 2_000);
+          killWithGrace();
         }, timeoutMs);
+      }
+
+      // Flow 301 (F5b/F5c): the run that owns this command can end it early — an
+      // unattended dispatch's `maxSeconds` abort, or an interactive hard-stop that
+      // reaches here (no `jobRegistry`, so `shellExecTool` cannot promote to a
+      // background task instead — see that module's own comment on why the
+      // registry branch does the opposite on purpose). Before F5b an abort here
+      // changed nothing: with `processGroup` on (the unattended dispatchers), the
+      // sandboxed process used to keep running, orphaned, after the dispatcher
+      // closed its proxy and deleted its scratch directory, until ITS OWN
+      // `timeoutMs` (120s default) eventually caught it — well past `maxSeconds`.
+      // Same kill as the deadline above (group-wide when opted in, direct pid
+      // otherwise); a distinct result rather than folding into the timeout notice,
+      // since the reason is different (the RUN ended, not this one command running
+      // too long) — same wording either way, `processGroup` changes only WHAT gets
+      // signalled, never what the caller is told.
+      let aborted = false;
+      const signal = options?.signal;
+      const onAbort = (): void => {
+        aborted = true;
+        killWithGrace();
+      };
+      if (signal !== undefined) {
+        if (signal.aborted) onAbort();
+        else signal.addEventListener("abort", onAbort, { once: true });
       }
 
       // Read incrementally rather than with `Response.text()`, which only
@@ -233,8 +320,12 @@ export function makeCommandRunner(
       let exit = 0;
       try {
         const drained = Promise.all([readInto(proc.stdout, out), readInto(proc.stderr, err)]);
+        // Awaited unconditionally, kill path included — flow 301's unattended
+        // dispatchers rely on THIS promise not resolving until the killed group has
+        // actually exited, so `closeProxy()`/scratch cleanup never races a process
+        // still tearing down.
         exit = await proc.exited;
-        if (timedOut) {
+        if (timedOut || aborted) {
           // Do not wait on pipes a surviving grandchild may still hold open.
           await Promise.race([drained, new Promise((r) => setTimeout(r, 200))]);
         } else {
@@ -243,6 +334,7 @@ export function makeCommandRunner(
       } finally {
         if (killTimer !== undefined) clearTimeout(killTimer);
         if (forceTimer !== undefined) clearTimeout(forceTimer);
+        if (signal !== undefined) signal.removeEventListener("abort", onAbort);
       }
       const stdout = out.text;
       const stderr = err.text;
@@ -252,6 +344,13 @@ export function makeCommandRunner(
         combined.length > MAX_OUTPUT_BYTES
           ? `${combined.slice(0, MAX_OUTPUT_BYTES)}\n…(truncated)`
           : combined;
+      if (aborted) {
+        const notice = "aborted: run time limit";
+        return {
+          output: bounded.length > 0 ? `${bounded}\n${notice}` : notice,
+          isError: true,
+        };
+      }
       if (timedOut) {
         const notice = `shell_exec: timed out after ${timeoutMs}ms and was killed (raise or disable with ${ENV_SHELL_TIMEOUT_MS})`;
         return {
@@ -343,7 +442,12 @@ export function shellExecTool(
         if (background) {
           return { output: "shell_exec: background jobs are not available in this session", isError: true };
         }
-        return run(command);
+        // Flow 301 (F5b): no registry means no promote-to-background escape hatch —
+        // this IS the synchronous call, so the run's own abort (an unattended
+        // dispatch's `maxSeconds`, or an interactive hard-stop) has to reach the
+        // runner directly, and a runner built to honour it (`makeCommandRunner`)
+        // kills the command's whole process group rather than leaving it orphaned.
+        return run(command, ctx?.signal !== undefined ? { signal: ctx.signal } : {});
       }
 
       const startOpts: StartTaskOptions = { phase: background ? "background" : "foreground" };

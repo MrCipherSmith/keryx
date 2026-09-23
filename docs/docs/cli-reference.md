@@ -1619,8 +1619,8 @@ keryx still runs no daemon of its own. The OS scheduler calls `keryx trigger run
 ```
 keryx schedule add --name <name> --every "<cadence>" --prompt "<task>" \
     --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
-    [--max-seconds 600] [--mode ask|trust] [--network off|full] \
-    [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
+    [--max-seconds 600] [--mode ask|trust] [--network off|full|allowlist] \
+    [--domain example.com]... [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
 keryx schedule list
 keryx schedule show <name>
 keryx schedule pause <name>
@@ -1685,10 +1685,31 @@ store or the reports. **No grant lifts any of it.**
 
 **Grants.**
 
-- **Network:** `off` (default: `--unshare-net`) or `full` (the host's whole network,
-  always shown with the NETWORK ON warning). An allowlist mode (only listed domains,
-  host loopback unreachable) is not available yet. It is flow 301, and an entry
-  asking for it is refused on load with that reason.
+- **Network:** `off` (default: `--unshare-net`), `full` (the host's whole network,
+  always shown with the NETWORK ON warning), or `allowlist` (Linux only). `allowlist`
+  still runs `--unshare-net` — the sandbox's netns has only its own private loopback,
+  and the host's real loopback stays unreachable from inside it — plus a UNIX socket
+  bind-mounted in for a domain-allowlisting proxy keryx runs OUTSIDE the sandbox. A
+  keryx-shipped forwarder inside the sandbox bridges `HTTP(S)_PROXY` to that socket
+  (most tools cannot speak to a unix-socket proxy directly). `--domain` (repeatable,
+  or comma-separated) names every reachable domain — an exact name or a `*.domain`
+  wildcard; at least one is required. The proxy allows plain HTTP by `Host` and HTTPS
+  `CONNECT` by authority ONLY for listed domains, refuses a bare IP-literal target
+  outright, and after resolving an allowed name refuses a loopback, private,
+  link-local, CGNAT, unique-local or cloud-metadata address — connecting to the exact
+  address it checked, never a fresh lookup, so a name that resolves differently on a
+  second (DNS-rebinding) lookup cannot slip through. HTTPS is a blind `CONNECT` relay
+  by default (no TLS termination), so the proxy cannot see SNI or an in-tunnel `Host`.
+  **`allowlist` governs ONLY the agent's own `shell_exec` commands inside the
+  sandbox** — the model call and every granted tool already run OUTSIDE the sandbox,
+  on your own network, and are unaffected by this grant. A client that ignores
+  `HTTP(S)_PROXY` gets no network at all (the sandbox's netns has no other route out).
+  macOS, and any host without a working bwrap, refuses `allowlist` with the reason —
+  it never silently falls back to `off` or `full`. Every allow/deny decision (host,
+  port, allowed, reason, time) is recorded in the run's report and its ledger entry,
+  and is part of the operator-confirmed, signed schedule content — changing the
+  domain list after confirmation refuses the run with `grants-changed`, the same as
+  changing anything else about it.
 - **Granted tools:** a fixed, reviewed catalogue: `gh.pr.list`, `gh.pr.view`,
   `gh.pr.checks`, `gh.issue.list`, `gh.issue.view`, `gh.run.list`. It includes no
   `gh api` and no free-form argv. **keryx runs a granted tool itself, outside the
