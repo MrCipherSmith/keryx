@@ -10,7 +10,7 @@
   "title": "flow ac update: amend a criterion's text, and refuse arguments it does not use",
   "status": "in-progress",
   "createdAt": "2026-09-22T23:36:31.506Z",
-  "updatedAt": "2026-09-23T00:14:22.570Z",
+  "updatedAt": "2026-09-23T00:34:13.491Z",
   "source": {
     "type": "description",
     "ref": null
@@ -169,6 +169,26 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Refuse to replace a multi-line criterion; keep every line's original ending",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T00:25:52.250Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -239,6 +259,21 @@
       "at": "2026-09-23T00:14:22.570Z",
       "event": "task-done",
       "detail": "T9: Review fixes: CRLF files, multi-line criteria, single-line reason, values that start with --"
+    },
+    {
+      "at": "2026-09-23T00:25:52.127Z",
+      "event": "task-added",
+      "detail": "T10: Refuse to replace a multi-line criterion; keep every line's original ending"
+    },
+    {
+      "at": "2026-09-23T00:25:52.250Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T00:34:13.491Z",
+      "event": "task-done",
+      "detail": "T10: Refuse to replace a multi-line criterion; keep every line's original ending"
     }
   ]
 }
