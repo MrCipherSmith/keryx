@@ -103,11 +103,14 @@ export function projectTriggersPanel(
   }
   const spend = formatTriggerSpend(view.spend);
   rows.push({ id: "sb-triggers-spend", chunks: [{ role: spend.role, text: fit(spend.text, w) }], target: list });
+  // N8: one name for one fact — an open reservation is ONLY "open", with the
+  // USD it holds; the spend line above never counts it as "not recorded".
   const open = view.openReservations.length;
   if (open > 0) {
+    const held = formatUsd(view.openReservations.reduce((sum, r) => sum + r.usd, 0));
     rows.push({
       id: "sb-triggers-reservations",
-      chunks: [{ role: "attention", text: fit(`! ${open} open reservation${open === 1 ? "" : "s"}`, w) }],
+      chunks: [{ role: "attention", text: fit(`! ${open} open · ${held} reserved`, w) }],
       target: list,
     });
   }

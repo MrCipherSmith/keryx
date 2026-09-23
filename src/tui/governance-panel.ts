@@ -121,6 +121,8 @@ export function createGovernanceRunner(options: GovernanceRunnerOptions): Govern
 // ---------------------------------------------------------------------------
 
 export const GOVERNANCE_NO_REPORT = "no report — click to run";
+/** A stored report that exists but cannot be read (flow 300 N7: its own state, not "no report"). */
+export const GOVERNANCE_UNREADABLE = "unreadable — click for reason";
 export const GOVERNANCE_RUNNING = "running…";
 export const GOVERNANCE_FAILED = "failed — click to retry";
 
@@ -144,15 +146,16 @@ function fit(text: string, width: number): string {
 }
 
 /**
- * One of exactly four states.
+ * One of exactly five states.
  *
  * - A run in flight wins.
  * - A failed run shows `failed — click to retry`, unless the stored report is
  *   NEWER than the failure (another process wrote one since): then that report
  *   is what there is to show (review F7).
- * - Otherwise the stored report decides — absent and malformed both read as
- *   "no report", and a report deleted since the last run reads as "no report"
- *   too. The run's own `generatedAt` is used only in the gap between a run
+ * - Otherwise the stored report decides — absent reads as "no report" (as does
+ *   a report deleted since the last run), and a malformed or unreadable one as
+ *   `unreadable — click for reason` (N7): the click opens the modal with the
+ *   reason and `r` to rebuild, never an automatic rebuild. The run's own `generatedAt` is used only in the gap between a run
  *   finishing and the re-read of what it wrote (`readIsStale`).
  */
 export function projectGovernanceRow(
@@ -171,8 +174,9 @@ export function projectGovernanceRow(
   if (newest === undefined) {
     // A malformed stored report is never rebuilt behind the operator's back
     // (review F15): the click opens the modal, which gives the reason and
-    // offers `r` to rebuild it.
-    return { text: fit(GOVERNANCE_NO_REPORT, width), role: "attention", action: read?.state === "malformed" ? "open" : "run" };
+    // offers `r` to rebuild it. It says so in its own words (N7).
+    if (read?.state === "malformed") return { text: fit(GOVERNANCE_UNREADABLE, width), role: "error", action: "open" };
+    return { text: fit(GOVERNANCE_NO_REPORT, width), role: "attention", action: "run" };
   }
   return { text: fit(`last report ${formatReportDate(newest)}`, width), role: "muted", action: "open" };
 }

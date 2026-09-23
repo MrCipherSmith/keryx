@@ -6,7 +6,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { flowsRoot } from "../flow/store";
-import { openReservations, readTriggerRuns, type TriggerRunsRead } from "../trigger/record";
+import { openReservations, readTriggerRuns, type TriggerRunRecord, type TriggerRunsRead } from "../trigger/record";
 import type { ManagedReviewManifest } from "../review/types";
 import type { FlowDispatch, FlowDispatchRun, FlowOpenReservation, FlowReviewSpend, ProjectTriggerSpend } from "./types";
 
@@ -103,6 +103,24 @@ export async function readProjectTriggerSpend(cwd: string): Promise<ProjectTrigg
   return summarizeProjectTriggerSpend(await readTriggerRuns(cwd));
 }
 
+/**
+ * Flow 300 (N8): the flow a CLOSING record belongs to — its own
+ * `dispatch.flow`, or, for an operator's `reservation-resolved` (which carries
+ * no `dispatch`), the flow of the reservation it closes. One function, used by
+ * both the project figure's `attributedToFlowsUsd` and the flow view, so the
+ * two can never disagree about which runs are a flow's.
+ */
+function closingRecordFlows(records: readonly TriggerRunRecord[]): (record: TriggerRunRecord) => string | undefined {
+  const reservationFlow = new Map<string, string>();
+  for (const record of records) {
+    if (record.outcome === "reserved" && record.reservation !== undefined && record.dispatch?.flow !== undefined) {
+      reservationFlow.set(record.reservation.runId, record.dispatch.flow);
+    }
+  }
+  return (record) =>
+    record.dispatch?.flow ?? (record.resolves !== undefined ? reservationFlow.get(record.resolves) : undefined);
+}
+
 /** Pure half of `readProjectTriggerSpend` — split out so `collectProjectGovernance` reads the ledger once and shares it with the per-flow dispatch view below (AC5: still read-only, just one read). */
 export function summarizeProjectTriggerSpend(read: TriggerRunsRead): ProjectTriggerSpend {
   if (read.state === "absent") {
@@ -118,23 +136,24 @@ export function summarizeProjectTriggerSpend(read: TriggerRunsRead): ProjectTrig
   // per flow, applied project-wide — so this subset always equals the sum of
   // every flow's own `dispatch.spend.spentUsd` (never drifts out of sync).
   let attributedToFlowsUsd: number | undefined;
-  let runsTotal = 0;
-  const open = new Set(openReservations(read.records).map((r) => r.runId));
+  let closedRuns = 0;
+  // Flow 300 review F3 + N8: a `reserved` record is the spend HOLD a dispatch
+  // writes before its first model call, not a run of its own. Once the run's
+  // closing record (same `dispatch.runId`) — or, for a killed run, the
+  // operator's `reservation-resolved` — exists, THAT record is the run and
+  // carries its cost. A hold nothing has closed yet (in flight, or killed and
+  // not yet resolved) is an OPEN RESERVATION: counted in `runsTotal` and named
+  // as such, exactly as the flow view names it — never "not recorded", never
+  // spent.
+  const open = openReservations(read.records);
+  const flowOf = closingRecordFlows(read.records);
   for (const record of read.records) {
-    // Flow 300 review F3: a `reserved` record is the spend HOLD a dispatch
-    // writes before its first model call, not a run. Once the run's own
-    // closing record (same `dispatch.runId`) — or, for a killed run, the
-    // operator's `reservation-resolved` — exists, THAT record is the run and
-    // carries its cost; counting the hold as well put every dispatch into "not
-    // recorded" even when its closing record had a cost. A hold nothing has
-    // closed yet (in flight, or killed and unresolved) is still a run whose
-    // cost is not recorded, and stays counted as one.
-    if (record.outcome === "reserved" && !(record.reservation !== undefined && open.has(record.reservation.runId))) continue;
-    runsTotal += 1;
+    if (record.outcome === "reserved") continue;
+    closedRuns += 1;
     if (record.cost.recorded) {
       spentUsd += record.cost.usd;
       runsWithCostRecorded += 1;
-      if (record.dispatch?.flow !== undefined) {
+      if (flowOf(record) !== undefined) {
         attributedToFlowsUsd = (attributedToFlowsUsd ?? 0) + record.cost.usd;
       }
     } else {
@@ -146,8 +165,10 @@ export function summarizeProjectTriggerSpend(read: TriggerRunsRead): ProjectTrig
     spentUsd,
     runsWithCostRecorded,
     runsWithCostNotRecorded,
-    runsTotal,
+    runsTotal: closedRuns + open.length,
     attributedToFlowsUsd,
+    openReservations: open.length,
+    openReservedUsd: open.reduce((sum, reservation) => sum + reservation.usd, 0),
   };
 }
 
@@ -181,16 +202,19 @@ export function collectFlowDispatch(read: TriggerRunsRead, flowId: string): Flow
     return { state: "unreadable", reason: read.reason };
   }
 
+  const flowOf = closingRecordFlows(read.records);
   const runs: FlowDispatchRun[] = read.records
-    .filter((record) => record.outcome !== "reserved" && record.dispatch?.flow === flowId)
+    .filter((record) => record.outcome !== "reserved" && flowOf(record) === flowId)
     .map((record) => ({
-      runId: record.dispatch!.runId,
+      // A `reservation-resolved` closes a KILLED run: it is that run's closing
+      // record (flow 300 N8), under the run id it resolves.
+      runId: record.dispatch?.runId ?? record.resolves ?? "",
       trigger: record.trigger,
       at: record.at,
-      task: record.dispatch!.task,
+      task: record.dispatch?.task,
       outcome: record.outcome,
       cost: record.cost,
-      denials: record.dispatch!.denials ?? [],
+      denials: record.dispatch?.denials ?? [],
     }));
 
   let spentUsd: number | undefined;

@@ -194,6 +194,8 @@ test("AC2: trigger spend sums recorded runs and counts unrecorded ones separatel
     runsTotal: 2,
     // Neither record above named a flow (`dispatch` field), so nothing is attributed.
     attributedToFlowsUsd: undefined,
+    openReservations: 0,
+    openReservedUsd: 0,
   });
 });
 
@@ -439,8 +441,15 @@ test("AC4: a record written before this change (a 'reserved' line with no `dispa
   if (flow?.dispatch.state !== "present") throw new Error("unreachable");
   expect(flow.dispatch.openReservations).toEqual([]); // unattributable — never guessed onto this flow
   expect(flow.dispatch.runs).toEqual([]);
-  // Still visible at the project level, exactly as before this change.
-  expect(report.projects[0]?.triggerSpend).toMatchObject({ state: "present", runsWithCostNotRecorded: 1, runsTotal: 1 });
+  // Still visible at the project level — since flow 300 (N8) under its own
+  // name, an OPEN reservation, not as a run whose cost was "not recorded".
+  expect(report.projects[0]?.triggerSpend).toMatchObject({
+    state: "present",
+    runsWithCostNotRecorded: 0,
+    openReservations: 1,
+    openReservedUsd: 1,
+    runsTotal: 1,
+  });
 });
 
 test("AC1/AC3: policy decisions are narrowed to interactive sessions — the report no longer calls flow 290 a future source", async () => {
@@ -819,7 +828,7 @@ test("F3: a dispatch whose closing record carries a cost is ONE run with cost re
   });
 });
 
-test("F3: a hold nothing has closed yet (in flight, or killed and unresolved) still counts as one run whose cost is not recorded", async () => {
+test("F3/N8: a hold nothing has closed yet (in flight, or killed and unresolved) still counts as one run — an OPEN one, not 'not recorded'", async () => {
   await appendTriggerRunRecord(ROOT, {
     trigger: "work",
     firedBy: { kind: "event", event: "ci" } as never,
@@ -831,7 +840,7 @@ test("F3: a hold nothing has closed yet (in flight, or killed and unresolved) st
     reservation: { runId: "run-open", usd: 1 },
   });
   const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
-  expect(report.projects[0]?.triggerSpend).toMatchObject({ state: "present", runsWithCostNotRecorded: 1, runsTotal: 1 });
+  expect(report.projects[0]?.triggerSpend).toMatchObject({ state: "present", runsWithCostNotRecorded: 0, openReservations: 1, openReservedUsd: 1, runsTotal: 1 });
 });
 
 // --- Flow 300 review F8: artifacts are replaced atomically, latest.json last ---
@@ -848,4 +857,88 @@ test("F8: when latest.md cannot be replaced, latest.json is left exactly as it w
   await expect(writeGovernanceArtifacts(ROOT, second)).rejects.toThrow();
   expect(await readFile(path.join(dir, "latest.json"), "utf8")).toBe(before);
   expect((await readdir(dir)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+});
+
+// --- Flow 300 N8: one fact, one name — an open reservation is "open" at project level AND in the flow view ---
+
+async function reserve(runId: string, flow: string, at: string, usd = 1): Promise<void> {
+  await appendTriggerRunRecord(ROOT, {
+    trigger: "work",
+    firedBy: { kind: "event", event: "ci" } as never,
+    action: { kind: "flow-next", flow } as never,
+    at,
+    outcome: "reserved",
+    detail: `reserved $${usd}`,
+    cost: { recorded: false, reason: "a reservation — the run's own record carries what it spent" },
+    reservation: { runId, usd },
+    dispatch: { runId, flow },
+  });
+}
+
+async function spendFor(flowId: string) {
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  const project = report.projects[0]?.triggerSpend;
+  const flow = report.projects[0]?.flows.find((f) => f.id === flowId);
+  if (flow?.dispatch.state !== "present") throw new Error("flow dispatch view not present");
+  return { project, dispatch: flow.dispatch, markdown: renderGovernanceMarkdown(report) };
+}
+
+test("N8: reserved → CLOSED by the run: one run with its cost, zero open — the same in the project figure and the flow view", async () => {
+  await writeFlowFixture("201-2026-01-01-n8-closed");
+  await reserve("run-c", "201", "2026-01-01T00:00:00.000Z");
+  await appendTriggerRunRecord(ROOT, {
+    trigger: "work",
+    firedBy: { kind: "event", event: "ci" } as never,
+    action: { kind: "flow-next", flow: "201" } as never,
+    at: "2026-01-01T00:10:00.000Z",
+    outcome: "ok",
+    detail: "done",
+    cost: { recorded: true, usd: 0.3 },
+    dispatch: { runId: "run-c", flow: "201" },
+  });
+  const { project, dispatch } = await spendFor("201");
+  expect(project).toMatchObject({ runsTotal: 1, runsWithCostRecorded: 1, runsWithCostNotRecorded: 0, openReservations: 0, openReservedUsd: 0, spentUsd: 0.3, attributedToFlowsUsd: 0.3 });
+  expect(dispatch.spend).toMatchObject({ runsTotal: 1, runsWithCostRecorded: 1, runsWithCostNotRecorded: 0, openReservedUsd: 0, spentUsd: 0.3 });
+  expect(dispatch.openReservations).toEqual([]);
+});
+
+test("N8: reserved → RESOLVED by the operator (killed run): the resolution is the run's closing record in BOTH views, zero open", async () => {
+  await writeFlowFixture("202-2026-01-01-n8-resolved");
+  await reserve("run-r", "202", "2026-01-01T00:00:00.000Z");
+  await appendTriggerRunRecord(ROOT, {
+    trigger: "work",
+    firedBy: { kind: "event", event: "ci" } as never,
+    action: { kind: "flow-next", flow: "202" } as never,
+    at: "2026-01-02T00:00:00.000Z",
+    outcome: "reservation-resolved",
+    detail: "operator closed run run-r's reservation",
+    cost: { recorded: true, usd: 0.7 },
+    resolves: "run-r",
+  });
+  const { project, dispatch } = await spendFor("202");
+  expect(project).toMatchObject({ runsTotal: 1, runsWithCostRecorded: 1, openReservations: 0, openReservedUsd: 0, spentUsd: 0.7, attributedToFlowsUsd: 0.7 });
+  expect(dispatch.spend).toMatchObject({ runsTotal: 1, runsWithCostRecorded: 1, openReservedUsd: 0, spentUsd: 0.7 });
+  expect(dispatch.runs.map((r) => [r.runId, r.outcome])).toEqual([["run-r", "reservation-resolved"]]);
+  expect(dispatch.openReservations).toEqual([]);
+});
+
+test("N8: reserved → still OPEN (in flight, or killed and never resolved): 'open' in both views, never 'not recorded', never spent, still in the total — included, not additive", async () => {
+  await writeFlowFixture("203-2026-01-01-n8-open");
+  await reserve("run-o", "203", "2026-01-01T00:00:00.000Z", 1.5);
+  const { project, dispatch, markdown } = await spendFor("203");
+  expect(project).toMatchObject({
+    runsTotal: 1,
+    runsWithCostRecorded: 0,
+    runsWithCostNotRecorded: 0,
+    openReservations: 1,
+    openReservedUsd: 1.5,
+    spentUsd: 0,
+    attributedToFlowsUsd: undefined,
+  });
+  expect(dispatch.spend).toMatchObject({ runsTotal: 1, runsWithCostNotRecorded: 0, openReservedUsd: 1.5, spentUsd: undefined, includedInProjectTriggerSpend: true });
+  expect(dispatch.openReservations.map((r) => r.runId)).toEqual(["run-o"]);
+  // The markdown names it the same way at both levels.
+  expect(markdown).toContain("0 run(s) fired with cost not recorded (never counted as $0); 1 open reservation(s) totaling $1.5 (reserved, not spent");
+  expect(markdown).toContain("1 run(s) total (1 open)");
+  expect(markdown).toContain("1 open reservation(s) totaling $1.5 (reserved, not spent); 1 run(s) total (included in the project's trigger spend above — not additive)");
 });

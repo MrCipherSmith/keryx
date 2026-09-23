@@ -595,8 +595,10 @@ Refusals print their code and exit non-zero (except where noted):
   and typing `acp` in the filter finds them. `keryx shell -c` never continues
   one: it continues the newest session of the shell's own kind.
 - **Governance** (TUI sidebar, always present, below Jobs). The row shows one of
-  four states:
-  - `no report — click to run`: there is no stored report, or it is malformed.
+  five states:
+  - `no report — click to run`: there is no stored report.
+  - `unreadable — click for reason`: a stored report exists but is malformed or
+    cannot be read.
   - `running…`: a report is being built.
   - `last report <YYYY-MM-DD HH:MM>`: taken from `generated_at`, in UTC.
   - `failed — click to retry`.
@@ -613,9 +615,9 @@ Refusals print their code and exit non-zero (except where noted):
   `all_projects`, above `latest.md` wrapped to the panel. `↑/↓` and `j/k` scroll
   one line, `PgUp/PgDn` scroll one page, `r` re-runs the report in the
   background and refreshes the modal when it finishes, and `Esc` closes it. A
-  malformed or unreadable stored report reads as "no report" in the sidebar,
-  but it is never rebuilt behind your back: clicking the row or `/governance`
-  opens the modal, which gives the reason and offers `r` to rebuild it. A report
+  malformed or unreadable stored report is never rebuilt behind your back:
+  clicking the `unreadable` row or `/governance` opens the modal, which gives
+  the reason and offers `r` to rebuild it. A report
   written by another process after a failed run replaces the `failed` state.
   Both artifacts are replaced atomically, `latest.json` last.
 - **Triggers** (TUI sidebar, below Governance). The section is hidden when
@@ -623,11 +625,15 @@ Refusals print their code and exit non-zero (except where noted):
   file, or the ledger, cannot be read. Row ages are repainted at least once a
   minute. It shows:
   - Project trigger spend, as `keryx governance report` computes it and in the
-    same format (`$0.004`, never rounded to `$0.00`). Runs whose cost was not
-    recorded are counted separately and never added in as $0. A dispatch's
-    spend reservation is not a run of its own once the run's closing record (or
-    `keryx trigger resolve`) exists.
-  - The number of open spend reservations, when there are any.
+    same format (`$0.004`, never rounded to `$0.00`). Runs that closed with
+    their cost not recorded are counted separately and never added in as $0. A
+    dispatch's spend reservation is not a run of its own once the run's closing
+    record (or `keryx trigger resolve`) exists.
+  - Open spend reservations, when there are any, with the USD they hold:
+    `! 1 open · $0.5 reserved`. An open reservation — a run in flight, or a
+    killed one nobody has resolved — is named only as open: it is never also
+    counted as "not recorded", and stays open until the run closes it or
+    `keryx trigger resolve`.
   - One row per event-fired trigger: its name, `enabled` or `disabled`, and
     either the last outcome with its age or `never fired`. A trigger whose
     dispatch has `network: true` is marked `NET`.
@@ -1905,8 +1911,16 @@ Per flow (`.metaproject/flows/<id>/flow.json` and its `reviews/*/manifest.json`)
 Per project (`.metaproject/data/trigger/runs.jsonl`):
 
 - **Trigger spend** — USD summed over every fired-trigger run whose cost was
-  recorded, plus the count of runs whose cost was not recorded (never folded
-  into the sum as `$0`). This is the project's TRUE total, project-wide across
+  recorded, plus the count of CLOSED runs whose cost was not recorded (never
+  folded into the sum as `$0`), plus — since flow 300 — the open spend
+  reservations (`openReservations`, `openReservedUsd` in the JSON; "N open
+  reservation(s) totaling $X (reserved, not spent …)" in the markdown). An open
+  reservation is a run whose dispatch reserved spend and has no closing record
+  and no `keryx trigger resolve` yet; it counts in `runsTotal` ("M run(s) total
+  (K open)") but never in the not-recorded count and never in `spentUsd` — the
+  same name and the same rule the per-flow "Open reservations" below use. An
+  operator's `reservation-resolved` is the killed run's closing record, and
+  belongs to the flow the reservation was opened for. This is the project's TRUE total, project-wide across
   every trigger and every action kind, whether or not the run named a flow.
   `attributedToFlowsUsd` says how much of that total is ALSO shown under a
   flow's own "Dispatch runs" section below (`spentUsd` there); it is a SUBSET
@@ -1940,7 +1954,7 @@ Per flow, also from `runs.jsonl` (flow 297):
   "reserved, not spent", on its own line, never added into the spend figure
   above. A reservation recorded before this change carries no flow reference
   and stays out of every flow's section — it is still counted at the
-  project-wide trigger-spend line, unchanged from before.
+  project-wide trigger-spend line, as an open reservation.
 - A report-only `flow-next` entry (no `dispatch` block — it only reports the
   next task, no model call) writes no `dispatch` record at all, so it never
   appears in either list here; it is still counted at the project-wide

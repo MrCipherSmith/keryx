@@ -95,8 +95,10 @@ test("AC4: a config that cannot be read is ONE error row", async () => {
 test("AC4: spend (unrecorded never folded into $0), reservations, one row per EVENT trigger, NET marker, N scheduled", async () => {
   const p = projectTriggersPanel(await loadTriggerLedgerView(await fixture()), { width: SIDEBAR_TEXT_WIDTH, now: NOW });
   const text = (id: string) => p.rows.find((r) => r.id === id)?.chunks.map((c) => c.text).join("");
-  expect(text("sb-triggers-spend")).toBe("spent $0.25 · 2 not recorded");
-  expect(p.rows.find((r) => r.id === "sb-triggers-reservations")?.chunks).toEqual([{ role: "attention", text: "! 1 open reservation" }]);
+  // N8: the open reservation is named ONCE, as open (with what it holds) —
+  // never also counted in "not recorded".
+  expect(text("sb-triggers-spend")).toBe("spent $0.25 · 1 not recorded");
+  expect(p.rows.find((r) => r.id === "sb-triggers-reservations")?.chunks).toEqual([{ role: "attention", text: "! 1 open · $0.5 reserved" }]);
   // 34 columns would not fit in 30: the NAME is shortened, the outcome kept whole.
   expect(text("sb-triggers-rebuild-on-merge")).toBe("rebuild-on-… · enabled · ok 3h");
   expect(text("sb-triggers-sync-off")).toBe("sync… · disabled · never fired");
@@ -159,7 +161,7 @@ otuiTest("AC10: a /theme switch recolours the Triggers section (theme roles, no 
 
 test("review F3: spend uses the governance report's own USD format — $0.004 is never rounded away to $0.00", () => {
   const present = (spentUsd: number, notRecorded = 0) =>
-    ({ state: "present", spentUsd, runsWithCostRecorded: 1, runsWithCostNotRecorded: notRecorded, runsTotal: 1 + notRecorded, attributedToFlowsUsd: undefined }) as const;
+    ({ state: "present", spentUsd, runsWithCostRecorded: 1, runsWithCostNotRecorded: notRecorded, runsTotal: 1 + notRecorded, attributedToFlowsUsd: undefined, openReservations: 0, openReservedUsd: 0 }) as const;
   expect(formatTriggerSpend(present(0.004)).text).toBe("spent $0.004");
   expect(formatTriggerSpend(present(0.25, 2)).text).toBe("spent $0.25 · 2 not recorded");
   expect(formatTriggerSpend(present(1.23456)).text).toBe("spent $1.2346");

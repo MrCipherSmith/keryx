@@ -504,8 +504,9 @@ Grouped by what you are trying to do, not by internal module layout.
   zero. Writes `.metaproject/data/governance/artifacts/latest.{md,json}`, the
   same convention `keryx health run` uses; `--all-projects` also covers every
   project in the user-global registry. In the TUI, the sidebar's
-  **Governance** row shows `no report — click to run`, `running…`,
-  `last report <date>` or `failed — click to retry`. With no report, a click
+  **Governance** row shows `no report — click to run`,
+  `unreadable — click for reason`, `running…`, `last report <date>` or
+  `failed — click to retry`. With no report, a click
   (or `/governance`) runs the report in the background, and the row updates
   when it finishes. With a report, a click opens it in a scrollable modal,
   where `r` re-runs it. Sessions written by `keryx agents external run` appear
