@@ -99,7 +99,9 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       expect(reconstructed).toContain(line);
       reconstructed = reconstructed.replace(line, "");
     }
-    expect(reconstructed).toBe(preFlow);
+    // The banner's version moves with every release; the block under it is what AC5 pins.
+    const withoutVersion = (text: string): string => text.replace(/^keryx \S+\n/, "keryx <version>\n");
+    expect(withoutVersion(reconstructed)).toBe(withoutVersion(preFlow));
   });
 
   test.each(["flow", "trigger", "serve-mcp", "governance"] as const)(

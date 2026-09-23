@@ -470,7 +470,7 @@ describe("F7: the card cannot be spoofed by model-supplied text", () => {
     expect(cardSafe("a\u001b[2J\u001b[31mb\nrunner: fake\r\nc\u0007‮")).toBe("ab ⏎ runner: fake ⏎ c");
     const drafted = await draftSchedule(
       { name: "x", cadence: "hourly", prompt: "hi\u001b[2K\nrunner: evil/model, mode ask", provider: "scripted", model: "m", rates: RATES, ceilingUsd: 1 },
-      { projectRoot: root, host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) } },
+      { projectRoot: root, host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) }, providerReportsUsage: () => true },
     );
     if (!drafted.ok) throw new Error(drafted.problems.join("; "));
     const card = drafted.draft.card;
@@ -487,6 +487,8 @@ describe("F8: schedule_create is bound to a one-time confirmation token", () => 
       projectRoot: root,
       defaults: () => ({ provider: "scripted", model: "m" }),
       host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) },
+      providerReportsUsage: () => true,
+      checkCredential: async () => ({ ok: true }),
     });
     const input = { name: "x", cadence: "hourly", prompt: "p", rates: { inputUsdPerMTok: 3, outputUsdPerMTok: 15 }, ceilingUsd: 1 };
     const confirmation = await create!.confirmation!(input);
@@ -682,7 +684,13 @@ describe("N2: granted programs run from an empty directory, and shims/scripts ar
     writeFileSync(wrapper, "#!/bin/sh\nexec /usr/bin/true \"$@\"\n", { mode: 0o755 });
     const drafted = await draftSchedule(
       { name: "x", cadence: "hourly", prompt: "p", provider: "scripted", model: "m", rates: RATES, ceilingUsd: 1, tools: ["gh.pr.list"], repos: ["a/b"] },
-      { projectRoot: root, host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) }, resolveProgram: () => wrapper, accountOf: async () => "me" },
+      {
+        projectRoot: root,
+        host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) },
+        resolveProgram: () => wrapper,
+        accountOf: async () => "me",
+        providerReportsUsage: () => true,
+      },
     );
     if (!drafted.ok) throw new Error(drafted.problems.join("; "));
     const pin = (drafted.draft.entry["action"] as { grants: { binDigests: Record<string, BinaryPin> } }).grants.binDigests["gh"]!;
