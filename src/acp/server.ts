@@ -501,8 +501,48 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         throw error;
       },
     ));
-  async function modelChoices(): Promise<readonly AcpModelChoice[]> {
-    if (listedChoices !== undefined) return listedChoices;
+  /**
+   * Sessions currently holding a configOptions built from the launch-only
+   * list because THEIR wait timed out (flow 288, T15). Drained by
+   * `armLateModelListNotify` once the specific listing they timed out on
+   * settles — successfully or not — and by `modelChoices` itself the moment a
+   * session's own next call sees the real list directly (nothing left to
+   * notify it about).
+   */
+  const pendingLateModelList = new Set<string>();
+  /**
+   * `sessionId` timed out waiting on `listPromise` (the SAME in-flight
+   * listing `modelChoices` raced against). If `listPromise` later resolves
+   * with a usable list, that session is told once, with a `session/update`
+   * carrying the complete `configOptions` — the one thing partial-list
+   * sessions are never otherwise told (flow 288 review gap). Nothing is sent
+   * when it fails (the next session simply asks again, as today), when the
+   * connection has closed or shutdown began by the time it settles, or when
+   * this session already got the full list some other way in the meantime
+   * (`pendingLateModelList.delete` below returns `false` and this is a
+   * no-op) — so a session is notified at most once per timeout.
+   */
+  function armLateModelListNotify(listPromise: Promise<readonly AcpModelChoice[]>, sessionId: string, method: string): void {
+    pendingLateModelList.add(sessionId);
+    listPromise.then(
+      () => {
+        if (!pendingLateModelList.delete(sessionId)) return;
+        if (stopping || registry.get(sessionId) === undefined) return;
+        void configOptionsFor(sessionId, method).then((configOptions) => {
+          sendUpdate(sessionId, { sessionUpdate: "config_option_update", configOptions });
+        });
+      },
+      () => {
+        // The late list failed too: send nothing, same as today.
+        pendingLateModelList.delete(sessionId);
+      },
+    );
+  }
+  async function modelChoices(sessionId: string, method: string): Promise<readonly AcpModelChoice[]> {
+    if (listedChoices !== undefined) {
+      pendingLateModelList.delete(sessionId);
+      return listedChoices;
+    }
     const source = options.models;
     if (source === undefined) return [launchChoice];
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -510,12 +550,14 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       timer = setTimeout(() => resolve("timeout"), modelListTimeoutMs);
     });
     try {
-      const outcome = await Promise.race([startListing(source).catch((error: unknown) => ({ error })), timedOut]);
+      const listPromise = startListing(source);
+      const outcome = await Promise.race([listPromise.catch((error: unknown) => ({ error })), timedOut]);
       if (outcome === "timeout") {
         options.logError(
           `acp: the model list did not arrive within ${modelListTimeoutMs}ms; this session is offered only the launch ` +
             `model (${launchChoice.value}), and the next session asks again`,
         );
+        armLateModelListNotify(listPromise, sessionId, method);
         return [launchChoice];
       }
       if ("error" in outcome) {
@@ -524,8 +566,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           `acp: listing models failed (${error instanceof Error ? error.message : String(error)}); ` +
             "only the launch model is offered, and the next session asks again",
         );
+        pendingLateModelList.delete(sessionId);
         return [launchChoice];
       }
+      pendingLateModelList.delete(sessionId);
       return outcome;
     } finally {
       clearTimeout(timer);
@@ -538,7 +582,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   }
 
   async function configOptionsFor(sessionId: string, method: string): Promise<AcpSessionConfigOption[]> {
-    const choices = await modelChoices();
+    const choices = await modelChoices(sessionId, method);
     return [acpModelConfigOption(choices, sessionModel(sessionId, method).choice)];
   }
 
@@ -569,7 +613,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     allowBareModelId: boolean,
     signal?: AbortSignal,
   ): Promise<SessionModel | "cancelled"> {
-    const choices = await modelChoices();
+    const choices = await modelChoices(sessionId, method);
     const choice = findAcpModelChoice(choices, requested, allowBareModelId);
     const available = choices.map((entry) => entry.value);
     if (choice === undefined) {
@@ -609,7 +653,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const value = acpModelValue(recorded.providerId, recorded.modelId);
     if (value === launchChoice.value) return;
     const seq = beginSwitch(sessionId);
-    const choice = findAcpModelChoice(await modelChoices(), value, false);
+    const choice = findAcpModelChoice(await modelChoices(sessionId, method), value, false);
     const built = choice === undefined ? "it is not among the models keryx can run here" : await bindChoice(choice, method);
     if (choice !== undefined && typeof built !== "string") {
       applySwitch(sessionId, seq, { choice, binding: built });
@@ -840,7 +884,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       case "model": {
         const current = sessionModel(sessionId, method);
         if (args.length === 0) {
-          const choices = await modelChoices();
+          const choices = await modelChoices(sessionId, method);
           const lines = choices.map(
             (choice) => `  ${choice.value === current.choice.value ? "*" : " "} ${choice.value}`,
           );

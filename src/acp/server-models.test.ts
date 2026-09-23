@@ -1,14 +1,19 @@
-// `runAcpServer` in-process, for the flow-288 T14 review findings on model
-// selection and slash commands whose evidence is an ORDER between the server
-// and a model source it cannot see into:
+// `runAcpServer` in-process, for the flow-288 T14/T15 review findings on
+// model selection and slash commands whose evidence is an ORDER between the
+// server and a model source it cannot see into:
 //
 //   1. a model list that never arrives cannot hold `session/new`;
 //   4c. `session/cancel` during `/model` leaves the model as it was;
 //   5. `session/load` after a restart continues on the recorded model;
-//   6. a later switch that fails leaves an earlier successful one in effect.
+//   6. a later switch that fails leaves an earlier successful one in effect;
+//   7. a session left on the launch-only list is told once the real list
+//      arrives late (T15) — never told when its own list was already
+//      complete, never told twice, and never told once the late list fails
+//      or the connection has closed.
 //
-// Every wait is on a frame or on the source being called — never a sleep. The
-// one timer is the server's own list bound, set short here.
+// Every wait is on a frame or on the source being called — never a sleep,
+// except the two short fixed waits in section 7 that confirm an update did
+// NOT arrive (a negative outcome nothing else can signal).
 
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync } from "node:fs";
@@ -53,12 +58,14 @@ const bindingFor = (choice: AcpModelChoice): AcpModelBinding => ({
   turnSettings: {},
 });
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: unknown) => void } {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((r) => {
-    resolve = r;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 type Harness = ReturnType<typeof harness>;
@@ -79,6 +86,20 @@ function modelOf(configOptions: unknown): { currentValue: string; values: string
   if (option === undefined) throw new Error(`no model option: ${JSON.stringify(configOptions)}`);
   return { currentValue: option.currentValue, values: option.options.map((entry) => entry.value) };
 }
+
+/** The `configOptions` carried by a `session/update` notification frame (untyped in `Frame`). */
+function configOptionsOf(frame: { params?: { update?: unknown } }): unknown {
+  return (frame.params?.update as { configOptions?: unknown } | undefined)?.configOptions;
+}
+
+/** All `config_option_update` frames sent for `sessionId` so far. */
+function configUpdatesFor(h: Harness, sessionId: string): unknown[] {
+  return h.frames
+    .filter((f) => f.params?.sessionId === sessionId && f.params?.update?.sessionUpdate === "config_option_update")
+    .map((f) => configOptionsOf(f));
+}
+
+const settle = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function prompt(h: Harness, sessionId: string, text: string): Promise<{ stopReason: unknown; text: string }> {
   const before = h.frames.length;
@@ -258,5 +279,73 @@ describe("5 — session/load after a restart", () => {
     } finally {
       await h.end();
     }
+  });
+});
+
+describe("7 — a late model list reaches sessions left on the launch-only one", () => {
+  test("a session offered only the launch model is told once, with the full list, when it arrives late", async () => {
+    const list = deferred<AcpModelChoice[]>();
+    const source: AcpModelSource = { choices: () => list.promise, bind: async (choice) => bindingFor(choice) };
+    const h = harness({ ...LAUNCH, provider: textProvider("test-model"), models: source, modelListTimeoutMs: 20 });
+    try {
+      const opened = await open(h, h.projectDir);
+      expect(opened.values).toEqual(["test/test-model"]);
+      list.resolve([acpModelChoice("test", "test-model"), acpModelChoice("test", "x")]);
+      const update = await h.waitFor(
+        (f) => f.params?.sessionId === opened.sessionId && f.params?.update?.sessionUpdate === "config_option_update",
+      );
+      const told = modelOf(configOptionsOf(update));
+      expect(told.values).toEqual(["test/test-model", "test/x"]);
+      // Told, not switched: the session's current model is unchanged.
+      expect(told.currentValue).toBe("test/test-model");
+      // Told exactly once — no second config_option_update follows.
+      await settle(20);
+      expect(configUpdatesFor(h, opened.sessionId)).toHaveLength(1);
+    } finally {
+      await h.end();
+    }
+  });
+
+  test("a session that already got the complete list is never told again", async () => {
+    const source: AcpModelSource = {
+      choices: async () => [acpModelChoice("test", "test-model"), acpModelChoice("test", "x")],
+      bind: async (choice) => bindingFor(choice),
+    };
+    const h = harness({ ...LAUNCH, provider: textProvider("test-model"), models: source });
+    try {
+      const opened = await open(h, h.projectDir);
+      expect(opened.values).toEqual(["test/test-model", "test/x"]);
+      await settle(20);
+      expect(configUpdatesFor(h, opened.sessionId)).toHaveLength(0);
+    } finally {
+      await h.end();
+    }
+  });
+
+  test("a late list that fails sends nothing", async () => {
+    const list = deferred<AcpModelChoice[]>();
+    const source: AcpModelSource = { choices: () => list.promise, bind: async (choice) => bindingFor(choice) };
+    const h = harness({ ...LAUNCH, provider: textProvider("test-model"), models: source, modelListTimeoutMs: 20 });
+    try {
+      const opened = await open(h, h.projectDir);
+      expect(opened.values).toEqual(["test/test-model"]);
+      list.reject(new Error("gateway down"));
+      await settle(20);
+      expect(configUpdatesFor(h, opened.sessionId)).toHaveLength(0);
+    } finally {
+      await h.end();
+    }
+  });
+
+  test("no update once the connection has closed", async () => {
+    const list = deferred<AcpModelChoice[]>();
+    const source: AcpModelSource = { choices: () => list.promise, bind: async (choice) => bindingFor(choice) };
+    const h = harness({ ...LAUNCH, provider: textProvider("test-model"), models: source, modelListTimeoutMs: 20 });
+    const opened = await open(h, h.projectDir);
+    expect(opened.values).toEqual(["test/test-model"]);
+    await h.end();
+    list.resolve([acpModelChoice("test", "test-model"), acpModelChoice("test", "x")]);
+    await settle(20);
+    expect(configUpdatesFor(h, opened.sessionId)).toHaveLength(0);
   });
 });

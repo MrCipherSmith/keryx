@@ -212,7 +212,11 @@ probed at `--base-url` only, as in the shell. The launch model is always in
 the list. Building the list touches the network, so it is started at launch
 and a new session waits for it at most 8 seconds: a list not ready by then is
 not waited for — that session offers only the launch model, stderr says so,
-and the next session asks again. Choose one
+and the next session asks again. If the list was still building, that session
+is not left with one entry forever: once it arrives, keryx sends that
+session's picker one `config_option_update` with the complete list (the model
+already running stays selected) — nothing arrives if the list fails, or if
+the session or connection has ended first. Choose one
 in the editor (`session/set_config_option`, answered with the complete,
 updated `configOptions`) or type `/model <value>` (a bare model id works when
 only one provider has it; keryx then sends `config_option_update`). The
