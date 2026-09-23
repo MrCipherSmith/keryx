@@ -1,7 +1,7 @@
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { createFlowService } from "../flow/service";
+import { acCriterionKnown, createFlowService, validateCriterionName } from "../flow/service";
 import { durableExternalCommentsGate } from "../flow/review-gate";
 import { flowStateSchema } from "../flow/schema";
 import { duplicateFlowIds } from "../flow/store";
@@ -853,19 +853,23 @@ async function runAc(args: string[]): Promise<void> {
     // itself makes exactly this same check internally (service.ts) to decide
     // whether to replace a line or append one, but its return value is a
     // plain `FlowState` with nowhere to report which one happened, so the
-    // caller re-asks the same read-only question rather than the service
-    // widening its return shape for one CLI print line.
+    // caller re-asks the same read-only question via `acCriterionKnown`
+    // (service.ts) rather than the service widening its return shape for one
+    // CLI print line, and rather than this file reaching past the facade into
+    // `../flow/store` itself (that direct import is exactly the
+    // `client-imports-core-internal` bypass `import-policy.live.test.ts`
+    // ratchets down — `flow` already has a facade in `service.ts`).
     const cwd = process.cwd();
-    let wasKnownCriterion = false;
-    if (criterion !== undefined) {
-      const { readAcCriteria, resolveFlowDir } = await import("../flow/store");
-      const dir = await resolveFlowDir(cwd, id);
-      wasKnownCriterion = (await readAcCriteria(cwd, dir)).includes(criterion.toUpperCase());
-    }
+    const wasKnownCriterion = criterion === undefined ? false : await acCriterionKnown({ cwd, id, criterion });
     await getService().acUpdate({ cwd, id, reason, criterion, text });
     if (criterion && text) {
+      // `validateCriterionName` again here — cheap and guaranteed not to
+      // throw a second time (the `acCriterionKnown` call above already ran
+      // it once and would have thrown by now if `criterion` were malformed)
+      // — so the printed label is the same trimmed-and-uppercased name that
+      // landed in the file, not the raw flag value.
       console.log(
-        `  ${style.green(symbols.ok)} ${style.bold(criterion.toUpperCase())} ${wasKnownCriterion ? "rewritten" : "appended"}; ` +
+        `  ${style.green(symbols.ok)} ${style.bold(validateCriterionName(criterion))} ${wasKnownCriterion ? "rewritten" : "appended"}; ` +
           `${style.dim("acceptance criteria re-frozen, prior confirmations cleared")}.`,
       );
     } else {

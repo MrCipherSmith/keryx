@@ -18,9 +18,12 @@
 // detected. It catches the failure that actually happened, not every possible
 // one.
 
+import path from "node:path";
 import { describe, expect, test } from "bun:test";
 import { CLI_ROUTES } from "../cli";
 import { triggerCommand } from "../commands/trigger";
+import { dispatchLockPath } from "../commands/trigger-dispatch";
+import { maintenanceLockPath } from "../lib/maintenance-lock";
 import { COMMAND_DESCRIPTORS, isAutoAllowable, listDescriptors } from "./command-registry";
 
 /**
@@ -203,5 +206,49 @@ describe("trigger run descriptor pinned against the trigger help", () => {
     expect(text).not.toMatch(/open-flow[^.]*flow-next[^.]*refuse/i);
     expect(text).not.toContain(".metaproject/data/trigger/.run.lock");
     expect(text.toLowerCase()).toContain("dispatch");
+  });
+
+  // Review of PR #658 caught a second false claim the tests above did not:
+  // the descriptor said EVERY action "briefly holds the project's shared
+  // maintenance lock … refuses when another run holds it". True for
+  // reconcile/rebuild/open-flow (`withTriggerRunLock` -> `withMaintenanceLock`
+  // in trigger.ts), but FALSE for a dispatching `flow-next`:
+  // `runFlowNextDispatch` (trigger-dispatch.ts) takes a PER-FLOW
+  // `dispatch-<flow>.lock` for the dispatch, and only briefly a separate
+  // `spend.lock` for the reservation — its own top-of-file comment says so
+  // outright ("The project's MAINTENANCE lock is not held across the agent
+  // run: the agent's own `keryx gdgraph build` must be able to take it"), so
+  // two dispatches on DIFFERENT flows run concurrently. Pinned against the
+  // real exported lock-path functions, not against a second hand-written
+  // string, so a rename of either lock file fails this instead of the
+  // descriptor silently going stale again.
+  test("the descriptor's lock claim is split per action: reconcile/rebuild/open-flow name the shared maintenance lock, a dispatching flow-next names the per-flow dispatch lock instead", () => {
+    const descriptor = COMMAND_DESCRIPTORS.find((entry) => entry.command === "trigger run");
+    expect(descriptor).toBeDefined();
+    const sideEffects = descriptor!.sideEffects ?? [];
+
+    const maintenanceLockName = path.basename(maintenanceLockPath("/tmp/keryx-pin-test"));
+    const dispatchLockName = path.basename(dispatchLockPath("/tmp/keryx-pin-test", "142"));
+    expect(maintenanceLockName).toBe("maintenance.lock");
+    expect(dispatchLockName).toBe("dispatch-142.lock");
+
+    const reconcileEffect = sideEffects.find((line) => line.startsWith("reconcile:"));
+    const rebuildEffect = sideEffects.find((line) => line.startsWith("rebuild:"));
+    const openFlowEffect = sideEffects.find((line) => line.startsWith("open-flow:"));
+    for (const effect of [reconcileEffect, rebuildEffect, openFlowEffect]) {
+      expect(effect).toBeDefined();
+      expect(effect).toContain(maintenanceLockName);
+    }
+
+    const dispatchEffect = sideEffects.find(
+      (line) => /flow-next/i.test(line) && /dispatch block/i.test(line) && !/no dispatch block/i.test(line),
+    );
+    expect(dispatchEffect).toBeDefined();
+    // Names the real per-flow lock (derived above from the actual export)...
+    expect(dispatchEffect).toContain("dispatch-<flow>.lock");
+    // ...and must NOT claim it takes (or refuses via) the shared maintenance
+    // lock — the exact false claim this test exists to catch.
+    expect(dispatchEffect).not.toContain(maintenanceLockName);
+    expect(dispatchEffect?.toLowerCase()).not.toMatch(/refuses[^.]*when another run[^.]*holds/);
   });
 });

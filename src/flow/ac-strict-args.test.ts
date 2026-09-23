@@ -307,3 +307,26 @@ test("`ac update --criterion <next unused> --text ...` prints \"appended\", not 
   expect(logs.join("\n")).toContain("AC2 appended");
   expect(logs.join("\n")).not.toContain("AC2 rewritten");
 });
+
+// Review of PR #658, finding 2: `runAc` decided "appended" vs "rewritten" by
+// `criterion.toUpperCase()` alone, with no `.trim()` — while the service's
+// own `validateCriterionName` (what `acUpdate` actually validates
+// `--criterion` with) trims first. A `--criterion " AC1 "` padded with
+// incidental whitespace therefore never matched any entry of the clean
+// `known` list (`"AC1"`, `"AC2"`, …) and was reported "appended" even though
+// it was about to REWRITE the existing AC1 line. Fixed by having
+// `acCriterionKnown` (service.ts) normalize through the same
+// `validateCriterionName` `acUpdate` uses, instead of re-deriving a second,
+// slightly different rule in the CLI layer.
+test('`ac update --criterion " AC1 " ...` (padded with whitespace) still reports "rewritten", matching the service\'s own trim+uppercase normalization', async () => {
+  const { id, acFile } = await freshFrozenFlow();
+  process.chdir(ROOT);
+
+  captureLogsAndErrors();
+  await flowCommand(["ac", "update", id, "--criterion", " AC1 ", "--text", "Rewritten text", "--reason", "why"]);
+
+  expect(process.exitCode).toBe(0);
+  expect(await readFile(acFile, "utf8")).toContain("- AC1: Rewritten text");
+  expect(logs.join("\n")).toContain("AC1 rewritten");
+  expect(logs.join("\n")).not.toContain("AC1 appended");
+});
