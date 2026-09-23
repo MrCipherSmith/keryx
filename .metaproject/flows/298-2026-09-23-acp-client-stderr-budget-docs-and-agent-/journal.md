@@ -145,3 +145,18 @@
   this session's `keryx ctx`/`gdgraph` tool calls, present before this
   round's `update` ran and unrelated to it; left untouched.
 - 2026-09-23T05:49:21.136Z - task-done: T5: Implement the frozen criteria
+- 2026-09-23T06:24:51.708Z - ac-confirmed: AC1: stderr budget: DEFAULT_MAX_STDERR_BYTES/DEFAULT_MAX_LINE_STREAM_STDERR_BYTES wired in acp-client.ts/supervise.ts; bun test src/harness/external/bounded.test.ts 10 pass (flow 298 review 2026-09-23-review-298, F-002 refuted) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T06:24:56.392Z - ac-confirmed: AC2: SKILL.md/templates.ts guidance verified accurate per-transport against agents-external.ts:369-375 and dispatch.ts:68,144-151; keryx skills verify --bundled 0 findings; bun test src/lib/templates.test.ts src/harness/external/dispatch.test.ts src/commands/agents-external*.test.ts 78 pass (review 2026-09-23-review-298, F-001 refuted) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T06:27:27.171Z - ac-confirmed: AC3: docs/docs/architecture.md 8-gate ordered list verified against src/flow/service.ts:784-923 (Gate1,2/2b,3/3b,4,5,6); matches exactly, caveat about code's own numbering is accurate (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T06:27:27.530Z - ac-confirmed: AC4: CI green on PR #660 (19/19 per coordinator); merge commit 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca on main; local: bun test across touched suites all pass, bun run typecheck clean per flow journal (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T06:27:35.226Z - task-done: T1: Collect remaining context
+- 2026-09-23T06:27:38.371Z - task-done: T2: Implement per plan
+- 2026-09-23T06:27:42.017Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-23T06:27:45.452Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-23T06:27:50.099Z - task-done: T6: Verification: CI green, keryx health run
+- 2026-09-23T06:28:00.727Z - completing: merged commit: 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca
+- 2026-09-23T06:28:00.787Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-23T06:28:00.788Z - completion-failed: review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against cca2d5d1c227a8eae9db0804a8d4a2e8c4f66732, but the completion names merged commit 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca, and cca2d5d1c227a8eae9db0804a8d4a2e8c4f66732 is neither contained in it (git reports it is not an ancestor) nor does it carry the same tree (round f5893c6d7e05bc1e5afdb79733c6bcb701a60a17, merged 7f4ac5a10b28d49610b9eb12d67386574720dd88). So the reviewers did not read what merged: the base moved under the branch, or the merge was edited. Re-running the round against the branch will not close this — ingest a round against the merged commit (`keryx review ingest … --head 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca`), or record the pull request on the flow so the round is compared against the PR head rather than against the merge. | health: no report; run `keryx health run` first
+- 2026-09-23T06:28:39.935Z - completing: merged commit: 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca
+- 2026-09-23T06:28:39.952Z - completion-attempt-recorded: attempt 2: passed
+- 2026-09-23T06:28:39.953Z - done: all gates passed

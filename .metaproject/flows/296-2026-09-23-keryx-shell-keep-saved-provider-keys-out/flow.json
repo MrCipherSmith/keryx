@@ -8,17 +8,38 @@
   "id": "296",
   "slug": "keryx-shell-keep-saved-provider-keys-out",
   "title": "keryx shell: keep saved provider keys out of MCP server environments",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-23T05:23:48.097Z",
-  "updatedAt": "2026-09-23T05:39:33.784Z",
+  "updatedAt": "2026-09-23T06:20:01.503Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:500ea358669c3f87b56c22b226a2da6e78c5d64d5823bd1d755d9b7c146d0c41",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-23T06:18:41.444Z",
+      "note": "declaredCredentialEnvKeys() (src/lib/shell-config.ts:276-282) unioned with savedCredentialEnvKeys() in buildMcpChildEnv (spawn-env.ts:378-380), configDir threaded through defaultConnect (runtime.ts:609). src/mcp-servers/declared-credentials.process.test.ts spawns a real server through both the keryx shell runtime path and the exact keryx mcp doctor call, asserting a custom-named saved key (none of KEY/TOKEN/SECRET) never reaches it. Ran: 38 pass/0 fail across declared-credentials.process.test.ts, spawn-env.test.ts, ac10-child-env.test.ts, shell-env.test.ts on worktree b399c79a (== main merge 6b5c7d2c). See flow-296 review 2026-09-23-review-296 F-001 (refuted)."
+    },
+    "AC2": {
+      "at": "2026-09-23T06:18:45.963Z",
+      "note": "spawn-env.test.ts 'the server's own env block hands over a saved-credential name deliberately' asserts an operator's explicit env entry wins over the by-name strip (checked pre- and post-follow-up fix; unaffected by declaredCredentialEnvKeys addition). bun test src/mcp-servers/spawn-env.test.ts: all pass on worktree b399c79a."
+    },
+    "AC3": {
+      "at": "2026-09-23T06:18:51.400Z",
+      "note": "acpMcpParentEnv removed from src/acp/session-mcp.ts; startAcpSessionMcp now passes options.env straight to defaultConnect, which builds the child env via the single buildMcpChildEnv in spawn-env.ts, same as keryx shell and keryx mcp doctor. isDeniedForMcpChild pattern strip untouched (spawn-env.test.ts pattern-strip tests still pass, 26+ cases). session-mcp.test.ts and mcp-servers.process.test.ts (ACP): 33 pass/0 fail on worktree b399c79a."
+    },
+    "AC4": {
+      "at": "2026-09-23T06:18:55.105Z",
+      "note": "docs/docs/cli-reference.md now documents both strips (shape-based and by-name) and explicitly names keryx mcp doctor and keryx shell --print/--no-tui/non-TTY as covered by the disk-declared half of the union (lines ~3777-3787 in the current worktree, verified by direct read)."
+    },
+    "AC5": {
+      "at": "2026-09-23T06:18:59.972Z",
+      "note": "PR #657 merged to main as squash commit 6b5c7d2c6c6e0658f5cd6f34b4487eddd84f6df7, head b399c79a5a149c97930b120bf2f9fb2d91ca948d. gh pr view 657: state=MERGED, all 18 status checks SUCCESS (deploy-to-pages SKIPPED as expected for a non-main-push run)."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/657"
   },
   "owner": {
     "value": "altsay",
@@ -31,7 +52,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -39,14 +60,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T5: context gathering and implementation were done as the single task T5 (see journal 2026-09-23T05:24:40 - T5 attempt through 05:39:33 - T5 done)."
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -54,14 +77,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T5: context gathering and implementation were done as the single task T5 (see journal 2026-09-23T05:24:40 - T5 attempt through 05:39:33 - T5 done)."
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -69,14 +94,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T5: tests were added as part of the single task T5, not a separate task — src/mcp-servers/spawn-env.test.ts, src/acp/mcp-servers.process.test.ts, src/mcp-servers/declared-credentials.process.test.ts (new), src/acp/session-mcp.test.ts, src/bus/ac10-child-env.test.ts, src/harness/process/shell-env.test.ts."
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +111,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Reviewed against merge commit 6b5c7d2c6c6e0658f5cd6f34b4487eddd84f6df7; one finding (F-001, major) raised and confirmed fixed by the follow-up commit. Recorded in ingested review 2026-09-23-review-296 (path .metaproject/flows/296-2026-09-23-keryx-shell-keep-saved-provider-keys-out/reviews/2026-09-23-review-296, status closed)."
     },
     {
       "id": "T5",
@@ -110,7 +139,7 @@
       "id": "T6",
       "title": "Verification: CI green, keryx health run",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -118,7 +147,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "CI on PR #657: gh pr view 657 shows state=MERGED, 19 status checks total, 18 SUCCESS and 1 SKIPPED (deploy to GitHub Pages, expected for a non-main-push run) - no failures. keryx health gate reported pass per the implementation journal entries (2026-09-23T06:05:00 and 06:15:00). Merged to main as squash commit 6b5c7d2c6c6e0658f5cd6f34b4487eddd84f6df7."
     }
   ],
   "history": [
@@ -154,6 +185,260 @@
       "at": "2026-09-23T05:39:33.784Z",
       "event": "task-done",
       "detail": "T5: Implement the frozen criteria"
+    },
+    {
+      "at": "2026-09-23T06:18:41.444Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: declaredCredentialEnvKeys() (src/lib/shell-config.ts:276-282) unioned with savedCredentialEnvKeys() in buildMcpChildEnv (spawn-env.ts:378-380), configDir threaded through defaultConnect (runtime.ts:609). src/mcp-servers/declared-credentials.process.test.ts spawns a real server through both the keryx shell runtime path and the exact keryx mcp doctor call, asserting a custom-named saved key (none of KEY/TOKEN/SECRET) never reaches it. Ran: 38 pass/0 fail across declared-credentials.process.test.ts, spawn-env.test.ts, ac10-child-env.test.ts, shell-env.test.ts on worktree b399c79a (== main merge 6b5c7d2c). See flow-296 review 2026-09-23-review-296 F-001 (refuted). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:18:45.963Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: spawn-env.test.ts 'the server's own env block hands over a saved-credential name deliberately' asserts an operator's explicit env entry wins over the by-name strip (checked pre- and post-follow-up fix; unaffected by declaredCredentialEnvKeys addition). bun test src/mcp-servers/spawn-env.test.ts: all pass on worktree b399c79a. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:18:51.400Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: acpMcpParentEnv removed from src/acp/session-mcp.ts; startAcpSessionMcp now passes options.env straight to defaultConnect, which builds the child env via the single buildMcpChildEnv in spawn-env.ts, same as keryx shell and keryx mcp doctor. isDeniedForMcpChild pattern strip untouched (spawn-env.test.ts pattern-strip tests still pass, 26+ cases). session-mcp.test.ts and mcp-servers.process.test.ts (ACP): 33 pass/0 fail on worktree b399c79a. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:18:55.105Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: docs/docs/cli-reference.md now documents both strips (shape-based and by-name) and explicitly names keryx mcp doctor and keryx shell --print/--no-tui/non-TTY as covered by the disk-declared half of the union (lines ~3777-3787 in the current worktree, verified by direct read). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:18:59.972Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: PR #657 merged to main as squash commit 6b5c7d2c6c6e0658f5cd6f34b4487eddd84f6df7, head b399c79a5a149c97930b120bf2f9fb2d91ca948d. gh pr view 657: state=MERGED, all 18 status checks SUCCESS (deploy-to-pages SKIPPED as expected for a non-main-push run). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:19:18.619Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/657 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-23T06:19:22.088Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T06:19:25.192Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T06:19:29.365Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T06:19:34.885Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-23T06:19:39.581Z",
+      "event": "task-done",
+      "detail": "T6: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T06:19:43.759Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T06:19:48.033Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-23T06:19:48.035Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#657 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__657.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 657 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own."
+    },
+    {
+      "at": "2026-09-23T06:19:57.235Z",
+      "event": "completing",
+      "detail": "merged commit: 6b5c7d2c6c6e0658f5cd6f34b4487eddd84f6df7"
+    },
+    {
+      "at": "2026-09-23T06:20:01.500Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-23T06:20:01.503Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-23T06:18:41.444Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:500ea358669c3f87b56c22b226a2da6e78c5d64d5823bd1d755d9b7c146d0c41"
+    },
+    {
+      "at": "2026-09-23T06:18:45.963Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:500ea358669c3f87b56c22b226a2da6e78c5d64d5823bd1d755d9b7c146d0c41"
+    },
+    {
+      "at": "2026-09-23T06:18:51.400Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:500ea358669c3f87b56c22b226a2da6e78c5d64d5823bd1d755d9b7c146d0c41"
+    },
+    {
+      "at": "2026-09-23T06:18:55.105Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:500ea358669c3f87b56c22b226a2da6e78c5d64d5823bd1d755d9b7c146d0c41"
+    },
+    {
+      "at": "2026-09-23T06:18:59.972Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:500ea358669c3f87b56c22b226a2da6e78c5d64d5823bd1d755d9b7c146d0c41"
+    },
+    {
+      "at": "2026-09-23T06:20:01.502Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:500ea358669c3f87b56c22b226a2da6e78c5d64d5823bd1d755d9b7c146d0c41",
+      "headCommit": "6b5c7d2c6c6e0658f5cd6f34b4487eddd84f6df7"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-23T06:19:48.033Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "5 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "6b5c7d2c6c6e0658f5cd6f34b4487eddd84f6df7 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "6b5c7d2c6c6e0658f5cd6f34b4487eddd84f6df7 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "6 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#657 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__657.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 657 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:500ea358669c3f87b56c22b226a2da6e78c5d64d5823bd1d755d9b7c146d0c41"
+    },
+    {
+      "at": "2026-09-23T06:20:01.500Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "5 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "6b5c7d2c6c6e0658f5cd6f34b4487eddd84f6df7 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "6b5c7d2c6c6e0658f5cd6f34b4487eddd84f6df7 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "6 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:500ea358669c3f87b56c22b226a2da6e78c5d64d5823bd1d755d9b7c146d0c41"
+    }
+  ],
+  "merged": {
+    "commit": "6b5c7d2c6c6e0658f5cd6f34b4487eddd84f6df7",
+    "ref": "origin/main",
+    "at": "2026-09-23T06:20:01.502Z"
+  }
 }

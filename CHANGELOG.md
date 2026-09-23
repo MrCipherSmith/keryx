@@ -3,6 +3,148 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.156] — 2026-09-23
+
+Eight flows, the day after 0.2.155: keryx can now schedule its own unattended
+turns instead of only reacting to triggers, and the record around unattended
+work gets three separate hardenings. `keryx schedule` turns "check this every
+4 hours" into an operator-confirmed OS timer — no daemon, a signed
+per-machine store, and a scheduled agent's own shell can now be limited to an
+`allowlist` of domains instead of only `off`/`full`. A flow can require a
+terminal confirmation token before it completes, and a flow stuck in
+`completing` is no longer stranded. `keryx governance report` now shows what
+an unattended run was denied and attributes trigger spend per flow. The TUI
+gains Governance, Triggers and Schedules sections with their own modals, and
+`keryx shell` stops handing an MCP server the provider keys it never asked
+for.
+
+### Added
+- **`keryx schedule add|list|show|pause|resume|run|remove` — recurring or
+  one-off unattended agent tasks, confirmed by the operator, not the
+  agent.** `add` prints a confirmation card (cadence and next runs, prompt,
+  runner and budget, network mode, every granted tool with the binary and
+  account it acts as) and writes nothing until you type `y` or pass `--yes`
+  at a real terminal — `--yes` from inside an agent's own shell
+  (`KERYX_TOOL_CALL=1`) is refused, the same as `pause`/`resume`/`remove`.
+  Cadence takes a 5-field cron expression or a phrase (`every N hours`,
+  `daily at HH:MM`, `weekdays at HH:MM`, …); keryx installs the OS scheduler
+  it finds — systemd `--user`, launchd, or cron — and runs no daemon of its
+  own. `/schedule` (shell) and the `schedule_create` tool propose the same
+  card for an agent to relay; only the operator can confirm it. Each
+  confirmed schedule is signed with an HMAC keyed by a per-machine secret
+  outside the project (`schedule-hmac.key`, 0600); `resume` checks the
+  signature and every granted binary's pin before re-enabling a timer, and a
+  schedule drafted from inside a keryx session is refused. Cron-to-systemd
+  translation now emits a real `OnCalendar=` line instead of a commented
+  placeholder. **Honest limits**, in the [scheduled-tasks
+  skill](src/gdskills/bundled/skills/platform/scheduled-tasks/SKILL.md) and
+  `docs/docs/limitations.md`: the hardened unattended sandbox is Linux-only,
+  so a macOS schedule runs in `ask` mode with granted tools only and no OS
+  sandbox at all; the scheduler-control floor is text analysis over shell
+  commands, so a same-user shell already in `trust` mode can in principle
+  spell around it (the terminal requirement, the `KERYX_TOOL_CALL` refusal,
+  and the per-machine signature are the actual gates, not the text check);
+  and a machine that is off or asleep misses runs — systemd/launchd catch up
+  once, cron does not. (#664, flow 295)
+- **`network: "allowlist"` for a schedule's own shell — Linux only.** Off by
+  default (`off`, or `full` for the host's whole network), `allowlist`
+  restricts only the scheduled agent's `shell_exec` commands to the
+  `--domain` names you grant, at host **and** port (443/80 by default),
+  through a loopback proxy keryx runs outside the sandbox and reaches over a
+  unix socket from an in-sandbox forwarder — the model call and every
+  granted tool already run outside the sandbox, unaffected by this grant. A
+  non-Linux schedule refuses `allowlist` with the reason rather than
+  silently falling back to `off` or `full`. Named honestly: DNS resolves
+  once outside the sandbox and the proxy connects to the address it checked
+  (closes rebinding, but a domain that legitimately changes IP is resolved
+  fresh each run); HTTPS is a blind `CONNECT` relay with no TLS termination,
+  so only the CONNECT authority is checked, not the SNI or an in-tunnel
+  `Host`; a tool that ignores `HTTP_PROXY`/`HTTPS_PROXY` gets no network at
+  all rather than falling back to the host's. `allowlist` for a `flow-next`
+  trigger dispatch (as opposed to a schedule) is not implemented in this
+  release — a follow-up. (#665, flow 301)
+- **A flow can require a terminal confirmation token before it
+  completes.** `flow init --require-confirmation` (or
+  `completion.require_confirmation: true`) adds a gate: `keryx flow complete`
+  now also needs `--confirm-token <token>` from `keryx flow confirm <id>`, a
+  short-lived, single-use token minted only by a typed challenge in an
+  actual terminal. **Named honestly** (see
+  `docs/decisions/keryx-harness/TM-03-terminal-confirmation-token.md`): the
+  token proves an interactive step ran outside the agent's tool roster,
+  within its TTL, for this criteria checksum — it is friction against an
+  agent completing its own flow unnoticed, not cryptographic proof a human
+  typed it, and it carries the same limits as every other identity this
+  release records as a claim. `keryx flow recover <id> --reason "<why>"`
+  moves a flow left stranded in `completing` — by a crash or an interrupted
+  attempt, never a normal gate failure — back to `in-progress`, closing the
+  one status this release found with no way out. (#661, flow 299)
+- **`keryx governance report` shows unattended-run denials and attributes
+  dispatch spend per flow.** Each trigger run's record now carries what an
+  unattended call was denied and why, surfaced next to that run's line in
+  the report; the project-level trigger-spend total gains a per-flow
+  breakdown that is explicitly **not additive** — it is shown for context
+  under each flow, and the project-wide figure is not the sum of the flow
+  figures next to it, so the report says so rather than inviting the wrong
+  arithmetic. (#659, flow 297)
+- **The external-agent stderr budget is now bounded on the ACP path, and
+  raised on the line-stream path.** `keryx acp`'s driven agent and `keryx
+  agents external run` cap stderr at 16 MiB by default (a per-agent
+  `maxStderrBytes` overrides it); the `claude-cli`/`codex-cli` line-stream
+  supervisor's own stderr-read budget is raised to 256 MiB, keeping its
+  first-16-KiB/last-48-KiB-of-recorded-output shape. Past the cap the run
+  fails with a named reason, not a silent truncation. The flow-orchestrator
+  and flow skills gain unattended-dispatch guidance (what a trigger's
+  `dispatch` block and `agents external run` actually control, and what
+  they do not), and `docs/docs/architecture.md` gains the sandbox/allowlist
+  gate diagram. (#660, flow 298)
+- **The TUI gains Governance, Triggers and Schedules sections, each with its
+  own modal.** Governance: five states (no report yet, unreadable, running,
+  last report, failed); clicking the row or `/governance` runs the report in
+  the background and opens the modal on the result. Triggers: `/triggers`
+  (or a click) opens Overview, Grants and Runs, and a run-now action starts
+  the trigger as a detached child with its own per-run log rather than
+  blocking the TUI. Schedules: `/schedules` (or a click) opens Overview,
+  Grants, Runs and Report for a confirmed schedule. Every reservation the
+  three sections show for an open run is now named consistently instead of
+  drifting between panels. (#662, #663, flow 300)
+- **Command registry descriptors corrected and added, and `--help` is rich
+  for `flow`, `trigger`, `serve-mcp` and `governance`.** The 0.2.155 flows
+  shipped real behavior their own descriptors described only loosely, or not
+  at all: `trigger run` no longer claims an `open-flow`/`flow-next` refusal
+  it does not perform, and its side effects no longer name the retired
+  single `.run.lock` path (now per-action lock paths). New commands from
+  those flows (`trigger resolve`, `flow owner set`, `agents external
+  list/probe`, and this release's `schedule`/`flow confirm`/`flow recover`)
+  each carry a descriptor or a documented, reasoned exclusion; a coverage
+  test pins the registry against the live `--help` output so the two cannot
+  drift unnoticed again. (#658, flow 294)
+
+### Fixed
+- **`keryx shell` no longer passes saved or declared provider keys to its
+  own MCP servers.** A locally spawned MCP server inherited the shell's full
+  environment, including every provider API key the shell itself holds,
+  whether or not that server had any legitimate use for one; the server's
+  environment is now built explicitly from its own declared `env`, never
+  inherited wholesale. (#657, flow 296)
+- **`acp:`-tagged sessions and `-c` stop colliding.** A session opened by
+  `keryx acp` is now tagged `acp:` in the session store, and `keryx shell
+  -c` no longer picks one up and continues it as if it were an interactive
+  session — the two entry points now stay on their own session lines.
+  (flow 300)
+- **An unattended run's own time limit now stops the command still
+  running**, rather than only marking the attempt failed while the process
+  kept going past its bound. (flow 301)
+- **A crashed allowlist proxy no longer takes the port down with it.** The
+  loopback proxy's port is now released and rebindable after a crash instead
+  of staying claimed by a dead process. (flow 301)
+
+### Security
+- **A scheduled agent's grants stay pinned to what the operator
+  confirmed.** Every granted tool binary (and any `#!` wrapper) is pinned at
+  confirmation time and re-checked at `resume`; a pin that no longer matches
+  refuses the run rather than executing whatever now sits at that path.
+  (flow 295)
+
 ## [0.2.155] — 2026-09-23
 
 Seven flows landed the day after 0.2.154 first reached a real editor and a

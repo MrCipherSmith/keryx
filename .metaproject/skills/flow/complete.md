@@ -17,12 +17,20 @@ whose status is `implemented`.
    confirmed + checksum intact; merged PR exists with green checks; code-health
    gate passes; and, for a flow that opted in (`flow init --owner` set the
    flag), an owner recorded - fails naming
-   `keryx flow owner set <id> --owner "<name>" --reason "<why>"` if not. On
-   pass this also appends a completion signature.
+   `keryx flow owner set <id> --owner "<name>" --reason "<why>"` if not. A
+   flow created with `--require-confirmation` needs one more gate: run
+   `keryx flow confirm <id>` in your own terminal first (a typed challenge
+   mints a short-lived, single-use token - it proves an interactive step ran
+   outside the agent's tool roster, not that a human did), then pass it as
+   `--confirm-token <token>`. On pass this also appends a completion
+   signature.
 4. Gates fail -> flow auto-returns to in-progress with fix notes:
    - small fixes: run a fix agent, then re-run the review/fix loop from step 2;
    - large fixes: describe what is wrong in the journal and relaunch the
      implementor/orchestrator against the updated plan.
+   - a flow left stuck in `completing` (a crash or an interrupted attempt,
+     never a normal gate failure) is moved back with
+     `keryx flow recover <id> --reason "<why>"`.
 5. Gates pass -> flow is done:
    - source was an issue: `keryx flow complete <id> --comment` posts a
      short, factual summary comment to the issue;

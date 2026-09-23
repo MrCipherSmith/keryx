@@ -127,11 +127,18 @@ tracker reporting.
 - \`keryx flow ac confirm|update ...\` (\`ac update\` also takes \`--criterion ACn
   --text "<criterion>"\` to rewrite/append one line)
 - \`keryx flow implemented <id> --pr <url>\`
-- \`keryx flow complete <id> [--comment] [--signed-by "<name>"]\`
+- \`keryx flow complete <id> [--comment] [--signed-by "<name>"] [--confirm-token <token>]\`
+- \`keryx flow confirm <id> [--merged]\` (mints a short-lived, single-use
+  terminal confirmation token; only for a flow created with
+  \`flow init --require-confirmation\` or \`completion.require_confirmation:
+  true\`)
+- \`keryx flow recover <id> --reason "<why>"\` (moves a flow stuck in
+  \`completing\` back to \`in-progress\`)
 - \`keryx flow block|unblock <id>\` / \`flow check\`
 
 Spend, confirmations, signatures and gate outcomes across flows:
-\`keryx governance report\`.
+\`keryx governance report\`. Recurring or one-off unattended agent turns:
+\`keryx schedule add|list|show|pause|resume|run|remove\`.
 
 ## Entry
 
@@ -190,14 +197,27 @@ the work.
 - \`flow init --owner "<name>"\` / \`flow owner set <id> --owner "<name>" --reason
   "<why>"\` names who is accountable; never inferred. Opted-in flows fail
   \`flow complete\` while no owner is set.
+- \`flow init --require-confirmation\` (or \`completion.require_confirmation:
+  true\`) makes \`flow complete\` also need \`--confirm-token <token>\` from
+  \`keryx flow confirm <id>\` — a short-lived, single-use token minted by a
+  typed challenge in a terminal. It proves an interactive step ran outside the
+  agent's tool roster, not that a human ran it. A flow stuck in \`completing\`
+  (never a normal gate failure) moves back with \`flow recover <id> --reason
+  "<why>"\`.
 
-## Unattended dispatch (triggers, and \`agents external run\`)
+## Unattended dispatch (triggers, schedules, and \`agents external run\`)
 
 A flow can advance without a human turn. \`keryx trigger list\` shows declared
 entries; \`status [<name>]\` shows the last recorded outcome; \`run <name>\`
 performs one pass by hand; \`schedule <name>\` prints the cron/systemd line for
 an external scheduler (keryx runs no daemon of its own); \`install\`/
-\`uninstall\` manage the git hook blocks for event-fired entries. A \`flow-next\`
+\`uninstall\` manage the git hook blocks for event-fired entries.
+\`keryx schedule add|list|show|pause|resume|run|remove\` (or \`/schedule\` in the
+shell) is the operator's own route to a recurring or one-off unattended agent
+turn — always confirmed at a terminal, never created from an agent's shell.
+Its \`network: allowlist\` mode (Linux only) restricts the agent's own shell to
+named domains; it never widens what a granted tool or the model call reaches.
+A \`flow-next\`
 action without a \`dispatch\` block only REPORTS the flow's next task; with one
 it DISPATCHES a keryx agent, unattended, to work that task in a throwaway
 worktree and record exactly one closing fact (\`task done\` only on a green
@@ -264,8 +284,10 @@ line is \`STATUS:\` (\`.metaproject/rules/core/subagent-status-protocol.md\`). S
 1. Create the package: \`keryx flow init --issue <url>\` or
    \`--title "<problem>"\`, adding \`--owner "<name>"\` when the accountable human
    is already known (never inferred; set later with \`flow owner set\` if not).
-   The CLI scaffolds the package and collects deterministic context (issue
-   body, memory search, gdgraph artifacts, health).
+   Add \`--require-confirmation\` when completion should need a terminal
+   confirmation token (\`flow confirm\`), not only the CLI gates. The CLI
+   scaffolds the package and collects deterministic context (issue body,
+   memory search, gdgraph artifacts, health).
 2. Enrich context - dispatch \`context-collector\` with \`context_refs\` to the
    flow package; it writes compact findings, not raw dumps. For an issue also
    dispatch \`issue-analyzer\`; for a described feature, \`feature-analyzer\`.
@@ -350,12 +372,20 @@ whose status is \`implemented\`.
    confirmed + checksum intact; merged PR exists with green checks; code-health
    gate passes; and, for a flow that opted in (\`flow init --owner\` set the
    flag), an owner recorded - fails naming
-   \`keryx flow owner set <id> --owner "<name>" --reason "<why>"\` if not. On
-   pass this also appends a completion signature.
+   \`keryx flow owner set <id> --owner "<name>" --reason "<why>"\` if not. A
+   flow created with \`--require-confirmation\` needs one more gate: run
+   \`keryx flow confirm <id>\` in your own terminal first (a typed challenge
+   mints a short-lived, single-use token - it proves an interactive step ran
+   outside the agent's tool roster, not that a human did), then pass it as
+   \`--confirm-token <token>\`. On pass this also appends a completion
+   signature.
 4. Gates fail -> flow auto-returns to in-progress with fix notes:
    - small fixes: run a fix agent, then re-run the review/fix loop from step 2;
    - large fixes: describe what is wrong in the journal and relaunch the
      implementor/orchestrator against the updated plan.
+   - a flow left stuck in \`completing\` (a crash or an interrupted attempt,
+     never a normal gate failure) is moved back with
+     \`keryx flow recover <id> --reason "<why>"\`.
 5. Gates pass -> flow is done:
    - source was an issue: \`keryx flow complete <id> --comment\` posts a
      short, factual summary comment to the issue;

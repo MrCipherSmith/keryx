@@ -199,6 +199,9 @@ export function renderIndexMarkdown({
     enableTasks
       ? "| Report spend, confirmations, signatures, or gate outcomes across flows | `governance` | `keryx governance report` | Read-only: never re-runs a gate or calls a model. |"
       : "",
+    enableTasks
+      ? "| Put a recurring or one-off task on a schedule, or drive it unattended | `schedule` | `keryx schedule --help`; `/schedule` (shell); `skills/gdskills/platform/scheduled-tasks/SKILL.md` | Always confirmed at a terminal by the operator; never created from an agent's own shell. `network: allowlist` (Linux only) restricts only the agent's own shell to named domains. |"
+      : "",
     "| Configure, run, or inspect a dispatching `flow-next` trigger, or drive one external ACP/CLI agent directly | `trigger` / `agents external` | `keryx trigger --help`; `keryx agents external --help`; docs/docs/guides/acp-client.md | Unattended: `ask` is read-only, `trust` needs the Linux sandbox, everything that would ask is denied and recorded — the unattended floor, not the boundary. |",
   ].filter(Boolean).join("\n");
 
@@ -399,6 +402,9 @@ export function renderIndexGateMarkdown({
     enableTasks ? "| current work state | `keryx flow status` |" : "",
     enableTasks
       ? "| spend, confirmations, signatures, gate outcomes across flows | `keryx governance report` |"
+      : "",
+    enableTasks
+      ? "| put a recurring or one-off unattended agent turn on a schedule | `keryx schedule add/list/show/pause/resume/run/remove` |"
       : "",
     enableSecurity ? "| secrets, PII, prompt injection | `keryx security check-output` |" : "",
     enableGdskills ? "| implement, review, refactor, plan | `skills/catalog.md` |" : "",

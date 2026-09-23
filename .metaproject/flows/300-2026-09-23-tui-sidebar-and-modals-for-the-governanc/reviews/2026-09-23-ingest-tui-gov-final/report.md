@@ -1,0 +1,556 @@
+# Review — flow 300, TUI governance and triggers sidebar (PR #662)
+
+Adversarial review of flow 300. The first pass read the feature commit ddfcfc9d and
+raised F1–F15; the second read the fixes be73b286 and b047bbd2 and raised N1–N8; a
+third read PR #663 (N7/N8 fixes, squash-merged as e92b2b8d) and raised no new defect.
+Every fixed finding was re-verified against its fixing commit and the merged tree; N1
+by re-running the symlink probe on an extracted d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff tree, F2 by a bun --compile probe,
+N8 by a ledger-lifecycle probe on an extracted e92b2b8d tree. PR #662 was squash-merged
+into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff (CI 18/18 green at 2889ff55639f8485dfe51b9642d14cf6da0b6f69); PR #663 as e92b2b8d. This round carries every finding, all fixed at or before this head.
+This round's head: e92b2b8d666b807e6f63cbee92692dc8665b8f71.
+
+```keryx:findings
+[
+  {
+    "id": "F1",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "major",
+    "file": "src/tui/trigger-ledger.test.ts",
+    "quote": "attributedToFlowsUsd",
+    "problem": "CI typecheck-and-tests failed with TS2769 on an optional-property literal in the spend expectation.",
+    "impact": "AC12 (CI green) not met; the branch could not merge.",
+    "suggested_fix": "Drop the undefined key or assert with toMatchObject.",
+    "evidence": "CI log of typecheck-and-tests on ddfcfc9d: src/tui/trigger-ledger.test.ts(75,30) TS2769.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff the expectation at src/tui/trigger-ledger.test.ts:82 carries the attributed field; typecheck-and-tests is green on #662 and bunx tsc --noEmit is clean locally. Fixing commit be73b2865b56da1ea17976e7c5e85de0a0d718b8; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit be73b2865b56da1ea17976e7c5e85de0a0d718b8 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/trigger-ledger.test.ts spend expectation (the only literal carrying attributedToFlowsUsd: undefined)"
+      ],
+      "enumeration_method": "the CI typecheck log listed exactly one TS2769 error; bunx tsc --noEmit on the fixed tree is clean, so no other site holds the shape."
+    }
+  },
+  {
+    "id": "F2",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "major",
+    "file": "src/trigger/schedule.ts",
+    "quote": "resolveKeryxInvocation",
+    "problem": "resolveKeryxInvocation returned argv[1] as scriptPath; in a bun --compile binary that is /$bunfs/root/<name>, so run-now spawned `keryx /$bunfs/root/keryx trigger run X` and every argument shifted by one.",
+    "impact": "Run-now (and printed cron/systemd lines) never ran the trigger on standalone-binary installs.",
+    "suggested_fix": "Reuse keryxSelfCommand's rule: a bunfs/~BUN entry means argv is [execPath] alone.",
+    "evidence": "Compiled probe printed child argv [\"bun\",\"/$bunfs/root/argvprobe\",\"/$bunfs/root/argvprobe\",\"child\",\"x\"].",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/lib/self-invocation.ts:13 isCompiledBinaryEntry; src/trigger/schedule.ts:72 returns {execPath} for a compiled entry; invocationArgv used by run-now, cron and ExecStart. Re-ran a bun build --compile probe calling the real resolveKeryxInvocation()/triggerRunArgv(): child argv = [\"trigger\",\"run\",\"nightly\"] compiled and from source. Test src/tui/trigger-run-now.test.ts 'AC6: the argv of a compiled binary is the binary alone' passes at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    },
+    "class_scope": {
+      "sites": [
+        "src/trigger/schedule.ts resolveKeryxInvocation (run-now argv, cron line, systemd ExecStart)",
+        "src/harness/tool/builtin/metaproject-tools.ts keryxSelfCommand (already handled bunfs; now shares isCompiledBinaryEntry)"
+      ],
+      "enumeration_method": "searched src for process.argv[1] / Bun.main self-invocation sites; these are the two ways keryx re-invokes itself, and both now go through src/lib/self-invocation.ts."
+    }
+  },
+  {
+    "id": "F3",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "major",
+    "file": "src/tui/triggers-panel.ts",
+    "quote": "toFixed(2)",
+    "problem": "Sidebar spend used toFixed(2) and every `reserved` ledger record counted as a run with cost not recorded.",
+    "impact": "One fully costed dispatch showed `spent $0.00 · 1 not recorded`; the governance report had the same miscount.",
+    "suggested_fix": "Format with the report's usd(); do not count a closed reservation hold as a run.",
+    "evidence": "Probe: reserved + closing ok ($0.004) -> `spent $0.00 · 1 not recorded`.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/governance/spend.ts:132 skips a reserved record once closed (by its run or reservation-resolved); sidebar uses governance usd(). Probe at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff: closed -> `spent $0.004`, 0 not recorded, runsTotal 1; resolved -> resolution record is the run; open/killed -> 1 not recorded; attributedToFlowsUsd still equals the flow slice (flow 297 'included, not additive' preserved). Test 'review F3: … $0.004 is never rounded away to $0.00' passes. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    },
+    "class_scope": {
+      "sites": [
+        "src/governance/spend.ts summarizeProjectTriggerSpend (project figure, governance markdown and TUI)",
+        "src/tui/triggers-panel.ts formatTriggerSpend (sidebar and modal list header)"
+      ],
+      "enumeration_method": "every consumer of ProjectTriggerSpend was listed with a search for runsWithCostNotRecorded/runsTotal/ProjectTriggerSpend: governance report.ts, aggregate.ts, trigger-ledger.ts, triggers-panel.ts; the flow view (collectFlowDispatch) already excluded reserved records."
+    }
+  },
+  {
+    "id": "F4",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "major",
+    "file": "src/tui/trigger-run-now.ts",
+    "quote": "child.kill(\"SIGTERM\")",
+    "problem": "Shell exit sent SIGTERM to an in-flight `keryx trigger run`, which has no handler.",
+    "impact": "A confirmed dispatch was killed silently, leaving an open reservation, open task attempt, worktree and orphaned grandchildren.",
+    "suggested_fix": "Do not kill the child; detach it and tell the operator on exit.",
+    "evidence": "trigger-run-now.ts dispose() iterated children with kill('SIGTERM') at ddfcfc9d.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff src/tui/trigger-run-now.ts:78/304 spawns detached (own session) with stdio [ignore, logfd, logfd] and child.unref() at :310; dispose never signals; tui-shell.ts prints describeDetachedRuns(liveOps.inFlightRuns()). Probe: child pid=pgid=sid distinct from the TUI's, stdin EOF. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/trigger-run-now.ts dispose (the only place the TUI signalled a child it did not own the lifetime of)"
+      ],
+      "enumeration_method": "searched src/tui for kill( / SIGTERM on children started by flow 300; run-now is the only detached-worthy child (the governance runner is in-process)."
+    }
+  },
+  {
+    "id": "F5",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/trigger-run-now.ts",
+    "quote": "process.env",
+    "problem": "The run-now child inherited the shell's KERYX_SESSION_PROVIDER/MODEL.",
+    "impact": "Child tools resolving the caller session anchored on the TUI's model, unlike a terminal `keryx trigger run`.",
+    "suggested_fix": "Drop KERYX_SESSION_* from the child env.",
+    "evidence": "exportCallerSession writes into process.env (src/commands/shell.ts); child env was process.env.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/trigger-run-now.ts:86 runNowChildEnv drops KERYX_SESSION_*; probe with KERYX_SESSION_MODEL=leak printed an empty value in the child. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "F6",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/trigger-run-now.test.ts",
+    "quote": "triggerRunArgv",
+    "problem": "Tests did not prove AC6/AC8 wiring: a PATH-keryx revert of run() passed; AC8 test wired handleCommand itself; AC10 used stand-in rows.",
+    "impact": "A regression to `keryx` on PATH or broken shell routing would ship green.",
+    "suggested_fix": "Assert the default spawn command; test the shell's routing function.",
+    "evidence": "trigger-run-now.test.ts only checked triggerRunArgv; ops-sidebar.test.ts wire() called ops.handleCommand directly.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff: src/tui/trigger-run-now.test.ts:102 'AC6 (review F6): with the DEFAULT invocation, run() spawns this process's own interpreter + entry' asserts the fake spawn's command; tui-shell.ts:6223/6578 route through routeOpsCommand (src/tui/ops-sidebar.ts:105), which the tests call; the AC10 stand-in limit is journaled and the darwin pty smoke ran green in CI. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "F7",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/governance-panel.ts",
+    "quote": "projectGovernanceRow",
+    "problem": "`failed` outranked a newer stored report, and a `done` run kept showing `last report` after its report was deleted.",
+    "impact": "Stale sidebar state after work done by another process.",
+    "suggested_fix": "Let a stored report newer than the failure clear it; prefer the stored read after a re-read.",
+    "evidence": "Probe: present report + failed run -> `failed — click to retry`; absent + done -> `last report …`.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/governance-panel.ts:166 compares stored generatedAt with the failure time; tests 'review F7: a stored report NEWER than the failure clears failed' and 'review F7: after the re-read the STORED report wins …; a deleted report reads as no report' pass at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "F8",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/governance/report.ts",
+    "quote": "writeFile(markdown",
+    "problem": "Governance artifacts were written non-atomically, md before json.",
+    "impact": "A TUI run racing a CLI run could leave mismatched md/json; a watcher tick could read truncated JSON.",
+    "suggested_fix": "Temp + rename, json last.",
+    "evidence": "report.ts writeGovernanceArtifacts used writeFile twice at ddfcfc9d.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/governance/report.ts:283 writeFileAtomic for json after md at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "F9",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/triggers-inspector.ts",
+    "quote": "initialName",
+    "problem": "`/triggers <typo>` opened the first trigger's detail silently.",
+    "impact": "`r` `y` could run a different trigger than the one typed.",
+    "suggested_fix": "Stay on the list and say the name was not found.",
+    "evidence": "reload().then selected index only when found; initialTab was detail.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/triggers-inspector.ts:400 sets the list tab and `no trigger named \"…\"`; test 'review F9' passes at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "F10",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/triggers-inspector.ts",
+    "quote": "split(\"\\n\")[0]",
+    "problem": "Only the first wrapped status line showed; the arm prompt omitted ceiling/NET.",
+    "impact": "Refusal reasons and the confirm hint were truncated on narrow panels.",
+    "suggested_fix": "Two status rows; posture in the arm prompt.",
+    "evidence": "paint() used wrapLines(statusText).split('\\n')[0].",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/triggers-inspector.ts:161 STATUS_ROWS=2 and :168 armPrompt names provider/model, ceiling and NETWORK ON; test 'review F10' passes at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "F11",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/triggers-inspector.ts",
+    "quote": "onKeypress",
+    "problem": "Modals read the raw key stream while a composer-choice prompt could own the keyboard.",
+    "impact": "Keys meant for a permission prompt also drove the triggers modal.",
+    "suggested_fix": "Ignore keys while another owner holds the keyboard.",
+    "evidence": "Both modals subscribe via _internalKeyInput with no ownership check.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/triggers-inspector.ts:347 returns when inputBlocked(); default is chrome.keyboardOwnedElsewhere() (src/tui/shell-chrome.ts:934: dock, withOverlay depth, non-modal overlay sources) at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff; tests 'review F11' and 'review N5' pass. Fixing commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "F12",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/triggers-panel.ts",
+    "quote": "catch(() => undefined)",
+    "problem": "Row ages froze between file changes and a load error hid the section.",
+    "impact": "Stale ages; a failing read looked like 'no triggers'.",
+    "suggested_fix": "Repaint ages on the tick; show an error row.",
+    "evidence": "refresh() caught load errors into undefined; paint only on change.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/triggers-panel.ts:96 sb-triggers-error row; src/tui/ops-sidebar.ts:209 watcher.onTick repaints ages every 60 s; test 'review F12' passes at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "F13",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/governance-panel.ts",
+    "quote": "safePaint",
+    "problem": "Theme listeners swallowed every paint error.",
+    "impact": "Real repaint bugs were hidden.",
+    "suggested_fix": "Ignore only destroyed-renderable errors.",
+    "evidence": "safePaint try/catch with empty catch in four files.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/theme-repaint.ts:18 guardedThemeRepaint ignores only gone renderables and logs/rethrows others; src/tui/theme.ts:449-456 isolates each listener so one failure cannot stop the rest (at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff). Fixing commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "F14",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "info",
+    "file": "src/trigger/describe.ts",
+    "quote": "cost: n/a",
+    "problem": "Modal printed unrecorded cost as `cost: n/a (<reason>)`; frozen AC5 wording is `not recorded (<reason>)`.",
+    "impact": "AC5 literal text not met.",
+    "suggested_fix": "Use `cost: not recorded (<reason>)` in the shared descriptor.",
+    "evidence": "describe.ts describeCost at ddfcfc9d.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/trigger/describe.ts:62 prints `cost: not recorded (<reason>)` for CLI and modal at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff; repo-wide search found no consumer parsing `cost: n/a`; docs updated. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "F15",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "info",
+    "file": "src/tui/ops-sidebar.ts",
+    "quote": "showGovernance",
+    "problem": "`/governance` mapped a read error to absent and started a rewrite of a malformed report immediately.",
+    "impact": "Evidence of the malformed report destroyed without asking.",
+    "suggested_fix": "Treat a throw as malformed; open the modal and let `r` rebuild.",
+    "evidence": "showGovernance catch -> absent; malformed branch called runner.start().",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/ops-sidebar.ts:235 opens the modal for present or malformed, no automatic rebuild; tests 'review F15' (governance-panel and ops-sidebar) pass at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. Fixing commit b047bbd268ab265115ff5ca70381092983b00fb1; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit b047bbd268ab265115ff5ca70381092983b00fb1 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "N1",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "major",
+    "file": "src/tui/trigger-run-now.ts",
+    "quote": "openSync(logPath, \"a\")",
+    "problem": "The run-now log was opened with plain append and followed a symlink at the log path or its directory.",
+    "impact": "A cloned repo shipping a symlink under .metaproject/data/trigger/run-now could get run output appended to ~/.bashrc or authorized_keys.",
+    "suggested_fix": "O_NOFOLLOW, lstat each segment, refuse a non-regular file.",
+    "evidence": "Probe at b047bbd2: a planted nightly.log symlink received the run header and child output in an outside file.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff src/tui/trigger-run-now.ts:131-146 lstats .metaproject/data/trigger and run-now, refusing a symlink; :173 opens with O_WRONLY|O_APPEND|O_CREAT|O_EXCL|O_NOFOLLOW and :180 fstat-checks a regular file. Probe re-run on an extracted d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff tree: planted log symlink -> refusal, victim unchanged, child NOT run; run-now dir symlink -> refusal, nothing written outside, child not run; trigger data dir symlink -> refusal; normal run -> exit 0 with tail. Fixing commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/trigger-run-now.ts log directory creation",
+        "src/tui/trigger-run-now.ts log file open",
+        "src/tui/trigger-run-now.ts .gitignore creation",
+        "src/tui/trigger-run-now.ts tail read"
+      ],
+      "enumeration_method": "every filesystem call in trigger-run-now.ts that takes the run-now path was listed; each now lstat-checks or opens with O_NOFOLLOW (and O_EXCL for creation)."
+    }
+  },
+  {
+    "id": "N2",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/trigger-run-now.ts",
+    "quote": "readFileSync(file)",
+    "problem": "The run-now log grew without bound and was read whole on every finish.",
+    "impact": "Unbounded disk and memory use for frequent runs.",
+    "suggested_fix": "Bounded tail read; rotate.",
+    "evidence": "tailFrom used readFileSync over the whole file.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/trigger-run-now.ts:100 keeps 5 logs per trigger (pruneRunLogs :188, called :300), :103/:207 reads at most 16 KiB for the tail (at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff). Fixing commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "N3",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/trigger-run-now.ts",
+    "quote": "runNowLogPath",
+    "problem": "One shared <name>.log meant a restarted shell's tail could include lines from a still-running detached child.",
+    "impact": "Misattributed output in the modal.",
+    "suggested_fix": "One log per run.",
+    "evidence": "runNowLogPath(root, name) at b047bbd2.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/trigger-run-now.ts:114 runNowLogPath(root, name, startedAt) -> <name>-<stamp>.log at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. Fixing commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "N4",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/theme.ts",
+    "quote": "listener(resolved, kind)",
+    "problem": "applyThemeId had no per-listener isolation, so a rethrowing repaint aborted /theme for later listeners.",
+    "impact": "One buggy panel breaks recolour everywhere.",
+    "suggested_fix": "Isolate each listener.",
+    "evidence": "theme.ts:448 looped listeners without try/catch.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/theme.ts:449-456 runs each listener in its own try/catch and logs theme.listener-failed (at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff). Fixing commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "N5",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "minor",
+    "file": "src/tui/ops-sidebar.ts",
+    "quote": "dock?.visible",
+    "problem": "Key blocking used only chrome.dock.visible, missing withOverlay pickers and queue navigation.",
+    "impact": "Keys for those owners could also drive the modal.",
+    "suggested_fix": "A keyboardOwnedElsewhere() that excludes the modal's own overlay source.",
+    "evidence": "ops-sidebar.ts default inputBlocked = dock.visible at b047bbd2.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/shell-chrome.ts:934 keyboardOwnedElsewhere (dock, overlayDepth, non-modal sources; modal-host registers kind 'modal' at modal-host.ts:503); ops-sidebar.ts:136 default; test 'review N5' passes at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. Fixing commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "N6",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "info",
+    "file": "src/tui/ops-sidebar.ts",
+    "quote": "detached = runNow.dispose()",
+    "problem": "The exit note used a snapshot cached at renderer destroy.",
+    "impact": "A run finishing just before exit was still reported as running.",
+    "suggested_fix": "Read in-flight runs live at print time.",
+    "evidence": "dispose() cached `detached` on first call.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/tui-shell.ts:7249 prints describeDetachedRuns(liveOps.inFlightRuns()), live via trigger-run-now.ts:319 (at d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff). Fixing commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69; CI 18/18 green on PR #662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69; squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 2889ff55639f8485dfe51b9642d14cf6da0b6f69 (PR #662), merged to main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff."
+    }
+  },
+  {
+    "id": "N7",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "info",
+    "file": "src/tui/governance-panel.ts",
+    "quote": "GOVERNANCE_NO_REPORT",
+    "problem": "A malformed stored report showed the absent-report text `no report — click to run`, but the click opened the modal and ran nothing.",
+    "impact": "The row text misdescribed what the click does.",
+    "suggested_fix": "Give the unreadable report its own row text.",
+    "evidence": "src/tui/governance-panel.ts at 2889ff55: malformed -> GOVERNANCE_NO_REPORT with action 'open'.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At e92b2b8d666b807e6f63cbee92692dc8665b8f71 src/tui/governance-panel.ts:125 GOVERNANCE_UNREADABLE = `unreadable — click for reason`, and :178 returns it (role error, action open) for a malformed read; AC1 was rewritten to five states. Tests 'AC1: projection — exactly five states, each within SIDEBAR_TEXT_WIDTH' and 'AC1: the mounted section reads each fixture project's state (absent, malformed, present)' expect it and pass on an extracted e92b2b8d666b807e6f63cbee92692dc8665b8f71 tree (272/272 flow-300 tests). Fixing commit e92b2b8d666b807e6f63cbee92692dc8665b8f71; CI 18/18 check runs success (Pages deploy skipped) on PR #663 at head f4ded686dbf9a5bd8e05e3411b2a6585855416d0; squash-merged into main as e92b2b8d666b807e6f63cbee92692dc8665b8f71.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Operator decision (altsay, 2026-09-23 07:13 UTC) to fix rather than accept; fixed in PR #663, merged to main as e92b2b8d666b807e6f63cbee92692dc8665b8f71."
+    }
+  },
+  {
+    "id": "N8",
+    "reviewer": "code-reviewer (flow 300 adversarial)",
+    "severity": "info",
+    "file": "src/governance/spend.ts",
+    "quote": "open.has(record.reservation.runId)",
+    "problem": "An open reservation counted as a run with cost not recorded at project level but as an open reservation in the flow view.",
+    "impact": "The same in-flight run had two names; the sidebar showed it twice.",
+    "suggested_fix": "Name it an open reservation at project level too.",
+    "evidence": "Probe at b047bbd2: open-only ledger -> project runsWithCostNotRecorded 1, flow runsWithCostNotRecorded 0 with openReservedUsd 2.",
+    "confidence": "high",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At e92b2b8d666b807e6f63cbee92692dc8665b8f71 src/governance/spend.ts:168-171 sets runsTotal = closed runs + open reservations and adds openReservations/openReservedUsd (types.ts); a reserved record is never counted as not recorded or spent. closingRecordFlows (spend.ts:113) attributes a reservation-resolved to its reservation's flow for both the project figure and the flow view. Probe on an extracted e92b2b8d666b807e6f63cbee92692dc8665b8f71 tree over closed, closed-unrecorded, resolved (CLI and legacy), open, orphan resolution and a two-flow mix: the sum of the flow slices' spentUsd equals attributedToFlowsUsd in every case (flow 297's 'included, not additive' holds); open-only -> 0 not recorded, 1 open, $2 reserved in both views. Fixing commit e92b2b8d666b807e6f63cbee92692dc8665b8f71; CI 18/18 check runs success (Pages deploy skipped) on PR #663 at head f4ded686dbf9a5bd8e05e3411b2a6585855416d0; squash-merged into main as e92b2b8d666b807e6f63cbee92692dc8665b8f71.",
+      "verifier": "orchestrator (flow 300 close-out verifier)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Operator decision (altsay, 2026-09-23 07:13 UTC) to fix rather than accept; fixed in PR #663, merged to main as e92b2b8d666b807e6f63cbee92692dc8665b8f71."
+    }
+  }
+]
+```

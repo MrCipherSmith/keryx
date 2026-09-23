@@ -8,17 +8,78 @@
   "id": "295",
   "slug": "scheduled-agent-tasks-from-the-shell-and",
   "title": "Scheduled agent tasks from the shell and TUI, running in the background with explicit grants",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-23T05:23:44.195Z",
-  "updatedAt": "2026-09-23T05:35:14.962Z",
+  "updatedAt": "2026-09-23T08:38:13.522Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-23T08:35:45.193Z",
+      "note": "agent-task action kind (src/trigger/config.ts) validates prompt/rates/ceiling, refuses permissionMode=auto, refuses ungranted or floor-refused tools on load. Proven by src/trigger/config.test.ts flow-295 block (53 pass, 0 fail incl. F1b/F1c/F1d/F4 cases). CI green on PR #664 head 4be4004d."
+    },
+    "AC2": {
+      "at": "2026-09-23T08:35:45.590Z",
+      "note": "keryx trigger run <name> on agent-task runs one unattended turn via src/commands/trigger-agent-task.ts, writing the report to .metaproject/data/trigger/reports/<name>/<runId>.md (path validated by record.ts/store.ts, M2-hardened). Proven by src/commands/trigger-agent-task.test.ts scripted-provider tests. CI green on PR #664 head 4be4004d."
+    },
+    "AC3": {
+      "at": "2026-09-23T08:35:53.709Z",
+      "note": "Granted tools run via execFile outside the sandbox with fixed argv templates, pattern-checked params (leading '-' refused), timeout, output cap, secret redaction; scrub runs before cap (F5). Sentinel GH_TOKEN test: shell_exec of env/echo/cat-config returns no token in any tool result, provider request or report. Proven by schedule-security.test.ts F3/F5 tests. CI green on PR #664."
+    },
+    "AC4": {
+      "at": "2026-09-23T08:35:54.104Z",
+      "note": "Network grant is off (default, --unshare-net) or full (NETWORK ON warning); allowlist is refused naming flow 301 not-implemented. GitHub checks need no sandbox network since granted tools run outside the sandbox. Proven by schedule-security.test.ts AC5 ask/trust x off/full tests. CI green on PR #664."
+    },
+    "AC5": {
+      "at": "2026-09-23T08:36:02.058Z",
+      "note": "Unattended posture/floor unchanged by grants; a changed schedule does not run (HMAC content-hash refuses grants-changed, F1/N6). agent-task under every grant combo still refuses push/merge/tag/publish, mutating gh api, flow-state verbs, nested trigger run, schedule create/install verbs, and writes to triggers.json/flow.json/AC/data/trigger/store/reports (F3, N1, N5). trust without a working sandbox refuses sandbox-unavailable. Prompt/grants/dispatch hash stored at confirmation; a changed entry is refused with grants-changed. Proven by schedule-security.test.ts F1/F2/F3/N1/N5/N6 blocks and existing trigger/unattended + sandbox/unattended tests passing unmodified. CI green on PR #664."
+    },
+    "AC6": {
+      "at": "2026-09-23T08:36:02.454Z",
+      "note": "/schedule registered in AGENT_SLASH_COMMANDS (registry tests updated); collects prompt/cadence/grants; shows one confirmation card (cadence as cron + next 3 runs, prompt, provider/model, ceiling/max seconds, network mode, every granted tool with resolved binary+account, unit/crontab path, exact ExecStart, linger status); decline writes nothing. Proven by tui/schedule-command.test.ts. CI green on PR #664."
+    },
+    "AC7": {
+      "at": "2026-09-23T08:36:09.623Z",
+      "note": "schedule_create tool with natural-language schedule creation; approval always asks and shows the same card as AC6 in every permission mode incl. auto; never auto-approved/remembered/offered always; not in the unattended roster (UNATTENDED_EXCLUDED_TOOLS); driven through the real agent loop under auto with a declining approver, writing/installing nothing. Proven by schedule-tools.test.ts and F8 one-time confirmationToken. CI green on PR #664."
+    },
+    "AC8": {
+      "at": "2026-09-23T08:36:10.019Z",
+      "note": "systemd --user units named keryx-<projecthash>-<name> with real OnCalendar= translated from cron, Persistent=true, WorkingDirectory=project root, absolute interpreter+script; pass systemd-analyze verify incl. a path with a space; macOS LaunchAgent plist; else marked crontab block; installing twice leaves exactly one unit; loginctl enable-linger never run by keryx. Proven by cron.test.ts, install.test.ts (fake systemctl), schedule.test.ts (systemd-analyze calendar). CI green on PR #664."
+    },
+    "AC9": {
+      "at": "2026-09-23T08:36:16.610Z",
+      "note": "keryx schedule list|pause|resume|run|remove work from the CLI: list shows name/cadence/enabled-or-paused/installed/next-run/last-outcome+cost/last-report-path; pause disables the timer and marks disabled (fire while paused records no-op); resume re-enables both and verifies MAC+pins first (L1); run performs one pass now; remove uninstalls and deletes the entry after confirmation, touching only files carrying keryx's managed header. Proven by commands/schedule.test.ts and install.test.ts. CI green on PR #664."
+    },
+    "AC10": {
+      "at": "2026-09-23T08:36:17.015Z",
+      "note": "TUI sidebar has a Schedules section mounted after mountOpsSidebar in the fixed sb-jobs/sb-governance/sb-triggers/sb-schedules order; each row is name/next-run/last-outcome(ok,failed,refused+cost); hidden with no schedules; row text within SIDEBAR_TEXT_WIDTH; theme-slot colours; clicking opens the detail modal. Proven by src/tui/schedules-sidebar.test.ts over a fixture ledger/store (18 pass, 0 fail). CI green on PR #664."
+    },
+    "AC11": {
+      "at": "2026-09-23T08:36:24.138Z",
+      "note": "Detail modal opens through modal-host with 4 tabs: Overview (cadence, next/last run, enabled, unit, linger, verified - M4/L1), Grants (network mode + pinned realpath/sha/interpreter per tool - L4), Runs (last N ledger records, closing-only cap - L4), Report (scrolled, path-validated, cardSafe'd - M2). Actions: pause/resume one step; run-now/delete arm-then-y with existence re-check (L3), any other key cancels; each action calls the CLI function; modal refreshes after. Proven by src/tui/schedules-sidebar.test.ts in the style of mcp-inspector.test.ts. CI green on PR #664."
+    },
+    "AC12": {
+      "at": "2026-09-23T08:36:24.535Z",
+      "note": "Every schedule interaction reachable without a mouse: /schedules opens a list modal, arrows select, Enter opens detail, Esc closes; every AC11 action has a key shown on the tab's first line. Proven by a keypress-driven test going from /schedules to a paused schedule with no mouse event, and routeSchedulesCommand shared by both tui-shell.ts branches. CI green on PR #664."
+    },
+    "AC13": {
+      "at": "2026-09-23T08:36:31.148Z",
+      "note": "A scheduled run finished in another process updates the open TUI without restart: sidebar and detail modal poll the ledger/reports on an injectable interval, repainting only on change; a one-line notice shown once per new report. Proven by a test appending a record+report to a fixture, firing the injected timer, asserting row/Runs-tab change and single notice (AC13 test in schedules-sidebar.test.ts); an unchanged tick repaints nothing (L2). CI green on PR #664."
+    },
+    "AC14": {
+      "at": "2026-09-23T08:36:31.542Z",
+      "note": "Every scheduled run reserves spend under the project-wide lock against min(project ceiling, schedule ceilingUsd) before its first model call; over-ceiling records budget-refused with no model call; sidebar row and modal show that outcome (reservation-resolved -> attention role, L4); closing runs.jsonl record carries runId/tokens/USD and closes the reservation; keryx governance report includes that cost in project trigger spend. Proven by an extended governance/report.test.ts case driving an agent-task run through runTriggerOnce. CI green on PR #664."
+    },
+    "AC15": {
+      "at": "2026-09-23T08:36:36.964Z",
+      "note": "Docs updated: docs/docs/cli-reference.md schedule section, README.md schedule bullet, docs/docs/limitations.md scheduled-tasks section with honest limits (sleeping laptop catch-up via Persistent=true, cron no catch-up, linger required while logged out, sandbox Linux-only so macOS is ask-only with granted tools). platform/scheduled-tasks skill registered (skills verify --bundled: 72 skills, 0 findings). CI green on PR #664 head 4be4004d: independently confirmed via gh api check-runs -- 18 success + 1 skipped (deploy to GitHub Pages) = 19 checks, none failing. keryx health run independently re-run in this worktree: PASS, project score 94, no gate conditions triggered."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/664"
   },
   "owner": {
     "value": "altsay",
@@ -31,7 +92,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -39,14 +100,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold context-gathering task folded into T5 (agent-task action kind implementation), which did the actual context collection"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -54,14 +117,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold implement-per-plan task folded into T5-T9, the specific implementation tasks that carried out the plan"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -69,14 +134,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold test task folded into T5-T10; tests were added alongside each implementation task and in the three security/TUI review rounds"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,13 +151,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold self-review/draft-PR task folded into T11; self-review happened across three journaled review rounds (security 9c9557f9, re-review 95c54166, TUI/merge review 338178da) plus PR #664 CI"
     },
     {
       "id": "T5",
       "title": "agent-task action kind, dispatcher report, confirmed-content hash",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -101,93 +170,130 @@
           }
         ]
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC1",
+        "AC2"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "agent-task trigger kind, dispatcher (src/commands/trigger-agent-task.ts), report writer, HMAC confirmed-content hash (src/trigger/schedule-key.ts); proven by src/trigger/config.test.ts and src/commands/trigger-agent-task.test.ts"
     },
     {
       "id": "T6",
       "title": "Granted tools outside the sandbox; network off/full; floor unchanged",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
         "log": []
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC3",
+        "AC4",
+        "AC5"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "granted-tools catalogue (src/trigger/granted-tools.ts), execFile outside sandbox with argv template/pattern checks/redaction, network off|full only; proven by AC3 sentinel-GH_TOKEN test and AC5 ask/trust x off/full floor-denial tests in schedule-security.test.ts"
     },
     {
       "id": "T7",
       "title": "Schedule store, installer (systemd/launchd/cron), renderer fixes, keryx schedule CLI",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
         "log": []
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC8",
+        "AC9"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "cron translation (src/trigger/cron.ts), installer for systemd/launchd/cron (src/trigger/install.ts), draft/confirm service (src/trigger/schedules.ts), keryx schedule CLI (src/commands/schedule.ts); proven by cron.test.ts, install.test.ts, schedule.test.ts, commands/schedule.test.ts"
     },
     {
       "id": "T8",
       "title": "/schedule and schedule_create with the always-ask confirmation card",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
         "log": []
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC6",
+        "AC7"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "InteractiveTool.confirmation credentials-class always-ask floor; schedule_create/schedule_list tools (src/commands/schedule-tools.ts); /schedule slash command in AGENT_SLASH_COMMANDS; proven by schedule-tools.test.ts (auto/trust/ask) and tui/schedule-command.test.ts"
     },
     {
       "id": "T9",
       "title": "TUI: Schedules sidebar section, detail modal, /schedules, live refresh",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
         "log": []
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC10",
+        "AC11",
+        "AC12",
+        "AC13"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Schedules sidebar (src/tui/schedules-sidebar.ts), list+4-tab detail modal (src/tui/schedules-panel.ts, schedules-inspector.ts), /schedules registration, live poll refresh via ops.watcher; proven by src/tui/schedules-sidebar.test.ts (AC10-AC14, 7 tests)"
     },
     {
       "id": "T10",
       "title": "Spend and governance; docs and agent skill",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
         "log": []
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC14",
+        "AC15"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "governance spend attribution proven by src/governance/report.test.ts agent-task case; docs updated (cli-reference.md, README.md, limitations.md); platform/scheduled-tasks skill registered (skills verify --bundled: 72 skills, 0 findings)"
     },
     {
       "id": "T11",
       "title": "Verification: CI green, keryx health run",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
         "log": []
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC15"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "CI green on PR #664 head 4be4004d (19 checks, SUCCESS or SKIPPED); keryx health run PASS score 94; typecheck/eslint clean; full suite 3016+ pass, 0 fail; skills verify 0 findings; flow check consistent"
     }
   ],
   "history": [
@@ -243,6 +349,450 @@
       "at": "2026-09-23T05:35:14.962Z",
       "event": "task-attempt",
       "detail": "T5: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T08:26:10.970Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T08:26:11.383Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T08:26:17.049Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T08:26:17.455Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-23T08:26:23.708Z",
+      "event": "task-done",
+      "detail": "T5: agent-task action kind, dispatcher report, confirmed-content hash"
+    },
+    {
+      "at": "2026-09-23T08:26:24.119Z",
+      "event": "task-done",
+      "detail": "T6: Granted tools outside the sandbox; network off/full; floor unchanged"
+    },
+    {
+      "at": "2026-09-23T08:26:30.343Z",
+      "event": "task-done",
+      "detail": "T7: Schedule store, installer (systemd/launchd/cron), renderer fixes, keryx schedule CLI"
+    },
+    {
+      "at": "2026-09-23T08:26:30.741Z",
+      "event": "task-done",
+      "detail": "T8: /schedule and schedule_create with the always-ask confirmation card"
+    },
+    {
+      "at": "2026-09-23T08:26:36.274Z",
+      "event": "task-done",
+      "detail": "T9: TUI: Schedules sidebar section, detail modal, /schedules, live refresh"
+    },
+    {
+      "at": "2026-09-23T08:26:36.685Z",
+      "event": "task-done",
+      "detail": "T10: Spend and governance; docs and agent skill"
+    },
+    {
+      "at": "2026-09-23T08:26:40.779Z",
+      "event": "task-done",
+      "detail": "T11: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T08:26:46.188Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/664 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-23T08:35:45.193Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: agent-task action kind (src/trigger/config.ts) validates prompt/rates/ceiling, refuses permissionMode=auto, refuses ungranted or floor-refused tools on load. Proven by src/trigger/config.test.ts flow-295 block (53 pass, 0 fail incl. F1b/F1c/F1d/F4 cases). CI green on PR #664 head 4be4004d. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:35:45.590Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: keryx trigger run <name> on agent-task runs one unattended turn via src/commands/trigger-agent-task.ts, writing the report to .metaproject/data/trigger/reports/<name>/<runId>.md (path validated by record.ts/store.ts, M2-hardened). Proven by src/commands/trigger-agent-task.test.ts scripted-provider tests. CI green on PR #664 head 4be4004d. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:35:53.709Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Granted tools run via execFile outside the sandbox with fixed argv templates, pattern-checked params (leading '-' refused), timeout, output cap, secret redaction; scrub runs before cap (F5). Sentinel GH_TOKEN test: shell_exec of env/echo/cat-config returns no token in any tool result, provider request or report. Proven by schedule-security.test.ts F3/F5 tests. CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:35:54.104Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Network grant is off (default, --unshare-net) or full (NETWORK ON warning); allowlist is refused naming flow 301 not-implemented. GitHub checks need no sandbox network since granted tools run outside the sandbox. Proven by schedule-security.test.ts AC5 ask/trust x off/full tests. CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:02.058Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Unattended posture/floor unchanged by grants; a changed schedule does not run (HMAC content-hash refuses grants-changed, F1/N6). agent-task under every grant combo still refuses push/merge/tag/publish, mutating gh api, flow-state verbs, nested trigger run, schedule create/install verbs, and writes to triggers.json/flow.json/AC/data/trigger/store/reports (F3, N1, N5). trust without a working sandbox refuses sandbox-unavailable. Prompt/grants/dispatch hash stored at confirmation; a changed entry is refused with grants-changed. Proven by schedule-security.test.ts F1/F2/F3/N1/N5/N6 blocks and existing trigger/unattended + sandbox/unattended tests passing unmodified. CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:02.454Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: /schedule registered in AGENT_SLASH_COMMANDS (registry tests updated); collects prompt/cadence/grants; shows one confirmation card (cadence as cron + next 3 runs, prompt, provider/model, ceiling/max seconds, network mode, every granted tool with resolved binary+account, unit/crontab path, exact ExecStart, linger status); decline writes nothing. Proven by tui/schedule-command.test.ts. CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:09.623Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: schedule_create tool with natural-language schedule creation; approval always asks and shows the same card as AC6 in every permission mode incl. auto; never auto-approved/remembered/offered always; not in the unattended roster (UNATTENDED_EXCLUDED_TOOLS); driven through the real agent loop under auto with a declining approver, writing/installing nothing. Proven by schedule-tools.test.ts and F8 one-time confirmationToken. CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:10.020Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: systemd --user units named keryx-<projecthash>-<name> with real OnCalendar= translated from cron, Persistent=true, WorkingDirectory=project root, absolute interpreter+script; pass systemd-analyze verify incl. a path with a space; macOS LaunchAgent plist; else marked crontab block; installing twice leaves exactly one unit; loginctl enable-linger never run by keryx. Proven by cron.test.ts, install.test.ts (fake systemctl), schedule.test.ts (systemd-analyze calendar). CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:16.610Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: keryx schedule list|pause|resume|run|remove work from the CLI: list shows name/cadence/enabled-or-paused/installed/next-run/last-outcome+cost/last-report-path; pause disables the timer and marks disabled (fire while paused records no-op); resume re-enables both and verifies MAC+pins first (L1); run performs one pass now; remove uninstalls and deletes the entry after confirmation, touching only files carrying keryx's managed header. Proven by commands/schedule.test.ts and install.test.ts. CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:17.015Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: TUI sidebar has a Schedules section mounted after mountOpsSidebar in the fixed sb-jobs/sb-governance/sb-triggers/sb-schedules order; each row is name/next-run/last-outcome(ok,failed,refused+cost); hidden with no schedules; row text within SIDEBAR_TEXT_WIDTH; theme-slot colours; clicking opens the detail modal. Proven by src/tui/schedules-sidebar.test.ts over a fixture ledger/store (18 pass, 0 fail). CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:24.138Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Detail modal opens through modal-host with 4 tabs: Overview (cadence, next/last run, enabled, unit, linger, verified - M4/L1), Grants (network mode + pinned realpath/sha/interpreter per tool - L4), Runs (last N ledger records, closing-only cap - L4), Report (scrolled, path-validated, cardSafe'd - M2). Actions: pause/resume one step; run-now/delete arm-then-y with existence re-check (L3), any other key cancels; each action calls the CLI function; modal refreshes after. Proven by src/tui/schedules-sidebar.test.ts in the style of mcp-inspector.test.ts. CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:24.535Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Every schedule interaction reachable without a mouse: /schedules opens a list modal, arrows select, Enter opens detail, Esc closes; every AC11 action has a key shown on the tab's first line. Proven by a keypress-driven test going from /schedules to a paused schedule with no mouse event, and routeSchedulesCommand shared by both tui-shell.ts branches. CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:31.148Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: A scheduled run finished in another process updates the open TUI without restart: sidebar and detail modal poll the ledger/reports on an injectable interval, repainting only on change; a one-line notice shown once per new report. Proven by a test appending a record+report to a fixture, firing the injected timer, asserting row/Runs-tab change and single notice (AC13 test in schedules-sidebar.test.ts); an unchanged tick repaints nothing (L2). CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:31.542Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: Every scheduled run reserves spend under the project-wide lock against min(project ceiling, schedule ceilingUsd) before its first model call; over-ceiling records budget-refused with no model call; sidebar row and modal show that outcome (reservation-resolved -> attention role, L4); closing runs.jsonl record carries runId/tokens/USD and closes the reservation; keryx governance report includes that cost in project trigger spend. Proven by an extended governance/report.test.ts case driving an agent-task run through runTriggerOnce. CI green on PR #664. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:36.964Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: Docs updated: docs/docs/cli-reference.md schedule section, README.md schedule bullet, docs/docs/limitations.md scheduled-tasks section with honest limits (sleeping laptop catch-up via Persistent=true, cron no catch-up, linger required while logged out, sandbox Linux-only so macOS is ask-only with granted tools). platform/scheduled-tasks skill registered (skills verify --bundled: 72 skills, 0 findings). CI green on PR #664 head 4be4004d: independently confirmed via gh api check-runs -- 18 success + 1 skipped (deploy to GitHub Pages) = 19 checks, none failing. keryx health run independently re-run in this worktree: PASS, project score 94, no gate conditions triggered. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T08:36:44.673Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T08:36:48.422Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-23T08:36:48.424Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 11 finding(s) at or above `minor` are not terminal: 2026-09-23-round1-security#F2 (major, round 2026-09-23-round1-security): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round1-security#F3 (major, round 2026-09-23-round1-security): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round1-security#F4 (minor, round 2026-09-23-round1-security): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round2-security#N3 (minor, round 2026-09-23-round2-security): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round2-security#N4 (minor, round 2026-09-23-round2-security): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#M1 (major, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#M2 (major, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#M3 (major, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#M4 (minor, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#L1 (minor, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#L3 (minor, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-23T08:38:09.713Z",
+      "event": "completing",
+      "detail": "merged commit: 89dbea8dc25d80639ead9f7497287767138a040c"
+    },
+    {
+      "at": "2026-09-23T08:38:13.521Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-23T08:38:13.522Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-09-23T08:35:45.193Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:35:45.590Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:35:53.709Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:35:54.104Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:36:02.058Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:36:02.454Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:36:09.623Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:36:10.019Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:36:16.610Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:36:17.015Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:36:24.138Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:36:24.535Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:36:31.148Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:36:31.542Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:36:36.964Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:38:13.521Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d",
+      "headCommit": "89dbea8dc25d80639ead9f7497287767138a040c"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-23T08:36:48.422Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "15 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "89dbea8dc25d80639ead9f7497287767138a040c is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "89dbea8dc25d80639ead9f7497287767138a040c is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "11 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 11 finding(s) at or above `minor` are not terminal: 2026-09-23-round1-security#F2 (major, round 2026-09-23-round1-security): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round1-security#F3 (major, round 2026-09-23-round1-security): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round1-security#F4 (minor, round 2026-09-23-round1-security): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round2-security#N3 (minor, round 2026-09-23-round2-security): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round2-security#N4 (minor, round 2026-09-23-round2-security): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#M1 (major, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#M2 (major, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#M3 (major, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#M4 (minor, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#L1 (minor, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-23-round3-tui-merge#L3 (minor, round 2026-09-23-round3-tui-merge): marked fixed at 89dbea8d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    },
+    {
+      "at": "2026-09-23T08:38:13.521Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "15 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "89dbea8dc25d80639ead9f7497287767138a040c is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "89dbea8dc25d80639ead9f7497287767138a040c is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "11 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 6 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d"
+    }
+  ],
+  "merged": {
+    "commit": "89dbea8dc25d80639ead9f7497287767138a040c",
+    "ref": "origin/main",
+    "at": "2026-09-23T08:38:13.521Z"
+  }
 }
