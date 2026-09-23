@@ -499,6 +499,10 @@
                 },
                 "acChecksum": {
                   "type": "string"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "The completion target the token was minted for: `pr:<url>` or `merged`."
                 }
               }
             }

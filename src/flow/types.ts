@@ -167,7 +167,12 @@ export type SignatureConfirmation = {
   tokenRef: string;
   mintedAt: string;
   consumedAt: string;
-  boundTo: { kind: "complete"; acChecksum: string };
+  /**
+   * `target` (security review of PR #661): `pr:<url>` or `merged`, the
+   * completion the operator was shown. Optional in the type so a signature
+   * written before it existed still reads.
+   */
+  boundTo: { kind: "complete"; acChecksum: string; target?: string | undefined };
 };
 
 /**

@@ -123,3 +123,29 @@ describe("AC4: the unattended floor", () => {
     expect(unattendedRefusal("apply_patch", { patch })).toMatch(/confirm-token\.json/);
   });
 });
+
+describe("security review of PR #661: the markers are word-bounded, not substrings", () => {
+  test("`flow confirm` matches as words only; `workflow confirmation` and `overflow confirmed` do not", () => {
+    expect(touchesFlowConfirm("keryx flow confirm 299")).toBe(true);
+    expect(touchesFlowConfirm("KERYX FLOW\tCONFIRM 299")).toBe(true);
+    expect(touchesFlowConfirm("echo workflow confirmation")).toBe(false);
+    expect(touchesFlowConfirm("echo overflow confirmed")).toBe(false);
+    expect(touchesFlowConfirm("keryx flow confirmed")).toBe(false);
+    // Accepted limit: a command that merely quotes the words still asks.
+    expect(touchesFlowConfirm('grep "flow confirm" docs')).toBe(true);
+  });
+
+  test("the unattended floor lets tests of the token module run, and still refuses writes to the store", () => {
+    expect(unattendedRefusal("shell_exec", { command: "bun test src/flow/confirm-token.test.ts" })).toBeUndefined();
+    expect(unattendedRefusal("shell_exec", { command: "cat src/flow/confirm-token.ts" })).toBeUndefined();
+    expect(unattendedRefusal("shell_exec", { command: "echo x > .metaproject/flows/299-x/confirm-token.json" })).toMatch(
+      /confirm-token\.json/,
+    );
+  });
+
+  test("the `flow recover` marker still refuses the real command, word-bounded", () => {
+    expect(unattendedRefusal("shell_exec", { command: "keryx flow recover 299 --reason crash" })).toMatch(/flow recover/);
+    expect(unattendedRefusal("shell_exec", { command: "bun run src/cli.ts flow  recover 299" })).toMatch(/flow\s+recover/);
+    expect(unattendedRefusal("shell_exec", { command: "echo workflow recovery notes" })).toBeUndefined();
+  });
+});

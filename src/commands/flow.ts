@@ -11,7 +11,12 @@ import {
 } from "../flow/service";
 import { durableExternalCommentsGate } from "../flow/review-gate";
 import { flowStateSchema } from "../flow/schema";
-import { duplicateFlowIds, interruptedCompletionLine, isCompletionInterrupted } from "../flow/store";
+import {
+  completionInProgressLine,
+  duplicateFlowIds,
+  interruptedCompletionLine,
+  isCompletionInterrupted,
+} from "../flow/store";
 import { githubAdapter } from "../flow/tracker/github";
 import { repairMovedFlowReviewRecords } from "../review/flow-move";
 import { createCodeHealthService } from "../health/service";
@@ -500,6 +505,8 @@ async function runStatus(args: string[]): Promise<void> {
   // completed by anyone. It was interrupted, and only `flow recover` moves it.
   if (await isCompletionInterrupted(process.cwd(), flow)) {
     console.log(`  ${style.yellow(WARN)} ${style.yellow(interruptedCompletionLine(flow.id))}`);
+  } else if (flow.status === "completing") {
+    console.log(`  ${style.dim(completionInProgressLine(flow.id))}`);
   }
   console.log(
     `  source:  ${flow.source.type}${flow.source.ref ? style.dim(` (${flow.source.ref})`) : ""}`,

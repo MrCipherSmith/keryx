@@ -19,7 +19,7 @@ import { withFileLock } from "../lib/fs";
 import { flowCommand } from "../commands/flow";
 import { createFlowService } from "./service";
 import { writeCleanReviewPackage } from "./review-fixtures";
-import { flowLockPathFor, interruptedCompletionLine, isCompletionInterrupted } from "./store";
+import { completionInProgressLine, flowLockPathFor, interruptedCompletionLine, isCompletionInterrupted } from "./store";
 import type { FlowService, FlowServiceDeps, FlowState, TrackerAdapter } from "./types";
 
 let ROOT = "";
@@ -286,7 +286,7 @@ test("AC6: flow recover refuses without a reason, from any other status, and whi
       expect(await isCompletionInterrupted(ROOT, { id, status: "completing" })).toBe(false);
       return service.recover({ cwd: ROOT, id, reason: "racing a live complete" });
     }),
-  ).rejects.toThrow(/another process holds flow .* lock/);
+  ).rejects.toThrow(/lock is held[\s\S]*becomes recoverable once its lock goes stale/);
   expect((await onDisk(dir)).status).toBe("completing");
 
   await service.recover({ cwd: ROOT, id, reason: "now it is really stuck" });
@@ -303,6 +303,16 @@ test("AC6: the CLI — `flow status` labels the interrupted flow and names the c
 
   await flowCommand(["status", id]);
   expect(logs.join("\n")).toContain(interruptedCompletionLine(id));
+
+  // While something holds the lock — a live completion, or one killed less
+  // than the stale window ago — status says so instead of "interrupted".
+  logs.length = 0;
+  await withFileLock(flowLockPathFor(ROOT, dir), async () => {
+    await flowCommand(["status", id]);
+  });
+  expect(logs.join("\n")).toContain(completionInProgressLine(id));
+  expect(logs.join("\n")).not.toContain("interrupted: completion did not finish");
+  logs.length = 0;
 
   await flowCommand(["recover", id]);
   expect(process.exitCode).toBe(1);

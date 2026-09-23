@@ -2317,7 +2317,11 @@ keryx flow complete <id> --confirm-token <token>     # the confirmation gate pas
 - a random code is typed back on `/dev/tty`, so a pipe on stdin cannot answer.
 
 It stores only the token's sha256, in `confirm-token.json` inside the flow
-directory, bound to the flow, the completion, and the criteria checksum. Only
+directory, bound to the flow, the completion, the criteria checksum, and the
+**target** you were shown: the PR URL, or `merged` for `--merged`. A token
+minted while looking at one PR fails as `token_target_mismatch` if the flow is
+later pointed at another PR, or completed with `--merged` instead (and the
+reverse). Only
 the latest mint is valid. A token lives for ten minutes. `flow complete` checks
 it when the attempt starts, so a slow health gate cannot expire it midway. It is
 spent only on a passing completion, so a failed attempt can be fixed and retried
@@ -2335,7 +2339,9 @@ What the token does **not** prove, stated rather than implied:
   TTL, for exactly this criteria checksum. Not that a human ran it, and not who.
 - **The command-text floors can be evaded.** keryx's own agent loop, its ACP
   classifier and its supervised-codex path ask a human before running any
-  command that contains `flow confirm`, in every permission mode. Unattended
+  command that contains the words `flow confirm`, in every permission mode. No
+  session pattern or remembered grant answers that prompt, and "always" is
+  never offered for it. Unattended
   trigger runs refuse it outright. But these checks match text: a variable, a
   script file or `bun -e` spells the same thing without the words.
 - **A pseudo-terminal can be faked.** `script -qc '…' /dev/null` gives any

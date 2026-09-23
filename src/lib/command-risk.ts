@@ -379,12 +379,16 @@ export function touchesSacConfirmReview(command: string): boolean {
  * states this. The floor is friction for a cooperating agent. It is not a
  * barrier against one working around it.
  */
-const FLOW_CONFIRM_MARKERS: readonly string[] = ["flow confirm"];
+const FLOW_CONFIRM_MARKER = /\bflow\s+confirm\b/i;
 
-/** True when `command` mentions `keryx flow confirm`. Pure. */
+/**
+ * True when `command` mentions `keryx flow confirm`. Pure. Word-bounded, so
+ * `workflow confirmation` or `overflow confirmed` does not match. Accepted
+ * false positive: a command that merely quotes the words, such as
+ * `grep "flow confirm" docs`, still asks.
+ */
 export function touchesFlowConfirm(command: string): boolean {
-  const text = command.toLowerCase().replace(/\s+/g, " ");
-  return FLOW_CONFIRM_MARKERS.some((marker) => text.includes(marker));
+  return FLOW_CONFIRM_MARKER.test(command);
 }
 
 /**

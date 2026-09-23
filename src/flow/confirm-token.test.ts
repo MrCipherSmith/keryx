@@ -281,7 +281,7 @@ test("AC2: expired, reused, other-flow, pre-criteria-change and mismatched token
   expect(reused).toBeInstanceOf(Error);
   const { checkConfirmationToken } = await import("./confirm-token");
   const state = await service.get({ cwd: ROOT, id: other.id });
-  const check = await checkConfirmationToken(ROOT, other.dir, { flowId: other.id, acChecksum: state.acChecksum }, good.token, clock);
+  const check = await checkConfirmationToken(ROOT, other.dir, { flowId: other.id, acChecksum: state.acChecksum, target: `pr:${PR}` }, good.token, clock);
   expect(check).toEqual({ ok: false, reason: "token_used" });
 });
 
@@ -317,7 +317,7 @@ test("AC3: a passing completion spends the token and records `confirmation` besi
     tokenRef: minted.tokenRef,
     mintedAt: minted.mintedAt,
     consumedAt: clock.toISOString(),
-    boundTo: { kind: "complete", acChecksum: String(flow.acChecksum) },
+    boundTo: { kind: "complete", acChecksum: String(flow.acChecksum), target: `pr:${PR}` },
   });
   expect(JSON.stringify(flow)).not.toContain(minted.token);
   const stored = JSON.parse(await readFile(confirmTokenPath(ROOT, dir), "utf8")) as { usedAt?: string };
@@ -359,4 +359,89 @@ test("AC3: flow status, the flow complete note and the governance report show th
   );
   expect(report).toContain(`+ terminal token ${minted.tokenRef}`);
   expect(report).toContain("not proof of who");
+});
+
+// --- security review of PR #661: the token binds to the completion target ------
+
+test("review #661: a token minted on pull/1 cannot close the flow after `flow implemented --pr .../pull/999`", async () => {
+  const service = await fresh();
+  const { id } = await readyFlow(service);
+  const minted = await service.confirmMint({ cwd: ROOT, id });
+  // The probe from the review: fail once without a token, re-point the PR, retry.
+  const without = await service.complete({ cwd: ROOT, id });
+  expect(without.passed).toBe(false);
+  await service.implemented({ cwd: ROOT, id, prUrl: "https://github.com/acme/app/pull/999" });
+  const retargeted = await service.complete({ cwd: ROOT, id, confirmToken: minted.token });
+  expect(retargeted.passed).toBe(false);
+  expect(retargeted.gates.find((gate) => gate.name === "confirmation")?.detail).toMatch(/^token_target_mismatch: /);
+});
+
+test("review #661: a token minted for a PR completion cannot be spent on a --merged one", async () => {
+  const service = await fresh({ mainMergeGate: async () => ({ status: "pass", detail: "contained" }) });
+  const { id } = await readyFlow(service, { implemented: false });
+  // Minted with --merged, spent on a --merged completion: the targets agree.
+  const asMerged = await service.confirmMint({ cwd: ROOT, id, merged: true });
+  const stored = JSON.parse(await readFile(confirmTokenPath(ROOT, (await onDiskDir(id)) ?? ""), "utf8")) as { target: string };
+  expect(stored.target).toBe("merged");
+  const merged = await service.complete({ cwd: ROOT, id, confirmToken: asMerged.token, mergedCommit: "7b78ff14" });
+  expect(merged.gates.find((gate) => gate.name === "confirmation")?.status).toBe("pass");
+
+  // Minted without --merged (a PR completion), spent on a --merged one: refused.
+  const second = await readyFlow(service, { title: "PR shaped" });
+  const asPr = await service.confirmMint({ cwd: ROOT, id: second.id });
+  await service.complete({ cwd: ROOT, id: second.id }); // back to in-progress, token unspent
+  const spentMerged = await service.complete({ cwd: ROOT, id: second.id, confirmToken: asPr.token, mergedCommit: "7b78ff14" });
+  expect(spentMerged.passed).toBe(false);
+  expect(spentMerged.gates.find((gate) => gate.name === "confirmation")?.detail).toMatch(/^token_target_mismatch: /);
+});
+
+async function onDiskDir(id: string): Promise<string | undefined> {
+  return (await readdir(path.join(ROOT, ".metaproject", "flows"))).find((dir) => dir.startsWith(`${id}-`));
+}
+
+// --- security review of PR #661: a corrupt store is `token_unreadable` ---------
+
+test("review #661: a corrupt or malformed store fails as token_unreadable, and a bad expiresAt never means 'never expires'", async () => {
+  const service = await fresh();
+  const { id, dir } = await readyFlow(service);
+  const minted = await service.confirmMint({ cwd: ROOT, id });
+  const good = JSON.parse(await readFile(confirmTokenPath(ROOT, dir), "utf8")) as Record<string, unknown>;
+  const state = await service.get({ cwd: ROOT, id });
+  const { checkConfirmationToken } = await import("./confirm-token");
+  const binding = { flowId: id, acChecksum: state.acChecksum, target: `pr:${PR}` };
+  const cases: Array<[string, string]> = [
+    ["null", "null"],
+    ["a number", "42"],
+    ["a string", '"hash"'],
+    ["an array", "[]"],
+    ["missing hash", JSON.stringify({ ...good, hash: undefined })],
+    ["non-string hash", JSON.stringify({ ...good, hash: 7 })],
+    ["missing expiresAt", JSON.stringify({ ...good, expiresAt: undefined })],
+    ["unparsable expiresAt", JSON.stringify({ ...good, expiresAt: "tomorrow-ish" })],
+    ["non-string expiresAt", JSON.stringify({ ...good, expiresAt: 99999999999999 })],
+    ["not JSON", "{"],
+  ];
+  for (const [name, body] of cases) {
+    await writeFile(confirmTokenPath(ROOT, dir), body, "utf8");
+    const check = await checkConfirmationToken(ROOT, dir, binding, minted.token, clock);
+    expect({ name, check }).toEqual({ name, check: { ok: false, reason: "token_unreadable" } });
+  }
+  // The intact store still verifies, so the cases above failed for their shape alone.
+  await writeFile(confirmTokenPath(ROOT, dir), JSON.stringify(good), "utf8");
+  expect((await checkConfirmationToken(ROOT, dir, binding, minted.token, clock)).ok).toBe(true);
+});
+
+test("review #661: token_other_flow accepts flow ids of any length, not just three digits", async () => {
+  const service = await fresh();
+  const { id, dir } = await readyFlow(service);
+  const state = await service.get({ cwd: ROOT, id });
+  const { checkConfirmationToken } = await import("./confirm-token");
+  const check = await checkConfirmationToken(
+    ROOT,
+    dir,
+    { flowId: id, acChecksum: state.acChecksum, target: `pr:${PR}` },
+    "1234.someothertoken",
+    clock,
+  );
+  expect(check).toEqual({ ok: false, reason: "token_other_flow" });
 });

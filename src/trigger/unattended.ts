@@ -91,8 +91,9 @@ const PROTECTED_TEXT_MARKERS: readonly string[] = [
   "triggers.json",
   "data/trigger",
   // Flow 299 (AC4): the confirmation token stores, flow and SAC alike
-  // (`<flow>/confirm-token.json`, `<proposal>.confirm-token.json`).
-  "confirm-token",
+  // (`<flow>/confirm-token.json`, `<proposal>.confirm-token.json`). The file
+  // name, not the bare stem, so `bun test src/flow/confirm-token.test.ts` runs.
+  "confirm-token.json",
 ];
 
 /** True when `p` (repo-relative or absolute) is a file an unattended run must never write. */

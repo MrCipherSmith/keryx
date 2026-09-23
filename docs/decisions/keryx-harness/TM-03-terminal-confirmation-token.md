@@ -27,10 +27,10 @@ implying more.
 | Part | Where | What it does |
 |---|---|---|
 | Mint | `keryx flow confirm <id> [--merged]`, `src/commands/flow.ts` `runConfirm` | Refuses unless stdin and stdout are both terminals, the flow is `implemented` (or `in-progress` with `--merged`), it opted in, and its criteria are frozen and unchanged. Prints what is being confirmed: the flow, its criteria checksum, how many criteria are confirmed, and the PR. Reads a random six-character code typed back **on `/dev/tty`**, not stdin. Then prints the token, once. |
-| Store | `<flow dir>/confirm-token.json`, `src/flow/confirm-token.ts` | Holds only the sha256 of the token, bound to `{flowId, kind: "complete", acChecksum}`, with `mintedAt`, `expiresAt` (10 min) and `usedAt`. A new mint replaces the old one. The token's visible prefix is the flow id, so a token pasted into the wrong flow is refused as `token_other_flow`. |
-| Gate | `confirmation` gate in `complete()`, `src/flow/service.ts` | Evaluated when the attempt starts, so a slow health gate cannot expire a token that was valid then. Reported last. `skipped` unless `gates.confirmation`. Otherwise it fails, with a named reason, on each of: `token_required`, `token_not_minted`, `token_unreadable`, `token_mismatch`, `token_expired`, `token_used`, `token_other_flow`, `token_stale_criteria`. |
+| Store | `<flow dir>/confirm-token.json`, `src/flow/confirm-token.ts` | Holds only the sha256 of the token, bound to `{flowId, kind: "complete", acChecksum, target}`, with `mintedAt`, `expiresAt` (10 min) and `usedAt`. `target` is the completion the operator was shown at mint: `pr:<url>`, or `merged` for `--merged`. A new mint replaces the old one. The token's visible prefix is the flow id (any number of digits), so a token pasted into the wrong flow is refused as `token_other_flow`. The store's shape is validated before use. `null`, a non-object, a missing or non-string field, or an `expiresAt` that does not parse is `token_unreadable`, never "no expiry". |
+| Gate | `confirmation` gate in `complete()`, `src/flow/service.ts` | Evaluated when the attempt starts, so a slow health gate cannot expire a token that was valid then. Reported last. `skipped` unless `gates.confirmation`. Otherwise it fails, with a named reason, on each of: `token_required`, `token_not_minted`, `token_unreadable`, `token_mismatch`, `token_expired`, `token_used`, `token_other_flow`, `token_stale_criteria`, `token_target_mismatch`. The last is a completion whose target is not the one minted for: another PR after `flow implemented --pr <other>`, or `--merged` against a token minted for the PR, or the reverse. |
 | Spend | passing path of `complete()` | Marked used only on a passing completion, right before the write that records the signature and `done`. A failed attempt leaves the token valid until it expires. |
-| Record | `FlowSignature.confirmation` | `{mechanism: "terminal-token", tokenRef, mintedAt, consumedAt, boundTo: {kind, acChecksum}}`. `tokenRef` is a prefix of the stored hash, never the token. `identity` beside it is unchanged, and the `basis` vocabulary (`stated`/`derived`/`unknown`) is **not** extended. A "human-confirmed" basis would claim what §5 says cannot be shown. |
+| Record | `FlowSignature.confirmation` | `{mechanism: "terminal-token", tokenRef, mintedAt, consumedAt, boundTo: {kind, acChecksum, target}}`. `tokenRef` is a prefix of the stored hash, never the token. `identity` beside it is unchanged, and the `basis` vocabulary (`stated`/`derived`/`unknown`) is **not** extended. A "human-confirmed" basis would claim what §5 says cannot be shown. |
 
 **Opt-in.** A flow opts in at creation, with `flow init --require-confirmation`,
 or with `completion.require_confirmation: true` in
@@ -43,12 +43,16 @@ before.
 **Floors.** These are the same shape as SAC's.
 - **No tool mints a token.** No MCP tool or agent-native tool mints one. A test
   pins the production callers of the mint to the service and the CLI verb.
-- **The approval floor asks in every mode.** A shell command containing
-  `flow confirm` sets the approval gate's hard floor
-  (`touchesHumanConfirmation`, `src/lib/command-risk.ts`). It forces `ask` in
-  every permission mode, `auto` included. This holds in keryx's own agent loop,
-  in the ACP permission classifier, and on the supervised-codex elicitation
-  path.
+- **The approval floor asks in every mode.** A shell command containing the
+  words `flow confirm` sets the approval gate's hard floor
+  (`touchesHumanConfirmation`, `src/lib/command-risk.ts`, word-bounded). It
+  forces `ask` in every permission mode, `auto` included. This holds in keryx's
+  own agent loop, in the ACP permission classifier, and on the
+  supervised-codex elicitation path.
+- **No grant answers the prompt.** The interactive approver never lets a
+  session pattern (`keryx flow *`) or a remembered exact grant auto-approve the
+  command. It never offers "always" for it (readline `A=always`, the TUI's
+  exact/prefix options), and a stored pattern naming it is refused on load.
 - **Unattended runs refuse it.** They refuse `flow confirm` and `flow recover`
   (`FORBIDDEN_FLOW_VERBS`). They also refuse any command or patch that names a
   `confirm-token` store, flow or SAC.
@@ -132,7 +136,11 @@ No verb could leave `completing` except `complete()` itself:
 - `completing → completing` is not an allowed transition;
 - `unblock` restores the previous status, which was `completing`.
 
-The fix has two parts.
+The fix has two parts. One window stays open. A failure between spending the
+token and writing `done` (a process killed right there) leaves the token spent
+and the flow in `completing`. The token file and `flow.json` cannot be written
+atomically together. `flow recover` returns the flow to `in-progress`, and a
+fresh `flow confirm` mints a new token.
 
 - **At the source.**
   - Every gate that can throw is caught and recorded as unevaluable, naming the
@@ -147,7 +155,11 @@ The fix has two parts.
   left behind.
   - It is valid only from `completing`.
   - It refuses while another process holds the flow lock, since a live
-    `complete` holds that lock.
+    `complete` holds that lock. A `complete` killed outright (`kill -9`) leaves
+    its lock behind until it goes stale, about 30 seconds. Until then the
+    refusal says a crashed completion becomes recoverable once the lock goes
+    stale, and `flow status` shows "completion in progress, or interrupted less
+    than ~30s ago". After that, the flow shows as `interrupted`.
   - It moves the flow to `in-progress` and records a `completion-recovered`
     event. The event carries the reason, the last event before the
     interruption, and whether the criteria file is intact.
@@ -167,6 +179,11 @@ lock nobody holds as `interrupted`, and name the command.
 - **Old signatures.** A signature without `confirmation` renders as before.
 - **What did change.** `complete()` no longer throws when the criteria file
   changes mid-run. It returns a failed result, and the flow is `in-progress`.
+- **Older keryx.** An older keryx validates `flow.json` against its own schema,
+  whose gate names are a closed list. So its `flow check` flags a completion
+  attempt that records the new `confirmation` gate, exactly as older builds
+  flagged `owner` when that gate was added. New code reads old flows
+  unchanged. Old code reading new flows is not a goal.
 
 ## 9. References
 

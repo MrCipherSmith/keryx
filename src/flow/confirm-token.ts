@@ -51,6 +51,13 @@ export type StoredConfirmationToken = {
   flowId: string;
   kind: "complete";
   acChecksum: string;
+  /**
+   * The completion target the operator was shown when minting (security
+   * review of PR #661): `pr:<url>` for a pull-request completion, `merged` for
+   * a direct-merge one. `flow complete` refuses a token spent on any other
+   * target, so a token minted while looking at pull/1 cannot close pull/999.
+   */
+  target: string;
   mintedAt: string;
   expiresAt: string;
   usedAt?: string | undefined;
@@ -64,7 +71,8 @@ export type ConfirmationTokenFailure =
   | "token_expired"
   | "token_used"
   | "token_other_flow"
-  | "token_stale_criteria";
+  | "token_stale_criteria"
+  | "token_target_mismatch";
 
 export type ConfirmationTokenCheck =
   | { ok: true; stored: StoredConfirmationToken }
@@ -72,6 +80,15 @@ export type ConfirmationTokenCheck =
 
 export function confirmTokenPath(cwd: string, dir: string): string {
   return path.join(flowsRoot(cwd), dir, CONFIRM_TOKEN_FILE);
+}
+
+/**
+ * The completion target a token binds to: `merged` for a direct-merge
+ * completion, `pr:<url>` for a pull-request one, `pr:none` when no PR is
+ * recorded (a completion that the pull-request gate will fail anyway).
+ */
+export function completionTarget(input: { merged: boolean; prUrl: string | null }): string {
+  return input.merged ? "merged" : `pr:${input.prUrl ?? "none"}`;
 }
 
 function sha256(text: string): string {
@@ -86,7 +103,7 @@ function sha256(text: string): string {
 export async function mintConfirmationToken(
   cwd: string,
   dir: string,
-  binding: { flowId: string; acChecksum: string },
+  binding: { flowId: string; acChecksum: string; target: string },
   deps: { now: () => Date; randomToken?: () => string },
 ): Promise<{ token: string; stored: StoredConfirmationToken }> {
   // The flow id is the token's visible prefix, so a token pasted into the wrong
@@ -101,11 +118,41 @@ export async function mintConfirmationToken(
     flowId: binding.flowId,
     kind: "complete",
     acChecksum: binding.acChecksum,
+    target: binding.target,
     mintedAt: mintedAt.toISOString(),
     expiresAt: new Date(mintedAt.getTime() + CONFIRMATION_TOKEN_TTL_MS).toISOString(),
   };
   await writeFileAtomic(confirmTokenPath(cwd, dir), `${JSON.stringify(stored, null, 2)}\n`);
   return { token, stored };
+}
+
+const isString = (value: unknown): value is string => typeof value === "string" && value.length > 0;
+const isInstant = (value: unknown): value is string => isString(value) && Number.isFinite(Date.parse(value));
+
+/**
+ * The store's shape, checked before anything in it is trusted (security review
+ * of PR #661). `null`, an array, a missing or non-string field, or an
+ * `expiresAt` that does not parse is `token_unreadable`. An unparsable expiry
+ * must never read as "never expires": `NaN <= now` is false, which is exactly
+ * that bug.
+ */
+function parseStoredToken(raw: unknown): StoredConfirmationToken | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  if (
+    !isString(record["hash"]) ||
+    !isString(record["tokenRef"]) ||
+    !isString(record["flowId"]) ||
+    record["kind"] !== "complete" ||
+    !isString(record["acChecksum"]) ||
+    !isString(record["target"]) ||
+    !isInstant(record["mintedAt"]) ||
+    !isInstant(record["expiresAt"]) ||
+    (record["usedAt"] !== undefined && !isString(record["usedAt"]))
+  ) {
+    return undefined;
+  }
+  return record as unknown as StoredConfirmationToken;
 }
 
 /**
@@ -115,31 +162,34 @@ export async function mintConfirmationToken(
 export async function checkConfirmationToken(
   cwd: string,
   dir: string,
-  binding: { flowId: string; acChecksum: string | null },
+  binding: { flowId: string; acChecksum: string | null; target: string },
   token: string | undefined,
   now: Date,
 ): Promise<ConfirmationTokenCheck> {
   if (token === undefined || token.trim() === "") return { ok: false, reason: "token_required" };
   const presented = token.trim();
   const prefix = presented.includes(".") ? presented.slice(0, presented.indexOf(".")) : undefined;
-  if (prefix !== undefined && /^\d{3}$/.test(prefix) && prefix !== binding.flowId) {
+  if (prefix !== undefined && /^\d+$/.test(prefix) && prefix !== binding.flowId) {
     return { ok: false, reason: "token_other_flow" };
   }
-  let stored: StoredConfirmationToken;
+  let raw: unknown;
   try {
-    stored = JSON.parse(await readFile(confirmTokenPath(cwd, dir), "utf8")) as StoredConfirmationToken;
+    raw = JSON.parse(await readFile(confirmTokenPath(cwd, dir), "utf8"));
   } catch (error) {
     return { ok: false, reason: isNotFound(error) ? "token_not_minted" : "token_unreadable" };
   }
-  if (typeof stored.hash !== "string" || stored.hash !== sha256(presented)) {
+  const stored = parseStoredToken(raw);
+  if (stored === undefined) return { ok: false, reason: "token_unreadable" };
+  if (stored.hash !== sha256(presented)) {
     return { ok: false, reason: "token_mismatch" };
   }
-  if (stored.flowId !== binding.flowId || stored.kind !== "complete") return { ok: false, reason: "token_other_flow" };
+  if (stored.flowId !== binding.flowId) return { ok: false, reason: "token_other_flow" };
   if (stored.usedAt !== undefined) return { ok: false, reason: "token_used" };
-  if (new Date(stored.expiresAt).getTime() <= now.getTime()) return { ok: false, reason: "token_expired" };
+  if (Date.parse(stored.expiresAt) <= now.getTime()) return { ok: false, reason: "token_expired" };
   if (binding.acChecksum === null || stored.acChecksum !== binding.acChecksum) {
     return { ok: false, reason: "token_stale_criteria" };
   }
+  if (stored.target !== binding.target) return { ok: false, reason: "token_target_mismatch" };
   return { ok: true, stored };
 }
 
@@ -160,7 +210,7 @@ export async function consumeConfirmationToken(
     tokenRef: stored.tokenRef,
     mintedAt: stored.mintedAt,
     consumedAt,
-    boundTo: { kind: stored.kind, acChecksum: stored.acChecksum },
+    boundTo: { kind: stored.kind, acChecksum: stored.acChecksum, target: stored.target },
   };
 }
 
@@ -184,6 +234,11 @@ export function describeConfirmationFailure(reason: ConfirmationTokenFailure, fl
       return `the confirmation token was minted for a different flow; ${mint}`;
     case "token_stale_criteria":
       return `the acceptance criteria changed after the confirmation token was minted; ${mint}`;
+    case "token_target_mismatch":
+      return (
+        "the confirmation token was minted for a different completion target (another PR, or a direct merge " +
+        `versus a PR) than this completion; ${mint}`
+      );
   }
 }
 

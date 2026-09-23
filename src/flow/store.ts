@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { appendFile, mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { isLockHeld, pathExists, writeFileAtomic } from "../lib/fs";
+import { DEFAULT_LOCK_STALE_MS, isLockHeld, pathExists, writeFileAtomic } from "../lib/fs";
 import type { AttemptEntry, FlowHistoryEvent, FlowState, FlowStatus, FlowTask } from "./types";
 
 export function flowsRoot(cwd: string): string {
@@ -28,6 +28,18 @@ export async function isCompletionInterrupted(
   if (flow.status !== "completing") return false;
   const flowDir = dir ?? (await resolveFlowDir(cwd, flow.id));
   return !(await isLockHeld(flowLockPathFor(cwd, flowDir)));
+}
+
+/**
+ * The line `flow status` shows for a `completing` flow whose lock IS held: a
+ * completion still running, or one killed so recently that its lock has not
+ * gone stale yet. The two look the same from here until the lock ages out.
+ */
+export function completionInProgressLine(id: string): string {
+  return (
+    `completion in progress, or interrupted less than ~${Math.round(DEFAULT_LOCK_STALE_MS / 1000)}s ago — ` +
+    `\`keryx flow recover ${id} --reason "<why>"\` works once its lock goes stale`
+  );
 }
 
 /** The one line `flow status` and the TUI's `/flows` view show for an interrupted completion (flow 299, AC6). */

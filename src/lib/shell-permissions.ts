@@ -15,7 +15,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
 import { shellConfigPath } from "./shell-config";
-import { isDestructiveCommand, touchesAgentCredentials, touchesSacConfirmReview } from "./command-risk";
+import { isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation } from "./command-risk";
 import { createHash } from "node:crypto";
 import { hasUnquotedMetacharacter } from "./shell-syntax";
 
@@ -141,11 +141,11 @@ export function validateShellPattern(pattern: string): PatternValidation {
         "touches the agent's own permission/credential files; remembering it would let one approved command disable the approval gate for every future session",
     };
   }
-  if (touchesSacConfirmReview(trimmed)) {
+  if (touchesHumanConfirmation(trimmed)) {
     return {
       ok: false,
       reason:
-        "touches SAC's proposal-review/confirm-token family; that guarantee depends on a human answering a real approval prompt, so it is never remembered",
+        "touches a human-confirmation command (SAC's confirm-review family, or `flow confirm`); that guarantee depends on a human answering a real approval prompt, so it is never remembered",
     };
   }
   const banned = bannedPrefixGrant(trimmed, firstToken);
@@ -389,7 +389,7 @@ export function matchShellPattern(pattern: string, command: string): boolean {
  *    `/bin/sh -c`, so a pattern match says nothing about what will run;
  *  - a destructive command always requires explicit confirmation;
  *  - a command touching the agent's own credentials, or SAC's confirm-review
- *    family (`touchesSacConfirmReview`), is never auto-approved from a stored
+ *    family or `flow confirm` (`touchesHumanConfirmation`), is never auto-approved from a stored
  *    pattern, no matter how that pattern got into the file.
  *
  * Pure.
@@ -408,7 +408,7 @@ export function isShellCommandAllowed(command: string, allow: readonly string[])
   if (touchesAgentCredentials(cmd)) {
     return false;
   }
-  if (touchesSacConfirmReview(cmd)) {
+  if (touchesHumanConfirmation(cmd)) {
     return false;
   }
   return allow.some((pat) => matchShellPattern(pat, cmd));
@@ -458,7 +458,7 @@ export interface ShellPatternSuggestion {
  * A destructive command offers neither grant, whatever its shape: "always" on a
  * destructive command is the exact path that put a literal `rm -rf /` into a
  * live allowlist (flow 115). Same reasoning extends to SAC's proposal-review/
- * confirm-token family (`touchesSacConfirmReview`): "always" there is the
+ * confirm-token family or `flow confirm` (`touchesHumanConfirmation`): "always" there is the
  * exact path that would let a *later*, unrelated turn's `shell_exec` silently
  * satisfy the human-presence proof `keryx workspace confirm-review` exists to
  * require.
@@ -474,7 +474,7 @@ export function suggestShellPatterns(command: string): ShellPatternSuggestion {
   const first = collapsed.split(" ")[0] ?? collapsed;
   const prefix = first.length > 0 ? `${first} *` : exact;
   const neverRemember =
-    trimmed.length > 0 && (isDestructiveCommand(trimmed) || touchesSacConfirmReview(trimmed));
+    trimmed.length > 0 && (isDestructiveCommand(trimmed) || touchesHumanConfirmation(trimmed));
   return {
     exact,
     prefix,

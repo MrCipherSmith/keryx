@@ -54,3 +54,12 @@ test("AC8: TM-02 §7 links TM-03, and the SAC guide no longer implies the token 
 test("AC8: the caveat `flow complete` prints says a step, not a person", () => {
   expect(CONFIRMATION_CAVEAT).toContain("not that a human ran it");
 });
+
+test("review #661: TM-03 documents the target binding, the spent-token window, and older `flow check` flagging the new gate", async () => {
+  const record = await read("docs/decisions/keryx-harness/TM-03-terminal-confirmation-token.md");
+  expect(record).toContain("token_target_mismatch");
+  expect(record).toMatch(/leaves the token spent\s+and the flow in `completing`/);
+  expect(record).toMatch(/its `flow check` flags a completion\s+attempt that records the new `confirmation` gate/);
+  const reference = await read("docs/docs/cli-reference.md");
+  expect(reference).toContain("token_target_mismatch");
+});

@@ -1,6 +1,6 @@
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { isLockHeld, pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
+import { DEFAULT_LOCK_STALE_MS, isLockHeld, pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import {
   assertTransition,
@@ -18,6 +18,7 @@ import { collectContext } from "./context";
 import { DEFAULT_TASKS } from "./default-tasks";
 import {
   checkConfirmationToken,
+  completionTarget,
   consumeConfirmationToken,
   describeConfirmationFailure,
   mintConfirmationToken,
@@ -869,7 +870,14 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       let confirmationToken: StoredConfirmationToken | undefined;
       let confirmationOutcome: GateOutcome;
       try {
-        const confirmation = await confirmationGate(cwd, dir, flow, confirmToken, deps.now());
+        const confirmation = await confirmationGate(
+          cwd,
+          dir,
+          flow,
+          confirmToken,
+          completionTarget({ merged: Boolean(mergedCommit), prUrl: flow.pr.url }),
+          deps.now(),
+        );
         confirmationOutcome = confirmation.outcome;
         confirmationToken = confirmation.stored;
       } catch {
@@ -1181,7 +1189,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         const { token, stored } = await mintConfirmationToken(
           cwd,
           dir,
-          { flowId: flow.id, acChecksum: flow.acChecksum },
+          {
+            flowId: flow.id,
+            acChecksum: flow.acChecksum,
+            // The target the CLI just showed the operator (security review of
+            // PR #661): a later `flow implemented --pr <other>` cannot reuse it.
+            target: completionTarget({ merged: merged === true, prUrl: flow.pr.url }),
+          },
           { now: deps.now },
         );
         // History names the token by its hash prefix only: the plaintext token
@@ -1213,8 +1227,10 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // running would race it.
       if (await isLockHeld(lock)) {
         throw new Error(
-          `flow recover: another process holds flow ${id}'s lock — a \`flow complete\` is probably still running. ` +
-            "Wait for it to finish; recover only a completion that was interrupted.",
+          `flow recover: flow ${id}'s lock is held. Either a \`flow complete\` is still running, or one was ` +
+            `killed less than ~${Math.round(DEFAULT_LOCK_STALE_MS / 1000)}s ago and its lock has not gone stale yet. ` +
+            "A crashed completion becomes recoverable once its lock goes stale: retry then. Recovering a completion " +
+            "that is still running would race it.",
         );
       }
       return withFileLock(lock, async () => {
@@ -1760,6 +1776,7 @@ async function confirmationGate(
   dir: string,
   flow: FlowState,
   token: string | undefined,
+  target: string,
   now: Date,
 ): Promise<{ outcome: GateOutcome; stored?: StoredConfirmationToken }> {
   if (!flow.gates?.confirmation) {
@@ -1773,7 +1790,13 @@ async function confirmationGate(
       },
     };
   }
-  const check = await checkConfirmationToken(cwd, dir, { flowId: flow.id, acChecksum: flow.acChecksum }, token, now);
+  const check = await checkConfirmationToken(
+    cwd,
+    dir,
+    { flowId: flow.id, acChecksum: flow.acChecksum, target },
+    token,
+    now,
+  );
   if (!check.ok) {
     return {
       outcome: { name: "confirmation", status: "fail", detail: `${check.reason}: ${describeConfirmationFailure(check.reason, flow.id)}` },

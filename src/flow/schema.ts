@@ -293,6 +293,10 @@ export function flowStateSchema(): Record<string, unknown> {
                 properties: {
                   kind: { type: "string", enum: ["complete"] },
                   acChecksum: { type: "string" },
+                  target: {
+                    type: "string",
+                    description: "The completion target the token was minted for: `pr:<url>` or `merged`.",
+                  },
                 },
               },
             },
