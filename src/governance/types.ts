@@ -34,10 +34,16 @@ export type FlowReviewSpend = {
 };
 
 /**
- * Project-wide spend from fired triggers (AC2). Never flow-attributed — a
- * `TriggerRunRecord` carries no flow reference, so this is reported once per
- * project, alongside a note explaining why it cannot be folded into any
- * flow's total.
+ * Project-wide spend from fired triggers (AC2). `spentUsd` is the TRUE total
+ * — every run's cost, project-wide, whether or not it named a flow.
+ *
+ * Flow 297 gave some runs a flow reference (`TriggerDispatchRecord.flow`),
+ * and THOSE runs are also shown individually under their flow's own
+ * `FlowGovernance.dispatch.spend` (below). `attributedToFlowsUsd` is how much
+ * of `spentUsd` that is — a SUBSET, not a separate figure: a reader must
+ * never compute `spentUsd + sum(flow.dispatch.spend.spentUsd)`, because that
+ * double-counts every flow-attributed dollar. `undefined` (never `0` by
+ * coercion) when no flow-attributed run recorded a cost.
  */
 export type ProjectTriggerSpend =
   /** `runs.jsonl` has never been written: a demonstrated $0, not an unknown. */
@@ -46,12 +52,14 @@ export type ProjectTriggerSpend =
   | { state: "unreadable"; reason: string }
   | {
       state: "present";
-      /** Sum of `cost.usd` over every run whose cost WAS recorded. */
+      /** Sum of `cost.usd` over every run whose cost WAS recorded — the project's true total, flow-attributed runs included. */
       spentUsd: number;
       runsWithCostRecorded: number;
       /** Runs that fired but whose cost was never recorded — counted, never folded into the $0. */
       runsWithCostNotRecorded: number;
       runsTotal: number;
+      /** Flow 297 (AC2 follow-up): the part of `spentUsd` also shown under a flow's own `dispatch.spend` — never additive with it. */
+      attributedToFlowsUsd: number | undefined;
     };
 
 /**
@@ -84,6 +92,13 @@ export type FlowOpenReservation = {
  * Flow 297 (AC2): figures over `runs` only — an open reservation is tracked
  * separately (`openReservedUsd`) and never folded into `spentUsd`, the same
  * "reserved, not spent" rule the project-wide trigger ledger already keeps.
+ *
+ * `includedInProjectTriggerSpend` is always `true`: every dispatch run here
+ * is also part of `ProjectGovernance.triggerSpend.spentUsd` (and of that
+ * figure's own `attributedToFlowsUsd` subset) — this flow's `spentUsd` is a
+ * SLICE of the project total, not an addition to it. A consumer summing
+ * `triggerSpend.spentUsd` across every flow's `dispatch.spend.spentUsd`
+ * double-counts every dollar shown here.
  */
 export type FlowDispatchSpend = {
   runsTotal: number;
@@ -91,6 +106,7 @@ export type FlowDispatchSpend = {
   runsWithCostRecorded: number;
   runsWithCostNotRecorded: number;
   openReservedUsd: number;
+  readonly includedInProjectTriggerSpend: true;
 };
 
 /**

@@ -135,9 +135,7 @@ export function renderGovernanceMarkdown(report: GovernanceReport): string {
       continue;
     }
 
-    lines.push(
-      `trigger spend (project-wide, never flow-attributed): ${renderTriggerSpendLine(project.triggerSpend)}`,
-    );
+    lines.push(`trigger spend (project-wide total): ${renderTriggerSpendLine(project.triggerSpend)}`);
     lines.push(`policy decisions: ${project.policyDecisions.recorded ? "recorded" : "not recorded"} (${project.policyDecisions.reason})`);
     lines.push("");
 
@@ -202,6 +200,10 @@ export function renderGovernanceMarkdown(report: GovernanceReport): string {
  * denials, joined from the same ledger `renderTriggerSpendLine` reads at the
  * project level. An open reservation is its own line, "reserved, not spent"
  * — never folded into `spent=`.
+ *
+ * Review fix (PR #659): this flow's `spent=` is included in the project's
+ * trigger spend above, not an amount on top of it — the line says so
+ * explicitly so the two are never read as additive.
  */
 function renderFlowDispatchLines(dispatch: FlowDispatch): string[] {
   if (dispatch.state === "absent") {
@@ -218,7 +220,8 @@ function renderFlowDispatchLines(dispatch: FlowDispatch): string[] {
     `dispatch runs: spent=${usd(spend.spentUsd)} across ${spend.runsWithCostRecorded} run(s) with recorded cost; ` +
       `${spend.runsWithCostNotRecorded} run(s) with cost not recorded (never counted as $0); ` +
       `${openReservations.length} open reservation(s) totaling ${usd(spend.openReservedUsd)} (reserved, not spent); ` +
-      `${spend.runsTotal} run(s) total`,
+      `${spend.runsTotal} run(s) total ` +
+      `(included in the project's trigger spend above — not additive)`,
   ];
   for (const run of runs) {
     lines.push(
@@ -238,7 +241,13 @@ function renderFlowDispatchLines(dispatch: FlowDispatch): string[] {
   return lines;
 }
 
-/** Same `usd()` formatter review spend uses — one place a figure becomes a string, not two. */
+/**
+ * Same `usd()` formatter review spend uses — one place a figure becomes a
+ * string, not two. Review fix (PR #659): `spentUsd` is the project's TRUE
+ * total; the "of which …" clause states how much of it is ALSO shown under a
+ * flow's own dispatch section, so a reader is told in the same line not to
+ * add the two together.
+ */
 function renderTriggerSpendLine(spend: ProjectGovernance["triggerSpend"]): string {
   if (spend.state === "absent") {
     return `${usd(0)} (no trigger has ever run)`;
@@ -249,7 +258,8 @@ function renderTriggerSpendLine(spend: ProjectGovernance["triggerSpend"]): strin
   return (
     `${usd(spend.spentUsd)} across ${spend.runsWithCostRecorded} run(s) with recorded cost; ` +
     `${spend.runsWithCostNotRecorded} run(s) fired with cost not recorded (never counted as $0); ` +
-    `${spend.runsTotal} run(s) total`
+    `${spend.runsTotal} run(s) total; ` +
+    `of which ${usd(spend.attributedToFlowsUsd)} is shown under flows below (not additive — do not sum project + flows)`
   );
 }
 

@@ -1540,10 +1540,16 @@ Per project (`.metaproject/data/trigger/runs.jsonl`):
 
 - **Trigger spend** — USD summed over every fired-trigger run whose cost was
   recorded, plus the count of runs whose cost was not recorded (never folded
-  into the sum as `$0`). Project-wide across every trigger and every action
-  kind, whether or not the run named a flow. An absent ledger reports a
-  demonstrated `$0` (nothing has ever fired); an unreadable one reports `not
-  recorded` with the reason.
+  into the sum as `$0`). This is the project's TRUE total, project-wide across
+  every trigger and every action kind, whether or not the run named a flow.
+  `attributedToFlowsUsd` says how much of that total is ALSO shown under a
+  flow's own "Dispatch runs" section below (`spentUsd` there); it is a SUBSET
+  of the project total, never an amount on top of it — **do not add the
+  project's `spentUsd` to any flow's `dispatch.spend.spentUsd`, that
+  double-counts every dispatch dollar.** The markdown says so in place, with
+  "of which $X is shown under flows below (not additive)". An absent ledger
+  reports a demonstrated `$0` (nothing has ever fired); an unreadable one
+  reports `not recorded` with the reason.
 - **Policy decisions** — an INTERACTIVE session's own allow/ask/deny decisions
   have no durable record in this build, so this section always reads `not
   recorded` with that reason. An UNATTENDED dispatch run is different: flow 290
@@ -1558,7 +1564,10 @@ Per flow, also from `runs.jsonl` (flow 297):
   or an operator's `reservation-resolved`), the cost, and every call its
   unattended approval gate denied — the tool and the reason, timed by the
   run's own `at`. Spend is summed only over these CLOSED runs, the same
-  "never folded into `$0`" rule trigger spend keeps.
+  "never folded into `$0`" rule trigger spend keeps. This `spentUsd` is
+  **included in** the project's trigger spend above, not additional to it —
+  `includedInProjectTriggerSpend: true` in the JSON, and the markdown line
+  says "(included in the project's trigger spend above — not additive)".
 - **Open reservations** — a spend reservation this flow's dispatch opened
   (`keryx trigger run`, before its first model call) that no closing record —
   and no `keryx trigger resolve` — has closed yet: a killed run. Shown as

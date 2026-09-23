@@ -90,9 +90,12 @@ export function summarizeReviewSpend(manifests: readonly ManagedReviewManifest[]
 }
 
 /**
- * AC2: project-wide spend from fired triggers. Never flow-attributed —
- * `TriggerRunRecord` (`src/trigger/record.ts`) carries no flow reference, so
- * every run's cost lands in this one project-level figure. An absent ledger
+ * AC2: project-wide spend from fired triggers — the project's TRUE total,
+ * every run's cost, whether or not that run named a flow. Some of these runs
+ * (flow 297: `TriggerDispatchRecord.flow`) are ALSO shown individually under
+ * their flow's own `dispatch.spend` (`collectFlowDispatch` below) —
+ * `attributedToFlowsUsd` says how much of this total that is, so a reader
+ * never has to (wrongly) add the two together to find out. An absent ledger
  * is a demonstrated `$0` (nothing has ever fired); an unreadable one reports
  * `unreadable` with the reason rather than guessing.
  */
@@ -111,10 +114,17 @@ export function summarizeProjectTriggerSpend(read: TriggerRunsRead): ProjectTrig
   let spentUsd = 0;
   let runsWithCostRecorded = 0;
   let runsWithCostNotRecorded = 0;
+  // The SAME "closing record named a flow" test `collectFlowDispatch` uses
+  // per flow, applied project-wide — so this subset always equals the sum of
+  // every flow's own `dispatch.spend.spentUsd` (never drifts out of sync).
+  let attributedToFlowsUsd: number | undefined;
   for (const record of read.records) {
     if (record.cost.recorded) {
       spentUsd += record.cost.usd;
       runsWithCostRecorded += 1;
+      if (record.outcome !== "reserved" && record.dispatch?.flow !== undefined) {
+        attributedToFlowsUsd = (attributedToFlowsUsd ?? 0) + record.cost.usd;
+      }
     } else {
       runsWithCostNotRecorded += 1;
     }
@@ -125,6 +135,7 @@ export function summarizeProjectTriggerSpend(read: TriggerRunsRead): ProjectTrig
     runsWithCostRecorded,
     runsWithCostNotRecorded,
     runsTotal: read.records.length,
+    attributedToFlowsUsd,
   };
 }
 
@@ -136,6 +147,12 @@ export function summarizeProjectTriggerSpend(read: TriggerRunsRead): ProjectTrig
  * before flow 290) never matches any flow and stays out of this view — it is
  * still counted in the project-wide `ProjectTriggerSpend` above, exactly as
  * before this change.
+ *
+ * The runs counted here are a SLICE of `ProjectTriggerSpend`, not an addition
+ * to it — every one of them is already inside that total, and inside its own
+ * `attributedToFlowsUsd`. That is what `FlowDispatchSpend.includedInProjectTriggerSpend`
+ * states explicitly, so a caller reading only this function's output still
+ * knows not to add its `spentUsd` onto the project's.
  *
  * One ledger line is one fact, never double-counted: a completed dispatch run
  * writes a "reserved" line and then exactly one closing line for the same
@@ -193,6 +210,11 @@ export function collectFlowDispatch(read: TriggerRunsRead, flowId: string): Flow
       runsWithCostRecorded,
       runsWithCostNotRecorded,
       openReservedUsd,
+      // Always true: every run counted above is also part of
+      // `ProjectTriggerSpend.spentUsd` (and its `attributedToFlowsUsd`
+      // subset) — this flow's `spentUsd` is a slice of the project total,
+      // never an addition to it.
+      includedInProjectTriggerSpend: true,
     },
     runs,
     openReservations: openReservationsOut,

@@ -170,6 +170,8 @@ test("AC2: trigger spend sums recorded runs and counts unrecorded ones separatel
     runsWithCostRecorded: 1,
     runsWithCostNotRecorded: 1,
     runsTotal: 2,
+    // Neither record above named a flow (`dispatch` field), so nothing is attributed.
+    attributedToFlowsUsd: undefined,
   });
 });
 
@@ -234,10 +236,62 @@ test("AC1/AC2: a dispatch run's denials (tool, reason, time) are read from the l
     runsWithCostRecorded: 1,
     runsWithCostNotRecorded: 0,
     openReservedUsd: 0,
+    includedInProjectTriggerSpend: true,
   });
 
   const markdown = renderGovernanceMarkdown(report);
   expect(markdown).toContain("denied: shell_exec — approval required under permission mode");
+});
+
+// Review finding (PR #659): a dispatch run's cost was counted in
+// `triggerSpend` AND in its flow's `dispatch.spend` as two UNCONNECTED
+// figures — a consumer summing project + flows from `latest.json` (or a
+// reader of the markdown) would double-count every dispatch dollar. Fixed by
+// making the overlap explicit: `attributedToFlowsUsd` (project side) and
+// `includedInProjectTriggerSpend` (flow side) — this test pins that the two
+// are never additive.
+test("review fix: a flow-attributed dispatch run's cost is the SAME dollar under the project total and the flow — never additive", async () => {
+  await writeFlowFixture("124-2026-01-01-double-count-fix");
+  await appendTriggerRunRecord(ROOT, {
+    at: "2026-01-01T00:00:00.000Z",
+    trigger: "overnight",
+    firedBy: { kind: "schedule", cron: "0 2 * * *" } as never,
+    action: { kind: "flow-next", flow: "124" } as never,
+    outcome: "ok",
+    detail: "task T1 done",
+    cost: { recorded: true, usd: 0.42 },
+    dispatch: { runId: "run-b", flow: "124", task: "T1", closing: "done" },
+  });
+
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  const project = report.projects[0]!;
+  const flow = project.flows.find((f) => f.id === "124");
+  expect(flow?.dispatch.state).toBe("present");
+  if (flow?.dispatch.state !== "present") throw new Error("unreachable");
+
+  // The project's total IS the true total ($0.42 — one run, nothing else fired).
+  expect(project.triggerSpend).toMatchObject({ state: "present", spentUsd: 0.42 });
+  if (project.triggerSpend.state !== "present") throw new Error("unreachable");
+  // The attributed part equals the whole total here — everything that fired named this flow.
+  expect(project.triggerSpend.attributedToFlowsUsd).toBe(0.42);
+  // The flow's own figure carries the explicit "this is a slice, not an addition" flag.
+  expect(flow.dispatch.spend.includedInProjectTriggerSpend).toBe(true);
+  expect(flow.dispatch.spend.spentUsd).toBe(0.42);
+
+  // The double-count a naive consumer would compute — project + every flow's
+  // dispatch spend — must NOT equal what the report presents as the total.
+  // It must instead equal spentUsd + attributedToFlowsUsd, proving the two
+  // figures overlap rather than sum.
+  const naiveDoubleCount = project.triggerSpend.spentUsd + flow.dispatch.spend.spentUsd!;
+  expect(naiveDoubleCount).toBe(0.84);
+  expect(naiveDoubleCount).not.toBe(project.triggerSpend.spentUsd); // the double-count is wrong…
+  expect(project.triggerSpend.spentUsd).toBe(0.42); // …the report's own total is the true, non-doubled figure
+
+  // Markdown makes the non-additivity explicit in both directions.
+  const markdown = renderGovernanceMarkdown(report);
+  expect(markdown).toContain("of which $0.42 is shown under flows");
+  expect(markdown).toMatch(/not additive/i);
+  expect(markdown).toContain("included in the project's trigger spend");
 });
 
 test("AC2/AC4: an open spend reservation is shown as reserved, not spent — never folded into spentUsd", async () => {
