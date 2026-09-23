@@ -624,10 +624,17 @@ function sandboxedRunner(workdir: string, plan: UnattendedSandboxPlan): CommandR
   if (!plan.ok) {
     return async () => ({ output: `shell_exec refused: this unattended run has no sandbox (${plan.reason})`, isError: true });
   }
-  return makeCommandRunner(workdir, async (command) => ({
-    ok: true,
-    plan: { spawnArgs: plan.wrap(["/bin/sh", "-c", command]), env: plan.env, netClose: async () => {} },
-  }));
+  return makeCommandRunner(
+    workdir,
+    async (command) => ({
+      ok: true,
+      plan: { spawnArgs: plan.wrap(["/bin/sh", "-c", command]), env: plan.env, netClose: async () => {} },
+    }),
+    // Flow 301 (F5c): this run has no terminal to hang up on, and every reason to
+    // want a sandboxed process tree fully gone on abort/timeout — opts in to the
+    // process-group kill `makeCommandRunner` otherwise leaves off by default.
+    { processGroup: true },
+  );
 }
 
 function renderReport(input: {

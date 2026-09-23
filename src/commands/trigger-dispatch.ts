@@ -359,10 +359,17 @@ function unattendedRunner(worktree: string, plan: UnattendedSandboxPlan): Comman
       isError: true,
     });
   }
-  return makeCommandRunner(worktree, async (command) => ({
-    ok: true,
-    plan: { spawnArgs: plan.wrap(["/bin/sh", "-c", command]), env: plan.env, netClose: async () => {} },
-  }));
+  return makeCommandRunner(
+    worktree,
+    async (command) => ({
+      ok: true,
+      plan: { spawnArgs: plan.wrap(["/bin/sh", "-c", command]), env: plan.env, netClose: async () => {} },
+    }),
+    // Flow 301 (F5c): this run has no terminal to hang up on, and every reason to
+    // want a sandboxed process tree fully gone on abort/timeout — opts in to the
+    // process-group kill `makeCommandRunner` otherwise leaves off by default.
+    { processGroup: true },
+  );
 }
 
 /**

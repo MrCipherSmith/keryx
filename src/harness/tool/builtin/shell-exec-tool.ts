@@ -162,6 +162,29 @@ export async function resolveSandboxedSpawn(
  * bounded stdout/stderr. Never throws — a non-zero exit or a spawn failure becomes
  * `{ isError: ... }`. OS-contained when `KERYX_SANDBOX_SHELL` opts in.
  */
+export interface MakeCommandRunnerOptions {
+  /**
+   * Flow 301 (F5c): spawn the command DETACHED (POSIX `setsid()`, its own process
+   * group) and, on the per-command deadline or an external abort, SIGTERM then
+   * SIGKILL the whole GROUP (`process.kill(-pid, …)`) rather than only the one
+   * directly-spawned process. This is what lets a kill reach a plain shell's own
+   * children, or, inside the hardened sandbox, bwrap's whole contained tree.
+   *
+   * Default `false` — spawn and kill exactly as before flow 301 (F5b): a plain
+   * (non-detached) child, killed directly by pid. That default matters for a
+   * REAL regression F5b introduced and F5c fixes: `detached: true` makes the
+   * child its own session too, so it stops inheriting the TERMINAL's process
+   * group — a terminal hangup (SIGHUP to the foreground group) used to take an
+   * interactive `shell_exec` command down with it, and no longer would have.
+   * `src/acp/roster.ts`'s `shellExecTool(root)` and any other interactive,
+   * no-job-registry caller must keep that inherited behaviour; only the two
+   * unattended dispatchers (`trigger-agent-task.ts`, `trigger-dispatch.ts`),
+   * which have no terminal to hang up on and every reason to want a sandboxed
+   * process tree fully gone, opt in.
+   */
+  readonly processGroup?: boolean;
+}
+
 export function makeCommandRunner(
   root: string,
   /**
@@ -171,7 +194,9 @@ export function makeCommandRunner(
    * interactive resolution (`resolveShellEnv` + `resolveShellSpawn`).
    */
   spawnPlan?: (command: string) => Promise<{ ok: true; plan: SandboxSpawnPlan } | { ok: false; error: string }>,
+  runnerOptions?: MakeCommandRunnerOptions,
 ): CommandRunner {
+  const processGroup = runnerOptions?.processGroup === true;
   return async (command, options) => {
     // Closes the restricted-network proxy worker (no-op unless restricted). Run
     // exactly once in the finally, after success or failure.
@@ -189,62 +214,78 @@ export function makeCommandRunner(
         stdout: "pipe",
         stderr: "pipe",
         env: resolved.plan.env,
-        // Flow 301 (F5b): its own process group (POSIX `setsid()`), so a kill below
-        // reaches every descendant — a plain shell's own children (`sh -c 'x & y'`),
-        // or, inside the hardened sandbox, bwrap's whole contained tree via
-        // `--die-with-parent` — not only the one process this call directly spawned.
-        // `proc.kill()` alone signals only that single pid.
-        detached: true,
+        // Flow 301 (F5c): opt-in only. `detached: true` (POSIX `setsid()`) makes
+        // the child its own process group AND SESSION — the price is that it stops
+        // inheriting the caller's terminal process group, so a terminal hangup
+        // (SIGHUP to the foreground group) no longer takes it down. That is fine,
+        // even desirable, for the two unattended dispatchers (no terminal to hang
+        // up on; every reason to want a sandboxed tree fully gone) but was a real
+        // regression for every OTHER caller of this shared function (`src/acp/
+        // roster.ts`'s `shellExecTool(root)`, and any interactive setup with no
+        // job registry) when F5b made it unconditional. Default `false`: spawn
+        // exactly as before F5b.
+        detached: processGroup,
       });
 
-      // Flow 301 (F5b): SIGTERM the whole process GROUP (`-proc.pid` — valid because
-      // `detached` above made this process its own group leader), then SIGKILL after
-      // a grace period if it ignores TERM. Shared by the per-command deadline below
-      // and by an external abort (`options.signal`) — same mechanism, different
-      // trigger, so the two paths cannot drift into killing different things.
+      // Flow 301 (F5b/F5c): SIGTERM then SIGKILL after a grace period if it ignores
+      // TERM. `processGroup` decides WHAT is signalled: the whole process GROUP
+      // (`-proc.pid` — valid only because `detached` above made this process its
+      // own group leader) when opted in, so the kill reaches every descendant — a
+      // plain shell's own children (`sh -c 'x & y'`), or, inside the hardened
+      // sandbox, bwrap's whole contained tree via `--die-with-parent`; otherwise
+      // (default) just the one process this call directly spawned, `proc.kill()`,
+      // exactly as before F5b. Shared by the per-command deadline below and by an
+      // external abort (`options.signal`) — same mechanism, different trigger, so
+      // the two paths cannot drift into killing different things.
       let forceTimer: ReturnType<typeof setTimeout> | undefined;
-      const killGroup = (signal: "SIGTERM" | "SIGKILL"): void => {
+      const kill = (signal: "SIGTERM" | "SIGKILL"): void => {
         try {
-          process.kill(-proc.pid, signal);
+          if (processGroup) process.kill(-proc.pid, signal);
+          else proc.kill(signal);
         } catch {
           // already gone
         }
       };
-      const killGroupWithGrace = (): void => {
-        killGroup("SIGTERM");
-        forceTimer = setTimeout(() => killGroup("SIGKILL"), 2_000);
+      const killWithGrace = (): void => {
+        kill("SIGTERM");
+        forceTimer = setTimeout(() => kill("SIGKILL"), 2_000);
       };
 
-      // Deadline. On expiry: SIGTERM the group, then SIGKILL if it ignores TERM, so
-      // a command that traps TERM (or forks a grandchild that ignores it) cannot
-      // outlive its deadline either. The output collected so far is still reported —
-      // a timeout with no context is much harder to act on than a truncated transcript.
+      // Deadline. On expiry: SIGTERM (the group when opted in, else just this
+      // process), then SIGKILL if it ignores TERM, so a command that traps TERM (or
+      // forks a grandchild that ignores it, when `processGroup` reaches it at all)
+      // cannot outlive its deadline either. The output collected so far is still
+      // reported — a timeout with no context is much harder to act on than a
+      // truncated transcript.
       const timeoutMs = resolveShellTimeoutMs(process.env);
       let timedOut = false;
       let killTimer: ReturnType<typeof setTimeout> | undefined;
       if (timeoutMs > 0) {
         killTimer = setTimeout(() => {
           timedOut = true;
-          killGroupWithGrace();
+          killWithGrace();
         }, timeoutMs);
       }
 
-      // Flow 301 (F5b): the run that owns this command can end it early — an
+      // Flow 301 (F5b/F5c): the run that owns this command can end it early — an
       // unattended dispatch's `maxSeconds` abort, or an interactive hard-stop that
       // reaches here (no `jobRegistry`, so `shellExecTool` cannot promote to a
       // background task instead — see that module's own comment on why the
-      // registry branch does the opposite on purpose). Before this fix an abort
-      // here changed nothing: the sandboxed process kept running, orphaned, after
-      // the dispatcher closed its proxy and deleted its scratch directory, until
-      // ITS OWN `timeoutMs` (120s default) eventually caught it — well past
-      // `maxSeconds`. Same group-wide kill as the deadline above; a distinct
-      // result rather than folding into the timeout notice, since the reason is
-      // different (the RUN ended, not this one command running too long).
+      // registry branch does the opposite on purpose). Before F5b an abort here
+      // changed nothing: with `processGroup` on (the unattended dispatchers), the
+      // sandboxed process used to keep running, orphaned, after the dispatcher
+      // closed its proxy and deleted its scratch directory, until ITS OWN
+      // `timeoutMs` (120s default) eventually caught it — well past `maxSeconds`.
+      // Same kill as the deadline above (group-wide when opted in, direct pid
+      // otherwise); a distinct result rather than folding into the timeout notice,
+      // since the reason is different (the RUN ended, not this one command running
+      // too long) — same wording either way, `processGroup` changes only WHAT gets
+      // signalled, never what the caller is told.
       let aborted = false;
       const signal = options?.signal;
       const onAbort = (): void => {
         aborted = true;
-        killGroupWithGrace();
+        killWithGrace();
       };
       if (signal !== undefined) {
         if (signal.aborted) onAbort();

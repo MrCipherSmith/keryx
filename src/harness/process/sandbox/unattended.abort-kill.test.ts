@@ -73,10 +73,21 @@ describe("F5b: an aborted unattended shell_exec is really killed, not orphaned (
       const marker = `keryx-abort-kill-marker-${randomUUID()}`;
       const command = `: ${marker}; sleep 60 & CHILD=$!; wait $CHILD`;
 
-      const run = makeCommandRunner(workdir, async (cmd) => ({
-        ok: true,
-        plan: { spawnArgs: plan.wrap(["/bin/sh", "-c", cmd]), env: plan.env, netClose: async () => {} },
-      }));
+      // Flow 301 (F5c): pass `{ processGroup: true }` explicitly — this is what
+      // distinguishes an unattended dispatcher's runner from the default (F5c made
+      // group-kill opt-in; `sandboxedRunner`/`unattendedRunner` in
+      // `trigger-agent-task.ts`/`trigger-dispatch.ts` both opt in). Without this,
+      // this test would silently exercise the DEFAULT (non-detached, direct-pid-
+      // kill) path instead of the real dispatcher shape, and could not prove the
+      // whole sandboxed tree — including the `sleep 60` grandchild — dies on abort.
+      const run = makeCommandRunner(
+        workdir,
+        async (cmd) => ({
+          ok: true,
+          plan: { spawnArgs: plan.wrap(["/bin/sh", "-c", cmd]), env: plan.env, netClose: async () => {} },
+        }),
+        { processGroup: true },
+      );
 
       const controller = new AbortController();
       const start = Date.now();
