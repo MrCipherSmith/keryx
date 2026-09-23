@@ -17,8 +17,10 @@
 //
 // Everything is read through `./trigger-ledger.ts` (the seam flow 295 reuses).
 
+import { formatUsd } from "../governance/service";
 import { entryHasNetwork } from "../trigger/describe";
 import type { TriggerRunOutcomeKind } from "../trigger/record";
+import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
 import { onThemeChange, type TextRole } from "./theme";
 import { dimChunk, roleChunk } from "./theme-text";
 import { clearTranscriptChildren } from "./transcript-blocks";
@@ -73,21 +75,28 @@ function fit(text: string, width: number): string {
 
 /** `spent $0.12 · 2 not recorded` / `spent $0` / `spend unreadable`. */
 export function formatTriggerSpend(spend: TriggerLedgerView["spend"]): { text: string; role: TextRole | "dim" } {
-  if (spend.state === "absent") return { text: "spent $0 · nothing fired yet", role: "dim" };
+  if (spend.state === "absent") return { text: `spent ${formatUsd(0)} · nothing fired yet`, role: "dim" };
   if (spend.state === "unreadable") return { text: "spend: ledger unreadable", role: "error" };
-  const usd = `$${spend.spentUsd.toFixed(2)}`;
+  // The governance report's own formatter (4 decimals, trimmed): `$0.004`,
+  // never a rounded-away `$0.00` (review F3).
+  const usd = formatUsd(spend.spentUsd);
   const notRecorded = spend.runsWithCostNotRecorded > 0 ? ` · ${spend.runsWithCostNotRecorded} not recorded` : "";
   return { text: `spent ${usd}${notRecorded}`, role: "dim" };
 }
 
 export function projectTriggersPanel(
   view: TriggerLedgerView | undefined,
-  options: { width: number; now: Date },
+  options: { width: number; now: Date; loadError?: string },
 ): TriggersPanelProjection {
-  if (view === undefined || view.config.kind === "absent") return { visible: false, rows: [] };
   const w = options.width;
   const list = { kind: "list" } as const;
   const rows: TriggersPanelRow[] = [];
+  // Review F12: a read that FAILED is not "no triggers" — say so, never hide.
+  if (options.loadError !== undefined) {
+    rows.push({ id: "sb-triggers-error", chunks: [{ role: "error", text: fit(`could not read: ${options.loadError}`, w) }], target: list });
+    return { visible: true, rows };
+  }
+  if (view === undefined || view.config.kind === "absent") return { visible: false, rows: [] };
   if (view.config.kind === "broken") {
     rows.push({ id: "sb-triggers-broken", chunks: [{ role: "error", text: fit(`config unreadable (${view.config.problem})`, w) }], target: list });
     return { visible: true, rows };
@@ -147,6 +156,8 @@ export interface TriggersPanelOptions {
 
 export interface TriggersPanelHandle {
   refresh(): Promise<void>;
+  /** Re-project the last read without reading again (row ages move on). */
+  repaint(): void;
   /** The last projection painted (tests). */
   projection(): TriggersPanelProjection;
   /** The last view read. */
@@ -167,6 +178,7 @@ export function mountTriggersPanel(
   const load = options.load ?? loadTriggerLedgerView;
   const now = options.now ?? (() => new Date());
   let view: TriggerLedgerView | undefined;
+  let loadError: string | undefined;
   let projected: TriggersPanelProjection = { visible: false, rows: [] };
   let generation = 0;
   let disposed = false;
@@ -176,7 +188,7 @@ export function mountTriggersPanel(
 
   const paint = (): void => {
     if (disposed) return;
-    projected = projectTriggersPanel(view, { width: options.width, now: now() });
+    projected = projectTriggersPanel(view, { width: options.width, now: now(), ...(loadError !== undefined ? { loadError } : {}) });
     clearTranscriptChildren(box);
     if (!projected.visible) return;
     box.add(
@@ -201,25 +213,23 @@ export function mountTriggersPanel(
 
   const refresh = async (): Promise<void> => {
     const mine = ++generation;
-    const next = await load(options.cwd).catch(() => undefined);
+    let next: TriggerLedgerView | undefined;
+    let error: string | undefined;
+    try {
+      next = await load(options.cwd);
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : String(caught);
+    }
     if (disposed || mine !== generation) return;
     view = next;
+    loadError = error;
     paint();
   };
-  // A theme listener runs inside `applyThemeId` for EVERY subscriber; one whose
-  // renderables were already torn down (renderer destroyed before close) must
-  // not throw into the others.
-  const safePaint = (): void => {
-    try {
-      paint();
-    } catch {
-      // destroyed renderables: nothing left to recolour
-    }
-  };
-  const unsubscribeTheme = onThemeChange(() => safePaint());
+  const unsubscribeTheme = onThemeChange(guardedThemeRepaint("triggers-panel", paint, () => disposed || isRenderableGone(box)));
   void refresh();
   return {
     refresh,
+    repaint: paint,
     projection: () => projected,
     view: () => view,
     dispose() {

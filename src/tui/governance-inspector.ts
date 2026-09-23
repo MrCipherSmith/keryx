@@ -19,6 +19,7 @@ import { clampScroll, windowLines, wrapLines } from "./flow-inspector";
 import { formatReportDate, type GovernanceRunner } from "./governance-panel";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
+import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
 import { dimChunk, roleChunk } from "./theme-text";
 
 type OpenTui = typeof import("@opentui/core");
@@ -48,6 +49,12 @@ export interface GovernanceModalOptions {
   readMarkdown?: (cwd: string) => Promise<string | undefined>;
   /** Override the body height (tests). */
   visibleRows?: number;
+  /**
+   * True while a composer choice or a permission prompt owns the keyboard
+   * (review F11): the modal then ignores keys, so an `r` or `y` meant for that
+   * prompt never re-runs anything here.
+   */
+  inputBlocked?: () => boolean;
 }
 
 export interface GovernanceModalHandle extends ModalHandle {
@@ -150,6 +157,7 @@ export function openGovernanceReport(
     paint();
   };
 
+  let unsubscribeTheme: () => void = () => {};
   const unsubscribeRunner = options.runner.subscribe((_state, event) => {
     if (event === "finished") {
       scroll = 0;
@@ -158,18 +166,6 @@ export function openGovernanceReport(
       paint();
     }
   });
-  // A theme listener runs inside `applyThemeId` for EVERY subscriber; one whose
-  // renderables were already torn down (renderer destroyed before close) must
-  // not throw into the others.
-  const safePaint = (): void => {
-    try {
-      paint();
-    } catch {
-      // destroyed renderables: nothing left to recolour
-    }
-  };
-  const unsubscribeTheme = onThemeChange(() => safePaint());
-
   const handle = openModal(core, chrome as never, {
     title: GOVERNANCE_COMMAND,
     tabs: [{ id: "report", label: "Report" }],
@@ -192,12 +188,15 @@ export function openGovernanceReport(
   });
   if (handle === undefined) {
     unsubscribeRunner();
-    unsubscribeTheme();
     return undefined;
   }
+  // Subscribed only once the modal really opened (review F13).
+  unsubscribeTheme = onThemeChange(
+    guardedThemeRepaint("governance-modal", paint, () => closed || isRenderableGone(bodyNode) || (r as { isDestroyed?: boolean } | undefined)?.isDestroyed === true),
+  );
 
   keys.off = options.onKeypress((key) => {
-    if (closed) return;
+    if (closed || options.inputBlocked?.() === true) return;
     const token = key.name || key.sequence;
     const total = bodyLines().length;
     if (token === "up" || token === "k") scroll = clampScroll(scroll - 1, total, bodyRows);

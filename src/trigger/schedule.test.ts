@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { renderScheduleLines, resolveScheduleEntry, type KeryxInvocation } from "./schedule";
+import { invocationArgv, renderScheduleLines, resolveKeryxInvocation, resolveScheduleEntry, type KeryxInvocation } from "./schedule";
 import { triggersConfigPath } from "./config";
 
 async function writeTriggers(root: string, triggers: unknown[]): Promise<void> {
@@ -242,5 +242,40 @@ describe("renderScheduleLines", () => {
         }
       },
     );
+  });
+});
+
+// Flow 300 review F2: a `bun build --compile` binary reports its entry as
+// `/$bunfs/root/<name>` (Windows: `B:\~BUN\root\<name>`). That path exists
+// only inside the binary; passing it as an argument shifted every one after it.
+describe("resolveKeryxInvocation on a compiled binary", () => {
+  test("a /$bunfs/ entry is the binary alone — no script argument", () => {
+    const invocation = resolveKeryxInvocation("/$bunfs/root/keryx", "/usr/local/bin/keryx");
+    expect(invocation).toEqual({ execPath: "/usr/local/bin/keryx" });
+    expect(invocationArgv(invocation)).toEqual(["/usr/local/bin/keryx"]);
+  });
+
+  test("a Windows ~BUN entry is the binary alone too", () => {
+    expect(invocationArgv(resolveKeryxInvocation("B:\\~BUN\\root\\keryx.exe", "C:\\keryx\\keryx.exe"))).toEqual(["C:\\keryx\\keryx.exe"]);
+  });
+
+  test("a real script entry keeps [interpreter, absolute script]", () => {
+    expect(invocationArgv(resolveKeryxInvocation("dist/cli.js", "/opt/bun/bin/bun"))).toEqual([
+      "/opt/bun/bin/bun",
+      path.resolve("dist/cli.js"),
+    ]);
+  });
+
+  test("the printed cron line and systemd ExecStart run the binary directly, arguments unshifted", () => {
+    const lines = renderScheduleLines({
+      projectRoot: "/srv/project",
+      name: "nightly",
+      cron: "0 2 * * *",
+      invocation: resolveKeryxInvocation("/$bunfs/root/keryx", "/usr/local/bin/keryx"),
+    });
+    expect(lines.cronCommand).toContain("'/usr/local/bin/keryx' trigger run 'nightly'");
+    expect(lines.cronCommand).not.toContain("$bunfs");
+    expect(lines.systemdService).toContain("ExecStart=/usr/local/bin/keryx trigger run nightly");
+    expect(lines.systemdService).not.toContain("$bunfs");
   });
 });

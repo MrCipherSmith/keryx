@@ -29,6 +29,7 @@ import type { TriggerRunRecord } from "../trigger/record";
 import { clampScroll, scrollToReveal, windowLines, wrapLines } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
+import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
 import { dimChunk, roleChunk } from "./theme-text";
 import { formatAge, formatTriggerSpend } from "./triggers-panel";
 import { eventEntries, loadTriggerLedgerView, scheduledEntries, type TriggerEntryView, type TriggerLedgerView } from "./trigger-ledger";
@@ -156,6 +157,22 @@ export function formatTriggerListLines(items: readonly TriggerModalItem[], view:
   return lines;
 }
 
+/** Lines of the status block above the tab body (review F10: two, not one). */
+export const STATUS_ROWS = 2;
+
+/**
+ * The arm prompt. For a dispatching entry it states what confirming spends
+ * and grants — its ceiling, and NETWORK ON when the agent gets the host
+ * network (review F10) — so `y` is never pressed on a one-line summary.
+ */
+export function armPrompt(item: TriggerModalItem): string {
+  const name = itemName(item);
+  const base = `run ${name} now (keryx trigger run ${name})?`;
+  const d = item.kind === "entry" ? entryDispatch(item.view.entry) : undefined;
+  const posture = d === undefined ? "" : ` dispatches ${d.provider}/${d.model}, ceiling $${d.ceilingUsd}${d.network ? ", NETWORK ON" : ", network off"} ·`;
+  return `${base}${posture} y to confirm · any other key cancels`;
+}
+
 export interface TriggersModalOptions {
   cwd: string;
   runNow: TriggerRunNow;
@@ -169,6 +186,8 @@ export interface TriggersModalOptions {
   now?: () => Date;
   /** Called once per confirmed run when it ends (the shell's toast). */
   onRunFinished?: (last: LastRunNow) => void;
+  /** True while a composer choice or permission prompt owns the keyboard (review F11): keys are ignored. */
+  inputBlocked?: () => boolean;
 }
 
 export interface TriggersModalHandle extends ModalHandle {
@@ -193,8 +212,8 @@ export function openTriggers(otui: unknown, chrome: unknown, options: TriggersMo
     typeof rendererHint?.width === "number" && typeof rendererHint.height === "number"
       ? modalBodyRows(resolveModalPanelSize(rendererHint.width, rendererHint.height).height)
       : 13;
-  // The status line and the blank under it.
-  const bodyRows = Math.max(1, (options.visibleRows ?? panelRows) - 2);
+  // The status block (STATUS_ROWS lines) and the blank under it (review F10).
+  const bodyRows = Math.max(1, (options.visibleRows ?? panelRows) - STATUS_ROWS - 1);
 
   let view: TriggerLedgerView | undefined;
   let items: TriggerModalItem[] = [];
@@ -232,13 +251,23 @@ export function openTriggers(otui: unknown, chrome: unknown, options: TriggersMo
     detailScroll = clampScroll(detailScroll, detailLines().length, bodyRows);
     const running = options.runNow.running();
     const role = armed !== undefined ? "attention" : running.size > 0 ? "accent" : "muted";
-    if (statusNode !== undefined) statusNode.content = core.t`${roleChunk(core, role, wrapLines(statusText, width).split("\n")[0] ?? "")}`;
+    if (statusNode !== undefined) {
+      const status = wrapLines(statusText, width).split("\n").slice(0, STATUS_ROWS).join("\n");
+      statusNode.content = core.t`${roleChunk(core, role, status)}`;
+    }
     if (bodyNode !== undefined) bodyNode.content = core.t`${dimChunk(core, visible().join("\n"))}`;
   };
 
   const reload = async (): Promise<void> => {
-    const next = await load(options.cwd).catch(() => undefined);
-    if (next === undefined) return;
+    let next: TriggerLedgerView;
+    try {
+      next = await load(options.cwd);
+    } catch (error) {
+      // Review F12: a read that fails says so; it never leaves a stale list looking current.
+      statusText = `could not read the triggers: ${error instanceof Error ? error.message : String(error)}`;
+      paint();
+      return;
+    }
     const entries = eventEntries(next);
     const hooks = await Promise.all(entries.map((e) => describeHook(options.cwd, e.entry).catch(() => "unknown")));
     const previous = selectedItem() === undefined ? undefined : itemName(selectedItem() as TriggerModalItem);
@@ -276,17 +305,7 @@ export function openTriggers(otui: unknown, chrome: unknown, options: TriggersMo
     });
   };
 
-  // A theme listener runs inside `applyThemeId` for EVERY subscriber; one whose
-  // renderables were already torn down (renderer destroyed before close) must
-  // not throw into the others.
-  const safePaint = (): void => {
-    try {
-      paint();
-    } catch {
-      // destroyed renderables: nothing left to recolour
-    }
-  };
-  const unsubscribeTheme = onThemeChange(() => safePaint());
+  let unsubscribeTheme: () => void = () => {};
   const handle = openModal(core, chrome as never, {
     title: TRIGGERS_COMMAND,
     tabs: [
@@ -310,15 +329,16 @@ export function openTriggers(otui: unknown, chrome: unknown, options: TriggersMo
       unsubscribeTheme();
     },
   });
-  if (handle === undefined) {
-    unsubscribeTheme();
-    return undefined;
-  }
+  if (handle === undefined) return undefined;
   const modal = handle;
   host.handle = handle;
+  // Subscribed only once the modal really opened (review F13).
+  unsubscribeTheme = onThemeChange(
+    guardedThemeRepaint("triggers-modal", paint, () => closed || isRenderableGone(bodyNode) || (r as { isDestroyed?: boolean } | undefined)?.isDestroyed === true),
+  );
 
   keys.off = options.onKeypress((key) => {
-    if (closed) return;
+    if (closed || options.inputBlocked?.() === true) return;
     const token = key.name || key.sequence;
     if (armed !== undefined) {
       const name = armed;
@@ -345,7 +365,7 @@ export function openTriggers(otui: unknown, chrome: unknown, options: TriggersMo
         statusText = `cannot run: ${refusal}`;
       } else {
         armed = itemName(selectedItem() as TriggerModalItem);
-        statusText = `run ${armed} now (keryx trigger run ${armed})? y to confirm · any other key cancels`;
+        statusText = armPrompt(selectedItem() as TriggerModalItem);
       }
     } else if (token === "[" || token === "p") move(selected - 1);
     else if (token === "]" || token === "n") move(selected + 1);
@@ -365,7 +385,14 @@ export function openTriggers(otui: unknown, chrome: unknown, options: TriggersMo
   const ready = reload().then(() => {
     if (options.initialName !== undefined) {
       const index = items.findIndex((i) => itemName(i) === options.initialName);
-      if (index >= 0) selected = index;
+      if (index >= 0) {
+        selected = index;
+      } else {
+        // Review F9: a typo'd name stays on the list and says so — it never
+        // opens some OTHER trigger's detail.
+        modal.setTab("list");
+        statusText = `no trigger named "${options.initialName}"`;
+      }
       paint();
     }
   });

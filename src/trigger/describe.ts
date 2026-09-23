@@ -57,9 +57,9 @@ export function entryHasNetwork(entry: TriggerEntry): boolean {
   return entryDispatch(entry)?.network === true;
 }
 
-/** `cost: $0.0120` or `cost: n/a (<reason>)` — an unrecorded cost is never shown as $0. */
+/** `cost: $0.0120` or `cost: not recorded (<reason>)` — an unrecorded cost is never shown as $0. */
 export function describeCost(cost: TriggerRunCost): string {
-  return cost.recorded ? `cost: $${cost.usd.toFixed(4)}` : `cost: n/a (${cost.reason})`;
+  return cost.recorded ? `cost: $${cost.usd.toFixed(4)}` : `cost: not recorded (${cost.reason})`;
 }
 
 /** `keryx trigger status`'s per-trigger line. */

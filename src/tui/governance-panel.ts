@@ -21,6 +21,7 @@ import {
   type GovernanceReport,
   type GovernanceReportRead,
 } from "../governance/service";
+import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
 import { onThemeChange, type TextRole } from "./theme";
 import { dimChunk, roleChunk } from "./theme-text";
 
@@ -34,7 +35,7 @@ export type GovernanceRunState =
   | { readonly kind: "idle" }
   | { readonly kind: "running"; readonly startedAt: string }
   | { readonly kind: "done"; readonly generatedAt: string }
-  | { readonly kind: "failed"; readonly reason: string };
+  | { readonly kind: "failed"; readonly reason: string; readonly at: string };
 
 /** Emitted once per run, on the transition out of `running`. */
 export type GovernanceRunEvent = "finished" | "failed";
@@ -100,7 +101,7 @@ export function createGovernanceRunner(options: GovernanceRunnerOptions): Govern
           current = { kind: "done", generatedAt: report.generatedAt };
           emit("finished");
         } catch (error) {
-          current = { kind: "failed", reason: error instanceof Error ? error.message : String(error) };
+          current = { kind: "failed", reason: error instanceof Error ? error.message : String(error), at: now().toISOString() };
           emit("failed");
         }
         return current;
@@ -143,24 +144,35 @@ function fit(text: string, width: number): string {
 }
 
 /**
- * One of exactly four states. A run in flight wins; a failed run shows until
- * the next run starts (clicking it retries); otherwise the stored report
- * decides (absent and malformed both read as "no report").
+ * One of exactly four states.
+ *
+ * - A run in flight wins.
+ * - A failed run shows `failed — click to retry`, unless the stored report is
+ *   NEWER than the failure (another process wrote one since): then that report
+ *   is what there is to show (review F7).
+ * - Otherwise the stored report decides — absent and malformed both read as
+ *   "no report", and a report deleted since the last run reads as "no report"
+ *   too. The run's own `generatedAt` is used only in the gap between a run
+ *   finishing and the re-read of what it wrote (`readIsStale`).
  */
 export function projectGovernanceRow(
   read: GovernanceReportRead | undefined,
   run: GovernanceRunState,
   width: number,
+  options: { readIsStale?: boolean } = {},
 ): GovernanceRow {
   if (run.kind === "running") return { text: fit(GOVERNANCE_RUNNING, width), role: "accent", action: "none" };
-  if (run.kind === "failed") return { text: fit(GOVERNANCE_FAILED, width), role: "error", action: "run" };
-  // The newest date known: the stored report's, or — between a run finishing
-  // and the re-read of what it wrote — the run's own.
   const stored = read?.state === "present" ? read.report.generatedAt : undefined;
-  const ran = run.kind === "done" ? run.generatedAt : undefined;
+  if (run.kind === "failed" && !(stored !== undefined && stored > run.at)) {
+    return { text: fit(GOVERNANCE_FAILED, width), role: "error", action: "run" };
+  }
+  const ran = run.kind === "done" && options.readIsStale === true ? run.generatedAt : undefined;
   const newest = stored === undefined ? ran : ran === undefined || stored >= ran ? stored : ran;
   if (newest === undefined) {
-    return { text: fit(GOVERNANCE_NO_REPORT, width), role: "attention", action: "run" };
+    // A malformed stored report is never rebuilt behind the operator's back
+    // (review F15): the click opens the modal, which gives the reason and
+    // offers `r` to rebuild it.
+    return { text: fit(GOVERNANCE_NO_REPORT, width), role: "attention", action: read?.state === "malformed" ? "open" : "run" };
   }
   return { text: fit(`last report ${formatReportDate(newest)}`, width), role: "muted", action: "open" };
 }
@@ -221,7 +233,9 @@ export function mountGovernancePanel(
   box.add(label);
   box.add(value as never);
 
-  const currentRow = (): GovernanceRow => projectGovernanceRow(read, options.runner.state(), options.width);
+  // True from a run finishing until the re-read of what it wrote lands.
+  let readIsStale = false;
+  const currentRow = (): GovernanceRow => projectGovernanceRow(read, options.runner.state(), options.width, { readIsStale });
   const paint = (): void => {
     if (disposed) return;
     const row = currentRow();
@@ -230,12 +244,8 @@ export function mountGovernancePanel(
   };
   const activate = (): GovernanceRowAction => {
     const action = currentRow().action;
-    if (action === "run") {
-      void options.runner.start();
-      // A malformed stored report reads as "no report" in the row; the modal
-      // is where its reason is given.
-      if (read?.state === "malformed") options.onOpen();
-    } else if (action === "open") options.onOpen();
+    if (action === "run") void options.runner.start();
+    else if (action === "open") options.onOpen();
     return action;
   };
   label.onMouseDown = () => {
@@ -253,26 +263,20 @@ export function mountGovernancePanel(
     }));
     if (disposed || mine !== generation) return;
     read = next;
+    readIsStale = false;
     paint();
   };
 
   const unsubscribeRunner = options.runner.subscribe((_state, event) => {
     // A finished run re-reads the artifact it just wrote; anything else is a
     // state change the row reflects immediately.
-    if (event === "finished") void refresh();
-    else paint();
-  });
-  // A theme listener runs inside `applyThemeId` for EVERY subscriber; one whose
-  // renderables were already torn down (renderer destroyed before close) must
-  // not throw into the others.
-  const safePaint = (): void => {
-    try {
+    if (event === "finished") {
+      readIsStale = true;
       paint();
-    } catch {
-      // destroyed renderables: nothing left to recolour
-    }
-  };
-  const unsubscribeTheme = onThemeChange(() => safePaint());
+      void refresh();
+    } else paint();
+  });
+  const unsubscribeTheme = onThemeChange(guardedThemeRepaint("governance-panel", paint, () => disposed || isRenderableGone(box)));
   paint();
   void refresh();
 

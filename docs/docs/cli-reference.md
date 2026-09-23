@@ -613,13 +613,20 @@ Refusals print their code and exit non-zero (except where noted):
   `all_projects`, above `latest.md` wrapped to the panel. `↑/↓` and `j/k` scroll
   one line, `PgUp/PgDn` scroll one page, `r` re-runs the report in the
   background and refreshes the modal when it finishes, and `Esc` closes it. A
-  malformed stored report reads as "no report" in the sidebar; the modal gives
-  the reason.
+  malformed or unreadable stored report reads as "no report" in the sidebar,
+  but it is never rebuilt behind your back: clicking the row or `/governance`
+  opens the modal, which gives the reason and offers `r` to rebuild it. A report
+  written by another process after a failed run replaces the `failed` state.
+  Both artifacts are replaced atomically, `latest.json` last.
 - **Triggers** (TUI sidebar, below Governance). The section is hidden when
   `.metaproject/triggers.json` does not exist, and shows one error row when the
-  file cannot be read. It shows:
-  - Project trigger spend, as `keryx governance report` computes it. Runs whose
-    cost was not recorded are counted separately and never added in as $0.
+  file, or the ledger, cannot be read. Row ages are repainted at least once a
+  minute. It shows:
+  - Project trigger spend, as `keryx governance report` computes it and in the
+    same format (`$0.004`, never rounded to `$0.00`). Runs whose cost was not
+    recorded are counted separately and never added in as $0. A dispatch's
+    spend reservation is not a run of its own once the run's closing record (or
+    `keryx trigger resolve`) exists.
   - The number of open spend reservations, when there are any.
   - One row per event-fired trigger: its name, `enabled` or `disabled`, and
     either the last outcome with its age or `never fired`. A trigger whose
@@ -628,7 +635,10 @@ Refusals print their code and exit non-zero (except where noted):
   Schedule-fired triggers get no rows here, only an `N scheduled` line; the
   Schedules section owns them.
 
-  Clicking a row, or `/triggers [name]`, opens a list+detail modal:
+  Clicking a row, or `/triggers [name]`, opens a list+detail modal. A name that
+  matches no trigger stays on the list with `no trigger named "<name>"`. Both
+  modals ignore keys while a permission prompt or another composer choice is
+  open.
   - **List keys:** `↑/↓` to select, `Enter` to open Detail, `[`/`]` for the
     previous or next trigger.
   - **Detail** shows the entry exactly as `keryx trigger list`/`status` print it
@@ -640,14 +650,25 @@ Refusals print their code and exit non-zero (except where noted):
     denials) and every open reservation with its exact
     `keryx trigger resolve <runId> --spent <usd>` command. The TUI never
     resolves a reservation itself.
-  - **Run now:** `r` arms it, `y` confirms, and any other key cancels. A
-    disabled or malformed entry cannot be armed, and the modal says why. A
-    confirmed run is `keryx trigger run <name>` executed as a child process of
-    the same keryx build the shell runs (its own interpreter and entry script,
-    not whatever `keryx` is on `PATH`), in the project root. It is therefore
-    bound by exactly the CLI's locks, budgets, spend reservations, refusals and
-    unattended floor. The modal shows `running…`, then the new ledger record and
-    the tail of the child's output, and one toast appears.
+  - **Run now:** `r` arms it, `y` confirms, and any other key cancels. For a
+    dispatching entry the prompt names its ceiling and whether the network is
+    ON. A disabled or malformed entry cannot be armed, and the modal says why.
+    A confirmed run is `keryx trigger run <name>` executed as a child process
+    of the same keryx build the shell runs (its own interpreter and entry
+    script, or the binary itself for a compiled build — never whatever `keryx`
+    is on `PATH`), in the project root, without the shell's `KERYX_SESSION_*`
+    variables. It is therefore bound by exactly the CLI's locks, budgets, spend
+    reservations, refusals and unattended floor. The modal shows `running…`,
+    then the new ledger record and the tail of the run's output, and one toast
+    appears.
+  - **Quitting while a run is in flight** does not stop it. The child runs
+    detached, in its own process group, and writes its output to
+    `.metaproject/data/trigger/run-now/<name>.log` (a directory that ignores
+    itself in git). On exit the shell prints one line naming the trigger and
+    the log. The run writes its own closing record, which the sidebar shows on
+    the next start. A second run-now of the same trigger from a restarted shell
+    is refused by the CLI's own lock (`lock-refused`, or `dispatch-locked` for a
+    dispatching `flow-next`), not by the TUI.
 
   Both sections poll `runs.jsonl`, `triggers.json` and the governance
   `latest.json` every few seconds, and again after every settled turn. They
@@ -1486,7 +1507,7 @@ Taken from a real run:
 $ keryx trigger status
 keryx trigger status (reading /path/to/project/.metaproject/data/trigger/runs.jsonl):
   - nightly-reconcile  [enabled]  schedule:"0 2 * * *"  -> reconcile
-      last: 2026-09-22T19:33:15.623Z — ok — action "reconcile" completed. [cost: n/a (this action does not call a model — reconcile/rebuild are deterministic, no spend to record)]
+      last: 2026-09-22T19:33:15.623Z — ok — action "reconcile" completed. [cost: not recorded (this action does not call a model — reconcile/rebuild are deterministic, no spend to record)]
 ```
 
 **Locking.** One project maintenance lock —
@@ -1562,7 +1583,7 @@ Read-only: it never re-runs a gate, never calls a model or a network service,
 and the only files it writes are its own report artifacts. A figure nobody
 recorded is reported as "not recorded", never as zero — the same rule
 `keryx review budget`'s `spend_status: not-recorded` and `keryx trigger
-status`'s `cost: n/a` already follow.
+status`'s `cost: not recorded (<reason>)` already follow.
 
 ```
 keryx governance report [--flow <id>] [--owner <name>] [--since <iso>] [--until <iso>] [--all-projects] [--json]

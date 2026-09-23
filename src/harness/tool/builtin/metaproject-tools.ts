@@ -14,6 +14,7 @@
 // the subprocess runner rather than surfacing the port's "unavailable" result.
 
 import { existsSync } from "node:fs";
+import { isCompiledBinaryEntry } from "../../../lib/self-invocation";
 import { resolve } from "node:path";
 import {
   METAPROJECT_OPERATIONS,
@@ -110,7 +111,7 @@ export function keryxSelfCommand(
   if (entries.includes(resolve(main)) && exists(main)) {
     return [execPath, main];
   }
-  if (main.startsWith("/$bunfs/") || /^[A-Za-z]:[\\/]~BUN[\\/]/.test(main)) {
+  if (isCompiledBinaryEntry(main)) {
     return [execPath];
   }
   return ["keryx"];

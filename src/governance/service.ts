@@ -22,6 +22,7 @@ export {
   governanceDataRoot,
   readLatestGovernanceReport,
   renderGovernanceMarkdown,
+  usd as formatUsd,
   writeGovernanceArtifacts,
   type BuildGovernanceReportOptions,
 } from "./report";

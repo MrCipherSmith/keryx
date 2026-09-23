@@ -11,6 +11,8 @@
 // calling this, and can subscribe to `ops.watcher` instead of starting a
 // second poller.
 
+import { findAgentCommand } from "../commands/agent-commands";
+import { classifyBusyDispatch } from "./busy-dispatch";
 import { readLatestGovernanceReport, type GovernanceReportRead } from "../governance/service";
 import { createGovernanceRunner, mountGovernancePanel, type GovernancePanelHandle, type GovernanceRunner, type GovernanceRunnerOptions } from "./governance-panel";
 import { GOVERNANCE_COMMAND, openGovernanceReport, type GovernanceModalHandle } from "./governance-inspector";
@@ -18,7 +20,7 @@ import type { ModalChrome } from "./modal-host";
 import { mountTriggersPanel, type TriggersPanelHandle } from "./triggers-panel";
 import { openTriggers, TRIGGERS_COMMAND, type LastRunNow, type TriggersModalHandle } from "./triggers-inspector";
 import { createTriggerLedgerWatcher, type LedgerInterval, type TriggerLedgerView, type TriggerLedgerWatcher } from "./trigger-ledger";
-import { createTriggerRunNow, type TriggerRunNow } from "./trigger-run-now";
+import { createTriggerRunNow, type InFlightRun, type TriggerRunNow } from "./trigger-run-now";
 
 export { GOVERNANCE_COMMAND, TRIGGERS_COMMAND };
 
@@ -41,7 +43,15 @@ export interface OpsSidebarOptions {
   /** Injectable for tests (the Governance section's stored-report read). */
   readLatestGovernance?: (cwd: string) => Promise<GovernanceReportRead>;
   now?: () => Date;
+  /**
+   * True while a composer choice or permission prompt owns the keyboard. Both
+   * modals ignore keys then (review F11). Default: the chrome's dock is visible.
+   */
+  inputBlocked?: () => boolean;
 }
+
+/** How often, at most, the Triggers section re-projects so row ages move on (review F12). */
+export const AGE_REPAINT_MS = 60_000;
 
 export interface OpsSidebar {
   readonly governancePanel: GovernancePanelHandle;
@@ -61,7 +71,12 @@ export interface OpsSidebar {
   afterTurn(): Promise<void>;
   /** Settles when the repaint the latest watcher change started has finished. */
   repainted(): Promise<void>;
-  dispose(): void;
+  /**
+   * Stop everything this owns. Never signals a run-now child (review F4):
+   * returns the runs still in flight, which keep going in the background.
+   * Idempotent — a second call returns the same list.
+   */
+  dispose(): readonly InFlightRun[];
 }
 
 export function commandToken(line: string): string {
@@ -73,12 +88,46 @@ export function isOpsCommand(line: string): boolean {
   return token === GOVERNANCE_COMMAND || token === TRIGGERS_COMMAND;
 }
 
+/**
+ * The shell's routing of `/governance` and `/triggers` — called from BOTH of
+ * `runLine`'s branches in `tui-shell.ts` (review F6: tests drive this, not a
+ * hand-wired `ops.handleCommand`):
+ *   - idle: the line resolves through the agent-mode registry
+ *     (`findAgentCommand`) and `isOpsCommand` picks it up;
+ *   - busy: `classifyBusyDispatch` — the same classifier the busy branch
+ *     switches on — must name it `governance`/`triggers`, i.e. read-only and
+ *     never deferred to a side worker.
+ * Returns whether the line was handled.
+ */
+export function routeOpsCommand(line: string, busy: boolean, ops: Pick<OpsSidebar, "handleCommand">): boolean {
+  const command = findAgentCommand(line, "agent");
+  if (command === undefined || !isOpsCommand(command.name)) return false;
+  if (busy) {
+    const target = classifyBusyDispatch({
+      line,
+      commandName: command.name,
+      isSessionInfo: false,
+      isFlows: false,
+      isWorkspace: false,
+      isReview: false,
+      isMcp: false,
+      isMcpConsumer: false,
+    });
+    if (target !== "governance" && target !== "triggers") return false;
+  }
+  return ops.handleCommand(line);
+}
+
 export function mountOpsSidebar(options: OpsSidebarOptions): OpsSidebar {
   const { otui, chrome, cwd } = options;
   const renderer = chrome.renderer;
   const notice = options.notice ?? (() => {});
   const runner = createGovernanceRunner({ cwd, ...options.governance });
   const runNow = options.runNow ?? createTriggerRunNow({ root: cwd });
+  const readLatestGovernance = options.readLatestGovernance ?? readLatestGovernanceReport;
+  const inputBlocked =
+    options.inputBlocked ?? ((): boolean => (chrome as { dock?: { visible?: boolean } }).dock?.visible === true);
+  const clock = options.now ?? (() => new Date());
   let governanceModal: GovernanceModalHandle | undefined;
   let triggersModal: TriggersModalHandle | undefined;
 
@@ -87,6 +136,8 @@ export function mountOpsSidebar(options: OpsSidebarOptions): OpsSidebar {
       cwd,
       runner,
       onKeypress: options.onKeypress,
+      readLatest: readLatestGovernance,
+      inputBlocked,
     });
     return governanceModal;
   };
@@ -98,7 +149,7 @@ export function mountOpsSidebar(options: OpsSidebarOptions): OpsSidebar {
     onOpen: () => {
       openReport();
     },
-    ...(options.readLatestGovernance !== undefined ? { readLatest: options.readLatestGovernance } : {}),
+    readLatest: readLatestGovernance,
   });
 
   const showTriggers = (name?: string): TriggersModalHandle | undefined => {
@@ -109,6 +160,7 @@ export function mountOpsSidebar(options: OpsSidebarOptions): OpsSidebar {
       ...(name !== undefined ? { initialName: name } : {}),
       ...(options.loadTriggers !== undefined ? { load: options.loadTriggers } : {}),
       ...(options.now !== undefined ? { now: options.now } : {}),
+      inputBlocked,
       onRunFinished: (last: LastRunNow) => {
         chrome.showToast(
           last.record === undefined
@@ -143,6 +195,17 @@ export function mountOpsSidebar(options: OpsSidebarOptions): OpsSidebar {
     ...(options.interval !== undefined ? { interval: options.interval } : {}),
   });
   let repaint: Promise<void> = Promise.resolve();
+  let detached: readonly InFlightRun[] | undefined;
+  // Review F12: ages ("ok 3m") move on even when no file changed — re-project
+  // at least once a minute, on the watcher's own tick (no second timer).
+  let agesPaintedAt = clock().getTime();
+  const unsubscribeTick = watcher.onTick(() => {
+    const t = clock().getTime();
+    if (t - agesPaintedAt >= AGE_REPAINT_MS) {
+      agesPaintedAt = t;
+      triggersPanel.repaint();
+    }
+  });
   const unsubscribeWatcher = watcher.subscribe((changed) => {
     const work: Array<Promise<void> | undefined> = [];
     if (changed.has("governance")) work.push(governancePanel.refresh(), governanceModal?.reload());
@@ -155,13 +218,15 @@ export function mountOpsSidebar(options: OpsSidebarOptions): OpsSidebar {
       notice("Governance report is already running in the background — the sidebar shows it when it finishes.\n");
       return openReport();
     }
-    const read = await readLatestGovernanceReport(cwd).catch(() => ({ state: "absent" }) as const);
-    if (read.state === "present") return openReport();
+    // A read that throws is "malformed", exactly as the sidebar maps it (review F15).
+    const read: GovernanceReportRead = await readLatestGovernance(cwd).catch((error: unknown) => ({
+      state: "malformed",
+      reason: error instanceof Error ? error.message : String(error),
+    }));
+    // Present, or malformed: open the modal. A malformed report is NOT rebuilt
+    // automatically — the modal gives its reason and offers `r`.
+    if (read.state !== "absent") return openReport();
     void runner.start();
-    if (read.state === "malformed") {
-      notice(`Stored governance report is unreadable (${read.reason}) — running a new one in the background.\n`);
-      return openReport();
-    }
     notice("No governance report yet — running `keryx governance report` in the background; the sidebar shows it when it finishes.\n");
     return undefined;
   };
@@ -194,16 +259,19 @@ export function mountOpsSidebar(options: OpsSidebarOptions): OpsSidebar {
     },
     repainted: () => repaint,
     dispose() {
+      if (detached !== undefined) return detached;
       // An open modal holds keypress and theme subscriptions; close it with the
       // sections so nothing paints into a renderer that is going away.
       governanceModal?.close({ restoreFocus: false });
       triggersModal?.close({ restoreFocus: false });
       unsubscribeRunner();
+      unsubscribeTick();
       unsubscribeWatcher();
       watcher.stop();
-      runNow.dispose();
+      detached = runNow.dispose();
       governancePanel.dispose();
       triggersPanel.dispose();
+      return detached;
     },
   };
 }

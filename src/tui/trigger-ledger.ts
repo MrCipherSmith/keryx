@@ -29,7 +29,7 @@
 // Change detection (one poller per shell, many subscribers):
 //
 //   createTriggerLedgerWatcher({ root, intervalMs?, interval?, stat? })
-//       → TriggerLedgerWatcher { ready, check(), subscribe(fn), stop() }
+//       → TriggerLedgerWatcher { ready, check(), subscribe(fn), onTick(fn), stop() }
 //       Fingerprints (mtime + size) the three watched files:
 //         "runs"       .metaproject/data/trigger/runs.jsonl
 //         "triggers"   .metaproject/triggers.json
@@ -41,6 +41,8 @@
 //       unchanged tick repaints nothing. `interval` is injectable: it receives
 //       the tick and the period and returns a cancel function (tests call the
 //       tick themselves; production uses an unref'd `setInterval`).
+//       `onTick(fn)` runs on EVERY interval tick (changed or not), after its
+//       check — for time-based repaints such as row ages.
 //   triggerLedgerPaths(root) → Record<LedgerSource, string>
 //
 // A Schedules panel therefore needs exactly: `watcher.subscribe(changed =>
@@ -171,6 +173,8 @@ export interface TriggerLedgerWatcher {
   /** Compare now; notify subscribers when anything changed. Returns what changed. */
   check(): Promise<ReadonlySet<LedgerSource>>;
   subscribe(listener: (changed: ReadonlySet<LedgerSource>) => void): () => void;
+  /** Called on EVERY interval tick, changed or not, after its check — for time-based repaints (row ages). */
+  onTick(listener: () => void): () => void;
   stop(): void;
 }
 
@@ -202,6 +206,7 @@ export function createTriggerLedgerWatcher(opts: {
   const paths = triggerLedgerPaths(opts.root);
   const statFile = opts.stat ?? defaultStat;
   const listeners = new Set<(changed: ReadonlySet<LedgerSource>) => void>();
+  const tickListeners = new Set<() => void>();
   let baseline: Map<LedgerSource, string> | undefined;
   let inFlight: Promise<ReadonlySet<LedgerSource>> | undefined;
   let stopped = false;
@@ -250,6 +255,13 @@ export function createTriggerLedgerWatcher(opts: {
   const cancel = (opts.interval ?? defaultInterval)(async () => {
     if (stopped) return;
     await check();
+    for (const listener of [...tickListeners]) {
+      try {
+        listener();
+      } catch {
+        // a broken tick subscriber must not stop the poller
+      }
+    }
   }, opts.intervalMs ?? DEFAULT_LEDGER_POLL_MS);
 
   return {
@@ -261,9 +273,16 @@ export function createTriggerLedgerWatcher(opts: {
         listeners.delete(listener);
       };
     },
+    onTick(listener) {
+      tickListeners.add(listener);
+      return () => {
+        tickListeners.delete(listener);
+      };
+    },
     stop() {
       stopped = true;
       listeners.clear();
+      tickListeners.clear();
       cancel();
     },
   };

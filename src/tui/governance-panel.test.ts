@@ -53,7 +53,7 @@ test("AC1: projection — exactly four states, each within SIDEBAR_TEXT_WIDTH", 
     projectGovernanceRow({ state: "malformed", reason: "x" }, idle, SIDEBAR_TEXT_WIDTH),
     projectGovernanceRow(present, { kind: "running", startedAt: "t" }, SIDEBAR_TEXT_WIDTH),
     projectGovernanceRow(present, idle, SIDEBAR_TEXT_WIDTH),
-    projectGovernanceRow(present, { kind: "failed", reason: "boom" }, SIDEBAR_TEXT_WIDTH),
+    projectGovernanceRow(present, { kind: "failed", reason: "boom", at: "2026-09-23T06:00:00.000Z" }, SIDEBAR_TEXT_WIDTH),
   ];
   expect(rows.map((r) => r.text)).toEqual([
     GOVERNANCE_NO_REPORT,
@@ -62,7 +62,8 @@ test("AC1: projection — exactly four states, each within SIDEBAR_TEXT_WIDTH", 
     "last report 2026-09-23 05:40",
     GOVERNANCE_FAILED,
   ]);
-  expect(rows.map((r) => r.action)).toEqual(["run", "run", "none", "open", "run"]);
+  // A malformed report is never rebuilt on a click (review F15): it opens the modal with the reason.
+  expect(rows.map((r) => r.action)).toEqual(["run", "open", "none", "open", "run"]);
   for (const row of rows) expect(row.text.length).toBeLessThanOrEqual(SIDEBAR_TEXT_WIDTH);
 });
 
@@ -181,7 +182,7 @@ otuiTest("AC2: a thrown build leaves `failed — click to retry`, never a stuck 
     const done = ops.runner.start();
     await done;
     await settle(h);
-    expect(ops.runner.state()).toEqual({ kind: "failed", reason: "disk on fire" });
+    expect(ops.runner.state()).toMatchObject({ kind: "failed", reason: "disk on fire" });
     expect(textOf(findById(h.chrome.sidebarTop, "sb-governance-v"))).toBe(GOVERNANCE_FAILED);
     expect(h.toasts).toEqual(["Governance report failed: disk on fire"]);
     // Retry is the row's action.
@@ -242,6 +243,58 @@ otuiTest("AC10: a /theme switch recolours the Governance section", async () => {
     expect(light).not.toEqual(dark);
   } finally {
     applyThemeId(before);
+    panel.dispose();
+    h.destroy();
+  }
+});
+
+test("review F7: a stored report NEWER than the failure clears `failed`; an older one does not", () => {
+  const failed: GovernanceRunState = { kind: "failed", reason: "boom", at: "2026-09-23T06:00:00.000Z" };
+  const report = (generatedAt: string) => ({ state: "present", report: { generatedAt } as GovernanceReport }) as const;
+  expect(projectGovernanceRow(report("2026-09-23T07:00:00.000Z"), failed, SIDEBAR_TEXT_WIDTH).text).toBe("last report 2026-09-23 07:00");
+  expect(projectGovernanceRow(report("2026-09-23T05:00:00.000Z"), failed, SIDEBAR_TEXT_WIDTH).text).toBe(GOVERNANCE_FAILED);
+});
+
+test("review F7: after the re-read the STORED report wins over the run's own date; a deleted report reads as no report", () => {
+  const done: GovernanceRunState = { kind: "done", generatedAt: "2026-09-23T08:00:00.000Z" };
+  // In the gap before the re-read, the run's own date shows.
+  expect(projectGovernanceRow({ state: "absent" }, done, SIDEBAR_TEXT_WIDTH, { readIsStale: true }).text).toBe("last report 2026-09-23 08:00");
+  // Re-read: the report was deleted since — no report.
+  expect(projectGovernanceRow({ state: "absent" }, done, SIDEBAR_TEXT_WIDTH).text).toBe(GOVERNANCE_NO_REPORT);
+  // Re-read: an OLDER stored report (another process rewrote it) is what there is.
+  const older = { state: "present", report: { generatedAt: "2026-09-23T07:30:00.000Z" } as GovernanceReport } as const;
+  expect(projectGovernanceRow(older, done, SIDEBAR_TEXT_WIDTH).text).toBe("last report 2026-09-23 07:30");
+});
+
+otuiTest("review F15: a click on a malformed report opens the modal with its reason and does NOT rebuild it", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const cwd = await project();
+  let builds = 0;
+  let opened = 0;
+  const runner = createGovernanceRunner({
+    cwd,
+    build: async (o) => {
+      builds += 1;
+      return buildGovernanceReport(o);
+    },
+  });
+  const panel = mountGovernancePanel(otui.core, h.renderer, h.chrome.sidebarTop, {
+    cwd,
+    runner,
+    width: SIDEBAR_TEXT_WIDTH,
+    onOpen: () => {
+      opened += 1;
+    },
+    readLatest: async () => ({ state: "malformed", reason: "latest.json is missing schemaVersion" }),
+  });
+  try {
+    await panel.refresh();
+    expect(textOf(findById(h.chrome.sidebarTop, "sb-governance-v"))).toBe(GOVERNANCE_NO_REPORT);
+    await clickNode(h, findById(h.chrome.sidebarTop, "sb-governance-v"));
+    expect(opened).toBe(1);
+    expect(builds).toBe(0);
+  } finally {
     panel.dispose();
     h.destroy();
   }

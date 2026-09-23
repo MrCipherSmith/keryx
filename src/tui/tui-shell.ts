@@ -65,7 +65,8 @@ import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/typ
 import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
-import { isOpsCommand, mountOpsSidebar, type OpsSidebar } from "./ops-sidebar";
+import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
+import { describeDetachedRuns } from "./trigger-run-now";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
 import { createSplashLifecycle, mountEmptyTranscriptSplash, playBootAnimation, type SplashLifecycle } from "./boot-animation";
@@ -6219,7 +6220,7 @@ export async function launchTuiAgentShell(opts: {
           }
           case "governance":
           case "triggers": {
-            ops.handleCommand(line);
+            routeOpsCommand(line, true, ops);
             return;
           }
           case "mcp": {
@@ -6574,8 +6575,7 @@ export async function launchTuiAgentShell(opts: {
           showReview();
           return;
         }
-        if (isOpsCommand(command.name)) {
-          ops.handleCommand(line);
+        if (routeOpsCommand(line, false, ops)) {
           return;
         }
         if (isMcpConsumerCommand(command.name)) {
@@ -7241,5 +7241,10 @@ export async function launchTuiAgentShell(opts: {
     } catch {
       // best-effort teardown
     }
+    // Flow 300 review F4: a run-now child is never killed with the shell. Say,
+    // once and after the alternate screen is gone, that it keeps running and
+    // where its output goes; the ledger watcher shows its outcome next start.
+    const detachedNote = describeDetachedRuns(liveOps?.dispose() ?? []);
+    if (detachedNote !== undefined) process.stderr.write(`${detachedNote}\n`);
   }
 }

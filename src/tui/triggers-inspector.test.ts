@@ -11,7 +11,7 @@ import { formatModalFooter, MODAL_PANEL_INNER_WIDTH } from "./modal-host";
 import { GOVERNANCE_FOOTER } from "./governance-inspector";
 import { applyThemeId, getThemeId, roleColor } from "./theme";
 import { findEntry, loadTriggerLedgerView } from "./trigger-ledger";
-import { formatTriggerDetailLines, openTriggers, TRIGGERS_FOOTER, type TriggerModalItem } from "./triggers-inspector";
+import { armPrompt, formatTriggerDetailLines, openTriggers, STATUS_ROWS, TRIGGERS_FOOTER, type TriggerModalItem } from "./triggers-inspector";
 import type { TriggerRunNow, TriggerRunNowResult } from "./trigger-run-now";
 import {
   appendRuns,
@@ -106,7 +106,7 @@ test("AC5: detail — fire, action, hook, full dispatch posture with the NETWORK
   expect(text).toContain("max attempts     2");
   expect(text).toContain(`roster           ${UNATTENDED_ROSTER_DESCRIPTION}`);
   expect(text).toContain(`network          NETWORK ON — ${NETWORK_ON_WARNING}`);
-  expect(text).toContain("dispatch-refused — flow 001 is not in progress  [cost: n/a (refused before any model call)]");
+  expect(text).toContain("dispatch-refused — flow 001 is not in progress  [cost: not recorded (refused before any model call)]");
   expect(text).toContain("refusal: flow-not-in-progress");
   expect(text).toContain("denials: shell_exec: ask mode");
   expect(text).toContain("keryx trigger resolve trg-abc --spent <usd>");
@@ -127,11 +127,11 @@ function fakeRunNow(): TriggerRunNow & { started: string[]; finish(result: Parti
       });
     },
     running: () => new Set(current === undefined ? [] : [current]),
-    dispose() {},
+    dispose: () => [],
     finish(result) {
       const name = current ?? "?";
       current = undefined;
-      resolve?.({ name, argv: ["bun", "cli.ts", "trigger", "run", name], exitCode: 0, output: "", startedAt: "2026-09-23T00:00:00.000Z", endedAt: "x", ...result });
+      resolve?.({ name, argv: ["bun", "cli.ts", "trigger", "run", name], exitCode: 0, output: "", logPath: "/tmp/x.log", startedAt: "2026-09-23T00:00:00.000Z", endedAt: "x", ...result });
     },
   };
 }
@@ -244,4 +244,60 @@ test("AC8: both modals' footers list their keys and fit the narrowest panel", ()
   expect(formatModalFooter(TRIGGERS_FOOTER)).toContain("r run");
   expect(formatModalFooter(TRIGGERS_FOOTER)).toContain("y confirm");
   expect(formatModalFooter(GOVERNANCE_FOOTER)).toContain("r re-run");
+});
+
+otuiTest("review F9: `/triggers <typo>` stays on the list and says `no trigger named`", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const root = await fixture();
+  const modal = openTriggers(otui.core, h.chrome, { cwd: root, runNow: fakeRunNow(), onKeypress: keypressSource(h.renderer), initialName: "rebiuld" });
+  try {
+    await modal!.ready;
+    expect(modal!.activeTab()).toBe("list");
+    expect(modal!.status()).toBe('no trigger named "rebiuld"');
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+test("review F10: the arm prompt of a dispatching entry names its ceiling and NETWORK ON; the status block is two lines", async () => {
+  const root = await fixture();
+  const view = await loadTriggerLedgerView(root);
+  const net = armPrompt({ kind: "entry", view: findEntry(view, "work-flow")!, hook: "n/a" });
+  expect(net).toContain("ceiling $1");
+  expect(net).toContain("NETWORK ON");
+  const plain = armPrompt({ kind: "entry", view: findEntry(view, "rebuild")!, hook: "n/a" });
+  expect(plain).toBe("run rebuild now (keryx trigger run rebuild)? y to confirm · any other key cancels");
+  expect(STATUS_ROWS).toBe(2);
+});
+
+otuiTest("review F11: while a composer choice or permission prompt owns the keyboard, the modal ignores `r` and `y`", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const root = await fixture();
+  const runNow = fakeRunNow();
+  let blocked = true;
+  const modal = openTriggers(otui.core, h.chrome, {
+    cwd: root,
+    runNow,
+    onKeypress: keypressSource(h.renderer),
+    inputBlocked: () => blocked,
+  });
+  try {
+    await modal!.ready;
+    const before = modal!.status();
+    h.mockInput.pressKey("r");
+    h.mockInput.pressKey("y");
+    await settle(h);
+    expect(runNow.started).toEqual([]);
+    expect(modal!.status()).toBe(before);
+    blocked = false;
+    h.mockInput.pressKey("r");
+    await settle(h);
+    expect(modal!.status()).toContain("run rebuild now");
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
 });

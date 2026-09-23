@@ -13,7 +13,7 @@ import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { readLatestGovernanceReport, type GovernanceReportRead } from "../governance/service";
 import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
-import { mountOpsSidebar, type OpsSidebar } from "./ops-sidebar";
+import { AGE_REPAINT_MS, mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
 import { loadTriggerLedgerView, type TriggerLedgerView } from "./trigger-ledger";
 import { createTriggerRunNow } from "./trigger-run-now";
 import {
@@ -179,11 +179,19 @@ async function typeCommand(h: MountedChrome, command: string): Promise<void> {
   await settle(h);
 }
 
-function wire(h: MountedChrome, ops: OpsSidebar): void {
-  // The shell's own route for these two commands: `ops.handleCommand(line)`.
+/**
+ * The composer's submit reaches the SHIPPED routing (`routeOpsCommand`), the
+ * function both of `tui-shell.ts`'s `runLine` branches call: idle through the
+ * agent-mode registry + `isOpsCommand`, busy through `classifyBusyDispatch`.
+ * `runLine` itself lives inside `launchTuiAgentShell` and cannot be mounted
+ * headlessly — that last hop is the one thing this does not execute.
+ */
+function wire(h: MountedChrome, ops: OpsSidebar): { handled: string[] } {
+  const handled: string[] = [];
   h.chrome.onSubmit((line) => {
-    ops.handleCommand(line);
+    if (routeOpsCommand(line, h.chrome.isBusy(), ops)) handled.push(line);
   });
+  return { handled };
 }
 
 otuiTest(
@@ -219,9 +227,12 @@ otuiTest(
       interval: () => () => {},
       runNow: createTriggerRunNow({ root: cwd, invocation: { execPath: process.execPath, scriptPath: CLI } }),
     });
-    wire(h, ops);
+    const routed = wire(h, ops);
     try {
+      // A main turn is running: the BUSY branch must route it, not defer it to a side worker.
+      h.chrome.startBusy("waiting for model");
       await typeCommand(h, "/triggers");
+      expect(routed.handled).toEqual(["/triggers"]);
       const modal = ops.openModals().triggers;
       expect(modal).toBeDefined();
       await modal!.ready;
@@ -265,9 +276,12 @@ otuiTest("AC8: keyboard only — composer `/governance` → r reaches a new repo
     interval: () => () => {},
     governance: { now: () => new Date("2026-09-23T07:07:00.000Z") },
   });
-  wire(h, ops);
+  const routed = wire(h, ops);
   try {
+    // Idle branch.
+    expect(h.chrome.isBusy()).toBe(false);
     await typeCommand(h, "/governance");
+    expect(routed.handled).toEqual(["/governance"]);
     for (let i = 0; i < 20 && ops.openModals().governance === undefined; i += 1) await settle(h, 1);
     const modal = ops.openModals().governance;
     expect(modal).toBeDefined();
@@ -354,6 +368,125 @@ otuiTest("AC10: on 80x24 the new sections mount AFTER everything above them — 
     for (const label of labels) expect(frame).toContain(label);
     expect(yOf("sb-governance")).toBeGreaterThan(Math.max(...after));
     expect(yOf("sb-triggers")).toBeGreaterThan(yOf("sb-governance"));
+  } finally {
+    ops.dispose();
+    h.destroy();
+  }
+});
+
+test("review F6: routeOpsCommand is the shell's routing — idle via the registry, busy via classifyBusyDispatch; other lines are not taken", () => {
+  const seen: string[] = [];
+  const ops = { handleCommand: (line: string) => (seen.push(line), true) };
+  expect(routeOpsCommand("/triggers nightly", false, ops)).toBe(true);
+  expect(routeOpsCommand("/governance", true, ops)).toBe(true);
+  expect(routeOpsCommand("/flows", false, ops)).toBe(false);
+  expect(routeOpsCommand("/model", true, ops)).toBe(false);
+  expect(routeOpsCommand("governance please", false, ops)).toBe(false);
+  expect(seen).toEqual(["/triggers nightly", "/governance"]);
+});
+
+otuiTest("review F12: row ages move on at least once a minute on the watcher tick, with no file change", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const cwd = await project();
+  await writeTriggers(cwd, [{ name: "sync", on: { kind: "event", event: "post-merge" }, action: { kind: "rebuild" } }]);
+  await appendRuns(cwd, [
+    {
+      at: "2026-09-23T11:58:00.000Z",
+      trigger: "sync",
+      firedBy: { kind: "event", event: "post-merge" },
+      action: { kind: "rebuild" },
+      outcome: "ok",
+      detail: "done",
+      cost: { recorded: false, reason: "no model" },
+    },
+  ]);
+  let now = new Date("2026-09-23T12:00:00.000Z");
+  const timer = manualInterval();
+  const ops = mountOpsSidebar({
+    otui: otui.core,
+    chrome: h.chrome,
+    parent: h.chrome.sidebarTop,
+    cwd,
+    width: SIDEBAR_TEXT_WIDTH,
+    onKeypress: keypressSource(h.renderer),
+    interval: timer.interval,
+    now: () => now,
+  });
+  try {
+    await ops.watcher.ready;
+    await ops.triggersPanel.refresh();
+    const row = () => textOf(findById(h.chrome.sidebarTop, "sb-triggers-sync"));
+    expect(row()).toBe("sync · enabled · ok 2m");
+    now = new Date(now.getTime() + 30_000);
+    await timer.fire();
+    expect(row()).toBe("sync · enabled · ok 2m"); // under a minute: not repainted
+    now = new Date(now.getTime() + AGE_REPAINT_MS);
+    await timer.fire();
+    expect(row()).toBe("sync · enabled · ok 4m");
+  } finally {
+    ops.dispose();
+    h.destroy();
+  }
+});
+
+otuiTest("review F12: a triggers read that FAILS shows an error row instead of hiding the section", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const cwd = await project();
+  const ops = mountOpsSidebar({
+    otui: otui.core,
+    chrome: h.chrome,
+    parent: h.chrome.sidebarTop,
+    cwd,
+    width: SIDEBAR_TEXT_WIDTH,
+    onKeypress: keypressSource(h.renderer),
+    interval: () => () => {},
+    loadTriggers: async () => {
+      throw new Error("EACCES");
+    },
+  });
+  try {
+    await ops.triggersPanel.refresh();
+    expect(textOf(findById(h.chrome.sidebarTop, "sb-triggers-error"))).toBe("could not read: EACCES");
+  } finally {
+    ops.dispose();
+    h.destroy();
+  }
+});
+
+otuiTest("review F15: `/governance` on a read that throws treats it as malformed — opens the modal, rebuilds nothing", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const cwd = await project();
+  let builds = 0;
+  const notices: string[] = [];
+  const ops = mountOpsSidebar({
+    otui: otui.core,
+    chrome: h.chrome,
+    parent: h.chrome.sidebarTop,
+    cwd,
+    width: SIDEBAR_TEXT_WIDTH,
+    onKeypress: keypressSource(h.renderer),
+    interval: () => () => {},
+    notice: (t) => notices.push(t),
+    readLatestGovernance: async () => {
+      throw new Error("EIO");
+    },
+    governance: {
+      build: async () => {
+        builds += 1;
+        throw new Error("unreachable");
+      },
+    },
+  });
+  try {
+    const modal = await ops.showGovernance();
+    expect(modal).toBeDefined();
+    await modal!.ready;
+    expect(modal!.visibleLines()[0]).toBe("Stored governance report is unreadable (EIO).");
+    expect(builds).toBe(0);
+    expect(ops.runner.state().kind).toBe("idle");
   } finally {
     ops.dispose();
     h.destroy();

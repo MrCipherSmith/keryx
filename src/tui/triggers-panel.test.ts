@@ -7,7 +7,7 @@ import path from "node:path";
 import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
 import { applyThemeId, getThemeId, roleColor } from "./theme";
 import { loadTriggerLedgerView } from "./trigger-ledger";
-import { mountTriggersPanel, NET_MARKER, projectTriggersPanel } from "./triggers-panel";
+import { formatTriggerSpend, mountTriggersPanel, NET_MARKER, projectTriggersPanel } from "./triggers-panel";
 import {
   appendRuns,
   chunkColors,
@@ -155,4 +155,13 @@ otuiTest("AC10: a /theme switch recolours the Triggers section (theme roles, no 
     panel.dispose();
     h.destroy();
   }
+});
+
+test("review F3: spend uses the governance report's own USD format — $0.004 is never rounded away to $0.00", () => {
+  const present = (spentUsd: number, notRecorded = 0) =>
+    ({ state: "present", spentUsd, runsWithCostRecorded: 1, runsWithCostNotRecorded: notRecorded, runsTotal: 1 + notRecorded, attributedToFlowsUsd: undefined }) as const;
+  expect(formatTriggerSpend(present(0.004)).text).toBe("spent $0.004");
+  expect(formatTriggerSpend(present(0.25, 2)).text).toBe("spent $0.25 · 2 not recorded");
+  expect(formatTriggerSpend(present(1.23456)).text).toBe("spent $1.2346");
+  expect(formatTriggerSpend({ state: "absent" }).text).toBe("spent $0 · nothing fired yet");
 });
