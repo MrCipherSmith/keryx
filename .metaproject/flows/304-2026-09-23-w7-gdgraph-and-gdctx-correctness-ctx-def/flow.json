@@ -9,7 +9,7 @@
   "title": "W7: gdgraph and gdctx correctness — ctx defects, read-only git allowlist, correctness benchmark, slim index",
   "status": "in-progress",
   "createdAt": "2026-09-23T21:26:28.813Z",
-  "updatedAt": "2026-09-23T22:22:31.037Z",
+  "updatedAt": "2026-09-23T22:58:07.477Z",
   "source": {
     "type": "description",
     "ref": null
@@ -79,7 +79,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 2,
+        "count": 4,
         "log": [
           {
             "at": "2026-09-23T22:06:51.086Z",
@@ -90,6 +90,16 @@
             "at": "2026-09-23T22:22:31.037Z",
             "outcome": "failed",
             "detail": "round 1: opus review 1 blocker/5 major/3 minor/1 info + CI typecheck-and-tests fail (ctx.rg-argv inline-form message); fix lanes security/ctx/gdgraph dispatched"
+          },
+          {
+            "at": "2026-09-23T22:43:06.596Z",
+            "outcome": "started",
+            "detail": "review round 2 (opus) on 7f33512b"
+          },
+          {
+            "at": "2026-09-23T22:58:07.477Z",
+            "outcome": "failed",
+            "detail": "round 2: opus review 1 blocker (CI import-policy ratchet 151>150 from commands/ctx.ts->security/read-source) + 3 major (tsconfig paths vs effective baseUrl regression, ls-files pathspec magic, MCP security.scan self-labels trusted-project) + 1 minor (camelCase credential names). No repeated finding; fix lanes security + gdgraph dispatched"
           }
         ]
       },
@@ -434,6 +444,16 @@
       "at": "2026-09-23T22:22:31.037Z",
       "event": "task-attempt",
       "detail": "T4: failed (attempt 2) — round 1: opus review 1 blocker/5 major/3 minor/1 info + CI typecheck-and-tests fail (ctx.rg-argv inline-form message); fix lanes security/ctx/gdgraph dispatched"
+    },
+    {
+      "at": "2026-09-23T22:43:06.596Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — review round 2 (opus) on 7f33512b"
+    },
+    {
+      "at": "2026-09-23T22:58:07.477Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — round 2: opus review 1 blocker (CI import-policy ratchet 151>150 from commands/ctx.ts->security/read-source) + 3 major (tsconfig paths vs effective baseUrl regression, ls-files pathspec magic, MCP security.scan self-labels trusted-project) + 1 minor (camelCase credential names). No repeated finding; fix lanes security + gdgraph dispatched"
     }
   ]
 }
