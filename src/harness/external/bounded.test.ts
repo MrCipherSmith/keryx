@@ -74,6 +74,49 @@ function stderrFloodPort(lines: number, lineChars: number): { port: ExternalSpaw
   return { port, written: () => total };
 }
 
+/**
+ * A process whose stderr floods until `kill()` is called — unlike
+ * `stderrFloodPort` above, nothing but a kill ends it, which is what lets a
+ * test prove the run stopped BECAUSE of the fix rather than because the flood
+ * happened to be finite. `capLines` is a safety valve only (so a broken fix
+ * cannot hang the suite), set far above anything a small budget should ever
+ * let through.
+ */
+function unstoppableStderrFloodPort(
+  lineChars: number,
+  capLines = 20_000,
+): { port: ExternalSpawnPort; written: () => number; wasKilled: () => boolean } {
+  let total = 0;
+  let stopped = false;
+  const port: ExternalSpawnPort = {
+    spawn(): SpawnedProcess {
+      const line = "e".repeat(lineChars);
+      let resolveExited: (code: number) => void = () => undefined;
+      const exited = new Promise<number>((resolve) => {
+        resolveExited = resolve;
+      });
+      return {
+        stderr: (async function* () {
+          for (let i = 0; i < capLines && !stopped; i += 1) {
+            total += line.length + 1;
+            yield line;
+          }
+        })(),
+        stdout: (async function* () {
+          await exited;
+        })(),
+        writeStdin: () => undefined,
+        kill: () => {
+          stopped = true;
+          resolveExited(0);
+        },
+        exited,
+      };
+    },
+  };
+  return { port, written: () => total, wasKilled: () => stopped };
+}
+
 describe("BoundedTranscript", () => {
   test("keeps the head and the tail, drops the middle, and counts it", () => {
     const t = new BoundedTranscript(100, 200);
@@ -109,6 +152,27 @@ describe("ACP client — the run's retention is bounded", () => {
     expect(outcome.stderr.length).toBeLessThanOrEqual(bound + MARKER_SLACK);
     expect(outcome.stderrDroppedBytes).toBeGreaterThan(flood.written() - bound - MARKER_SLACK);
     expect(outcome.stderr).toContain("dropped from the middle");
+  });
+
+  test("a stderr-only flood ends the run within its stderr budget, not the run timeout", async () => {
+    // `unstoppableStderrFloodPort` never ends on its own — only `kill()` stops
+    // it — so a run that reaches the end here did so BECAUSE something read
+    // the budget and killed the child, not because the flood happened to run
+    // out. Without the fix nothing calls `kill()`, the flood keeps going until
+    // its safety-valve cap, and the run is left waiting on a child that never
+    // exits until `timeoutMs` elapses — `status: "timeout"`, not the named
+    // stderr-budget failure asserted below.
+    const flood = unstoppableStderrFloodPort(10_000);
+    const outcome = await superviseAcpRun(acpInput({ maxStderrBytes: 20_000, timeoutMs: 5_000 }), {
+      spawn: flood.port,
+    });
+    expect(outcome.status).toBe("failed");
+    expect(outcome.failure).toContain("more than 20000 bytes to stderr");
+    expect(outcome.killed).toBe(true);
+    expect(flood.wasKilled()).toBe(true);
+    // Stopped a couple of lines past the 20 000-byte ceiling, nowhere near the
+    // 20 000-line safety cap — proof the budget cut the read short.
+    expect(flood.written()).toBeLessThan(100_000);
   });
 
   test(
@@ -187,6 +251,44 @@ describe("line-stream supervisor (claude/codex share it) — the same bounds", (
     };
   }
 
+  /**
+   * A stderr flood that, like `unstoppableStderrFloodPort` above, only ends
+   * when `kill()` is called — so a run that stops here did so because the
+   * stderr budget was enforced, not because the flood was finite.
+   */
+  function killableStderrFloodPort(
+    lineChars: number,
+    capLines = 20_000,
+  ): { port: ExternalSpawnPort; kills: () => number; written: () => number } {
+    let kills = 0;
+    let stopped = false;
+    let total = 0;
+    return {
+      kills: () => kills,
+      written: () => total,
+      port: {
+        spawn(): SpawnedProcess {
+          const line = "e".repeat(lineChars);
+          return {
+            stdout: (async function* () {})(),
+            stderr: (async function* () {
+              for (let i = 0; i < capLines && !stopped; i += 1) {
+                total += line.length + 1;
+                yield line;
+              }
+            })(),
+            writeStdin: () => undefined,
+            kill: () => {
+              kills += 1;
+              stopped = true;
+            },
+            exited: Promise.resolve(0),
+          };
+        },
+      },
+    };
+  }
+
   test("an event flood passes the output budget: named reason, child killed, events bounded", async () => {
     const p = linesPort(
       async function* () {
@@ -201,6 +303,22 @@ describe("line-stream supervisor (claude/codex share it) — the same bounds", (
     expect(outcome.overflow).toContain("more than 20000 bytes of output in one run");
     expect(p.kills()).toBe(1);
     expect(outcome.events.length).toBeLessThan(25);
+  });
+
+  test("a stderr-only flood passes the stderr budget: named reason, child killed", async () => {
+    // `killableStderrFloodPort` never ends on its own, so a run that stops did
+    // so because the budget was enforced, not because the flood was finite —
+    // without the fix this run would hang on `wall`/`timeoutMs` instead.
+    const flood = killableStderrFloodPort(10_000);
+    const outcome = await superviseExternalRun(
+      { argv: ["x"], cwd: root, env: {}, prompt: "", timeoutMs: 5_000, maxStderrBytes: 20_000 },
+      { spawn: flood.port, codec: textCodec },
+    );
+    expect(outcome.overflow).toContain("more than 20000 bytes to stderr");
+    expect(flood.kills()).toBe(1);
+    // Stopped a couple of lines past the 20 000-byte ceiling, nowhere near the
+    // 20 000-line safety cap.
+    expect(flood.written()).toBeLessThan(100_000);
   });
 
   test("stderr and raw stdout keep a bounded head and tail, with dropped bytes counted", async () => {

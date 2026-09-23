@@ -68,6 +68,7 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 | Implement, review, refactor, document, plan, analyze, or verify | `gdskills` | `skills/catalog.md`; `project-skills/`; `skills/gdskills/` | Route to local orchestrators/reviewers/quality skills before global skills. |
 | Start, resume, track, or finish managed work | `flow` / `flow-orchestrator` | `skills/flow/SKILL.md`; `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` | Use Task Manager state and never edit flow files by hand. |
 | Report spend, confirmations, signatures, or gate outcomes across flows | `governance` | `keryx governance report` | Read-only: never re-runs a gate or calls a model. |
+| Configure, run, or inspect a dispatching `flow-next` trigger, or drive one external ACP/CLI agent directly | `trigger` / `agents external` | `keryx trigger --help`; `keryx agents external --help`; docs/docs/guides/acp-client.md | Unattended: `ask` is read-only, `trust` needs the Linux sandbox, everything that would ask is denied and recorded — the unattended floor, not the boundary. |
 
 ## Agent Workflow
 
