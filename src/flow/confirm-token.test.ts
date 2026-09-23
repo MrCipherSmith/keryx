@@ -395,6 +395,16 @@ test("review #661: a token minted for a PR completion cannot be spent on a --mer
   expect(spentMerged.gates.find((gate) => gate.name === "confirmation")?.detail).toMatch(/^token_target_mismatch: /);
 });
 
+test("re-review #661: `flow confirm --merged` on an implemented flow with a PR binds `merged`, and a PR completion with it is refused", async () => {
+  const service = await fresh();
+  const { id, dir } = await readyFlow(service);
+  const minted = await service.confirmMint({ cwd: ROOT, id, merged: true });
+  const stored = JSON.parse(await readFile(confirmTokenPath(ROOT, dir), "utf8")) as { target: string };
+  expect(stored.target).toBe("merged");
+  const asPr = await service.complete({ cwd: ROOT, id, confirmToken: minted.token });
+  expect(asPr.gates.find((gate) => gate.name === "confirmation")?.detail).toMatch(/^token_target_mismatch: /);
+});
+
 async function onDiskDir(id: string): Promise<string | undefined> {
   return (await readdir(path.join(ROOT, ".metaproject", "flows"))).find((dir) => dir.startsWith(`${id}-`));
 }

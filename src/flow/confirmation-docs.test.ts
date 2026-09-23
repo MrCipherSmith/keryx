@@ -63,3 +63,11 @@ test("review #661: TM-03 documents the target binding, the spent-token window, a
   const reference = await read("docs/docs/cli-reference.md");
   expect(reference).toContain("token_target_mismatch");
 });
+
+test("re-review #661: TM-03 and the CLI reference say a --merged token binds `merged`, not a commit, and is accepted on an implemented flow", async () => {
+  for (const file of ["docs/decisions/keryx-harness/TM-03-terminal-confirmation-token.md", "docs/docs/cli-reference.md"]) {
+    const text = await read(file);
+    expect({ file, found: /With `--merged` the token binds only `merged`, not a commit/.test(text) }).toEqual({ file, found: true });
+    expect({ file, found: /accepted\s+on an `implemented` flow that records a PR/.test(text) }).toEqual({ file, found: true });
+  }
+});

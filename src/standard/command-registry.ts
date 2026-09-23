@@ -529,10 +529,14 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     module: "tasks",
     command: "flow confirm",
     summary:
-      "Mint a completion confirmation token for a flow that requires one. Terminal only: refuses unless stdin and " +
-      "stdout are TTYs, shows what is being confirmed, and reads a typed challenge from /dev/tty. Every approval " +
-      "mode asks before it runs. An interactive step, not proof of a person (TM-03).",
-    intent: ["подтверди завершение флоу", "flow confirm", "mint completion confirmation token", "confirm flow completion"],
+      "OPERATOR-ONLY — not for agents to run. A person mints, in their own terminal, the completion confirmation " +
+      "token a flow that requires one needs; an agent asked to confirm a completion should ask the operator to run " +
+      "this, not run it. Refuses unless stdin and stdout are TTYs, shows what is being confirmed, and reads a typed " +
+      "challenge from /dev/tty; every approval mode asks before it runs. An interactive step, not proof of a person (TM-03).",
+    // Operator-phrased only (security re-review of PR #661): no agent-facing
+    // "confirm completion" phrasing, so an agent is never routed to a
+    // human-only verb by intent matching.
+    intent: ["flow confirm", "operator mints flow confirmation token"],
     args: [
       { name: "<id>", type: "string", required: true, desc: "flow id" },
       { name: "merged", type: "bool", required: false, desc: "confirm a direct-merge completion of an in-progress flow" },
