@@ -9,7 +9,7 @@
   "title": "W7: gdgraph and gdctx correctness — ctx defects, read-only git allowlist, correctness benchmark, slim index",
   "status": "in-progress",
   "createdAt": "2026-09-23T21:26:28.813Z",
-  "updatedAt": "2026-09-23T22:06:03.383Z",
+  "updatedAt": "2026-09-23T22:22:31.037Z",
   "source": {
     "type": "description",
     "ref": null
@@ -79,8 +79,19 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-23T22:06:51.086Z",
+            "outcome": "started",
+            "detail": "review round 1 (opus) on PR #674"
+          },
+          {
+            "at": "2026-09-23T22:22:31.037Z",
+            "outcome": "failed",
+            "detail": "round 1: opus review 1 blocker/5 major/3 minor/1 info + CI typecheck-and-tests fail (ctx.rg-argv inline-form message); fix lanes security/ctx/gdgraph dispatched"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -413,6 +424,16 @@
       "at": "2026-09-23T22:06:03.383Z",
       "event": "task-done",
       "detail": "T12: Verify: targeted tests, typecheck and eslint on changed files"
+    },
+    {
+      "at": "2026-09-23T22:06:51.086Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1 (opus) on PR #674"
+    },
+    {
+      "at": "2026-09-23T22:22:31.037Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: opus review 1 blocker/5 major/3 minor/1 info + CI typecheck-and-tests fail (ctx.rg-argv inline-form message); fix lanes security/ctx/gdgraph dispatched"
     }
   ]
 }
