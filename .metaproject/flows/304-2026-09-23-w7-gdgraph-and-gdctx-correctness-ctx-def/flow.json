@@ -9,7 +9,7 @@
   "title": "W7: gdgraph and gdctx correctness — ctx defects, read-only git allowlist, correctness benchmark, slim index",
   "status": "in-progress",
   "createdAt": "2026-09-23T21:26:28.813Z",
-  "updatedAt": "2026-09-23T22:58:07.477Z",
+  "updatedAt": "2026-09-23T23:16:18.740Z",
   "source": {
     "type": "description",
     "ref": null
@@ -79,7 +79,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 4,
+        "count": 6,
         "log": [
           {
             "at": "2026-09-23T22:06:51.086Z",
@@ -100,6 +100,16 @@
             "at": "2026-09-23T22:58:07.477Z",
             "outcome": "failed",
             "detail": "round 2: opus review 1 blocker (CI import-policy ratchet 151>150 from commands/ctx.ts->security/read-source) + 3 major (tsconfig paths vs effective baseUrl regression, ls-files pathspec magic, MCP security.scan self-labels trusted-project) + 1 minor (camelCase credential names). No repeated finding; fix lanes security + gdgraph dispatched"
+          },
+          {
+            "at": "2026-09-23T23:11:23.927Z",
+            "outcome": "started",
+            "detail": "review round 3 (opus) on f10ca87e"
+          },
+          {
+            "at": "2026-09-23T23:16:18.740Z",
+            "outcome": "failed",
+            "detail": "round 3: 2 minor (R3-1 credential names still enumerable: authorization/privatekey/accesskey_id; R3-2 MCP security.scan absolute path in report) + 1 info (stale comments). CI green on f10ca87e. Budget reached: re-planned R3-1 to a safe-parameter allowlist instead of a credential-name denylist"
           }
         ]
       },
@@ -454,6 +464,16 @@
       "at": "2026-09-23T22:58:07.477Z",
       "event": "task-attempt",
       "detail": "T4: failed (attempt 4) — round 2: opus review 1 blocker (CI import-policy ratchet 151>150 from commands/ctx.ts->security/read-source) + 3 major (tsconfig paths vs effective baseUrl regression, ls-files pathspec magic, MCP security.scan self-labels trusted-project) + 1 minor (camelCase credential names). No repeated finding; fix lanes security + gdgraph dispatched"
+    },
+    {
+      "at": "2026-09-23T23:11:23.927Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 5) — review round 3 (opus) on f10ca87e"
+    },
+    {
+      "at": "2026-09-23T23:16:18.740Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 6) — round 3: 2 minor (R3-1 credential names still enumerable: authorization/privatekey/accesskey_id; R3-2 MCP security.scan absolute path in report) + 1 info (stale comments). CI green on f10ca87e. Budget reached: re-planned R3-1 to a safe-parameter allowlist instead of a credential-name denylist"
     }
   ]
 }
