@@ -191,3 +191,9 @@ test("classifyBusyDispatch: /bus routes to bus even while main is busy", () => {
 test("classifyBusyDispatch: bare /bus (opening the modal) also routes to bus while busy", () => {
   expect(classifyBusyDispatch({ line: "/bus", commandName: "/bus", ...base })).toBe("bus");
 });
+
+test("flow 300: /governance and /triggers are read-only while busy — never deferred to a side worker", () => {
+  expect(classifyBusyDispatch({ line: "/governance", commandName: "/governance", ...base })).toBe("governance");
+  expect(classifyBusyDispatch({ line: "/triggers", commandName: "/triggers", ...base })).toBe("triggers");
+  expect(classifyBusyDispatch({ line: "/triggers nightly", commandName: "/triggers", ...base })).toBe("triggers");
+});

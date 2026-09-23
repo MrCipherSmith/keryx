@@ -450,7 +450,16 @@ export interface ShellChrome {
    * chrome cannot know about them. A registration function keeps the dependency
    * one-way instead of reintroducing a mutable binding rewired later.
    */
-  addOverlaySource(isActive: () => boolean): () => void;
+  addOverlaySource(isActive: () => boolean, opts?: { kind?: "modal" }): () => void;
+  /**
+   * True while something OTHER than the modal host owns the keyboard: the
+   * composer dock (a choice or a permission prompt), a `withOverlay` run (a
+   * full-screen picker), or any registered source that is not a modal (queue
+   * navigation, for one). A modal's own key handler uses this to stand down
+   * while such a prompt is up (flow 300 review N5) — `overlayActive()` would
+   * always be true there, because the modal itself is an overlay source.
+   */
+  keyboardOwnedElsewhere(): boolean;
   /** Mark an overlay active for the duration of an async run. */
   withOverlay<T>(run: () => Promise<T>): Promise<T>;
 
@@ -891,6 +900,8 @@ export async function createShellChrome(
   // `r.root`); registered sources cover whatever the caller owns.
   let overlayDepth = 0;
   const overlaySources = new Set<() => boolean>();
+  /** The subset of `overlaySources` registered by the modal host. */
+  const modalSources = new Set<() => boolean>();
   const overlayActive = (): boolean => {
     if (overlayDepth > 0 || dock.visible === true) {
       return true;
@@ -912,11 +923,20 @@ export async function createShellChrome(
       debugEvent("overlay.exit", { depth: overlayDepth, dockVisible: dock.visible });
     }
   };
-  const addOverlaySource = (isActive: () => boolean): (() => void) => {
+  const addOverlaySource = (isActive: () => boolean, opts: { kind?: "modal" } = {}): (() => void) => {
     overlaySources.add(isActive);
+    if (opts.kind === "modal") modalSources.add(isActive);
     return () => {
       overlaySources.delete(isActive);
+      modalSources.delete(isActive);
     };
+  };
+  const keyboardOwnedElsewhere = (): boolean => {
+    if (overlayDepth > 0 || dock.visible === true) return true;
+    for (const isActive of overlaySources) {
+      if (!modalSources.has(isActive) && isActive()) return true;
+    }
+    return false;
   };
 
   // Live `/` command dropdown (Pi/grok-style): a Select filtered as the composer
@@ -1498,6 +1518,7 @@ export async function createShellChrome(
 
     overlayActive,
     addOverlaySource,
+    keyboardOwnedElsewhere,
     withOverlay,
 
     showToast,

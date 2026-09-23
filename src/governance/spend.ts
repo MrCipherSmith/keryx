@@ -118,11 +118,23 @@ export function summarizeProjectTriggerSpend(read: TriggerRunsRead): ProjectTrig
   // per flow, applied project-wide — so this subset always equals the sum of
   // every flow's own `dispatch.spend.spentUsd` (never drifts out of sync).
   let attributedToFlowsUsd: number | undefined;
+  let runsTotal = 0;
+  const open = new Set(openReservations(read.records).map((r) => r.runId));
   for (const record of read.records) {
+    // Flow 300 review F3: a `reserved` record is the spend HOLD a dispatch
+    // writes before its first model call, not a run. Once the run's own
+    // closing record (same `dispatch.runId`) — or, for a killed run, the
+    // operator's `reservation-resolved` — exists, THAT record is the run and
+    // carries its cost; counting the hold as well put every dispatch into "not
+    // recorded" even when its closing record had a cost. A hold nothing has
+    // closed yet (in flight, or killed and unresolved) is still a run whose
+    // cost is not recorded, and stays counted as one.
+    if (record.outcome === "reserved" && !(record.reservation !== undefined && open.has(record.reservation.runId))) continue;
+    runsTotal += 1;
     if (record.cost.recorded) {
       spentUsd += record.cost.usd;
       runsWithCostRecorded += 1;
-      if (record.outcome !== "reserved" && record.dispatch?.flow !== undefined) {
+      if (record.dispatch?.flow !== undefined) {
         attributedToFlowsUsd = (attributedToFlowsUsd ?? 0) + record.cost.usd;
       }
     } else {
@@ -134,7 +146,7 @@ export function summarizeProjectTriggerSpend(read: TriggerRunsRead): ProjectTrig
     spentUsd,
     runsWithCostRecorded,
     runsWithCostNotRecorded,
-    runsTotal: read.records.length,
+    runsTotal,
     attributedToFlowsUsd,
   };
 }

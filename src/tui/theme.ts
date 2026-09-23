@@ -4,6 +4,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "../lib/config-dir";
+import { debugEvent } from "./debug-log";
 
 export type ThemeId =
   | "auto"
@@ -445,8 +446,18 @@ export function themeLabel(id: ThemeId): string {
 export function applyThemeId(id: ThemeId, mode: ThemeMode | null = null): Theme {
   kind = id;
   resolved = resolveTheme(id, mode);
-  for (const listener of listeners) {
-    listener(resolved, kind);
+  // Flow 300 review N4: every listener runs, each in isolation. One buggy
+  // panel's repaint must not abort `/theme` for the rest of the screen; its
+  // failure goes to the debug log instead of being swallowed silently.
+  for (const listener of [...listeners]) {
+    try {
+      listener(resolved, kind);
+    } catch (error) {
+      debugEvent("theme.listener-failed", {
+        theme: resolved.name,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   return resolved;
 }

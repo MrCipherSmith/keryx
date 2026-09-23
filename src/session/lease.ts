@@ -29,6 +29,7 @@ import { resolveProjectRoot, sessionDir } from "./paths";
 import {
   findSession,
   forkSession,
+  isExternalRunSession,
   listSessions,
   openSession,
   shortSessionId,
@@ -211,6 +212,9 @@ export function latestUnleasedSession(
 ): { summary: SessionSummary | undefined; skipped?: SkippedSession } {
   let skipped: SkippedSession | undefined;
   for (const summary of listSessions(cwd, dataDir)) {
+    // `-c` continues the shell's own kind of session, never the record of an
+    // external agent run (flow 300, AC9).
+    if (isExternalRunSession(summary)) continue;
     const { state, holder } = sessionLeaseState(cwd, summary.id, dataDir, timing);
     if (state === "free" || state === "mine") {
       return { summary, ...(skipped !== undefined ? { skipped } : {}) };

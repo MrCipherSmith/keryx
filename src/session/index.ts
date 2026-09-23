@@ -19,6 +19,7 @@ export {
   exportSessionMarkdown,
   findSession,
   forkSession,
+  isExternalRunSession,
   latestSession,
   listSessions,
   loadArchive,

@@ -6,7 +6,7 @@
 // AC8 (--all-projects, skip missing/unreadable), AC9 (policy decisions).
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { FlowState } from "../flow/types";
@@ -252,13 +252,13 @@ test("flow 295 AC14: a scheduled agent-task run's cost is included in project tr
   }
   const usd = (1000 * 3 + 200 * 15) / 1_000_000;
   const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
-  // The reservation record carries no cost; the closing record carries the run's.
+  // The reservation is not a run (flow 300); the closing record carries the run's cost.
   expect(report.projects[0]?.triggerSpend).toEqual({
     state: "present",
     spentUsd: usd,
     runsWithCostRecorded: 1,
-    runsWithCostNotRecorded: 1,
-    runsTotal: 2,
+    runsWithCostNotRecorded: 0,
+    runsTotal: 1,
     // A scheduled agent task names no flow, so none of its cost is attributed to one (flow 297).
     attributedToFlowsUsd: undefined,
   });
@@ -766,4 +766,86 @@ test("review-fix: trigger spend is formatted through the same usd() rounding as 
   const markdown = renderGovernanceMarkdown(report);
   expect(markdown).toContain("$0.3 across 2 run(s) with recorded cost");
   expect(markdown).not.toContain("0.30000000000000004");
+});
+
+// --- Flow 300 review F3: a reservation hold is not a run once something closed it ---
+
+test("F3: a dispatch whose closing record carries a cost is ONE run with cost recorded — its reservation hold is not counted as 'not recorded'", async () => {
+  const hold = {
+    trigger: "work",
+    firedBy: { kind: "event", event: "ci" } as never,
+    action: { kind: "flow-next", flow: "001" } as never,
+  };
+  await appendTriggerRunRecord(ROOT, {
+    ...hold,
+    at: "2026-01-01T00:00:00.000Z",
+    outcome: "reserved",
+    detail: "reserved $1",
+    cost: { recorded: false, reason: "a reservation — the run's own record carries what it spent" },
+    reservation: { runId: "run-a", usd: 1 },
+  });
+  await appendTriggerRunRecord(ROOT, {
+    ...hold,
+    at: "2026-01-01T00:05:00.000Z",
+    outcome: "ok",
+    detail: "done",
+    cost: { recorded: true, usd: 0.004 },
+    dispatch: { runId: "run-a", flow: "001" },
+  });
+  // A killed run the operator closed: its resolution is the run's closing record.
+  await appendTriggerRunRecord(ROOT, {
+    ...hold,
+    at: "2026-01-02T00:00:00.000Z",
+    outcome: "reserved",
+    detail: "reserved $1",
+    cost: { recorded: false, reason: "a reservation" },
+    reservation: { runId: "run-b", usd: 1 },
+  });
+  await appendTriggerRunRecord(ROOT, {
+    ...hold,
+    at: "2026-01-02T01:00:00.000Z",
+    outcome: "reservation-resolved",
+    detail: "operator closed run run-b's reservation",
+    cost: { recorded: true, usd: 0.5 },
+    resolves: "run-b",
+  });
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  expect(report.projects[0]?.triggerSpend).toMatchObject({
+    state: "present",
+    spentUsd: 0.504,
+    runsWithCostRecorded: 2,
+    runsWithCostNotRecorded: 0,
+    runsTotal: 2,
+  });
+});
+
+test("F3: a hold nothing has closed yet (in flight, or killed and unresolved) still counts as one run whose cost is not recorded", async () => {
+  await appendTriggerRunRecord(ROOT, {
+    trigger: "work",
+    firedBy: { kind: "event", event: "ci" } as never,
+    action: { kind: "flow-next", flow: "001" } as never,
+    at: "2026-01-01T00:00:00.000Z",
+    outcome: "reserved",
+    detail: "reserved $1",
+    cost: { recorded: false, reason: "a reservation" },
+    reservation: { runId: "run-open", usd: 1 },
+  });
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  expect(report.projects[0]?.triggerSpend).toMatchObject({ state: "present", runsWithCostNotRecorded: 1, runsTotal: 1 });
+});
+
+// --- Flow 300 review F8: artifacts are replaced atomically, latest.json last ---
+
+test("F8: when latest.md cannot be replaced, latest.json is left exactly as it was — it is written LAST — and no temp file is left behind", async () => {
+  const dir = path.join(ROOT, ".metaproject", "data", "governance", "artifacts");
+  const first = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date("2026-01-01T00:00:00.000Z") });
+  await writeGovernanceArtifacts(ROOT, first);
+  const before = await readFile(path.join(dir, "latest.json"), "utf8");
+  // Make the markdown target un-replaceable: a non-empty directory where the file goes.
+  await rm(path.join(dir, "latest.md"));
+  await mkdir(path.join(dir, "latest.md", "blocker"), { recursive: true });
+  const second = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date("2026-02-02T00:00:00.000Z") });
+  await expect(writeGovernanceArtifacts(ROOT, second)).rejects.toThrow();
+  expect(await readFile(path.join(dir, "latest.json"), "utf8")).toBe(before);
+  expect((await readdir(dir)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
 });

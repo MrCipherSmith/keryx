@@ -36,7 +36,7 @@ import { homedir, userInfo } from "node:os";
 import path from "node:path";
 import { isNotFound } from "../lib/fs";
 import { cronToLaunchdIntervals, cronToOnCalendar } from "./cron";
-import { managedHeader, projectScheduleHash, renderScheduleLines, resolveKeryxInvocation, scheduleUnitBase, type KeryxInvocation } from "./schedule";
+import { invocationArgv, managedHeader, projectScheduleHash, renderScheduleLines, resolveKeryxInvocation, scheduleUnitBase, type KeryxInvocation } from "./schedule";
 
 export type ScheduleBackend = "systemd" | "launchd" | "cron";
 
@@ -147,7 +147,7 @@ export async function planInstall(projectRoot: string, name: string, cron: strin
   // another control character in one of them would start a new directive or a new
   // crontab line, so such a path is refused rather than escaped.
   // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
-  const unsafe = [projectRoot, invocation.execPath, invocation.scriptPath, name, process.env["XDG_DATA_HOME"] ?? ""].find((v) => /[\u0000-\u001f\u007f]/.test(v));
+  const unsafe = [projectRoot, ...invocationArgv(invocation), name, process.env["XDG_DATA_HOME"] ?? ""].find((v) => /[\u0000-\u001f\u007f]/.test(v));
   if (unsafe !== undefined) {
     return {
       backend,
@@ -164,7 +164,7 @@ export async function planInstall(projectRoot: string, name: string, cron: strin
   const pinned: Record<string, string> = process.env["XDG_DATA_HOME"] ? { XDG_DATA_HOME: process.env["XDG_DATA_HOME"] } : {};
   const lines = renderScheduleLines({ projectRoot, name, cron, invocation, scheduleOnly: true, environment: pinned });
   const base = scheduleUnitBase(projectRoot, name);
-  const execStart = `${invocation.execPath} ${invocation.scriptPath} trigger run --schedule ${name}`;
+  const execStart = `${invocationArgv(invocation).join(" ")} trigger run --schedule ${name}`;
   if (backend === "systemd") {
     const dir = systemdUserUnitDir(host);
     const calendar = cronToOnCalendar(cron);
@@ -197,8 +197,7 @@ export async function planInstall(projectRoot: string, name: string, cron: strin
   <key>Label</key><string>${xml(label)}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${xml(invocation.execPath)}</string>
-    <string>${xml(invocation.scriptPath)}</string>
+${invocationArgv(invocation).map((arg) => `    <string>${xml(arg)}</string>`).join("\n")}
     <string>trigger</string>
     <string>run</string>
     <string>--schedule</string>

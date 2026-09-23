@@ -52,23 +52,33 @@
 import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import path from "node:path";
+import { isCompiledBinaryEntry } from "../lib/self-invocation";
 import { loadTriggersConfig, type TriggerEntry } from "./config";
 import { cronToOnCalendar } from "./cron";
 
 export interface KeryxInvocation {
-  /** The interpreter actually running this process (`node` or `bun`), absolute. */
+  /** The interpreter actually running this process (`node` or `bun`), absolute — or, for a compiled binary, keryx itself. */
   readonly execPath: string;
-  /** The entry script actually running this process, absolute. */
-  readonly scriptPath: string;
+  /** The entry script actually running this process, absolute. Absent for a compiled binary (see `invocationArgv`). */
+  readonly scriptPath?: string;
 }
 
-/** How THIS process was launched — the one thing a generated line can assert without guessing. */
-export function resolveKeryxInvocation(): KeryxInvocation {
-  const script = process.argv[1];
-  return {
-    execPath: process.execPath,
-    scriptPath: script ? path.resolve(script) : process.execPath,
-  };
+/**
+ * How THIS process was launched — the one thing a generated line can assert
+ * without guessing. A compiled binary's entry lives in bun's embedded
+ * filesystem and is not an argument to pass (`isCompiledBinaryEntry`).
+ */
+export function resolveKeryxInvocation(
+  entry: string | undefined = process.argv[1],
+  execPath: string = process.execPath,
+): KeryxInvocation {
+  if (entry === undefined || entry.length === 0 || isCompiledBinaryEntry(entry)) return { execPath };
+  return { execPath, scriptPath: path.resolve(entry) };
+}
+
+/** The argv prefix that runs keryx the way this process runs: `[interpreter, script]` or `[binary]`. */
+export function invocationArgv(invocation: KeryxInvocation): string[] {
+  return invocation.scriptPath === undefined ? [invocation.execPath] : [invocation.execPath, invocation.scriptPath];
 }
 
 export type ScheduleResolution =
@@ -262,7 +272,7 @@ export function renderScheduleLines(params: {
   const cronEnv = extraEnv.map(([k, v]) => `${k}=${shQuote(v)} `).join("");
   const cronCommand =
     `cd ${shQuote(projectRoot)} && mkdir -p ${shQuote(logDir)} && ${cronEnv}PATH=${shQuote(assumedPath)} ` +
-    `${shQuote(invocation.execPath)} ${shQuote(invocation.scriptPath)} trigger run ${runFlag}${shQuote(name)} ` +
+    `${invocationArgv(invocation).map(shQuote).join(" ")} trigger run ${runFlag}${shQuote(name)} ` +
     `>> ${shQuote(logPath)} 2>&1`;
   // `cronLine` (what actually goes into a crontab) gets cron's own `%`
   // escaping on top of `cronCommand`'s shell quoting — see the file-header
@@ -294,7 +304,7 @@ ${extraEnv.map(([k, v]) => `Environment=${systemdQuote(systemdEscapePercent(`${k
 # not create a missing PARENT directory, only a missing file. The leading "-"
 # means systemd ignores this step's own exit status.
 ExecStartPre=-/bin/mkdir -p ${systemdValue(logDir)}
-ExecStart=${systemdValue(invocation.execPath)} ${systemdValue(invocation.scriptPath)} trigger run ${runFlag}${systemdValue(name)}
+ExecStart=${invocationArgv(invocation).map(systemdValue).join(" ")} trigger run ${runFlag}${systemdValue(name)}
 StandardOutput=append:${systemdEscapePercent(logPath)}
 StandardError=append:${systemdEscapePercent(logPath)}
 `;

@@ -22,9 +22,14 @@ export {
   governanceDataRoot,
   readLatestGovernanceReport,
   renderGovernanceMarkdown,
+  usd as formatUsd,
   writeGovernanceArtifacts,
   type BuildGovernanceReportOptions,
 } from "./report";
+
+// Flow 300: the TUI's Triggers section shows project trigger spend exactly as
+// the governance report computes it — one reader, not a second sum.
+export { readProjectTriggerSpend } from "./spend";
 
 export type {
   CriterionConfirmation,

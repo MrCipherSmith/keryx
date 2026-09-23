@@ -579,8 +579,21 @@ export function listSessions(cwd: string, dataDir?: string): SessionSummary[] {
   return out;
 }
 
+/**
+ * Sessions written by `keryx agents external run` carry `provider: "acp:<agent>"`
+ * (`src/harness/external/acp-run.ts`). They are records of another agent's run,
+ * not shell conversations: listed and searchable in the session switcher, but
+ * never what `-c` continues (flow 300, AC9).
+ */
+export const EXTERNAL_RUN_PROVIDER_PREFIX = "acp:";
+
+export function isExternalRunSession(summary: Pick<SessionSummary, "provider">): boolean {
+  return summary.provider?.startsWith(EXTERNAL_RUN_PROVIDER_PREFIX) === true;
+}
+
+/** The newest session of the shell's own kind — never an external agent run's record. */
 export function latestSession(cwd: string, dataDir?: string): SessionSummary | undefined {
-  return listSessions(cwd, dataDir)[0];
+  return listSessions(cwd, dataDir).find((summary) => !isExternalRunSession(summary));
 }
 
 export function findSession(cwd: string, idOrPrefix: string, dataDir?: string): SessionSummary | undefined {

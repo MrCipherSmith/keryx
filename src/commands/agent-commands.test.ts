@@ -39,7 +39,10 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/governance",
+    "/triggers",
     "/schedule",
+    "/schedules",
     "/integrations",
     "/mcp",
     "/compact",
@@ -70,8 +73,8 @@ test("SLATE-15: findAgentCommand resolves /goal (with args) in agent mode, never
   expect(findAgentCommand("/goal", "chat")).toBeUndefined();
 });
 
-test("SLATE-15: filterCommands('/g', 'agent') resolves to /goal and /game (registry order)", () => {
-  expect(filterCommands("/g", "agent").map((c) => c.name)).toEqual(["/goal", "/game"]);
+test("SLATE-15: filterCommands('/g', 'agent') resolves to /goal, /governance and /game (registry order)", () => {
+  expect(filterCommands("/g", "agent").map((c) => c.name)).toEqual(["/goal", "/governance", "/game"]);
 });
 
 test("filterCommands: a trailing space after a fully-typed command name matches nothing (the composer dropdown must not stay open once the user is typing arguments)", () => {
@@ -128,7 +131,10 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/governance",
+    "/triggers",
     "/schedule",
+    "/schedules",
     "/integrations",
     "/mcp",
     "/compact",
@@ -249,7 +255,10 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/governance",
+    "/triggers",
     "/schedule",
+    "/schedules",
     "/integrations",
     "/mcp",
     "/compact",
@@ -314,6 +323,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/sessions",
     "/status",
     "/schedule",
+    "/schedules",
   ]);
   expect(filterCommands("/i", "agent").map((c) => c.name)).toEqual([
     "/integrations",

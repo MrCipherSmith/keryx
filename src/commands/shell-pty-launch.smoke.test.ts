@@ -38,6 +38,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { buildGovernanceReport, writeGovernanceArtifacts } from "../governance/service";
 import { uniqueTestRoot } from "../lib/test-tmp";
 
 const REAL_SUBPROCESS_FLAG = process.env.KERYX_ALLOW_REAL_SUBPROCESS === "1";
@@ -137,7 +138,14 @@ function visibleText(raw: string): string {
  *      {@link HARD_TIMEOUT_MS}, and `killed` carries that out so the caller
  *      fails loudly instead of silently asserting on an empty capture.
  */
-async function runPtyShell(opts: { args: string[]; readyMarker: string }): Promise<PtyRun> {
+async function runPtyShell(opts: {
+  args: string[];
+  readyMarker: string;
+  /** Populate the working directory before launch (flow 300: a project with a report and triggers). */
+  prepareCwd?: (cwd: string) => Promise<void>;
+  /** Pin the pty to this size before the shell starts (`stty`, inside the pty). */
+  size?: { rows: number; cols: number };
+}): Promise<PtyRun> {
   const root = uniqueTestRoot(tmpdir(), "keryx-pty-launch");
   const home = path.join(root, "home");
   const cwd = path.join(root, "cwd");
@@ -147,6 +155,7 @@ async function runPtyShell(opts: { args: string[]; readyMarker: string }): Promi
   mkdirSync(cwd, { recursive: true });
 
   try {
+    await opts.prepareCwd?.(cwd);
     // BSD form: `script -q -F <transcript> <command> [args…]`. `script` allocates
     // the pty, makes it the child's controlling terminal, and mirrors every byte
     // the child writes into <transcript>. The inner `sh` reports the shell's own
@@ -159,6 +168,7 @@ async function runPtyShell(opts: { args: string[]; readyMarker: string }): Promi
     // any shorter readiness deadline would have failed on flush latency rather
     // than on anything about the shell.
     const inner =
+      (opts.size === undefined ? "" : `stty rows ${opts.size.rows} cols ${opts.size.cols}; `) +
       `${shq(process.execPath)} ${shq(CLI)} ${opts.args.map(shq).join(" ")}; ` +
       `printf '\\n${SENTINEL}=%s\\n' "$?"`;
     const driver = [
@@ -295,6 +305,44 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
         expect(BOX_DRAWING.test(run.text)).toBe(true);
         // 5. It gave the terminal back, and the shell itself exited 0.
         expect(run.raw).toContain(ALT_EXIT);
+        expect(run.childExit).toBe(0);
+      },
+      TEST_TIMEOUT_MS,
+    );
+
+    test(
+      "flow 300 (AC10): on 80x24, with a governance report and three triggers, the sidebar still shows Model/Context/Tools/Status/Ready",
+      async () => {
+        const run = await runPtyShell({
+          args: ["shell", "--provider", "fake", "--model", "fake-echo"],
+          readyMarker: ALT_ENTER,
+          size: { rows: 24, cols: 80 },
+          prepareCwd: async (cwd) => {
+            mkdirSync(path.join(cwd, ".metaproject"), { recursive: true });
+            writeFileSync(
+              path.join(cwd, ".metaproject", "triggers.json"),
+              JSON.stringify({
+                schemaVersion: 1,
+                triggers: [
+                  { name: "rebuild", on: { kind: "event", event: "post-merge" }, action: { kind: "rebuild" } },
+                  { name: "sync", on: { kind: "event", event: "post-commit" }, action: { kind: "reconcile" } },
+                  { name: "open", on: { kind: "event", event: "ci" }, action: { kind: "open-flow", template: "Weekly" } },
+                ],
+              }),
+            );
+            const report = await buildGovernanceReport({
+              cwd,
+              filters: { flow: undefined, owner: undefined, since: undefined, until: undefined },
+              allProjects: false,
+              now: () => new Date("2026-09-23T05:40:00.000Z"),
+            });
+            await writeGovernanceArtifacts(cwd, report);
+          },
+        });
+        expect({ killed: run.killed, ready: run.ready }).toEqual({ killed: false, ready: true });
+        for (const label of TUI_ONLY_LABELS) {
+          expect(run.text).toContain(label);
+        }
         expect(run.childExit).toBe(0);
       },
       TEST_TIMEOUT_MS,

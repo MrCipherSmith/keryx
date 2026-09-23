@@ -49,6 +49,20 @@ export type BusyDispatchTarget =
    * never be deferred.
    */
   | "bus"
+  /**
+   * `/governance` and `/triggers` (flow 300): opening either modal is
+   * read-only, and each one's action — a governance report written in this
+   * process, or `keryx trigger run` in a CHILD process — never touches the main
+   * turn, so neither waits for it.
+   */
+  | "governance"
+  | "triggers"
+  /**
+   * `/schedules` (flow 295): the Schedules list and detail modals. Opening them is
+   * read-only; their actions (pause, resume, delete, run-now as a CHILD process)
+   * never touch the main turn.
+   */
+  | "schedules"
   | "deferred"
   | "not-a-command";
 
@@ -82,6 +96,9 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/demote") return "demote";
   if (commandName === "/game") return "game";
   if (commandName === "/bus") return "bus";
+  if (commandName === "/governance") return "governance";
+  if (commandName === "/triggers") return "triggers";
+  if (commandName === "/schedules") return "schedules";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
   if (isBusyReadonlyCommand && isFlows) return "flows";

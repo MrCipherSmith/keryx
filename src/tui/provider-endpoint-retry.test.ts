@@ -57,6 +57,27 @@ async function pressEscapeAndSettle(h: {
 }
 
 /**
+ * Wait for a frame after a bare Esc. `waitForFrame` counts render PASSES, but a
+ * bare Esc only becomes a keypress once the parser's TIMER fires — on a loaded
+ * CI runner (darwin-arm64, PR #662) that landed after the fixed settle above
+ * and after all 20 passes, failing a correct shell. Poll the frame against a
+ * generous deadline instead; a pass returns as soon as the frame is there.
+ */
+async function waitForFrameAfterEscape(
+  h: { flush: () => Promise<unknown>; captureCharFrame: () => string },
+  predicate: (frame: string) => boolean,
+  deadlineMs = 5_000,
+): Promise<string> {
+  const until = Date.now() + deadlineMs;
+  for (;;) {
+    await h.flush();
+    const frame = h.captureCharFrame();
+    if (predicate(frame) || Date.now() >= until) return frame;
+    await new Promise((resolve) => setTimeout(resolve, ESC_PARSER_TIMEOUT_MS));
+  }
+}
+
+/**
  * Replace an input's contents rather than appending to them.
  *
  * The endpoint step seeds the field with the CURRENT base URL, and `typeText`
@@ -211,7 +232,7 @@ describe("REGRESSION — an unreachable endpoint re-opens the URL step", () => {
       // Backing out of the endpoint step must NOT fall through to a model
       // picker built from the failed probe.
       await pressEscapeAndSettle(h);
-      await h.waitForFrame((f) => f.includes("Select a provider"));
+      expect(await waitForFrameAfterEscape(h, (f) => f.includes("Select a provider"))).toContain("Select a provider");
       await pressEscapeAndSettle(h);
       expect(await resultPromise).toBeUndefined();
     } finally {
@@ -254,7 +275,7 @@ describe("BOUNDARY — the endpoint step stays shut when the URL is not the prob
       expect(probes).toBe(1);
 
       await pressEscapeAndSettle(h);
-      await h.waitForFrame((f) => f.includes("Select a provider"));
+      expect(await waitForFrameAfterEscape(h, (f) => f.includes("Select a provider"))).toContain("Select a provider");
       await pressEscapeAndSettle(h);
       expect(await resultPromise).toBeUndefined();
     } finally {

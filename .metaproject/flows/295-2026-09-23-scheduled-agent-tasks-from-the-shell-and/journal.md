@@ -95,3 +95,22 @@
   - The card shows `gh: script wrapper … (interpreter …) — pinned`.
   - Tests: pinned wrapper runs; changed wrapper refused; changed interpreter refused; interpreter shadowed on PATH refused; card line; shim refused; wrapper inside the project refused. Four revert demos fail as expected.
   - Docs and the skill state that a wrapper's own global config is outside what keryx pins.
+- 2026-09-23T14:30:00.000Z - note (implementer): merged origin/main (flow 300, d3a4d916) with `--no-commit` on top of 95c54166. The merge is not committed, and the 6 resolved files are left unstaged.
+  - Conflicts resolved:
+    - README: kept 300's trigger paragraph and added the schedule bullet.
+    - agent-commands and its test lists: `/governance`, `/triggers`, `/schedule`, `/schedules`.
+    - `trigger.ts`: 300's `describe.ts` imports plus the agent-task dispatcher. The agent-task branch and its NET posture moved into `describe.ts` (`describeAction`, `entryHasNetwork`).
+    - `schedule.ts`: `invocationArgv()` combined with the pinned env and `--schedule`. `install.ts` uses `invocationArgv` too.
+    - `schedule.test.ts` imports.
+    - The AC14 governance expectation follows 300's counting: a reservation is not a run.
+- 2026-09-23T14:30:00.000Z - note (implementer): T9 done.
+  - New modules: `src/tui/schedules-panel.ts`, `schedules-inspector.ts` (list modal plus a 4-tab detail modal) and `schedules-sidebar.ts`. The sidebar is mounted after `mountOpsSidebar` and reuses `ops.watcher` and `ops.runNow`; the watcher gains a "schedules" source (the store).
+  - Detail modal keys: p pause/resume; r then y run now (`trigger run --schedule`, a detached child via `invocationArgv`); d then y delete. `x` is modal-host's close key, so delete is `d`.
+  - `/schedules` is registered and added to busy dispatch.
+  - Tests: `src/tui/schedules-sidebar.test.ts` (AC10-AC14, 7 tests, no wall-clock waits).
+- 2026-09-23T14:31:00.000Z - note (implementer): T11 checks.
+  - Clean: typecheck; eslint on the changed files.
+  - `opentui-tests-no-skips src/tui`: 1100 pass, 0 skipped.
+  - Suites: 3016 pass, 5 skip, 0 fail.
+  - `skills verify`: 0 findings. `flow check`: consistent.
+  - `keryx health run`: PASS (score 94).
