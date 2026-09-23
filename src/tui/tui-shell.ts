@@ -7244,7 +7244,9 @@ export async function launchTuiAgentShell(opts: {
     // Flow 300 review F4: a run-now child is never killed with the shell. Say,
     // once and after the alternate screen is gone, that it keeps running and
     // where its output goes; the ledger watcher shows its outcome next start.
-    const detachedNote = describeDetachedRuns(liveOps?.dispose() ?? []);
+    // Review N6: read what is STILL running at print time, not dispose()'s snapshot.
+    liveOps?.dispose();
+    const detachedNote = describeDetachedRuns(liveOps?.inFlightRuns() ?? []);
     if (detachedNote !== undefined) process.stderr.write(`${detachedNote}\n`);
   }
 }

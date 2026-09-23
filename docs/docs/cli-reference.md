@@ -662,9 +662,12 @@ Refusals print their code and exit non-zero (except where noted):
     then the new ledger record and the tail of the run's output, and one toast
     appears.
   - **Quitting while a run is in flight** does not stop it. The child runs
-    detached, in its own process group, and writes its output to
-    `.metaproject/data/trigger/run-now/<name>.log` (a directory that ignores
-    itself in git). On exit the shell prints one line naming the trigger and
+    detached, in its own process group, and writes its output to its own
+    file, `.metaproject/data/trigger/run-now/<name>-<startedAt>.log`, in a
+    directory that ignores itself in git. The newest five logs per trigger are
+    kept. The log is never written through a symbolic link: if
+    `.metaproject/data/trigger`, `run-now` or the log file is a symlink (or not
+    what it should be), run-now refuses and the modal says why. On exit the shell prints one line naming the trigger and
     the log. The run writes its own closing record, which the sidebar shows on
     the next start. A second run-now of the same trigger from a restarted shell
     is refused by the CLI's own lock (`lock-refused`, or `dispatch-locked` for a

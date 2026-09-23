@@ -8,7 +8,8 @@
 
 import { afterEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { readFile, rm } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { maintenanceLockPath, withMaintenanceLock } from "../lib/maintenance-lock";
@@ -19,6 +20,11 @@ import {
   createTriggerRunNow,
   describeDetachedRuns,
   runNowChildEnv,
+  OUTPUT_TAIL_BYTES,
+  OUTPUT_TAIL_CHARS,
+  prepareRunNowLogDir,
+  RUN_NOW_LOGS_KEPT,
+  runNowLogDir,
   runNowLogPath,
   triggerRunArgv,
   type RunNowChild,
@@ -121,7 +127,7 @@ test("AC6: the argv of a compiled binary is the binary alone (review F2)", () =>
 test("review F4: the child is detached in its own process group with output to a self-ignoring log; dispose never signals it", async () => {
   const root = await project();
   const fake = recordingSpawn();
-  const runNow = createTriggerRunNow({ root, invocation: INVOCATION, spawn: fake.spawn });
+  const runNow = createTriggerRunNow({ root, invocation: INVOCATION, spawn: fake.spawn, now: () => new Date("2026-09-23T10:00:00.000Z") });
   const done = runNow.run("nightly");
   const options = fake.calls[0]?.options;
   expect(options?.detached).toBe(true);
@@ -129,17 +135,21 @@ test("review F4: the child is detached in its own process group with output to a
   expect(typeof options?.stdio[1]).toBe("number");
   expect(options?.stdio[1]).toBe(options?.stdio[2]);
   expect(options?.cwd).toBe(root);
-  const logPath = runNowLogPath(root, "nightly");
+  const logPath = runNowLogPath(root, "nightly", "2026-09-23T10:00:00.000Z");
+  expect(path.basename(logPath)).toBe("nightly-2026-09-23T10-00-00-000Z.log");
   expect(await readFile(path.join(path.dirname(logPath), ".gitignore"), "utf8")).toContain("*");
   // A second run-now of the same name from this shell starts nothing.
   expect(runNow.run("nightly")).toBeUndefined();
   // Quitting the shell: nothing is killed; the run is reported as continuing.
   const detached = runNow.dispose();
   expect(fake.killed).toEqual([]);
+  // Review N6: what is running is read live.
+  expect(runNow.inFlightRuns()).toEqual([{ name: "nightly", logPath }]);
   expect(detached).toEqual([{ name: "nightly", logPath }]);
   expect(describeDetachedRuns(detached)).toBe(`keryx: trigger nightly keeps running in the background — log: ${logPath}`);
   fake.exit(0);
   expect((await done!).exitCode).toBe(0);
+  expect(runNow.inFlightRuns()).toEqual([]);
 });
 
 test("review F5: the child env drops every KERYX_SESSION_* key and keeps the rest", async () => {
@@ -272,3 +282,116 @@ test(
   },
   60_000,
 );
+
+// --- review N1: never write through a symlink planted in the repository ---
+
+async function plantOutsideTarget(): Promise<string> {
+  const outside = await mkdtemp(path.join(tmpdir(), "keryx-outside-"));
+  roots.push(outside);
+  const target = path.join(outside, "authorized_keys");
+  await writeFile(target, "ssh-ed25519 AAAA original\n", "utf8");
+  return target;
+}
+
+test("review N1: a `run-now` DIRECTORY that is a symlink is refused — nothing is spawned, the outside file is untouched, the modal gets the reason", async () => {
+  const root = await project();
+  const target = await plantOutsideTarget();
+  await mkdir(path.join(root, ".metaproject", "data", "trigger"), { recursive: true });
+  await symlink(path.dirname(target), path.join(root, ".metaproject", "data", "trigger", "run-now"));
+  const fake = recordingSpawn();
+  const result = await createTriggerRunNow({ root, invocation: INVOCATION, spawn: fake.spawn }).run("nightly")!;
+  expect(fake.calls).toEqual([]);
+  expect(result.refusal).toContain("is a symbolic link");
+  expect(await readFile(target, "utf8")).toBe("ssh-ed25519 AAAA original\n");
+  expect(await readdir(path.dirname(target))).toEqual(["authorized_keys"]);
+});
+
+test("review N1: a `trigger` directory that is a symlink is refused too", async () => {
+  const root = await project();
+  const target = await plantOutsideTarget();
+  await mkdir(path.join(root, ".metaproject", "data"), { recursive: true });
+  await symlink(path.dirname(target), path.join(root, ".metaproject", "data", "trigger"));
+  const fake = recordingSpawn();
+  const result = await createTriggerRunNow({ root, invocation: INVOCATION, spawn: fake.spawn }).run("nightly")!;
+  expect(fake.calls).toEqual([]);
+  expect(result.refusal).toContain("is a symbolic link");
+  expect(await readdir(path.dirname(target))).toEqual(["authorized_keys"]);
+});
+
+test("review N1: a planted LOG FILE symlink is never followed — refused, the outside file is untouched", async () => {
+  const root = await project();
+  const target = await plantOutsideTarget();
+  const at = "2026-09-23T10:00:00.000Z";
+  await mkdir(runNowLogDir(root), { recursive: true });
+  await symlink(target, runNowLogPath(root, "nightly", at));
+  const fake = recordingSpawn();
+  const result = await createTriggerRunNow({ root, invocation: INVOCATION, spawn: fake.spawn, now: () => new Date(at) }).run("nightly")!;
+  expect(fake.calls).toEqual([]);
+  expect(result.refusal).toContain("refusing to write run-now output there");
+  expect(await readFile(target, "utf8")).toBe("ssh-ed25519 AAAA original\n");
+});
+
+test("review N1: a `run-now` that is a regular FILE (not a directory) is refused", async () => {
+  const root = await project();
+  await mkdir(path.join(root, ".metaproject", "data", "trigger"), { recursive: true });
+  await writeFile(runNowLogDir(root), "not a dir", "utf8");
+  expect(prepareRunNowLogDir(root)).toEqual({ ok: false, reason: `${runNowLogDir(root)} is not a directory — refusing to write run-now output there` });
+});
+
+// --- review N2/N3: one file per run, pruned, tail read bounded ---
+
+test("review N3: each run writes its OWN file, so a restart's tail never includes an older detached run's lines", async () => {
+  const root = await project();
+  let clock = new Date("2026-09-23T10:00:00.000Z");
+  const first = recordingSpawn();
+  const runA = createTriggerRunNow({ root, invocation: INVOCATION, spawn: first.spawn, now: () => clock });
+  const doneA = runA.run("nightly")!;
+  const logA = runA.inFlightRuns()[0]!.logPath;
+  // "Restart": a second shell, later, same trigger.
+  clock = new Date("2026-09-23T10:05:00.000Z");
+  const second = recordingSpawn();
+  const runB = createTriggerRunNow({ root, invocation: INVOCATION, spawn: second.spawn, now: () => clock });
+  const doneB = runB.run("nightly")!;
+  const logB = runB.inFlightRuns()[0]!.logPath;
+  expect(logB).not.toBe(logA);
+  // The OLD detached child keeps appending to ITS file…
+  await appendFile(logA, "old run: still going\n");
+  await appendFile(logB, "new run: ok\n");
+  second.exit(0);
+  const b = await doneB;
+  // …which never shows up in the new run's tail.
+  expect(b.output).toContain("new run: ok");
+  expect(b.output).not.toContain("old run");
+  first.exit(0);
+  await doneA;
+});
+
+test("review N2: only the newest RUN_NOW_LOGS_KEPT logs per trigger are kept, and a neighbour's logs are left alone", async () => {
+  const root = await project();
+  await mkdir(runNowLogDir(root), { recursive: true });
+  for (let day = 10; day < 18; day += 1) {
+    await writeFile(runNowLogPath(root, "nightly", `2026-09-${day}T00:00:00.000Z`), "x", "utf8");
+  }
+  await writeFile(runNowLogPath(root, "nightly-other", "2026-09-01T00:00:00.000Z"), "neighbour", "utf8");
+  const fake = recordingSpawn();
+  const done = createTriggerRunNow({ root, invocation: INVOCATION, spawn: fake.spawn, now: () => new Date("2026-09-23T00:00:00.000Z") }).run("nightly")!;
+  const left = (await readdir(runNowLogDir(root))).filter((n) => n.endsWith(".log")).sort();
+  expect(left.filter((n) => /^nightly-\d/.test(n))).toHaveLength(RUN_NOW_LOGS_KEPT);
+  expect(left).toContain("nightly-2026-09-23T00-00-00-000Z.log");
+  expect(left).toContain("nightly-other-2026-09-01T00-00-00-000Z.log");
+  fake.exit(0);
+  await done;
+});
+
+test("review N2: the tail read is bounded — a huge log returns only its last bytes", async () => {
+  const root = await project();
+  const fake = recordingSpawn();
+  const runNow = createTriggerRunNow({ root, invocation: INVOCATION, spawn: fake.spawn });
+  const done = runNow.run("nightly")!;
+  const log = runNow.inFlightRuns()[0]!.logPath;
+  await appendFile(log, `${"x".repeat(3 * OUTPUT_TAIL_BYTES)}\nEND-OF-RUN\n`);
+  fake.exit(0);
+  const result = await done;
+  expect(result.output.endsWith("END-OF-RUN\n")).toBe(true);
+  expect(result.output.length).toBeLessThanOrEqual(OUTPUT_TAIL_CHARS);
+});

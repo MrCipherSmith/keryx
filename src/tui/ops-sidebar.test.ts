@@ -492,3 +492,65 @@ otuiTest("review F15: `/governance` on a read that throws treats it as malformed
     h.destroy();
   }
 });
+
+otuiTest("review N5: keyboardOwnedElsewhere ignores the modal's own overlay but sees a withOverlay picker and queue navigation — and the triggers modal stands down for them", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const cwd = await project();
+  await writeTriggers(cwd, [{ name: "sync", on: { kind: "event", event: "post-merge" }, action: { kind: "rebuild" } }]);
+  const started: string[] = [];
+  const ops = mountOpsSidebar({
+    otui: otui.core,
+    chrome: h.chrome,
+    parent: h.chrome.sidebarTop,
+    cwd,
+    width: SIDEBAR_TEXT_WIDTH,
+    onKeypress: keypressSource(h.renderer),
+    interval: () => () => {},
+    runNow: {
+      run: (name) => {
+        started.push(name);
+        return undefined;
+      },
+      running: () => new Set(),
+      inFlightRuns: () => [],
+      dispose: () => [],
+    },
+  });
+  try {
+    const modal = ops.showTriggers();
+    await modal!.ready;
+    // The modal itself is an overlay, but not "elsewhere".
+    expect(h.chrome.overlayActive()).toBe(true);
+    expect(h.chrome.keyboardOwnedElsewhere()).toBe(false);
+
+    // Queue navigation (a registered, non-modal source).
+    let queueNav = true;
+    const release = h.chrome.addOverlaySource(() => queueNav);
+    expect(h.chrome.keyboardOwnedElsewhere()).toBe(true);
+    h.mockInput.pressKey("r");
+    await settle(h);
+    expect(modal!.status()).not.toContain("run sync now");
+    queueNav = false;
+    release();
+
+    // A full-screen `withOverlay` picker.
+    let finishPicker!: () => void;
+    const picker = h.chrome.withOverlay(() => new Promise<void>((resolve) => (finishPicker = resolve)));
+    expect(h.chrome.keyboardOwnedElsewhere()).toBe(true);
+    h.mockInput.pressKey("r");
+    await settle(h);
+    expect(modal!.status()).not.toContain("run sync now");
+    finishPicker();
+    await picker;
+
+    expect(h.chrome.keyboardOwnedElsewhere()).toBe(false);
+    h.mockInput.pressKey("r");
+    await settle(h);
+    expect(modal!.status()).toContain("run sync now");
+    expect(started).toEqual([]);
+  } finally {
+    ops.dispose();
+    h.destroy();
+  }
+});

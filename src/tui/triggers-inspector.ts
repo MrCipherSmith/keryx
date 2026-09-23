@@ -291,6 +291,12 @@ export function openTriggers(otui: unknown, chrome: unknown, options: TriggersMo
     statusText = `running ${name}… (keryx trigger run ${name})`;
     paint();
     inFlight = run.then(async (result) => {
+      if (result.refusal !== undefined) {
+        // Review N1: an unsafe log location — nothing was started.
+        statusText = `cannot run: ${result.refusal}`;
+        paint();
+        return;
+      }
       await reload();
       const fresh = view === undefined ? undefined : eventEntries(view).find((e) => e.entry.name === name);
       const record = fresh?.records.find((rec) => rec.at >= result.startedAt);

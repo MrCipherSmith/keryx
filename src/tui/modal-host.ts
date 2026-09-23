@@ -500,7 +500,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     unsubTheme: () => {},
   };
 
-  state.releaseOverlay = chrome.addOverlaySource(() => state.open);
+  state.releaseOverlay = chrome.addOverlaySource(() => state.open, { kind: "modal" });
   state.unsubKeys = onKeypress(r, (key) => {
     if (!state.open || state.input === undefined) {
       return;

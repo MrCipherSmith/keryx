@@ -45,7 +45,8 @@ export interface OpsSidebarOptions {
   now?: () => Date;
   /**
    * True while a composer choice or permission prompt owns the keyboard. Both
-   * modals ignore keys then (review F11). Default: the chrome's dock is visible.
+   * modals ignore keys then (review F11). Default: `chrome.keyboardOwnedElsewhere()`
+   * — the dock, a `withOverlay` picker or queue navigation (review N5).
    */
   inputBlocked?: () => boolean;
 }
@@ -77,6 +78,8 @@ export interface OpsSidebar {
    * Idempotent — a second call returns the same list.
    */
   dispose(): readonly InFlightRun[];
+  /** The run-now children still running right now — live, not a snapshot (review N6). */
+  inFlightRuns(): readonly InFlightRun[];
 }
 
 export function commandToken(line: string): string {
@@ -125,8 +128,12 @@ export function mountOpsSidebar(options: OpsSidebarOptions): OpsSidebar {
   const runner = createGovernanceRunner({ cwd, ...options.governance });
   const runNow = options.runNow ?? createTriggerRunNow({ root: cwd });
   const readLatestGovernance = options.readLatestGovernance ?? readLatestGovernanceReport;
+  // Review N5: the dock (choices, permission prompts), a `withOverlay`
+  // full-screen picker, and queue navigation all own the keyboard — every
+  // overlay EXCEPT the modal host's own.
   const inputBlocked =
-    options.inputBlocked ?? ((): boolean => (chrome as { dock?: { visible?: boolean } }).dock?.visible === true);
+    options.inputBlocked ??
+    ((): boolean => (chrome as { keyboardOwnedElsewhere?: () => boolean }).keyboardOwnedElsewhere?.() === true);
   const clock = options.now ?? (() => new Date());
   let governanceModal: GovernanceModalHandle | undefined;
   let triggersModal: TriggersModalHandle | undefined;
@@ -252,6 +259,7 @@ export function mountOpsSidebar(options: OpsSidebarOptions): OpsSidebar {
       }
       return false;
     },
+    inFlightRuns: () => runNow.inFlightRuns(),
     openModals: () => ({ governance: governanceModal, triggers: triggersModal }),
     async afterTurn() {
       await watcher.check();

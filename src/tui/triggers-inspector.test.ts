@@ -128,6 +128,7 @@ function fakeRunNow(): TriggerRunNow & { started: string[]; finish(result: Parti
     },
     running: () => new Set(current === undefined ? [] : [current]),
     dispose: () => [],
+    inFlightRuns: () => [],
     finish(result) {
       const name = current ?? "?";
       current = undefined;
