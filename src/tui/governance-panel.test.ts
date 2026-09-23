@@ -14,6 +14,7 @@ import {
   GOVERNANCE_FAILED,
   GOVERNANCE_NO_REPORT,
   GOVERNANCE_RUNNING,
+  GOVERNANCE_UNREADABLE,
   mountGovernancePanel,
   projectGovernanceRow,
   type GovernanceRunState,
@@ -45,7 +46,7 @@ function deferred<T>(): { promise: Promise<T>; resolve(v: T): void; reject(e: un
   return { promise, resolve, reject };
 }
 
-test("AC1: projection — exactly four states, each within SIDEBAR_TEXT_WIDTH", () => {
+test("AC1: projection — exactly five states, each within SIDEBAR_TEXT_WIDTH", () => {
   const idle: GovernanceRunState = { kind: "idle" };
   const present = { state: "present", report: { generatedAt: "2026-09-23T05:40:12.000Z" } as GovernanceReport } as const;
   const rows = [
@@ -57,7 +58,7 @@ test("AC1: projection — exactly four states, each within SIDEBAR_TEXT_WIDTH", 
   ];
   expect(rows.map((r) => r.text)).toEqual([
     GOVERNANCE_NO_REPORT,
-    GOVERNANCE_NO_REPORT,
+    GOVERNANCE_UNREADABLE,
     GOVERNANCE_RUNNING,
     "last report 2026-09-23 05:40",
     GOVERNANCE_FAILED,
@@ -94,7 +95,7 @@ otuiTest("AC1: the mounted section reads each fixture project's state (absent, m
       panel.dispose();
       parent.destroy();
     }
-    expect(texts).toEqual([GOVERNANCE_NO_REPORT, GOVERNANCE_NO_REPORT, "last report 2026-09-23 05:40"]);
+    expect(texts).toEqual([GOVERNANCE_NO_REPORT, GOVERNANCE_UNREADABLE, "last report 2026-09-23 05:40"]);
   } finally {
     h.destroy();
   }
@@ -290,7 +291,7 @@ otuiTest("review F15: a click on a malformed report opens the modal with its rea
   });
   try {
     await panel.refresh();
-    expect(textOf(findById(h.chrome.sidebarTop, "sb-governance-v"))).toBe(GOVERNANCE_NO_REPORT);
+    expect(textOf(findById(h.chrome.sidebarTop, "sb-governance-v"))).toBe(GOVERNANCE_UNREADABLE);
     await clickNode(h, findById(h.chrome.sidebarTop, "sb-governance-v"));
     expect(opened).toBe(1);
     expect(builds).toBe(0);
