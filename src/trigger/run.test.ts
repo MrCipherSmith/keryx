@@ -10,9 +10,9 @@ import { describe, expect, test } from "bun:test";
 import { appendFile, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { evaluateTriggerBudget, resolveTriggerForRun, triggerRunLockPath, withTriggerRunLock } from "./run";
+import { evaluateTriggerBudget, reserveTriggerSpend, resolveTriggerForRun, triggerRunLockPath, withTriggerRunLock } from "./run";
 import { triggersConfigPath } from "./config";
-import { appendTriggerRunRecord, triggerRunsPath } from "./record";
+import { appendTriggerRunRecord, readTriggerRuns, triggerRunsPath } from "./record";
 import { pathExists } from "../lib/fs";
 
 async function projectWith(content: string | undefined): Promise<string> {
@@ -304,5 +304,48 @@ describe("evaluateTriggerBudget: per-trigger ceiling (flow 290)", () => {
     );
     const outcome = await evaluateTriggerBudget(root, "flow-next", {}, { name: "old", ceilingUsd: 1 });
     expect(outcome.allowed).toBe(false);
+  });
+});
+
+// Flow 297 (AC2): `reserveTriggerSpend`'s optional `dispatch` input writes
+// additively onto the "reserved" record, so a governance report can attribute
+// an OPEN (not yet closed) reservation to the flow it was opened for.
+describe("reserveTriggerSpend: additive flow/task attribution (flow 297, AC2)", () => {
+  const entryBits = {
+    firedBy: { kind: "schedule", cron: "0 2 * * *" } as const,
+    action: { kind: "flow-next", flow: "297" } as const,
+  };
+
+  test("passing `dispatch` writes it onto the 'reserved' record", async () => {
+    const root = await projectWith(undefined);
+    const reserved = await reserveTriggerSpend(root, {
+      runId: "run-297",
+      trigger: "overnight",
+      ...entryBits,
+      perTrigger: { name: "overnight", ceilingUsd: 1 },
+      dispatch: { flow: "297", task: "T5" },
+    });
+    expect(reserved.reserved).toBe(true);
+
+    const read = await readTriggerRuns(root);
+    expect(read.state).toBe("present");
+    if (read.state !== "present") throw new Error("unreachable");
+    const record = read.records.find((r) => r.outcome === "reserved");
+    expect(record?.dispatch).toEqual({ runId: "run-297", flow: "297", task: "T5" });
+    expect(record?.reservation).toEqual({ runId: "run-297", usd: reserved.reserved ? reserved.usd : 0 });
+  });
+
+  test("omitting `dispatch` (every call site before flow 297) writes no `dispatch` field at all — unchanged from before this change", async () => {
+    const root = await projectWith(undefined);
+    await reserveTriggerSpend(root, {
+      runId: "run-plain",
+      trigger: "overnight",
+      ...entryBits,
+      perTrigger: { name: "overnight", ceilingUsd: 1 },
+    });
+    const read = await readTriggerRuns(root);
+    if (read.state !== "present") throw new Error("unreachable");
+    const record = read.records.find((r) => r.outcome === "reserved");
+    expect(record?.dispatch).toBeUndefined();
   });
 });

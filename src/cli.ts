@@ -14,7 +14,7 @@ import { skillVerifySkillCommand, skillsCommand } from "./commands/skills";
 import { healthCommand } from "./commands/health";
 import { testCommand } from "./commands/test";
 import { memoryCommand } from "./commands/memory";
-import { flowCommand } from "./commands/flow";
+import { flowCommand, printFlowHelp } from "./commands/flow";
 import { jobCommand } from "./commands/job";
 import { reviewCommand } from "./commands/review";
 import { rulesCommand } from "./commands/rules";
@@ -23,7 +23,7 @@ import { commandsCommand } from "./commands/commands";
 import { securityCommand } from "./commands/security";
 import { sandboxCommand } from "./commands/sandbox";
 import { mcpCommand } from "./commands/mcp";
-import { serveMcpCommand } from "./commands/serve-mcp";
+import { printServeMcpHelp, serveMcpCommand } from "./commands/serve-mcp";
 import { integrateCommand } from "./commands/integrate";
 import { statusCommand } from "./commands/status";
 import { harnessCommand } from "./commands/harness";
@@ -44,8 +44,8 @@ import { providersCommand } from "./commands/providers";
 import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
 import { forgettingCommand } from "./commands/forgetting";
-import { triggerCommand } from "./commands/trigger";
-import { governanceCommand } from "./commands/governance";
+import { printTriggerHelp, triggerCommand } from "./commands/trigger";
+import { governanceCommand, printGovernanceHelp } from "./commands/governance";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -152,6 +152,18 @@ export async function main(): Promise<void> {
     // group, so a future subcommand cannot forget it — and it is skipped for
     // tokens after `--`, which are the child process's own.
     if (shouldInterceptHelp(command, args.slice(1))) {
+      // A group in this map still gets intercepted — no mutating subcommand
+      // handler ever runs on a stray `--help` — but the TEXT printed is the
+      // group's own help, not a second, independently-drifting slice of
+      // `USAGE_BODY` (AC5, flow 294). `groupUsage`'s slice is what silently
+      // dropped `flow owner`/`flow ac`/half of `flow`'s subcommands and every
+      // `trigger` subcommand but `run` — this is the fix for that class of
+      // drift, applied without touching the "ask, don't do" guard above.
+      const richHelp = RICH_GROUP_HELP.get(command);
+      if (richHelp) {
+        richHelp();
+        return;
+      }
       const usage = groupUsage(command);
       console.log(usage === undefined ? `keryx ${VERSION}\n\n${USAGE_BODY}` : `keryx ${command} — usage:\n\n${usage}\n`);
       return;
@@ -387,6 +399,30 @@ export function helpRequestedFor(rest: readonly string[]): boolean {
  * answering help itself belongs here, and its own help test will say so.
  */
 const DEEP_HELP_GROUPS: ReadonlySet<string> = new Set(["agents", "shell"]);
+
+/**
+ * Groups whose `--help` STAYS intercepted (the guard above never lets a
+ * mutating subcommand see a stray `--help` and run) but whose printed TEXT
+ * is the group's own handler help — not `groupUsage`'s slice of the static
+ * `USAGE_BODY` (AC5, flow 294).
+ *
+ * `DEEP_HELP_GROUPS` above is the other way to solve "the intercepted text is
+ * wrong": let the handler see `--help` itself. That is right for `agents` and
+ * `shell`, whose EVERY subcommand already guards its own `--help` safely. It
+ * is wrong here: `trigger install`/`uninstall`/`list`/`status`/`resolve` (and
+ * most of `flow`'s subcommands) do not check for `--help` at all, so
+ * `keryx trigger install --help` reaching the handler unintercepted would
+ * actually run the install — the exact regression the interception guard
+ * exists to prevent. Calling the group's own top-level help FUNCTION directly
+ * (its `!command`/`--help`/`-h` branch) gets the same single-source-of-truth
+ * text without ever handing a subcommand its own `--help` token.
+ */
+const RICH_GROUP_HELP: ReadonlyMap<string, () => void> = new Map([
+  ["flow", printFlowHelp],
+  ["trigger", printTriggerHelp],
+  ["serve-mcp", printServeMcpHelp],
+  ["governance", printGovernanceHelp],
+]);
 
 /**
  * Should the group's own usage be printed instead of running anything? Pure, so

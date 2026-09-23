@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "294",
+  "slug": "command-registry-descriptors-still-descr",
+  "title": "Command registry: descriptors still describe the pre-0.2.155 behaviour",
+  "status": "in-progress",
+  "createdAt": "2026-09-23T05:19:01.189Z",
+  "updatedAt": "2026-09-23T05:40:19.015Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:286d5150ac248be2b1555aa4e2b002ea02e5e8c2aae7d55bdee17451b44f65eb",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Audit and correct the command registry descriptors for flows 287-293",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T05:19:13.368Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-23T05:19:01.189Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-23T05:19:12.390Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T05:19:12.638Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T05:19:12.888Z",
+      "event": "task-added",
+      "detail": "T5: Audit and correct the command registry descriptors for flows 287-293"
+    },
+    {
+      "at": "2026-09-23T05:19:13.125Z",
+      "event": "task-added",
+      "detail": "T6: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T05:19:13.368Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-23T05:28:50.611Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"(new)\" -> \"Top-level `--help` for a command group whose handler has its own help — at least `flow`, `trigger`, `serve-mcp`, `governance` and `agents external` — lists every subcommand that group has, instead of a shorter stale usage block; a test compares each intercepted help against the handler's own help so a new subcommand cannot be missing from it.\" (Found while fixing the registry: keryx trigger --help printed only 'run', hiding list, status, schedule, install, uninstall and resolve, because src/cli.ts intercepts --help with a stale USAGE_BODY block. Same class of drift as AC1.)"
+    },
+    {
+      "at": "2026-09-23T05:40:19.015Z",
+      "event": "task-done",
+      "detail": "T5: Audit and correct the command registry descriptors for flows 287-293"
+    }
+  ]
+}
