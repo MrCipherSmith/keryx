@@ -1,6 +1,7 @@
 import path from "node:path";
 import {
   validateSerializedContentForTransport,
+  type ExfilExemption,
   type OutputValidationResult,
 } from "./output-validation";
 import { readFile } from "node:fs/promises";
@@ -54,8 +55,11 @@ import { scanContainedPath, type SecurityScanOptions } from "./path-scan";
  */
 export { redactSensitiveText } from "./redact";
 
-export function validateSerializedOutput(content: string): OutputValidationResult {
-  return validateSerializedContentForTransport(content);
+export function validateSerializedOutput(
+  content: string,
+  exemptExfil?: ExfilExemption,
+): OutputValidationResult {
+  return validateSerializedContentForTransport(content, exemptExfil);
 }
 
 // Result of a full analysis: the decision plus the surfaced self-protection

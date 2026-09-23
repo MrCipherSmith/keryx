@@ -7,6 +7,17 @@ import type { DetectorMatch } from "./types";
 
 export type OutputTransportFormat = "json" | "text";
 
+// GDCTX-2: this module is the MANDATORY deterministic redaction floor — it
+// applies whether or not the `security` module is enabled or configured, so
+// it never loads `SecurityConfig` (an unreadable/absent config must not
+// silently widen what it masks). A caller that HAS already resolved config
+// (e.g. `guard.ts#redactRaw`, which only reaches here once it knows the
+// module is enabled and has loaded the config) can pass a pre-resolved
+// predicate deciding which `detectExfil` matches to leave unmasked — never a
+// config object, so the floor's own independence from config loading stays
+// true. Absent, every exfil match is masked, exactly as before.
+export type ExfilExemption = (match: DetectorMatch) => boolean;
+
 export type OutputRedaction =
   | { state: "none" | "redacted"; reasons: string[] }
   | { state: "format-unsafe"; reasons: string[] };
@@ -15,6 +26,8 @@ export type OutputValidationInput = {
   value: unknown;
   format: OutputTransportFormat;
   schema?: Record<string, unknown>;
+  // GDCTX-2: see `ExfilExemption` above.
+  exemptExfil?: ExfilExemption;
 };
 
 export type OutputValidationResult =
@@ -143,10 +156,18 @@ function isNumericText(value: string): boolean {
   return /^[+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(value);
 }
 
-function redactString(value: string, key: string | undefined): RedactedString {
+function redactString(
+  value: string,
+  key: string | undefined,
+  exemptExfil?: ExfilExemption,
+): RedactedString {
   const secretMatches = detectSecrets(value);
   const piiMatches = detectPii(value);
-  const exfilMatches = detectExfil(value);
+  const allExfilMatches = detectExfil(value);
+  const exfilMatches = exemptExfil
+    ? allExfilMatches.filter((match) => !exemptExfil(match))
+    : allExfilMatches;
+  const exemptedCount = allExfilMatches.length - exfilMatches.length;
   const contextualMatches: DetectorMatch[] =
     isSensitiveFieldKey(key) && value.length > 0 && secretMatches.length === 0
       ? [
@@ -177,10 +198,15 @@ function redactString(value: string, key: string | undefined): RedactedString {
   }
 
   // Keep the established deterministic text helper as the normal redaction
-  // path. The contextual numeric-ID exception needs the already-filtered spans.
+  // path. The contextual numeric-ID exception needs the already-filtered
+  // spans, and so does an exfil exemption (GDCTX-2): `redactSensitiveText`
+  // re-runs the detectors from scratch and would put an exempted match right
+  // back, so any exemption forces the `applyRedaction(value, matches)` path,
+  // which masks exactly (and only) the already-filtered `matches` array.
   const redacted = matches.length ===
       secretMatches.length + piiMatches.length + exfilMatches.length &&
-    contextualMatches.length === 0
+    contextualMatches.length === 0 &&
+    exemptedCount === 0
     ? redactSensitiveText(value)
     : applyRedaction(value, matches);
 
@@ -219,12 +245,13 @@ function sanitizeJsonValue(
   value: unknown,
   key: string | undefined,
   active: WeakSet<object>,
+  exemptExfil?: ExfilExemption,
 ): SafeValueResult {
   if (value === null || typeof value === "boolean") {
     return { ok: true, value, reasons: [] };
   }
   if (typeof value === "string") {
-    const redacted = redactString(value, key);
+    const redacted = redactString(value, key, exemptExfil);
     return { ok: true, value: redacted.value, reasons: redacted.reasons };
   }
   if (typeof value === "number") {
@@ -254,7 +281,7 @@ function sanitizeJsonValue(
         if (!(index in value)) {
           return { ok: false, reason: "non-json-value" };
         }
-        const nested = sanitizeJsonValue(value[index], undefined, active);
+        const nested = sanitizeJsonValue(value[index], undefined, active, exemptExfil);
         if (!nested.ok) return nested;
         output.push(nested.value);
         reasons.push(...nested.reasons);
@@ -272,7 +299,7 @@ function sanitizeJsonValue(
       if (isSensitivePropertyName(nestedKey)) {
         return { ok: false, reason: "sensitive-property-name" };
       }
-      const nested = sanitizeJsonValue(nestedValue, nestedKey, active);
+      const nested = sanitizeJsonValue(nestedValue, nestedKey, active, exemptExfil);
       if (!nested.ok) return nested;
       entries.push([nestedKey, nested.value]);
       reasons.push(...nested.reasons);
@@ -451,7 +478,7 @@ export function validateOutputForTransport(
       if (typeof input.value !== "string") {
         return failure("non-text-value");
       }
-      const safe = redactString(input.value, undefined);
+      const safe = redactString(input.value, undefined, input.exemptExfil);
       const schemaReason = schemaFailure(safe.value, input.schema);
       if (schemaReason !== undefined) return failure(schemaReason);
       const reasons = uniqueSorted(safe.reasons);
@@ -466,7 +493,7 @@ export function validateOutputForTransport(
       };
     }
 
-    const safe = sanitizeJsonValue(input.value, undefined, new WeakSet());
+    const safe = sanitizeJsonValue(input.value, undefined, new WeakSet(), input.exemptExfil);
     if (!safe.ok) return failure(safe.reason);
     const schemaReason = schemaFailure(safe.value, input.schema);
     if (schemaReason !== undefined) return failure(schemaReason);
@@ -713,14 +740,16 @@ function bytesAreFaithfulTo(content: string, expected: unknown): boolean {
  */
 export function validateSerializedContentForTransport(
   content: string,
+  exemptExfil?: ExfilExemption,
 ): OutputValidationResult {
   let value: unknown;
+  const exemption = exemptExfil !== undefined ? { exemptExfil } : {};
   try {
     value = JSON.parse(content);
   } catch {
-    return validateOutputForTransport({ value: content, format: "text" });
+    return validateOutputForTransport({ value: content, format: "text", ...exemption });
   }
-  const result = validateOutputForTransport({ value, format: "json" });
+  const result = validateOutputForTransport({ value, format: "json", ...exemption });
   if (!result.ok || result.redaction.state === "redacted") {
     // Unsafe structure, or a walk that already produced the canonical safe form.
     return result;
