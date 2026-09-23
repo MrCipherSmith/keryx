@@ -1,6 +1,15 @@
 # Complete Installation, Project Setup, and Agent Workflow Guide
 
-This guide takes a new user from prerequisites and global installation through a
+**Audience.** Operators and integrators who want one page with every setup
+step spelled out end to end — global install, project-local install,
+initialization flags, context-building commands, agent-runtime wiring, and
+copy-ready prompts for controlling keryx from inside an agent session. If you
+are a new user running keryx for the first time, start with
+[Onboarding](onboarding.md) instead — it covers the same install paths
+compared side by side with their trade-offs, plus the first-run walkthrough
+and the first `keryx shell` session, in less depth per step than this guide.
+
+This guide takes a user from prerequisites and global installation through a
 fully initialized project, optional integrations, verification, daily operation,
 and copy-ready prompts for controlling keryx through an AI coding agent.
 
@@ -48,6 +57,12 @@ bun --version
 ```
 
 ## 2. Global keryx installation
+
+> The npm package and the standalone binary — the two paths most users take —
+> are covered in [Onboarding → Install](onboarding.md#install), including the
+> four-way trade-off table. This section restates the managed-clone path in
+> full because two things below are specific to it: pinning a ref with
+> `KERYX_REF`, and the verification commands that follow.
 
 ### Install / update globally (short form)
 

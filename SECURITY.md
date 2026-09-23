@@ -7,13 +7,14 @@ protects users of the tool; this document covers how to report a vulnerability
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
-| < 0.1   | :x:                |
+| Version           | Supported          |
+| ------------------ | ------------------ |
+| latest `0.2.x`      | :white_check_mark: |
+| any earlier release | :x:                |
 
-Security fixes land on the latest `0.1.x` release. Please upgrade to the latest
-version before reporting.
+The project is pre-1.0 and releases frequently (`0.2.157` as of this writing);
+there is no long-term-support branch. Security fixes land on the latest
+release. Please upgrade to the latest version before reporting.
 
 ## Reporting a Vulnerability
 

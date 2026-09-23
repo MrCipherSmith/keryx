@@ -719,6 +719,113 @@ when it is absent.
 
 ---
 
+## trigger & schedule
+
+**Purpose.** Declared automation over `.metaproject/triggers.json` (hand-edited,
+keryx never writes it): a repository event (git hook) or a cron/systemd
+schedule fires exactly one pass of a named action — reconciling the graph and
+wiki, opening Task Manager work, reporting or dispatching a flow's next task,
+or running a free-form scheduled agent turn. `schedule` is the
+human-confirmed, operator-facing entry point on top of the same mechanism —
+it never writes a trigger unattended, and every entry it creates is one
+`keryx schedule add` (or `/schedule` in the shell) confirmed at a terminal.
+
+**CLI surface.** `triggerCommand` / `scheduleCommand`:
+
+| Subcommand | Behavior |
+|---|---|
+| `trigger run <name>` | perform exactly one pass of `<name>`'s action |
+| `trigger run --schedule <name>` | the same, resolving only a local schedule |
+| `trigger install` / `uninstall` | install/remove the git hook block for event-fired entries |
+| `trigger list` | declared entries: enabled state, fire, action, hook status |
+| `trigger status [<name>]` | last recorded outcome for one or every entry |
+| `trigger schedule <name>` | print the cron line / systemd timer unit for a schedule entry |
+| `trigger resolve <runId> --spent <usd>` | close a killed dispatch's spend reservation with what it really spent |
+| `schedule add\|list\|show\|pause\|resume\|run\|remove` | create (with a confirmation card), inspect, pause/resume, run once, or delete a scheduled agent task |
+
+**Key files.** `commands/trigger.ts`, `commands/schedule.ts` (dispatchers),
+`trigger/config.ts` (`.metaproject/triggers.json` schema and load), `trigger/run.ts`
+(the one-pass executor), `trigger/schedules.ts`/`trigger/cron.ts`/`trigger/schedule.ts`
+(the per-machine schedule store and cron/systemd/launchd unit rendering),
+`trigger/hooks.ts`/`trigger/install.ts` (git hook block management),
+`trigger/unattended.ts` (the unattended refusal floor), `trigger/record.ts`
+(the run ledger), `trigger/granted-tools.ts`/`trigger/granted-binary.ts`
+(credentialed tools that run outside the sandbox, e.g. `gh pr list`).
+
+**How it works.** Actions: `reconcile` runs `keryx sync --apply`; `rebuild`
+runs `keryx gdgraph build`; `open-flow` opens a flow from `action.template`
+(`skipIfOpen` avoids a second one while an equivalent flow is open); `flow-next`
+without a `dispatch` block only reports `action.flow`'s next task, and with one
+dispatches a keryx agent to work that task unattended, in a throwaway git
+worktree on branch `trigger/<flow>-<task>` (committed, never pushed) —
+`permissionMode: "trust"` requires the hardened Linux sandbox (bubblewrap:
+network off, home hidden, allow-listed env) and refuses to start without it,
+`"ask"` is read-only, and `"auto"` is rejected outright; `agent-task` (only
+ever created by `schedule add`/`/schedule`) is a free-form scheduled agent
+turn with a report on disk. Unattended means every call that would ask is
+denied and recorded, the saved shell allowlist and project permission mode are
+ignored, there are no web/MCP/subagent/ask_user tools, and a text floor
+(defence in depth, not the boundary — see [limitations](limitations.md))
+refuses `git push`/merge/tag, publishing, mutating `gh api`, keryx flow state
+changes, nested trigger runs, and writes to `flow.json`,
+`acceptance-criteria.md`, `triggers.json` or the record. Spend is **reserved**
+before the first model call and stays reserved until `trigger resolve` closes
+a killed run; a triggered run **refuses** (never waits) when another `keryx`
+run already holds the project's maintenance lock, while a manual
+`sync --apply`/`gdgraph build` waits for it. `schedule` installs a
+`systemd --user` timer (launchd on macOS, cron elsewhere) that runs
+`trigger run <name>` unattended; keryx never enables linger and never runs a
+daemon of its own.
+
+**Data & artifacts.** `.metaproject/triggers.json` (hand-edited declarations),
+`.metaproject/data/trigger/schedules.json` (the per-machine, gitignored
+schedule store), `.metaproject/data/trigger/runs.jsonl` (the spend/outcome
+ledger `governance` reads), `.metaproject/data/trigger/reports/` (per-run
+`agent-task` reports).
+
+**Dependencies / integrations.** Bubblewrap (Linux) for `trust`-mode
+dispatch; `systemd --user` / launchd / cron for installed timers; optional
+`gh` for granted read-only tools. **Cross-module:** `flow` (the tasks a
+`flow-next` dispatch works), `health` (the dispatch's own `health gate`),
+`governance` (reads the run ledger).
+
+## governance
+
+**Purpose.** A single read-only report over what other modules already
+recorded — never a new source of truth, never a re-run of a gate, never a
+model or network call. It exists because that evidence was scattered across
+per-flow `flow.json` files, per-review package manifests and the trigger run
+ledger, with no one place to ask "what did this cost, who confirmed it, and
+did the gates pass."
+
+**CLI surface.** `governanceCommand`:
+
+| Subcommand | Behavior |
+|---|---|
+| `report [--flow <id>] [--owner <name>] [--since <iso>] [--until <iso>] [--all-projects] [--json]` | regenerate and print the report |
+| `show [--json]` | reprint the most recently written report without regenerating it |
+
+**Key files.** `commands/governance.ts` (dispatcher), `governance/service.ts`
+(assembly), `governance/aggregate.ts`, `governance/spend.ts`,
+`governance/accountability.ts`, `governance/report.ts` (rendering).
+
+**How it works.** Reads `flow.json` (owner, signatures, `acConfirmed`,
+`completionAttempts`) across flow packages, review package manifests (cost),
+and `.metaproject/data/trigger/runs.jsonl` (project-wide trigger/schedule
+spend — never attributed to a flow, since the run record carries no flow
+reference). A figure nobody recorded is reported as **"not recorded,"** never
+silently as zero. `--all-projects` also walks every project in the
+user-global registry (`keryx projects`); a registered project whose path is
+missing or unreadable is listed with a reason rather than failing the whole
+report.
+
+**Data & artifacts.** `.metaproject/data/governance/artifacts/latest.md` and
+`latest.json` (schema-versioned).
+
+**Dependencies / integrations.** Node builtins only. **Cross-module:** `flow`
+(owner/signature/completion data), `review` (round cost), `trigger`
+(the spend ledger).
+
 ## review
 
 **Purpose.** The review module turns review output into a durable, validated
