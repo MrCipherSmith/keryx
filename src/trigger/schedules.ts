@@ -73,7 +73,9 @@ export interface ScheduleRequest {
   readonly ceilingUsd: number;
   readonly maxSeconds?: number;
   readonly permissionMode?: "ask" | "trust";
-  readonly network?: "off" | "full";
+  readonly network?: "off" | "full" | "allowlist";
+  /** Required, non-empty when `network === "allowlist"` (flow 301). */
+  readonly domains?: readonly string[];
   readonly tools?: readonly string[];
   readonly repos?: readonly string[];
 }
@@ -197,6 +199,7 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
     },
     grants: {
       network: request.network ?? "off",
+      domains: [...(request.domains ?? [])],
       tools,
       repos: [...(request.repos ?? [])],
       bins,
@@ -246,6 +249,7 @@ function renderCard(input: {
 }): string[] {
   const { request, plan } = input;
   const network = request.network ?? "off";
+  const domains = request.domains ?? [];
   const tools = request.tools ?? [];
   const lingerLine =
     plan.backend === "systemd"
@@ -264,7 +268,13 @@ function renderCard(input: {
     `prompt: ${request.prompt}`,
     `runner: ${request.provider}/${request.model}, mode ${request.permissionMode ?? "ask"}${(request.permissionMode ?? "ask") === "trust" ? " (the agent can run shell commands in the sandbox)" : " (read-only: every command is denied)"}`,
     `budget: ceiling $${request.ceilingUsd} for this schedule (the project-wide ceiling also applies), max ${request.maxSeconds ?? 600}s per run, rates $${request.rates.inputUsdPerMTok}/$${request.rates.outputUsdPerMTok} per M tokens in/out`,
-    `network: ${network === "full" ? FULL_NETWORK_CARD_WARNING : "off (the agent's shell has no network)"}`,
+    `network: ${
+      network === "full"
+        ? FULL_NETWORK_CARD_WARNING
+        : network === "allowlist"
+          ? `allowlist - ${domains.join(", ") || "(no domains — every request refused)"} — governs ONLY the agent's shell commands; the model call and granted tools already run outside the sandbox`
+          : "off (the agent's shell has no network)"
+    }`,
     tools.length === 0
       ? "granted tools: none"
       : `granted tools (run by keryx outside the sandbox with YOUR credentials; the model sees only redacted output): ${tools.join(", ")}`,

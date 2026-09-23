@@ -124,13 +124,42 @@ export interface AgentTaskAction {
   readonly report: { readonly keep: number };
 }
 
-/** Flow 295 (AC4): `allowlist` is named so it can be refused with a reason; it is delivered by flow 301. */
-export const AGENT_TASK_NETWORK_MODES = ["off", "full"] as const;
+/**
+ * Flow 301: `allowlist` reaches only `domains` through the loopback domain proxy —
+ * `off`/`full` never touch it. The sandbox still runs `--unshare-net` (same as `off`);
+ * only the agent's own `shell_exec` traffic is governed — the model call and every
+ * granted tool already run outside the sandbox (`trigger-agent-task.ts`).
+ */
+export const AGENT_TASK_NETWORK_MODES = ["off", "full", "allowlist"] as const;
 export type AgentTaskNetworkMode = (typeof AGENT_TASK_NETWORK_MODES)[number];
+
+/**
+ * One allowed `allowlist` entry: an exact hostname, or a `*.domain` wildcard covering
+ * the apex and every subdomain (the grammar `matchesAllowlist` enforces at proxy time).
+ * Rejects an IP literal (v4 or v6) and a bare `*` — see {@link agentTaskDomainProblem}.
+ */
+export function agentTaskDomainProblem(domain: unknown): string | undefined {
+  if (typeof domain !== "string" || domain.trim().length === 0) return "must be a non-empty string";
+  const value = domain.trim().toLowerCase();
+  if (value === "*") return '"*" is not a domain — every allowlist entry names a specific domain or "*.domain"';
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value) || value.includes(":")) {
+    return `"${domain}" is an IP literal — the allowlist is domains only (the proxy refuses an IP-literal target at connect time too)`;
+  }
+  const name = value.startsWith("*.") ? value.slice(2) : value;
+  if (name.length === 0) return `"${domain}" has no domain after the wildcard`;
+  const LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+  const labels = name.split(".");
+  if (labels.length < 2 || labels.some((label) => !LABEL.test(label))) {
+    return `"${domain}" does not look like a domain (expected labels like "example.com" or "*.example.com")`;
+  }
+  return undefined;
+}
 
 export interface AgentTaskGrants {
   /** `off` (default) keeps `--unshare-net`; `full` is the host network, always shown with NETWORK_ON_WARNING. */
   readonly network: AgentTaskNetworkMode;
+  /** Flow 301: required, non-empty when `network === "allowlist"`; empty otherwise. */
+  readonly domains: readonly string[];
   /** Granted-tool catalogue ids (`./granted-tools.ts`). */
   readonly tools: readonly string[];
   /** Repositories every repo-scoped granted tool is limited to. */
@@ -354,14 +383,20 @@ function agentTaskProblems(raw: Record<string, unknown>): string[] {
 function grantsProblems(grants: Record<string, unknown>): string[] {
   const problems: string[] = [];
   const network = grants.network ?? "off";
-  if (network === "allowlist") {
-    problems.push(
-      'action.grants.network: "allowlist" (shell commands reaching only listed domains through the loopback proxy) is ' +
-        "not yet available — it is delivered by flow 301. Use \"off\" (the default); granted tools run outside the " +
-        "sandbox and need no sandbox network.",
-    );
-  } else if (typeof network !== "string" || !(AGENT_TASK_NETWORK_MODES as readonly string[]).includes(network)) {
+  if (typeof network !== "string" || !(AGENT_TASK_NETWORK_MODES as readonly string[]).includes(network)) {
     problems.push(`action.grants.network: must be one of ${AGENT_TASK_NETWORK_MODES.join(", ")}`);
+  }
+  const domains = grants.domains ?? [];
+  if (!Array.isArray(domains) || !domains.every((d) => typeof d === "string")) {
+    problems.push("action.grants.domains: must be an array of strings");
+  } else if (network === "allowlist") {
+    if (domains.length === 0) {
+      problems.push('action.grants.domains: required and non-empty when network is "allowlist" — a name or "*.domain" wildcard for every domain the agent\'s shell may reach');
+    }
+    for (const domain of domains) {
+      const problem = agentTaskDomainProblem(domain);
+      if (problem !== undefined) problems.push(`action.grants.domains: ${problem}`);
+    }
   }
   const tools = grants.tools ?? [];
   if (!Array.isArray(tools)) {
@@ -552,6 +587,7 @@ function normalizeAgentTask(action: AgentTaskAction): AgentTaskAction {
     },
     grants: {
       network: grants.network ?? "off",
+      domains: [...(grants.domains ?? [])],
       tools: [...(grants.tools ?? [])],
       repos: [...(grants.repos ?? [])],
       bins: { ...(grants.bins ?? {}) },

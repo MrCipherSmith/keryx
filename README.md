@@ -479,7 +479,10 @@ Grouped by what you are trying to do, not by internal module layout.
   - **Granted tools** (`gh pr list/view/checks`, `gh issue list/view`, `gh run list`) run
     **outside** the sandbox with your credentials. The model sees only redacted output, and the
     token never enters the sandbox, the model context or the report.
-  - **Network:** the agent's shell network is `off` or `full`.
+  - **Network:** the agent's shell network is `off`, `full`, or `allowlist` (Linux
+    only) — reaches only the domains you name, through a loopback proxy keryx runs
+    outside the sandbox; it governs only the agent's own shell commands, never the
+    model call or a granted tool. See the [CLI reference](docs/docs/cli-reference.md#schedule).
   - **Refusals:** the unattended floor is unchanged, and an entry edited after you confirmed it is
     refused (`grants-changed`).
   - **Tracking:** every run is spend-bounded and appears in `keryx trigger status` and

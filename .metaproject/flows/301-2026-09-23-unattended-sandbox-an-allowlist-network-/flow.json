@@ -1,0 +1,471 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "301",
+  "slug": "unattended-sandbox-an-allowlist-network-",
+  "title": "Unattended sandbox: an allowlist network mode through the domain proxy on Linux",
+  "status": "in-progress",
+  "createdAt": "2026-09-23T05:35:33.070Z",
+  "updatedAt": "2026-09-23T09:07:38.319Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T5-T17, which collect and act on context per-area"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T5-T14 (implementation split by area)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T16 plus per-area tests added alongside each T5-T14 change"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T17 (full verification suite + report)"
+    },
+    {
+      "id": "T5",
+      "title": "config: AgentTaskGrants allowlist+domains (AC1)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "AGENT_TASK_NETWORK_MODES+domains field+agentTaskDomainProblem validation in config.ts; config.test.ts updated (stale not-yet-available test rewritten) plus new AC1 tests, 55/55 green"
+    },
+    {
+      "id": "T6",
+      "title": "guard.ts: exported private/reserved address classifier (AC3 reuse)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "isPrivateIPv4 exported + isPrivateOrReservedAddress added in guard.ts, with guard.private-address.test.ts; revert-check done (4/7 tests red without the fix)"
+    },
+    {
+      "id": "T7",
+      "title": "proxy.ts: unix-socket listen, IP-literal refusal, DNS pin+refuse (AC3,AC4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "proxy.ts: unixSocketPath listen mode, IP-literal refusal, refuseReservedAddresses (DNS-pin, checkedAddress) for CONNECT+plain-HTTP; proxy.allowlist.test.ts (6 tests) plus pre-existing proxy/proxy-tls/network-run suites unmodified and green; revert-check done (3/6 red)"
+    },
+    {
+      "id": "T8",
+      "title": "sandbox-net-forward hidden CLI cmd + forwarder (AC5)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "forwarder.ts (TCP<->unix bridge with pre-connect buffering fix) + hidden CLI keryx __sandbox-net-forward (src/commands/sandbox-net-forward.ts), registered in cli.ts with DOCUMENTED_ELSEWHERE/cli.test.ts exceptions; forwarder.test.ts revert-checked red on the buffering fix"
+    },
+    {
+      "id": "T9",
+      "title": "unattended.ts: allowlist network mode wiring (AC2,AC5,AC11)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "unattended.ts: UnattendedNetworkAllowlist type, socket bind-mount, HTTP(S)_PROXY env, FIFO-synchronized wrap() starting the forwarder inside the same bwrap invocation; unattended.test.ts (23 tests) unmodified and green"
+    },
+    {
+      "id": "T10",
+      "title": "trigger-agent-task.ts: proxy lifecycle + report + record (AC6,AC7)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "trigger-agent-task.ts: creates+closes the proxy per run, wires allowlist into planUnattendedSandbox, records ProxyDecision into agentTask.networkDecisions and the report; trigger-agent-task.test.ts (14 tests) unmodified and green"
+    },
+    {
+      "id": "T11",
+      "title": "schedule hash coverage test (AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "AC8 covered directly: scheduleContentCanonical deep-canonicalizes action.grants, so domains is automatically signed; added an explicit test proving same-domains hash-equal and changed-domains hash-different"
+    },
+    {
+      "id": "T12",
+      "title": "confirmation card + TUI grants/runs (AC9,AC10)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "renderCard (schedules.ts) + grantsLines/runsLines (schedules-inspector.ts) show allowlist mode+domains and network refusal counts; new tests schedules.allowlist.test.ts + schedules-inspector.allowlist.test.ts green, plus pre-existing 109 TUI/CLI schedule tests unmodified and green"
+    },
+    {
+      "id": "T13",
+      "title": "trigger-dispatch.ts TMPDIR/worktree scratch-parent fix (AC12)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "flow-next worktrees now use triggerDispatchScratchParent() (per-uid/XDG_RUNTIME_DIR) validated by ensureScratchParent (shared with agent-task via new src/commands/unattended-scratch.ts), and planSandbox gets hide:[parent]; 3 new tests + revert-check (2/35 red without the fix); 35/35 green, 96/96 in trigger-agent-task+schedule-security unmodified and green"
+    },
+    {
+      "id": "T14",
+      "title": "sandbox status note (AC13)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "sandbox.ts: the not-implemented status sentence for the general harness 'Domain allowlist' row now names the unattended agent-task allowlist as a separate capability; capability-matrix.ts data untouched (doc-sync test still green); new test + 12/12 sandbox.test.ts green"
+    },
+    {
+      "id": "T15",
+      "title": "docs: cli-reference, limitations, README, scheduled-tasks skill (AC14)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "docs/docs/cli-reference.md #schedule, docs/docs/limitations.md (2 sections), README.md, and the scheduled-tasks skill all updated: allowlist mode, Linux-only, governs-only-shell_exec framing, DNS-pin/blind-relay/proxy-env-ignoring honest limits; cli-reference-coverage.test.ts still 7/7 green"
+    },
+    {
+      "id": "T16",
+      "title": "real bwrap integration test (AC6) + revert-checks for security fixes",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "AC6 real bwrap integration test done as part of T7 (unattended.allowlist.test.ts, 3 real-bwrap tests); revert-checks done for T6 (guard), T7 (proxy DNS-pin), T8 (forwarder buffering) and T13 (scratch-parent/hide) — all confirmed red without their fix, green restored"
+    },
+    {
+      "id": "T17",
+      "title": "full verification suite + report",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Full verification suite run: tsc --noEmit clean; eslint clean on all changed/new files; bun test src/harness/process/sandbox (184 pass/5 pre-existing flag-gated skip), src/trigger (145 pass), schedule+security suites (111+341 pass), opentui-tests-no-skips.ts src/tui (1113 pass, 0 skip), test:client:terminal (1398 pass/3 pre-existing skip), test:client:runtime (3766 pass/16 pre-existing skip), src/commands+src/trigger+sandbox+mutation combined (2645 pass/12 skip); skills verify --bundled findings:0 after trimming scheduled-tasks SKILL.md back to its 96-line recorded ceiling (never raised); flow check clean. No leftover revert-check markers in source."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-23T05:35:33.070Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-23T08:20:35.510Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T08:20:41.109Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T08:26:48.565Z",
+      "event": "task-added",
+      "detail": "T5: config: AgentTaskGrants allowlist+domains (AC1)"
+    },
+    {
+      "at": "2026-09-23T08:26:48.675Z",
+      "event": "task-added",
+      "detail": "T6: guard.ts: exported private/reserved address classifier (AC3 reuse)"
+    },
+    {
+      "at": "2026-09-23T08:26:48.783Z",
+      "event": "task-added",
+      "detail": "T7: proxy.ts: unix-socket listen, IP-literal refusal, DNS pin+refuse (AC3,AC4)"
+    },
+    {
+      "at": "2026-09-23T08:26:48.902Z",
+      "event": "task-added",
+      "detail": "T8: sandbox-net-forward hidden CLI cmd + forwarder (AC5)"
+    },
+    {
+      "at": "2026-09-23T08:26:49.008Z",
+      "event": "task-added",
+      "detail": "T9: unattended.ts: allowlist network mode wiring (AC2,AC5,AC11)"
+    },
+    {
+      "at": "2026-09-23T08:26:49.112Z",
+      "event": "task-added",
+      "detail": "T10: trigger-agent-task.ts: proxy lifecycle + report + record (AC6,AC7)"
+    },
+    {
+      "at": "2026-09-23T08:26:49.215Z",
+      "event": "task-added",
+      "detail": "T11: schedule hash coverage test (AC8)"
+    },
+    {
+      "at": "2026-09-23T08:26:49.319Z",
+      "event": "task-added",
+      "detail": "T12: confirmation card + TUI grants/runs (AC9,AC10)"
+    },
+    {
+      "at": "2026-09-23T08:26:49.423Z",
+      "event": "task-added",
+      "detail": "T13: trigger-dispatch.ts TMPDIR/worktree scratch-parent fix (AC12)"
+    },
+    {
+      "at": "2026-09-23T08:26:49.528Z",
+      "event": "task-added",
+      "detail": "T14: sandbox status note (AC13)"
+    },
+    {
+      "at": "2026-09-23T08:26:49.632Z",
+      "event": "task-added",
+      "detail": "T15: docs: cli-reference, limitations, README, scheduled-tasks skill (AC14)"
+    },
+    {
+      "at": "2026-09-23T08:26:49.738Z",
+      "event": "task-added",
+      "detail": "T16: real bwrap integration test (AC6) + revert-checks for security fixes"
+    },
+    {
+      "at": "2026-09-23T08:26:49.846Z",
+      "event": "task-added",
+      "detail": "T17: full verification suite + report"
+    },
+    {
+      "at": "2026-09-23T08:26:54.756Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T08:26:54.869Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T08:26:54.972Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T08:26:55.080Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-23T08:45:58.499Z",
+      "event": "task-done",
+      "detail": "T6: guard.ts: exported private/reserved address classifier (AC3 reuse)"
+    },
+    {
+      "at": "2026-09-23T08:45:58.606Z",
+      "event": "task-done",
+      "detail": "T7: proxy.ts: unix-socket listen, IP-literal refusal, DNS pin+refuse (AC3,AC4)"
+    },
+    {
+      "at": "2026-09-23T08:45:58.709Z",
+      "event": "task-done",
+      "detail": "T8: sandbox-net-forward hidden CLI cmd + forwarder (AC5)"
+    },
+    {
+      "at": "2026-09-23T08:45:58.813Z",
+      "event": "task-done",
+      "detail": "T9: unattended.ts: allowlist network mode wiring (AC2,AC5,AC11)"
+    },
+    {
+      "at": "2026-09-23T08:45:58.918Z",
+      "event": "task-done",
+      "detail": "T10: trigger-agent-task.ts: proxy lifecycle + report + record (AC6,AC7)"
+    },
+    {
+      "at": "2026-09-23T08:46:49.488Z",
+      "event": "task-done",
+      "detail": "T5: config: AgentTaskGrants allowlist+domains (AC1)"
+    },
+    {
+      "at": "2026-09-23T08:46:49.592Z",
+      "event": "task-done",
+      "detail": "T11: schedule hash coverage test (AC8)"
+    },
+    {
+      "at": "2026-09-23T08:48:17.097Z",
+      "event": "task-done",
+      "detail": "T12: confirmation card + TUI grants/runs (AC9,AC10)"
+    },
+    {
+      "at": "2026-09-23T08:56:00.288Z",
+      "event": "task-done",
+      "detail": "T13: trigger-dispatch.ts TMPDIR/worktree scratch-parent fix (AC12)"
+    },
+    {
+      "at": "2026-09-23T08:57:03.924Z",
+      "event": "task-done",
+      "detail": "T14: sandbox status note (AC13)"
+    },
+    {
+      "at": "2026-09-23T08:59:07.473Z",
+      "event": "task-done",
+      "detail": "T15: docs: cli-reference, limitations, README, scheduled-tasks skill (AC14)"
+    },
+    {
+      "at": "2026-09-23T08:59:07.576Z",
+      "event": "task-done",
+      "detail": "T16: real bwrap integration test (AC6) + revert-checks for security fixes"
+    },
+    {
+      "at": "2026-09-23T09:07:38.319Z",
+      "event": "task-done",
+      "detail": "T17: full verification suite + report"
+    }
+  ]
+}

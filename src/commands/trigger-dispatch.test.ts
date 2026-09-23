@@ -6,11 +6,12 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
+import { chmodSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runTriggerOnce, triggerCommand } from "./trigger";
-import { dispatchLockPath, providerReportsUsage, sandboxedHealthGate, type HealthGateResult } from "./trigger-dispatch";
+import { dispatchLockPath, providerReportsUsage, sandboxedHealthGate, triggerDispatchScratchParent, type HealthGateResult } from "./trigger-dispatch";
 import { planUnattendedSandbox, type UnattendedSandboxPlan } from "../harness/process/sandbox/unattended";
 import { evaluateTriggerBudget, reserveTriggerSpend } from "../trigger/run";
 import { openReservations } from "../trigger/record";
@@ -844,5 +845,54 @@ describe("T14: dispatch.network: true is named for what it is", () => {
     expect(out).toContain("NETWORK ON");
     expect(out).toContain("every service on the host's loopback");
     expect(out).toContain("The model call does not need this");
+  });
+});
+
+describe("Flow 301 AC12: flow-next worktrees get the same scratch-parent protection agent-task runs already have", () => {
+  test("triggerDispatchScratchParent prefers XDG_RUNTIME_DIR, like agentTaskScratchParent", () => {
+    expect(triggerDispatchScratchParent({ XDG_RUNTIME_DIR: "/run/user/4242" })).toBe("/run/user/4242/keryx-trigger-worktrees");
+    expect(triggerDispatchScratchParent({})).toContain("keryx-trigger-worktrees");
+  });
+
+  test("a pre-existing world-writable DEFAULT parent refuses the dispatch before any model call", async () => {
+    await writeTriggers([dispatchEntry()]);
+    const tmp = await mkdtemp(path.join(tmpdir(), "keryx-dispatch-tmpdir-"));
+    const savedTmpdir = process.env["TMPDIR"];
+    const savedRuntime = process.env["XDG_RUNTIME_DIR"];
+    try {
+      process.env["TMPDIR"] = tmp;
+      delete process.env["XDG_RUNTIME_DIR"];
+      const parent = triggerDispatchScratchParent(process.env);
+      await mkdir(parent, { recursive: true });
+      chmodSync(parent, 0o777);
+      const provider = scripted([]);
+      // No `worktreeParent` override here — the point is the DEFAULT path.
+      await runTriggerOnce(root, "overnight", {
+        service,
+        dispatch: { makeProvider: () => provider, healthGate: passGate(), planSandbox: () => UNWRAPPED_SANDBOX },
+      });
+      expect((await lastRecord()).detail).toContain("has mode 777, not 700");
+      expect(provider.calls()).toBe(0);
+    } finally {
+      if (savedTmpdir === undefined) delete process.env["TMPDIR"];
+      else process.env["TMPDIR"] = savedTmpdir;
+      if (savedRuntime !== undefined) process.env["XDG_RUNTIME_DIR"] = savedRuntime;
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("the sandbox plan hides the worktree parent, so a sibling run's worktree is not readable from inside", async () => {
+    await writeTriggers([dispatchEntry()]);
+    let seenHide: readonly string[] | undefined;
+    const provider = scripted([[USAGE_ROUND_1, ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }]]);
+    await run(provider, {
+      planSandbox: (input: { hide?: readonly string[] }) => {
+        seenHide = input.hide;
+        return UNWRAPPED_SANDBOX;
+      },
+    });
+    expect((await lastRecord()).outcome).toBe("ok");
+    expect(seenHide).toBeDefined();
+    expect(seenHide!.some((dir) => dir.includes(`${path.basename(root)}-wt`))).toBe(true);
   });
 });

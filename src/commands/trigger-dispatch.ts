@@ -56,6 +56,7 @@ import { makeProvider } from "../harness/provider/make-provider";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import type { NormalizedEvent, NormalizedMessage, NormalizedUsage, ProviderPort } from "../harness/provider/types";
 import { planUnattendedSandbox, type UnattendedSandboxInput, type UnattendedSandboxPlan } from "../harness/process/sandbox/unattended";
+import { ensureScratchParent } from "./unattended-scratch";
 import { providerByName } from "./providers";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir, keryxLocksDir } from "../lib/maintenance-lock";
@@ -269,6 +270,18 @@ function realOr(p: string): string {
   } catch {
     return path.resolve(p);
   }
+}
+
+/**
+ * Flow 301 (AC12): where flow-next's throwaway worktrees live, mirroring
+ * `agentTaskScratchParent` in `./trigger-agent-task.ts` (same per-uid-or-runtime-dir
+ * shape, a different keryx-owned name so the two never collide).
+ */
+export function triggerDispatchScratchParent(env: Record<string, string | undefined> = process.env): string {
+  const uid = typeof process.getuid === "function" ? process.getuid() : 0;
+  const runtime = env["XDG_RUNTIME_DIR"];
+  if (runtime !== undefined && runtime.length > 0 && path.isAbsolute(runtime)) return path.join(runtime, "keryx-trigger-worktrees");
+  return path.join(tmpdir(), `keryx-trigger-worktrees-${uid}`);
 }
 
 /** How to invoke this keryx from inside the sandbox, and which roots that needs readable. */
@@ -565,9 +578,29 @@ async function dispatchLocked(
     );
   }
 
-  // --- 3. containment (AC13) — decided before anything is written --------------
+  // --- 3. containment (AC13, and flow 301 AC12) — decided before anything is written --
+  // Flow 301 (AC12): every run's worktree lives under one 0700 parent, and that parent
+  // is hidden inside the sandbox below — the same protection `agentTaskScratchParent`/
+  // `ensureScratchParent` already give scheduled `agent-task` runs. Before this, a
+  // shared `TMPDIR` outside `/tmp` left one run's worktree visible (read-only, via
+  // `--ro-bind / /`) to another's sandbox.
   const branch = triggerBranchName(flow, task.id);
-  const parent = deps.worktreeParent ?? path.join(tmpdir(), "keryx-trigger-worktrees");
+  const parent = deps.worktreeParent ?? triggerDispatchScratchParent();
+  // The 0700/owned/non-symlink check runs only for the DEFAULT (computed) parent — an
+  // explicit `deps.worktreeParent` is a trusted test/caller seam, not attacker-reachable
+  // input, and every existing caller of that seam (tests) manages its own directory.
+  if (deps.worktreeParent === undefined) {
+    const parentSafe = await ensureScratchParent(parent);
+    if (!parentSafe.ok) {
+      return {
+        outcome: "failed",
+        detail: `dispatch for flow ${flow} not started: ${parentSafe.reason}`,
+        cost: { recorded: false, reason: "no model was called — the worktree parent was not safe" },
+        dispatch: { runId, flow, task: task.id },
+        exitCode: 1,
+      };
+    }
+  }
   const worktree = path.join(parent, `${flow}-${task.id}-${runId}`.replace(/[^A-Za-z0-9._-]/g, "-"));
   const scratchHome = `${worktree}-home`;
   const invocation = keryxInvocation();
@@ -581,6 +614,7 @@ async function dispatchLocked(
       ...invocation.roots,
       path.join(projectRoot, "node_modules"),
     ],
+    hide: [parent],
     env: process.env,
     home: homedir(),
     ...(typeof process.getuid === "function" ? { uid: process.getuid() } : {}),

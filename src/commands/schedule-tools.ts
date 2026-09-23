@@ -76,6 +76,7 @@ export function requestFromToolInput(input: Record<string, unknown>, binding: Sc
   if (missing.length > 0) return { error: `missing ${missing.join(", ")} — ask the operator for what you do not know` };
   const mode = input["permissionMode"];
   const network = input["network"];
+  const domains = strings(input["domains"]);
   const maxSeconds = num(input["maxSeconds"]);
   return {
     name: name!,
@@ -87,7 +88,8 @@ export function requestFromToolInput(input: Record<string, unknown>, binding: Sc
     ceilingUsd: ceiling!,
     ...(maxSeconds !== undefined ? { maxSeconds } : {}),
     ...(mode === "ask" || mode === "trust" ? { permissionMode: mode } : {}),
-    ...(network === "off" || network === "full" ? { network } : {}),
+    ...(network === "off" || network === "full" || network === "allowlist" ? { network } : {}),
+    ...(domains.length > 0 ? { domains } : {}),
     tools: strings(input["tools"]),
     repos: strings(input["repos"]),
   };
@@ -128,7 +130,18 @@ export function scheduleTools(binding: ScheduleToolBinding): InteractiveTool[] {
           ceilingUsd: { type: "number", description: "this schedule's own spend ceiling in USD" },
           maxSeconds: { type: "number", description: "per-run wall-clock limit (default 600)" },
           permissionMode: { type: "string", enum: ["ask", "trust"], description: "ask (default, read-only) or trust" },
-          network: { type: "string", enum: ["off", "full"], description: "the scheduled agent's shell network; default off" },
+          network: {
+            type: "string",
+            enum: ["off", "full", "allowlist"],
+            description:
+              'the scheduled agent\'s shell network; default off. "allowlist" (Linux only) reaches only `domains`, through a ' +
+              "loopback proxy keryx runs, and governs only the agent's shell_exec calls — never the model call or granted tools.",
+          },
+          domains: {
+            type: "array",
+            items: { type: "string" },
+            description: 'required, non-empty when network is "allowlist": exact hostnames or "*.domain" wildcards; never an IP literal',
+          },
           tools: { type: "array", items: { type: "string", enum: GRANTED_TOOL_CATALOGUE.map((s) => s.id) } },
           repos: { type: "array", items: { type: "string" }, description: "owner/name repositories the granted tools may touch" },
         },

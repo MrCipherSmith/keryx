@@ -47,6 +47,16 @@ describe("buildSandboxReport", () => {
     expect(byCapability["Credential masking"]!.kind).toBe("not-implemented");
   });
 
+  test('flow 301 AC13: the "Domain allowlist" row names the scheduled agent-task allowlist as a separate capability, so the two surfaces do not silently disagree', () => {
+    const report = buildSandboxReport({ platform: "linux", env: { PATH: "/usr/bin/bwrap" }, existsSync: () => true });
+    const byCapability = Object.fromEntries(report.capabilities.map((c) => [c.capability, c]));
+    expect(byCapability["Domain allowlist"]!.kind).toBe("not-implemented");
+    expect(byCapability["Domain allowlist"]!.status).toContain("SEPARATE capability");
+    expect(byCapability["Domain allowlist"]!.status).toContain('network: "allowlist"');
+    // Every other row is unaffected by the note.
+    expect(byCapability["Credential masking"]!.status).not.toContain("SEPARATE capability");
+  });
+
   test("AC3: linux without bwrap — implemented capabilities say launcher-missing, unimplemented ones say not-implemented, never the other sentence", () => {
     const report = buildSandboxReport({
       platform: "linux",

@@ -55,13 +55,41 @@ export const UNATTENDED_ENV_ALLOWLIST: readonly string[] = [
   "FORCE_COLOR",
 ];
 
+/**
+ * Flow 301: an `agent-task` grant of `network: "allowlist"`. The sandbox still runs
+ * `--unshare-net` (its netns has only its own private `lo` — see the module header);
+ * the only extra opening is a UNIX socket bind-mounted in, for a domain-allowlisting
+ * proxy the dispatcher runs OUTSIDE the sandbox. Because that netns cannot reach the
+ * host's TCP loopback at all, a TCP-speaking client inside (curl, git, …) cannot use
+ * the socket directly — `wrap` starts a keryx-shipped TCP↔unix forwarder, in the SAME
+ * bwrap invocation as the command, and points HTTP(S)_PROXY at it.
+ */
+export interface UnattendedNetworkAllowlist {
+  readonly mode: "allowlist";
+  /** Bind-mounted read-write (AF_UNIX `connect` needs write access to the socket file). Created and listening OUTSIDE the sandbox before the first command runs. */
+  readonly proxySocketPath: string;
+  /** How to invoke keryx's hidden `__sandbox-net-forward` helper from inside the sandbox — `keryxInvocation().argv` with the subcommand name appended. */
+  readonly forwarderArgv: readonly string[];
+}
+
+/** `false` (off, the default) | `true` (full host network) | an allowlist grant (flow 301). */
+export type UnattendedNetwork = boolean | UnattendedNetworkAllowlist;
+
+/** Fixed: each `shell_exec` bwrap invocation gets its own private netns, so no run can collide with another's forwarder port. */
+export const UNATTENDED_ALLOWLIST_FORWARDER_PORT = 8917;
+
+/** Single-quote `value` for embedding in a POSIX `/bin/sh -c` script. */
+function shQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 export interface UnattendedSandboxInput {
   /** The run's worktree — the command's cwd, read-write. */
   readonly worktree: string;
   /** A scratch directory used as HOME, read-write, discarded after the run. */
   readonly scratchHome: string;
-  /** `dispatch.network` — default false. */
-  readonly network: boolean;
+  /** `dispatch.network` — default false. An object grants `allowlist` (flow 301, `agent-task` only). */
+  readonly network: UnattendedNetwork;
   /** Extra read-only roots (the repository's git dir, the keryx package, `node_modules`). */
   readonly readOnly: readonly string[];
   /**
@@ -185,6 +213,8 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
 
   const home = path.resolve(input.home);
   const args: string[] = ["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"];
+  const allowlist = typeof input.network === "object" ? input.network : undefined;
+  const fullNetwork = input.network === true;
 
   // Hide wholesale, the same allow-list way as $HOME:
   //
@@ -219,11 +249,12 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   }
   for (const dir of hidden) args.push("--tmpfs", dir);
 
-  // `dispatch.network: true` only: /etc/resolv.conf is usually a symlink into
+  // `dispatch.network: true` (full) only: /etc/resolv.conf is usually a symlink into
   // /run (systemd-resolved's stub file). With /run hidden it would dangle and
   // name resolution would fail. The FILE is bound back read-only — never the
-  // directory holding the resolver's sockets.
-  if (input.network) {
+  // directory holding the resolver's sockets. `allowlist` binds NO resolv.conf —
+  // the sandbox does its own DNS never; the proxy outside it resolves every name.
+  if (fullNetwork) {
     const resolv = real("/etc/resolv.conf");
     if (resolv !== "/etc/resolv.conf" && exists(resolv) && !isDir(resolv)) args.push("--ro-bind", resolv, resolv);
   }
@@ -245,7 +276,12 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
     else args.push("--ro-bind", "/dev/null", secret);
   }
 
-  if (!input.network) args.push("--unshare-net");
+  if (!fullNetwork) args.push("--unshare-net"); // `allowlist` NEVER shares the host netns — only its own bind-mounted proxy socket is reachable.
+  // Flow 301: the proxy's unix socket, read-write (AF_UNIX `connect` needs write
+  // access to the socket special file, not merely read). Nothing else in `/tmp`
+  // survives — it is a fresh, empty tmpfs (above) — so binding this one path in
+  // is the ONLY way out of the sandbox's private netns.
+  if (allowlist !== undefined) args.push("--bind", allowlist.proxySocketPath, allowlist.proxySocketPath);
   args.push("--unshare-pid", "--unshare-ipc", "--die-with-parent", "--new-session", "--chdir", real(input.worktree));
 
   const env: Record<string, string> = {};
@@ -262,6 +298,16 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   env["TMPDIR"] = "/tmp";
   // The same marker every `shell_exec` child carries (agent bus D-13).
   env["KERYX_TOOL_CALL"] = "1";
+  if (allowlist !== undefined) {
+    // The forwarder listens on the sandbox's OWN private loopback — every shell_exec
+    // command gets a fresh netns, so a fixed port never collides across runs.
+    const proxyUrl = `http://127.0.0.1:${UNATTENDED_ALLOWLIST_FORWARDER_PORT}`;
+    env["HTTP_PROXY"] = proxyUrl;
+    env["HTTPS_PROXY"] = proxyUrl;
+    env["http_proxy"] = proxyUrl;
+    env["https_proxy"] = proxyUrl;
+    env["ALL_PROXY"] = proxyUrl;
+  }
 
   const launcherPath = launcher.path;
   return {
@@ -269,6 +315,36 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
     launcher: launcherPath,
     args,
     env,
-    wrap: (argv) => [launcherPath, ...args, "--", ...argv],
+    wrap: (argv) => {
+      if (allowlist === undefined) return [launcherPath, ...args, "--", ...argv];
+      // Flow 301 (AC5): start the TCP↔unix forwarder INSIDE this same bwrap invocation
+      // (a fresh one per shell_exec command) before running the real command, so both
+      // share the sandbox's own private netns — a forwarder started in a SEPARATE bwrap
+      // call cannot be reached at all (each `--unshare-net` gets its own netns).
+      //
+      // Synchronization is a FIFO, not a fixed sleep: `read` blocks until the forwarder
+      // writes to it, which happens only after its TCP listener is bound — so a client
+      // that connects the instant `exec "$@"` runs never races an unbound port. Plain
+      // POSIX (`mkfifo`, blocking `read -r`), no bash-only syntax.
+      const readyFifo = "/tmp/.keryx-net-fwd-ready";
+      const forwarderCmd = [
+        ...allowlist.forwarderArgv,
+        "--socket",
+        allowlist.proxySocketPath,
+        "--port",
+        String(UNATTENDED_ALLOWLIST_FORWARDER_PORT),
+        "--ready-fifo",
+        readyFifo,
+      ]
+        .map(shQuote)
+        .join(" ");
+      const script = [
+        `mkfifo ${shQuote(readyFifo)}`,
+        `${forwarderCmd} >/tmp/.keryx-net-fwd.log 2>&1 &`,
+        `read -r _ < ${shQuote(readyFifo)}`,
+        `exec "$@"`,
+      ].join("\n");
+      return [launcherPath, ...args, "--", "/bin/sh", "-c", script, "sh", ...argv];
+    },
   };
 }

@@ -103,7 +103,7 @@ function u32ToOctets(n: number): [number, number, number, number] {
  * link-local + cloud metadata `169.254.0.0/16`, and CGNAT `100.64.0.0/10`.
  * Public destinations (e.g. `8.8.8.8`) return `false`. Pure arithmetic.
  */
-function isPrivateIPv4(o0: number, o1: number, o2: number, o3: number): boolean {
+export function isPrivateIPv4(o0: number, o1: number, o2: number, o3: number): boolean {
   if (o0 === 0 && o1 === 0 && o2 === 0 && o3 === 0) return true; // 0.0.0.0 unspecified
   if (o0 === 127) return true; // 127.0.0.0/8 loopback
   if (o0 === 10) return true; // 10.0.0.0/8 RFC1918
@@ -111,6 +111,31 @@ function isPrivateIPv4(o0: number, o1: number, o2: number, o3: number): boolean 
   if (o0 === 192 && o1 === 168) return true; // 192.168.0.0/16 RFC1918
   if (o0 === 169 && o1 === 254) return true; // 169.254.0.0/16 link-local + metadata
   if (o0 === 100 && o1 >= 64 && o1 <= 127) return true; // 100.64.0.0/10 CGNAT
+  return false;
+}
+
+/**
+ * True when `ip` — a resolved IPv4 dotted-quad or IPv6 colon-form literal, NEVER a
+ * hostname — falls in a loopback, private, link-local, unique-local, CGNAT or metadata
+ * range. Flow 301: the allowlist proxy calls this AFTER resolving an allowed domain
+ * name, the one point {@link PRIVATE_EGRESS_PATTERNS} above cannot reach — that scanner
+ * runs on argv/URL TEXT before any DNS lookup. A malformed IPv4 (an octet over 255)
+ * refuses too — fail closed on anything this parser cannot make sense of. Pure.
+ */
+export function isPrivateOrReservedAddress(ip: string): boolean {
+  const v4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4 !== null) {
+    const octets = [v4[1], v4[2], v4[3], v4[4]].map((s) => Number(s));
+    if (octets.some((o) => o > 255)) return true; // malformed — fail closed
+    return isPrivateIPv4(octets[0] as number, octets[1] as number, octets[2] as number, octets[3] as number);
+  }
+  const stripped = ip.replace(/^\[|\]$/g, "").toLowerCase();
+  // IPv4-mapped IPv6 (`::ffff:a.b.c.d`) — classify the embedded IPv4.
+  const mapped = stripped.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (mapped !== null) return isPrivateOrReservedAddress(mapped[1] as string);
+  if (stripped === "::1" || stripped === "::" || stripped === "0:0:0:0:0:0:0:1" || stripped === "0:0:0:0:0:0:0:0") return true; // loopback / unspecified
+  if (/^fe[89ab][0-9a-f]:/.test(stripped)) return true; // fe80::/10 link-local
+  if (/^f[cd][0-9a-f]{2}:/.test(stripped)) return true; // fc00::/7 unique-local
   return false;
 }
 

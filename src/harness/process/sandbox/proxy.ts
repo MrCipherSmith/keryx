@@ -14,6 +14,9 @@
 import http from "node:http";
 import https from "node:https";
 import net from "node:net";
+import dns from "node:dns";
+import { unlinkSync } from "node:fs";
+import { isPrivateOrReservedAddress } from "../../mutation/guard";
 import type { RunCa } from "./tls-ca";
 
 /** Canonical host form for comparison: lowercase, no trailing dot. */
@@ -50,6 +53,27 @@ export interface ProxyDecision {
   host: string;
   allowed: boolean;
   kind: "connect" | "http";
+  /** Flow 301: the target port, when known. */
+  port?: number;
+  /** Flow 301: why a denial was refused (absent for an allow, or when `refuseReservedAddresses` is off). */
+  reason?: string;
+  /** Flow 301: ISO-8601, when this decision was made. */
+  at?: string;
+}
+
+/** True when `host` is an IPv4 dotted-quad or an IPv6 literal — never a hostname. Domain names never contain a colon. */
+function isIpLiteral(host: string): boolean {
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(":");
+}
+
+/** Default DNS resolver: one A/AAAA lookup through the OS resolver. */
+async function defaultResolveHost(hostname: string): Promise<string | undefined> {
+  try {
+    const { address } = await dns.promises.lookup(hostname);
+    return address;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -70,10 +94,17 @@ export interface CredentialMask {
 
 export interface AllowlistProxyOptions {
   allowedDomains: string[];
-  /** Bind host — loopback only. Default 127.0.0.1. */
+  /** Bind host — loopback only. Default 127.0.0.1. Ignored when `unixSocketPath` is set. */
   host?: string;
-  /** Bind port. Default 0 (ephemeral). */
+  /** Bind port. Default 0 (ephemeral). Ignored when `unixSocketPath` is set. */
   port?: number;
+  /**
+   * Flow 301: bind a UNIX socket instead of TCP loopback. The unattended sandbox's
+   * `--unshare-net` netns has only its own private `lo` — it cannot reach the host's
+   * TCP loopback at all — so its proxy listens on a socket bind-mounted into the
+   * sandbox instead (`src/harness/process/sandbox/unattended.ts`).
+   */
+  unixSocketPath?: string;
   /** Audit hook: called for every allow/deny decision. */
   onDecision?: (decision: ProxyDecision) => void;
   /** Credentials to unmask on outbound HTTP requests to their inject hosts. */
@@ -93,6 +124,38 @@ export interface AllowlistProxyOptions {
    * so a local TLS upstream verifies.
    */
   upstreamCa?: string | string[];
+  /**
+   * Flow 301: harden the allowlist — refuse a bare IP-literal target outright, and
+   * after resolving an allowed DOMAIN NAME, refuse a loopback/private/link-local/
+   * CGNAT/unique-local/metadata resolved address (`isPrivateOrReservedAddress`).
+   * The address that PASSED the check is then the address CONNECTED to — never a
+   * fresh lookup — so a name that resolves public at check time and private on a
+   * later (DNS-rebinding) lookup cannot slip through.
+   *
+   * Default false: the pre-flow-301 `network: "restricted"` posture (flow 098/142)
+   * deliberately proxies to `localhost`/`127.0.0.1` test upstreams and would break
+   * under this refusal — it stays exactly as it was unless a caller opts in.
+   */
+  refuseReservedAddresses?: boolean;
+  /** Test seam for `refuseReservedAddresses`. Default: one OS `dns.lookup`. */
+  resolveHost?: (hostname: string) => Promise<string | undefined>;
+}
+
+/**
+ * Resolve `hostname` and return the address to connect to, or `undefined` to refuse:
+ * an IP-literal target, a lookup failure, or a resolved loopback/private/link-local/
+ * CGNAT/unique-local/metadata address. The caller connects to the RETURNED address —
+ * never re-resolves — so this doubles as the DNS-rebinding pin (flow 301 AC4).
+ */
+async function checkedAddress(
+  hostname: string,
+  resolveHost: (h: string) => Promise<string | undefined>,
+): Promise<{ address: string } | { reason: string }> {
+  if (isIpLiteral(hostname)) return { reason: "IP-literal targets are refused — the allowlist is domains only" };
+  const address = await resolveHost(hostname);
+  if (address === undefined) return { reason: "could not be resolved" };
+  if (isPrivateOrReservedAddress(address)) return { reason: `resolved to ${address}, a loopback/private/link-local/metadata address` };
+  return { address };
 }
 
 /** Replace every mask's sentinel with its real value inside a header value. */
@@ -128,6 +191,8 @@ function applyMasks(
 export interface AllowlistProxy {
   host: string;
   port: number;
+  /** Flow 301: set when `unixSocketPath` was requested — `host`/`port` are then meaningless (0). */
+  unixSocketPath?: string;
   close: () => Promise<void>;
 }
 
@@ -155,32 +220,49 @@ function httpTarget(req: http.IncomingMessage): { hostname: string; port: number
 export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise<AllowlistProxy> {
   const host = opts.host ?? "127.0.0.1";
   const allowed = opts.allowedDomains;
-  const decide = (d: ProxyDecision): boolean => {
-    opts.onDecision?.(d);
+  const hardened = opts.refuseReservedAddresses === true;
+  const resolveHost = opts.resolveHost ?? defaultResolveHost;
+  const decide = (d: Omit<ProxyDecision, "at">): boolean => {
+    opts.onDecision?.({ ...d, at: new Date().toISOString() });
     return d.allowed;
   };
 
   const server = http.createServer((req, res) => {
     const target = httpTarget(req);
     const hostname = target?.hostname ?? "";
-    if (!target || !decide({ host: hostname, allowed: matchesAllowlist(hostname, allowed), kind: "http" })) {
+    const refuse = (reason?: string): void => {
+      decide({ host: hostname, allowed: false, kind: "http", ...(target !== undefined ? { port: target.port } : {}), ...(reason !== undefined ? { reason } : {}) });
       res.writeHead(403, { "content-type": "text/plain" });
       res.end("blocked by keryx sandbox network allowlist");
+    };
+    if (!target || !matchesAllowlist(hostname, allowed)) {
+      refuse(target ? "not on the allowlist" : "no target host");
       return;
     }
-    const headers = applyMasks(req.headers, opts.masks ?? [], target.hostname);
-    const upstream = http.request(
-      { host: target.hostname, port: target.port, method: req.method, path: pathFromUrl(req.url), headers },
-      (up) => {
-        res.writeHead(up.statusCode ?? 502, up.headers);
-        up.pipe(res);
-      },
-    );
-    upstream.on("error", () => {
-      if (!res.headersSent) res.writeHead(502);
-      res.end("upstream error");
+    const proceed = (connectHost: string): void => {
+      decide({ host: hostname, allowed: true, kind: "http", port: target.port });
+      const headers = applyMasks(req.headers, opts.masks ?? [], target.hostname);
+      const upstream = http.request(
+        { host: connectHost, port: target.port, method: req.method, path: pathFromUrl(req.url), headers: { ...headers, host: target.hostname } },
+        (up) => {
+          res.writeHead(up.statusCode ?? 502, up.headers);
+          up.pipe(res);
+        },
+      );
+      upstream.on("error", () => {
+        if (!res.headersSent) res.writeHead(502);
+        res.end("upstream error");
+      });
+      req.pipe(upstream);
+    };
+    if (!hardened) {
+      proceed(target.hostname);
+      return;
+    }
+    void checkedAddress(target.hostname, resolveHost).then((checked) => {
+      if ("reason" in checked) refuse(checked.reason);
+      else proceed(checked.address);
     });
-    req.pipe(upstream);
   });
 
   // Decrypt-and-forward handler for terminated TLS connections: mask the request
@@ -271,56 +353,90 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
     const [reqHost, reqPort] = (req.url ?? "").split(":");
     const hostname = reqHost ?? "";
     const port = Number(reqPort) || 443;
-    if (!decide({ host: hostname, allowed: matchesAllowlist(hostname, allowed), kind: "connect" })) {
+    const refuse = (reason?: string): void => {
+      decide({ host: hostname, allowed: false, kind: "connect", port, ...(reason !== undefined ? { reason } : {}) });
       clientSocket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
       clientSocket.end();
+    };
+    if (!matchesAllowlist(hostname, allowed)) {
+      refuse("not on the allowlist");
       return;
     }
 
-    // OPT-IN MITM: terminate TLS with a leaf for this host so contents (and
-    // credential masking) are visible, instead of a blind byte relay.
-    const ca = opts.tlsTerminate;
-    if (ca) {
-      void (async () => {
-        try {
-          const terminatorPort = await mitmPortFor(hostname, port, ca);
-          clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-          // The client now speaks TLS; hand the raw bytes to this host's
-          // internal HTTPS terminator, which does the handshake and decrypts.
-          const internal = net.connect(terminatorPort, "127.0.0.1", () => {
-            if (head && head.length > 0) internal.write(head);
-            clientSocket.pipe(internal);
-            internal.pipe(clientSocket);
-          });
-          internal.on("error", () => clientSocket.destroy());
-          clientSocket.on("error", () => internal.destroy());
-        } catch {
-          clientSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
-          clientSocket.end();
-        }
-      })();
+    const proceed = (connectHost: string): void => {
+      decide({ host: hostname, allowed: true, kind: "connect", port });
+
+      // OPT-IN MITM: terminate TLS with a leaf for this host so contents (and
+      // credential masking) are visible, instead of a blind byte relay.
+      const ca = opts.tlsTerminate;
+      if (ca) {
+        void (async () => {
+          try {
+            const terminatorPort = await mitmPortFor(hostname, port, ca);
+            clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+            // The client now speaks TLS; hand the raw bytes to this host's
+            // internal HTTPS terminator, which does the handshake and decrypts.
+            const internal = net.connect(terminatorPort, "127.0.0.1", () => {
+              if (head && head.length > 0) internal.write(head);
+              clientSocket.pipe(internal);
+              internal.pipe(clientSocket);
+            });
+            internal.on("error", () => clientSocket.destroy());
+            clientSocket.on("error", () => internal.destroy());
+          } catch {
+            clientSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+            clientSocket.end();
+          }
+        })();
+        return;
+      }
+
+      // Blind relay — connects to `connectHost` (the ADDRESS `checkedAddress`
+      // just checked when hardened, never a fresh lookup: flow 301 AC4's
+      // DNS-rebinding pin). Never terminated, so it cannot see SNI or an
+      // in-tunnel Host — an inherent limit of a relay that inspects nothing.
+      const upstream = net.connect(port, connectHost, () => {
+        clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+        if (head && head.length > 0) upstream.write(head);
+        upstream.pipe(clientSocket);
+        clientSocket.pipe(upstream);
+      });
+      upstream.on("error", () => {
+        clientSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+        clientSocket.end();
+      });
+      clientSocket.on("error", () => upstream.destroy());
+    };
+
+    if (!hardened) {
+      proceed(hostname);
       return;
     }
-
-    const upstream = net.connect(port, hostname, () => {
-      clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-      if (head && head.length > 0) upstream.write(head);
-      upstream.pipe(clientSocket);
-      clientSocket.pipe(upstream);
+    void checkedAddress(hostname, resolveHost).then((checked) => {
+      if ("reason" in checked) refuse(checked.reason);
+      else proceed(checked.address);
     });
-    upstream.on("error", () => {
-      clientSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
-      clientSocket.end();
-    });
-    clientSocket.on("error", () => upstream.destroy());
   });
 
-  await new Promise<void>((resolve) => server.listen(opts.port ?? 0, host, () => resolve()));
+  if (opts.unixSocketPath !== undefined) {
+    // A stale socket file from a crashed prior run would otherwise fail `listen` with
+    // EADDRINUSE — the run's scratch directory is per-run (flow 295's `agentTaskScratchParent`),
+    // so removing whatever is there first is safe.
+    try {
+      unlinkSync(opts.unixSocketPath);
+    } catch {
+      // did not exist — fine
+    }
+    await new Promise<void>((resolve) => server.listen(opts.unixSocketPath, () => resolve()));
+  } else {
+    await new Promise<void>((resolve) => server.listen(opts.port ?? 0, host, () => resolve()));
+  }
   const addr = server.address();
-  const port = addr && typeof addr === "object" ? addr.port : 0;
+  const port = addr && typeof addr === "object" && addr !== null ? addr.port : 0;
   return {
     host,
     port,
+    ...(opts.unixSocketPath !== undefined ? { unixSocketPath: opts.unixSocketPath } : {}),
     close: async () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       // Tear down every per-host TLS terminator created for this run.

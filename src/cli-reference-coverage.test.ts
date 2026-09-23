@@ -24,6 +24,10 @@ const DOCUMENTED_ELSEWHERE = new Map<string, string>([
   // Aliases of a verb that does have a section.
   ["dash", "covered by `## dashboard (and `dash`)`"],
   ["session", "alias of `sessions`"],
+  // Flow 301 (AC5): an internal helper `planUnattendedSandbox.wrap()` invokes from
+  // inside the unattended sandbox — never typed by an operator, so it has no usage
+  // to document. See `src/commands/sandbox-net-forward.ts`.
+  ["__sandbox-net-forward", "internal-only helper subcommand, never typed by an operator (see its own file header)"],
 ]);
 
 async function sectionHeadings(): Promise<Set<string>> {
