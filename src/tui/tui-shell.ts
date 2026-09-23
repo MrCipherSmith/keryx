@@ -617,27 +617,70 @@ interface CustomProviderWizardResult {
   timeoutMs?: number;
 }
 
-/** Empty (skipped) -> `undefined`; a non-finite entry is also treated as skipped, never throws. */
-function parseOptionalWizardNumber(raw: string): number | undefined {
+/** One optional numeric wizard step's outcome: Esc (back) or a value (`undefined` = skipped, never saved). */
+type WizardNumberStepResult = { kind: "back" } | { kind: "value"; value: number | undefined };
+
+/**
+ * Parse one optional numeric wizard field. Empty = skipped (`undefined` — the
+ * key is left out of `llm-providers.json` entirely, never written with a
+ * default). A non-empty entry that does not parse is INVALID and re-opens the
+ * step (via {@link promptOptionalNumberStep}) instead of being silently
+ * dropped: a mistyped `4096x` used to save nothing and never say so.
+ *
+ * `positive` (maxOutputTokens/timeoutMs) requires a positive SAFE INTEGER —
+ * matching `isCustomCompatProvider`'s `OPTIONAL_POSITIVE_NUMBER_FIELDS` guard,
+ * which drops the WHOLE entry for a zero/fractional value the old parser
+ * accepted: `0` here is not a setting — it would request a budget of zero
+ * output tokens (the `?? DEFAULT_MAX_OUTPUT_TOKENS` request fallback only
+ * triggers on `undefined`, not `0`) or abort every stream instantly, and a
+ * saved `0.5` was rejected at load time along with the entire provider.
+ * `temperature` takes any finite number (`0` is meaningful there).
+ */
+export function validateOptionalWizardNumber(
+  raw: string,
+  positive: boolean,
+): { kind: "skip" } | { kind: "invalid" } | { kind: "value"; value: number } {
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
-    return undefined;
+    return { kind: "skip" };
   }
   const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  if (!Number.isFinite(parsed)) {
+    return { kind: "invalid" };
+  }
+  if (positive && !(Number.isSafeInteger(parsed) && parsed > 0)) {
+    return { kind: "invalid" };
+  }
+  return { kind: "value", value: parsed };
 }
 
 /**
- * Same as {@link parseOptionalWizardNumber}, but a value `<= 0` is ALSO
- * treated as skipped (never saved). For `maxOutputTokens`/`timeoutMs` —
- * unlike `temperature`, where `0` is a meaningful setting — a `0` here would
- * silently request a budget of zero output tokens on every request (the
- * request-construction `?? 1024` fallback only triggers on `undefined`, not
- * `0`), and a `0`/negative `timeoutMs` would abort every stream instantly.
+ * {@link promptCustomFieldStep} + {@link validateOptionalWizardNumber}: empty
+ * skips the parameter (the key is never written), an invalid entry re-opens
+ * the SAME step with a `✗ must be …` suffix appended to the note, and Esc
+ * still backs out to the caller.
  */
-function parseOptionalPositiveWizardNumber(raw: string): number | undefined {
-  const parsed = parseOptionalWizardNumber(raw);
-  return parsed !== undefined && parsed > 0 ? parsed : undefined;
+async function promptOptionalNumberStep(
+  otui: OpenTui,
+  target: StepTarget,
+  opts: { title: string; note: string; positive?: boolean; invalidNote: string },
+): Promise<WizardNumberStepResult> {
+  let retried = false;
+  for (;;) {
+    const step = await promptCustomFieldStep(otui, target, {
+      title: opts.title,
+      note: retried ? `${opts.note} · ✗ ${opts.invalidNote}` : opts.note,
+    });
+    if (step.kind === "back") {
+      return step;
+    }
+    const verdict = validateOptionalWizardNumber(step.value, opts.positive === true);
+    if (verdict.kind === "invalid") {
+      retried = true;
+      continue;
+    }
+    return { kind: "value", value: verdict.kind === "value" ? verdict.value : undefined };
+  }
 }
 
 /**
@@ -700,31 +743,37 @@ async function promptCustomProviderWizard(otui: OpenTui, target: StepTarget): Pr
       const models = modelsStep.value.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
       // flow 268: optional, skippable model-param defaults. Same "restart this
       // card from the URL step" back-navigation the key/models steps above
-      // already use — not a per-field back-stack.
-      const temperatureStep = await promptCustomFieldStep(otui, target, {
+      // already use — not a per-field back-stack. Empty = the key is never
+      // written to `llm-providers.json`; an invalid entry re-asks the step.
+      const temperatureStep = await promptOptionalNumberStep(otui, target, {
         title: "Temperature (optional)",
-        note: "empty = provider default · e.g. 0.2",
+        note: "empty = not written · e.g. 0.2",
+        invalidNote: "must be a number (or leave empty to skip)",
       });
       if (temperatureStep.kind === "back") {
         continue;
       }
-      const temperature = parseOptionalWizardNumber(temperatureStep.value);
-      const maxOutputTokensStep = await promptCustomFieldStep(otui, target, {
+      const temperature = temperatureStep.value;
+      const maxOutputTokensStep = await promptOptionalNumberStep(otui, target, {
         title: "Max output tokens (optional)",
-        note: "empty = default 1024 · e.g. 4096",
+        note: "empty = not written · session default 8192 · e.g. 16384",
+        positive: true,
+        invalidNote: "must be a positive whole number (or leave empty to skip)",
       });
       if (maxOutputTokensStep.kind === "back") {
         continue;
       }
-      const maxOutputTokens = parseOptionalPositiveWizardNumber(maxOutputTokensStep.value);
-      const timeoutMsStep = await promptCustomFieldStep(otui, target, {
+      const maxOutputTokens = maxOutputTokensStep.value;
+      const timeoutMsStep = await promptOptionalNumberStep(otui, target, {
         title: "Request timeout ms (optional)",
-        note: "empty = no engine-internal timeout · e.g. 180000",
+        note: "empty = not written · no engine timeout · e.g. 180000",
+        positive: true,
+        invalidNote: "must be a positive whole number (or leave empty to skip)",
       });
       if (timeoutMsStep.kind === "back") {
         continue;
       }
-      const timeoutMs = parseOptionalPositiveWizardNumber(timeoutMsStep.value);
+      const timeoutMs = timeoutMsStep.value;
       return {
         name,
         baseUrl,

@@ -247,7 +247,7 @@ export interface ResolvedProviderModelParams {
  * default — the fallback lives at the request-construction call sites, same
  * as today (the agent turn's `?? DEFAULT_MAX_OUTPUT_TOKENS` in
  * `resolveAgentMaxOutputTokens`, `commands/agent.ts`; `runShell`'s own
- * chat-mode loop's `?? 1024`).
+ * chat-mode loop's `?? DEFAULT_MAX_OUTPUT_TOKENS`).
  */
 export function resolveProviderModelParams(
   provider: OpenAiCompatProvider | CustomCompatProvider,

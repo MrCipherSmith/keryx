@@ -128,6 +128,7 @@ import {
   type AgentDeps,
   type AgentIO,
   buildAgentSystemInstruction,
+  DEFAULT_MAX_OUTPUT_TOKENS,
   describeReasoningEffortSource,
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
@@ -1075,9 +1076,12 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     // A normal line is one turn: push the user message, then stream a reply.
     history.push({ role: "user", content: line, provenance: "project" });
 
-    // flow 268: absent `modelParams` (the default) reproduces today's request
-    // byte-for-byte (AC3).
-    const resolvedMaxOutputTokens = modelParams.maxOutputTokens ?? 1024;
+    // flow 268: absent `modelParams` (the default) leaves the request with no
+    // temperature and no provider override (AC3). The budget below is the ONE
+    // deliberate divergence from the old chat-mode default: the hardcoded 1024
+    // truncated long replies — the same reason agent mode's own 1024 was
+    // raised to DEFAULT_MAX_OUTPUT_TOKENS in commands/agent.ts.
+    const resolvedMaxOutputTokens = modelParams.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
     const request: NormalizedRequest = {
       providerId: providerName,
       modelId: modelName,

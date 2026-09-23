@@ -148,7 +148,7 @@ export interface ModelTurnInput {
   system: string;
   /** The user message (project content). */
   user: string;
-  /** Output token budget. Defaults to 1024. */
+  /** Output token budget. Defaults to 8192 (parity with the agent turn's DEFAULT_MAX_OUTPUT_TOKENS). */
   maxOutputTokens?: number;
   /** Correlation id stem. */
   requestId?: string;
@@ -221,8 +221,12 @@ export async function runModelTurn(input: ModelTurnInput): Promise<ModelTurnResu
     systemInstruction: input.system,
     messages: [{ role: "user", content: input.user, provenance: "project" }],
     budget: {
-      maxOutputTokens: input.maxOutputTokens ?? 1024,
-      runReservation: input.maxOutputTokens ?? 1024,
+      // 8192 = the agent turn's DEFAULT_MAX_OUTPUT_TOKENS (commands/agent.ts),
+      // mirrored literally so this standalone helper pulls in no agent module —
+      // the old 1024 fallback truncated long replies here the same way it did
+      // in agent mode before that constant existed.
+      maxOutputTokens: input.maxOutputTokens ?? 8192,
+      runReservation: input.maxOutputTokens ?? 8192,
     },
     stream: true,
     requestId: input.requestId ?? "keryx-model-turn",

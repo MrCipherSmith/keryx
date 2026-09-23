@@ -143,8 +143,8 @@ const OPTIONAL_FINITE_NUMBER_FIELDS = ["temperature"] as const;
 /**
  * Fields validated as finite AND strictly positive when present. Unlike
  * `temperature`, `0` here is not a real setting: it would request a budget of
- * zero output tokens (the `?? 1024` request-construction fallback only
- * triggers on `undefined`, not `0`) or abort every stream instantly.
+ * zero output tokens (the `?? DEFAULT_MAX_OUTPUT_TOKENS` request fallback
+ * only triggers on `undefined`, not `0`) or abort every stream instantly.
  */
 const OPTIONAL_POSITIVE_NUMBER_FIELDS = ["maxOutputTokens", "timeoutMs"] as const;
 
