@@ -8,15 +8,52 @@
   "id": "299",
   "slug": "a-completion-signature-an-agent-cannot-m",
   "title": "A completion signature an agent cannot make on its own, and a way out of completing",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-23T05:23:59.298Z",
-  "updatedAt": "2026-09-23T05:55:42.329Z",
+  "updatedAt": "2026-09-23T06:31:24.491Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-23T06:30:56.011Z",
+      "note": "runConfirm (src/commands/flow.ts) refuses non-TTY, wrong status, unfrozen/tampered AC and a wrong challenge; reads the challenge from /dev/tty; the store holds only the sha256, bound to flowId/kind/acChecksum (+target since 084380c9), with a 10-min TTL. src/flow/confirm-token.test.ts covers each refusal and that the plaintext token is in no flow file; 147/147 flow-299 tests pass at head 21c29e76; merge dbacee36 (#661)."
+    },
+    "AC2": {
+      "at": "2026-09-23T06:30:56.124Z",
+      "note": "gates.confirmation is stamped by flow init --require-confirmation or completion.require_confirmation; the confirmation gate fails with named reasons (token_required/not_minted/unreadable/mismatch/expired/used/other_flow/stale_criteria/target_mismatch) and returns the flow to in-progress with the attempt recorded. confirm-token.test.ts covers these; round-1 and round-2 probes P1/P2b/P3/P6 confirmed them; merge dbacee36 (#661)."
+    },
+    "AC3": {
+      "at": "2026-09-23T06:30:56.229Z",
+      "note": "consumeConfirmationToken runs only on the passing path, right before the done/signature save; the signature keeps identity and gains confirmation {mechanism terminal-token, tokenRef hash prefix, mintedAt, consumedAt, boundTo}; flow status, the complete note and the governance report render it; the basis enum is unchanged. Covered by confirm-token.test.ts AC3 cases and the schema tests; merge dbacee36 (#661)."
+    },
+    "AC4": {
+      "at": "2026-09-23T06:30:56.336Z",
+      "note": "No MCP or agent tool mints (confirm-floors.test.ts pins the callers); touchesHumanConfirmation forces ask in agent.ts, acp-permission.ts and supervise-mcp.ts, and since 084380c9 also in the REPL/TUI approver (shell-approval.ts:74, shell-permissions.ts:144/411/477). The unattended floor refuses flow confirm/recover and confirm-token.json. Review 2026-09-23-review-299 F-001/F-003 refuted on merge dbacee36 (#661)."
+    },
+    "AC5": {
+      "at": "2026-09-23T06:30:56.445Z",
+      "note": "Every throwing gate is caught; the failure path uses returnToInProgress; a late tamper records a second failed attempt with no signature and no spend. src/flow/completion-never-stuck.test.ts reproduces all three and asserts status in-progress, the attempt recorded and no complete signature; merge dbacee36 (#661)."
+    },
+    "AC6": {
+      "at": "2026-09-23T06:30:56.559Z",
+      "note": "flow recover refuses without --reason, from any non-completing status, and while the lock is held; it appends completion-recovered with the reason, last event and AC state; signatures and attempts are untouched. Two-process probe confirmed the live-lock refusal and recovery after the lock goes stale; flow status and the TUI /flows show 'interrupted' (flow-inspector-interrupted.test.ts); merge dbacee36 (#661)."
+    },
+    "AC7": {
+      "at": "2026-09-23T06:30:56.669Z",
+      "note": "confirmation-backward-compat.test.ts sweeps .metaproject/flows/*/flow.json and a pre-change fixture: they load, validate and pass flow check; a flow without gates.confirmation reports the gate skipped with an unchanged outcome; no schemaVersion bump. TM-03 section 8 notes that older keryx flags the new gate name (F-006); merge dbacee36 (#661)."
+    },
+    "AC8": {
+      "at": "2026-09-23T06:30:56.779Z",
+      "note": "TM-03 (linked from TM-02 section 7) and the CLI reference state the caveat and name all the bypasses and the delegation; since 21c29e76 also that --merged binds no commit (TM-03:29, cli-reference.md:2116); SAC confirm-review has the same limits. confirmation-docs.test.ts greps them; CONFIRMATION_CAVEAT is printed by flow complete; merge dbacee36 (#661)."
+    },
+    "AC9": {
+      "at": "2026-09-23T06:30:56.891Z",
+      "note": "CI on PR #661 at head 21c29e76: 19 check runs, 18 success and 1 skipped (gh api check-runs). keryx health run on the branch: PASS, score 94, no gate conditions triggered. Squash-merged as dbacee36c553946b1026a33956ade21f5f2e2a39."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -31,7 +68,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -39,14 +76,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T5-T9: each work task collected its own context (context.md, TM-02 section 7, the SAC review-confirm-token pattern)"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -54,14 +93,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T5-T8 (the implement tasks: never-stuck completing, flow recover, flow confirm and the confirmation gate, the floors), plus the review fixes in 084380c9/21c29e76"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -69,14 +110,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T5-T9: tests added are src/flow/confirm-token.test.ts, confirm-floors.test.ts, completion-never-stuck.test.ts, confirmation-backward-compat.test.ts, confirmation-docs.test.ts and src/tui/flow-inspector-interrupted.test.ts, plus cases in shell-approval.test.ts, shell-agent-repl.test.ts, supervise-mcp.test.ts and agent-permission-mode.test.ts"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +127,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "two adversarial security review rounds, ingested as review 2026-09-23-review-299 (8 findings, all acted-on, all verified refuted on merge dbacee36 by a separate verifier; status closed)"
     },
     {
       "id": "T5",
@@ -170,7 +215,7 @@
       "id": "T10",
       "title": "Verification: CI green, keryx health run",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -178,7 +223,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "CI on PR #661 at head 21c29e76: 19 check runs, 18 success and 1 skipped; keryx health run PASS (score 94, no gate conditions); squash-merged as dbacee36c553946b1026a33956ade21f5f2e2a39"
     }
   ],
   "history": [
@@ -254,6 +301,319 @@
       "at": "2026-09-23T05:55:42.329Z",
       "event": "task-done",
       "detail": "T9: Backward compatibility sweep, TM-03 decision record and CLI reference limits"
+    },
+    {
+      "at": "2026-09-23T06:30:56.011Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: runConfirm (src/commands/flow.ts) refuses non-TTY, wrong status, unfrozen/tampered AC and a wrong challenge; reads the challenge from /dev/tty; the store holds only the sha256, bound to flowId/kind/acChecksum (+target since 084380c9), with a 10-min TTL. src/flow/confirm-token.test.ts covers each refusal and that the plaintext token is in no flow file; 147/147 flow-299 tests pass at head 21c29e76; merge dbacee36 (#661). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:30:56.124Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: gates.confirmation is stamped by flow init --require-confirmation or completion.require_confirmation; the confirmation gate fails with named reasons (token_required/not_minted/unreadable/mismatch/expired/used/other_flow/stale_criteria/target_mismatch) and returns the flow to in-progress with the attempt recorded. confirm-token.test.ts covers these; round-1 and round-2 probes P1/P2b/P3/P6 confirmed them; merge dbacee36 (#661). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:30:56.229Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: consumeConfirmationToken runs only on the passing path, right before the done/signature save; the signature keeps identity and gains confirmation {mechanism terminal-token, tokenRef hash prefix, mintedAt, consumedAt, boundTo}; flow status, the complete note and the governance report render it; the basis enum is unchanged. Covered by confirm-token.test.ts AC3 cases and the schema tests; merge dbacee36 (#661). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:30:56.336Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: No MCP or agent tool mints (confirm-floors.test.ts pins the callers); touchesHumanConfirmation forces ask in agent.ts, acp-permission.ts and supervise-mcp.ts, and since 084380c9 also in the REPL/TUI approver (shell-approval.ts:74, shell-permissions.ts:144/411/477). The unattended floor refuses flow confirm/recover and confirm-token.json. Review 2026-09-23-review-299 F-001/F-003 refuted on merge dbacee36 (#661). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:30:56.445Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Every throwing gate is caught; the failure path uses returnToInProgress; a late tamper records a second failed attempt with no signature and no spend. src/flow/completion-never-stuck.test.ts reproduces all three and asserts status in-progress, the attempt recorded and no complete signature; merge dbacee36 (#661). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:30:56.559Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: flow recover refuses without --reason, from any non-completing status, and while the lock is held; it appends completion-recovered with the reason, last event and AC state; signatures and attempts are untouched. Two-process probe confirmed the live-lock refusal and recovery after the lock goes stale; flow status and the TUI /flows show 'interrupted' (flow-inspector-interrupted.test.ts); merge dbacee36 (#661). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:30:56.669Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: confirmation-backward-compat.test.ts sweeps .metaproject/flows/*/flow.json and a pre-change fixture: they load, validate and pass flow check; a flow without gates.confirmation reports the gate skipped with an unchanged outcome; no schemaVersion bump. TM-03 section 8 notes that older keryx flags the new gate name (F-006); merge dbacee36 (#661). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:30:56.779Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: TM-03 (linked from TM-02 section 7) and the CLI reference state the caveat and name all the bypasses and the delegation; since 21c29e76 also that --merged binds no commit (TM-03:29, cli-reference.md:2116); SAC confirm-review has the same limits. confirmation-docs.test.ts greps them; CONFIRMATION_CAVEAT is printed by flow complete; merge dbacee36 (#661). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:30:56.892Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: CI on PR #661 at head 21c29e76: 19 check runs, 18 success and 1 skipped (gh api check-runs). keryx health run on the branch: PASS, score 94, no gate conditions triggered. Squash-merged as dbacee36c553946b1026a33956ade21f5f2e2a39. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:31:12.903Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T06:31:13.013Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T06:31:13.120Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T06:31:13.226Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-23T06:31:13.333Z",
+      "event": "task-done",
+      "detail": "T10: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T06:31:17.625Z",
+      "event": "completing",
+      "detail": "merged commit: dbacee36c553946b1026a33956ade21f5f2e2a39"
+    },
+    {
+      "at": "2026-09-23T06:31:17.655Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-23T06:31:17.656Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against 21c29e76de927b55435b3edb5bad806e75e5358f, but the completion names merged commit dbacee36c553946b1026a33956ade21f5f2e2a39, and 21c29e76de927b55435b3edb5bad806e75e5358f is neither contained in it (git reports it is not an ancestor) nor does it carry the same tree (round 4be7cbfdacd56bbac124f6e63297a3aef4a1455a, merged 0c0ca6290ba5ca1978eef7ac3ee3bc04b9843115). So the reviewers did not read what merged: the base moved under the branch, or the merge was edited. Re-running the round against the branch will not close this — ingest a round against the merged commit (`keryx review ingest … --head dbacee36c553946b1026a33956ade21f5f2e2a39`), or record the pull request on the flow so the round is compared against the PR head rather than against the merge."
+    },
+    {
+      "at": "2026-09-23T06:31:24.473Z",
+      "event": "completing",
+      "detail": "merged commit: dbacee36c553946b1026a33956ade21f5f2e2a39"
+    },
+    {
+      "at": "2026-09-23T06:31:24.490Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-23T06:31:24.491Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-23T06:30:56.011Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f"
+    },
+    {
+      "at": "2026-09-23T06:30:56.124Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f"
+    },
+    {
+      "at": "2026-09-23T06:30:56.229Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f"
+    },
+    {
+      "at": "2026-09-23T06:30:56.336Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f"
+    },
+    {
+      "at": "2026-09-23T06:30:56.445Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f"
+    },
+    {
+      "at": "2026-09-23T06:30:56.559Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f"
+    },
+    {
+      "at": "2026-09-23T06:30:56.669Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f"
+    },
+    {
+      "at": "2026-09-23T06:30:56.779Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f"
+    },
+    {
+      "at": "2026-09-23T06:30:56.891Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f"
+    },
+    {
+      "at": "2026-09-23T06:31:24.490Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f",
+      "headCommit": "dbacee36c553946b1026a33956ade21f5f2e2a39"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-23T06:31:17.655Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "dbacee36c553946b1026a33956ade21f5f2e2a39 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "10 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — head-commit (violated): the latest round ran against 21c29e76de927b55435b3edb5bad806e75e5358f, but the completion names merged commit dbacee36c553946b1026a33956ade21f5f2e2a39, and 21c29e76de927b55435b3edb5bad806e75e5358f is neither contained in it (git reports it is not an ancestor) nor does it carry the same tree (round 4be7cbfdacd56bbac124f6e63297a3aef4a1455a, merged 0c0ca6290ba5ca1978eef7ac3ee3bc04b9843115). So the reviewers did not read what merged: the base moved under the branch, or the merge was edited. Re-running the round against the branch will not close this — ingest a round against the merged commit (`keryx review ingest … --head dbacee36c553946b1026a33956ade21f5f2e2a39`), or record the pull request on the flow so the round is compared against the PR head rather than against the merge."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f"
+    },
+    {
+      "at": "2026-09-23T06:31:24.490Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "dbacee36c553946b1026a33956ade21f5f2e2a39 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "10 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:cafbdadd081acfc928c1b8d1133e50bc9be460b485c33946891ce21655d2a21f"
+    }
+  ],
+  "merged": {
+    "commit": "dbacee36c553946b1026a33956ade21f5f2e2a39",
+    "ref": "origin/main",
+    "at": "2026-09-23T06:31:24.490Z"
+  }
 }

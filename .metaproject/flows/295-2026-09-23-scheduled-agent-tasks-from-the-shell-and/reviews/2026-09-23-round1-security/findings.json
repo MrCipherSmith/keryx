@@ -1,0 +1,264 @@
+[
+  {
+    "id": "F1",
+    "reviewer": "security-reviewer (flow 295)",
+    "severity": "blocker",
+    "problem": "A forged or git-committed schedule store entry could run code outside the hardened sandbox: the confirmation/content hash was a plain, unkeyed digest (forgeable), a store file could be tracked by git and shipped with the repo, a store entry could masquerade as a git-hook-triggered entry, and a granted tool's `bins` path was not pinned to a verified, out-of-project binary.",
+    "impact": "An attacker who could write to the schedule store (or a git-committed trigger file crafted to look like one) could get keryx to execute arbitrary commands, either unattended on a timer or by having them treated as pre-confirmed, entirely outside the sandbox that every other unattended code path runs inside.",
+    "suggested_fix": "Key the confirmation hash with a per-machine secret (HMAC), refuse any store tracked by git, restrict store/agent-task entries to `on.kind: \"schedule\"` only, and pin every granted binary's basename/realpath/sha256 at draft time, re-verified before every exec, refusing anything inside the project.",
+    "evidence": "Pre-fix, the content hash was a plain sha256 with no keying, `isHookableTriggerEntry` did not exclude store-sourced entries, and a granted tool's `bins` path was accepted from inside the project with no realpath/sha pin.",
+    "confidence": "high",
+    "file": "src/trigger/config.ts",
+    "line": null,
+    "quote": "schedule store",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/trigger/schedule-key.ts (HMAC key generation/read)",
+        "src/trigger/config.ts (store load, git-tracked refusal, on.kind restriction, bins basename check)",
+        "src/trigger/hooks.ts (isHookableTriggerEntry)",
+        "src/trigger/granted-binary.ts (pin/verify realpath+sha256, project-root refusal)"
+      ],
+      "enumeration_method": "walked every way a schedule store entry reaches execution: (a) the content hash that gates re-use of a confirmed entry, (b) whether the store file itself can be committed to git, (c) whether a store entry can be dispatched through the git-hook trigger path instead of the schedule timer, (d) whether the binary a granted tool executes is the one that was verified. All four are distinct trust boundaries around the same store."
+    },
+    "global_id": "2026-09-23-round1-security#F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "All 4 sub-claims confirmed at 89dbea8d (== worktree HEAD 4be4004d). (1) HMAC-SHA256 keyed by per-machine secret: src/trigger/schedule-key.ts:29 KEY_FILE=\"schedule-hmac.key\"; :39-54 readScheduleKey refuses on missing key or mode & 0o077 !== 0; :88-91 scheduleMac uses createHmac(\"sha256\", key). Tests schedule-security.test.ts:189,202 pass. (2) Git-tracked store refused whole: trigger/config.ts:767-770 isScheduleStoreTracked() via `git ls-files --error-unmatch`, :784 gates load, :871 refusal text. Test config.test.ts:547 \"F1b: a schedule store tracked by git is refused whole\" passes. (3) isHookableTriggerEntry skips store entries, on.kind restricted to \"schedule\": trigger/hooks.ts:22-26. Tests schedule-security.test.ts:377, config.test.ts:531,537 pass. (4) bins basename must equal program; realpath+sha256 pinned and re-checked before every exec; project-root refused at draft and run: trigger/config.ts:385 (basename check), trigger/granted-binary.ts:161 (draft refusal 'resolves inside this project'), :240 (run-time refusal), :254 (interpreter re-check). Tests schedule-security.test.ts:224,237, config.test.ts:542 pass. Full-file baselines: schedule-security.test.ts 82 pass/0 fail, config.test.ts 53 pass/0 fail.",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "HMAC key (schedule-key.ts), git-tracked-store refusal, on.kind restriction and pinned/verified granted binaries; commit following 9c9557f9 in the flow-295 journal; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "F2",
+    "reviewer": "security-reviewer (flow 295)",
+    "severity": "major",
+    "problem": "`shell_exec` of `keryx schedule add --yes`, or of `crontab`/`systemctl`/`launchctl` directly, or a remembered/allowlisted grant, could install or modify a schedule without ever showing the operator the confirmation card.",
+    "impact": "An agent in `auto` or `trust` mode (or one abusing a saved shell allowlist) could install a persistent background timer with arbitrary grants without any human ever seeing what was being installed — defeating the entire point of the always-ask confirmation card.",
+    "suggested_fix": "Add a dedicated scheduler-control matcher used at every approval site (shell, patch, agent tool-call, ACP, supervised MCP), and refuse `keryx schedule add|remove|pause|resume|run` outright when running inside an agent's own tool call (`KERYX_TOOL_CALL=1`).",
+    "evidence": "Pre-fix, `touchesHumanConfirmation` had no scheduler-specific matcher, so `shell_exec keryx schedule add --yes` and direct `systemctl`/`crontab`/`launchctl` invocations reached execution without the always-ask floor.",
+    "confidence": "high",
+    "file": "src/lib/command-risk.ts",
+    "line": null,
+    "quote": "touchesHumanConfirmation",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/command-risk.ts (touchesSchedulerControl / touchesHumanConfirmation)",
+        "src/lib/shell-permissions.ts (validate/allowed/suggest)",
+        "src/commands/shell-approval.ts",
+        "src/commands/agent.ts (executeCall)",
+        "src/harness/external/acp-permission.ts",
+        "src/harness/external/supervise-mcp.ts",
+        "src/commands/schedule.ts (KERYX_TOOL_CALL refusal on add/remove/pause/resume/run)"
+      ],
+      "enumeration_method": "enumerated every place a shell command or tool call is approved before running: shell approval, shell permission validation, the agent's own executeCall, ACP's permission bridge, and supervised MCP — every one of them needed the same scheduler-control check, plus a floor inside `keryx schedule` itself for when the agent shells out directly."
+    },
+    "global_id": "2026-09-23-round1-security#F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against the merge commit 89dbea8dc25d80639ead9f7497287767138a040c (== worktree HEAD 4be4004daf96599ec3f2e28b1e6e4e8ab94a1c9d, identical trees). touchesSchedulerControl (src/lib/command-risk.ts:611-615) folded into touchesHumanConfirmation (:625-627), used at every approver site: shell-permissions.ts:154,421,147, shell-approval.ts:74, agent.ts:3501 (executeCall's sacReviewConfirmation), acp-permission.ts:143, supervise-mcp.ts:258. KERYX_TOOL_CALL=1 refusal for schedule add|remove|pause|resume|run: commands/schedule.ts:59 OPERATOR_ONLY set, :136-138. Regression tests: describe 'F2 (probe p1): scheduler control always asks...' in src/commands/schedule-security.test.ts:265-374, including ':320 wildcard patterns...refused', ':332 through the real agent loop under auto...declined it never runs', ':363 KERYX_TOOL_CALL=1 refused and writes nothing'. Ran `bun test src/commands/schedule-security.test.ts -t F2` -> 27 pass, 0 fail (224 expect() calls).",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "touchesSchedulerControl folded into touchesHumanConfirmation at every approver site, plus KERYX_TOOL_CALL refusal in schedule.ts; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "F3",
+    "reviewer": "security-reviewer (flow 295)",
+    "severity": "major",
+    "problem": "The agent could write to the schedule store file directly with a file-patch tool, bypassing the confirmation flow that only gated `keryx schedule add`.",
+    "impact": "A patch tool call editing `.metaproject/data/trigger/schedules.json` (or the signing key, or the OS scheduler's unit directories) directly would install or alter a schedule with no confirmation card at all, since the gate that mattered was on the CLI subcommand, not on the file.",
+    "suggested_fix": "Mark the store file, the HMAC key, and the systemd/launchd unit directories as credentials-class paths, gated the same way as the agent's own saved credentials, for both shell writes and file-patch writes.",
+    "evidence": "Pre-fix, `CREDENTIAL_MARKERS` did not include the schedule store, key or unit directories, so a patch tool call targeting them was treated as an ordinary file write.",
+    "confidence": "high",
+    "file": "src/lib/command-risk.ts",
+    "line": null,
+    "quote": "touchesAgentCredentials",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/command-risk.ts (CREDENTIAL_MARKERS, touchesAgentCredentials)",
+        "src/lib/patch-risk.ts (file-patch write gating)",
+        "src/lib/shell-permissions.ts (shell write gating)",
+        "src/harness/external/acp-permission.ts / acp-fs.ts"
+      ],
+      "enumeration_method": "enumerated the two ways a tool can write a file (shell redirection/command, and the dedicated patch tool) and both ACP write paths; the store, key and unit directories needed the same credentials-class marker on all four."
+    },
+    "global_id": "2026-09-23-round1-security#F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against the merge commit 89dbea8dc25d80639ead9f7497287767138a040c (== worktree HEAD 4be4004daf96599ec3f2e28b1e6e4e8ab94a1c9d, identical trees). CREDENTIAL_MARKERS (src/lib/command-risk.ts:260-273) includes 'schedule-hmac.key', 'trigger/schedules.json', 'systemd/user', 'library/launchagents'; touchesAgentCredentials at :346-348; wired into shell-permissions.ts:137,418 (shell writes) and patch-risk.ts:138 (file-patch writes), plus acp-permission.ts:118,141 and acp-fs.ts:83. Test: schedule-security.test.ts:384-401 describe 'F3: the store, the key and the unit directories are always asked about', :385 'a patch writing the store is credentials-class'. Ran `bun test ... -t F3` -> 6 pass, 0 fail.",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "store/key/unit-dir paths added to CREDENTIAL_MARKERS, gated for shell and patch writes; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "F4",
+    "reviewer": "security-reviewer (flow 295)",
+    "severity": "minor",
+    "problem": "A committed (non-store) trigger entry sharing a schedule's name could hijack the schedule's installed timer, since the timer's invocation resolved against the general trigger set rather than the schedule store specifically.",
+    "impact": "A git-committed trigger crafted with the same name as an operator's local schedule could run under that schedule's timer identity, executing unreviewed, committed logic on a background cadence the operator believed was running their confirmed schedule.",
+    "suggested_fix": "Have the installed timer invoke `trigger run --schedule <name>`, resolving ONLY against the per-machine schedule store, and refuse a committed trigger whose name clashes with a store entry, keeping the store entry authoritative.",
+    "evidence": "Pre-fix, the installed unit ran `trigger run <name>` with no `--schedule` flag, resolving against the full trigger set (store plus `triggers.json`) with no name-clash refusal.",
+    "confidence": "medium",
+    "file": "src/commands/trigger.ts",
+    "line": null,
+    "quote": "trigger run --schedule",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-round1-security#F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against the merge commit 89dbea8dc25d80639ead9f7497287767138a040c (== worktree HEAD 4be4004daf96599ec3f2e28b1e6e4e8ab94a1c9d, identical trees). Installed timer invokes `trigger run --schedule <name>` (src/commands/trigger.ts:147-155). Store-only resolution: src/trigger/run.ts:59-74 resolveTriggerForRun filters to source==='store' when scheduleOnly. Name-clash refusal with store kept authoritative: trigger/config.ts:839. Tests: schedule-security.test.ts:403 (\"trigger run --schedule resolves only the store; the committed same-name trigger never runs\") and config.test.ts:557 (\"F4: a committed trigger with a local schedule's name is refused; the local schedule is kept\") both pass, 1/1 each.",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "installed timer invokes trigger run --schedule, store-only resolution, name-clash refusal; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "F5",
+    "reviewer": "security-reviewer (flow 295)",
+    "severity": "info",
+    "problem": "Granted-tool output was capped before it was scrubbed, so a secret could be left dangling across the truncation boundary; and the scrub did not cover GitHub token shapes or the live `gh auth token` value.",
+    "impact": "A secret split across the cap boundary, or a GitHub token/`gh auth token` value, could reach the model or the report unredacted.",
+    "suggested_fix": "Scrub before capping, drop the trailing partial line on truncation, and add patterns for GitHub token shapes, `Authorization:` headers, `*_AUTH`-shaped env values, and the literal `gh auth token` output.",
+    "evidence": "Pre-fix, output was capped first and scrubbed second, and the pattern set did not include GitHub token shapes or the live `gh auth token` value.",
+    "confidence": "medium",
+    "file": "src/commands/trigger-agent-task.ts",
+    "line": null,
+    "quote": "scrubGrantedOutput",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-round1-security#F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against the merge commit 89dbea8dc25d80639ead9f7497287767138a040c (== worktree HEAD 4be4004daf96599ec3f2e28b1e6e4e8ab94a1c9d, identical trees). Scrub-then-cap with trailing partial line dropped: src/commands/trigger-agent-task.ts:145-151 scrubThenCap (scrubs via scrubGrantedOutput first, caps second, cuts at lastIndexOf('\\n') on truncation). Token shapes: :113-117 TOKEN_SHAPES (github_pat_..., gh[pousr]_..., Authorization: token|bearer). *_AUTH env-shaped values: :105 SECRET_ENV_NAME regex applied in scrubGrantedOutput :127-137. Live `gh auth token` value scrubbed: :223-232 ghAuthToken() fetched via execFile outside sandbox and fed into the scrub's secrets param. Tests schedule-security.test.ts:427,446,450 all pass; ran `bun test ... -t F5` -> 7 pass, 0 fail.",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "scrub-then-cap ordering, GitHub token/gh-auth-token patterns; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "F6",
+    "reviewer": "security-reviewer (flow 295)",
+    "severity": "info",
+    "problem": "A granted tool's `bins` path could point inside the project itself, letting the project supply the binary that will execute with the agent's own credentials.",
+    "impact": "If the project were untrusted (a cloned repo, a compromised dependency), it could plant a binary at the granted path and have it run with the operator's granted tool identity.",
+    "suggested_fix": "Refuse any granted binary path that resolves inside the project, at both draft and run time.",
+    "evidence": "Same defect as F1's fourth sub-claim — pre-fix, no project-root check existed on a granted tool's resolved binary path.",
+    "confidence": "medium",
+    "file": "src/trigger/granted-binary.ts",
+    "line": null,
+    "quote": "resolves inside this project",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-round1-security#F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against the merge commit 89dbea8dc25d80639ead9f7497287767138a040c (== worktree HEAD 4be4004daf96599ec3f2e28b1e6e4e8ab94a1c9d, identical trees). Same fix as F1 sub-claim 4: src/trigger/granted-binary.ts:161 (draft-time project-root refusal), :240 (run-time), :254 (interpreter re-check). Test schedule-security.test.ts:237 'F1d / F6: a program resolved inside the project (direnv PATH_add bin) is refused at draft and at run' asserts drafted.problems contains 'resolves inside this project' and run-time detail contains 'resolves inside the project'. Passed as part of F1's 6-test run.",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "project-root refusal for granted binaries (same fix as F1d); merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "F7",
+    "reviewer": "security-reviewer (flow 295)",
+    "severity": "info",
+    "problem": "The confirmation card had no defence against terminal control characters or ANSI escapes in a schedule's name or prompt, which could visually spoof the card's contents.",
+    "impact": "A crafted schedule name/prompt containing ANSI escapes or embedded newlines could make the confirmation card display different information than what was actually being installed, misleading the operator's approval.",
+    "suggested_fix": "Strip ANSI/control characters and render literal newlines as a visible glyph on every card line.",
+    "evidence": "Pre-fix, card lines were rendered with no sanitisation of control characters or embedded newlines.",
+    "confidence": "medium",
+    "file": "src/trigger/schedules.ts",
+    "line": null,
+    "quote": "cardSafe",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-round1-security#F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against the merge commit 89dbea8dc25d80639ead9f7497287767138a040c (== worktree HEAD 4be4004daf96599ec3f2e28b1e6e4e8ab94a1c9d, identical trees). cardSafe (src/trigger/schedules.ts:288-304) strips ANSI CSI/OSC sequences, C0/C1 controls and bidi overrides, converts CRLF/CR/LF to literal ' ⏎ ', tabs to space; applied to every card line (:285 .map(cardSafe)) and throughout src/tui/schedules-inspector.ts and schedules-sidebar.ts. Test schedule-security.test.ts:469-470 asserts cardSafe(\"a\\u001b[2J\\u001b[31mb\\nrunner: fake\\r\\nc\\u0007\\u202e\") === \"ab ⏎ runner: fake ⏎ c\". Ran `bun test ... -t F7` -> 1 pass, 0 fail.",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "cardSafe strips ANSI/control chars and renders newlines as visible glyph; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "F8",
+    "reviewer": "security-reviewer (flow 295)",
+    "severity": "info",
+    "problem": "A declined or never-confirmed draft schedule from `schedule_create` had no mechanism preventing it from later being installed on a replay or a race.",
+    "impact": "A draft that the operator declined, or that was denied by an unattended/read-only run, could still end up invoked if the tool were called again with the same request.",
+    "suggested_fix": "Require a one-time confirmation token, issued only after the operator's explicit yes, and drop the draft entirely on decline.",
+    "evidence": "Pre-fix, `schedule_create`'s invoke step required no token distinguishing a confirmed draft from an unconfirmed one.",
+    "confidence": "medium",
+    "file": "src/commands/schedule-tools.ts",
+    "line": null,
+    "quote": "confirmationToken",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-round1-security#F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against the merge commit 89dbea8dc25d80639ead9f7497287767138a040c (== worktree HEAD 4be4004daf96599ec3f2e28b1e6e4e8ab94a1c9d, identical trees). One-time confirmationToken issued only after operator confirms: src/commands/schedule-tools.ts:140-166 confirmation()/invoke(); confirmationDeclined(token) deletes the pending draft. Driver only forwards the token on approval and fires confirmationDeclined on deny: src/commands/agent.ts:3590-3643. Test schedule-security.test.ts:485 'invoke without the token, or after a decline, writes nothing' asserts existsSync(scheduleStorePath(root)) === false in both cases. Ran `bun test ... -t F8` -> 1 pass, 0 fail.",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "one-time confirmationToken required, dropped on decline; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  }
+]

@@ -8,17 +8,78 @@
   "id": "301",
   "slug": "unattended-sandbox-an-allowlist-network-",
   "title": "Unattended sandbox: an allowlist network mode through the domain proxy on Linux",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-23T05:35:33.070Z",
-  "updatedAt": "2026-09-23T09:07:38.319Z",
+  "updatedAt": "2026-09-23T11:04:07.027Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-23T11:02:59.539Z",
+      "note": "config.ts: agentTaskDomainProblem validates domains at draft/load/run; empty triggers.json refusal string for agent-task confirmed gone; flow-next TriggerDispatch.network stays boolean. Strengthened by F3 fix (inet_aton forms). Tests: config.test.ts pass."
+    },
+    "AC2": {
+      "at": "2026-09-23T11:02:59.651Z",
+      "note": "unattended.ts planUnattendedSandbox: allowlist always pushes --unshare-net, resolv.conf bound only for network:full, proxy socket bound from scratch dir, refuses run on proxy-creation failure (trigger-agent-task.ts catch->refusal, never off/full fallback)."
+    },
+    "AC3": {
+      "at": "2026-09-23T11:02:59.765Z",
+      "note": "proxy.ts: unix-socket listen, matchesAllowlist host check, looksLikeIpHost IP-literal refusal, isPrivateOrReservedAddress post-resolve refusal (incl. NAT64 F4 fix), now also port-scoped (F2 fix). Tests: proxy.allowlist.test.ts, guard.private-address.test.ts, guard.ip-host.test.ts all pass at aae6558c-identical tree."
+    },
+    "AC4": {
+      "at": "2026-09-23T11:02:59.879Z",
+      "note": "checkedAddress() connects to the exact resolved address, never re-resolves. Test 'AC4: connects to the address CHECKED, not a fresh lookup' with injected resolver — passing."
+    },
+    "AC5": {
+      "at": "2026-09-23T11:02:59.996Z",
+      "note": "forwarder.ts binds 127.0.0.1, started in same bwrap invocation via wrap()'s FIFO handshake (mkfifo/read, plus F5 watchdog); HTTP(S)_PROXY/http(s)_proxy/ALL_PROXY set in unattended.ts. pending-buffer flush documented and tested."
+    },
+    "AC6": {
+      "at": "2026-09-23T11:03:00.109Z",
+      "note": "unattended.allowlist.test.ts real bwrap integration: curl reaches allowed name via proxy, refused for unlisted name, host's real loopback unreachable from inside sandbox even bypassing proxy env. Ran myself: 3/3 passing."
+    },
+    "AC7": {
+      "at": "2026-09-23T11:03:00.226Z",
+      "note": "trigger-agent-task.ts: onDecision callback pushes to networkDecisions, written into renderReport() and agentTask.networkDecisions (runs.jsonl record)."
+    },
+    "AC8": {
+      "at": "2026-09-23T11:03:00.341Z",
+      "note": "scheduleContentCanonical signs the whole raw action object (incl. grants.domains and grants.ports); schedule-verify.ts signatureProblem recomputes HMAC before every run/resume. schedules.allowlist.test.ts passing."
+    },
+    "AC9": {
+      "at": "2026-09-23T11:03:00.458Z",
+      "note": "schedules.ts renderCard: network line shows 'allowlist - <domains>' or FULL_NETWORK_CARD_WARNING or 'off', never off/full for allowlist; states governs-only-shell-commands; every line piped through cardSafe."
+    },
+    "AC10": {
+      "at": "2026-09-23T11:03:00.574Z",
+      "note": "schedules-inspector.ts Grants tab shows mode+domains; Runs tab surfaces proxy denials via existing detail line. schedules-inspector.allowlist.test.ts passing (ran myself)."
+    },
+    "AC11": {
+      "at": "2026-09-23T11:03:00.688Z",
+      "note": "planUnattendedSandbox refuses with platform-naming reason when platform !== linux or launcher/probe fails; trigger-agent-task/dispatch refuse trust mode rather than falling back uncontained."
+    },
+    "AC12": {
+      "at": "2026-09-23T11:03:00.802Z",
+      "note": "unattended-scratch.ts ensureScratchParent requires real dir, owned by uid, mode exactly 0700, shared by agentTaskScratchParent and triggerDispatchScratchParent; trigger-dispatch.ts hides parent from sandbox. deps.worktreeParent test-only exemption confirmed unreachable from any production path (grepped every call site)."
+    },
+    "AC13": {
+      "at": "2026-09-23T11:03:00.922Z",
+      "note": "sandbox.ts: Domain-allowlist not-implemented row carries a note distinguishing it from the scheduler's own allowlist grant. Diff confirmed present at aae6558c."
+    },
+    "AC14": {
+      "at": "2026-09-23T11:03:01.037Z",
+      "note": "docs/docs/cli-reference.md, docs/docs/limitations.md, README.md, src/gdskills/bundled/skills/platform/scheduled-tasks/SKILL.md all updated at aae6558c (confirmed via git diff origin/main~1..aae6558c). Documents Linux-only, shell_exec-only scope, proxy-off-if-ignored, blind-relay SNI limit."
+    },
+    "AC15": {
+      "at": "2026-09-23T11:03:01.154Z",
+      "note": "gh pr checks 665: 18 passed, 0 failed. keryx health run (run myself, this session): PASS, score 94, no gate conditions triggered."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/665"
   },
   "owner": {
     "value": "altsay",
@@ -301,6 +362,166 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "Full verification suite run: tsc --noEmit clean; eslint clean on all changed/new files; bun test src/harness/process/sandbox (184 pass/5 pre-existing flag-gated skip), src/trigger (145 pass), schedule+security suites (111+341 pass), opentui-tests-no-skips.ts src/tui (1113 pass, 0 skip), test:client:terminal (1398 pass/3 pre-existing skip), test:client:runtime (3766 pass/16 pre-existing skip), src/commands+src/trigger+sandbox+mutation combined (2645 pass/12 skip); skills verify --bundled findings:0 after trimming scheduled-tasks SKILL.md back to its 96-line recorded ceiling (never raised); flow check clean. No leftover revert-check markers in source."
+    },
+    {
+      "id": "T18",
+      "title": "F1: port parsing crash + try/catch defence in depth (HIGH)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F1 fixed: parsePort (strict 1-65535 digit parsing) replaces Number(reqPort)||443 in CONNECT/plain-HTTP/MITM upstreamPort; trySync wraps every net.connect/http.request/https.request call as defence in depth. 8 new tests (crash-reproduction + still-alive-afterward + malformed variants); revert-check reproduced the exact ERR_SOCKET_BAD_PORT crash when both defenses were removed together"
+    },
+    {
+      "id": "T19",
+      "title": "F2: port restriction 443/80 default + grants.ports",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F2 fixed: default port restriction 443(CONNECT)/80(HTTP) plus optional signed grants.ports, enforced via portAllowed/portRestricted in proxy.ts (opt-in, allowedPorts alone enforces independent of refuseReservedAddresses); config.ts validation+normalization; card+Grants tab+CLI --port+schedule_create ports param; 9 new proxy tests + 2 config tests + 2 card/Grants tests; revert-check red at both proxy.ts and config.ts layers; existing non-standard-port test fixtures updated with explicit allowedPorts/ports per the reviewer's instruction"
+    },
+    {
+      "id": "T20",
+      "title": "F3: reject inet_aton short/mixed/hex domain and proxy forms",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F3 fixed: guard.ts's looksLikeIpHost (inet_aton short/mixed-radix + flat encoded + numeric-final-label + bracketed/bare IPv6) replaces the strict-dotted-quad-only isIpLiteral in proxy.ts's checkedAddress; config.ts's agentTaskDomainProblem gets an equivalent self-contained check (duplicated by necessity across the core/client zone boundary). 6+2 new unit tests plus a proxy-integration test for 127.1; revert-checked red at guard.ts, proxy-integration and config.ts layers"
+    },
+    {
+      "id": "T21",
+      "title": "F4: NAT64 64:ff9b::/96 in isPrivateOrReservedAddress",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F4 fixed: NAT64 64:ff9b::/96 (RFC6052, embedded-v4 decode+recurse) and 64:ff9b:1::/48 (RFC8215 Local-Use, blanket refuse) added to isPrivateOrReservedAddress; 2 new tests; revert-check red"
+    },
+    {
+      "id": "T22",
+      "title": "F5: wrap() readiness timeout + maxSeconds process-tree kill investigation",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F5a fixed: wrap() script now has a bounded FIFO watchdog (default 10s, UNATTENDED_ALLOWLIST_FORWARDER_READY_TIMEOUT_SECONDS, test-seam readyTimeoutSeconds) that gives a clear stderr message and exit 97 instead of hanging forever if the forwarder dies/hangs before binding; real-bwrap test + revert-check (reverting reproduced an actual 30s test timeout/hang). F5b investigated per the review's 'confirm... report what you find': the run-level maxSeconds AbortSignal does NOT reach an in-flight shell_exec's spawned bwrap/sh process for either unattended path (trigger-agent-task.ts and trigger-dispatch.ts both call shellExecTool(root, runner) with no jobRegistry, so invoke() takes the early 'return run(command)' branch that never reads ctx.signal); only the separate per-command KERYX_SHELL_TIMEOUT_MS deadline (default 120s, independent of and potentially longer than maxSeconds) kills it. Confirmed with a cheap unit test (no fix applied — wiring the signal into makeCommandRunner/CommandRunner's shared type touches core shell-exec machinery used by the interactive TUI too, outside flow 301's scope; flagged as a follow-up in the final report)."
+    },
+    {
+      "id": "T23",
+      "title": "F1-F5: full verification suite + report",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Full verification suite run: tsc --noEmit clean; eslint clean on all 16 changed/new files; sandbox tests including real bwrap (357 pass/7 pre-existing skip); src/trigger (148 pass); schedule+security+src/security suites (453 pass); opentui-tests-no-skips.ts src/tui (1114 pass, 0 skip); test:client:terminal (1399 pass/3 pre-existing skip); test:client:runtime (3785 pass/16 pre-existing skip); src/standard (45 pass); skills verify --bundled findings:0 (no skill files touched this round, ceiling unaffected); flow check clean. No leftover revert-check markers."
+    },
+    {
+      "id": "T24",
+      "title": "F5b: maxSeconds abort kills in-flight shell_exec process group (pre-existing gap from flow 290, fixed in 301)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Pre-existing gap from flow 290 (the unattended dispatch's own maxSeconds abort never reached an in-flight shell_exec, since jobRegistry===undefined took the return run(command) branch which never read ctx.signal), fixed here in 301. Fix: CommandRunner gained an additive optional CommandRunOptions{signal} 2nd param (fewer-params-assignable, so every existing 1-arg runner/test-double still type-checks unchanged); makeCommandRunner spawns detached:true (its own process group via setsid) and on abort (or its existing per-command timeoutMs deadline) sends SIGTERM to the whole group (process.kill(-proc.pid,...)) then SIGKILL after a 2s grace period, resolving isError:true with 'aborted: run time limit' only after proc.exited settles -- so both trigger-agent-task.ts and trigger-dispatch.ts naturally wait for the killed tree before closeProxy()/cleanup, since their await runAgentTurn(...) chain directly awaits the in-flight tool call, never races it away. shellExecTool's no-registry branch now passes ctx.signal through. The jobRegistry-present (interactive TUI) branch is byte-for-byte untouched -- verified both by diff and by a new confirming test (promote-not-kill on abort still holds, and reverting the racing logic makes that new test fail in exactly the way expected). Verified with a live probe (Bun.spawn detached:true + process.kill(-pid,SIGTERM) killed a real bwrap --unshare-pid --die-with-parent contained sleep, both the outer sh and its grandchild, confirmed absent system-wide via ps) before writing the fix. Flipped the previous F5-finding unit test (now proves the signal IS passed through instead of being dropped); added a real-process unit test (sleep 5 via makeCommandRunner, abort at 50ms, killed well under the 2s grace bound) and a real-bwrap integration test (sleep 60 with a grandchild via sleep & wait, abort at 200ms, confirmed zero matching processes survive system-wide via ps, checked by pid+cmdline together) in a new unattended.abort-kill.test.ts. Both the shell-exec-tool.ts fix and the abort-kill real-process test were revert-checked red (a 5s hard test timeout and a 15s hard timeout + wrong-output respectively) then restored green."
+    },
+    {
+      "id": "T25",
+      "title": "F5b: verification suite + report",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Full verification suite rerun: tsc --noEmit clean; eslint clean on all 6 changed/new files; sandbox+mutation+tool/builtin tests incl. real bwrap (614 pass/7 pre-existing skip); src/trigger (148 pass); schedule+security suites (453 pass); opentui-tests-no-skips.ts src/tui (1114 pass, 0 skip); test:client:terminal (1399 pass/3 pre-existing skip); test:client:runtime (3789 pass/16 pre-existing skip); src/standard (45 pass); skills verify --bundled findings:0; flow check clean. No leftover revert-check markers; no commits made."
+    },
+    {
+      "id": "T26",
+      "title": "F5c: process-group spawning opt-in (default spawn unchanged pre-17d42d0a; unattended dispatchers opt in)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Added MakeCommandRunnerOptions{processGroup?:boolean} to makeCommandRunner (shell-exec-tool.ts): default spawns exactly as before 17d42d0a (detached:false, kill=proc.kill(signal) targets only the direct child); processGroup:true reproduces the F5b behaviour (detached:true, group kill via process.kill(-proc.pid,signal)). Only sandboxedRunner (trigger-agent-task.ts) and unattendedRunner (trigger-dispatch.ts) now pass {processGroup:true}; every other caller (src/acp/roster.ts's shellExecTool(root), src/tui/tui-shell.ts's 3 makeCommandRunner(cwd) call sites) is unaffected and gets the restored default, fixing the SIGHUP/orphan regression F5b introduced. Renamed killGroup/killGroupWithGrace to kill/killWithGrace to reflect the dual-mode design; abort message unchanged in both modes."
+    },
+    {
+      "id": "T27",
+      "title": "F5c: verification suite + report",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Updated C-06/C-07 source-pattern test to assert both shapes (opt-in group-kill only reachable when processGroup, default proc.kill(signal) always, detached:processGroup never a bare 'true'). Updated unattended.abort-kill.test.ts to pass {processGroup:true} matching the real dispatcher shape (note: this bwrap test cannot itself discriminate group-vs-default kill, since bwrap's own --unshare-pid namespace collapse tears down the sandboxed tree either way when its PID dies -- documented in the new test file). Added 2 new discriminating tests in shell-exec-tool.test.ts using a real backgrounded grandchild (sleep & wait): opt-in kills it, default leaves it running (orphaned, cleaned up in test teardown) -- and a pgid-comparison test proving the default child shares the caller's process group (not its own, i.e. not detached). All 4 new/updated tests revert-checked (forced processGroup false/true, and detached:true literal) and confirmed RED, then restored to GREEN; no TEMP markers left in src/. Verification: tsc clean, eslint clean on the 5 changed files, sandbox+tool/builtin suites (481 pass/7 skip/0 fail), test:client:terminal (1399 pass/0 fail), test:client:runtime (3793 pass/0 fail), src/acp (191 pass/0 fail). No commit made; HEAD still 17d42d0a."
     }
   ],
   "history": [
@@ -466,6 +687,495 @@
       "at": "2026-09-23T09:07:38.319Z",
       "event": "task-done",
       "detail": "T17: full verification suite + report"
+    },
+    {
+      "at": "2026-09-23T09:20:12.628Z",
+      "event": "task-added",
+      "detail": "T18: F1: port parsing crash + try/catch defence in depth (HIGH)"
+    },
+    {
+      "at": "2026-09-23T09:20:12.732Z",
+      "event": "task-added",
+      "detail": "T19: F2: port restriction 443/80 default + grants.ports"
+    },
+    {
+      "at": "2026-09-23T09:20:12.836Z",
+      "event": "task-added",
+      "detail": "T20: F3: reject inet_aton short/mixed/hex domain and proxy forms"
+    },
+    {
+      "at": "2026-09-23T09:20:12.944Z",
+      "event": "task-added",
+      "detail": "T21: F4: NAT64 64:ff9b::/96 in isPrivateOrReservedAddress"
+    },
+    {
+      "at": "2026-09-23T09:20:13.047Z",
+      "event": "task-added",
+      "detail": "T22: F5: wrap() readiness timeout + maxSeconds process-tree kill investigation"
+    },
+    {
+      "at": "2026-09-23T09:20:13.151Z",
+      "event": "task-added",
+      "detail": "T23: F1-F5: full verification suite + report"
+    },
+    {
+      "at": "2026-09-23T09:40:05.289Z",
+      "event": "task-done",
+      "detail": "T18: F1: port parsing crash + try/catch defence in depth (HIGH)"
+    },
+    {
+      "at": "2026-09-23T09:40:05.400Z",
+      "event": "task-done",
+      "detail": "T19: F2: port restriction 443/80 default + grants.ports"
+    },
+    {
+      "at": "2026-09-23T09:40:05.509Z",
+      "event": "task-done",
+      "detail": "T20: F3: reject inet_aton short/mixed/hex domain and proxy forms"
+    },
+    {
+      "at": "2026-09-23T09:40:05.619Z",
+      "event": "task-done",
+      "detail": "T21: F4: NAT64 64:ff9b::/96 in isPrivateOrReservedAddress"
+    },
+    {
+      "at": "2026-09-23T09:47:52.810Z",
+      "event": "task-done",
+      "detail": "T22: F5: wrap() readiness timeout + maxSeconds process-tree kill investigation"
+    },
+    {
+      "at": "2026-09-23T09:52:02.098Z",
+      "event": "task-done",
+      "detail": "T23: F1-F5: full verification suite + report"
+    },
+    {
+      "at": "2026-09-23T09:53:30.881Z",
+      "event": "task-added",
+      "detail": "T24: F5b: maxSeconds abort kills in-flight shell_exec process group (pre-existing gap from flow 290, fixed in 301)"
+    },
+    {
+      "at": "2026-09-23T09:53:31.132Z",
+      "event": "task-added",
+      "detail": "T25: F5b: verification suite + report"
+    },
+    {
+      "at": "2026-09-23T10:07:10.620Z",
+      "event": "task-done",
+      "detail": "T24: F5b: maxSeconds abort kills in-flight shell_exec process group (pre-existing gap from flow 290, fixed in 301)"
+    },
+    {
+      "at": "2026-09-23T10:11:18.925Z",
+      "event": "task-done",
+      "detail": "T25: F5b: verification suite + report"
+    },
+    {
+      "at": "2026-09-23T10:24:03.524Z",
+      "event": "task-added",
+      "detail": "T26: F5c: process-group spawning opt-in (default spawn unchanged pre-17d42d0a; unattended dispatchers opt in)"
+    },
+    {
+      "at": "2026-09-23T10:24:03.627Z",
+      "event": "task-added",
+      "detail": "T27: F5c: verification suite + report"
+    },
+    {
+      "at": "2026-09-23T10:44:51.386Z",
+      "event": "task-done",
+      "detail": "T26: F5c: process-group spawning opt-in (default spawn unchanged pre-17d42d0a; unattended dispatchers opt in)"
+    },
+    {
+      "at": "2026-09-23T10:44:59.884Z",
+      "event": "task-done",
+      "detail": "T27: F5c: verification suite + report"
+    },
+    {
+      "at": "2026-09-23T11:00:11.430Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/665 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-23T11:02:59.539Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: config.ts: agentTaskDomainProblem validates domains at draft/load/run; empty triggers.json refusal string for agent-task confirmed gone; flow-next TriggerDispatch.network stays boolean. Strengthened by F3 fix (inet_aton forms). Tests: config.test.ts pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:02:59.651Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: unattended.ts planUnattendedSandbox: allowlist always pushes --unshare-net, resolv.conf bound only for network:full, proxy socket bound from scratch dir, refuses run on proxy-creation failure (trigger-agent-task.ts catch->refusal, never off/full fallback). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:02:59.765Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: proxy.ts: unix-socket listen, matchesAllowlist host check, looksLikeIpHost IP-literal refusal, isPrivateOrReservedAddress post-resolve refusal (incl. NAT64 F4 fix), now also port-scoped (F2 fix). Tests: proxy.allowlist.test.ts, guard.private-address.test.ts, guard.ip-host.test.ts all pass at aae6558c-identical tree. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:02:59.879Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: checkedAddress() connects to the exact resolved address, never re-resolves. Test 'AC4: connects to the address CHECKED, not a fresh lookup' with injected resolver — passing. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:02:59.996Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: forwarder.ts binds 127.0.0.1, started in same bwrap invocation via wrap()'s FIFO handshake (mkfifo/read, plus F5 watchdog); HTTP(S)_PROXY/http(s)_proxy/ALL_PROXY set in unattended.ts. pending-buffer flush documented and tested. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:03:00.110Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: unattended.allowlist.test.ts real bwrap integration: curl reaches allowed name via proxy, refused for unlisted name, host's real loopback unreachable from inside sandbox even bypassing proxy env. Ran myself: 3/3 passing. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:03:00.226Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: trigger-agent-task.ts: onDecision callback pushes to networkDecisions, written into renderReport() and agentTask.networkDecisions (runs.jsonl record). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:03:00.341Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: scheduleContentCanonical signs the whole raw action object (incl. grants.domains and grants.ports); schedule-verify.ts signatureProblem recomputes HMAC before every run/resume. schedules.allowlist.test.ts passing. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:03:00.458Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: schedules.ts renderCard: network line shows 'allowlist - <domains>' or FULL_NETWORK_CARD_WARNING or 'off', never off/full for allowlist; states governs-only-shell-commands; every line piped through cardSafe. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:03:00.575Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: schedules-inspector.ts Grants tab shows mode+domains; Runs tab surfaces proxy denials via existing detail line. schedules-inspector.allowlist.test.ts passing (ran myself). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:03:00.689Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: planUnattendedSandbox refuses with platform-naming reason when platform !== linux or launcher/probe fails; trigger-agent-task/dispatch refuse trust mode rather than falling back uncontained. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:03:00.802Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: unattended-scratch.ts ensureScratchParent requires real dir, owned by uid, mode exactly 0700, shared by agentTaskScratchParent and triggerDispatchScratchParent; trigger-dispatch.ts hides parent from sandbox. deps.worktreeParent test-only exemption confirmed unreachable from any production path (grepped every call site). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:03:00.922Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: sandbox.ts: Domain-allowlist not-implemented row carries a note distinguishing it from the scheduler's own allowlist grant. Diff confirmed present at aae6558c. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:03:01.037Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: docs/docs/cli-reference.md, docs/docs/limitations.md, README.md, src/gdskills/bundled/skills/platform/scheduled-tasks/SKILL.md all updated at aae6558c (confirmed via git diff origin/main~1..aae6558c). Documents Linux-only, shell_exec-only scope, proxy-off-if-ignored, blind-relay SNI limit. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:03:01.154Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: gh pr checks 665: 18 passed, 0 failed. keryx health run (run myself, this session): PASS, score 94, no gate conditions triggered. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T11:03:08.854Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T11:03:12.742Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-23T11:03:12.743Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against aae6558c7d414a3278d4a1290eb4b95b2af14b4c, but the PR head is 70362a5a77a79417de1bf09a0b933521b0856b7e. A clean round against a stale SHA proves nothing about what will merge — re-run the round."
+    },
+    {
+      "at": "2026-09-23T11:04:03.253Z",
+      "event": "completing",
+      "detail": "merged commit: aae6558c7d414a3278d4a1290eb4b95b2af14b4c"
+    },
+    {
+      "at": "2026-09-23T11:04:07.026Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-23T11:04:07.027Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-09-23T11:02:59.539Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:02:59.651Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:02:59.765Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:02:59.879Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:02:59.996Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:03:00.109Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:03:00.226Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:03:00.341Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:03:00.458Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:03:00.574Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:03:00.688Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:03:00.802Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:03:00.922Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:03:01.037Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:03:01.154Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:04:07.027Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f",
+      "headCommit": "aae6558c7d414a3278d4a1290eb4b95b2af14b4c"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-23T11:03:12.742Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "15 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "aae6558c7d414a3278d4a1290eb4b95b2af14b4c is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "aae6558c7d414a3278d4a1290eb4b95b2af14b4c is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "27 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — head-commit (violated): the latest round ran against aae6558c7d414a3278d4a1290eb4b95b2af14b4c, but the PR head is 70362a5a77a79417de1bf09a0b933521b0856b7e. A clean round against a stale SHA proves nothing about what will merge — re-run the round."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    },
+    {
+      "at": "2026-09-23T11:04:07.026Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "15 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "aae6558c7d414a3278d4a1290eb4b95b2af14b4c is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "aae6558c7d414a3278d4a1290eb4b95b2af14b4c is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "27 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:61a64246b73d0f49166636c9e79a71c0dfb9be8216b123804f19739eff09a81f"
+    }
+  ],
+  "merged": {
+    "commit": "aae6558c7d414a3278d4a1290eb4b95b2af14b4c",
+    "ref": "origin/main",
+    "at": "2026-09-23T11:04:07.027Z"
+  }
 }

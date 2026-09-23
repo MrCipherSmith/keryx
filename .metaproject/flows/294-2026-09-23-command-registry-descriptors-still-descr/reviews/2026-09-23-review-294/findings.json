@@ -1,0 +1,46 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "code-reviewer (pr-verification)",
+    "severity": "minor",
+    "problem": "The new `trigger run` command descriptor's `sideEffects` carried one blanket bullet claiming the command holds the project's shared maintenance lock (.metaproject/data/.locks/) while the action runs, for every action kind, but `flow-next` with a `dispatch` block never took that lock at all — `runFlowNextDispatch` (src/commands/trigger-dispatch.ts) instead took a separate per-flow `dispatch-<flow>.lock`, held for the whole dispatch, plus briefly a separate `spend.lock` only for the reservation decision.",
+    "impact": "An agent or operator reasoning about trigger concurrency from this descriptor (the exact audience AC1 of flow 294 is for) would wrongly conclude that two `flow-next` dispatches on different flows serialize against each other through one shared lock, when in fact they run concurrently (per-flow lock). This is precisely the class of descriptor drift flow 294 exists to correct, reproduced in the very descriptor flow 294 rewrote.",
+    "suggested_fix": "Split the lock claim per action kind: state the shared maintenance lock explicitly for reconcile/rebuild/open-flow, and separately state the per-flow dispatch lock (plus the brief spend lock) for a dispatching flow-next, naming both lock files.",
+    "evidence": "src/trigger/run.ts:137-174 (withTriggerRunLock -> withMaintenanceLock, used by reconcile/rebuild/open-flow via src/commands/trigger.ts:220,382); src/commands/trigger-dispatch.ts:405-434 (runFlowNextDispatch takes dispatchLockPath, never withTriggerRunLock) and :143 (\"beside the maintenance lock\" — explicitly a separate lock file); src/trigger/run.ts:276-278 (spendLockPath, a third, separate lock).",
+    "confidence": "high",
+    "file": "src/standard/command-registry.ts",
+    "global_id": "2026-09-23-review-294#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in commit 9f7788daa4c3186988cfcb412656409fbc49c234 (\"fix(cli): say which lock each trigger action takes, and ask the flow service what a criterion is\"), the branch's last head, contained in squash-merge commit 8ed65112694dfa759d53d1c757d704037294c37b (PR #658) on origin/main. src/standard/command-registry.ts's `trigger run` descriptor now states per action: reconcile/rebuild/open-flow hold '.metaproject/data/.locks/maintenance.lock'; flow-next with NO dispatch block takes no lock; flow-next WITH a dispatch block does NOT take the maintenance lock, taking instead a per-flow '.metaproject/data/.locks/dispatch-<flow>.lock' plus briefly '.metaproject/data/.locks/spend.lock'. Pinned by a new test in src/standard/command-registry.coverage.test.ts (\"the descriptor's lock claim is split per action: reconcile/rebuild/open-flow name the shared maintenance lock, a dispatching flow-next names the per-flow dispatch lock instead\") that derives the lock names from the real exported maintenanceLockPath/dispatchLockPath functions and asserts the dispatch line neither contains the maintenance lock's basename nor matches a 'refuses ... when another run holds' claim. Ran `bun test src/standard/command-registry.coverage.test.ts src/flow/ac-strict-args.test.ts` at this commit: 29 pass, 0 fail.",
+      "verifier": "review-verification pass (origin/main, merge commit 8ed65112)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 9f7788daa4c3186988cfcb412656409fbc49c234, squash-merged as 8ed65112694dfa759d53d1c757d704037294c37b (PR #658) on origin/main; pinned by src/standard/command-registry.coverage.test.ts's new lock-per-action test."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "code-reviewer (pr-verification)",
+    "severity": "info",
+    "problem": "`flow ac update`'s \"rewritten\"/\"appended\" decision read the raw `--criterion` value and applied only `.toUpperCase()` before checking membership in the known-criteria list, while the service's own `validateCriterionName` (what `acUpdate` actually validates `--criterion` with) trims the value first. A `--criterion` carrying incidental whitespace (e.g. `\" AC3 \"`) would be trimmed and matched by the service (a rewrite) but reported \"appended\" by the CLI's own untrimmed pre-check.",
+    "impact": "A rare, low-likelihood edge case (argv tokens seldom carry padding) producing a misleading confirmation message; no data corruption, since the actual file write follows the service's correct, trimmed normalization.",
+    "suggested_fix": "Have the CLI's pre-check use the same trim-then-uppercase normalization the service applies, ideally by asking the service directly rather than re-deriving the rule a second time.",
+    "evidence": "src/commands/flow.ts (pre-fix): wasKnownCriterion computed via .toUpperCase() only, no .trim(); src/flow/service.ts:111-117 validateCriterionName: raw.trim() before the uppercase/shape check. No test covered this padded-value path at review time; reasoned from code, not reproduced against a running build.",
+    "confidence": "medium",
+    "file": "src/commands/flow.ts",
+    "global_id": "2026-09-23-review-294#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in the same commit 9f7788daa4c3186988cfcb412656409fbc49c234 (squash-merged as 8ed65112694dfa759d53d1c757d704037294c37b, PR #658). src/commands/flow.ts's `runAc` no longer reimplements the known-criterion check inline; it now calls the new `acCriterionKnown` (src/flow/service.ts), which normalizes through the exported `validateCriterionName` (trim, then uppercase, then AC\\d+ shape check) - the SAME normalization `acUpdate` itself validates `--criterion` with - so a padded `--criterion \" AC1 \"` now matches the known-criteria list correctly instead of falsely reporting 'appended'. New regression test in src/flow/ac-strict-args.test.ts (`ac update --criterion \" AC1 \" ...` padded with whitespace still reports \"rewritten\", matching the service's own trim+uppercase normalization) asserts exactly this case and passes. Ran `bun test src/flow/ac-strict-args.test.ts` (part of the 29-test run above): pass, 0 fail.",
+      "verifier": "review-verification pass (origin/main, merge commit 8ed65112)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 9f7788daa4c3186988cfcb412656409fbc49c234, squash-merged as 8ed65112694dfa759d53d1c757d704037294c37b (PR #658) on origin/main; pinned by src/flow/ac-strict-args.test.ts's new padded-criterion test."
+    }
+  }
+]

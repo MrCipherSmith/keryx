@@ -33,3 +33,45 @@
 - 2026-09-23T08:59:07.473Z - task-done: T15: docs: cli-reference, limitations, README, scheduled-tasks skill (AC14)
 - 2026-09-23T08:59:07.576Z - task-done: T16: real bwrap integration test (AC6) + revert-checks for security fixes
 - 2026-09-23T09:07:38.319Z - task-done: T17: full verification suite + report
+- 2026-09-23T09:20:12.628Z - task-added: T18: F1: port parsing crash + try/catch defence in depth (HIGH)
+- 2026-09-23T09:20:12.732Z - task-added: T19: F2: port restriction 443/80 default + grants.ports
+- 2026-09-23T09:20:12.836Z - task-added: T20: F3: reject inet_aton short/mixed/hex domain and proxy forms
+- 2026-09-23T09:20:12.944Z - task-added: T21: F4: NAT64 64:ff9b::/96 in isPrivateOrReservedAddress
+- 2026-09-23T09:20:13.047Z - task-added: T22: F5: wrap() readiness timeout + maxSeconds process-tree kill investigation
+- 2026-09-23T09:20:13.151Z - task-added: T23: F1-F5: full verification suite + report
+- 2026-09-23T09:40:05.289Z - task-done: T18: F1: port parsing crash + try/catch defence in depth (HIGH)
+- 2026-09-23T09:40:05.400Z - task-done: T19: F2: port restriction 443/80 default + grants.ports
+- 2026-09-23T09:40:05.509Z - task-done: T20: F3: reject inet_aton short/mixed/hex domain and proxy forms
+- 2026-09-23T09:40:05.619Z - task-done: T21: F4: NAT64 64:ff9b::/96 in isPrivateOrReservedAddress
+- 2026-09-23T09:47:52.810Z - task-done: T22: F5: wrap() readiness timeout + maxSeconds process-tree kill investigation
+- 2026-09-23T09:52:02.098Z - task-done: T23: F1-F5: full verification suite + report
+- 2026-09-23T09:53:30.881Z - task-added: T24: F5b: maxSeconds abort kills in-flight shell_exec process group (pre-existing gap from flow 290, fixed in 301)
+- 2026-09-23T09:53:31.132Z - task-added: T25: F5b: verification suite + report
+- 2026-09-23T10:07:10.620Z - task-done: T24: F5b: maxSeconds abort kills in-flight shell_exec process group (pre-existing gap from flow 290, fixed in 301)
+- 2026-09-23T10:11:18.925Z - task-done: T25: F5b: verification suite + report
+- 2026-09-23T10:24:03.524Z - task-added: T26: F5c: process-group spawning opt-in (default spawn unchanged pre-17d42d0a; unattended dispatchers opt in)
+- 2026-09-23T10:24:03.627Z - task-added: T27: F5c: verification suite + report
+- 2026-09-23T10:44:51.386Z - task-done: T26: F5c: process-group spawning opt-in (default spawn unchanged pre-17d42d0a; unattended dispatchers opt in)
+- 2026-09-23T10:44:59.884Z - task-done: T27: F5c: verification suite + report
+- 2026-09-23T11:00:11.430Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/665 (warning: PR is not a draft) (base: main)
+- 2026-09-23T11:02:59.539Z - ac-confirmed: AC1: config.ts: agentTaskDomainProblem validates domains at draft/load/run; empty triggers.json refusal string for agent-task confirmed gone; flow-next TriggerDispatch.network stays boolean. Strengthened by F3 fix (inet_aton forms). Tests: config.test.ts pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:02:59.651Z - ac-confirmed: AC2: unattended.ts planUnattendedSandbox: allowlist always pushes --unshare-net, resolv.conf bound only for network:full, proxy socket bound from scratch dir, refuses run on proxy-creation failure (trigger-agent-task.ts catch->refusal, never off/full fallback). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:02:59.765Z - ac-confirmed: AC3: proxy.ts: unix-socket listen, matchesAllowlist host check, looksLikeIpHost IP-literal refusal, isPrivateOrReservedAddress post-resolve refusal (incl. NAT64 F4 fix), now also port-scoped (F2 fix). Tests: proxy.allowlist.test.ts, guard.private-address.test.ts, guard.ip-host.test.ts all pass at aae6558c-identical tree. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:02:59.879Z - ac-confirmed: AC4: checkedAddress() connects to the exact resolved address, never re-resolves. Test 'AC4: connects to the address CHECKED, not a fresh lookup' with injected resolver — passing. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:02:59.996Z - ac-confirmed: AC5: forwarder.ts binds 127.0.0.1, started in same bwrap invocation via wrap()'s FIFO handshake (mkfifo/read, plus F5 watchdog); HTTP(S)_PROXY/http(s)_proxy/ALL_PROXY set in unattended.ts. pending-buffer flush documented and tested. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:03:00.110Z - ac-confirmed: AC6: unattended.allowlist.test.ts real bwrap integration: curl reaches allowed name via proxy, refused for unlisted name, host's real loopback unreachable from inside sandbox even bypassing proxy env. Ran myself: 3/3 passing. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:03:00.226Z - ac-confirmed: AC7: trigger-agent-task.ts: onDecision callback pushes to networkDecisions, written into renderReport() and agentTask.networkDecisions (runs.jsonl record). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:03:00.341Z - ac-confirmed: AC8: scheduleContentCanonical signs the whole raw action object (incl. grants.domains and grants.ports); schedule-verify.ts signatureProblem recomputes HMAC before every run/resume. schedules.allowlist.test.ts passing. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:03:00.458Z - ac-confirmed: AC9: schedules.ts renderCard: network line shows 'allowlist - <domains>' or FULL_NETWORK_CARD_WARNING or 'off', never off/full for allowlist; states governs-only-shell-commands; every line piped through cardSafe. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:03:00.575Z - ac-confirmed: AC10: schedules-inspector.ts Grants tab shows mode+domains; Runs tab surfaces proxy denials via existing detail line. schedules-inspector.allowlist.test.ts passing (ran myself). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:03:00.689Z - ac-confirmed: AC11: planUnattendedSandbox refuses with platform-naming reason when platform !== linux or launcher/probe fails; trigger-agent-task/dispatch refuse trust mode rather than falling back uncontained. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:03:00.802Z - ac-confirmed: AC12: unattended-scratch.ts ensureScratchParent requires real dir, owned by uid, mode exactly 0700, shared by agentTaskScratchParent and triggerDispatchScratchParent; trigger-dispatch.ts hides parent from sandbox. deps.worktreeParent test-only exemption confirmed unreachable from any production path (grepped every call site). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:03:00.922Z - ac-confirmed: AC13: sandbox.ts: Domain-allowlist not-implemented row carries a note distinguishing it from the scheduler's own allowlist grant. Diff confirmed present at aae6558c. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:03:01.037Z - ac-confirmed: AC14: docs/docs/cli-reference.md, docs/docs/limitations.md, README.md, src/gdskills/bundled/skills/platform/scheduled-tasks/SKILL.md all updated at aae6558c (confirmed via git diff origin/main~1..aae6558c). Documents Linux-only, shell_exec-only scope, proxy-off-if-ignored, blind-relay SNI limit. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:03:01.154Z - ac-confirmed: AC15: gh pr checks 665: 18 passed, 0 failed. keryx health run (run myself, this session): PASS, score 94, no gate conditions triggered. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T11:03:08.854Z - completing
+- 2026-09-23T11:03:12.742Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-23T11:03:12.743Z - completion-failed: review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against aae6558c7d414a3278d4a1290eb4b95b2af14b4c, but the PR head is 70362a5a77a79417de1bf09a0b933521b0856b7e. A clean round against a stale SHA proves nothing about what will merge — re-run the round.
+- 2026-09-23T11:04:03.253Z - completing: merged commit: aae6558c7d414a3278d4a1290eb4b95b2af14b4c
+- 2026-09-23T11:04:07.026Z - completion-attempt-recorded: attempt 2: passed
+- 2026-09-23T11:04:07.027Z - done: all gates passed

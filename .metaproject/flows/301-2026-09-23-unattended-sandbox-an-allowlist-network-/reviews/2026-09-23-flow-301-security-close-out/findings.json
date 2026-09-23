@@ -1,0 +1,171 @@
+[
+  {
+    "id": "F1",
+    "reviewer": "security-reviewer (flow 301)",
+    "severity": "blocker",
+    "problem": "The allowlist proxy (src/harness/process/sandbox/proxy.ts) parsed a client-controlled port string (a CONNECT authority, or a plain-HTTP Host header) with `Number(x) || 443` and handed the result straight to `net.connect`/`http.request`. An out-of-range value (e.g. `-1`, `99999999999999`) makes Node/Bun throw a SYNCHRONOUS, uncaught `ERR_SOCKET_BAD_PORT` inside the proxy's own request handler, which is not inside any try/catch and is not surfaced as an `error` event.",
+    "impact": "The proxy runs OUTSIDE the sandbox, in the dispatcher process, as the one thing enforcing the network boundary between a scheduled agent-task run and the operator's own network/credentials. A single crafted line (`printf 'CONNECT allowed.test:-1 HTTP/1.1\\r\\n\\r\\n' | nc 127.0.0.1 8917`) run from INSIDE the sandbox crashes that dispatcher process. Because it is an uncaught exception, every `finally` (including `closeProxy()`/scratch cleanup in trigger-agent-task.ts) is skipped, leaking the run's unix socket and scratch tree on top of the crash.",
+    "suggested_fix": "Strictly parse the port (digits only, no sign, 1-65535) before it ever reaches net.connect/http.request/https.request, refuse with a normal 403/502 decision on a bad port instead of proceeding, and wrap every remaining connect call in a try/catch as defence in depth.",
+    "evidence": "Reproduced end to end: built the real bwrap sandbox via planUnattendedSandbox(), started the real forwarder and proxy, and from inside the sandbox ran `printf 'CONNECT allowed.test:-1 HTTP/1.1\\r\\n\\r\\n' | nc 127.0.0.1 8917` — the dispatcher process (running the proxy) died with `RangeError: Port should be >= 0 and < 65536. Received -1` at proxy.ts's net.connect call, and the finally-guarded cleanup never ran (confirmed leaked /tmp/keryx-crash-it-*.sock and scratch dirs afterward). Also reproduced the same crash via the plain-HTTP path (a `Host: allowed.com:-1` header hitting http.request).",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/harness/process/sandbox/proxy.ts — CONNECT handler's blind-relay net.connect call (pre-fix: `net.connect(port, connectHost, ...)` with an unvalidated `port`)",
+        "src/harness/process/sandbox/proxy.ts — plain-HTTP handler's http.request call (pre-fix: `http.request({ port: target.port, ... })` with an unvalidated port)",
+        "src/harness/process/sandbox/proxy.ts — MITM terminator's https.request call (pre-fix: same unvalidated-port shape, unreachable in the flow 301 configuration since tlsTerminate is never set by trigger-agent-task.ts, but the same class of bug)"
+      ],
+      "enumeration_method": "grepped every `net.connect(`, `http.request(`, `https.request(` call in proxy.ts that takes a client-derived port, and confirmed by direct reproduction against the first two (the third is structurally identical and unreachable in production for this flow)"
+    },
+    "global_id": "2026-09-23-flow-301-security-close-out#F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at commit 051f14758c983643ddbe6a12b7584e4aaaa305cf, tree-identical to the squash-merge commit aae6558c7d414a3278d4a1290eb4b95b2af14b4c on main for every file this finding touches (`git diff aae6558c7d414a3278d4a1290eb4b95b2af14b4c 70362a5a77a79417de1bf09a0b933521b0856b7e -- src/harness/process/sandbox/proxy.ts` is empty). Re-ran the exact original crash reproduction against the fixed code: raw `CONNECT allowed.test:-1`, huge/garbage/non-digit/leading-zero ports, an absolute-URL out-of-range port, and a fully non-HTTP garbage request line, all against a live createAllowlistProxy — every case returns a clean 403/400/431 with no crash, and the proxy answers a following request normally afterward. Also ran the project's own `proxy.allowlist.test.ts` \"flow 301 security review F1: a malformed port never crashes the proxy\" suite (4/4 passing) and the full sandbox/proxy/guard/config/shell-exec-tool suite (124 pass, 2 skip, 0 fail). The finding does not reproduce at aae6558c7d414a3278d4a1290eb4b95b2af14b4c.",
+      "verifier": "close-out verifier (flow 301)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed at commit 051f14758c983643ddbe6a12b7584e4aaaa305cf; re-verified clean against merge commit aae6558c7d414a3278d4a1290eb4b95b2af14b4c via proxy.allowlist.test.ts 'security review F1' suite and live raw-socket reproduction"
+    }
+  },
+  {
+    "id": "F2",
+    "reviewer": "security-reviewer (flow 301)",
+    "severity": "major",
+    "problem": "The allowlist proxy checked only the hostname for both CONNECT and plain HTTP, never the destination port, so once a domain was allowed every port on it was reachable — not just the port(s) the operator intended (e.g. its web API) — including any other service the same host happens to run (SSH, a database, an internal admin panel).",
+    "impact": "A schedule's `domains` grant is meant to scope what the agent's shell can reach; without port scoping it also grants access to every other TCP service the allowed host exposes, widening the intended attack surface well beyond \"reach this API\".",
+    "suggested_fix": "Restrict CONNECT to port 443 and plain HTTP to port 80 by default once the allowlist is hardened, with an explicit, HMAC-signed `grants.ports` override for schedules that legitimately need another port.",
+    "evidence": "Confirmed pre-fix by the project's own AC3/AC4 tests connecting to an arbitrary non-standard upstream port on an allowed host and succeeding. Post-fix, confirmed live: `CONNECT allowed.test:80` and `GET http://allowed.test:443/` are both refused by default (`port ... is not allowed`), `CONNECT allowed.test:443` / `GET http://allowed.test:80/` are allowed, and an absolute URL with an explicit non-default port (`http://allowed.test:8080/`) does not bypass the restriction — same `portAllowed()` check regardless of how the port was derived.",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/harness/process/sandbox/proxy.ts — the CONNECT allow-decision path (server.on(\"connect\", ...))",
+        "src/harness/process/sandbox/proxy.ts — the plain-HTTP allow-decision path (http.createServer request handler)"
+      ],
+      "enumeration_method": "the proxy serves exactly two request kinds (CONNECT and plain HTTP); both were read end to end and both lacked any port check before the fix, confirmed by the two portAllowed() call sites the fix added"
+    },
+    "global_id": "2026-09-23-flow-301-security-close-out#F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at commit 051f14758c983643ddbe6a12b7584e4aaaa305cf, tree-identical to aae6558c7d414a3278d4a1290eb4b95b2af14b4c for src/harness/process/sandbox/proxy.ts (confirmed via empty `git diff aae6558c7d414a3278d4a1290eb4b95b2af14b4c 70362a5a77a79417de1bf09a0b933521b0856b7e -- src/harness/process/sandbox/proxy.ts`). Re-ran live: `CONNECT allowed.test:80` and `GET http://allowed.test:443/` both refused by default; `CONNECT allowed.test:443` and `GET http://allowed.test:80/` both allowed; an absolute URL with an explicit non-default port (`http://allowed.test:8080/`) does not bypass the restriction. Also ran the project's own `proxy.allowlist.test.ts` \"flow 301 security review F2: the allowlist restricts host AND port\" suite (4/4 passing). The finding does not reproduce at aae6558c7d414a3278d4a1290eb4b95b2af14b4c.",
+      "verifier": "close-out verifier (flow 301)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed at commit 051f14758c983643ddbe6a12b7584e4aaaa305cf; re-verified clean against merge commit aae6558c7d414a3278d4a1290eb4b95b2af14b4c via proxy.allowlist.test.ts 'security review F2' suite and live port-boundary probes"
+    }
+  },
+  {
+    "id": "F3",
+    "reviewer": "security-reviewer (flow 301)",
+    "severity": "minor",
+    "problem": "The domain-literal detector (agentTaskDomainProblem in src/trigger/config.ts, and isIpLiteral in proxy.ts) only matched the canonical 4-part dotted-decimal / bare-colon IPv6 form, missing inet_aton short/mixed-radix forms such as `127.1` (== 127.0.0.1), `0177.1` (octal), `0x7f.1` (hex) — these passed domain-shape validation as if they were ordinary two-label domains.",
+    "impact": "A confirmation card could show what looks like a normal domain (`127.1`) that is actually a disguised loopback/private literal. Not independently exploitable: at connect time, isPrivateOrReservedAddress runs on whatever address the OS resolver actually returns for such a string (glibc decodes it via inet_aton before DNS), so the resolved address is still caught and refused by the separate, address-level check — verified this is a genuinely independent second layer, not the same check repeated.",
+    "suggested_fix": "Add an inet_aton-aware decoder (looksLikeIpHost in guard.ts, with a mirrored copy in config.ts for the core/client zone boundary) so these forms are refused at the domain-validation layer too, not only at connect time.",
+    "evidence": "Confirmed pre-fix: `agentTaskDomainProblem(\"127.1\")` returned no problem (accepted as a domain). Post-fix: ran `looksLikeIpHost` and `agentTaskDomainProblem` side by side against 1password.com, 3com.com, 3.com, a1.com, 9gag.com, 8888.com, 3m.com, 17.com, 2130706433.com, cisco.com (all correctly accepted as real domains, zero false positives) and against 127.1, 0177.1, 0x7f.1, 10.1.2, example.123, example.0x1a (all correctly refused on both sides, full agreement).",
+    "confidence": "high",
+    "global_id": "2026-09-23-flow-301-security-close-out#F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at commit 051f14758c983643ddbe6a12b7584e4aaaa305cf, tree-identical to aae6558c7d414a3278d4a1290eb4b95b2af14b4c for src/trigger/config.ts and src/harness/mutation/guard.ts (empty `git diff aae6558c7d414a3278d4a1290eb4b95b2af14b4c 70362a5a77a79417de1bf09a0b933521b0856b7e` over those files). Ran `looksLikeIpHost` and `agentTaskDomainProblem` side by side against a battery of real domains (1password.com, 3com.com, 3.com, a1.com, 9gag.com, 8888.com, 3m.com, 17.com, 2130706433.com, cisco.com — all correctly accepted, zero false positives) and disguised IP literals (127.1, 0177.1, 0x7f.1, 10.1.2, example.123, example.0x1a — all correctly refused, full agreement between the two implementations). Also ran `guard.ip-host.test.ts` and `config.test.ts` (all passing). The finding does not reproduce at aae6558c7d414a3278d4a1290eb4b95b2af14b4c.",
+      "verifier": "close-out verifier (flow 301)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed at commit 051f14758c983643ddbe6a12b7584e4aaaa305cf; re-verified clean against merge commit aae6558c7d414a3278d4a1290eb4b95b2af14b4c via guard.ip-host.test.ts and side-by-side looksLikeIpHost/agentTaskDomainProblem probes"
+    }
+  },
+  {
+    "id": "F4",
+    "reviewer": "security-reviewer (flow 301)",
+    "severity": "minor",
+    "problem": "isPrivateOrReservedAddress (src/harness/mutation/guard.ts) decoded IPv4-mapped IPv6 (`::ffff:a.b.c.d`) but not the NAT64 well-known prefix `64:ff9b::/96`, which also embeds an IPv4 address (e.g. `64:ff9b::a9fe:a9fe` embeds 169.254.169.254, a cloud metadata address).",
+    "impact": "On a host/network with NAT64 enabled in the resolution path, a name could resolve to a NAT64-embedded private/metadata address that the reserved-address check would not recognise, defeating the AC3/AC4 hardening for that one resolver configuration.",
+    "suggested_fix": "Decode the NAT64 well-known prefix (hex-group and mixed-dotted forms) and classify the embedded IPv4, plus refuse the RFC 8215 local-use NAT64 prefix (64:ff9b:1::/48) outright since its embedded-v4 layout is non-contiguous.",
+    "evidence": "Read guard.ts post-fix: NAT64 decoding (hex groups and mixed-dotted tail) plus the RFC 8215 local-use prefix refusal are present at isPrivateOrReservedAddress (guard.ts:136-151); confirmed correct by inspection against the RFC 6052/8215 address shapes.",
+    "confidence": "high",
+    "global_id": "2026-09-23-flow-301-security-close-out#F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at commit 051f14758c983643ddbe6a12b7584e4aaaa305cf, tree-identical to aae6558c7d414a3278d4a1290eb4b95b2af14b4c for src/harness/mutation/guard.ts. Read isPrivateOrReservedAddress post-fix: NAT64 hex-group and mixed-dotted decoding plus the RFC 8215 local-use prefix refusal are present (guard.ts:136-151) and ran `guard.private-address.test.ts` (all passing, including NAT64 cases). The finding does not reproduce at aae6558c7d414a3278d4a1290eb4b95b2af14b4c.",
+      "verifier": "close-out verifier (flow 301)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed at commit 051f14758c983643ddbe6a12b7584e4aaaa305cf; re-verified clean against merge commit aae6558c7d414a3278d4a1290eb4b95b2af14b4c via guard.private-address.test.ts NAT64 cases"
+    }
+  },
+  {
+    "id": "F5",
+    "reviewer": "security-reviewer (flow 301)",
+    "severity": "minor",
+    "problem": "The in-sandbox TCP->unix forwarder's readiness handshake (a FIFO the wrap() script `read`s) had no bound: if the forwarder crashed or hung before writing to the FIFO, the wrap script's blocking `read` waited forever, with nothing to time it out.",
+    "impact": "A forwarder that fails to start (a bug, resource exhaustion, an unexpected environment) hangs the whole shell_exec command indefinitely rather than failing fast with a clear reason, relying entirely on unverified outer timeouts to eventually recover.",
+    "suggested_fix": "Add a background watchdog that races the forwarder to the same FIFO after a bounded wait (default 10s) and makes the script exit 97 with a clear stderr message when the forwarder never signals ready, killing the forwarder process either way.",
+    "evidence": "Ran the project's real bwrap integration test (`unattended.allowlist.test.ts`, \"flow 301 F5\": a stand-in forwarder that never signals readiness) post-fix: it correctly exits 97 with \"did not become ready\" well under the 10s bound, and the real command never runs. `bun test src/harness/process/sandbox/unattended.allowlist.test.ts` — 1/1 relevant test passing.",
+    "confidence": "high",
+    "global_id": "2026-09-23-flow-301-security-close-out#F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at commit 051f14758c983643ddbe6a12b7584e4aaaa305cf, tree-identical to aae6558c7d414a3278d4a1290eb4b95b2af14b4c for src/harness/process/sandbox/unattended.ts. Ran the real bwrap integration test `unattended.allowlist.test.ts` \"flow 301 F5: a forwarder that never becomes ready gives up within the bound\" — exits 97 with a clear stderr message well under the 10s bound, the real command never runs. `bun test src/harness/process/sandbox/unattended.allowlist.test.ts` — 3/3 passing. The finding does not reproduce at aae6558c7d414a3278d4a1290eb4b95b2af14b4c.",
+      "verifier": "close-out verifier (flow 301)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed at commit 051f14758c983643ddbe6a12b7584e4aaaa305cf; re-verified clean against merge commit aae6558c7d414a3278d4a1290eb4b95b2af14b4c via unattended.allowlist.test.ts real bwrap watchdog test"
+    }
+  },
+  {
+    "id": "F6",
+    "reviewer": "security-reviewer (flow 301)",
+    "severity": "major",
+    "problem": "An unattended run's own abort (the dispatch's `maxSeconds` wall-clock limit, or any other trigger of the run's AbortController) ended the agent turn loop but never reached an in-flight `shell_exec` command: `makeCommandRunner`'s runner ignored `options.signal` entirely, so the sandboxed bwrap process kept running, orphaned, with the domain-allowlist proxy already closed and the run's scratch directory already deleted, until the COMMAND's own separate 120s-default timeout eventually caught it — well past the run's actual deadline.",
+    "impact": "A live containment/lifecycle violation: the run is supposed to have ended (its network proxy and scratch are already torn down), but the sandboxed process tree the run started keeps executing for up to two extra minutes with no supervision and no network path it can still use, which is a silent extension of a scheduled agent's execution window past the operator-set limit.",
+    "suggested_fix": "Give `CommandRunner` an optional AbortSignal, spawn the command in its own process group and kill the whole group (SIGTERM then SIGKILL) on the run's abort or the per-command deadline, and make the run's own cleanup await that kill completing before closing the proxy/removing scratch.",
+    "evidence": "Ran the project's real bwrap integration test (`unattended.abort-kill.test.ts`) post-fix: a real sandboxed `sleep 60 &` plus `wait` (a genuine grandchild), aborted ~200ms in via the same AbortController path the dispatchers use — confirmed via a host-wide `ps` scan by unique marker that the tree was really running beforehand, and that ZERO matching processes survive after the abort, within the 2s grace period (elapsed well under the 5s test bound, nowhere near the 60s sleep). `bun test src/harness/process/sandbox/unattended.abort-kill.test.ts` — 1/1 passing.",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/commands/trigger-agent-task.ts — sandboxedRunner(), the no-job-registry CommandRunner the agent-task dispatcher builds",
+        "src/commands/trigger-dispatch.ts — unattendedRunner(), the no-job-registry CommandRunner the flow-next dispatcher builds"
+      ],
+      "enumeration_method": "grepped every caller of makeCommandRunner() across src/commands/*.ts — these are the only two unattended dispatchers, and both build their shell_exec runner without a job registry"
+    },
+    "global_id": "2026-09-23-flow-301-security-close-out#F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at commit 17d42d0a250fc6edadeaf7a3c0d9662e0f221c6a, tree-identical to aae6558c7d414a3278d4a1290eb4b95b2af14b4c for src/commands/trigger-agent-task.ts and src/commands/trigger-dispatch.ts (empty `git diff aae6558c7d414a3278d4a1290eb4b95b2af14b4c 70362a5a77a79417de1bf09a0b933521b0856b7e` over those files). Ran the real bwrap integration test `unattended.abort-kill.test.ts`: a sandboxed `sleep 60 &` plus `wait` (a real grandchild), confirmed running via a host-wide `ps` scan by unique marker, aborted ~200ms in via the same AbortController the dispatchers use, and confirmed by a second `ps` scan that ZERO matching processes survive, within the 2s grace period. `bun test src/harness/process/sandbox/unattended.abort-kill.test.ts` — 1/1 passing. The finding does not reproduce at aae6558c7d414a3278d4a1290eb4b95b2af14b4c.",
+      "verifier": "close-out verifier (flow 301)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed at commit 17d42d0a250fc6edadeaf7a3c0d9662e0f221c6a; re-verified clean against merge commit aae6558c7d414a3278d4a1290eb4b95b2af14b4c via unattended.abort-kill.test.ts real bwrap ps-scan test"
+    }
+  },
+  {
+    "id": "F7",
+    "reviewer": "security-reviewer (flow 301)",
+    "severity": "minor",
+    "problem": "The fix for F6 made `Bun.spawn` unconditionally pass `detached: true` inside the SHARED `makeCommandRunner`, which every caller of `shellExecTool`/`makeCommandRunner` goes through — not only the two unattended dispatchers. `detached: true` (POSIX setsid) makes the spawned command its own process group AND session, which means it stops inheriting the caller's terminal process group.",
+    "impact": "For any interactive, no-job-registry caller of shellExecTool (confirmed: src/acp/roster.ts's `shellExecTool(root)`, and any other interactive setup without a job registry — the job-registry-backed path used by ordinary `keryx shell` was already detached before this and is unaffected), a terminal hangup (SIGHUP to the whole foreground process group) or a shell's own \"kill this job\" no longer reaches the running command automatically, where it previously did. A command left running through such a path could now outlive the terminal/session that started it.",
+    "suggested_fix": "Make process-group spawning an explicit opt-in (`makeCommandRunner(root, plan, { processGroup: true })`) that only the two unattended dispatchers pass; every other caller spawns exactly as it did before F6, and the kill function branches on the same flag (group-wide kill only when opted in, direct pid kill otherwise).",
+    "evidence": "Directly demonstrated the process-group-membership mechanism before the F7 fix: spawned two children via Bun.spawn, one without `detached` and one with `detached: true`, and inspected `pgid` via `ps -o pgid= -p <pid>` — the non-detached child shared the parent's pgid, the detached one had its own (== its own pid). Post-fix, ran the project's own new tests confirming the split: `shell-exec-tool.test.ts` \"F5c: the default runner (no processGroup) does NOT reach a backgrounded grandchild on abort\" and a pgid-equality assertion (`childRow.pgid === parentRow.pgid` for the default runner) both pass, and the two unattended dispatchers (`trigger-agent-task.ts:636`, `trigger-dispatch.ts:371`) both pass `{ processGroup: true }` explicitly. `bun test src/harness/tool/builtin/shell-exec-tool.test.ts` — all passing (part of a 161-pass/0-fail run across the full relevant suite).",
+    "confidence": "high",
+    "global_id": "2026-09-23-flow-301-security-close-out#F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at commit 70362a5a77a79417de1bf09a0b933521b0856b7e, IS the branch head merged as aae6558c7d414a3278d4a1290eb4b95b2af14b4c (tree-identical for src/harness/tool/builtin/shell-exec-tool.ts, src/commands/trigger-agent-task.ts and src/commands/trigger-dispatch.ts, confirmed by empty `git diff aae6558c7d414a3278d4a1290eb4b95b2af14b4c 70362a5a77a79417de1bf09a0b933521b0856b7e` over those files). Confirmed `makeCommandRunner`'s `detached` is now `detached: processGroup` (default false) by reading the source, confirmed only `trigger-agent-task.ts:636` and `trigger-dispatch.ts:371` pass `{ processGroup: true }`, and ran `shell-exec-tool.test.ts`'s \"F5c: the default runner (no processGroup) does NOT reach a backgrounded grandchild on abort\" and its pgid-equality assertion (child shares the parent's process group by default) — both passing. `bun test src/harness/tool/builtin/shell-exec-tool.test.ts` and the full relevant suite (161 pass, 2 skip, 0 fail). The finding does not reproduce at aae6558c7d414a3278d4a1290eb4b95b2af14b4c.",
+      "verifier": "close-out verifier (flow 301)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed at commit 70362a5a77a79417de1bf09a0b933521b0856b7e which is the merge commit aae6558c7d414a3278d4a1290eb4b95b2af14b4c's tree for the affected files; re-verified via shell-exec-tool.test.ts F5c pgid-equality test and source read of the processGroup opt-in"
+    }
+  }
+]

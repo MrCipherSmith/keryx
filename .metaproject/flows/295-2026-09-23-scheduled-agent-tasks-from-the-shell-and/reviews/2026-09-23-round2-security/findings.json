@@ -1,0 +1,183 @@
+[
+  {
+    "id": "N1",
+    "reviewer": "security-reviewer (flow 295, round 2)",
+    "severity": "major",
+    "problem": "The round-1 scheduler-control matcher could be bypassed by shell quoting/escaping (e.g. `keryx 'schedule' add`) or by a wrapper stripping the tool-call marker (e.g. `env -u KERYX_TOOL_CALL keryx schedule add`); and `keryx schedule add|resume|run` accepted non-interactive/scripted invocation outside a detected tool-call context.",
+    "impact": "An agent could still install or resume a schedule unattended by quoting around the raw-regex matcher, or by piping input to `keryx schedule add --yes` from a context the KERYX_TOOL_CALL heuristic did not catch, defeating the always-ask floor F2 was meant to close.",
+    "suggested_fix": "Match on PARSED shell words (handling quotes, escapes, env/sudo/nice/nohup/exec/timeout wrappers, `sh -c`/`eval` reparsing, and `cd` into a unit directory) with the raw regex kept as a second net; and require both stdin and stdout to be a real TTY for `add|resume|run`, `--yes` included.",
+    "evidence": "Pre-fix, `touchesSchedulerControl` matched only raw regex patterns against the whole command string, and `keryx schedule add|resume|run` had no terminal requirement beyond the KERYX_TOOL_CALL check.",
+    "confidence": "high",
+    "file": "src/lib/command-risk.ts",
+    "line": null,
+    "quote": "touchesSchedulerControl",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/command-risk.ts (parsedSchedulerControl, segmentControlsScheduler, peelWrappers)",
+        "src/commands/schedule.ts (NEEDS_TERMINAL check on add/resume/run)"
+      ],
+      "enumeration_method": "enumerated every way a command string reaches the scheduler-control check without matching the raw regex: shell quoting, escape sequences, prefix wrappers, `sh -c`/`eval` reparsing, and `cd` into a unit directory — each needed its own handling in the parsed-word matcher; separately, every entry point that can install/resume/run a schedule (add, resume, run) needed the same TTY requirement."
+    },
+    "global_id": "2026-09-23-round2-security#N1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "All 3 sub-parts confirmed at 89dbea8d (== worktree HEAD 4be4004d). (a) Parsed-word matching: src/lib/command-risk.ts touchesSchedulerControl (611-615) checks raw regex first then parsedSchedulerControl (614); parsedSchedulerControl (584-596) splits shell segments, unescapes words, tracks cd targets; segmentControlsScheduler (560-581) calls peelWrappers (561, strips env/sudo/nice/nohup/etc and reparses sh -c/eval at 524-530), matches crontab/launchctl/loginctl, systemctl verbs, schedule <verb>/trigger schedule|install/trigger run --schedule, and cd-relative unit-dir names. Doc comment 602-609 states the honest limit (also in docs/docs/limitations.md:122-148). Test: describe 'N1 (probe p4): quoting, escapes and wrappers do not hide scheduler control' (test.each, 13 cases) + 'patterns that could reach it through quoting are refused', lines 602-626. (b) TTY requirement: src/commands/schedule.ts NEEDS_TERMINAL=Set(['add','resume','run']) at line 56; lines 144-151 check process.stdin.isTTY && process.stdout.isTTY (or deps.isTerminal), refusing with NO_TERMINAL_REASON (72-75) including when --yes is passed; KERYX_TOOL_CALL=1 refusal kept separately (130-143). Test at lines 628-640 asserts add/resume/run refuse without a terminal (incl. --yes) while pause is not blocked. Ran `bun test src/commands/schedule-security.test.ts -t N1` -> 15 pass, 0 fail (36 expect() calls). (c) docs/skill state the limit: docs/docs/limitations.md:122-148 'The scheduler-control floor is text analysis' section, matching source comment command-risk.ts:606-609.",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "parsed-word scheduler-control matching (peelWrappers, sh -c/eval reparsing) plus TTY requirement on add/resume/run; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "N2",
+    "reviewer": "security-reviewer (flow 295, round 2)",
+    "severity": "minor",
+    "problem": "Granted tool execs (and the `gh auth token` lookup) ran with the project directory as their cwd, and a shell-shim binary (asdf/mise/PATH shims) could substitute a different real binary than the one that was verified.",
+    "impact": "A granted tool running from the project directory could pick up project-local config/binaries it should not see, and a shim could redirect execution to an unverified real binary without the pin catching the substitution.",
+    "suggested_fix": "Run granted execs and the `gh auth token` lookup from a dedicated empty directory; refuse shims at draft time (suggesting `mise which`/`asdf which`); and, per a later revision, allow a `#!` wrapper outside the project by pinning both the wrapper AND its resolved interpreter (realpath+sha256+inode+mtime each), re-verified before every exec with the interpreter re-resolved on the runtime PATH.",
+    "evidence": "Pre-fix, granted execs ran with the project as cwd, and no shim/wrapper distinction existed at draft time.",
+    "confidence": "high",
+    "file": "src/trigger/granted-binary.ts",
+    "line": null,
+    "quote": "granted-cwd",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-round2-security#N2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Final/revised behavior confirmed at 89dbea8d. Empty cwd: src/commands/trigger-agent-task.ts:383-386 grantedCwd = scratch/granted-cwd, mode 0700, used for ghAuthToken (466) and every grantedTool (470). Pinning: src/trigger/granted-binary.ts pinGrantedBinary (151-192) refuses program resolving inside project (160-162), refuses shims via shimReason (163-164, suggests `mise which <program>`), pins realpath+sha256+ino+mtime for the binary and, for a #! script, for its interpreter too (171-191, resolving #!/usr/bin/env X and refusing if it resolves inside project or is itself a shim). verifyGrantedBinary (229-260) re-verifies both binary and interpreter at run time; interpreter is re-resolved on the RUNTIME PATH (252), catching a shadowed interpreter. Card text confirmed: 'gh: script wrapper ... (interpreter ...) -- pinned; it runs from an empty directory, so it cannot see the project' (asserted at test line 691-693). Tests: describe 'N2: granted programs run from an empty directory, and shims/scripts are refused at draft' (651-706, 4 tests) + describe 'pinned #! wrappers at run time' (708-760, 3 tests: pinned wrapper runs, changed wrapper refused with refusal==='grants-changed', changed/shadowed interpreter refused). Ran filtered and separate runs: 4 + 3 = 7/7 pass.",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "granted execs run from an empty granted-cwd; shims refused; pinned wrapper+interpreter identity re-verified before every exec (revised per coordinator decision); merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "N3",
+    "reviewer": "security-reviewer (flow 295, round 2)",
+    "severity": "minor",
+    "problem": "The scratch working-directory parent for agent-task runs had no check on its owning uid or permission mode, so another local user (or a symlink) could redirect or read a run's scratch space.",
+    "impact": "On a shared machine, another local user could pre-create the scratch parent as world-writable or as a symlink, letting them read or tamper with an agent-task run's scratch files.",
+    "suggested_fix": "Require the scratch parent to be a plain directory (not a symlink), owned by the current uid, and mode 0700; refuse otherwise before any model call.",
+    "evidence": "Pre-fix, the scratch parent directory was created with no ownership or mode verification if it already existed.",
+    "confidence": "medium",
+    "file": "src/commands/trigger-agent-task.ts",
+    "line": null,
+    "quote": "ensureScratchParent",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-round2-security#N3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against the merge commit 89dbea8dc25d80639ead9f7497287767138a040c (== worktree HEAD 4be4004daf96599ec3f2e28b1e6e4e8ab94a1c9d, identical trees). src/commands/trigger-agent-task.ts agentTaskScratchParent (280-285) prefers $XDG_RUNTIME_DIR/keryx-agent-tasks else <tmpdir>/keryx-agent-tasks-<uid>. ensureScratchParent (287-304) creates mode 0700, then lstatSync refuses if symlink/not-plain-directory (298), not owned by current uid (299), or mode != 0700 (300-302); called at line 364 before any model call (417). Test: describe 'N3: the scratch parent must be ours' (762-793): 'a pre-existing world-writable parent, or a symlink, refuses the run before any model call' (asserts detail contains 'has mode 777, not 700' and 'is not a plain directory', provider.calls()===0); 'XDG_RUNTIME_DIR is preferred when set'. Both pass (part of the 11-test N2-N6 filtered run).",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "scratch parent must be a plain directory, owned by current uid, mode 0700; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "N4",
+    "reviewer": "security-reviewer (flow 295, round 2)",
+    "severity": "minor",
+    "problem": "When `XDG_DATA_HOME` pointed outside `$HOME`, keryx's config directory (holding the HMAC signing key and saved credentials) was not hidden inside the hardened sandbox used for unattended/agent-task runs.",
+    "impact": "A sandboxed run with a non-default XDG_DATA_HOME could read keryx's own signing key and credentials from inside the sandbox, defeating the F1 HMAC-key protection.",
+    "suggested_fix": "Always hide keryxConfigDir in the unattended sandbox regardless of where it resolves, for both the agent-task and flow-next dispatch paths; refuse a config dir located inside the project; pin XDG_DATA_HOME into the generated units.",
+    "evidence": "Pre-fix, the sandbox only hid the config directory when it resolved under $HOME.",
+    "confidence": "medium",
+    "file": "src/harness/process/sandbox/unattended.ts",
+    "line": null,
+    "quote": "keryxConfigDir",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-round2-security#N4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against the merge commit 89dbea8dc25d80639ead9f7497287767138a040c (== worktree HEAD 4be4004daf96599ec3f2e28b1e6e4e8ab94a1c9d, identical trees). src/harness/process/sandbox/unattended.ts:212-219 calls keryxConfigDir() unconditionally (not gated on $HOME), adds it to the hidden/tmpfs set (220) regardless of XDG_DATA_HOME. This single planUnattendedSandbox is used by both trigger-agent-task.ts:393 (agent-task path) and trigger-dispatch.ts:575 (flow-next path), covering both dispatch paths. src/trigger/schedule-key.ts configDirInsideProjectReason (71-86) refuses a config dir inside/equal to the project root; called at draft time (schedules.ts:168) and run time (schedule-verify.ts:55, via trigger-agent-task.ts:355, before any model call). src/trigger/install.ts:132-133 pins Environment=XDG_DATA_HOME=<value> into the generated unit. Tests: describe 'N4: keryx's config dir is always hidden, never inside the project, and pinned into the unit' (795-834, 3 tests: sandbox hides config dir outside $HOME asserting --tmpfs args; config dir inside project refuses both draftSchedule and runTriggerOnce with provider.calls()===0; installed unit pins XDG_DATA_HOME). All 3 pass (part of the 11-test run).",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "keryxConfigDir always hidden in the unattended sandbox for both dispatch paths; config dir inside project refused; XDG_DATA_HOME pinned into units; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "N5",
+    "reviewer": "security-reviewer (flow 295, round 2)",
+    "severity": "info",
+    "problem": "`trigger run --schedule` (the scheduler's own self-invocation) had no distinguishing marker in the scheduler-control pattern family.",
+    "impact": "A pattern-based allowlist could not specifically recognise the scheduler's own invocation as scheduler-control, weakening pattern refusal coverage.",
+    "suggested_fix": "Explicitly treat `trigger run … --schedule` as scheduler-control, and refuse the wildcard pattern `keryx trigger run *` too.",
+    "evidence": "Pre-fix, `trigger run --schedule` matched no explicit rule in the scheduler-control family.",
+    "confidence": "low",
+    "file": "src/lib/command-risk.ts",
+    "line": null,
+    "quote": "trigger run --schedule",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-round2-security#N5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against the merge commit 89dbea8dc25d80639ead9f7497287767138a040c (== worktree HEAD 4be4004daf96599ec3f2e28b1e6e4e8ab94a1c9d, identical trees). src/lib/command-risk.ts:574 inside segmentControlsScheduler: `if (positional[i]==='trigger' && positional[i+1]==='run' && rest.includes('--schedule')) return true`. Wildcard refusal via the general pattern-matching machinery in validateShellPattern. Test: describe \"N5: `trigger run --schedule`\" (643-649) asserts touchesSchedulerControl true for both plain and quoted forms, and that patterns 'keryx trigger run *' and 'keryx trigger *' are refused by validateShellPattern. Passed (part of the 11-test run).",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "trigger run --schedule and the keryx trigger run * wildcard treated as scheduler-control; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  },
+  {
+    "id": "N6",
+    "reviewer": "security-reviewer (flow 295, round 2)",
+    "severity": "info",
+    "problem": "Granted binaries were re-verified (pinned realpath/sha) only once per agent-task run, not before each individual exec within that run, leaving a TOCTOU window if a binary changed mid-run.",
+    "impact": "A binary swapped after the first verification but before a later grant call within the same run could execute unverified content.",
+    "suggested_fix": "Record dev/inode/size/mtime at verification time and re-check all four before every single exec, not just once per run.",
+    "evidence": "Pre-fix, the pinned identity was checked once at run start and not re-checked before subsequent execs in the same run.",
+    "confidence": "low",
+    "file": "src/trigger/granted-binary.ts",
+    "line": null,
+    "quote": "sameIdentity",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-round2-security#N6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against the merge commit 89dbea8dc25d80639ead9f7497287767138a040c (== worktree HEAD 4be4004daf96599ec3f2e28b1e6e4e8ab94a1c9d, identical trees). src/trigger/granted-binary.ts: FileIdentity (dev/ino/size/mtimeMs, 42-47), identityOf (49-56), sameIdentity (58-60) compares all four fields. src/commands/trigger-agent-task.ts:208-214 inside grantedTool's invoke (runs on every single tool call, not once per run): refuses with '<tool>: refused -- <file> changed since it was verified at the start of this run' if any exec-time identity mismatches the run-start identity. Test: describe 'N6: a binary swapped mid-run is not executed' (837-863) swaps the binary's content mid-run (between two grant exec opportunities), asserts the swapped binary's marker never ran and the record text contains the refusal string. Passed (part of the 11-test run). Full-file baseline: `bun test src/commands/schedule-security.test.ts` -> 82 pass, 0 fail, 357 expect() calls.",
+      "verifier": "close-out verifier (flow 295)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "dev/inode/size/mtime identity re-checked before every exec, not just once per run; merged as 89dbea8dc25d80639ead9f7497287767138a040c via PR #664"
+    }
+  }
+]

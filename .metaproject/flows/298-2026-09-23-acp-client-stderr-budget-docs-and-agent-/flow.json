@@ -8,15 +8,32 @@
   "id": "298",
   "slug": "acp-client-stderr-budget-docs-and-agent-",
   "title": "ACP client stderr budget, docs and agent skills for triggers and external agents",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-23T05:23:55.733Z",
-  "updatedAt": "2026-09-23T05:49:21.136Z",
+  "updatedAt": "2026-09-23T06:28:39.953Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:178a7f923d1808dce299ff15e714bac8c9bb5c98f7e8120e48e2313761de88b6",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-23T06:24:51.708Z",
+      "note": "stderr budget: DEFAULT_MAX_STDERR_BYTES/DEFAULT_MAX_LINE_STREAM_STDERR_BYTES wired in acp-client.ts/supervise.ts; bun test src/harness/external/bounded.test.ts 10 pass (flow 298 review 2026-09-23-review-298, F-002 refuted)"
+    },
+    "AC2": {
+      "at": "2026-09-23T06:24:56.392Z",
+      "note": "SKILL.md/templates.ts guidance verified accurate per-transport against agents-external.ts:369-375 and dispatch.ts:68,144-151; keryx skills verify --bundled 0 findings; bun test src/lib/templates.test.ts src/harness/external/dispatch.test.ts src/commands/agents-external*.test.ts 78 pass (review 2026-09-23-review-298, F-001 refuted)"
+    },
+    "AC3": {
+      "at": "2026-09-23T06:27:27.171Z",
+      "note": "docs/docs/architecture.md 8-gate ordered list verified against src/flow/service.ts:784-923 (Gate1,2/2b,3/3b,4,5,6); matches exactly, caveat about code's own numbering is accurate"
+    },
+    "AC4": {
+      "at": "2026-09-23T06:27:27.530Z",
+      "note": "CI green on PR #660 (19/19 per coordinator); merge commit 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca on main; local: bun test across touched suites all pass, bun run typecheck clean per flow journal"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -31,7 +48,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -39,14 +56,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T5: done as a single task (see journal)"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -54,14 +73,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T5: done as a single task (see journal)"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -69,14 +90,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests added directly in the work task: src/harness/external/bounded.test.ts (new stderr-flood-within-budget tests, 10 pass); see journal"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +107,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "review 2026-09-23-review-298 (F-001, F-002, both refuted, both acted-on) plus prior follow-up review folded into fix commit cca2d5d1"
     },
     {
       "id": "T5",
@@ -110,7 +135,7 @@
       "id": "T6",
       "title": "Verification: CI green, keryx health run",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -118,7 +143,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "CI 19/19 green on PR #660; keryx health run; merged to main as 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca"
     }
   ],
   "history": [
@@ -154,6 +181,239 @@
       "at": "2026-09-23T05:49:21.136Z",
       "event": "task-done",
       "detail": "T5: Implement the frozen criteria"
+    },
+    {
+      "at": "2026-09-23T06:24:51.708Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: stderr budget: DEFAULT_MAX_STDERR_BYTES/DEFAULT_MAX_LINE_STREAM_STDERR_BYTES wired in acp-client.ts/supervise.ts; bun test src/harness/external/bounded.test.ts 10 pass (flow 298 review 2026-09-23-review-298, F-002 refuted) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:24:56.392Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: SKILL.md/templates.ts guidance verified accurate per-transport against agents-external.ts:369-375 and dispatch.ts:68,144-151; keryx skills verify --bundled 0 findings; bun test src/lib/templates.test.ts src/harness/external/dispatch.test.ts src/commands/agents-external*.test.ts 78 pass (review 2026-09-23-review-298, F-001 refuted) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:27:27.171Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: docs/docs/architecture.md 8-gate ordered list verified against src/flow/service.ts:784-923 (Gate1,2/2b,3/3b,4,5,6); matches exactly, caveat about code's own numbering is accurate (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:27:27.530Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: CI green on PR #660 (19/19 per coordinator); merge commit 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca on main; local: bun test across touched suites all pass, bun run typecheck clean per flow journal (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T06:27:35.226Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T06:27:38.371Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T06:27:42.017Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T06:27:45.452Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-23T06:27:50.099Z",
+      "event": "task-done",
+      "detail": "T6: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T06:28:00.727Z",
+      "event": "completing",
+      "detail": "merged commit: 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca"
+    },
+    {
+      "at": "2026-09-23T06:28:00.787Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-23T06:28:00.788Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against cca2d5d1c227a8eae9db0804a8d4a2e8c4f66732, but the completion names merged commit 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca, and cca2d5d1c227a8eae9db0804a8d4a2e8c4f66732 is neither contained in it (git reports it is not an ancestor) nor does it carry the same tree (round f5893c6d7e05bc1e5afdb79733c6bcb701a60a17, merged 7f4ac5a10b28d49610b9eb12d67386574720dd88). So the reviewers did not read what merged: the base moved under the branch, or the merge was edited. Re-running the round against the branch will not close this — ingest a round against the merged commit (`keryx review ingest … --head 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca`), or record the pull request on the flow so the round is compared against the PR head rather than against the merge. | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-09-23T06:28:39.935Z",
+      "event": "completing",
+      "detail": "merged commit: 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca"
+    },
+    {
+      "at": "2026-09-23T06:28:39.952Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-23T06:28:39.953Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-23T06:24:51.708Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:178a7f923d1808dce299ff15e714bac8c9bb5c98f7e8120e48e2313761de88b6"
+    },
+    {
+      "at": "2026-09-23T06:24:56.392Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:178a7f923d1808dce299ff15e714bac8c9bb5c98f7e8120e48e2313761de88b6"
+    },
+    {
+      "at": "2026-09-23T06:27:27.171Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:178a7f923d1808dce299ff15e714bac8c9bb5c98f7e8120e48e2313761de88b6"
+    },
+    {
+      "at": "2026-09-23T06:27:27.530Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:178a7f923d1808dce299ff15e714bac8c9bb5c98f7e8120e48e2313761de88b6"
+    },
+    {
+      "at": "2026-09-23T06:28:39.953Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:178a7f923d1808dce299ff15e714bac8c9bb5c98f7e8120e48e2313761de88b6",
+      "headCommit": "7cd96cbe3df6be503dea1f07dccc8d0b375d68ca"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-23T06:28:00.787Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "4 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "7cd96cbe3df6be503dea1f07dccc8d0b375d68ca is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "6 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — head-commit (violated): the latest round ran against cca2d5d1c227a8eae9db0804a8d4a2e8c4f66732, but the completion names merged commit 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca, and cca2d5d1c227a8eae9db0804a8d4a2e8c4f66732 is neither contained in it (git reports it is not an ancestor) nor does it carry the same tree (round f5893c6d7e05bc1e5afdb79733c6bcb701a60a17, merged 7f4ac5a10b28d49610b9eb12d67386574720dd88). So the reviewers did not read what merged: the base moved under the branch, or the merge was edited. Re-running the round against the branch will not close this — ingest a round against the merged commit (`keryx review ingest … --head 7cd96cbe3df6be503dea1f07dccc8d0b375d68ca`), or record the pull request on the flow so the round is compared against the PR head rather than against the merge."
+        },
+        {
+          "name": "health",
+          "status": "fail",
+          "detail": "no report; run `keryx health run` first"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:178a7f923d1808dce299ff15e714bac8c9bb5c98f7e8120e48e2313761de88b6"
+    },
+    {
+      "at": "2026-09-23T06:28:39.952Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "4 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "7cd96cbe3df6be503dea1f07dccc8d0b375d68ca is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "6 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:178a7f923d1808dce299ff15e714bac8c9bb5c98f7e8120e48e2313761de88b6"
+    }
+  ],
+  "merged": {
+    "commit": "7cd96cbe3df6be503dea1f07dccc8d0b375d68ca",
+    "ref": "origin/main",
+    "at": "2026-09-23T06:28:39.953Z"
+  }
 }

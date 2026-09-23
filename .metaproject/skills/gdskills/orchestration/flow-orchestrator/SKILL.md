@@ -631,7 +631,7 @@ keryx flow complete <id>
 
 Completion is allowed only after the PR merge has been confirmed. The merge
 target must be the base branch captured when the flow was created; do not
-silently retarget or close against another branch. Flows created since the owner gate fail completion while no owner is set (`keryx flow owner set <id> --owner "<name>" --reason "<why>"`); `ac confirm` and `flow complete` append a signature — `--signed-by "<name>"` names the signer, otherwise `KERYX_ACTOR` or the local git identity is recorded, as a claim.
+silently retarget or close against another branch. Flows created since the owner gate fail completion while no owner is set (`keryx flow owner set <id> --owner "<name>" --reason "<why>"`); `ac confirm` and `flow complete` append a signature — `--signed-by "<name>"` names the signer, otherwise `KERYX_ACTOR` or the local git identity is recorded, as a claim. A flow created with `--require-confirmation` needs one more gate — `--confirm-token <token>` from `keryx flow confirm <id>`, a short-lived single-use token minted by a typed challenge in a terminal; it proves an interactive step ran outside the agent's tool roster, not that a human ran it. A flow left stuck in `completing` by a crash or interrupted attempt (never a normal gate failure) recovers with `keryx flow recover <id> --reason "<why>"`.
 
 If gates fail, the CLI returns the flow to `in-progress`. Add a journal note,
 create fix tasks, and repeat Phase 2.

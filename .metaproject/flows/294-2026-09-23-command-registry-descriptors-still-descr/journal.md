@@ -73,3 +73,20 @@
   src/flow/` (whole module) — 297 pass / 0 fail; `bun run typecheck` clean; `bunx eslint` clean on
   every changed file; `keryx health run` PASS (score 94).
 - 2026-09-23T05:40:19.015Z - task-done: T5: Audit and correct the command registry descriptors for flows 287-293
+- 2026-09-23T06:11:26.483Z - ac-confirmed: AC1: Verified against origin/main merge commit 8ed65112 (PR #658): trigger/flow/serve-mcp/governance/agents-external descriptors updated for flows 287-293's actual 0.2.155 behaviour; trigger run no longer claims open-flow/flow-next refuse, and its sideEffects no longer name the retired .run.lock path (now per-action lock paths, fixed further by follow-up commit 9f7788da after review). command-registry.coverage.test.ts pins this. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T06:11:26.618Z - ac-confirmed: AC2: New commands from flows 287-293 (trigger resolve, flow owner set, agents external list/probe, etc.) have descriptors or a reasoned exclusion (agents external run explicitly excluded, documented in a comment); command-registry.coverage.test.ts passes (29 tests, 0 fail) at merge commit 8ed65112. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T06:11:26.738Z - ac-confirmed: AC3: src/standard/command-registry.coverage.test.ts's 'trigger run descriptor pinned against the trigger help' describe block asserts the trigger run description text against the live trigger --help output, so the two cannot drift unnoticed. Ran at merge commit 8ed65112: pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T06:11:26.859Z - ac-confirmed: AC5: src/cli.ts routes top-level --help for flow/trigger/serve-mcp/governance to each handler's own exported help (RICH_GROUP_HELP), still fully intercepted before any mutating subcommand runs -- verified empirically in a temp keryx init repo: trigger install --help / flow ac update 1 --help / governance report --help / serve-mcp --help all print rich help, exit 0, zero side effects. src/cli.test.ts's new 'AC5: a group's top-level --help lists every subcommand its handler dispatches' describe block derives the required subcommand set from each handler's own dispatch table and pins it. Passing at merge commit 8ed65112. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T06:12:30.891Z - ac-confirmed: AC4: gh pr checks 658: 18/18 passed, 0 failed. keryx health run at merge commit 8ed65112: PASS, project score 94, no gate conditions triggered. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-23T06:12:55.219Z - completing: merged commit: 8ed65112694dfa759d53d1c757d704037294c37b
+- 2026-09-23T06:12:55.249Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-23T06:12:55.249Z - completion-failed: tasks: not done: T1, T2, T3, T4, T6; never started since `flow init` generated them: T1, T2, T3, T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 294 T1 --disposition skipped --reason "<why this flow did not need it>")
+- 2026-09-23T06:17:43.744Z - task-done: T1: Collect remaining context
+- 2026-09-23T06:17:51.333Z - task-done: T1: Collect remaining context
+- 2026-09-23T06:17:59.169Z - task-done: T2: Implement per plan
+- 2026-09-23T06:17:59.290Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-23T06:18:02.902Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-23T06:18:06.740Z - task-done: T6: Verification: CI green, keryx health run
+- 2026-09-23T06:18:10.243Z - completing: merged commit: 8ed65112694dfa759d53d1c757d704037294c37b
+- 2026-09-23T06:18:10.272Z - completion-attempt-recorded: attempt 2: passed
+- 2026-09-23T06:18:10.273Z - done: all gates passed

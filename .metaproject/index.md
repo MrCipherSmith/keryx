@@ -13,6 +13,7 @@ Routing pointers. Everything else is in [`routing.md`](routing.md) — read it o
 | lint/type/test/quality status | `keryx health run` |
 | current work state | `keryx flow status` |
 | spend, confirmations, signatures, gate outcomes across flows | `keryx governance report` |
+| put a recurring or one-off unattended agent turn on a schedule | `keryx schedule add/list/show/pause/resume/run/remove` |
 | secrets, PII, prompt injection | `keryx security check-output` |
 | implement, review, refactor, plan | `skills/catalog.md` |
 | dispatch unattended work from a flow, or drive one external agent directly | `keryx trigger run/list/status`, `keryx agents external run` |

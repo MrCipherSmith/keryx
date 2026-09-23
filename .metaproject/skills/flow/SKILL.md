@@ -47,14 +47,27 @@ the work.
 - `flow init --owner "<name>"` / `flow owner set <id> --owner "<name>" --reason
   "<why>"` names who is accountable; never inferred. Opted-in flows fail
   `flow complete` while no owner is set.
+- `flow init --require-confirmation` (or `completion.require_confirmation:
+  true`) makes `flow complete` also need `--confirm-token <token>` from
+  `keryx flow confirm <id>` — a short-lived, single-use token minted by a
+  typed challenge in a terminal. It proves an interactive step ran outside the
+  agent's tool roster, not that a human ran it. A flow stuck in `completing`
+  (never a normal gate failure) moves back with `flow recover <id> --reason
+  "<why>"`.
 
-## Unattended dispatch (triggers, and `agents external run`)
+## Unattended dispatch (triggers, schedules, and `agents external run`)
 
 A flow can advance without a human turn. `keryx trigger list` shows declared
 entries; `status [<name>]` shows the last recorded outcome; `run <name>`
 performs one pass by hand; `schedule <name>` prints the cron/systemd line for
 an external scheduler (keryx runs no daemon of its own); `install`/
-`uninstall` manage the git hook blocks for event-fired entries. A `flow-next`
+`uninstall` manage the git hook blocks for event-fired entries.
+`keryx schedule add|list|show|pause|resume|run|remove` (or `/schedule` in the
+shell) is the operator's own route to a recurring or one-off unattended agent
+turn — always confirmed at a terminal, never created from an agent's shell.
+Its `network: allowlist` mode (Linux only) restricts the agent's own shell to
+named domains; it never widens what a granted tool or the model call reaches.
+A `flow-next`
 action without a `dispatch` block only REPORTS the flow's next task; with one
 it DISPATCHES a keryx agent, unattended, to work that task in a throwaway
 worktree and record exactly one closing fact (`task done` only on a green

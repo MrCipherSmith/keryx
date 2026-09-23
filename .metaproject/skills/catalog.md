@@ -63,6 +63,7 @@ Resolution order:
 | claude-md-management | platform | Maintain CLAUDE.md and related agent entrypoint guidance. | gdskills/platform/claude-md-management/SKILL.md |
 | hook-manager | platform | Create and verify lightweight git hooks for graph, health, and skill verification. | gdskills/platform/hook-manager/SKILL.md |
 | hookify | platform | Use hook guidance for safe hook design and installation. | gdskills/platform/hookify/SKILL.md |
+| scheduled-tasks | platform | Propose operator-confirmed scheduled background agent tasks with schedule_create. | gdskills/platform/scheduled-tasks/SKILL.md |
 | skill-catalog-manager | platform | Generate `.metaproject/skills/catalog.md` and machine-readable skill registry. | gdskills/platform/skill-catalog-manager/SKILL.md |
 | skill-runtime-exporter | platform | Export canonical skills to runtime-compatible Codex or Claude artifacts. | gdskills/platform/skill-runtime-exporter/SKILL.md |
 | skill-sync | platform | Sync exported runtime skills to configured local runtimes only when explicitly enabled. | gdskills/platform/skill-sync/SKILL.md |
