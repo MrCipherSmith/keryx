@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx://schemas/agent-platform/install-manifest.schema.json",
+  "title": "Keryx stack catalog install manifest",
+  "description": "planned — Declares the profiles, modules, components, and per-target install state consumed by `keryx skills install` and `keryx skills doctor` for the stack-aware skills & rules catalog (W1). No runtime reads this shape yet; it is the target contract for the install-plan/install-state/doctor/uninstall surface described in workstreams/W1-stack-catalog.md.",
+  "type": "object",
+  "required": ["schemaVersion", "profiles", "modules", "components"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Manifest format version. Bumped only on a breaking shape change; consumers must fail closed on an unrecognised major."
+    },
+    "profiles": {
+      "type": "object",
+      "description": "Named install profiles. Keys are profile ids referenced by `keryx skills install --profile <id>`.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/profile"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/id"
+      }
+    },
+    "modules": {
+      "type": "object",
+      "description": "Named install modules. Keys are module ids referenced from `profiles[*].modules` and `components[*].modules`.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/module"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/id"
+      }
+    },
+    "components": {
+      "type": "object",
+      "description": "Named install components, e.g. `lang:python`, `framework:react`. Keys are component ids referenced from `profiles[*].components`.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/component"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/componentId"
+      }
+    },
+    "installState": {
+      "$ref": "#/$defs/installState",
+      "description": "Optional embedded snapshot of the last recorded install state for one target. `keryx skills doctor` and `keryx skills install --state <file>` read/write this shape as a standalone document sharing this same $defs; it is optional inside a manifest document and mandatory as the top-level shape of a per-target `.metaproject/data/skills/install-state/<target>.json` file."
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$",
+      "description": "Lowercase kebab-case identifier, max 64 chars, matching the Agent Skills open standard's `name` constraint reused here for consistency."
+    },
+    "componentId": {
+      "type": "string",
+      "pattern": "^(baseline|lang|framework|capability|tool|agent|skill):[a-z][a-z0-9-]{0,63}$",
+      "description": "Namespaced component id, e.g. `lang:python`, `framework:react`, `tool:docker`, `capability:sql`, `baseline:core`. Prefixes align 1:1 with the `component.family` enum below (`baseline`, `lang`↔`language`, `framework`, `capability`, `tool`, `agent`, `skill`)."
+    },
+    "harnessId": {
+      "type": "string",
+      "enum": [
+        "claude",
+        "codex",
+        "cursor",
+        "windsurf",
+        "gemini-cli",
+        "kiro",
+        "github-copilot-agent",
+        "zed",
+        "antigravity",
+        "opencode",
+        "generic-mcp",
+        "keryx-shell"
+      ],
+      "description": "Canonical harness id list, shared with schemas/portable-bundle.schema.json and schemas/harness-capability-matrix.schema.json (both keep this same enum) and defined by workstreams/W5-multi-harness.md's Target matrix. `keryx-shell` denotes Keryx's own agent shell rather than a host harness."
+    },
+    "profile": {
+      "type": "object",
+      "required": ["description", "modules"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "uniqueItems": true,
+          "description": "Module ids installed unconditionally by this profile."
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/componentId"
+          },
+          "uniqueItems": true,
+          "description": "Component ids this profile installs when detected or explicitly requested via `--with`. Example profiles: minimal (module set only, no components), core (common rules + orchestration/quality/review modules, no stack components), a per-stack profile (e.g. `python`, `react`) adding exactly that stack's components, and full (every registered component)."
+        },
+        "stackDetectionAware": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, `keryx skills install --profile <p>` intersects `components` with `keryx stack detect` output instead of installing all listed components unconditionally; an uncertain detection result includes every component (fail open, matching src/review/stack.ts's uncertain-always-means-included rule)."
+        }
+      }
+    },
+    "module": {
+      "type": "object",
+      "required": ["kind", "description", "paths", "targets", "defaultInstall", "cost", "stability"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["rule", "skill", "agent-ref", "hook-runtime", "schema", "doc"],
+          "description": "What this module installs. `hook-runtime` modules must list only targets with a real hook surface (W5 capability matrix state `native` or `adapter`), never `instruction-only` or `unsupported`."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "description": "Repo-relative source paths (files or globs) this module installs from the bundled tree."
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/harnessId"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Harnesses this module is written for. Export/adapter honesty is cross-checked against the W5 capability matrix at install-plan time — a target this module lists but the matrix marks `unsupported` fails the plan."
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "uniqueItems": true,
+          "default": [],
+          "description": "Other module ids that must be installed first."
+        },
+        "defaultInstall": {
+          "type": "boolean",
+          "description": "Whether a profile that references this module installs it without an explicit `--with` flag."
+        },
+        "cost": {
+          "type": "string",
+          "enum": ["light", "medium", "heavy"],
+          "description": "Relative context/token footprint once installed, surfaced in `keryx skills install --dry-run` output so an operator can budget a profile."
+        },
+        "stability": {
+          "type": "string",
+          "enum": ["experimental", "stable", "deprecated"],
+          "description": "Deprecated modules may still be installed explicitly but are excluded from `full` unless `--include-deprecated` is passed."
+        }
+      }
+    },
+    "component": {
+      "type": "object",
+      "required": ["family", "modules"],
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "type": "string",
+          "enum": ["baseline", "language", "framework", "capability", "tool", "agent", "skill"],
+          "description": "Groups components for catalog display and for the stack-pack table in workstreams/W1-stack-catalog.md. Aligns 1:1 with the `componentId` prefix (`baseline`, `language`↔`lang:`, `framework`, `capability`, `tool`, `agent`, `skill`)."
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Module ids this component bundles. A component is purely a named grouping of modules — it installs no file directly."
+        },
+        "detectionMarkers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": [],
+          "description": "Marker files, extensions, or manifest dependency names that `keryx stack detect` uses to recommend this component. Empty for components with no deterministic detector (recommended manually only)."
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["origin"],
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "type": "string",
+          "enum": ["authored", "generated", "imported", "learned"],
+          "description": "`authored` = written by a Keryx maintainer; `generated` = produced by the W2 per-stack agent compiler from a W1 stack pack; `imported` = brought in via `keryx bundle import` (W4) from an Agent-Skills-standard-conformant external catalog; `learned` = graduated from the W3 self-learning loop after human accept."
+        },
+        "sourceRef": {
+          "type": "string",
+          "description": "Free-text pointer to the generating flow, import bundle id, or learned-pattern id. Required in practice for every non-`authored` origin, kept optional here so hand-authored components need not fill it."
+        },
+        "addedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "installState": {
+      "type": "object",
+      "required": ["schemaVersion", "target", "installedModules", "recordedAt"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "target": {
+          "$ref": "#/$defs/harnessId"
+        },
+        "profile": {
+          "$ref": "#/$defs/id",
+          "description": "Profile id last applied, if install was profile-driven."
+        },
+        "installedModules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/installedModuleRecord"
+          },
+          "description": "One record per module Keryx has written for this target. `keryx skills uninstall` and `keryx skills doctor` only ever touch files listed here."
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "installedModuleRecord": {
+      "type": "object",
+      "required": ["moduleId", "writtenPaths", "sha256", "managedSentinel"],
+      "additionalProperties": false,
+      "properties": {
+        "moduleId": {
+          "$ref": "#/$defs/id"
+        },
+        "surface": {
+          "type": "string",
+          "enum": [
+            "block",
+            "prompt-gate",
+            "inject-context",
+            "pre-tool-context",
+            "observe",
+            "post-tool",
+            "session-start",
+            "stop",
+            "skills",
+            "agents",
+            "instructions",
+            "mcp"
+          ],
+          "description": "Optional W5 surface discriminator for this record, letting a single target hold separately tracked install-state per surface (e.g. a `block` hook vs. an `instructions` file for the same harness)."
+        },
+        "writtenPaths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "description": "Absolute or project-relative paths Keryx wrote for this module on this target."
+        },
+        "sha256": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "description": "Map of written path -> sha256 of the content Keryx wrote, used by `doctor` to detect user edits (drift) before an uninstall or reinstall touches the file."
+        },
+        "managedSentinel": {
+          "type": "boolean",
+          "description": "Whether the written file(s) carry a `_keryxManaged` sentinel. Files sharing a host config with user content (e.g. a merged settings.json block) must be true; a file Keryx owns outright may still be true for consistency."
+        }
+      }
+    }
+  }
+}

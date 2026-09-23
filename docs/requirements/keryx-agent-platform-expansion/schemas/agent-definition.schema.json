@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx://schemas/agent-platform/agent-definition.schema.json",
+  "title": "Keryx agent definition",
+  "description": "Canonical, harness-neutral agent-persona definition. The frontmatter of a .metaproject/agents/<name>.md file. Compiled into keryx-shell spawn_subagent dispatch inputs or into a host-native subagent file; never executed directly.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "description",
+    "role",
+    "tools",
+    "model_tier",
+    "policy_profile",
+    "output_contract"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Frozen schema version for this definition shape."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,63}$",
+      "description": "Unique agent id. Lowercase letters, digits, hyphens; must start with a letter. Doubles as the file stem (<name>.md) and the export target's own name field where the host format needs one."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "Third-person statement of what this agent does and when to dispatch it. Injected verbatim into routing/selection surfaces; no first/second-person phrasing."
+    },
+    "role": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "description": "One-paragraph persona summary. Compiled into the prompt header immediately after the shared prompt-defense baseline and before the body."
+    },
+    "tools": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "Allowlist of tool names this agent may use. An empty array means no tools beyond the target harness's own read-only baseline. Every entry must resolve to a tool that exists on the target (keryx agents verify checks this)."
+    },
+    "model_tier": {
+      "type": "string",
+      "enum": ["light", "standard", "deep"],
+      "description": "Tier from .metaproject/rules/core/model-selection.mdc, resolved at dispatch time against the session's own provider by src/gdskills/model-tier.ts. Never a literal model name."
+    },
+    "policy_profile": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Named policy profile the compiler resolves per export target (e.g. a keryx-shell child policy profile or a host permission-mode name). Never grants beyond what the target's own policy engine independently allows."
+    },
+    "skills": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "default": [],
+      "description": "Skill/module ids this agent should have preloaded or may route to. Every entry must exist in the skill catalogue (keryx agents verify checks this)."
+    },
+    "stacks": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "default": [],
+      "description": "stack_requires-style tags gating when this agent is dispatched (mirrors src/review/stack.ts's extractStackRequiresField vocabulary). Empty or absent means stack-agnostic."
+    },
+    "output_contract": {
+      "type": "string",
+      "enum": ["subagent-result"],
+      "description": "Canonical result contract this agent's reply must satisfy. subagent-result is the STATUS-first prose contract defined in src/harness/child/contract.ts; the only value this workstream ships against."
+    },
+    "isolation": {
+      "type": "string",
+      "enum": ["none", "worktree"],
+      "default": "none",
+      "description": "Whether the compiled dispatch requests worktree isolation on targets that support it (keryx-shell: src/harness/child/isolation.ts)."
+    },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Provenance for this definition. Absent only for a hand-authored definition predating this field.",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["authored", "generated", "imported", "learned"],
+          "description": "`authored` = written by a Keryx maintainer; `generated` = produced by the W2 per-stack agent compiler from a W1 stack pack; `imported` = brought in via `keryx bundle import` (W4); `learned` = graduated from the W3 self-learning loop after human accept. Mirrors `provenance.origin` in schemas/install-manifest.schema.json."
+        },
+        "sourceRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Id of the source this definition was produced from: a W1 stack pack id for `generated`, an import bundle id for `imported`, or a learned-pattern id for `learned`. Required in practice for every non-`authored` kind."
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp the generation/import/graduation ran."
+        }
+      }
+    }
+  }
+}
