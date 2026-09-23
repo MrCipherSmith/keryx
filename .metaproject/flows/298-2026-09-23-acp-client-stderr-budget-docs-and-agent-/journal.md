@@ -87,4 +87,61 @@
   project's own committed copy and diffs it against a fresh render. This
   drift (the one just fixed) would not have been caught automatically. Not
   adding such a test in this flow, per instruction.
+- PR #660 review follow-up (2 findings):
+  1. CONFIRMED — verified with the code, not guessed: `dispatch.ts`'s
+     `IMPLEMENTED_SANDBOX_MODES = ["read-only"]` for a line-stream (codec)
+     agent (`IMPLEMENTED_ACP_SANDBOX_MODES` adds `worktree-write` for ACP
+     only), and `validateRuntimeBlock` REFUSES `worktree-write` on a codec
+     agent fail-closed with a distinguishable `not-implemented` code — this is
+     also the ONLY path: `keryx agents external run` itself refuses a
+     non-ACP entry outright (`transportOf(entry) !== "acp"` ->
+     `commands/agents-external.ts:369`, "drives ACP agents only... Delegate to
+     it from `keryx shell` with /delegate"), and `/delegate`
+     (`tui/external-operator.ts`) hardcodes `read-only` as
+     "the sandbox every run in this release uses... worktree-write is refused
+     upstream (D-04)". So there is NO silent-discard path for a line-stream
+     `--write`: it is refused everywhere, consistently, before any run
+     starts. Nothing to note as a behavioural follow-up. Rewrote the
+     "Unattended dispatch" section's `agents external run` paragraph in
+     `src/flow/templates.ts` (ships as `.metaproject/skills/flow/SKILL.md`)
+     to say this precisely, per transport, instead of the prior "ACP/CLI"
+     phrasing that implied both worked the same way.
+     `docs/docs/cli-reference.md`'s `run` row was already accurate ("Drive
+     one registry agent whose transport is `acp`... A line-stream agent is
+     refused") — no change needed there.
+  2. Added `DEFAULT_MAX_LINE_STREAM_STDERR_BYTES = 256 * 1024 * 1024` in
+     `bounded.ts`, used as `supervise.ts`'s stderr-budget default (kept
+     `DEFAULT_MAX_STDERR_BYTES` = 16 MiB for the ACP path, since the
+     "codex narrates on stderr and prints file contents" reasoning is
+     specific to the line-stream/codec path, per `codec/codex-cli.ts`'s
+     header). Added `ExternalAgentEntry.maxStderrBytes?: number`
+     (`types.ts`) as a per-agent override, wired through
+     `runtime.ts` (falls back to `entry.maxStderrBytes` for the line-stream
+     `superviseExternalRun` call) and `acp-run.ts`'s `runAcpInWorktree`
+     (`options.maxStderrBytes ?? entry.maxStderrBytes`, caller option still
+     wins). No entry sets an override yet — the blanket default raise covers
+     both shipped codec agents. Measured (not guessed): a synthetic
+     256 MiB flood against the shared supervisor's mechanism resolves in
+     ~54ms of pure budget/read overhead in a throwaway timing script — the
+     softened doc comment in `bounded.ts` says "well under a second" rather
+     than quoting that exact number, since a real child's actual pipe I/O
+     will dominate. Documented both defaults and the override in
+     `docs/docs/guides/acp-client.md`'s "Size bounds" section. Flood tests in
+     `bounded.test.ts` already inject an explicit small `maxStderrBytes`
+     rather than relying on the default, so they were unaffected by the
+     raise (all 469 tests under `src/harness/external/` still pass).
+  Re-synced `.metaproject/skills/flow/SKILL.md` the same way as the prior
+  follow-up (`update --skip-runtime`, kept only the one intended file,
+  reverted `metaproject.json`/`modules/gdskills.md`/`keryx-dashboard.html`/
+  `.gitignore`); render-and-diff check confirmed byte-for-byte match again.
+  `index.md`/`routing.md` were untouched this round (no `src/lib/templates.ts`
+  change). Verification: `skills verify --bundled` (0 findings),
+  `templates.test.ts` + `src/flow/` (317 pass), `src/harness/external/`
+  (469 pass), `agents-external*.test.ts` + `trigger*.test.ts` (74 pass),
+  `cli-reference-coverage.test.ts`, `check:doc-links` (0 broken),
+  `typecheck` (clean), `eslint` on every changed file (clean). Four
+  `.metaproject/data/gdgraph/**` and `data/wiki/freshness-queue.jsonl` files
+  show as modified in `git status` — pre-existing background hook drift from
+  this session's `keryx ctx`/`gdgraph` tool calls, present before this
+  round's `update` ran and unrelated to it; left untouched.
 - 2026-09-23T05:49:21.136Z - task-done: T5: Implement the frozen criteria

@@ -48,14 +48,40 @@ export const DIAGNOSTIC_TAIL_BYTES = 48 * 1024;
 export const DEFAULT_MAX_RUN_OUTPUT_BYTES = 16 * 1024 * 1024;
 
 /**
- * The most stderr a single run may be READ FROM before it is stopped —
+ * The most stderr a single ACP run may be READ FROM before it is stopped —
  * independent of `BoundedTranscript`'s retention bound, which only caps what
  * is kept, not what is read. Same order of magnitude as
  * {@link DEFAULT_MAX_RUN_OUTPUT_BYTES}: both exist to keep a hostile or
  * misbehaving child from making keryx do unbounded work in one run, whether
  * that work is holding the result or reading a diagnostic stream.
+ *
+ * ACP-transport default only. A line-stream (codec) run uses
+ * {@link DEFAULT_MAX_LINE_STREAM_STDERR_BYTES} instead — see that constant for
+ * why the two differ. Either can be overridden per agent by
+ * `ExternalAgentEntry.maxStderrBytes` (`./types.ts`).
  */
 export const DEFAULT_MAX_STDERR_BYTES = 16 * 1024 * 1024;
+
+/**
+ * The most stderr a single line-stream (codec) run may be READ FROM before it
+ * is stopped — the shared supervisor's counterpart to
+ * {@link DEFAULT_MAX_STDERR_BYTES}, sized differently on purpose.
+ *
+ * `codex exec` narrates itself on stderr BY DESIGN and prints the contents of
+ * files it reads (`./codec/codex-cli.ts`'s header) — a legitimate read-heavy
+ * run can be verbose there in a way no ACP agent is documented to be. Since
+ * stderr MEMORY is already bounded by `BoundedTranscript`'s head/tail
+ * retention regardless of this value, this budget's only job is to end a
+ * PATHOLOGICAL flood sooner than the run's wall-clock `timeoutMs` (default 10
+ * minutes) — not to protect a legitimate chatty run. 256 MiB does that: a
+ * synthetic flood of short lines against this ceiling still ends in well
+ * under a second of pure read/budget overhead (`bounded.test.ts`'s flood
+ * tests exercise the mechanism, not the wall-clock number, since a real
+ * child's actual pipe I/O dominates), while 256 MiB sits far above anything a
+ * real narrating run has been observed to write.
+ * Overridable per agent by `ExternalAgentEntry.maxStderrBytes`.
+ */
+export const DEFAULT_MAX_LINE_STREAM_STDERR_BYTES = 256 * 1024 * 1024;
 
 /** Fixed per-event overhead counted against the budget, so zero-text events cannot grow the list for free. */
 export const EVENT_OVERHEAD_BYTES = 64;

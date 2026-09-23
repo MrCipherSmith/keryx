@@ -59,6 +59,19 @@ export interface ExternalAgentEntry {
   readonly transport?: ExternalTransportKind;
   /** Argv after `binary` that starts the agent in ACP mode. Only read when `transport` is `"acp"`. */
   readonly acpArgs?: readonly string[];
+  /**
+   * Per-agent override of the stderr-read budget (flow 298 T14), for an agent
+   * whose CLI is known to be unusually chatty on stderr by design — `codex
+   * exec` narrates itself there and prints the contents of files it reads
+   * (see `./codec/codex-cli.ts`'s header), so a legitimate read-heavy run can
+   * approach the shared default before it is anywhere near done. Absent means
+   * the transport's own default from `./bounded.ts`:
+   * `DEFAULT_MAX_LINE_STREAM_STDERR_BYTES` for `"line-stream"`,
+   * `DEFAULT_MAX_STDERR_BYTES` for `"acp"`. This bounds bytes READ, not bytes
+   * retained — `BoundedTranscript` already caps memory regardless of this
+   * value.
+   */
+  readonly maxStderrBytes?: number;
   readonly notes?: string;
 }
 

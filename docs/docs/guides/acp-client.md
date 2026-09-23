@@ -177,18 +177,29 @@ A foreign agent cannot make keryx hold unbounded output:
 - **Stderr retained:** keryx keeps only its first 16 KiB and last 48 KiB, and
   counts the bytes it dropped from the middle.
 - **Stderr read:** retention alone bounds memory, not how long a flood of
-  ordinary short lines can keep the run alive. A second, separate 16 MiB
-  budget counts stderr bytes as they are read; passing it stops the run with a
-  named reason and kills the agent, the same as the output budget below —
+  ordinary short lines can keep the run alive. A second, separate budget
+  counts stderr bytes as they are read; passing it stops the run with a named
+  reason and kills the agent, the same as the output budget below —
   independent of it, so noisy stderr cannot starve a legitimate large result's
-  budget or vice versa.
+  budget or vice versa. **This ACP path defaults to 16 MiB.** The Claude/Codex
+  line-stream path below uses a different default for a reason specific to
+  it.
 - **What the run produces:** the assistant text plus the recorded events are
   capped at 16 MiB. Past that, the run fails with a named reason and the agent
   is killed.
 
-The Claude and Codex agents, which use the non-ACP path, get the same line and
-stderr bounds and the same 16 MiB cap on their recorded events. Their raw stdout
-is kept as its first 256 KiB and last 768 KiB.
+The Claude and Codex agents, which use the non-ACP (line-stream) path, get the
+same line ceiling and the same 16 MiB cap on their recorded events. Their raw
+stdout is kept as its first 256 KiB and last 768 KiB, same as the ACP path's
+retention shape. Their **stderr-read budget defaults to 256 MiB**, not 16 MiB:
+`codex exec` narrates itself on stderr by design and prints the contents of
+files it reads, so a legitimate read-heavy run can be verbose there in a way
+no ACP agent is documented to be — and since stderr *memory* is already
+bounded by retention regardless of this budget, the only job left for it is to
+end a pathological flood sooner than the run's own wall-clock timeout, not to
+protect a normal chatty run. Both defaults (16 MiB for ACP, 256 MiB for
+line-stream) can be overridden per agent with `maxStderrBytes` on that agent's
+registry entry (`src/harness/external/registry.ts`).
 
 ## What keryx cannot control
 

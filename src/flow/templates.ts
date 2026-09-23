@@ -214,16 +214,29 @@ a silent yes. This is a floor, not a full boundary — read what still is not
 contained before trusting a run.
 
 \`keryx agents external run <id> --task "<text>" [--unattended] [--write]\`
-drives one third-party ACP/CLI agent as a subprocess under the same policy —
-a different mechanism from a trigger's own dispatch (which runs keryx's own
-agent loop). keryx controls: the permission bridge (clamped to \`ask\` for a
-foreign agent), filesystem confinement to the disposable worktree, and a
-\`--write\` run's patch, which is captured but **never applied**. keryx does
-NOT control what the foreign agent's own tools do outside ACP messages, or
-its MCP calls, which bypass the permission bridge. See
-\`docs/docs/guides/acp-client.md\` for the full contract, including the output
-size bounds (a stderr-only flood and an output flood both end the run with a
-named reason, not the timeout).
+drives ONE ACP-transport agent (today \`gemini-acp\`) as a subprocess, with
+keryx as its ACP client — a different mechanism from a trigger's own dispatch
+(which runs keryx's own agent loop). For that agent, keryx controls: the
+permission bridge (clamped to \`ask\` for a foreign agent), filesystem
+confinement to the disposable worktree, and a \`--write\` run's patch, which is
+captured but **never applied**. keryx does NOT control what the foreign
+agent's own tools do outside ACP messages, or its MCP calls, which bypass the
+permission bridge.
+
+A line-stream agent (\`claude-cli\`, \`codex-cli\`) is a DIFFERENT thing:
+\`run\` refuses it outright ("speaks the one-way line stream. Delegate to it
+from \`keryx shell\` with /delegate"). There is no ACP permission bridge and
+no patch capture for it — this release implements \`worktree-write\` for the
+ACP transport only; a dispatch that asks for \`worktree-write\` on a
+line-stream agent is REFUSED fail-closed with a distinguishable
+\`not-implemented\` reason everywhere keryx dispatches one (the internal
+\`runtime\` block, and \`keryx shell\`'s /delegate) — never silently accepted
+and its writes discarded. It stays \`read-only\`, contained by the same
+disposable worktree as every external run.
+
+See \`docs/docs/guides/acp-client.md\` for the full ACP contract, including the
+output size bounds (a stderr-only flood and an output flood both end the run
+with a named reason, not the timeout).
 `;
 }
 

@@ -31,8 +31,8 @@
 //      genuinely broken port.
 import {
   BoundedTranscript,
+  DEFAULT_MAX_LINE_STREAM_STDERR_BYTES,
   DEFAULT_MAX_RUN_OUTPUT_BYTES,
-  DEFAULT_MAX_STDERR_BYTES,
   OutputBudget,
   eventCost,
   outputBudgetReason,
@@ -176,7 +176,11 @@ export interface SuperviseInput {
    * Ceiling on stderr READ from the child (flow 298 T14) — independent of
    * `BoundedTranscript`'s retention bound, which caps what is kept, not what
    * is read. Passing it stops the run with a named `overflow`, the same as
-   * {@link maxOutputBytes}. Defaults to {@link DEFAULT_MAX_STDERR_BYTES}.
+   * {@link maxOutputBytes}. Defaults to
+   * {@link DEFAULT_MAX_LINE_STREAM_STDERR_BYTES} (256 MiB — generous, because
+   * `codex exec` narrates itself on stderr by design; stderr memory is already
+   * bounded by retention, so this only needs to end a pathological flood
+   * sooner than the run's own `timeoutMs`).
    */
   readonly maxStderrBytes?: number;
   /** Grace given to the exit signal AFTER a kill. Defaults to {@link DEFAULT_KILL_GRACE_MS}. */
@@ -345,7 +349,7 @@ export async function superviseExternalRun(
   // Separate from `budget` above: it counts stderr BYTES READ, not retained,
   // so an endless flood of short lines is stopped even though
   // `BoundedTranscript` already keeps memory bounded (flow 298 T14).
-  const stderrBudget = new OutputBudget(input.maxStderrBytes ?? DEFAULT_MAX_STDERR_BYTES);
+  const stderrBudget = new OutputBudget(input.maxStderrBytes ?? DEFAULT_MAX_LINE_STREAM_STDERR_BYTES);
   let overflow: string | undefined;
   const events: ExternalEvent[] = [];
   let skippedLines = 0;
