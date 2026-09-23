@@ -648,7 +648,22 @@ export function buildToolRegistry(): ToolEntry[] {
       mutating: false,
       async invoke(cwd, params) {
         const content = stringParam(params, "content") ?? "";
-        const source = (stringParam(params, "source") ?? "untrusted-external") as SecuritySource;
+        // F3 (review round 1): `source` is model-supplied over MCP, and
+        // `trusted-project` means "already in the repository the OPERATOR
+        // chose to work in — vetted by committing it" (`types.ts`). A caller
+        // on the other side of this tool call can claim anything in that
+        // string field; letting it claim `trusted-project` would let it grant
+        // its own content the shipped egress source-override allowance
+        // (`resolve.ts#egressSourceOverrideAction`) that exists for a
+        // committed README badge, not for a model's own say-so. Every other
+        // recognized value is passed through unchanged — this clamps the one
+        // value a caller must never be able to self-assign, it does not
+        // restrict which sources this tool may otherwise report.
+        const requestedSource = stringParam(params, "source") ?? "untrusted-external";
+        const source: SecuritySource =
+          requestedSource === "trusted-project"
+            ? "untrusted-external"
+            : (requestedSource as SecuritySource);
         return createSecurityService(cwd).check({ content, source });
       },
     },

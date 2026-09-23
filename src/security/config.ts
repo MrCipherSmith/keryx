@@ -28,18 +28,10 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     egress: {
       enabled: true,
       action: "block",
-      // GDCTX-2: a static, committed badge/logo `<img src>`/markdown-image URL
-      // (CI badge, npm badge, license badge — see README.md) reads as an
-      // exfil-shaped egress finding under `trusted-project` content even though
-      // nobody's secret ever reaches it. `resolve.ts#egressSourceOverrideAction`
-      // still gates this on the URL's query string: a credential-shaped
-      // parameter (or a value a secret/PII detector flags) keeps the ordinary
-      // `action` above. A project that wants its own README's image URLs
-      // redacted too can override this one entry back to `"redact"`/`"block"`.
-      sourceOverrides: {
-        "egress.html-image-exfil": { "trusted-project": "allow" },
-        "egress.markdown-image-exfil": { "trusted-project": "allow" },
-      },
+      // GDCTX-2: `sourceOverrides` is deliberately ABSENT here — see
+      // `SHIPPED_EGRESS_SOURCE_OVERRIDES` below for why, and
+      // `resolve.ts#egressSourceOverrideAction` for where the shipped default
+      // is actually applied.
     },
     artifactSafety: { enabled: true, action: "redact" },
   },
@@ -57,6 +49,33 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     },
   },
   gate: { failOn: "critical", minConfidence: 0.5 },
+};
+
+// GDCTX-2's shipped default: a static, committed badge/logo `<img src>`/
+// markdown-image URL (CI badge, npm badge, license badge — see README.md)
+// reads as an exfil-shaped egress finding under `trusted-project` content even
+// though nobody's secret ever reaches it. `resolve.ts#egressSourceOverrideAction`
+// still gates this on the URL's query string: a credential-shaped parameter
+// (or a value a secret/PII detector flags) keeps the ordinary `action` above.
+//
+// F1 (T-review): this used to live INSIDE `DEFAULT_SECURITY_CONFIG.policies.egress`
+// and `mergeEgressPolicy` always copied it onto every merged config — including
+// one loaded from a `security.config.json` a user never touched. `configChecksum`
+// (§14) is `sha256(policies)` (`computeConfigChecksum` below), so every config
+// file rendered before this feature shipped, with a checksum computed over a
+// `policies.egress` that had NO `sourceOverrides` key at all, started reading as
+// TAMPERED the moment this build loaded it (`security status` → MISMATCH,
+// `security policy validate` → fail) — a false self-protection incident with no
+// actual edit behind it. A shipped default is not something the OPERATOR wrote,
+// so it must never enter the block their checksum protects; it is applied at
+// RESOLUTION time instead (`egressSourceOverrideAction`), never materialized
+// into `config.policies`. A project that wants its own override — including
+// turning this shipped one back to `"redact"`/`"block"` — writes it into
+// `security.config.json` directly; only THAT explicit entry is merged and
+// checksummed (see `mergeEgressPolicy`).
+export const SHIPPED_EGRESS_SOURCE_OVERRIDES: SourceOverrideTable = {
+  "egress.html-image-exfil": { "trusted-project": "allow" },
+  "egress.markdown-image-exfil": { "trusted-project": "allow" },
 };
 
 /**
@@ -126,7 +145,7 @@ function isSecurityAction(value: unknown): value is SecurityAction {
 // default untouched. A malformed leaf (not a recognized `SecurityAction`
 // string) is dropped rather than merged, so a typo in the config file cannot
 // silently produce `undefined`-as-allow.
-function mergeSourceOverrides(
+export function mergeSourceOverrides(
   base: SourceOverrideTable | undefined,
   override: unknown,
 ): SourceOverrideTable | undefined {
@@ -158,8 +177,17 @@ function mergeSourceOverrides(
 // absent or malformed value leaves the field undefined so the default config,
 // its rendered form, and its `configChecksum` stay byte-identical to today
 // (AC0.1, AC2.3). A non-empty allowlist IS included (and thus checksummed) so
-// tampering is detected (§5). `sourceOverrides` is part of the SHIPPED default
-// (unlike the allowlist) and is always present on the merged result.
+// tampering is detected (§5).
+//
+// `sourceOverrides` (F1): unlike the allowlist, the SHIPPED default
+// (`SHIPPED_EGRESS_SOURCE_OVERRIDES`) is never merged in here — `base` is
+// `DEFAULT_SECURITY_CONFIG.policies.egress`, whose own `sourceOverrides` is
+// intentionally absent (see that constant's comment), so `base.sourceOverrides`
+// is always `undefined`. Only a `sourceOverrides` block the OPERATOR actually
+// wrote in `security.config.json` is merged and thus checksummed; the shipped
+// default is applied later, at resolution time
+// (`resolve.ts#egressSourceOverrideAction`), never stored on the config object
+// this function returns.
 function mergeEgressPolicy(
   base: PolicyConfig,
   override?: Partial<PolicyConfig>,

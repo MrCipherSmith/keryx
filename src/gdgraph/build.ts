@@ -67,6 +67,16 @@ type SourceCollection = {
 type PathMapping = {
   pattern: string;
   targets: string[];
+  // GDGRAPH-3 fix round 1 (F6): the project-root-relative directory these
+  // targets resolve against — this mapping's OWN declaring config's `baseUrl`
+  // when that SAME config also sets one, otherwise the declaring config's own
+  // directory (TS 4.1: `paths` without `baseUrl` resolves relative to the
+  // tsconfig file that contains `paths`). "" means the project root itself.
+  // Carried per-mapping (not read from the resolver's single top-level
+  // `baseUrl`) because a mapping declared deep in an `extends` chain can have
+  // a different declaring config, and therefore a different base, than
+  // whichever config happens to set the final effective `baseUrl`.
+  base: string;
 };
 
 // A per-language import resolver, selected by the importing file's language.
@@ -628,11 +638,27 @@ async function loadTsconfigResolver(projectRoot: string): Promise<ImportResolver
     return empty;
   }
 
-  const resolved = await resolveTsconfigOptions(tsconfigPath, new Set<string>(), 0);
+  const resolved = await resolveTsconfigOptions(tsconfigPath, new Set<string>(), 0, projectRoot);
   if (!resolved) {
     return empty;
   }
   return createTsconfigResolver(resolved.baseUrl, resolved.paths);
+}
+
+// GDGRAPH-3 fix round 1 (F6): `baseUrl` and `paths` are each resolved relative
+// to the config file that DECLARES them, not relative to the project root —
+// the same rule `tsc` itself follows. A config in a subdirectory
+// (`config/tsconfig.base.json`) declaring `baseUrl: ".."` means "one level up
+// from `config/`" (the project root), never a literal `".."` measured from the
+// project root (which would escape it entirely). `toProjectRelativeDir` below
+// converts an absolute directory into this resolver's project-root-relative,
+// posix, no-leading-"./" convention ("" means the project root itself) so
+// every `baseUrl`/mapping `base` this module carries is expressed in the same
+// coordinate space regardless of which file in the `extends` chain declared
+// it.
+function toProjectRelativeDir(projectRoot: string, absoluteDir: string): string {
+  const relative = normalizePath(path.relative(projectRoot, absoluteDir)).replace(/^\.\//, "");
+  return relative === "." ? "" : relative;
 }
 
 async function readTsconfigJson(
@@ -676,6 +702,7 @@ async function resolveTsconfigOptions(
   configPath: string,
   visited: Set<string>,
   depth: number,
+  projectRoot: string,
 ): Promise<TsconfigOptions | null> {
   const resolvedPath = path.resolve(configPath);
   if (depth > TSCONFIG_EXTENDS_MAX_DEPTH || visited.has(resolvedPath)) {
@@ -692,22 +719,43 @@ async function resolveTsconfigOptions(
   if (typeof parsed.extends === "string") {
     const basePath = resolveTsconfigExtendsPath(path.dirname(resolvedPath), parsed.extends);
     if (basePath) {
-      inherited = await resolveTsconfigOptions(basePath, visited, depth + 1);
+      inherited = await resolveTsconfigOptions(basePath, visited, depth + 1, projectRoot);
     }
   }
 
+  // F6: both `baseUrl` and (when this same config sets no `baseUrl` of its
+  // own) `paths` resolve relative to THIS config's own directory — never the
+  // project root and never the directory of whichever other config in the
+  // chain happens to declare `baseUrl`. `declaringDir` is this config's own
+  // directory, already expressed in the resolver's project-root-relative
+  // convention.
+  const configDir = path.dirname(resolvedPath);
+  const declaringDir = toProjectRelativeDir(projectRoot, configDir);
+
   const options = parsed.compilerOptions ?? {};
-  const baseUrl = typeof options.baseUrl === "string"
-    ? normalizePath(path.posix.normalize(options.baseUrl)).replace(/^\.\//, "")
-    : inherited?.baseUrl ?? null;
-  const paths = isRecord(options.paths)
+  const ownBaseUrl = typeof options.baseUrl === "string"
+    ? toProjectRelativeDir(projectRoot, path.resolve(configDir, options.baseUrl))
+    : null;
+  // Child overrides parent per field: this config's own `baseUrl` wins when
+  // present, otherwise the (already-resolved) inherited one, otherwise none.
+  const baseUrl = ownBaseUrl ?? inherited?.baseUrl ?? null;
+
+  const ownPaths = isRecord(options.paths)
     ? Object.entries(options.paths)
         .filter((entry): entry is [string, string[]] => Array.isArray(entry[1]))
         .map(([pattern, targets]) => ({
           pattern,
           targets: targets.filter((target): target is string => typeof target === "string"),
+          // TS 4.1: relative to baseUrl when THIS config itself sets one;
+          // otherwise relative to the directory containing THIS config file
+          // (not the project root, and not some other config's directory).
+          base: ownBaseUrl ?? declaringDir,
         }))
-    : (inherited?.paths ?? []);
+    : null;
+  // `paths` is likewise replaced wholesale by a child that declares its own
+  // (never merged with the parent's), and each inherited mapping already
+  // carries the `base` its own declaring config computed for it.
+  const paths = ownPaths ?? inherited?.paths ?? [];
   return { baseUrl, paths };
 }
 
@@ -726,7 +774,7 @@ function createTsconfigResolver(baseUrl: string | null, mappings: PathMapping[])
           continue;
         }
         for (const target of mapping.targets) {
-          candidates.push(applyPathTarget(baseUrl, target, match));
+          candidates.push(applyPathTarget(mapping.base, target, match));
         }
       }
       if (baseUrl !== null) {
@@ -751,9 +799,9 @@ function matchPathPattern(pattern: string, specifier: string): string | null {
   return specifier.slice(prefix.length, specifier.length - suffix.length);
 }
 
-function applyPathTarget(baseUrl: string | null, target: string, wildcard: string): string {
+function applyPathTarget(base: string, target: string, wildcard: string): string {
   const replaced = target.includes("*") ? target.replace("*", wildcard) : target;
-  return normalizePath(path.posix.normalize(path.posix.join(baseUrl ?? "", replaced)));
+  return normalizePath(path.posix.normalize(path.posix.join(base, replaced)));
 }
 
 function stripJsonComments(source: string): string {

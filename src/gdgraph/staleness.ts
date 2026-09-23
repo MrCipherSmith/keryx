@@ -21,10 +21,23 @@ import { gitCmd, gitHead, readProvenance } from "../sync/provenance";
 // `src/commands/gdgraph*.ts` only) to change; this module instead spawns
 // `git status` itself and strips only the single trailing newline git always
 // terminates the last line with, never the leading byte of the first one.
+// F9 (fix round 1): with `core.quotePath` at its (default, on) setting, `git
+// status --porcelain` octal-escapes and double-quotes any path holding a
+// non-ASCII or otherwise "unusual" byte — e.g. `src/café.ts` prints as
+// `"src/caf\303\251.ts"`. The line-oriented parser below used to read that
+// quoted, escaped text as the literal path, so every `stat()` against it
+// missed (the real file on disk has no quotes or octal escapes in its name)
+// and the edit went unreported. `-z` (NUL-separated) output is never quoted
+// or escaped — git prints exact bytes — which sidesteps the whole unquoting
+// problem instead of implementing octal-unescaping here. It also removes the
+// newline-vs-content ambiguity `-z` output has no other use for line
+// splitting: an ordinary entry is `XY PATH\0`, but a rename/copy (X or Y is
+// `R`/`C`) is `XY PATH\0ORIG_PATH\0` — TWO NUL-terminated fields, not one —
+// which `categorizeStatusEntries` below accounts for.
 function gitStatusPorcelain(cwd: string): Promise<string | null> {
   return new Promise((resolve) => {
     try {
-      const child = spawn("git", ["status", "--porcelain=v1"], { cwd, stdio: ["ignore", "pipe", "ignore"] });
+      const child = spawn("git", ["status", "--porcelain=v1", "-z"], { cwd, stdio: ["ignore", "pipe", "ignore"] });
       let out = "";
       child.stdout?.on("data", (chunk) => {
         out += String(chunk);
@@ -35,7 +48,7 @@ function gitStatusPorcelain(cwd: string): Promise<string | null> {
           resolve(null);
           return;
         }
-        resolve(out.endsWith("\n") ? out.slice(0, -1) : out);
+        resolve(out.endsWith("\0") ? out.slice(0, -1) : out);
       });
     } catch {
       resolve(null);
@@ -131,44 +144,62 @@ function gdgraphConfigPath(cwd: string): string {
 // which promotes it to a trigger only when the file's mtime postdates the
 // build (a content edit already present at build time is already reflected
 // in the graph and must not false-stale it).
-function categorizeStatusLines(
-  porcelain: string,
+//
+// F9 (fix round 1): entries come in NUL-separated (`-z`) from
+// `gitStatusPorcelain`, never quoted/escaped, so there is no quote-stripping
+// left to do here — the previous `.replace(/^"|"$/g, "")` existed only to
+// undo the quoting `-z` never produces in the first place. A rename/copy
+// entry (X or Y is `R`/`C`) is TWO consecutive NUL-terminated fields — the
+// new path, then the original path — not one "old -> new" line; `entries[i +
+// 1]` below consumes that second field so it is never misread as its own
+// unrelated status entry.
+function categorizeStatusEntries(
+  entries: string[],
   rootPrefix: string,
 ): { added: string[]; deleted: string[]; renamed: string[]; modified: string[] } {
-  const lines = porcelain.split("\n").filter((line) => line.length >= 2);
   const metaprojectPrefix = `${rootPrefix}.metaproject/`;
   const added: string[] = [];
   const deleted: string[] = [];
   const renamed: string[] = [];
   const modified: string[] = [];
-  for (const line of lines) {
-    const indexStatus = line[0];
-    const worktreeStatus = line[1];
-    const rawPath = line.slice(3);
-    // For a rename, porcelain prints "old -> new"; check the side(s) that
-    // matter for the metaproject exclusion (either is enough to skip a pure
-    // internal-bookkeeping rename, which does not occur in practice anyway).
-    const isMetaprojectPath = rawPath
-      .split(" -> ")
-      .some((candidate) => candidate.replace(/^"|"$/g, "").startsWith(metaprojectPrefix));
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i] ?? "";
+    if (entry.length < 2) {
+      continue;
+    }
+    const indexStatus = entry[0];
+    const worktreeStatus = entry[1];
+    const rawPath = entry.slice(3);
+    // Renames AND copies (X or Y is `R`/`C`) both carry a second, orig-path
+    // field in `-z` output — it must be consumed here regardless of which
+    // bucket (if any) the entry itself lands in below, or the next loop
+    // iteration would misparse that orig-path field as its own status entry.
+    const hasOrigPathField =
+      indexStatus === "R" || worktreeStatus === "R" || indexStatus === "C" || worktreeStatus === "C";
+    const origPath = hasOrigPathField ? entries[i + 1] ?? null : null;
+    if (hasOrigPathField) {
+      i += 1;
+    }
+    const isMetaprojectPath = [rawPath, origPath]
+      .filter((candidate): candidate is string => candidate !== null)
+      .some((candidate) => candidate.startsWith(metaprojectPrefix));
     if (isMetaprojectPath) {
       continue;
     }
-    const displayPath = rawPath.replace(/^"|"$/g, "");
     if (indexStatus === "?" || worktreeStatus === "?" || indexStatus === "A") {
-      added.push(displayPath);
+      added.push(rawPath);
       continue;
     }
     if (indexStatus === "D" || worktreeStatus === "D") {
-      deleted.push(displayPath);
+      deleted.push(rawPath);
       continue;
     }
     if (indexStatus === "R" || worktreeStatus === "R") {
-      renamed.push(displayPath);
+      renamed.push(rawPath);
       continue;
     }
     if (indexStatus === "M" || worktreeStatus === "M") {
-      modified.push(displayPath);
+      modified.push(rawPath);
     }
   }
   return { added, deleted, renamed, modified };
@@ -200,15 +231,20 @@ async function committedChangedFiles(
   toCommit: string,
   rootPrefix: string,
 ): Promise<string[]> {
-  const diff = await gitCmd(cwd, ["diff", "--name-only", fromCommit, toCommit]);
+  // F9: `-z` here too — `--name-only` quotes/octal-escapes an unusual path
+  // (e.g. `src/café.ts` → `"src/caf\303\251.ts"`) exactly like `git status`
+  // does, which fed a mismatched, unstat-able path into `nameFiles` for the
+  // "HEAD moved" reason. `--name-only -z` lists only the destination path per
+  // entry even for a rename (unlike `git status -z`, which pairs it with an
+  // orig-path field), so this stays a plain NUL-split with no pairing logic.
+  const diff = await gitCmd(cwd, ["diff", "--name-only", "-z", fromCommit, toCommit]);
   if (diff === null) {
     return [];
   }
   const metaprojectPrefix = `${rootPrefix}.metaproject/`;
   return diff
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith(metaprojectPrefix));
+    .split("\0")
+    .filter((entry) => entry.length > 0 && !entry.startsWith(metaprojectPrefix));
 }
 
 /**
@@ -309,7 +345,10 @@ export async function checkGraphStaleness(cwd: string): Promise<StalenessCheck> 
     // to the git root — exactly what `git status --porcelain`'s repo-root-
     // relative paths need for the `.metaproject/` exclusion to match
     // regardless of where the project root sits (T19 finding 3).
-    const { added, deleted, renamed, modified } = categorizeStatusLines(porcelain, rootPrefix);
+    // `-z` output is NUL-separated (never newline-separated, and a filename
+    // can itself contain "\n"), so entries are split on "\0", not "\n".
+    const entries = porcelain.split("\0").filter((entry) => entry.length > 0);
+    const { added, deleted, renamed, modified } = categorizeStatusEntries(entries, rootPrefix);
     if (added.length > 0) {
       reasons.push(nameFiles("an untracked or newly added file exists in the working tree", added));
     }

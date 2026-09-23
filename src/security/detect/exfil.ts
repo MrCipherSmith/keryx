@@ -291,7 +291,12 @@ function stripC0OrSpace(value: string): string {
   return value.slice(start, end);
 }
 
-function renderableUrl(url: string): string {
+// Exported for `resolve.ts#hasCredentialShapedQuery` (F2, review round 1): the
+// egress source-override gate must read a URL's query string the same way a
+// renderer would fetch it — after character-reference decoding and the URL
+// parser's own whitespace/control stripping — not the raw bytes as written.
+// See the module comment above for what this function does and why.
+export function renderableUrl(url: string): string {
   return stripC0OrSpace(
     decodeCharacterReferences(url).replace(URL_STRIPPED_CHARACTERS, ""),
   );

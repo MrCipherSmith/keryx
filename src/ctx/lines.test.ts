@@ -90,8 +90,12 @@ test("classifyLine keeps stream-agnostic markers on a clean stdout line regardle
   expect(classifyLine("(fail) something", { stream: "stdout", exitCode: 0 })).toBe("failure");
 });
 
-test("classifyLine treats warn the same way: prose on clean stdout is not a verdict", () => {
-  expect(classifyLine("warn: heads up", { stream: "stdout", exitCode: 0 })).toBeNull();
+test("classifyLine keeps WARNING_STEMS unconditional: a clean stdout warning is still a verdict", () => {
+  // Unlike FAILURE_STEMS, WARNING_STEMS is a tool's own report vocabulary
+  // (ESLint's `warning: x`, a deprecation notice) rather than incidental
+  // failure-shaped English prose — so the stream/exit gate does not apply to
+  // it (AC1 scopes the gate to FAILURE_STEMS only).
+  expect(classifyLine("warn: heads up", { stream: "stdout", exitCode: 0 })).toBe("warning");
   expect(classifyLine("warn: heads up", { stream: "stderr", exitCode: 0 })).toBe("warning");
 });
 

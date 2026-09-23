@@ -30,7 +30,7 @@ import { pathExists } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { loadSecurityConfig, securityProjectRoot } from "./config";
 import { createSecurityService, validateSerializedOutput } from "./service";
-import { egressSourceOverrideAction } from "./resolve";
+import { egressSourceHasOverride, egressSourceOverrideAction } from "./resolve";
 import type { ExfilExemption } from "./output-validation";
 import type {
   DetectorMatch,
@@ -392,7 +392,20 @@ export async function redactRaw(input: RedactRawInput): Promise<RedactRawResult>
     // unconditional `safe.text` above whenever this pass is somehow not `ok`
     // (in practice it mirrors `safe.ok`, which is already confirmed true here
     // — this is defense in depth, not an expected branch).
+    //
+    // F10 (review round 1): that second pass reruns the SAME exfil detection
+    // the first (`safe`) pass just ran, over the same content, even when no
+    // override in this config could possibly apply to THIS `source` — the
+    // ordinary case, since `sourceOverrides` today only ever exists for
+    // `trusted-project`. `egressSourceHasOverride` answers that cheaply from
+    // the config alone (no detection run), so the costly second pass is
+    // skipped and `safe.text` — already the right answer when nothing can be
+    // exempted — is reused instead.
     const config = await loadSecurityConfig(cwd);
+    if (!egressSourceHasOverride(config.policies.egress, source)) {
+      const { findings } = await createSecurityService(cwd).redact(content, { source });
+      return { content: safe.text, findings };
+    }
     const exempted = validateSerializedOutput(content, egressExemption(config.policies.egress, source));
     const { findings } = await createSecurityService(cwd).redact(content, { source });
     return { content: exempted.ok ? exempted.text : safe.text, findings };

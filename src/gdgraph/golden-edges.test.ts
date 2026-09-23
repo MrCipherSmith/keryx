@@ -143,19 +143,27 @@ test("GDGRAPH-3 golden — an alias inherited through tsconfig `extends` resolve
   ]);
 });
 
-test("GDGRAPH-3 — a bare package `extends` (e.g. \"@tsconfig/node20\") is documented as unresolved, not followed", async () => {
+test("GDGRAPH-3 — a bare package `extends` (e.g. \"@tsconfig/node20\") is documented as unresolved, not followed, but does not block this config's OWN `paths`", async () => {
   // This fix intentionally does not resolve a package-specifier `extends`
   // (no leading "." or "/") — doing so would mean replicating node_modules
   // package resolution inside this cheap, dependency-light graph-build
-  // resolver. A base alias reachable ONLY through such a chain stays
-  // unresolved, same as before this task's fix; this fixture documents that
-  // as the known, intentional limitation rather than leaving it unproven.
+  // resolver. Fix round 1 (F6 review): the previous version of this fixture
+  // had NO `paths` anywhere in the chain, so it passed trivially whether or
+  // not the `extends`-walking fix existed at all — a near-tautological
+  // golden. This version pairs the unresolvable `extends` with `paths`
+  // declared directly on the SAME (root) config, so the assertion actually
+  // exercises the fix: an unresolvable base link degrades to "nothing
+  // inherited from THAT link" without corrupting or dropping this config's
+  // own directly-declared alias.
   const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-golden-tsconfig-extends-package");
   await reset(root);
   await mkdir(path.join(root, "src", "lib"), { recursive: true });
   await writeFile(
     path.join(root, "tsconfig.json"),
-    JSON.stringify({ extends: "@tsconfig/node20/tsconfig.json", compilerOptions: {} }),
+    JSON.stringify({
+      extends: "@tsconfig/node20/tsconfig.json",
+      compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["src/lib/*"] } },
+    }),
   );
   await writeFile(
     path.join(root, "src", "app.ts"),
@@ -167,10 +175,128 @@ test("GDGRAPH-3 — a bare package `extends` (e.g. \"@tsconfig/node20\") is docu
   const graph = await loadGraph(root);
   const edgesFromApp = graph.edges.filter((edge) => edge.from === "src/app.ts");
 
-  // No edge to src/lib/x.ts: the alias declared only in the unreachable
-  // package base config never entered the resolver, so the import stayed
-  // unresolved (dropped, not reported as an edge — matches build.ts's
-  // existing unresolved-import handling for every other unresolvable
-  // specifier).
+  // The config's own `paths` resolve exactly as if the unreachable package
+  // `extends` were not there at all.
+  expect(normalizeEdges(edgesFromApp)).toEqual([
+    {
+      from: "src/app.ts",
+      to: "src/lib/x.ts",
+      kind: "imports",
+      specifier: "@lib/x",
+      importKind: "import-statement",
+    },
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// GDGRAPH-3 fix round 1 (F6) — `baseUrl`/`paths` inherited through `extends`
+// must resolve relative to the config file that DECLARES them, not relative
+// to the project root. Before this fix, `config/tsconfig.base.json`
+// declaring `baseUrl: ".."` (meaning "one level up from `config/`", i.e. the
+// project root) was read as a literal `".."` measured from the project root
+// instead — escaping it entirely, so the alias never resolved. These
+// fixtures pin both correct variants (`baseUrl` escaping the subdirectory,
+// and `paths` doing so directly per TS 4.1's "no baseUrl" rule) and the
+// negative control (`baseUrl: "."` in the subdirectory, which must NOT reach
+// outside it).
+// ---------------------------------------------------------------------------
+
+test("GDGRAPH-3 F6 golden — a subdirectory base's `baseUrl: \"..\"` escapes to the project root", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-golden-tsconfig-subdir-baseurl");
+  await reset(root);
+  await mkdir(path.join(root, "config"), { recursive: true });
+  await mkdir(path.join(root, "src", "lib"), { recursive: true });
+  await writeFile(
+    path.join(root, "config", "tsconfig.base.json"),
+    JSON.stringify({ compilerOptions: { baseUrl: "..", paths: { "@lib/*": ["src/lib/*"] } } }),
+  );
+  await writeFile(
+    path.join(root, "tsconfig.json"),
+    JSON.stringify({ extends: "./config/tsconfig.base.json", compilerOptions: {} }),
+  );
+  await writeFile(
+    path.join(root, "src", "app.ts"),
+    'import { helper } from "@lib/x";\nexport const use = helper;\n',
+  );
+  await writeFile(path.join(root, "src", "lib", "x.ts"), "export const helper = 1;\n");
+
+  await buildGraph(root);
+  const graph = await loadGraph(root);
+  const edgesFromApp = graph.edges.filter((edge) => edge.from === "src/app.ts");
+
+  expect(normalizeEdges(edgesFromApp)).toEqual([
+    {
+      from: "src/app.ts",
+      to: "src/lib/x.ts",
+      kind: "imports",
+      specifier: "@lib/x",
+      importKind: "import-statement",
+    },
+  ]);
+});
+
+test("GDGRAPH-3 F6 golden — a subdirectory base's `paths` without `baseUrl` resolve relative to the base's own directory (TS 4.1)", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-golden-tsconfig-subdir-paths-no-baseurl");
+  await reset(root);
+  await mkdir(path.join(root, "config"), { recursive: true });
+  await mkdir(path.join(root, "src", "lib"), { recursive: true });
+  await writeFile(
+    path.join(root, "config", "tsconfig.base.json"),
+    JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["../src/lib/*"] } } }),
+  );
+  await writeFile(
+    path.join(root, "tsconfig.json"),
+    JSON.stringify({ extends: "./config/tsconfig.base.json", compilerOptions: {} }),
+  );
+  await writeFile(
+    path.join(root, "src", "app.ts"),
+    'import { helper } from "@lib/x";\nexport const use = helper;\n',
+  );
+  await writeFile(path.join(root, "src", "lib", "x.ts"), "export const helper = 1;\n");
+
+  await buildGraph(root);
+  const graph = await loadGraph(root);
+  const edgesFromApp = graph.edges.filter((edge) => edge.from === "src/app.ts");
+
+  expect(normalizeEdges(edgesFromApp)).toEqual([
+    {
+      from: "src/app.ts",
+      to: "src/lib/x.ts",
+      kind: "imports",
+      specifier: "@lib/x",
+      importKind: "import-statement",
+    },
+  ]);
+});
+
+test("GDGRAPH-3 F6 golden (negative) — a subdirectory base's `baseUrl: \".\"` stays scoped to that subdirectory, not the project root", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-golden-tsconfig-subdir-baseurl-dot");
+  await reset(root);
+  await mkdir(path.join(root, "config"), { recursive: true });
+  await mkdir(path.join(root, "src", "lib"), { recursive: true });
+  // `baseUrl: "."` declared IN `config/` means "config/ itself" — `@lib/x`
+  // resolves to `config/src/lib/x.ts`, a file that does not exist here. It
+  // must NOT resolve to the real `src/lib/x.ts` at the project root: doing
+  // so would mean this resolver ignored the declaring config's own directory
+  // entirely (exactly the pre-fix bug, which happened to get this literal
+  // value "right" only by coincidence).
+  await writeFile(
+    path.join(root, "config", "tsconfig.base.json"),
+    JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["src/lib/*"] } } }),
+  );
+  await writeFile(
+    path.join(root, "tsconfig.json"),
+    JSON.stringify({ extends: "./config/tsconfig.base.json", compilerOptions: {} }),
+  );
+  await writeFile(
+    path.join(root, "src", "app.ts"),
+    'import { helper } from "@lib/x";\nexport const use = helper;\n',
+  );
+  await writeFile(path.join(root, "src", "lib", "x.ts"), "export const helper = 1;\n");
+
+  await buildGraph(root);
+  const graph = await loadGraph(root);
+  const edgesFromApp = graph.edges.filter((edge) => edge.from === "src/app.ts");
+
   expect(edgesFromApp.some((edge) => edge.to === "src/lib/x.ts")).toBe(false);
 });

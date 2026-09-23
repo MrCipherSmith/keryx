@@ -28,6 +28,14 @@ describe("false-block rate on the allowlist is zero (W7-AC9)", () => {
     "git diff --shortstat",
     "git diff --numstat",
     "git diff --stat HEAD~1",
+    "git diff --stat --cached",
+    "git diff --stat --staged",
+    "git log --oneline -5 --decorate",
+    "git log --oneline -5 --graph",
+    "git log --oneline -5 --no-merges",
+    "git log --oneline -5 --first-parent",
+    "git log --oneline -5 --reverse",
+    "git log --oneline -200", // exactly at the cap
     "git -C some/dir status",
     "git -C some/dir log --oneline -3",
   ];
@@ -58,6 +66,26 @@ describe("must-stay-routed git forms are still blocked", () => {
     "git show",
     "git show HEAD",
     "git show --stat", // spec keeps `show --stat` routed, unlike `diff --stat`
+
+    // F5 regression: the previous denylist-of-unsafe-modifiers admitted these
+    // patch-producing forms because none of them was individually named as
+    // unsafe. The fix switches to an explicit SAFE-flag allowlist, so any
+    // flag not on that list falls through unclassified (routed) instead of
+    // needing to be named here.
+    "git diff --stat -p", // reviewer example: 4297-line patch despite --stat
+    "git diff --numstat -U999",
+    "git diff --stat=200", // width argument is a distinct token from the bare flag
+    "git diff --dirstat",
+    "git diff --word-diff",
+    "git diff --cc",
+    "git log --oneline -5 -U5",
+    "git log --oneline -5 --word-diff",
+    "git log --oneline -5 --cc",
+    "git log --oneline -5 -L1,400:f",
+    "git log --oneline -5 --remerge-diff",
+    "git log --oneline -5 --format=%B",
+    "git log --oneline -5 --pretty=fuller",
+    "git log --oneline -100000", // bound present but exceeds the 200-commit cap
   ];
 
   for (const cmd of routed) {

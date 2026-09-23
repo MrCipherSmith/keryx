@@ -5,6 +5,7 @@ import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { redactRaw } from "../security/guard";
+import { sourceForFileRead } from "../security/read-source";
 import { runCtxHook } from "../ctx/hook";
 import { installRuntimeHook, uninstallRuntimeHook } from "../ctx/hook-install";
 import { resolveRuntimes, runtimeIds, UNSUPPORTED_RUNTIMES } from "../ctx/runtimes";
@@ -313,8 +314,15 @@ async function readAndSummarize(args: string[], config: CtxConfig): Promise<void
   // Redact any detected secret before it is summarized/persisted into a gdctx
   // artifact. No-op (byte-identical) when security is disabled or nothing is
   // detected.
+  //
+  // F3 (review round 1): `trusted-project` is only correct when this file is
+  // the operator's own committed content, not any path the process can read —
+  // see `sourceForFileRead` for what "trusted-project" now requires (inside
+  // the project root AND git-tracked) and why everything else must fall back
+  // to `untrusted-external`.
+  const source = await sourceForFileRead(process.cwd(), absolutePath);
   const content = (
-    await redactRaw({ cwd: process.cwd(), content: rawContent, source: "trusted-project" })
+    await redactRaw({ cwd: process.cwd(), content: rawContent, source })
   ).content;
   const lines = content.split("\n");
   const reservation = await newArtifactReservation("read");
@@ -963,13 +971,21 @@ type BundleExpansion = { ok: true; args: string[] } | { ok: false; reason: strin
 function expandBundledShortFlags(args: string[]): BundleExpansion {
   const expanded: string[] = [];
   let sawSeparator = false;
+  let prevWasValueFlag = false;
   for (const arg of args) {
+    const isOperandOfValueFlag = prevWasValueFlag;
+    prevWasValueFlag = RG_SAFE_VALUE_FLAGS.has(arg);
     if (arg === "--" && !sawSeparator) {
       sawSeparator = true;
       expanded.push(arg);
       continue;
     }
-    if (!sawSeparator && /^-[a-zA-Z]{2,}$/.test(arg)) {
+    // A token that is the operand of a value-taking flag (`-g`/`--glob`/…)
+    // must reach the downstream dash-value refusal untouched — otherwise a
+    // value like `-weird` gets misread as a bundle of boolean short flags
+    // (`-w`, `-e`, `-i`, `-r`, `-d`) and refused for the wrong reason, with
+    // advice that names the wrong flags instead of the offending value.
+    if (!sawSeparator && !isOperandOfValueFlag && /^-[a-zA-Z]{2,}$/.test(arg)) {
       const bundleFlags: string[] = [];
       for (const letter of arg.slice(1)) {
         const flag = `-${letter}`;

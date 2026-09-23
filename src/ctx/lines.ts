@@ -122,18 +122,21 @@ export function classifyLine(line: string, context?: LineContext): LineVerdict |
   if (FAILURE_MARKERS.some((pattern) => pattern.test(claim))) {
     return "failure";
   }
-  // Stream-agnostic markers matched above regardless of context. The prose
-  // stems below only count as a verdict when the line is known to be stderr,
-  // or the run it came from failed — or when the caller has no idea (no
-  // context at all), which is the pre-existing, unconditional behaviour.
+  // Stream-agnostic markers matched above regardless of context. The
+  // FAILURE_STEMS prose below only counts as a verdict when the line is known
+  // to be stderr, or the run it came from failed — or when the caller has no
+  // idea (no context at all), which is the pre-existing, unconditional
+  // behaviour. This gate is scoped to FAILURE_STEMS only: a WARNING_STEMS hit
+  // (e.g. ESLint's `warning: x` on a clean, exit-0 stdout) is a tool's own
+  // verdict spelled in its normal report, not incidental English prose the
+  // way "cannot"/"fail" can be — gating it the same way made those lines
+  // vanish from Errors / Warnings and from compaction rescue (AC1 scopes the
+  // gate to FAILURE_STEMS only).
   const stemsApply =
     context === undefined ||
     context.stream === "stderr" ||
     (context.exitCode !== undefined && context.exitCode !== 0);
-  if (!stemsApply) {
-    return null;
-  }
-  if (FAILURE_STEMS.test(claim)) {
+  if (stemsApply && FAILURE_STEMS.test(claim)) {
     return "failure";
   }
   return WARNING_STEMS.test(claim) ? "warning" : null;

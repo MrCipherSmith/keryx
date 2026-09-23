@@ -1,6 +1,16 @@
 import { expect, test } from "bun:test";
-import { buildFinding, egressSourceOverrideAction, resolveDecision } from "./resolve";
-import { DEFAULT_SECURITY_CONFIG, mergeSecurityConfig } from "./config";
+import {
+  buildFinding,
+  egressSourceHasOverride,
+  egressSourceOverrideAction,
+  resolveDecision,
+} from "./resolve";
+import {
+  computeConfigChecksum,
+  DEFAULT_SECURITY_CONFIG,
+  mergeSecurityConfig,
+  verifyConfigChecksum,
+} from "./config";
 import { detectExfil } from "./detect/exfil";
 import type { SecurityConfig } from "./types";
 
@@ -110,12 +120,37 @@ test("a query VALUE that a secret detector flags keeps redaction even with a ben
   expect(action).toBeUndefined();
 });
 
-test("mergeSecurityConfig: the default override is present at policies.egress.sourceOverrides", () => {
+test("mergeSecurityConfig: the shipped default is NOT materialized into policies.egress.sourceOverrides (F1)", () => {
+  // F1 (review round 1): the shipped default used to be copied into every
+  // merged config's `policies.egress.sourceOverrides`, which is exactly the
+  // block `configChecksum` hashes (`computeConfigChecksum`) — so a config file
+  // rendered before GDCTX-2 existed, whose checksum was computed over a
+  // `policies.egress` with no `sourceOverrides` key at all, started reading as
+  // TAMPERED. The shipped default must stay OUT of the merged/checksummed
+  // config; it is applied at resolution time instead (see the
+  // `egressSourceOverrideAction` tests below, which prove it still applies).
   const config = mergeSecurityConfig({});
-  expect(config.policies.egress.sourceOverrides).toEqual({
-    "egress.html-image-exfil": { "trusted-project": "allow" },
-    "egress.markdown-image-exfil": { "trusted-project": "allow" },
-  });
+  expect(config.policies.egress.sourceOverrides).toBeUndefined();
+});
+
+test("F1: a config checksummed the PRE-GDCTX-2 way (no sourceOverrides key) still verifies", () => {
+  // Simulates a `security.config.json` written before this feature shipped:
+  // `computeConfigChecksum` hashed `policies` with no `sourceOverrides` entry
+  // at all. Loading it through today's merge must reproduce the SAME checksum,
+  // or every pre-existing config in the wild reads as tampered the moment this
+  // build runs `security status` / `security policy validate` against it.
+  const config = mergeSecurityConfig({});
+  const oldChecksum = computeConfigChecksum(config);
+  const rendered: SecurityConfig = { ...config, configChecksum: oldChecksum };
+  const reloaded = mergeSecurityConfig(rendered);
+  expect(verifyConfigChecksum(reloaded).match).toBe(true);
+
+  // And the shipped override still applies to a fresh (never configured)
+  // workspace's resolution — the fix moves WHERE the default lives, not
+  // whether it takes effect.
+  const match = exfilMatch(HTML_BADGE);
+  const action = egressSourceOverrideAction(reloaded.policies.egress, match, "trusted-project");
+  expect(action).toBe("allow");
 });
 
 test("a project can disable the override through its own security config", () => {
@@ -131,13 +166,19 @@ test("a project can disable the override through its own security config", () =>
       },
     },
   });
-  // The overridden entry is gone; the untouched one survives the merge.
-  expect(config.policies.egress.sourceOverrides?.["egress.html-image-exfil"]).toEqual({
-    "trusted-project": "redact",
+  // F1: only what the operator actually wrote is stored/checksummed — the
+  // shipped default for the OTHER policyId is not copied in here at all.
+  expect(config.policies.egress.sourceOverrides).toEqual({
+    "egress.html-image-exfil": { "trusted-project": "redact" },
   });
-  expect(config.policies.egress.sourceOverrides?.["egress.markdown-image-exfil"]).toEqual({
-    "trusted-project": "allow",
-  });
+
+  // The operator's own entry wins at resolution time; the untouched policyId
+  // still resolves through the shipped default (merged in by
+  // `egressSourceOverrideAction`, not stored on `config`).
+  const markdownMatch = exfilMatch(MARKDOWN_BADGE);
+  expect(
+    egressSourceOverrideAction(config.policies.egress, markdownMatch, "trusted-project"),
+  ).toBe("allow");
 
   const match = exfilMatch(HTML_BADGE);
   const decision = resolveDecision(config, {
@@ -169,4 +210,93 @@ test("an action other than allow is never gated on the query string", () => {
   const match = exfilMatch(HTML_BADGE);
   const action = egressSourceOverrideAction(config.policies.egress, match, "tool-output");
   expect(action).toBe("warn");
+});
+
+// F2 (review round 1): `hasCredentialShapedQuery` used to parse the RAW
+// `match.value` span while `detectExfil`/a real renderer classify and fetch
+// the DECODED destination (`exfil.ts#renderableUrl`). Every case below is a
+// query string that reads as credential-free to a naive raw-bytes parse but
+// decodes (or splits, or stem-matches) to a credential-shaped one — each was a
+// confirmed bypass that returned `allow` before the fix. All must now keep the
+// policy's stricter (redacting) action, i.e. `egressSourceOverrideAction`
+// returns `undefined`.
+const EGRESS_POLICY = DEFAULT_SECURITY_CONFIG.policies.egress;
+
+function overrideActionFor(content: string): ReturnType<typeof egressSourceOverrideAction> {
+  const match = exfilMatch(content);
+  return egressSourceOverrideAction(EGRESS_POLICY, match, "trusted-project");
+}
+
+test("F2 bypass: double-encoded &amp;amp; before a credential-shaped param name", () => {
+  const content = `<img src="https://img.shields.io/npm/v/x.svg?a=1&amp;amp;token=abc123">`;
+  expect(overrideActionFor(content)).toBeUndefined();
+});
+
+test("F2 bypass: numeric character reference spells the param name (&amp;#116;oken)", () => {
+  const content = `<img src="https://img.shields.io/npm/v/x.svg?&amp;#116;oken=abc123">`;
+  expect(overrideActionFor(content)).toBeUndefined();
+});
+
+test("F2 bypass: numeric character reference inside a markdown image URL (t&amp;#111;ken)", () => {
+  const content = `![npm](https://img.shields.io/npm/v/x.svg?t&amp;#111;ken=abc123)`;
+  expect(overrideActionFor(content)).toBeUndefined();
+});
+
+test("F2 bypass: a `;`-separated query pair (not just `&`)", () => {
+  const content = `<img src="https://img.shields.io/npm/v/x.svg?a=1;token=abc123">`;
+  expect(overrideActionFor(content)).toBeUndefined();
+});
+
+test("F2 bypass: a credential stem compounded with an unrelated word (x_token)", () => {
+  const content = `<img src="https://img.shields.io/npm/v/x.svg?x_token=abc123">`;
+  expect(overrideActionFor(content)).toBeUndefined();
+});
+
+test("F2 bypass: a credential stem compounded with unrelated words (access_key_id)", () => {
+  const content = `<img src="https://img.shields.io/npm/v/x.svg?access_key_id=abc123">`;
+  expect(overrideActionFor(content)).toBeUndefined();
+});
+
+test("F2 bypass: an OAuth-shaped `code` param name", () => {
+  const content = `<img src="https://img.shields.io/npm/v/x.svg?code=abc123">`;
+  expect(overrideActionFor(content)).toBeUndefined();
+});
+
+// Control: a param name that merely CONTAINS a stem's letters with no word
+// boundary (no separator, no camelCase transition) is NOT a false positive —
+// otherwise ordinary benign badge query params would stop passing at all.
+test("F2 control: a param name containing stem letters with no word boundary stays allowed", () => {
+  const content = `<img src="https://img.shields.io/npm/v/x.svg?barcode=123&areacode=1">`;
+  expect(overrideActionFor(content)).toBe("allow");
+});
+
+// F10 (review round 1): `egressSourceHasOverride` is what `guard.ts#redactRaw`
+// now consults to skip its second, config-aware detection pass. It must read
+// `true` for the shipped default (even with no explicit config) and for a
+// source the operator's own config names, and `false` for a source neither
+// table mentions.
+test("F10: egressSourceHasOverride reflects the shipped default with no config at all", () => {
+  expect(egressSourceHasOverride(DEFAULT_SECURITY_CONFIG.policies.egress, "trusted-project")).toBe(
+    true,
+  );
+  expect(egressSourceHasOverride(DEFAULT_SECURITY_CONFIG.policies.egress, "tool-output")).toBe(
+    false,
+  );
+});
+
+test("F10: egressSourceHasOverride reflects an operator's own explicit override", () => {
+  const config: SecurityConfig = mergeSecurityConfig({
+    policies: {
+      ...DEFAULT_SECURITY_CONFIG.policies,
+      egress: {
+        enabled: true,
+        action: "block",
+        sourceOverrides: {
+          "egress.html-image-exfil": { "tool-output": "warn" },
+        },
+      },
+    },
+  });
+  expect(egressSourceHasOverride(config.policies.egress, "tool-output")).toBe(true);
+  expect(egressSourceHasOverride(config.policies.egress, "untrusted-external")).toBe(false);
 });

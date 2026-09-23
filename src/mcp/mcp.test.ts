@@ -339,6 +339,43 @@ test("AC4: a seeded secret is masked when the security module is enabled", async
   expect(result.text).not.toContain(secret);
 });
 
+// F3 (review round 1): `security.check`'s `source` is model-supplied over MCP.
+// `trusted-project` means "already in the repository the OPERATOR chose to
+// work in — vetted by committing it" (`security/types.ts`), and a caller on
+// the other side of this tool call must never be able to grant its own
+// content that trust by simply naming it in the `source` field — that would
+// hand it the GDCTX-2 egress source-override allowance a committed README
+// badge gets. This drives the same badge-shaped URL `resolve.test.ts` proves
+// gets `action: "allow"` under a REAL `trusted-project` — over MCP, with a
+// caller-claimed `source: "trusted-project"`, it must still redact.
+test("AC-security: security.check clamps a caller-claimed trusted-project source", async () => {
+  await writeFile(
+    path.join(root, ".metaproject", "metaproject.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      standardVersion: "0.1.0",
+      name: "fixture",
+      createdBy: "keryx",
+      paths: {},
+      modules: { security: { enabled: true }, mcp: { enabled: true } },
+    }),
+    "utf8",
+  );
+  const ctx = await buildMcpContext(root);
+  const badgeUrl = `<img src="https://github.com/o/r/actions/workflows/ci.yml/badge.svg">`;
+  const result = await dispatchCallTool(ctx, "security.check", {
+    content: badgeUrl,
+    source: "trusted-project",
+  });
+  expect(result.isError).toBe(false);
+  const decision = JSON.parse(result.text) as { findings: Array<{ action: string }> };
+  const egressFinding = decision.findings.find((f) => "action" in f);
+  expect(egressFinding).toBeDefined();
+  // A REAL trusted-project source would resolve this to "allow" (the shipped
+  // GDCTX-2 badge override) — clamped to untrusted-external, it must not.
+  expect(egressFinding?.action).not.toBe("allow");
+});
+
 // --- AC1/AC2 stdio round-trip (SDK-gated) ------------------------------------
 
 test("stdio round-trip over the real SDK transport (skips if SDK unavailable)", async () => {

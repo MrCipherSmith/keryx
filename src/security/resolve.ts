@@ -5,6 +5,8 @@ import {
 } from "./redact";
 import { detectSecrets } from "./detect/secrets";
 import { detectPii } from "./detect/pii";
+import { mergeSourceOverrides, SHIPPED_EGRESS_SOURCE_OVERRIDES } from "./config";
+import { renderableUrl } from "./detect/exfil";
 import type {
   DetectorMatch,
   PolicyConfig,
@@ -72,10 +74,63 @@ const CREDENTIAL_QUERY_PARAM_NAMES: ReadonlySet<string> = new Set([
   "csrf",
   "bearer",
   "jwt",
+  "code",
+]);
+
+// F2 (review round 1): a param name compounded with an UNRELATED word around a
+// credential stem — `x_token`, `access_key_id`, `oauth_code` — normalizes (whole
+// string, non-alphanumeric stripped) to something `CREDENTIAL_QUERY_PARAM_NAMES`
+// does not list, and enumerating every compound is the same losing game the
+// exfil detector's own header comment warns against. So the name is also split
+// into SEGMENTS — on any non-alphanumeric run and on a lower→upper camelCase
+// boundary — and each segment is checked against this smaller STEM set. A
+// segment is a whole word the split produced, never a substring match, which is
+// why an unrelated word merely containing a stem's letters in a single
+// no-separator token (`areacode`, `barcode`) does NOT match: nothing split it,
+// so it is one segment, "areacode", which is not itself a listed stem.
+const CREDENTIAL_QUERY_PARAM_STEMS: ReadonlySet<string> = new Set([
+  "token",
+  "key",
+  "secret",
+  "sig",
+  "signature",
+  "auth",
+  "pass",
+  "password",
+  "pwd",
+  "passwd",
+  "session",
+  "code",
+  "credential",
+  "credentials",
+  "jwt",
+  "bearer",
+  "csrf",
 ]);
 
 function normalizeQueryParamName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+const CAMEL_CASE_BOUNDARY = /([a-z0-9])([A-Z])/g;
+const NON_ALPHANUMERIC_RUN = /[^a-zA-Z0-9]+/g;
+
+function queryParamNameSegments(name: string): string[] {
+  return name
+    .replace(CAMEL_CASE_BOUNDARY, "$1_$2")
+    .replace(NON_ALPHANUMERIC_RUN, "_")
+    .split("_")
+    .map((segment) => segment.toLowerCase())
+    .filter((segment) => segment.length > 0);
+}
+
+function isCredentialShapedParamName(name: string): boolean {
+  if (CREDENTIAL_QUERY_PARAM_NAMES.has(normalizeQueryParamName(name))) {
+    return true;
+  }
+  return queryParamNameSegments(name).some((segment) =>
+    CREDENTIAL_QUERY_PARAM_STEMS.has(segment),
+  );
 }
 
 // The query string of a URL that may not itself be absolute (a relative or
@@ -94,6 +149,33 @@ function extractQueryString(url: string): string {
   }
 }
 
+// F2 (review round 1): a query string's parameter PAIRS are separated by `&` OR
+// `;` — `application/x-www-form-urlencoded` and every renderer's own query
+// parser accept both (`URLSearchParams` only splits on `&`, which is exactly
+// the gap `?a=1;token=abc123` bypassed the old check through) — and a NAME is
+// read up to the first `=` and then percent-decoded, because a renderer decodes
+// it before ever comparing it to anything. A name that fails to percent-decode
+// (a lone `%` or a truncated escape) is kept as written rather than dropped:
+// dropping it would silently remove a candidate this gate must still see.
+const QUERY_PAIR_SEPARATOR = /[&;]+/;
+
+function queryParamNames(query: string): string[] {
+  const body = query.startsWith("?") ? query.slice(1) : query;
+  if (!body) return [];
+  return body
+    .split(QUERY_PAIR_SEPARATOR)
+    .filter((pair) => pair.length > 0)
+    .map((pair) => {
+      const eq = pair.indexOf("=");
+      const raw = eq === -1 ? pair : pair.slice(0, eq);
+      try {
+        return decodeURIComponent(raw.replace(/\+/g, " "));
+      } catch {
+        return raw;
+      }
+    });
+}
+
 /**
  * Is `url` safe to release from under a `redact`/`block` egress finding
  * despite a matching source override (GDCTX-2 design §2)?
@@ -105,24 +187,41 @@ function extractQueryString(url: string): string {
  * pass, so refusing every URL with any `?` would fail the acceptance criteria
  * this override exists to satisfy. What must still redact is a query that
  * could itself be the leak — a credential-shaped PARAMETER NAME (checked
- * case-insensitively against `CREDENTIAL_QUERY_PARAM_NAMES` above, independent
- * of that parameter's value), or a query string whose bytes trip the existing
- * secret/PII detectors (an attacker- or model-controlled URL with a token
- * pasted into an unrelated-looking parameter, or a leaked email/phone). Only
- * the query component is scanned — the host/path of an exfil destination is
- * already what `detectExfil` classified the match on, and is not sensitive by
- * itself.
+ * against `CREDENTIAL_QUERY_PARAM_NAMES`/`CREDENTIAL_QUERY_PARAM_STEMS` above,
+ * independent of that parameter's value), or a query string whose bytes trip
+ * the existing secret/PII detectors (an attacker- or model-controlled URL with
+ * a token pasted into an unrelated-looking parameter, or a leaked email/phone).
+ * Only the query component is scanned — the host/path of an exfil destination
+ * is already what `detectExfil` classified the match on, and is not sensitive
+ * by itself.
+ *
+ * F2 (review round 1): this used to parse `match.value` — the RAW span as
+ * written — while `detectExfil`/a real renderer classify and fetch the
+ * DECODED destination (`exfil.ts#renderableUrl`: HTML character references
+ * resolved, tab/LF/CR stripped, leading/trailing C0-or-space trimmed). A
+ * credential-shaped param survives entity-encoding it (`?a=1&amp;amp;token=…`,
+ * `?&amp;#116;oken=…`, a markdown `?t&amp;#111;ken=…`) and reaches a renderer
+ * unmasked while reading as query-free bytes to this gate. `renderableUrl` is
+ * reused rather than re-derived, so the two ever agree on what the request
+ * actually is. A raw-value fallback would be UNSOUND here in the direction
+ * this gate must never err (letting a credential-shaped query through as
+ * `allow`), so a decoding failure falls through to the `catch` below instead —
+ * fail-closed, keeping the policy's stricter action.
  */
 function hasCredentialShapedQuery(url: string): boolean {
-  const query = extractQueryString(url);
-  if (!query) return false;
-  const params = new URLSearchParams(query);
-  for (const name of params.keys()) {
-    if (CREDENTIAL_QUERY_PARAM_NAMES.has(normalizeQueryParamName(name))) {
+  try {
+    const query = extractQueryString(renderableUrl(url));
+    if (!query) return false;
+    if (queryParamNames(query).some((name) => isCredentialShapedParamName(name))) {
       return true;
     }
+    return detectSecrets(query).length > 0 || detectPii(query).length > 0;
+  } catch {
+    // Fail-closed: an unexpected decoding/parsing failure must never be read
+    // as "no credential-shaped query" — it keeps the policy's ordinary
+    // (stricter) action, exactly like a positive match would.
+    return true;
   }
-  return detectSecrets(query).length > 0 || detectPii(query).length > 0;
 }
 
 /**
@@ -144,6 +243,16 @@ function hasCredentialShapedQuery(url: string): boolean {
  * Non-`allow` overrides (a project tightening its own policy, e.g. forcing
  * `redact` for a source that would otherwise be more permissive) are not
  * gated — there is nothing unsafe about a project asking for MORE redaction.
+ *
+ * F1 (review round 1): `policy.sourceOverrides` is now ONLY what the operator
+ * actually wrote in `security.config.json` (see `config.ts#mergeEgressPolicy`
+ * — the shipped default is deliberately kept OUT of it, so it never enters
+ * `configChecksum`). The shipped default (`SHIPPED_EGRESS_SOURCE_OVERRIDES`)
+ * is applied HERE, at resolution time, merged UNDER the operator's own table
+ * with `mergeSourceOverrides` — same semantics as before this fix, and the
+ * same function `mergeEgressPolicy` already used to combine the two: an
+ * operator's own entry for a (policyId, source) pair replaces the shipped
+ * one; every pair they do not mention keeps the shipped default.
  */
 export function egressSourceOverrideAction(
   policy: PolicyConfig,
@@ -151,12 +260,33 @@ export function egressSourceOverrideAction(
   source: SecuritySource,
 ): SecurityAction | undefined {
   if (match.category !== "egress") return undefined;
-  const overrideAction = policy.sourceOverrides?.[match.policyId]?.[source];
+  const effectiveOverrides = mergeSourceOverrides(
+    SHIPPED_EGRESS_SOURCE_OVERRIDES,
+    policy.sourceOverrides,
+  );
+  const overrideAction = effectiveOverrides?.[match.policyId]?.[source];
   if (overrideAction === undefined) return undefined;
   if (overrideAction === "allow" && hasCredentialShapedQuery(match.value)) {
     return undefined;
   }
   return overrideAction;
+}
+
+// F10 (review round 1): does ANY (policyId, source) pair — shipped default
+// included — resolve to an override for this source at all? `guard.ts#redactRaw`
+// uses this to skip its second, config-aware `validateSerializedOutput` pass
+// (which reruns exfil detection over the same content) when the answer is
+// `false`: no override can possibly change the outcome for this source, so the
+// unconditional first pass already IS the answer, and a caller checking every
+// source on every call — not knowing in advance which one carries an override —
+// would otherwise pay the detection cost twice on every single call.
+export function egressSourceHasOverride(policy: PolicyConfig, source: SecuritySource): boolean {
+  const effectiveOverrides = mergeSourceOverrides(
+    SHIPPED_EGRESS_SOURCE_OVERRIDES,
+    policy.sourceOverrides,
+  );
+  if (!effectiveOverrides) return false;
+  return Object.values(effectiveOverrides).some((bySource) => bySource?.[source] !== undefined);
 }
 
 function policyFor(category: SecurityCategory, config: SecurityConfig): PolicyConfig {

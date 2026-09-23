@@ -447,6 +447,24 @@ test("summarizeCommandOutput does not treat a clean commit message as a failure"
   expect(out).toContain("fix: refuse unpriceable provider at the card");
 });
 
+// F4: WARNING_STEMS is a tool's own report vocabulary (ESLint's `warning: x`),
+// not incidental failure-shaped prose — so unlike FAILURE_STEMS it is not
+// gated by stream/exit code. A clean, exit-0 lint run whose stdout still
+// carries `warning:` lines must keep them in Errors / Warnings, and they must
+// survive compaction rescue the same way a failure verdict does.
+test("summarizeCommandOutput keeps exit-0 lint warnings on stdout under Errors / Warnings", () => {
+  const log = [
+    "src/foo.ts",
+    "  12:3  warning  'x' is defined but never used  no-unused-vars",
+    "src/bar.ts",
+    "  4:1  warning  Missing return type  @typescript-eslint/explicit-function-return-type",
+  ].join("\n");
+  const out = summarizeCommandOutput("eslint .", result(log, { exitCode: 0 }), CONFIG);
+
+  expect(out).toContain("## Errors / Warnings");
+  expect(out).toContain("'x' is defined but never used");
+});
+
 test("summarizeCommandOutput treats the same commit message as a failure when the command exited non-zero", () => {
   const log = [
     "a1b2c3d fix: refuse unpriceable provider at the card",
