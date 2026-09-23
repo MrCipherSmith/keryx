@@ -70,6 +70,7 @@ import type {
   TriggerRunOutcomeKind,
   UnattendedDenial,
 } from "../trigger/record";
+import { NETWORK_ON_WARNING } from "../trigger/describe";
 import { reserveTriggerSpend } from "../trigger/run";
 import { UNATTENDED_EXCLUDED_TOOLS, unattendedRefusal } from "../trigger/unattended";
 
@@ -107,19 +108,10 @@ export interface DispatchDeps {
   readonly planSandbox?: (input: UnattendedSandboxInput) => UnattendedSandboxPlan;
 }
 
-/**
- * What `dispatch.network: true` actually grants (flow 290 T14). The sandbox
- * then shares the host's network namespace: nothing is filtered. Printed by
- * `keryx trigger list` and in every such run's record. The MODEL call is made
- * by the dispatcher itself, outside the sandbox, so talking to the provider —
- * a local Ollama included — never needs this.
- */
-export const NETWORK_ON_WARNING =
-  "the agent's shell commands get the host's FULL network: the internet, every service on the host's loopback " +
-  "(e.g. a local model server or database), and the host's abstract unix sockets. The model call does not need this.";
-
-export const UNATTENDED_ROSTER_DESCRIPTION =
-  "get_cwd, list_dir, read_file, shell_exec, apply_patch — no web, no MCP, no subagents, no ask_user";
+// Flow 300 T5: the two posture strings moved to `../trigger/describe.ts`, where
+// the CLI's and the TUI's trigger descriptors both read them. Re-exported so
+// every existing importer of this module keeps working unchanged.
+export { NETWORK_ON_WARNING, UNATTENDED_ROSTER_DESCRIPTION } from "../trigger/describe";
 
 /**
  * The unattended tool roster (AC5). `shell_exec` runs through `runner` — the

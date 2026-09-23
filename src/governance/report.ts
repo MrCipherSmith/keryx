@@ -2,9 +2,9 @@
 // (AC1-AC9 combined). Read-only over recorded artifacts (AC5); the only
 // files this module writes are its own report artifacts (AC6).
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { pathExists } from "../lib/fs";
+import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { listProjects } from "../lib/project-registry";
 import { collectProjectGovernance } from "./aggregate";
@@ -94,7 +94,8 @@ export async function buildGovernanceReport(options: BuildGovernanceReportOption
   };
 }
 
-function usd(value: number | undefined): string {
+/** USD as every governance surface prints it: 4 decimals, trailing zeros trimmed; `not recorded` for undefined. */
+export function usd(value: number | undefined): string {
   return value === undefined ? "not recorded" : `$${value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}`;
 }
 
@@ -275,8 +276,11 @@ export async function writeGovernanceArtifacts(
 ): Promise<{ markdownPath: string; jsonPath: string }> {
   const { markdown, json } = artifactPaths(cwd);
   await mkdir(path.dirname(markdown), { recursive: true });
-  await writeFile(markdown, renderGovernanceMarkdown(report), "utf8");
-  await writeFile(json, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  // Flow 300 review F8: each file is replaced atomically (temp + rename), and
+  // `latest.json` goes LAST — it is what the TUI's watcher and `show` read, so
+  // when it changes, the `latest.md` beside it is already the matching one.
+  await writeFileAtomic(markdown, renderGovernanceMarkdown(report));
+  await writeFileAtomic(json, `${JSON.stringify(report, null, 2)}\n`);
   return { markdownPath: markdown, jsonPath: json };
 }
 

@@ -155,6 +155,20 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 300: TUI-only, same reasoning as /review — the sidebar section, the
+    // background run and the report modal all need the OpenTUI surface.
+    name: "/governance",
+    description: "Show the last governance report, or run one in the background",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 300: TUI-only — the sidebar section and the list+detail modal with
+    // run-now (`keryx trigger run <name>` in a child process).
+    name: "/triggers",
+    description: "Declared triggers: last outcome, spend, reservations — run one now",
+    modes: AGENT_ONLY,
+  },
+  {
     // The installer view under the name that says what it does: it wires this
     // project into an editor, the TUI half of `keryx integrate`.
     name: "/integrations",
