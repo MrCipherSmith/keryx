@@ -262,6 +262,14 @@ const CREDENTIAL_MARKERS: readonly string[] = [
   "auth.json",
   ".local/share/keryx",
   ".config/keryx",
+  // Flow 295 (F1/F3): the per-machine key that signs confirmed schedules, the
+  // schedule store itself, and the OS scheduler's unit directories. Writing any
+  // of them is how a confirmed schedule would be forged or widened, so they sit
+  // with the agent's own credentials: always asked, never remembered.
+  "schedule-hmac.key",
+  "trigger/schedules.json",
+  "systemd/user",
+  "library/launchagents",
 ];
 
 /**
@@ -392,11 +400,228 @@ export function touchesFlowConfirm(command: string): boolean {
 }
 
 /**
+ * Flow 295 (F2): commands that create, change or run a scheduled background
+ * task, or that drive the OS scheduler directly. A schedule runs unattended,
+ * spends money and uses the operator's granted credentials, so it exists only
+ * after the operator confirms a card (`keryx schedule add`, `/schedule`,
+ * `schedule_create`). A `shell_exec` of `keryx schedule add … --yes`, or a
+ * `systemctl --user enable` of a hand-written unit, would skip that card, so
+ * this family gets the human-confirmation floor: every permission mode asks
+ * (`auto` included), the answer is never remembered, and a pattern for it is refused.
+ *
+ * Matched on whole words (`\b`), not substrings: `reschedule add` is not a
+ * match, while `bun run src/cli.ts schedule add` is. Over-broad in the other
+ * direction on purpose (`echo "crontab"` asks), for the same reason as every
+ * other marker here: a false positive costs one prompt, and a false negative
+ * costs the confirmation.
+ */
+const SCHEDULER_CONTROL_PATTERNS: readonly RegExp[] = [
+  /\bschedule\s+(?:add|remove|pause|resume|run)\b/,
+  /\btrigger\s+(?:schedule|install)\b/,
+  /\btrigger\s+run\b[^\n;&|]*--schedule\b/,
+  /\bcrontab\b/,
+  /\bsystemctl\b[^\n;&|]*\b(?:enable|reenable|link|start|restart|reload-or-restart|try-restart|daemon-reload|edit|disable|stop|mask|unmask|preset|revert|set-property|set-environment|import-environment)\b/,
+  /\blaunchctl\b/,
+  /\bloginctl\b/,
+  /\bsystemd\/user\b/,
+  /\blibrary\/launchagents\b/,
+];
+
+/** `systemctl` verbs that change what runs (install, start, reload or remove units). */
+const SYSTEMCTL_CONTROL_VERBS: ReadonlySet<string> = new Set([
+  "enable", "reenable", "link", "start", "restart", "reload-or-restart", "try-restart", "daemon-reload",
+  "edit", "disable", "stop", "mask", "unmask", "preset", "revert", "set-property", "set-environment", "import-environment",
+]);
+
+/** `keryx schedule <verb>` verbs that create, change or run a schedule. */
+const SCHEDULE_VERBS: ReadonlySet<string> = new Set(["add", "remove", "pause", "resume", "run"]);
+
+/** Command words that run the rest of the line as another command. */
+const WRAPPER_COMMANDS: ReadonlySet<string> = new Set([
+  "env", "sudo", "doas", "nice", "nohup", "command", "exec", "time", "timeout", "stdbuf", "ionice", "setsid", "chrt", "caffeinate", "xargs", "builtin",
+]);
+
+/** Wrapper flags that consume the next word (`env -u NAME`, `sudo -u user`, `nice -n 5`, `env -C dir`). */
+const WRAPPER_FLAGS_WITH_VALUE: ReadonlySet<string> = new Set(["-u", "-g", "-n", "-C", "-p", "-U", "-h", "--unset", "--user", "--group", "--chdir", "-s", "-k", "-o", "-e", "-i0"]);
+
+/** Shells whose `-c '<script>'` argument is another command line to inspect. */
+const SHELLS: ReadonlySet<string> = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish", "busybox"]);
+
+/** Directories the OS scheduler reads units from; a write into one installs a timer. */
+const UNIT_DIR_MARKERS: readonly string[] = ["systemd/user", "config/systemd", "launchagents"];
+
+/** How keryx is named on a command line: the binary, or its entry script run by a JS runtime. */
+const KERYX_ENTRY_NAMES: ReadonlySet<string> = new Set(["keryx", "cli.ts", "cli.js"]);
+/** Runtimes that run keryx's entry script (`bun src/cli.ts shell`, `npx keryx shell`). */
+const JS_RUNNERS: ReadonlySet<string> = new Set(["bun", "bunx", "node", "npx", "pnpx", "tsx", "deno"]);
+/** Programs that give another program a terminal, so the caller can type into it. */
+const TERMINAL_DRIVERS: ReadonlySet<string> = new Set(["script", "screen", "tmux", "unbuffer", "dtach", "abduco", "expect", "socat", "zpty"]);
+
+function baseName(word: string | undefined): string {
+  return ((word ?? "").split("/").pop() ?? "").toLowerCase();
+}
+
+/**
+ * Flow 295 (M3b): does this simple command start an INTERACTIVE keryx — `keryx` with no
+ * subcommand, or `keryx shell` in any interactive form? `keryx shell -p/--print` runs one
+ * headless turn: it has no TUI, no `/schedule`, no `/schedules` and no schedule tools,
+ * so it is not caught.
+ */
+function launchesInteractiveKeryx(words: readonly string[]): boolean {
+  let at = 0;
+  if (JS_RUNNERS.has(baseName(words[0]))) {
+    at = words.findIndex((w, i) => i > 0 && !w.startsWith("-") && !["run", "x", "exec"].includes(w));
+    if (at < 0) return false;
+  }
+  if (!KERYX_ENTRY_NAMES.has(baseName(words[at]))) return false;
+  const after = words.slice(at + 1);
+  const sub = after.find((w) => !w.startsWith("-"));
+  if (sub === undefined) return !after.some((w) => w === "--help" || w === "-h" || w === "--version" || w === "-v");
+  if (sub !== "shell") return false;
+  return !after.some((w) => w === "-p" || w === "--print" || w.startsWith("--print="));
+}
+
+/**
+ * M3b: a terminal driver (`script`, `screen`, `tmux`, `unbuffer`, …) that starts an
+ * interactive keryx, or types into a running session (`tmux send-keys`, `screen -X stuff`).
+ * An agent could otherwise drive a nested keryx TUI through a pseudo-terminal and answer
+ * its `/schedule` card or press its `/schedules` keys itself.
+ */
+function drivesKeryxTerminal(words: readonly string[], depth: number): boolean {
+  const cmd = baseName(words[0]);
+  if (!TERMINAL_DRIVERS.has(cmd)) return false;
+  const rest = words.slice(1);
+  if (cmd === "tmux" && rest.some((w) => w === "send-keys" || w === "send" || w === "paste-buffer" || w === "pasteb")) return true;
+  if (cmd === "screen" && rest.some((w, i) => w === "-X" && ["stuff", "paste", "eval"].includes((rest[i + 1] ?? "").toLowerCase()))) return true;
+  // A command string argument (`script -qfc 'keryx shell' /dev/null`, `tmux new 'keryx'`).
+  for (let i = 0; i < rest.length; i += 1) {
+    const w = rest[i]!;
+    const commandFlag = /^-[a-z]*c$/i.test(w) || w === "--command";
+    const value = commandFlag ? rest[i + 1] : w.startsWith("--command=") ? w.slice("--command=".length) : /\s/.test(w) ? w : undefined;
+    if (value !== undefined && depth < 4 && parsedSchedulerControl(value, depth + 1)) return true;
+  }
+  // The rest of the line as a program and its arguments (`screen keryx shell`, BSD
+  // `script -q /dev/null keryx`, `unbuffer bun src/cli.ts shell`).
+  for (let i = 1; i < words.length; i += 1) {
+    if (launchesInteractiveKeryx(words.slice(i))) return true;
+  }
+  return false;
+}
+
+/** Remove backslash escapes a shell would drop (`sys\temctl` → `systemctl`). Quotes are already gone. */
+function unescapeWord(word: string): string {
+  return word.replace(/\\(.)/g, "$1");
+}
+
+/**
+ * Peel wrappers off a word list (`env -u X VAR=1 sudo -u me nice -n 5 <cmd …>`), returning
+ * the real command's words, or the inner script when the command is `sh|bash -c '<script>'`.
+ */
+function peelWrappers(input: readonly string[]): { words: string[]; inner?: string } {
+  let words = stripAssignments(input.map(unescapeWord));
+  for (let guard = 0; guard < 16 && words.length > 0; guard++) {
+    const cmd = (words[0]!.split("/").pop() ?? "").toLowerCase();
+    if (SHELLS.has(cmd)) {
+      const at = words.findIndex((w, i) => i > 0 && /^-[a-z]*c[a-z]*$/i.test(w));
+      const script = at > 0 ? words[at + 1] : undefined;
+      if (script !== undefined) return { words, inner: script };
+      return { words };
+    }
+    if (cmd === "eval") return { words, inner: words.slice(1).join(" ") };
+    if (!WRAPPER_COMMANDS.has(cmd)) return { words };
+    let i = 1;
+    while (i < words.length) {
+      const w = words[i]!;
+      if (w === "--") {
+        i++;
+        break;
+      }
+      if (w.startsWith("-")) {
+        i += WRAPPER_FLAGS_WITH_VALUE.has(w) ? 2 : 1;
+        continue;
+      }
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) {
+        i++;
+        continue;
+      }
+      // `timeout 30 cmd`, `nice 5 cmd` (rare): a bare number before the command.
+      if ((cmd === "timeout" || cmd === "nice") && /^[0-9.]+[smhd]?$/.test(w)) {
+        i++;
+        continue;
+      }
+      break;
+    }
+    words = words.slice(i);
+  }
+  return { words };
+}
+
+/** One parsed segment: does it control a schedule or the OS scheduler? */
+function segmentControlsScheduler(input: readonly string[], cwdHint: string, depth: number): boolean {
+  const peeled = peelWrappers(input);
+  if (peeled.inner !== undefined) return depth < 4 && parsedSchedulerControl(peeled.inner, depth + 1);
+  const words = peeled.words;
+  if (words.length === 0) return false;
+  const cmd = (words[0]!.split("/").pop() ?? "").toLowerCase();
+  const rest = words.slice(1).map((w) => w.toLowerCase());
+  const positional = rest.filter((w) => !w.startsWith("-"));
+  if (cmd === "crontab" || cmd === "launchctl" || cmd === "loginctl") return true;
+  if (launchesInteractiveKeryx(words) || drivesKeryxTerminal(words, depth)) return true;
+  if (cmd === "systemctl" && positional.some((w) => SYSTEMCTL_CONTROL_VERBS.has(w))) return true;
+  for (let i = 0; i + 1 < positional.length; i++) {
+    if (positional[i] === "schedule" && SCHEDULE_VERBS.has(positional[i + 1]!)) return true;
+    if (positional[i] === "trigger" && (positional[i + 1] === "schedule" || positional[i + 1] === "install")) return true;
+    if (positional[i] === "trigger" && positional[i + 1] === "run" && rest.includes("--schedule")) return true;
+  }
+  // A unit directory named anywhere in the segment (a cp/mv/ln/install/tee target, a
+  // redirect, an editor), directly or relative to a directory an earlier `cd` entered.
+  const named = [words.join(" "), ...words.map((w) => (w.startsWith("/") || w.startsWith("~") ? w : `${cwdHint}/${w}`))]
+    .map((w) => w.toLowerCase());
+  return named.some((w) => UNIT_DIR_MARKERS.some((marker) => w.includes(marker)));
+}
+
+/** Parsed-word check over every simple command, `cd` targets carried forward. */
+function parsedSchedulerControl(command: string, depth = 0): boolean {
+  let cwdHint = "";
+  for (const seg of splitSegments(command)) {
+    const words = seg.words.map(unescapeWord);
+    if ((words[0] ?? "") === "cd") {
+      cwdHint = words[1] ?? "";
+      if (UNIT_DIR_MARKERS.some((marker) => cwdHint.toLowerCase().includes(marker))) return true;
+      continue;
+    }
+    if (segmentControlsScheduler(words, cwdHint, depth)) return true;
+  }
+  return false;
+}
+
+/**
+ * True when `command` creates, changes or runs a schedule, drives the OS scheduler, or
+ * (M3b) starts an interactive keryx or a terminal driver around one. Pure.
+ *
+ * Flow 295 (N1): matched on PARSED words, the way `isPublishCommand` is, so quoting
+ * (`keryx 'schedule' add`, `sys''temctl`, `cron''tab`), backslash escapes, wrappers
+ * (`env -u KERYX_TOOL_CALL …`, `sudo`, `nohup`, `bash -c '…'`) and a `cd` into a unit
+ * directory followed by a relative copy are all seen. The raw-text regexes stay as a
+ * second net. HONEST LIMIT: this is a text floor. A same-uid shell can still reach the
+ * scheduler through a variable, a script file or an interpreter one-liner. The real
+ * gates are that `keryx schedule add|resume|run` require a terminal, and that stored
+ * schedules are signed with the per-machine key.
+ */
+export function touchesSchedulerControl(command: string): boolean {
+  const text = command.toLowerCase();
+  if (SCHEDULER_CONTROL_PATTERNS.some((pattern) => pattern.test(text))) return true;
+  return parsedSchedulerControl(command);
+}
+
+/**
  * Every command whose purpose is to show that a person, not the agent, took a
- * step: SAC's review confirmation and flow 299's completion confirmation. The
- * approval gate's `sacReviewConfirmation` floor is fed from this, so both force
- * `ask` in every permission mode, `auto` included.
+ * step: SAC's review confirmation, flow 299's completion confirmation (`flow
+ * confirm`), and flow 295's scheduler control (a schedule exists only after the
+ * operator confirms its card). The approval gate's `sacReviewConfirmation` floor is
+ * fed from this, so every family forces `ask` in every permission mode, `auto`
+ * included; no answer is remembered, and a pattern for any of them is refused.
  */
 export function touchesHumanConfirmation(command: string): boolean {
-  return touchesSacConfirmReview(command) || touchesFlowConfirm(command);
+  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command);
 }

@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "295",
+  "slug": "scheduled-agent-tasks-from-the-shell-and",
+  "title": "Scheduled agent tasks from the shell and TUI, running in the background with explicit grants",
+  "status": "in-progress",
+  "createdAt": "2026-09-23T05:23:44.195Z",
+  "updatedAt": "2026-09-23T05:35:14.962Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:661f10d17536b3beaa9e8a54d8f68580d98512393e8b46c3cdced915efabf72d",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "agent-task action kind, dispatcher report, confirmed-content hash",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T05:35:14.961Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Granted tools outside the sandbox; network off/full; floor unchanged",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Schedule store, installer (systemd/launchd/cron), renderer fixes, keryx schedule CLI",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "/schedule and schedule_create with the always-ask confirmation card",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "TUI: Schedules sidebar section, detail modal, /schedules, live refresh",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Spend and governance; docs and agent skill",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Verification: CI green, keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-23T05:23:44.195Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-23T05:35:13.887Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T05:35:14.010Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T05:35:14.135Z",
+      "event": "task-added",
+      "detail": "T5: agent-task action kind, dispatcher report, confirmed-content hash"
+    },
+    {
+      "at": "2026-09-23T05:35:14.254Z",
+      "event": "task-added",
+      "detail": "T6: Granted tools outside the sandbox; network off/full; floor unchanged"
+    },
+    {
+      "at": "2026-09-23T05:35:14.369Z",
+      "event": "task-added",
+      "detail": "T7: Schedule store, installer (systemd/launchd/cron), renderer fixes, keryx schedule CLI"
+    },
+    {
+      "at": "2026-09-23T05:35:14.488Z",
+      "event": "task-added",
+      "detail": "T8: /schedule and schedule_create with the always-ask confirmation card"
+    },
+    {
+      "at": "2026-09-23T05:35:14.606Z",
+      "event": "task-added",
+      "detail": "T9: TUI: Schedules sidebar section, detail modal, /schedules, live refresh"
+    },
+    {
+      "at": "2026-09-23T05:35:14.724Z",
+      "event": "task-added",
+      "detail": "T10: Spend and governance; docs and agent skill"
+    },
+    {
+      "at": "2026-09-23T05:35:14.843Z",
+      "event": "task-added",
+      "detail": "T11: Verification: CI green, keryx health run"
+    },
+    {
+      "at": "2026-09-23T05:35:14.962Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1)"
+    }
+  ]
+}

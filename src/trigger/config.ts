@@ -42,9 +42,12 @@
 // namespace, not a corner of a generated one. This also matches the shape the
 // flow's own description.md names first (`.metaproject/triggers.json`).
 
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { readConfigFile } from "../lib/config-dir";
+import type { BinaryPin } from "./granted-binary";
+import { grantedToolProblems } from "./granted-tools";
 
 // ---------------------------------------------------------------------------
 // Vocabulary
@@ -63,7 +66,7 @@ export const TRIGGER_EVENT_NAMES = ["post-merge", "post-commit", "post-checkout"
 export type TriggerEventName = (typeof TRIGGER_EVENT_NAMES)[number];
 
 /** What a fired trigger does (flow 286 description.md §"What this flow builds"). */
-export const TRIGGER_ACTION_KINDS = ["reconcile", "rebuild", "open-flow", "flow-next"] as const;
+export const TRIGGER_ACTION_KINDS = ["reconcile", "rebuild", "open-flow", "flow-next", "agent-task"] as const;
 export type TriggerActionKind = (typeof TRIGGER_ACTION_KINDS)[number];
 
 /** A safe CLI-argument-shaped name: `keryx trigger run <name>` passes it through argv verbatim. */
@@ -99,7 +102,53 @@ export type TriggerAction =
   | { readonly kind: "reconcile" }
   | { readonly kind: "rebuild" }
   | { readonly kind: "open-flow"; readonly template: string; readonly skipIfOpen?: boolean }
-  | { readonly kind: "flow-next"; readonly flow: string; readonly dispatch?: TriggerDispatch };
+  | { readonly kind: "flow-next"; readonly flow: string; readonly dispatch?: TriggerDispatch }
+  | AgentTaskAction;
+
+/**
+ * Flow 295 (AC1): a free-form scheduled agent task, with no flow and no task
+ * behind it. The operator states the prompt, the runner and its budget, and
+ * the grants (network mode, granted tools, and the repositories those tools
+ * may touch). An `agent-task` entry is only ever loaded from the per-machine
+ * schedule store (`./store.ts`) and never from the committed `triggers.json`
+ * (flow 295 C1). The dispatcher refuses it unless its content still matches
+ * the hash the operator confirmed (AC5).
+ */
+export interface AgentTaskAction {
+  readonly kind: "agent-task";
+  /** The operator's own words; the dispatcher wraps them in a fixed unattended preamble. */
+  readonly prompt: string;
+  /** Same money-shaped fields as a `flow-next` dispatch. `maxAttempts` and `network` do not apply here (network is a grant). */
+  readonly dispatch: TriggerDispatch;
+  readonly grants: AgentTaskGrants;
+  readonly report: { readonly keep: number };
+}
+
+/** Flow 295 (AC4): `allowlist` is named so it can be refused with a reason; it is delivered by flow 301. */
+export const AGENT_TASK_NETWORK_MODES = ["off", "full"] as const;
+export type AgentTaskNetworkMode = (typeof AGENT_TASK_NETWORK_MODES)[number];
+
+export interface AgentTaskGrants {
+  /** `off` (default) keeps `--unshare-net`; `full` is the host network, always shown with NETWORK_ON_WARNING. */
+  readonly network: AgentTaskNetworkMode;
+  /** Granted-tool catalogue ids (`./granted-tools.ts`). */
+  readonly tools: readonly string[];
+  /** Repositories every repo-scoped granted tool is limited to. */
+  readonly repos: readonly string[];
+  /** Absolute program paths resolved when the operator confirmed (`{ gh: "/usr/bin/gh" }`). Each basename equals its program. */
+  readonly bins: Readonly<Record<string, string>>;
+  /**
+   * Flow 295 (F1d): per program, the realpath and the sha256 of the binary as it was when
+   * the operator confirmed. Both are covered by the signed hash and checked again before
+   * every `execFile`, so a swapped binary or a repointed symlink refuses with `grants-changed`.
+   */
+  readonly binDigests: Readonly<Record<string, BinaryPin>>;
+  /** The account the granted tools act as, as shown on the confirmation card (display only). */
+  readonly account?: string;
+}
+
+export const DEFAULT_AGENT_TASK_MAX_SECONDS = 600;
+export const DEFAULT_AGENT_TASK_REPORT_KEEP = 20;
 
 /**
  * Flow 290 (AC1, AC4, AC6, AC7): what turns a report-only `flow-next` into
@@ -143,7 +192,43 @@ export interface TriggerEntry {
   readonly action: TriggerAction;
   /** Defaults to `true` when absent. A disabled entry loads (and lists) but a run refuses it — that refusal belongs to T7, not this loader. */
   readonly enabled: boolean;
+  /** Flow 295: where the entry came from — the committed `triggers.json` or the per-machine schedule store. */
+  readonly source: TriggerEntrySource;
+  /** Flow 295 (AC5): the content hash the operator confirmed. Present only on schedule-store entries. */
+  readonly confirmedHash?: string;
+  /**
+   * Flow 295 (M1): the keryx invocation and pinned environment the operator confirmed on the
+   * card. Signed with the rest of the content. Install, resume and reinstall write exactly
+   * this into the unit, whichever process presses the key.
+   */
+  readonly install?: ConfirmedRunner;
 }
+
+/** Flow 295 (M1): what the installed timer executes — `argv` then `trigger run --schedule <name>` — and the environment it pins. */
+export interface ConfirmedRunner {
+  readonly argv: readonly string[];
+  readonly env: Readonly<Record<string, string>>;
+}
+
+/** Problems with a stored `install` block; empty means valid. */
+export function confirmedRunnerProblems(value: unknown): string[] {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return ["install: must be an object {argv, env}"];
+  const raw = value as { argv?: unknown; env?: unknown };
+  const problems: string[] = [];
+  if (!Array.isArray(raw.argv) || raw.argv.length < 1 || raw.argv.length > 2 || !raw.argv.every((a) => typeof a === "string" && path.isAbsolute(a))) {
+    problems.push("install.argv: must be one or two absolute paths (the keryx binary, or the interpreter and keryx's entry script)");
+  }
+  if (raw.env === null || typeof raw.env !== "object" || Array.isArray(raw.env)) {
+    problems.push("install.env: must be an object of string values");
+  } else {
+    for (const [k, v] of Object.entries(raw.env as Record<string, unknown>)) {
+      if (!/^[A-Z_][A-Z0-9_]*$/.test(k) || typeof v !== "string") problems.push(`install.env.${k}: must be an upper-case name with a string value`);
+    }
+  }
+  return problems;
+}
+
+export type TriggerEntrySource = "config" | "store";
 
 // ---------------------------------------------------------------------------
 // On-disk (pre-validation) shape
@@ -215,8 +300,122 @@ function actionProblems(value: unknown): string[] {
     }
     return problems;
   }
+  if (raw.kind === "agent-task") {
+    return agentTaskProblems(raw);
+  }
   // "reconcile" / "rebuild" carry no extra fields.
   return [];
+}
+
+/** Flow 295 (AC1, AC4): every problem with an `agent-task` action; empty means valid. */
+function agentTaskProblems(raw: Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  if (typeof raw.prompt !== "string" || raw.prompt.trim().length === 0) {
+    problems.push("action.prompt: required — the free-form task the scheduled agent is given");
+  } else if (raw.prompt.length > 4000) {
+    problems.push("action.prompt: at most 4000 characters");
+  }
+  if (raw.dispatch === undefined) {
+    problems.push(
+      "action.dispatch: required — {provider, model, rates, ceilingUsd}. An agent task always calls a model, so it " +
+        "always needs a priced runner and a ceiling.",
+    );
+  } else {
+    problems.push(...dispatchProblems(raw.dispatch));
+    const d = raw.dispatch as Record<string, unknown> | null;
+    if (d !== null && typeof d === "object" && !Array.isArray(d)) {
+      if (d.network !== undefined) {
+        problems.push("action.dispatch.network: not used by an agent task — the network is a grant (action.grants.network)");
+      }
+      if (d.maxAttempts !== undefined) {
+        problems.push("action.dispatch.maxAttempts: not used by an agent task — there is no flow task to retry");
+      }
+    }
+  }
+  const grants = raw.grants;
+  if (grants === undefined) {
+    problems.push('action.grants: required — at least {"network": "off", "tools": []}');
+  } else if (grants === null || typeof grants !== "object" || Array.isArray(grants)) {
+    problems.push("action.grants: must be an object");
+  } else {
+    problems.push(...grantsProblems(grants as Record<string, unknown>));
+  }
+  if (raw.report !== undefined) {
+    const report = raw.report as Record<string, unknown> | null;
+    if (report === null || typeof report !== "object" || Array.isArray(report)) {
+      problems.push("action.report: must be an object when present");
+    } else if (report.keep !== undefined && !(Number.isSafeInteger(report.keep) && (report.keep as number) > 0 && (report.keep as number) <= 1000)) {
+      problems.push("action.report.keep: must be an integer from 1 to 1000 when present");
+    }
+  }
+  return problems;
+}
+
+function grantsProblems(grants: Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  const network = grants.network ?? "off";
+  if (network === "allowlist") {
+    problems.push(
+      'action.grants.network: "allowlist" (shell commands reaching only listed domains through the loopback proxy) is ' +
+        "not yet available — it is delivered by flow 301. Use \"off\" (the default); granted tools run outside the " +
+        "sandbox and need no sandbox network.",
+    );
+  } else if (typeof network !== "string" || !(AGENT_TASK_NETWORK_MODES as readonly string[]).includes(network)) {
+    problems.push(`action.grants.network: must be one of ${AGENT_TASK_NETWORK_MODES.join(", ")}`);
+  }
+  const tools = grants.tools ?? [];
+  if (!Array.isArray(tools)) {
+    problems.push("action.grants.tools: must be an array of catalogue ids");
+  } else {
+    problems.push(...grantedToolProblems(tools));
+  }
+  const repos = grants.repos ?? [];
+  if (!Array.isArray(repos) || !repos.every((r) => typeof r === "string" && /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/.test(r))) {
+    problems.push("action.grants.repos: must be an array of owner/name repository strings");
+  } else if (Array.isArray(tools) && tools.length > 0 && repos.length === 0) {
+    problems.push("action.grants.repos: required when granted tools are listed — every granted tool is scoped to named repositories");
+  }
+  const bins = grants.bins ?? {};
+  if (bins === null || typeof bins !== "object" || Array.isArray(bins)) {
+    problems.push("action.grants.bins: must be an object mapping a program to its absolute path");
+  } else {
+    for (const [program, bin] of Object.entries(bins as Record<string, unknown>)) {
+      if (typeof bin !== "string" || !path.isAbsolute(bin)) {
+        problems.push(`action.grants.bins.${program}: must be an absolute path`);
+      } else if (path.basename(bin) !== program) {
+        // Flow 295 (F1d): `bins.gh` must be a program named `gh`, never `/bin/bash`.
+        problems.push(`action.grants.bins.${program}: "${bin}" is not a program named "${program}"`);
+      }
+    }
+  }
+  const digests = grants.binDigests ?? {};
+  if (digests === null || typeof digests !== "object" || Array.isArray(digests)) {
+    problems.push("action.grants.binDigests: must be an object");
+  } else {
+    const filePinOk = (d: unknown): boolean => {
+      const f = d as { realpath?: unknown; sha256?: unknown; ino?: unknown; mtimeMs?: unknown } | null;
+      return (
+        f !== null &&
+        typeof f === "object" &&
+        typeof f.realpath === "string" &&
+        path.isAbsolute(f.realpath) &&
+        typeof f.sha256 === "string" &&
+        /^[0-9a-f]{64}$/.test(f.sha256) &&
+        (f.ino === undefined || typeof f.ino === "number") &&
+        (f.mtimeMs === undefined || typeof f.mtimeMs === "number")
+      );
+    };
+    for (const [program, digest] of Object.entries(digests as Record<string, unknown>)) {
+      const interp = (digest as { interpreter?: unknown } | null)?.interpreter as { command?: unknown } | undefined;
+      if (!filePinOk(digest) || (interp !== undefined && (!filePinOk(interp) || typeof interp.command !== "string"))) {
+        problems.push(`action.grants.binDigests.${program}: must be {realpath (absolute), sha256 (hex), ino?, mtimeMs?, interpreter?}`);
+      }
+    }
+  }
+  if (grants.account !== undefined && typeof grants.account !== "string") {
+    problems.push("action.grants.account: must be a string when present");
+  }
+  return problems;
 }
 
 function isNonNegativeFinite(value: unknown): value is number {
@@ -317,6 +516,7 @@ export function isLoopbackUrl(value: string): boolean {
 
 /** Normalize a validated action: fills a dispatch block's defaults. */
 function normalizeAction(action: TriggerAction): TriggerAction {
+  if (action.kind === "agent-task") return normalizeAgentTask(action);
   if (action.kind !== "flow-next" || action.dispatch === undefined) return action;
   const raw = action.dispatch as Partial<TriggerDispatch> & Pick<TriggerDispatch, "provider" | "model" | "rates" | "ceilingUsd">;
   const dispatch: TriggerDispatch = {
@@ -331,6 +531,64 @@ function normalizeAction(action: TriggerAction): TriggerAction {
     ...(raw.baseUrl !== undefined ? { baseUrl: raw.baseUrl } : {}),
   };
   return { kind: "flow-next", flow: action.flow, dispatch };
+}
+
+function normalizeAgentTask(action: AgentTaskAction): AgentTaskAction {
+  const raw = action.dispatch as Partial<TriggerDispatch> & Pick<TriggerDispatch, "provider" | "model" | "rates" | "ceilingUsd">;
+  const grants = (action.grants ?? {}) as Partial<AgentTaskGrants>;
+  return {
+    kind: "agent-task",
+    prompt: action.prompt,
+    dispatch: {
+      provider: raw.provider,
+      model: raw.model,
+      permissionMode: raw.permissionMode ?? "ask",
+      rates: { inputUsdPerMTok: raw.rates.inputUsdPerMTok, outputUsdPerMTok: raw.rates.outputUsdPerMTok },
+      ceilingUsd: raw.ceilingUsd,
+      maxSeconds: raw.maxSeconds ?? DEFAULT_AGENT_TASK_MAX_SECONDS,
+      maxAttempts: 1,
+      network: (grants.network ?? "off") === "full",
+      ...(raw.baseUrl !== undefined ? { baseUrl: raw.baseUrl } : {}),
+    },
+    grants: {
+      network: grants.network ?? "off",
+      tools: [...(grants.tools ?? [])],
+      repos: [...(grants.repos ?? [])],
+      bins: { ...(grants.bins ?? {}) },
+      binDigests: { ...(grants.binDigests ?? {}) },
+      ...(grants.account !== undefined ? { account: grants.account } : {}),
+    },
+    report: { keep: action.report?.keep ?? DEFAULT_AGENT_TASK_REPORT_KEEP },
+  };
+}
+
+/**
+ * Flow 295 (AC5): the content an operator confirms. It covers everything that decides what
+ * an `agent-task` run does: its name, cadence, prompt, runner, budget and grants,
+ * including the realpath and sha256 of every granted binary. `enabled` is excluded on
+ * purpose, because pause and resume are not a change of content. The input is the RAW
+ * entry as stored (before defaults are filled), canonicalised by sorting object keys.
+ *
+ * Flow 295 (F1): this is signed with an HMAC keyed by a per-machine secret
+ * (`./schedule-key.ts`), never merely hashed. Anyone could compute a plain hash for a
+ * committed or forged store; only this machine's key can produce the MAC.
+ */
+export function scheduleContentCanonical(entry: unknown): string {
+  const raw = (entry ?? {}) as Record<string, unknown>;
+  // M1: `install` (the confirmed keryx invocation and pinned env) is signed too, so an
+  // edit that points the timer at another program fails verification.
+  return canonicalJson({ name: raw.name, on: raw.on, action: raw.action, install: raw.install });
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value ?? null);
 }
 
 /**
@@ -373,12 +631,16 @@ export function triggerEntryProblems(value: unknown): string[] {
   if (raw.enabled !== undefined && typeof raw.enabled !== "boolean") {
     problems.push("enabled: must be a boolean when present");
   }
+  if (raw.confirmedHash !== undefined && (typeof raw.confirmedHash !== "string" || !/^[0-9a-f]{64}$/.test(raw.confirmedHash))) {
+    problems.push("confirmedHash: must be a sha256 hex string when present");
+  }
+  if (raw.install !== undefined) problems.push(...confirmedRunnerProblems(raw.install));
 
   return problems;
 }
 
 /** Parse `value` into a {@link TriggerEntry}, or `undefined` when {@link triggerEntryProblems} finds any. Never throws. */
-function parseTriggerEntry(value: unknown): TriggerEntry | undefined {
+function parseTriggerEntry(value: unknown, source: TriggerEntrySource = "config"): TriggerEntry | undefined {
   try {
     if (triggerEntryProblems(value).length > 0) return undefined;
     const raw = value as {
@@ -386,6 +648,8 @@ function parseTriggerEntry(value: unknown): TriggerEntry | undefined {
       on: { kind: "event"; event: TriggerEventName } | { kind: "schedule"; cron: string };
       action: TriggerAction;
       enabled?: boolean;
+      confirmedHash?: string;
+      install?: ConfirmedRunner;
     };
     const fire: TriggerFire =
       raw.on.kind === "event" ? { kind: "event", event: raw.on.event } : { kind: "schedule", cron: raw.on.cron };
@@ -394,6 +658,9 @@ function parseTriggerEntry(value: unknown): TriggerEntry | undefined {
       fire,
       action: normalizeAction(raw.action),
       enabled: raw.enabled ?? true,
+      source,
+      ...(raw.confirmedHash !== undefined ? { confirmedHash: raw.confirmedHash } : {}),
+      ...(raw.install !== undefined ? { install: { argv: [...raw.install.argv], env: { ...raw.install.env } } } : {}),
     };
   } catch {
     return undefined;
@@ -406,11 +673,13 @@ function parseTriggerEntry(value: unknown): TriggerEntry | undefined {
 
 /** One entry the loader could not accept, and why. */
 export interface RejectedTriggerEntry {
-  /** Position in the `triggers` array (0-based), for pointing a hand-editor at the right entry. */
+  /** Position in the `triggers` array (0-based), for pointing a hand-editor at the right entry. -1 for a whole-file problem of the schedule store. */
   readonly index: number;
   /** The entry's own `name`, when it had a readable string one — `undefined` when even that could not be read. */
   readonly name: string | undefined;
   readonly reasons: readonly string[];
+  /** Flow 295: which file the entry was in. */
+  readonly source?: TriggerEntrySource;
 }
 
 export type TriggersFileProblem =
@@ -422,17 +691,19 @@ export type TriggersFileProblem =
   | "triggers-not-an-array";
 
 export interface TriggersLoadResult {
-  /** Valid, de-duplicated entries, in file order. */
+  /** Valid, de-duplicated entries, in file order (`triggers.json` first, then the schedule store). */
   readonly triggers: readonly TriggerEntry[];
   /** Malformed entries, each with the reason(s) it was refused (AC1). */
   readonly rejected: readonly RejectedTriggerEntry[];
   /**
-   * Set when the FILE itself could not be read as a triggers document at all
+   * Set when `triggers.json` itself could not be read as a triggers document at all
    * (absent, not JSON, wrong top-level shape, ...) — as opposed to one bad
    * entry inside an otherwise-valid file, which shows up in `rejected`
    * instead. `triggers`/`rejected` are always `[]` together with this set,
    * except `"absent"`, which is the ordinary "no trigger config yet" state,
-   * not an error to surface.
+   * not an error to surface. Flow 295: `"absent"` means NEITHER `triggers.json`
+   * NOR the schedule store exists; a broken schedule store never hides the
+   * committed entries — it is reported as one rejected pseudo-entry.
    */
   readonly fileProblem: TriggersFileProblem | undefined;
 }
@@ -443,7 +714,39 @@ export function triggersConfigPath(projectRoot: string): string {
 }
 
 /**
- * Load and validate every entry in `.metaproject/triggers.json`.
+ * Flow 295 (C1): the per-machine schedule store. Keryx writes it (`./store.ts`),
+ * only after the operator confirms. It lives under `.metaproject/data/trigger/`,
+ * which the unattended floor protects and which `./store.ts` makes self-ignoring,
+ * so it is never committed. A merged edit to a shared file can therefore never
+ * change the prompt or the grants behind an installed timer.
+ */
+export function scheduleStorePath(projectRoot: string): string {
+  return path.join(projectRoot, ".metaproject", "data", "trigger", "schedules.json");
+}
+
+type TriggerFileRead = { readonly problem: TriggersFileProblem } | { readonly problem: undefined; readonly entries: readonly unknown[] };
+
+function readTriggerFile(file: string): TriggerFileRead {
+  if (!existsSync(file)) return { problem: "absent" };
+  const read = readConfigFile(file);
+  // `readConfigFile`'s own reasons all collapse to "unreadable" — none of them describe an entry.
+  if (!read.ok) return { problem: "unreadable" };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(read.text);
+  } catch {
+    return { problem: "not-json" };
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return { problem: "not-an-object" };
+  const raw = parsed as RawTriggersFile;
+  if (raw.schemaVersion !== TRIGGERS_SCHEMA_VERSION) return { problem: "wrong-schema-version" };
+  if (!Array.isArray(raw.triggers)) return { problem: "triggers-not-an-array" };
+  return { problem: undefined, entries: raw.triggers };
+}
+
+/**
+ * Load and validate every entry in `.metaproject/triggers.json` and, since flow
+ * 295, the per-machine schedule store.
  *
  * AC1: "an entry that is malformed is refused on load with the reason, and
  * the other entries still work" — never throws, and one bad entry never
@@ -455,82 +758,123 @@ export function triggersConfigPath(projectRoot: string): string {
  * silently win would make that resolution depend on file order without
  * saying so.
  */
-export function loadTriggersConfig(projectRoot: string): TriggersLoadResult {
-  const empty = (fileProblem: TriggersFileProblem | undefined): TriggersLoadResult => ({
-    triggers: [],
-    rejected: [],
-    fileProblem,
-  });
-
-  const file = triggersConfigPath(projectRoot);
-  if (!existsSync(file)) {
-    return empty("absent");
-  }
-
-  const read = readConfigFile(file);
-  if (!read.ok) {
-    // `readConfigFile`'s own reasons ("not-regular" | "too-large" | "unreadable" | "absent")
-    // all collapse to "unreadable" here — none of them describe an entry, so
-    // none belongs in `rejected`, and the caller only needs "the file could
-    // not be read" plus (if it wants it) `read.reason` from a direct call.
-    return empty("unreadable");
-  }
-
-  let parsed: unknown;
+/**
+ * Flow 295 (F1b): is the schedule store tracked by git? A tracked store is shared
+ * content, and so possibly someone else's. It is refused whole. `git ls-files
+ * --error-unmatch` exits 0 only when the path is in the index. Any other exit
+ * (untracked, not a repository, no git) means "not tracked".
+ */
+export function isScheduleStoreTracked(projectRoot: string): boolean {
   try {
-    parsed = JSON.parse(read.text);
+    execFileSync("git", ["ls-files", "--error-unmatch", "--", path.relative(projectRoot, scheduleStorePath(projectRoot))], {
+      cwd: projectRoot,
+      stdio: "ignore",
+      timeout: 10_000,
+    });
+    return true;
   } catch {
-    return empty("not-json");
+    return false;
+  }
+}
+
+export function loadTriggersConfig(projectRoot: string): TriggersLoadResult {
+  const config = readTriggerFile(triggersConfigPath(projectRoot));
+  let store = readTriggerFile(scheduleStorePath(projectRoot));
+  let storeTracked = false;
+  if (store.problem === undefined && isScheduleStoreTracked(projectRoot)) {
+    storeTracked = true;
+    store = { problem: "unreadable" };
   }
 
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return empty("not-an-object");
+  if (config.problem !== undefined && config.problem !== "absent") {
+    return { triggers: [], rejected: [], fileProblem: config.problem };
   }
-  const raw = parsed as RawTriggersFile;
-
-  if (raw.schemaVersion !== TRIGGERS_SCHEMA_VERSION) {
-    return empty("wrong-schema-version");
-  }
-  if (!Array.isArray(raw.triggers)) {
-    return empty("triggers-not-an-array");
+  if (config.problem === "absent" && store.problem === "absent") {
+    return { triggers: [], rejected: [], fileProblem: "absent" };
   }
 
   const triggers: TriggerEntry[] = [];
   const rejected: RejectedTriggerEntry[] = [];
   const seenNames = new Set<string>();
+  // Flow 295 (F4): a local schedule's name wins over a committed trigger of the
+  // same name. Otherwise a committed entry could take over the operator's timer.
+  const storeNames = new Set<string>(
+    store.problem === undefined
+      ? store.entries
+          .map((e) => (e !== null && typeof e === "object" ? (e as { name?: unknown }).name : undefined))
+          .filter((n): n is string => typeof n === "string")
+      : [],
+  );
 
-  raw.triggers.forEach((candidate, index) => {
-    let reasons: string[];
-    try {
-      reasons = triggerEntryProblems(candidate);
-    } catch (error) {
-      reasons = [`entry: threw during validation (${error instanceof Error ? error.message : String(error)})`];
-    }
-    const candidateName =
-      candidate !== null && typeof candidate === "object" && typeof (candidate as { name?: unknown }).name === "string"
-        ? ((candidate as { name: string }).name)
-        : undefined;
+  const take = (candidates: readonly unknown[], source: TriggerEntrySource): void => {
+    candidates.forEach((candidate, index) => {
+      let reasons: string[];
+      try {
+        reasons = triggerEntryProblems(candidate);
+      } catch (error) {
+        reasons = [`entry: threw during validation (${error instanceof Error ? error.message : String(error)})`];
+      }
+      const candidateName =
+        candidate !== null && typeof candidate === "object" && typeof (candidate as { name?: unknown }).name === "string"
+          ? ((candidate as { name: string }).name)
+          : undefined;
+      const kind = (candidate as { action?: { kind?: unknown } } | null)?.action?.kind;
 
-    if (reasons.length === 0 && candidateName !== undefined && seenNames.has(candidateName)) {
-      reasons = [`name: "${candidateName}" is already used by an earlier entry in this file`];
-    }
+      if (reasons.length === 0 && source === "config" && kind === "agent-task") {
+        reasons = [
+          "action.kind: an agent-task is created with `keryx schedule add` (or /schedule in the shell) and lives in the " +
+            "per-machine schedule store — never in the committed triggers.json, where a merged edit could change its prompt or grants",
+        ];
+      }
+      const fireKind = (candidate as { on?: { kind?: unknown } } | null)?.on?.kind;
+      if (reasons.length === 0 && source === "store" && kind !== "agent-task") {
+        reasons = ["action.kind: the schedule store holds only agent-task schedules"];
+      }
+      if (reasons.length === 0 && (source === "store" || kind === "agent-task") && fireKind !== "schedule") {
+        // Flow 295 (F1c): a stored schedule never fires on a git event, so it is never hooked.
+        reasons = ['on.kind: a stored schedule / agent-task fires only on {"kind": "schedule"} — never on a git event'];
+      }
+      if (reasons.length === 0 && source === "config" && candidateName !== undefined && storeNames.has(candidateName)) {
+        reasons = [
+          `name: "${candidateName}" is also a local schedule on this machine — the local schedule wins and this committed ` +
+            "trigger is refused. Rename one of them.",
+        ];
+      }
+      if (reasons.length === 0 && candidateName !== undefined && seenNames.has(candidateName)) {
+        reasons = [`name: "${candidateName}" is already used by an earlier entry`];
+      }
 
-    if (reasons.length > 0) {
-      rejected.push({ index, name: candidateName, reasons });
-      return;
-    }
+      if (reasons.length > 0) {
+        rejected.push({ index, name: candidateName, reasons, source });
+        return;
+      }
 
-    const entry = parseTriggerEntry(candidate);
-    if (entry === undefined) {
-      // Defensive: `triggerEntryProblems` found nothing, but the parse step
-      // itself failed. Should be unreachable given the two functions agree on
-      // shape; refused rather than silently dropped either way.
-      rejected.push({ index, name: candidateName, reasons: ["entry: failed to parse after passing validation"] });
-      return;
-    }
-    seenNames.add(entry.name);
-    triggers.push(entry);
-  });
+      const entry = parseTriggerEntry(candidate, source);
+      if (entry === undefined) {
+        rejected.push({ index, name: candidateName, reasons: ["entry: failed to parse after passing validation"], source });
+        return;
+      }
+      seenNames.add(entry.name);
+      triggers.push(entry);
+    });
+  };
+
+  if (config.problem === undefined) take(config.entries, "config");
+  if (store.problem === undefined) {
+    take(store.entries, "store");
+  } else if (store.problem !== "absent") {
+    rejected.push({
+      index: -1,
+      name: undefined,
+      reasons: [
+        storeTracked
+          ? `schedule store ${scheduleStorePath(projectRoot)} is tracked by git — it is per-machine and must never be ` +
+            "committed; a committed store may be someone else's, so none of its schedules run. `git rm --cached` it."
+          : `schedule store ${scheduleStorePath(projectRoot)} could not be read (${store.problem}) — its schedules do not run`,
+      ],
+      source: "store",
+    });
+  }
 
   return { triggers, rejected, fileProblem: undefined };
 }

@@ -49,9 +49,12 @@
 //      the project root resolved at generation time — neither cron nor
 //      systemd otherwise runs a job from inside the project.
 
+import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
 import path from "node:path";
 import { isCompiledBinaryEntry } from "../lib/self-invocation";
 import { loadTriggersConfig, type TriggerEntry } from "./config";
+import { cronToOnCalendar } from "./cron";
 
 export interface KeryxInvocation {
   /** The interpreter actually running this process (`node` or `bun`), absolute — or, for a compiled binary, keryx itself. */
@@ -95,7 +98,7 @@ export function resolveScheduleEntry(projectRoot: string, name: string): Schedul
 }
 
 /** Quote one shell word single-quoted, safe for any byte a path or name can contain. */
-function shQuote(value: string): string {
+export function shQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
@@ -179,7 +182,7 @@ function systemdEscapePercent(value: string): string {
 }
 
 /** `systemdEscapePercent` then `systemdQuote`, in the order every interpolated systemd value below needs. */
-function systemdValue(value: string): string {
+export function systemdValue(value: string): string {
   return systemdQuote(systemdEscapePercent(value));
 }
 
@@ -190,6 +193,31 @@ function systemdValue(value: string): string {
  */
 function cronEscapePercent(value: string): string {
   return value.replace(/%/g, "\\%");
+}
+
+/**
+ * Flow 295 (AC8): a short, stable hash of the project's real path. It makes unit, plist and
+ * crontab names unique per project, so two projects that both have a schedule named
+ * `check-github` never share a unit in `~/.config/systemd/user/`.
+ */
+export function projectScheduleHash(projectRoot: string): string {
+  let real: string;
+  try {
+    real = realpathSync(projectRoot);
+  } catch {
+    real = path.resolve(projectRoot);
+  }
+  return createHash("sha256").update(real).digest("hex").slice(0, 8);
+}
+
+/** `keryx-<projecthash>-<name>`: the base of every unit/plist/crontab-block name keryx installs. */
+export function scheduleUnitBase(projectRoot: string, name: string): string {
+  return `keryx-${projectScheduleHash(projectRoot)}-${name}`;
+}
+
+/** The header every file keryx installs carries; uninstall touches only files that carry it for this project. */
+export function managedHeader(projectRoot: string, name: string): string {
+  return `# keryx-managed ${projectScheduleHash(projectRoot)} ${name}`;
 }
 
 export interface ScheduleLines {
@@ -204,6 +232,8 @@ export interface ScheduleLines {
   readonly serviceUnitName: string;
   readonly timerUnitName: string;
   readonly logPath: string;
+  /** Flow 295 (AC8): the translated `OnCalendar=` value, or why the cron cannot be translated. */
+  readonly onCalendar: { readonly ok: true; readonly value: string } | { readonly ok: false; readonly reason: string };
 }
 
 /**
@@ -216,8 +246,13 @@ export function renderScheduleLines(params: {
   readonly name: string;
   readonly cron: string;
   readonly invocation: KeryxInvocation;
+  /** Flow 295 (F4): run `trigger run --schedule <name>`, which resolves only the local schedule store. */
+  readonly scheduleOnly?: boolean;
+  /** Flow 295 (N4): extra environment pinned into the unit (e.g. `XDG_DATA_HOME`, so the timer finds the same signing key). */
+  readonly environment?: Readonly<Record<string, string>>;
 }): ScheduleLines {
   const { projectRoot, name, cron, invocation } = params;
+  const runFlag = params.scheduleOnly === true ? "--schedule " : "";
   const interpreterDir = path.dirname(invocation.execPath);
   // Interpreter's own directory first (so THIS keryx resolves even if
   // something it shells out to looks up "node"/"bun" by bare name), then the
@@ -233,9 +268,11 @@ export function renderScheduleLines(params: {
   // the redirect is what makes the first-ever scheduled fire, not just every
   // one after it, actually perform the pass — measured by this task's own
   // AC6 test failing exactly this way before this line was added.
+  const extraEnv = Object.entries(params.environment ?? {});
+  const cronEnv = extraEnv.map(([k, v]) => `${k}=${shQuote(v)} `).join("");
   const cronCommand =
-    `cd ${shQuote(projectRoot)} && mkdir -p ${shQuote(logDir)} && PATH=${shQuote(assumedPath)} ` +
-    `${invocationArgv(invocation).map(shQuote).join(" ")} trigger run ${shQuote(name)} ` +
+    `cd ${shQuote(projectRoot)} && mkdir -p ${shQuote(logDir)} && ${cronEnv}PATH=${shQuote(assumedPath)} ` +
+    `${invocationArgv(invocation).map(shQuote).join(" ")} trigger run ${runFlag}${shQuote(name)} ` +
     `>> ${shQuote(logPath)} 2>&1`;
   // `cronLine` (what actually goes into a crontab) gets cron's own `%`
   // escaping on top of `cronCommand`'s shell quoting — see the file-header
@@ -244,14 +281,18 @@ export function renderScheduleLines(params: {
   // below), which never runs cron's line-preprocessing at all.
   const cronLine = `${cron} ${cronEscapePercent(cronCommand)}`;
 
-  const serviceUnitName = `keryx-trigger-${name}.service`;
-  const timerUnitName = `keryx-trigger-${name}.timer`;
+  const unitBase = scheduleUnitBase(projectRoot, name);
+  const serviceUnitName = `${unitBase}.service`;
+  const timerUnitName = `${unitBase}.timer`;
+  const header = managedHeader(projectRoot, name);
+  const onCalendar = cronToOnCalendar(cron);
   // Description= is free text (not word-split, not argv), so it only needs
   // `%` doubled — the literal decorative quotes around the name below stay
   // exactly as authored.
   const descriptionName = systemdEscapePercent(name);
   const descriptionProjectRoot = systemdEscapePercent(projectRoot);
-  const systemdService = `# ${serviceUnitName} — install under /etc/systemd/system/ (or ~/.config/systemd/user/ for --user)
+  const systemdService = `${header}
+# ${serviceUnitName} — a --user unit: ~/.config/systemd/user/ (keryx schedule installs it there for you)
 [Unit]
 Description=keryx trigger "${descriptionName}" (${descriptionProjectRoot})
 
@@ -259,27 +300,32 @@ Description=keryx trigger "${descriptionName}" (${descriptionProjectRoot})
 Type=oneshot
 WorkingDirectory=${systemdEscapePercent(projectRoot)}
 Environment=${systemdQuote(systemdEscapePercent(`PATH=${assumedPath}`))}
-# Same reason as the cron line's own \`mkdir -p\`: StandardOutput=append: does
+${extraEnv.map(([k, v]) => `Environment=${systemdQuote(systemdEscapePercent(`${k}=${v}`))}\n`).join("")}# Same reason as the cron line's own \`mkdir -p\`: StandardOutput=append: does
 # not create a missing PARENT directory, only a missing file. The leading "-"
 # means systemd ignores this step's own exit status.
 ExecStartPre=-/bin/mkdir -p ${systemdValue(logDir)}
-ExecStart=${invocationArgv(invocation).map(systemdValue).join(" ")} trigger run ${systemdValue(name)}
+ExecStart=${invocationArgv(invocation).map(systemdValue).join(" ")} trigger run ${runFlag}${systemdValue(name)}
 StandardOutput=append:${systemdEscapePercent(logPath)}
 StandardError=append:${systemdEscapePercent(logPath)}
 `;
-  const systemdTimer = `# ${timerUnitName} — install alongside ${serviceUnitName}
+  // Flow 295 (AC8): a real OnCalendar= translated from the cron. Flow 286 printed
+  // only a commented placeholder here, so that timer never fired. An expression
+  // with no systemd equivalent keeps the comment and says why, and it is never installed.
+  const calendarLines = onCalendar.ok
+    ? `# cron "${cron}", translated; check it with: systemd-analyze calendar '${onCalendar.value}'\nOnCalendar=${onCalendar.value}`
+    : `# cron "${cron}" has no systemd equivalent: ${onCalendar.reason}\n# OnCalendar=`;
+  const systemdTimer = `${header}
+# ${timerUnitName} — install alongside ${serviceUnitName}
 [Unit]
 Description=Schedule for keryx trigger "${descriptionName}"
 
 [Timer]
-# Translate the cron expression "${cron}" into OnCalendar= syntax, e.g. with
-# \`systemd-analyze calendar '<expression>'\` to verify it, then uncomment:
-# OnCalendar=
+${calendarLines}
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 `;
 
-  return { assumedPath, cronCommand, cronLine, systemdService, systemdTimer, serviceUnitName, timerUnitName, logPath };
+  return { assumedPath, cronCommand, cronLine, systemdService, systemdTimer, serviceUnitName, timerUnitName, logPath, onCalendar };
 }

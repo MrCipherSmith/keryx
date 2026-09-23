@@ -57,6 +57,12 @@ export type BusyDispatchTarget =
    */
   | "governance"
   | "triggers"
+  /**
+   * `/schedules` (flow 295): the Schedules list and detail modals. Opening them is
+   * read-only; their actions (pause, resume, delete, run-now as a CHILD process)
+   * never touch the main turn.
+   */
+  | "schedules"
   | "deferred"
   | "not-a-command";
 
@@ -92,6 +98,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/bus") return "bus";
   if (commandName === "/governance") return "governance";
   if (commandName === "/triggers") return "triggers";
+  if (commandName === "/schedules") return "schedules";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
   if (isBusyReadonlyCommand && isFlows) return "flows";

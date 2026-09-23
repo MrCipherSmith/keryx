@@ -216,7 +216,8 @@ export function mountOpsSidebar(options: OpsSidebarOptions): OpsSidebar {
   const unsubscribeWatcher = watcher.subscribe((changed) => {
     const work: Array<Promise<void> | undefined> = [];
     if (changed.has("governance")) work.push(governancePanel.refresh(), governanceModal?.reload());
-    if (changed.has("runs") || changed.has("triggers")) work.push(triggersPanel.refresh(), triggersModal?.reload());
+    // Flow 295: a schedule added or removed changes the Triggers section's "N scheduled" line too.
+    if (changed.has("runs") || changed.has("triggers") || changed.has("schedules")) work.push(triggersPanel.refresh(), triggersModal?.reload());
     repaint = Promise.all(work).then(() => undefined);
   });
 

@@ -208,11 +208,14 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * two words were removed from the description and the workflow. A skill winning
  * a query on `d` < `r` is not routing, and the pair must never absorb one.
  *
+ * Flow 295 added `scheduled-tasks` with three positives, all ranking first:
+ * 305/307 + 3 = 308/310.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 305;
-export const RANK1_TOTAL = 307;
+export const RANK1_FIRST = 308;
+export const RANK1_TOTAL = 310;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -1262,6 +1265,19 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     negatives: [
       { prompt: "install the post-commit git hook for graph rebuilds", owner: "hook-manager" },
       { prompt: "run lint and the tests and the type-check before I call this done", owner: "code-verifier" },
+    ],
+  },
+  {
+    // Flow 295.
+    skill: "scheduled-tasks",
+    positives: [
+      "make this happen repeatedly in the background while I am away: look at github each afternoon",
+      "every morning at nine summarise the new github issues for me, unattended",
+      "проверяй мои открытые PR на гитхабе по расписанию и присылай сводку",
+    ],
+    negatives: [
+      { prompt: "run lint after every edit, set that up as a hook", owner: "hookify" },
+      { prompt: "commit changes", owner: "commit" },
     ],
   },
   {

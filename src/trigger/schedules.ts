@@ -1,0 +1,440 @@
+// Flow 295 (AC6-AC9): the one service behind every way a schedule is created
+// or changed: `keryx schedule …`, `/schedule`, the `schedule_create` agent tool,
+// and the TUI modal's actions.
+//
+// Creating a schedule has two halves, and nothing is written between them:
+//
+//   1. DRAFT. Turn the operator's (or the model's) request into a complete
+//      `agent-task` entry. That means translating the cadence, resolving each granted
+//      program to an absolute path, looking up the account it acts as, and planning
+//      the timer install. The draft renders the CONFIRMATION CARD, which lists
+//      everything the schedule will be allowed to do and exactly what will be
+//      installed. Drafting writes nothing.
+//   2. CONFIRM. Only after the operator says yes to that card: store the entry
+//      with its content hash (`./store.ts`) and install the timer
+//      (`./install.ts`). If the install fails, the stored entry is removed again,
+//      so a schedule is either fully present or absent.
+//
+// The model can propose a draft, but it cannot confirm one. Every caller that confirms
+// is an operator surface: a TTY prompt, `--yes` typed by the operator, or a TUI card.
+
+import { execFile } from "node:child_process";
+import { accessSync, constants as fsConstants, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { loadTriggersConfig, triggerEntryProblems, type AgentTaskAction, type ConfirmedRunner, type TriggerEntry } from "./config";
+import { nextCronRuns, parseCadence } from "./cron";
+import { grantedToolSpec } from "./granted-tools";
+import {
+  currentRunner,
+  installSchedule,
+  isScheduleInstalled,
+  lingerStatus,
+  pauseSchedule,
+  planInstall,
+  resumeSchedule,
+  uninstallSchedule,
+  type InstallPlan,
+  type ScheduleHost,
+} from "./install";
+import { latestRunByTrigger, readTriggerRuns, type TriggerRunRecord } from "./record";
+import { addConfirmedSchedule, removeStoredSchedule, setScheduleEnabled, triggerReportsDir } from "./store";
+import { configDirInsideProjectReason, scheduleKeyPath } from "./schedule-key";
+import { pinGrantedBinary, resolvesInsideProject, type BinaryPin } from "./granted-binary";
+import { verifyStoredSchedule } from "./schedule-verify";
+
+/** Shown on the card whenever the shell gets the host network. Kept in step with trigger-dispatch's NETWORK_ON_WARNING. */
+export const FULL_NETWORK_CARD_WARNING =
+  "NETWORK ON — the agent's shell commands get the host's FULL network: the internet, every service on the host's loopback, and the host's abstract unix sockets.";
+
+/**
+ * Flow 295 (M3a): a keryx started from an agent's `shell_exec` inherits KERYX_TOOL_CALL=1.
+ * An agent can drive such a nested TUI through a pseudo-terminal, so every surface that
+ * creates or changes a schedule (the `/schedule` card, `schedule_create`, the modal's
+ * pause/resume, run-now and delete) refuses there, whatever answers its prompts.
+ */
+export function nestedAgentScheduleRefusal(env: Readonly<Record<string, string | undefined>> = process.env): string | undefined {
+  if (env["KERYX_TOOL_CALL"] !== "1") return undefined;
+  return (
+    "refused: this keryx was started from an agent's shell (KERYX_TOOL_CALL=1), and an agent can type into it. " +
+    "Schedules are created, run and changed only from your own terminal's keryx."
+  );
+}
+
+/** What a caller asks for. Everything money-shaped is required; the rest has safe defaults. */
+export interface ScheduleRequest {
+  readonly name: string;
+  /** A cron expression or a phrase `parseCadence` understands ("every 4 hours"). */
+  readonly cadence: string;
+  readonly prompt: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly rates: { readonly inputUsdPerMTok: number; readonly outputUsdPerMTok: number };
+  readonly ceilingUsd: number;
+  readonly maxSeconds?: number;
+  readonly permissionMode?: "ask" | "trust";
+  readonly network?: "off" | "full";
+  readonly tools?: readonly string[];
+  readonly repos?: readonly string[];
+}
+
+export interface DraftContext {
+  readonly projectRoot: string;
+  readonly host?: ScheduleHost;
+  readonly now?: () => Date;
+  /** Resolve a program to an absolute path. Default: search `PATH`. */
+  readonly resolveProgram?: (program: string) => string | undefined;
+  /** The account a granted program acts as. Default: `gh api user --jq .login`, run from the project root. */
+  readonly accountOf?: (program: string, bin: string) => Promise<string | undefined>;
+}
+
+export interface ScheduleDraft {
+  /** The exact entry that will be stored if confirmed. */
+  readonly entry: Record<string, unknown>;
+  readonly cron: string;
+  readonly nextRuns: readonly Date[];
+  readonly plan: InstallPlan;
+  readonly linger: "yes" | "no" | "unknown" | "n/a";
+  /** The confirmation card, one line per element. The same text on every surface. */
+  readonly card: readonly string[];
+}
+
+export type DraftResult = { readonly ok: true; readonly draft: ScheduleDraft } | { readonly ok: false; readonly problems: readonly string[] };
+
+/** Search PATH for an executable. */
+export function resolveOnPath(program: string, pathEnv: string | undefined = process.env["PATH"]): string | undefined {
+  for (const dir of (pathEnv ?? "").split(path.delimiter)) {
+    if (dir.length === 0) continue;
+    const candidate = path.join(dir, program);
+    try {
+      accessSync(candidate, fsConstants.X_OK);
+      return candidate;
+    } catch {
+      // next
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Who `gh` acts as, for the card. It runs ONLY while the card is drafted (never at run
+ * time), and (flow 295 N2) from a fresh empty directory, never from the project, so no
+ * committed `.tool-versions`/`.mise.toml`/`.envrc` can steer it.
+ */
+function defaultAccountOf(): (program: string, bin: string) => Promise<string | undefined> {
+  return async (program, bin) => {
+    if (program !== "gh") return undefined;
+    const cwd = mkdtempSync(path.join(tmpdir(), "keryx-account-"));
+    try {
+      return await new Promise<string | undefined>((resolve) => {
+        execFile(bin, ["api", "user", "--jq", ".login"], { cwd, timeout: 10_000 }, (error, stdout) => {
+          resolve(error === null && stdout.trim().length > 0 ? stdout.trim() : undefined);
+        });
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  };
+}
+
+/** Build a draft. Writes nothing and installs nothing. */
+export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext): Promise<DraftResult> {
+  const cadence = parseCadence(request.cadence);
+  if (!cadence.ok) return { ok: false, problems: [`cadence: ${cadence.reason}`] };
+  const tools = [...(request.tools ?? [])];
+  const programs = [...new Set(tools.map((id) => grantedToolSpec(id)?.program).filter((p): p is string => p !== undefined))];
+  const resolve = ctx.resolveProgram ?? ((p: string) => resolveOnPath(p));
+  const bins: Record<string, string> = {};
+  const binDigests: Record<string, BinaryPin> = {};
+  const problems: string[] = [];
+  const wrappers: Record<string, string> = {};
+  for (const program of programs) {
+    const bin = resolve(program);
+    if (bin === undefined) {
+      problems.push(`grants: "${program}" is not on PATH, so the granted tools that run it cannot be confirmed`);
+      continue;
+    }
+    // F1d/F6/N2: named what it claims, outside the project, not a shim; realpath,
+    // sha256, inode and mtime pinned, and a `#!` wrapper's interpreter pinned as well.
+    const pinned = pinGrantedBinary(program, bin, ctx.projectRoot);
+    if (!pinned.ok) {
+      problems.push(`grants: ${pinned.reason}`);
+      continue;
+    }
+    bins[program] = bin;
+    binDigests[program] = pinned.pin;
+    if (pinned.pin.interpreter !== undefined) wrappers[program] = pinned.pin.interpreter.realpath;
+  }
+  const configInside = configDirInsideProjectReason(ctx.projectRoot);
+  if (configInside !== undefined) problems.push(`schedule: ${configInside}`);
+  // M1: the keryx the timer will run is recorded now, signed with the entry, and reused by
+  // every later install and resume. Like a granted binary, it may not come from the
+  // project: an agent can edit the project's source, and the timer would then run its edit.
+  const runnerNow = currentRunner(ctx.host ?? {});
+  const insideRunner = runnerNow.argv.find((file) => resolvesInsideProject(ctx.projectRoot, file));
+  if (insideRunner !== undefined) {
+    problems.push(
+      `runner: keryx is running from ${insideRunner}, inside this project — a timer would run project files an agent can edit. ` +
+        "Install keryx globally (for example `npm install -g` or a release binary) and create the schedule from that keryx.",
+    );
+  }
+  const accountOf = ctx.accountOf ?? defaultAccountOf();
+  const accounts: string[] = [];
+  for (const [program, bin] of Object.entries(bins)) {
+    const account = await accountOf(program, bin).catch(() => undefined);
+    accounts.push(`${program}: ${account ?? "unknown (could not ask it)"}`);
+  }
+  const action: Record<string, unknown> = {
+    kind: "agent-task",
+    prompt: request.prompt,
+    dispatch: {
+      provider: request.provider,
+      model: request.model,
+      permissionMode: request.permissionMode ?? "ask",
+      rates: { inputUsdPerMTok: request.rates.inputUsdPerMTok, outputUsdPerMTok: request.rates.outputUsdPerMTok },
+      ceilingUsd: request.ceilingUsd,
+      ...(request.maxSeconds !== undefined ? { maxSeconds: request.maxSeconds } : {}),
+    },
+    grants: {
+      network: request.network ?? "off",
+      tools,
+      repos: [...(request.repos ?? [])],
+      bins,
+      binDigests,
+      ...(accounts.length > 0 ? { account: accounts.join("; ") } : {}),
+    },
+  };
+  const entry: Record<string, unknown> = {
+    name: request.name,
+    on: { kind: "schedule", cron: cadence.cron },
+    action,
+    install: { argv: [...runnerNow.argv], env: { ...runnerNow.env } },
+  };
+  problems.push(...triggerEntryProblems(entry));
+  const existing = loadTriggersConfig(ctx.projectRoot).triggers.find((t) => t.name === request.name);
+  if (existing !== undefined) problems.push(`name: "${request.name}" is already used by a ${existing.source === "store" ? "schedule" : "trigger"}`);
+  if (problems.length > 0) return { ok: false, problems };
+
+  const host = ctx.host ?? {};
+  const plan = await planInstall(ctx.projectRoot, request.name, cadence.cron, host, runnerNow);
+  if (plan.problem !== undefined) return { ok: false, problems: [`cadence: ${plan.problem}`] };
+  const linger = plan.backend === "systemd" ? await lingerStatus(host) : "n/a";
+  const now = (ctx.now ?? (() => new Date()))();
+  const nextRuns = nextCronRuns(cadence.cron, now, 3);
+  const draft: ScheduleDraft = {
+    entry,
+    cron: cadence.cron,
+    nextRuns,
+    plan,
+    linger,
+    card: renderCard({ request, cron: cadence.cron, phrase: cadence.phrase, nextRuns, bins, wrappers, accounts, plan, linger }),
+  };
+  return { ok: true, draft };
+}
+
+function renderCard(input: {
+  request: ScheduleRequest;
+  cron: string;
+  phrase: string;
+  nextRuns: readonly Date[];
+  bins: Record<string, string>;
+  /** Program → pinned interpreter realpath, for granted programs that are `#!` wrappers. */
+  wrappers: Record<string, string>;
+  accounts: readonly string[];
+  plan: InstallPlan;
+  linger: string;
+}): string[] {
+  const { request, plan } = input;
+  const network = request.network ?? "off";
+  const tools = request.tools ?? [];
+  const lingerLine =
+    plan.backend === "systemd"
+      ? input.linger === "yes"
+        ? "linger: on — the timer runs even while you are logged out"
+        : input.linger === "no"
+          ? "linger: off — the timer runs only while you are logged in (keryx never enables linger; `loginctl enable-linger` is yours to run)"
+          : "linger: unknown — could not read it; assume the timer runs only while you are logged in"
+      : plan.backend === "launchd"
+        ? "linger: n/a — a LaunchAgent runs only while you are logged in"
+        : "linger: n/a — cron runs while the machine is on; runs missed while it was off are NOT caught up";
+  return [
+    `Schedule "${request.name}" — confirm to store it and install a background timer`,
+    `cadence: ${input.cron}${input.phrase !== input.cron ? ` (${input.phrase})` : ""}`,
+    `next runs: ${input.nextRuns.map((d) => d.toISOString()).join(", ") || "none within a year"}`,
+    `prompt: ${request.prompt}`,
+    `runner: ${request.provider}/${request.model}, mode ${request.permissionMode ?? "ask"}${(request.permissionMode ?? "ask") === "trust" ? " (the agent can run shell commands in the sandbox)" : " (read-only: every command is denied)"}`,
+    `budget: ceiling $${request.ceilingUsd} for this schedule (the project-wide ceiling also applies), max ${request.maxSeconds ?? 600}s per run, rates $${request.rates.inputUsdPerMTok}/$${request.rates.outputUsdPerMTok} per M tokens in/out`,
+    `network: ${network === "full" ? FULL_NETWORK_CARD_WARNING : "off (the agent's shell has no network)"}`,
+    tools.length === 0
+      ? "granted tools: none"
+      : `granted tools (run by keryx outside the sandbox with YOUR credentials; the model sees only redacted output): ${tools.join(", ")}`,
+    ...tools.map((id) => {
+      const spec = grantedToolSpec(id);
+      return `  - ${id}: ${spec !== undefined ? input.bins[spec.program] ?? "(unresolved)" : "(unknown)"}`;
+    }),
+    ...Object.entries(input.wrappers).map(
+      ([program, interpreter]) =>
+        `  ${program}: script wrapper ${input.bins[program]} (interpreter ${interpreter}) — pinned; it runs from an empty directory, so it cannot see the project`,
+    ),
+    ...(tools.length > 0 ? [`  repositories: ${(request.repos ?? []).join(", ")}`, `  account: ${input.accounts.join("; ") || "unknown"}`] : []),
+    `install: ${plan.backend} — ${plan.location}`,
+    `runs: ${plan.execStart}`,
+    lingerLine,
+    `signing key: ${scheduleKeyPath()} (outside the project; the installed timer is pinned to it)`,
+    "the machine must be on; a missed run is caught up once at the next boot/wake (systemd Persistent=true, launchd) — never by cron",
+  ].map(cardSafe);
+}
+
+/**
+ * Flow 295 (F7): the card shows text the MODEL supplied (prompt, name, repos, provider,
+ * model). A line of it must never be able to draw a fake line of the card. So ANSI escape
+ * sequences, C0/C1 controls and bidi overrides are removed, and a newline is shown as a
+ * visible ⏎ instead of starting a new line.
+ */
+export function cardSafe(text: string): string {
+  return text
+    // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
+    .replace(/\u001b[\]P^_][\s\S]*?(?:\u0007|\u001b\\)/g, "")
+    .replace(/\r\n|\r|\n/g, " ⏎ ")
+    // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
+    .replace(/\t/g, " ");
+}
+
+export interface CreateResult {
+  readonly name: string;
+  readonly backend: string;
+  readonly unit: string;
+  readonly confirmedHash: string;
+}
+
+/**
+ * CONFIRM: store the drafted entry with its content hash and install its timer. Call this only
+ * after the operator has said yes to `draft.card`.
+ */
+export async function confirmSchedule(projectRoot: string, draft: ScheduleDraft, host: ScheduleHost = {}): Promise<CreateResult> {
+  const stored = await addConfirmedSchedule(projectRoot, draft.entry);
+  try {
+    const installed = await installSchedule(projectRoot, stored.name, draft.cron, host, draft.entry["install"] as ConfirmedRunner);
+    return { name: stored.name, backend: installed.backend, unit: installed.unit, confirmedHash: stored.confirmedHash };
+  } catch (error) {
+    await removeStoredSchedule(projectRoot, stored.name).catch(() => false);
+    throw error;
+  }
+}
+
+/** One row of `keryx schedule list`, `/schedules` and the sidebar. */
+export interface ScheduleSummary {
+  readonly name: string;
+  readonly cron: string;
+  readonly enabled: boolean;
+  readonly installed: boolean;
+  readonly nextRun: Date | undefined;
+  readonly last: { readonly at: string; readonly outcome: string; readonly usd: number | undefined; readonly refusal?: string; readonly detail: string } | undefined;
+  readonly reportPath: string | undefined;
+  readonly entry: TriggerEntry & { action: AgentTaskAction };
+}
+
+function scheduleEntries(projectRoot: string): (TriggerEntry & { action: AgentTaskAction; fire: { kind: "schedule"; cron: string } })[] {
+  return loadTriggersConfig(projectRoot).triggers.filter(
+    (t): t is TriggerEntry & { action: AgentTaskAction; fire: { kind: "schedule"; cron: string } } =>
+      t.source === "store" && t.action.kind === "agent-task" && t.fire.kind === "schedule",
+  );
+}
+
+/** The newest report file for `name`, repo-relative. */
+export function latestReportPath(projectRoot: string, name: string): string | undefined {
+  const dir = path.join(triggerReportsDir(projectRoot), name);
+  let names: string[];
+  try {
+    names = readdirSync(dir).filter((n) => n.endsWith(".md")).sort();
+  } catch {
+    return undefined;
+  }
+  const newest = names[names.length - 1];
+  return newest === undefined ? undefined : path.relative(projectRoot, path.join(dir, newest));
+}
+
+/** Every stored schedule, with its install state, next run and last outcome. */
+export async function listSchedules(projectRoot: string, options: { host?: ScheduleHost; now?: () => Date; records?: readonly TriggerRunRecord[] } = {}): Promise<ScheduleSummary[]> {
+  let records = options.records;
+  if (records === undefined) {
+    const read = await readTriggerRuns(projectRoot);
+    records = read.state === "present" ? read.records : [];
+  }
+  const outcomes = latestRunByTrigger(records.filter((r) => r.outcome !== "reserved"));
+  const now = (options.now ?? (() => new Date()))();
+  const out: ScheduleSummary[] = [];
+  for (const entry of scheduleEntries(projectRoot)) {
+    const record = outcomes.get(entry.name);
+    const installed = await isScheduleInstalled(projectRoot, entry.name, entry.fire.cron, options.host ?? {}, entry.install).catch(() => false);
+    out.push({
+      name: entry.name,
+      cron: entry.fire.cron,
+      enabled: entry.enabled,
+      installed,
+      nextRun: entry.enabled ? nextCronRuns(entry.fire.cron, now, 1)[0] : undefined,
+      last:
+        record === undefined
+          ? undefined
+          : {
+              at: record.at,
+              outcome: record.outcome,
+              usd: record.cost.recorded ? record.cost.usd : undefined,
+              ...(record.agentTask?.refusal !== undefined ? { refusal: record.agentTask.refusal } : {}),
+              detail: record.detail,
+            },
+      reportPath: record?.agentTask?.reportPath ?? latestReportPath(projectRoot, entry.name),
+      entry,
+    });
+  }
+  return out;
+}
+
+function findSchedule(projectRoot: string, name: string): TriggerEntry & { action: AgentTaskAction; fire: { kind: "schedule"; cron: string } } {
+  const entry = scheduleEntries(projectRoot).find((e) => e.name === name);
+  if (entry === undefined) throw new Error(`no schedule named "${name}" (keryx schedule list shows them)`);
+  return entry;
+}
+
+/** Pause: disable the timer and mark the entry disabled. A fire while paused records `no-op`. */
+export async function pauseStoredSchedule(projectRoot: string, name: string, host: ScheduleHost = {}): Promise<void> {
+  const entry = findSchedule(projectRoot, name);
+  await setScheduleEnabled(projectRoot, name, false);
+  await pauseSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
+}
+
+/**
+ * Resume: re-enable both. No new confirmation is asked, so resume first proves the entry is
+ * still exactly what was confirmed (L1: the MAC and every binary pin), and it reinstalls the
+ * CONFIRMED runner (M1), never the invocation of whichever process pressed the key.
+ */
+export async function resumeStoredSchedule(projectRoot: string, name: string, host: ScheduleHost = {}): Promise<void> {
+  const entry = findSchedule(projectRoot, name);
+  const verified = await verifyStoredSchedule(projectRoot, entry);
+  if (!verified.ok) throw new Error(`resume refused: ${verified.reason}`);
+  if (entry.install === undefined) {
+    throw new Error(`resume refused: schedule "${name}" has no confirmed runner recorded — remove it and create it again`);
+  }
+  await resumeSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
+  await setScheduleEnabled(projectRoot, name, true);
+}
+
+/** L1: is the stored entry still exactly what was confirmed? Shown on the Overview tab. */
+export async function scheduleVerification(projectRoot: string, name: string): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }> {
+  const entry = scheduleEntries(projectRoot).find((e) => e.name === name);
+  if (entry === undefined) return { ok: false, reason: `no schedule named "${name}"` };
+  const verified = await verifyStoredSchedule(projectRoot, entry);
+  return verified.ok ? verified : { ok: false, reason: verified.reason };
+}
+
+/** Remove: uninstall the timer (only our own files) and delete the entry. Callers confirm first. */
+export async function removeSchedule(projectRoot: string, name: string, host: ScheduleHost = {}): Promise<{ removed: readonly string[]; skipped: readonly string[] }> {
+  const entry = findSchedule(projectRoot, name);
+  const result = await uninstallSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
+  await removeStoredSchedule(projectRoot, name);
+  return result;
+}
+

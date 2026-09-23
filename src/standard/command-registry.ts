@@ -11,6 +11,8 @@
 // diffable. Consumers: `keryx commands` (agent-facing), `.metaproject/index.md`
 // intent router, and future MCP tool generation.
 
+import { SCHEDULE_DESCRIPTORS } from "./schedule-descriptors";
+
 /** One argument (positional or flag) of a command. */
 export interface CommandArg {
   /** Flag name without dashes (`page`) or `<positional>` for a positional arg. */
@@ -924,9 +926,18 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       '"keryx sync --apply", "rebuild" -> "keryx gdgraph build", "open-flow" opens a flow from a template ' +
       '(skipIfOpen skips a second one while an equivalent flow is open), and "flow-next" is REPORT-ONLY unless ' +
       'the entry declares a "dispatch" block — with one, it DISPATCHES an unattended keryx agent, in a throwaway ' +
-      "git worktree, to work the flow's next task.",
+      "git worktree, to work the flow's next task. \"agent-task\" (flow 295) runs one unattended agent turn for a " +
+      "schedule the operator confirmed with `keryx schedule add`, and leaves a report.",
     intent: ["запусти триггер", "run trigger", "fire trigger", "trigger run"],
-    args: [{ name: "<name>", type: "string", required: true, desc: "the trigger's name, as declared in .metaproject/triggers.json" }],
+    args: [
+      { name: "<name>", type: "string", required: true, desc: "the trigger's name, as declared in .metaproject/triggers.json or the local schedule store" },
+      {
+        name: "schedule",
+        type: "bool",
+        required: false,
+        desc: "resolve only a local schedule (.metaproject/data/trigger/schedules.json), never a committed trigger — what an installed timer runs",
+      },
+    ],
     json: false,
     read: false,
     sideEffects: [
@@ -935,6 +946,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       'open-flow: creates a flow via "keryx flow init --title <template>", unless skipIfOpen finds an equivalent flow already open; the whole check-then-create sequence runs under the SAME shared maintenance lock (.metaproject/data/.locks/maintenance.lock) as reconcile/rebuild, with the same clean refusal',
       'flow-next with NO dispatch block: report-only ("keryx flow next <flow>") — takes no lock at all',
       "flow-next WITH a dispatch block: does NOT take the shared maintenance lock (so the dispatched agent's own \"keryx gdgraph build\" can take it) — instead takes a PER-FLOW dispatch lock (.metaproject/data/.locks/dispatch-<flow>.lock, no wait) that refuses only a second dispatch on the SAME flow, so dispatches on different flows run concurrently; briefly takes a separate project-wide spend lock (.metaproject/data/.locks/spend.lock) just to decide and record the spend reservation before the first model call; then runs an unattended keryx agent in a throwaway git worktree on branch trigger/<flow>-<task> (committed, never pushed), which may leave a commit there, and records a task-attempt / task-done / attempt-failed-or-blocked outcome on the flow",
+      "agent-task: refuses unless this machine's signature (HMAC) over the stored schedule still verifies; runs one unattended agent turn in a scratch directory with the project read-only; granted tools run outside the sandbox; the dispatcher writes .metaproject/data/trigger/reports/<name>/<runId>.md",
       "appends one record to .metaproject/data/trigger/runs.jsonl",
     ],
   },
@@ -1354,6 +1366,8 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // Flow 295: `keryx schedule` (self-contained in ./schedule-descriptors.ts).
+  ...SCHEDULE_DESCRIPTORS,
 ];
 
 /**

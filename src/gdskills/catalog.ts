@@ -493,6 +493,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Avoid network and destructive behavior inside hooks.",
   ], ["install hook", "git hook", "post-commit"],
     "Use when a lightweight, explicitly-enabled git hook that runs graph, health, or skill verification after a commit, a checkout, or a merge needs installing or checking. NOT for: general hook design guidance not tied to these three (see hookify)."),
+  skill("scheduled-tasks", "platform", ["recommended", "full"], "Propose operator-confirmed scheduled background agent tasks with schedule_create.", [
+    "Pin down cadence, prompt, rates and ceiling; ask rather than guess.",
+    "Grant only the catalogue tools and repositories the task needs; keep the network off.",
+    "Never confirm, install or enable linger yourself — the operator confirms the card.",
+  ]),
   skill("hookify", "platform", ["full"], "Use hook guidance for safe hook design and installation.", [
     "Detect existing hooks and preserve user content.",
     "Install idempotent managed blocks.",

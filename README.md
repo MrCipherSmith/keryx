@@ -458,7 +458,7 @@ Grouped by what you are trying to do, not by internal module layout.
   USD recorded, and a per-trigger spend ceiling on top of the project-wide one.
   `keryx trigger install` extends the same hook files `sync install-hooks` and
   `update` already write into; `keryx trigger schedule` prints a cron line or
-  systemd unit pair and runs no daemon of its own. Triggered runs and a manual
+  systemd unit pair (with a real `OnCalendar=`) and runs no daemon of its own. Triggered runs and a manual
   `sync --apply`/`gdgraph build` share one maintenance lock (manual waits,
   triggered refuses). In the TUI, the sidebar's **Triggers** section lists the
   event-fired triggers. Each row shows the last outcome and its age, and a `NET`
@@ -468,6 +468,32 @@ Grouped by what you are trying to do, not by internal module layout.
   `y` runs one now as `keryx trigger run <name>` in a child process of the same
   build, bound by the same locks, budgets and refusals as the CLI. See the
   [CLI reference](docs/docs/cli-reference.md#trigger).
+- **schedule**: scheduled agent tasks in the background. Say it in the shell ("schedule a task every
+  4 hours to check my open PRs"), use `/schedule`, or run `keryx schedule add`. keryx shows a
+  **confirmation card** listing the cadence and next runs, the prompt, the runner and its budget,
+  the network mode, and every granted tool with the account it acts as. It also shows exactly what
+  will be installed. Nothing is written until you say yes. After that, keryx stores the schedule in a
+  per-machine, gitignored store and installs a `systemd --user` timer (launchd on macOS, cron
+  elsewhere) that runs `keryx trigger run <name>` unattended. The run leaves a report in
+  `.metaproject/data/trigger/reports/`.
+  - **Granted tools** (`gh pr list/view/checks`, `gh issue list/view`, `gh run list`) run
+    **outside** the sandbox with your credentials. The model sees only redacted output, and the
+    token never enters the sandbox, the model context or the report.
+  - **Network:** the agent's shell network is `off` or `full`.
+  - **Refusals:** the unattended floor is unchanged, and an entry edited after you confirmed it is
+    refused (`grants-changed`).
+  - **Tracking:** every run is spend-bounded and appears in `keryx trigger status` and
+    `keryx governance report`.
+  - **Management:** `keryx schedule list|show|pause|resume|run|remove`. In `keryx shell`:
+    - the sidebar's **Schedules** section shows each schedule's next run and last outcome;
+    - `/schedules` (or a click) opens the detail: Overview, Grants, Runs, Report;
+    - `p` pauses or resumes, `r` then `y` runs it now, `d` then `y` deletes it;
+    - a run finished in the background shows up without a restart.
+  - **Limits:** the machine must be on. systemd and launchd catch up one missed run after a boot or
+    wake; cron does not. Without linger, a user timer does not run while you are logged out, and
+    keryx never enables linger for you. The hardened sandbox is Linux-only.
+
+  See the [CLI reference](docs/docs/cli-reference.md#schedule).
 - **governance** — `keryx governance report`, one read-only report unifying what
   is already recorded: review-round spend per flow (USD and tokens, with a
   rounds-with-cost/rounds-total count for partial coverage), project-wide

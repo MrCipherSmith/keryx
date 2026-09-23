@@ -67,6 +67,7 @@ import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
 import { describeDetachedRuns } from "./trigger-run-now";
+import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
 import { createSplashLifecycle, mountEmptyTranscriptSplash, playBootAnimation, type SplashLifecycle } from "./boot-animation";
@@ -239,6 +240,7 @@ import { setBackgroundJobListener } from "./job-bridge";
 import { openJobInspector, paintBackgroundJobSidebar } from "./background-job-inspector";
 import { getExecutionPlan } from "../session/execution-plan";
 import { mountExecutionPlanPanel } from "./execution-plan-panel";
+import { runScheduleSlashCommand } from "./schedule-command";
 import { openExecutionPlanInspector } from "./execution-plan-inspector";
 import { BackgroundJobStore, type BackgroundJobStoreHint } from "./background-job-session";
 import { formatFleetSidebarWithPeers, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet, type FleetPeer } from "./worker-fleet";
@@ -3121,6 +3123,7 @@ export async function launchTuiAgentShell(opts: {
   // Flow 300: same nullable-ref idiom — the Governance/Triggers sections own a
   // poller and possibly a running `keryx trigger run` child to stop on exit.
   let liveOps: OpsSidebar | undefined;
+  let liveSchedules: SchedulesSidebar | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
   // is installed before the operator exists, and leaving the module-level
   // external bridge pointing at a destroyed shell would let a still-settling
@@ -3214,6 +3217,7 @@ export async function launchTuiAgentShell(opts: {
     const r = (renderer = await createShellRenderer(otui, {
     onDestroy: () => {
         disposeExecutionPlanPanel?.();
+        liveSchedules?.dispose();
         liveOps?.dispose();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
@@ -3586,6 +3590,19 @@ export async function launchTuiAgentShell(opts: {
       notice: (text) => io.onSystem?.(text),
     });
     liveOps = ops;
+    // Flow 295 (AC10-AC13): Schedules, mounted after Triggers (the fixed order), on
+    // the same ledger watcher and run-now as the section above. No second poller.
+    const schedules = mountSchedulesSidebar({
+      otui,
+      chrome,
+      parent: sidebar,
+      cwd: opts.session?.cwd ?? process.cwd(),
+      width: SIDEBAR_TEXT_WIDTH,
+      ops,
+      onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+      notice: (text) => io.onSystem?.(text),
+    });
+    liveSchedules = schedules;
     const fleet = new WorkerFleet();
     const sessions = new SubagentSessionStore();
     const jobs = new BackgroundJobStore();
@@ -3943,6 +3960,41 @@ export async function launchTuiAgentShell(opts: {
     // The flow-041 advisory context (blast radius + memory note) is loaded through
     // this loader — the same information the readline shell shows above its prompt.
     const approvalContext = createApprovalContextLoader(opts.session?.cwd ?? process.cwd());
+    // Flow 295 (AC6/AC7): the ONE confirmation dialog for a schedule — used by the
+    // `schedule_create` tool's approval and by `/schedule`. Prints the card, then
+    // offers exactly two choices; Esc/cancel is "no".
+    const confirmScheduleCard = async (card: readonly string[]): Promise<boolean> => {
+      for (const line of card) {
+        transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
+      }
+      chrome.hideMenu();
+      setMainAgent("blocked", "approval");
+      const id = await chrome.withOverlay(() =>
+        showComposerChoice(otui, r, chrome.dock, {
+          title: "Create this schedule and install its background timer?",
+          subtitle: card[0] ?? "",
+          cancelId: "cancel",
+          onOpen: () => chrome.blurComposer(),
+          signal: foregroundOperation.signal,
+          options: [
+            { id: "create", label: "Create and install", description: "Store it and install the timer shown above" },
+            { id: "cancel", label: "Cancel", description: "Nothing is written or installed" },
+          ],
+        }),
+      );
+      input.focus();
+      setMainAgent("running", id === "create" ? "schedule" : "denied");
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `ap${uid++}`,
+          content:
+            id === "create"
+              ? otui.t`${roleChunk(otui, "ok", "◇ schedule confirmed")}`
+              : otui.t`${roleChunk(otui, "error", "◇ schedule not created — nothing written or installed")}`,
+        }),
+      );
+      return id === "create";
+    };
     io.requestApproval = async (tool, inputJson, meta) => {
       if (meta?.untrustedOrigin === true) {
         // `agent.ts`'s untrusted-content gate asks the human instead of refusing
@@ -3953,6 +4005,13 @@ export async function launchTuiAgentShell(opts: {
             content: otui.t`${roleChunk(otui, "attention", "⚠ follows untrusted external content — it cannot authorize this call; your answer does")}`,
           }),
         );
+      }
+
+      // Flow 295 (AC6/AC7): an operator-confirmed call (schedule_create). The
+      // card is printed verbatim, the only choices are yes/no, and the answer is
+      // never remembered — no mode and no saved pattern answers it.
+      if (meta?.alwaysAsk === true && meta.card !== undefined) {
+        return confirmScheduleCard(meta.card);
       }
 
       // Multi-agent spawn: auto-allow read_only; ask for general.
@@ -6223,6 +6282,10 @@ export async function launchTuiAgentShell(opts: {
             routeOpsCommand(line, true, ops);
             return;
           }
+          case "schedules": {
+            routeSchedulesCommand(line, true, schedules);
+            return;
+          }
           case "mcp": {
             showTools();
             return;
@@ -6409,6 +6472,21 @@ export async function launchTuiAgentShell(opts: {
           })();
           return;
         }
+        if (command.name === "/schedule") {
+          // Flow 295 (AC6): create a scheduled background task — the same draft,
+          // card and confirmation as `keryx schedule add` and `schedule_create`.
+          void runScheduleSlashCommand(line.slice(command.name.length).trim(), {
+            cwd: sessionCwd,
+            defaults: () => ({ provider: deps.providerId ?? "", model: deps.modelId ?? "" }),
+            print: (text, tone) => {
+              const chunk =
+                tone === "ok" ? roleChunk(otui, "ok", text) : tone === "error" ? roleChunk(otui, "error", text) : dimChunk(otui, text);
+              transcript.add(new otui.TextRenderable(r, { id: `sch${uid++}`, content: otui.t`${chunk}` }));
+            },
+            confirm: (card) => confirmScheduleCard(card),
+          });
+          return;
+        }
         if (command.name === "/goal") {
           // SLATE-15 (flow 161, AC1/AC2): deterministic slate-open entry point.
           void (async () => {
@@ -6576,6 +6654,9 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (routeOpsCommand(line, false, ops)) {
+          return;
+        }
+        if (routeSchedulesCommand(line, false, schedules)) {
           return;
         }
         if (isMcpConsumerCommand(command.name)) {
@@ -7245,6 +7326,7 @@ export async function launchTuiAgentShell(opts: {
     // once and after the alternate screen is gone, that it keeps running and
     // where its output goes; the ledger watcher shows its outcome next start.
     // Review N6: read what is STILL running at print time, not dispose()'s snapshot.
+    liveSchedules?.dispose();
     liveOps?.dispose();
     const detachedNote = describeDetachedRuns(liveOps?.inFlightRuns() ?? []);
     if (detachedNote !== undefined) process.stderr.write(`${detachedNote}\n`);

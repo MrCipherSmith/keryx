@@ -11,6 +11,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { FlowState } from "../flow/types";
 import { appendTriggerRunRecord } from "../trigger/record";
+import { addConfirmedSchedule } from "../trigger/store";
+import { runTriggerOnce } from "../commands/trigger";
+import type { NormalizedEvent, ProviderPort } from "../harness/provider/types";
 import { registerProject } from "../lib/project-registry";
 import {
   buildGovernanceReport,
@@ -20,6 +23,25 @@ import {
 } from "./report";
 import { summarizeReviewSpend } from "./spend";
 import type { ManagedReviewManifest } from "../review/types";
+
+// Flow 295 (F1): confirming a schedule creates the per-machine signing key in keryx's
+// user-global directory. Point HOME and XDG_DATA_HOME at a throwaway directory so no
+// test ever writes the developer's real key.
+let keyHome = "";
+const savedKeyEnv = { HOME: process.env["HOME"], XDG_DATA_HOME: process.env["XDG_DATA_HOME"] };
+beforeEach(async () => {
+  keyHome = await mkdtemp(path.join(tmpdir(), "keryx-schedule-key-home-"));
+  process.env["HOME"] = keyHome;
+  process.env["XDG_DATA_HOME"] = path.join(keyHome, ".local", "share");
+});
+afterEach(async () => {
+  for (const [name, value] of Object.entries(savedKeyEnv)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+  await rm(keyHome, { recursive: true, force: true });
+});
+
 
 let ROOT = "";
 
@@ -194,6 +216,58 @@ test("AC2: a trigger run record carries no flow reference, so project-wide spend
   // The flow's own review spend is unaffected by project-wide trigger spend.
   expect(flow?.spend.spentUsd).toBeUndefined();
   expect(report.projects[0]?.triggerSpend).toMatchObject({ state: "present", spentUsd: 9 });
+});
+
+// Flow 295 (AC14): a scheduled `agent-task` run, driven end to end through
+// `keryx trigger run`, lands in the same ledger, and its cost is in the report.
+test("flow 295 AC14: a scheduled agent-task run's cost is included in project trigger spend", async () => {
+  await addConfirmedSchedule(ROOT, {
+    name: "check-github",
+    on: { kind: "schedule", cron: "0 */4 * * *" },
+    action: {
+      kind: "agent-task",
+      prompt: "Summarise open PRs.",
+      dispatch: { provider: "scripted", model: "m", permissionMode: "ask", rates: { inputUsdPerMTok: 3, outputUsdPerMTok: 15 }, ceilingUsd: 1 },
+      grants: { network: "off", tools: [], repos: [] },
+    },
+  });
+  const provider: ProviderPort = {
+    describe: () => ({ capabilities: {} as never, descriptor: { providerId: "scripted" } }),
+    stream: (_request, opts) =>
+      (async function* (): AsyncGenerator<NormalizedEvent> {
+        yield { sequence: 0, attemptId: opts.attemptId, kind: "usage_update", usage: { inputTokens: 1000, outputTokens: 200 } } as NormalizedEvent;
+        yield { sequence: 1, attemptId: opts.attemptId, kind: "text_delta", text: "Nothing needs you." } as NormalizedEvent;
+        yield { sequence: 2, attemptId: opts.attemptId, kind: "model_end" } as NormalizedEvent;
+      })(),
+  };
+  const log = console.log;
+  console.log = () => {};
+  try {
+    await runTriggerOnce(ROOT, "check-github", {
+      agentTask: {
+        makeProvider: () => provider,
+        planSandbox: () => ({ ok: true, launcher: "none", args: [], env: {}, wrap: () => ["/bin/true"] }),
+      },
+    });
+  } finally {
+    console.log = log;
+  }
+  const usd = (1000 * 3 + 200 * 15) / 1_000_000;
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  // The reservation is not a run (flow 300); the closing record carries the run's cost.
+  expect(report.projects[0]?.triggerSpend).toEqual({
+    state: "present",
+    spentUsd: usd,
+    runsWithCostRecorded: 1,
+    runsWithCostNotRecorded: 0,
+    runsTotal: 1,
+    // The run closed its reservation, so nothing is left open (flow 300 N8).
+    openReservations: 0,
+    openReservedUsd: 0,
+    // A scheduled agent task names no flow, so none of its cost is attributed to one (flow 297).
+    attributedToFlowsUsd: undefined,
+  });
+  expect(renderGovernanceMarkdown(report)).toContain("$0.006 across 1 run(s) with recorded cost");
 });
 
 // --- Flow 297 (AC1, AC2, AC3, AC4): unattended denials, dispatch attribution ---

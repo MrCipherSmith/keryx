@@ -47,6 +47,8 @@ export const UNATTENDED_EXCLUDED_TOOLS: readonly string[] = [
   "use_tool",
   "spawn_subagent",
   "ask_user",
+  // Flow 295 (AC7): creating a schedule needs an operator's confirmation, and an unattended run has none.
+  "schedule_create",
 ];
 
 /** `keryx flow` verbs only an operator (or the dispatcher itself) may run. */
@@ -65,6 +67,14 @@ const FORBIDDEN_FLOW_VERBS: readonly RegExp[] = [
   /\bflow\s+recover\b/,
   // A nested dispatch would run outside this run's spend reservation.
   /\btrigger\s+run\b/,
+  // Flow 295 (AC5): only an operator creates, installs or changes a schedule —
+  // never an unattended run, whatever its grants.
+  /\bschedule\s+(?:add|remove|pause|resume|run|install|uninstall)\b/,
+  /\btrigger\s+schedule\b/,
+  /\bsystemctl\b[^\n]*\b(?:enable|disable|start|stop|daemon-reload|link|edit|mask)\b/,
+  /\bcrontab\b/,
+  /\blaunchctl\b/,
+  /\bloginctl\b/,
 ];
 
 /** Git subcommands that move shared history, rewrite refs directly, or publish. */
@@ -116,7 +126,7 @@ export function unattendedShellRefusal(command: string): string | undefined {
   for (const pattern of FORBIDDEN_FLOW_VERBS) {
     const match = pattern.exec(text);
     if (match !== null) {
-      return `\`${match[0]}\` changes flow state only an operator (or the dispatcher itself) may change`;
+      return `\`${match[0]}\` changes flow state, a schedule or a timer — only an operator (or the dispatcher itself) may change those`;
     }
   }
 

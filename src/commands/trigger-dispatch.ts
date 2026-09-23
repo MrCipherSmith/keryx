@@ -190,7 +190,7 @@ export function providerReportsUsage(provider: string): boolean {
 }
 
 /** Default provider construction: fails closed on a missing credential and on unknown usage reporting. */
-function defaultMakeProvider(dispatch: TriggerDispatch): ProviderPort | { error: string; code?: DispatchRefusalCode } {
+export function defaultMakeProvider(dispatch: TriggerDispatch): ProviderPort | { error: string; code?: DispatchRefusalCode } {
   if (!providerReportsUsage(dispatch.provider)) {
     return {
       code: "provider-usage-unknown",
@@ -393,6 +393,80 @@ export async function recoverStaleWorktree(
   return { ok: true, recovered: undefined };
 }
 
+/**
+ * Flow 295 (C4): the spend meter both unattended dispatches (`flow-next` and
+ * `agent-task`) price their tokens with. It stops the run (`abort`) once the
+ * priced cost reaches the reservation. A response without usage is charged the
+ * whole reservation, because it cannot be priced (AC14 of flow 290).
+ */
+export interface SpendMeter {
+  readonly tokens: { input: number; output: number };
+  priced(): number;
+  cost(): TriggerRunCost;
+  onUsage(usage: NormalizedUsage): void;
+  markUsageMissing(): void;
+  readonly state: { spendStopped: boolean; usageMissing: boolean };
+}
+
+export function createSpendMeter(dispatch: TriggerDispatch, reservedUsd: number, abort: () => void): SpendMeter {
+  const tokens = { input: 0, output: 0 };
+  const state = { spendStopped: false, usageMissing: false };
+  const priced = (): number =>
+    state.usageMissing
+      ? reservedUsd
+      : spendFromTokens({
+          inputTokens: tokens.input,
+          outputTokens: tokens.output,
+          inputRatePerMillion: dispatch.rates.inputUsdPerMTok,
+          outputRatePerMillion: dispatch.rates.outputUsdPerMTok,
+        });
+  return {
+    tokens,
+    state,
+    priced,
+    cost: () => ({ recorded: true, usd: priced(), tokens: { input: tokens.input, output: tokens.output } }),
+    onUsage: (usage) => {
+      const t = usageTokens(usage);
+      tokens.input += t.input;
+      tokens.output += t.output;
+      if (!state.spendStopped && priced() >= reservedUsd) {
+        state.spendStopped = true;
+        abort();
+      }
+    },
+    markUsageMissing: () => {
+      state.usageMissing = true;
+      abort();
+    },
+  };
+}
+
+/**
+ * Flow 295 (C4): the approver of every unattended run. Nobody is present, so
+ * each approval request is DENIED and recorded with the floors that applied.
+ */
+export function deniedUnattendedApproval(
+  permissionMode: TriggerDispatch["permissionMode"],
+  denials: UnattendedDenial[],
+): NonNullable<AgentIO["requestApproval"]> {
+  return async (tool, _input, meta) => {
+    const floors = [
+      meta?.credentials === true ? "touches credential files" : undefined,
+      meta?.publishLease === true ? "a publish lease applies" : undefined,
+      meta?.destructive === true ? "destructive" : undefined,
+      meta?.untrustedOrigin === true ? "follows untrusted content" : undefined,
+    ].filter((x): x is string => x !== undefined);
+    denials.push({
+      tool,
+      reason:
+        `approval required under permission mode "${permissionMode}"` +
+        (floors.length > 0 ? ` (${floors.join(", ")})` : "") +
+        " — unattended, so denied",
+    });
+    return false;
+  };
+}
+
 /** Run one dispatch for `entry` (a `flow-next` with a `dispatch` block). */
 export async function runFlowNextDispatch(
   projectRoot: string,
@@ -563,18 +637,9 @@ async function dispatchLocked(
 
   // From here on every path returns a result carrying `runId`, whose record
   // closes the reservation; a throw is turned into such a result below.
-  const tokens = { input: 0, output: 0 };
-  let usageMissing = false;
-  const priced = (): number =>
-    usageMissing
-      ? reservedUsd
-      : spendFromTokens({
-          inputTokens: tokens.input,
-          outputTokens: tokens.output,
-          inputRatePerMillion: dispatch.rates.inputUsdPerMTok,
-          outputRatePerMillion: dispatch.rates.outputUsdPerMTok,
-        });
-  const costNow = (): TriggerRunCost => ({ recorded: true, usd: priced(), tokens: { input: tokens.input, output: tokens.output } });
+  const controller = new AbortController();
+  const meter = createSpendMeter(dispatch, reservedUsd, () => controller.abort());
+  const costNow = (): TriggerRunCost => meter.cost();
   try {
     return await runReserved();
   } catch (error) {
@@ -638,9 +703,7 @@ async function dispatchLocked(
     }
 
     const denials: UnattendedDenial[] = [];
-    const controller = new AbortController();
     let timedOut = false;
-    let spendStopped = false;
     let providerError: string | undefined;
     let terminal: string | undefined;
     let finishReason: string | undefined;
@@ -649,10 +712,7 @@ async function dispatchLocked(
       timedOut = true;
       controller.abort();
     });
-    const provider = guardUsage(built as ProviderPort, () => {
-      usageMissing = true;
-      controller.abort();
-    });
+    const provider = guardUsage(built as ProviderPort, () => meter.markUsageMissing());
 
     try {
       const tools = buildUnattendedRoster(worktree, unattendedRunner(worktree, sandbox));
@@ -676,35 +736,12 @@ async function dispatchLocked(
         onSystem: (text) => {
           if (/\[error\]/.test(text)) providerError ??= text.replace(/\s+/g, " ").trim().slice(0, 400);
         },
-        onUsage: (usage) => {
-          const t = usageTokens(usage);
-          tokens.input += t.input;
-          tokens.output += t.output;
-          if (!spendStopped && priced() >= reservedUsd) {
-            spendStopped = true;
-            controller.abort();
-          }
-        },
+        onUsage: (usage) => meter.onUsage(usage),
         // AC4: the ONLY permission mode is the entry's. Never the project's
         // stored default, never a saved shell allowlist — this io consults neither.
         permissionMode: () => dispatch.permissionMode,
         readOnly: () => false,
-        requestApproval: async (tool, _input, meta) => {
-          const floors = [
-            meta?.credentials === true ? "touches credential files" : undefined,
-            meta?.publishLease === true ? "a publish lease applies" : undefined,
-            meta?.destructive === true ? "destructive" : undefined,
-            meta?.untrustedOrigin === true ? "follows untrusted content" : undefined,
-          ].filter((x): x is string => x !== undefined);
-          denials.push({
-            tool,
-            reason:
-              `approval required under permission mode "${dispatch.permissionMode}"` +
-              (floors.length > 0 ? ` (${floors.join(", ")})` : "") +
-              " — unattended, so denied",
-          });
-          return false;
-        },
+        requestApproval: deniedUnattendedApproval(dispatch.permissionMode, denials),
         onAutoApproved: () => {},
         onUnattendedDenial: (tool, reason) => {
           denials.push({ tool, reason });
@@ -729,6 +766,7 @@ async function dispatchLocked(
     }
 
     const cost = costNow();
+    const { spendStopped, usageMissing } = meter.state;
     const normal =
       crashed === undefined &&
       providerError === undefined &&

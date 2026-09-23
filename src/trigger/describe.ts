@@ -44,6 +44,16 @@ export function describeAction(action: TriggerAction): string {
       ")"
     );
   }
+  if (action.kind === "agent-task") {
+    // Flow 295: a scheduled agent task (the confirmed, signed local schedule).
+    const d = action.dispatch;
+    return (
+      `agent-task(${d.provider}/${d.model}, mode ${d.permissionMode}, ceiling $${d.ceilingUsd}, max ${d.maxSeconds}s, ` +
+      `granted: ${action.grants.tools.length > 0 ? action.grants.tools.join(",") : "none"}` +
+      (action.grants.network === "full" ? `, NETWORK ON — ${NETWORK_ON_WARNING}` : ", network off") +
+      ")"
+    );
+  }
   return action.kind;
 }
 
@@ -54,6 +64,8 @@ export function entryDispatch(entry: TriggerEntry): TriggerDispatch | undefined 
 
 /** True when this entry's unattended agent gets the host network — the posture the NET marker flags. */
 export function entryHasNetwork(entry: TriggerEntry): boolean {
+  // Flow 295: an agent task's network is a grant, not a dispatch field.
+  if (entry.action.kind === "agent-task") return entry.action.grants.network === "full";
   return entryDispatch(entry)?.network === true;
 }
 

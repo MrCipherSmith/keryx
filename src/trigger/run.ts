@@ -56,8 +56,22 @@ export type TriggerResolution =
  * do" — it is refused loudly (non-zero), the same way `flow task done` on an
  * unknown task id throws rather than silently no-opping.
  */
-export function resolveTriggerForRun(projectRoot: string, name: string): TriggerResolution {
-  const loaded = loadTriggersConfig(projectRoot);
+export function resolveTriggerForRun(
+  projectRoot: string,
+  name: string,
+  options: { readonly scheduleOnly?: boolean } = {},
+): TriggerResolution {
+  const all = loadTriggersConfig(projectRoot);
+  // Flow 295 (F4): an installed schedule timer runs `trigger run --schedule <name>`,
+  // which resolves ONLY the per-machine store. A committed trigger of the same name
+  // can then never be what the operator's timer fires.
+  const loaded = options.scheduleOnly
+    ? {
+        ...all,
+        triggers: all.triggers.filter((t) => t.source === "store"),
+        rejected: all.rejected.filter((r) => r.source === "store"),
+      }
+    : all;
 
   if (loaded.fileProblem === "absent") {
     return { kind: "config-absent" };
@@ -299,6 +313,8 @@ export async function reserveTriggerSpend(
     readonly perTrigger: PerTriggerCeiling;
     readonly options?: SpendCapOptions;
     readonly now?: () => Date;
+    /** Flow 295: the action being reserved for, named in a refusal. Default `flow-next`. */
+    readonly actionKind?: string;
     /**
      * Flow 297 (AC2): the flow/task this dispatch is working, written onto the
      * "reserved" record itself (additively — `TriggerRunRecord.dispatch` was
@@ -315,7 +331,7 @@ export async function reserveTriggerSpend(
   return withFileLock(
     spendLockPath(projectRoot),
     async (): Promise<SpendReservation> => {
-      const budget = await evaluateTriggerBudget(projectRoot, "flow-next", input.options ?? {}, input.perTrigger);
+      const budget = await evaluateTriggerBudget(projectRoot, input.actionKind ?? "flow-next", input.options ?? {}, input.perTrigger);
       if (!budget.allowed) return { reserved: false, reason: budget.reason };
       if (!(budget.remainingUsd > 0)) {
         return {

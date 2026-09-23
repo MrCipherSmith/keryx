@@ -38,6 +38,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { detectSandboxLauncher, type DetectOptions } from "./detect";
+import { keryxConfigDir } from "../../../lib/config-dir";
 import { defaultReadDenyList } from "./profile";
 
 /** Environment variables an unattended command inherits, by name. Nothing else passes. */
@@ -63,6 +64,13 @@ export interface UnattendedSandboxInput {
   readonly network: boolean;
   /** Extra read-only roots (the repository's git dir, the keryx package, `node_modules`). */
   readonly readOnly: readonly string[];
+  /**
+   * Flow 295: directories hidden behind an empty tmpfs, like $HOME, before the worktree
+   * and scratch home are bound back. Pass the shared parent of every run's scratch
+   * directory, and one run then cannot read another's, even when TMPDIR is not `/tmp`
+   * (a host `/var/tmp` is otherwise visible read-only through `--ro-bind / /`).
+   */
+  readonly hide?: readonly string[];
   /** The operator's environment — read for PATH/locale and the opt-outs, never passed through. */
   readonly env: Record<string, string | undefined>;
   readonly home: string;
@@ -200,6 +208,14 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   if (runtimeDir !== undefined && runtimeDir.length > 0 && isDir(runtimeDir)) {
     const resolved = real(runtimeDir);
     if (![...hidden].some((dir) => resolved === dir || resolved.startsWith(`${dir}${path.sep}`))) hidden.add(resolved);
+  }
+  // Flow 295 (N4): keryx's own config directory (auth.json, provider keys, the
+  // schedule signing key) is hidden ALWAYS. It usually sits under $HOME, which is
+  // hidden already, but `XDG_DATA_HOME` may point anywhere, and `--ro-bind / /` would
+  // then expose it to every unattended command (with network `full`, off the box too).
+  const configDir = keryxConfigDir();
+  for (const extra of [configDir, ...(input.hide ?? [])]) {
+    if (isDir(extra)) hidden.add(real(extra));
   }
   for (const dir of hidden) args.push("--tmpfs", dir);
 

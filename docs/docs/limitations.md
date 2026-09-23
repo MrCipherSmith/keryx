@@ -96,6 +96,67 @@ for the containment matrix and the
 [Linux verification runbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/verification/linux-sandbox-verification.md)
 for what has been verified on a real host.
 
+## Scheduled agent tasks need the machine on
+
+`keryx schedule` hands a confirmed task to the OS scheduler. keryx itself runs no daemon.
+
+- **Missed runs:** a machine that is off or asleep misses runs. systemd
+  (`Persistent=true`) and launchd run one catch-up run at the next boot or wake;
+  cron runs none.
+- **Logged out:** without linger, a systemd `--user` timer does not run while you are
+  logged out. keryx shows the linger state on the confirmation card and never
+  enables it.
+- **Network:** an allowlist network mode for the scheduled agent's shell is not
+  available yet (flow 301); the choices are `off` and `full`.
+- **Platform:** the hardened unattended sandbox is Linux-only, so a macOS schedule
+  runs in `ask` mode with granted tools only.
+- **The signing key and an interactive agent:** each confirmed schedule is signed
+  with an HMAC keyed by a per-machine secret. The secret lives outside the project,
+  in keryx's user-global directory (`schedule-hmac.key`, 0600). A committed or forged
+  store therefore never runs, and a scheduled run cannot see the key because its sandbox
+  hides `$HOME`. But an interactive agent running as the same user, in `trust` mode
+  with an unrestricted shell, could in principle read the key by spelling its path in a
+  way the text floor does not recognise. The floor turns every command or patch that
+  names the key, the schedule store or the systemd/launchd unit directories into a
+  prompt. That makes reading the key an ask, not an impossibility.
+- **The scheduler-control floor is text analysis.** The shell floor parses commands the
+  way a shell would, so quoting, escapes, wrappers (`env -u`, `sudo`, `nohup`,
+  `bash -c '…'`) and a `cd` into a unit directory are all seen. But a same-user shell
+  in `trust` mode can always spell a command so no text check sees it: a variable, a
+  script file, an interpreter one-liner. The gates behind it:
+  - `keryx schedule add`, `resume` and `run` require an interactive terminal on stdin
+    and stdout, `--yes` included, so a pipe or an MCP/ACP client cannot create,
+    re-enable or fire a schedule;
+  - the terminal requirement alone is not enough, because an agent can make a
+    terminal: `script -qfc 'keryx shell' /dev/null`, `tmux`, `screen` or `unbuffer`
+    give a nested keryx a pseudo-terminal the agent types into, and so reaches the
+    `/schedule` card and the `/schedules` keys. Two things cover that path. A keryx
+    started from an agent's shell inherits `KERYX_TOOL_CALL=1`, and its `/schedule`,
+    `schedule_create`, pause, resume, run-now and delete all refuse. And starting an
+    interactive keryx (`keryx`, `keryx shell`) or a terminal driver around one, or
+    typing into a running session (`tmux send-keys`, `screen -X stuff`), is in the
+    always-ask family: you are asked every time, and the answer is never remembered;
+  - every stored schedule must carry this machine's signature, and resume checks the
+    signature and every binary pin before it re-enables a timer. The timer runs the
+    keryx recorded (and signed) when you confirmed the card, never the one that
+    pressed resume, and a keryx running from inside the project is refused when the
+    schedule is drafted.
+
+  The honest limit stays: an agent running as your user, in `trust` mode, can unset
+  `KERYX_TOOL_CALL` in a way the text floor does not see, or drive a terminal through
+  a program the floor does not know. The floor makes that an ask, and your answer is
+  the boundary.
+- **A script wrapper's own configuration.** A pinned `#!` wrapper (and its interpreter)
+  cannot change without the schedule being refused, and it runs from an empty directory,
+  so the project cannot steer it. What the wrapper reads from its own global
+  configuration (`~/.config/...`, an account file) is the operator's machine, and outside
+  what keryx pins.
+- **Granted binaries between checks.** A granted program is hashed once at the start of
+  a run, and its inode, size and mtime are re-checked before every exec. What is left is
+  the window between that last stat and the kernel's exec, which is milliseconds.
+
+See [schedule](cli-reference.md#schedule).
+
 ## Remote approvals are not implemented
 
 `keryx serve` accepts turns over a loopback-bound authenticated HTTP listener,

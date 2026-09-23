@@ -33,6 +33,13 @@ const ALLOWED_CONFUSABLE: ReadonlyArray<{ pair: readonly [string, string]; becau
       "for the current provider. Both land the operator in model selection, so " +
       "reaching the other one costs a keystroke and nothing else.",
   },
+  {
+    pair: ["/schedule", "/schedules"],
+    because:
+      "Same subject, and neither direction acts on a mistype: /schedule (meant /schedules) only drafts a " +
+      "confirmation card that always asks and writes nothing when declined (bare /schedule just prints its " +
+      "usage); /schedules (meant /schedule) only opens the read-only list, whose actions each need their own key.",
+  },
 ];
 
 function names(): string[] {

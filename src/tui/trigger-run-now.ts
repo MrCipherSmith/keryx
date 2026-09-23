@@ -77,9 +77,13 @@ export type RunNowSpawn = (command: string, args: readonly string[], options: Ru
 const defaultSpawn: RunNowSpawn = (command, args, options) =>
   nodeSpawn(command, [...args], { cwd: options.cwd, env: options.env, detached: true, stdio: [...options.stdio] });
 
-/** The exact argv run-now executes for `name`. */
-export function triggerRunArgv(name: string, invocation: KeryxInvocation = resolveKeryxInvocation()): string[] {
-  return [...invocationArgv(invocation), "trigger", "run", name];
+/**
+ * The exact argv run-now executes for `name`. Flow 295: `schedule: true` adds
+ * `--schedule`, which resolves ONLY a local schedule (never a committed trigger
+ * of the same name), exactly what the installed timer runs.
+ */
+export function triggerRunArgv(name: string, invocation: KeryxInvocation = resolveKeryxInvocation(), options: { schedule?: boolean } = {}): string[] {
+  return [...invocationArgv(invocation), "trigger", "run", ...(options.schedule === true ? ["--schedule"] : []), name];
 }
 
 /** The environment a run-now child gets: this one, minus every `KERYX_SESSION_*` key. */
@@ -227,8 +231,8 @@ export interface InFlightRun {
 }
 
 export interface TriggerRunNow {
-  /** Start `name`. `undefined` when that trigger is already running from this shell. */
-  run(name: string): Promise<TriggerRunNowResult> | undefined;
+  /** Start `name`. `undefined` when that trigger is already running from this shell. `schedule`: flow 295's `--schedule`. */
+  run(name: string, options?: { schedule?: boolean }): Promise<TriggerRunNowResult> | undefined;
   /** Names with a child in flight. */
   running(): ReadonlySet<string>;
   /** The runs in flight RIGHT NOW, with their logs — read live, never cached (review N6). */
@@ -257,9 +261,9 @@ export function createTriggerRunNow(opts: {
   const now = opts.now ?? (() => new Date());
   const inFlight = new Map<string, InFlightRun>();
   return {
-    run(name) {
+    run(name, runOptions = {}) {
       if (inFlight.has(name)) return undefined;
-      const argv = triggerRunArgv(name, opts.invocation);
+      const argv = triggerRunArgv(name, opts.invocation, runOptions);
       const startedAt = now().toISOString();
       const logPath = runNowLogPath(opts.root, name, startedAt);
       inFlight.set(name, { name, logPath });

@@ -53,7 +53,7 @@
 import { stat as fsStat } from "node:fs/promises";
 import path from "node:path";
 import { governanceDataRoot, readProjectTriggerSpend, type ProjectTriggerSpend } from "../governance/service";
-import { loadTriggersConfig, triggersConfigPath, type RejectedTriggerEntry, type TriggerEntry, type TriggersFileProblem } from "../trigger/config";
+import { loadTriggersConfig, scheduleStorePath, triggersConfigPath, type RejectedTriggerEntry, type TriggerEntry, type TriggersFileProblem } from "../trigger/config";
 import { openReservations, readTriggerRuns, triggerRunsPath, type OpenReservation, type TriggerRunRecord, type TriggerRunsRead } from "../trigger/record";
 
 export type TriggerConfigState =
@@ -114,7 +114,15 @@ export async function loadTriggerLedgerView(
   }
   const entries = loaded.triggers.map((entry): TriggerEntryView => {
     const all = byName.get(entry.name) ?? [];
-    const newestFirst = all.slice(-limit).reverse();
+    // Flow 295 (L4): the cap counts CLOSING records (outcomes). A spend reservation rides
+    // along with its run, so a ledger full of reservations still shows `limit` outcomes.
+    const newestFirst: TriggerRunRecord[] = [];
+    let closing = 0;
+    for (let i = all.length - 1; i >= 0 && closing < limit; i -= 1) {
+      const record = all[i]!;
+      newestFirst.push(record);
+      if (record.outcome !== "reserved") closing += 1;
+    }
     return {
       entry,
       scheduled: isScheduledEntry(entry),
@@ -150,15 +158,17 @@ export function findEntry(view: TriggerLedgerView, name: string): TriggerEntryVi
 // Change detection
 // ---------------------------------------------------------------------------
 
-export type LedgerSource = "runs" | "triggers" | "governance";
+/** Flow 295: "schedules" is the per-machine schedule store (`keryx schedule add`, /schedule). */
+export type LedgerSource = "runs" | "triggers" | "governance" | "schedules";
 
-export const LEDGER_SOURCES: readonly LedgerSource[] = ["runs", "triggers", "governance"];
+export const LEDGER_SOURCES: readonly LedgerSource[] = ["runs", "triggers", "governance", "schedules"];
 
 export function triggerLedgerPaths(root: string): Record<LedgerSource, string> {
   return {
     runs: triggerRunsPath(root),
     triggers: triggersConfigPath(root),
     governance: path.join(governanceDataRoot(root), "artifacts", "latest.json"),
+    schedules: scheduleStorePath(root),
   };
 }
 

@@ -19,8 +19,10 @@ import { loadTriggersConfig, type TriggerEntry, type TriggerEventName } from "./
  */
 const HOOKABLE_EVENTS: readonly TriggerEventName[] = ["post-merge", "post-commit", "post-checkout"];
 
-function isHookable(entry: TriggerEntry): entry is TriggerEntry & { fire: { kind: "event"; event: TriggerEventName } } {
-  return entry.fire.kind === "event" && (HOOKABLE_EVENTS as readonly string[]).includes(entry.fire.event);
+export function isHookableTriggerEntry(entry: TriggerEntry): entry is TriggerEntry & { fire: { kind: "event"; event: TriggerEventName } } {
+  // Flow 295 (F1c): a schedule-store entry is never hooked. The loader already
+  // refuses a store entry that is not schedule-fired; this is the second lock.
+  return entry.source !== "store" && entry.fire.kind === "event" && (HOOKABLE_EVENTS as readonly string[]).includes(entry.fire.event);
 }
 
 function blockId(name: string): string {
@@ -71,7 +73,7 @@ export async function installTriggerHooks(projectRoot: string): Promise<TriggerH
   const { triggers } = loadTriggersConfig(projectRoot);
   const results: TriggerHookResult[] = [];
   for (const entry of triggers) {
-    if (!isHookable(entry)) continue;
+    if (!isHookableTriggerEntry(entry)) continue;
     const hookName = entry.fire.event;
     const wrote = await installManagedHook(projectRoot, hookName, blockId(entry.name), hookBody(entry.name, hookName));
     results.push({ name: entry.name, hook: hookName, wrote });
@@ -84,7 +86,7 @@ export async function uninstallTriggerHooks(projectRoot: string): Promise<Trigge
   const { triggers } = loadTriggersConfig(projectRoot);
   const results: TriggerHookResult[] = [];
   for (const entry of triggers) {
-    if (!isHookable(entry)) continue;
+    if (!isHookableTriggerEntry(entry)) continue;
     const hookName = entry.fire.event;
     const wrote = await removeManagedHook(projectRoot, hookName, blockId(entry.name));
     results.push({ name: entry.name, hook: hookName, wrote });
@@ -94,7 +96,7 @@ export async function uninstallTriggerHooks(projectRoot: string): Promise<Trigge
 
 /** Read-only: whether `entry`'s hook block is currently installed. `false` for a schedule/`"ci"` entry — there is nothing to install for those (`keryx trigger list`'s "hook installed" column). */
 export async function isTriggerHookInstalled(projectRoot: string, entry: TriggerEntry): Promise<boolean> {
-  if (!isHookable(entry)) return false;
+  if (!isHookableTriggerEntry(entry)) return false;
   return hasManagedHook(projectRoot, entry.fire.event, blockId(entry.name));
 }
 

@@ -15,7 +15,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
 import { shellConfigPath } from "./shell-config";
-import { isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation } from "./command-risk";
+import { isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation, touchesSchedulerControl } from "./command-risk";
 import { createHash } from "node:crypto";
 import { hasUnquotedMetacharacter } from "./shell-syntax";
 
@@ -139,6 +139,16 @@ export function validateShellPattern(pattern: string): PatternValidation {
       ok: false,
       reason:
         "touches the agent's own permission/credential files; remembering it would let one approved command disable the approval gate for every future session",
+    };
+  }
+  // A wildcard pattern such as `systemctl *` or `keryx schedule *` has no control verb
+  // in its text, yet it would cover one. So the pattern is refused by the command
+  // family it can reach, not only by the verb it happens to spell out.
+  if (touchesSchedulerControl(trimmed) || /\b(?:schedule|crontab|systemctl|launchctl|loginctl)\b|\btrigger\s+(?:\*|schedule|install|run)/i.test(trimmed.replace(/['"\\]/g, ""))) {
+    return {
+      ok: false,
+      reason:
+        "creates, changes or runs a scheduled background task, or drives the OS scheduler; a schedule exists only after the operator confirms its card, so this is never remembered",
     };
   }
   if (touchesHumanConfirmation(trimmed)) {

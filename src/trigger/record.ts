@@ -131,6 +131,12 @@ export const DISPATCH_REFUSAL_CODES = [
   "sandbox-unavailable",
   "provider-usage-unknown",
   "worktree-conflict",
+  // Flow 295 (AC5): an agent-task whose stored content no longer matches the
+  // hash the operator confirmed — an edit behind an installed timer never runs.
+  "grants-changed",
+  // Flow 295 (F1a): this machine's schedule key is missing, unreadable or too
+  // open, so no stored schedule's signature can be checked and none runs.
+  "schedule-key-unavailable",
 ] as const;
 export type DispatchRefusalCode = (typeof DISPATCH_REFUSAL_CODES)[number];
 
@@ -151,6 +157,27 @@ export interface TriggerDispatchRecord {
   /** The closing fact written to the flow: `done` or the attempt outcome. */
   readonly closing?: "done" | "failed" | "blocked";
   readonly denials?: readonly UnattendedDenial[];
+}
+
+/** Flow 295 (AC3): one granted-tool call an agent-task run made — what ran, never its output. */
+export interface GrantedCallRecord {
+  readonly tool: string;
+  /** The argv keryx ran (program resolved, parameters checked). No environment, no output. */
+  readonly argv: readonly string[];
+  readonly exitCode: number | null;
+  readonly ok: boolean;
+}
+
+/** Flow 295 (AC2): what an `agent-task` run did, beside the generic record fields. Additive. */
+export interface TriggerAgentTaskRecord {
+  readonly runId: string;
+  readonly refusal?: DispatchRefusalCode;
+  /** Repo-relative path of the report the dispatcher wrote, when it wrote one. */
+  readonly reportPath?: string;
+  readonly grantedCalls?: readonly GrantedCallRecord[];
+  readonly denials?: readonly UnattendedDenial[];
+  readonly permissionMode?: "ask" | "trust";
+  readonly network?: "off" | "full";
 }
 
 export const NO_MODEL_COST: TriggerRunCost = {
@@ -175,6 +202,8 @@ export interface TriggerRunRecord {
   readonly cost: TriggerRunCost;
   /** Flow 290: present only on a dispatching `flow-next` run. */
   readonly dispatch?: TriggerDispatchRecord;
+  /** Flow 295: present only on an `agent-task` run. */
+  readonly agentTask?: TriggerAgentTaskRecord;
   /** Flow 290 T13: on a `reserved` record — the amount held back for run `runId`. */
   readonly reservation?: { readonly runId: string; readonly usd: number };
   /** Flow 290 T13: on a `reservation-resolved` record — the run whose reservation an operator closed. */
@@ -212,7 +241,7 @@ export function openReservations(records: readonly TriggerRunRecord[]): OpenRese
       });
       continue;
     }
-    const closes = record.resolves ?? record.dispatch?.runId;
+    const closes = record.resolves ?? record.dispatch?.runId ?? record.agentTask?.runId;
     if (closes !== undefined) open.delete(closes);
   }
   return [...open.values()];
@@ -313,6 +342,34 @@ export function latestRunByTrigger(records: readonly TriggerRunRecord[]): Map<st
   return latest;
 }
 
+/**
+ * Flow 295 (M2): the ONE place a scheduled run's report may be, repo-relative:
+ * `.metaproject/data/trigger/reports/<trigger>/<runId>.md`. `undefined` when the trigger
+ * name or run id could not have come from keryx (a separator, `..`, a leading dot).
+ */
+export function expectedReportRelPath(trigger: string, runId: string): string | undefined {
+  const safe = (s: string): boolean => /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(s) && !s.includes("..");
+  if (!safe(trigger) || !safe(runId)) return undefined;
+  return path.join(".metaproject", "data", "trigger", "reports", trigger, `${runId}.md`);
+}
+
+/**
+ * M2: `runs.jsonl` is trackable, so a commit can plant a record. A `reportPath` that is not
+ * exactly where keryx writes this run's report is dropped when the record is read, so no
+ * reader can be pointed at `../../etc/hostname` or a FIFO somewhere else.
+ */
+function withSafeReportPath(raw: Record<string, unknown>): Record<string, unknown> {
+  const task = raw["agentTask"];
+  if (task === null || typeof task !== "object" || Array.isArray(task)) return raw;
+  const t = task as Record<string, unknown>;
+  if (t["reportPath"] === undefined) return raw;
+  const expected =
+    typeof t["runId"] === "string" && typeof raw["trigger"] === "string" ? expectedReportRelPath(raw["trigger"], t["runId"]) : undefined;
+  if (expected !== undefined && t["reportPath"] === expected) return raw;
+  const { reportPath: _dropped, ...rest } = t;
+  return { ...raw, agentTask: rest };
+}
+
 function parseRecord(line: string): TriggerRunRecord | null {
   let value: unknown;
   try {
@@ -325,5 +382,5 @@ function parseRecord(line: string): TriggerRunRecord | null {
   if (typeof raw["at"] !== "string" || typeof raw["trigger"] !== "string" || typeof raw["outcome"] !== "string") {
     return null;
   }
-  return raw as unknown as TriggerRunRecord;
+  return withSafeReportPath(raw) as unknown as TriggerRunRecord;
 }

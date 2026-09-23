@@ -39,6 +39,13 @@ describe("advertised commands", () => {
     expect(acpAvailableCommands().map((command) => command.name)).not.toContain("triggers");
   });
 
+  test("flow 295: /schedule and /schedules are TUI-only — pinned, never advertised to an editor", () => {
+    expect(ACP_TUI_ONLY_COMMANDS).toContain("schedule");
+    expect(ACP_TUI_ONLY_COMMANDS).toContain("schedules");
+    expect(acpAvailableCommands().map((command) => command.name)).not.toContain("schedule");
+    expect(acpAvailableCommands().map((command) => command.name)).not.toContain("schedules");
+  });
+
   test("the payload has the published shape: name without a slash, description, optional input.hint", () => {
     const commands = acpAvailableCommands();
     expect(commands.map((command) => command.name)).toEqual(["help", "model", "reasoning", "status"]);

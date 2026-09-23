@@ -6,7 +6,9 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { loadTriggersConfig, triggerEntryProblems, triggersConfigPath } from "./config";
+import { execFileSync } from "node:child_process";
+import { loadTriggersConfig, scheduleContentCanonical, scheduleStorePath, triggerEntryProblems, triggersConfigPath } from "./config";
+import { GRANTED_TOOL_CATALOGUE, grantedToolProblems, type GrantedToolSpec } from "./granted-tools";
 
 async function projectWith(content: string | undefined): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-triggers-config-"));
@@ -409,5 +411,156 @@ describe("flow 290 T13: dispatch hardening at load (AC14, review item 8)", () =>
     const action = loadTriggersConfig(root).triggers[0]!.action;
     if (action.kind !== "flow-next" || action.dispatch === undefined) throw new Error("expected a dispatch");
     expect(action.dispatch.network).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow 295 (AC1, AC4): the `agent-task` kind, loaded from the schedule store.
+// ---------------------------------------------------------------------------
+
+describe("flow 295: agent-task entries", () => {
+  const RATES = { inputUsdPerMTok: 3, outputUsdPerMTok: 15 };
+  function agentTask(overrides: Record<string, unknown> = {}, name = "check-github"): Record<string, unknown> {
+    return {
+      name,
+      on: { kind: "schedule", cron: "0 */4 * * *" },
+      action: {
+        kind: "agent-task",
+        prompt: "Check open PRs and summarise what needs my attention.",
+        dispatch: { provider: "anthropic", model: "m", permissionMode: "ask", rates: RATES, ceilingUsd: 0.5 },
+        grants: { network: "off", tools: ["gh.pr.list"], repos: ["MrCipherSmith/keryx"], bins: { gh: "/usr/bin/gh" } },
+        ...overrides,
+      },
+    };
+  }
+  async function storeWith(entries: unknown[], config?: unknown[]): Promise<string> {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-triggers-store-"));
+    await mkdir(path.join(root, ".metaproject", "data", "trigger"), { recursive: true });
+    await writeFile(scheduleStorePath(root), JSON.stringify({ schemaVersion: 1, triggers: entries }), "utf8");
+    if (config !== undefined) await writeFile(triggersConfigPath(root), JSON.stringify({ schemaVersion: 1, triggers: config }), "utf8");
+    return root;
+  }
+  function reasonsOf(root: string, name: string): string {
+    return (loadTriggersConfig(root).rejected.find((r) => r.name === name)?.reasons ?? []).join("\n");
+  }
+
+  test("a complete agent-task loads from the store with defaults filled (ask, 600s, keep 20)", async () => {
+    const root = await storeWith([agentTask()]);
+    const { triggers, rejected, fileProblem } = loadTriggersConfig(root);
+    expect(fileProblem).toBeUndefined();
+    expect(rejected).toEqual([]);
+    const entry = triggers[0]!;
+    expect(entry.source).toBe("store");
+    if (entry.action.kind !== "agent-task") throw new Error("expected an agent-task");
+    expect(entry.action.dispatch.permissionMode).toBe("ask");
+    expect(entry.action.dispatch.maxSeconds).toBe(600);
+    expect(entry.action.grants).toEqual({ network: "off", tools: ["gh.pr.list"], repos: ["MrCipherSmith/keryx"], bins: { gh: "/usr/bin/gh" }, binDigests: {} });
+    expect(entry.action.report.keep).toBe(20);
+  });
+
+  test("a missing prompt, rates or ceiling is refused with the reason; a neighbour still loads", async () => {
+    const noPrompt = agentTask({ prompt: undefined }, "no-prompt");
+    const noRates = agentTask({ dispatch: { provider: "p", model: "m", ceilingUsd: 1 } }, "no-rates");
+    const noCeiling = agentTask({ dispatch: { provider: "p", model: "m", rates: RATES } }, "no-ceiling");
+    const root = await storeWith([noPrompt, noRates, noCeiling, agentTask()]);
+    expect(reasonsOf(root, "no-prompt")).toContain("action.prompt: required");
+    expect(reasonsOf(root, "no-rates")).toContain("action.dispatch.rates: required");
+    expect(reasonsOf(root, "no-ceiling")).toContain("action.dispatch.ceilingUsd: required");
+    expect(loadTriggersConfig(root).triggers.map((t) => t.name)).toEqual(["check-github"]);
+  });
+
+  test('permissionMode "auto" is refused with the reason', async () => {
+    const root = await storeWith([
+      agentTask({ dispatch: { provider: "p", model: "m", permissionMode: "auto", rates: RATES, ceilingUsd: 1 } }),
+    ]);
+    expect(reasonsOf(root, "check-github")).toContain('"auto" is never allowed for an unattended run');
+  });
+
+  test("a granted tool outside the built-in catalogue is refused with the reason", async () => {
+    const root = await storeWith([agentTask({ grants: { network: "off", tools: ["gh.pr.merge"], repos: ["o/r"], bins: {} } })]);
+    expect(reasonsOf(root, "check-github")).toContain('"gh.pr.merge" is not in the built-in granted-tool catalogue');
+  });
+
+  test("a granted tool whose argv the unattended floor refuses is refused on load with the floor's reason", () => {
+    // The shipped catalogue is read-only; a merge entry reaching it would be a
+    // reviewed code change. The floor still refuses it, so no grant can lift it.
+    const merge: GrantedToolSpec = {
+      id: "gh.pr.merge",
+      tool: "gh_pr_merge",
+      program: "gh",
+      description: "merge",
+      params: { number: { description: "n", required: true, pattern: /^\d+$/ } },
+      argv: (v) => ["pr", "merge", v["number"]!, "--squash"],
+    };
+    const problems = grantedToolProblems(["gh.pr.merge"], [...GRANTED_TOOL_CATALOGUE, merge]);
+    expect(problems.join("\n")).toContain("which the unattended floor refuses");
+    // Every shipped catalogue entry passes the same check.
+    expect(grantedToolProblems(GRANTED_TOOL_CATALOGUE.map((s) => s.id))).toEqual([]);
+  });
+
+  test('AC4: network "allowlist" is refused as not yet available (flow 301); "full" and "off" load', async () => {
+    const root = await storeWith([
+      agentTask({ grants: { network: "allowlist", tools: [], repos: [] } }, "allow"),
+      agentTask({ grants: { network: "full", tools: [], repos: [] } }, "full"),
+      agentTask({ grants: { network: "off", tools: [], repos: [] } }, "off"),
+    ]);
+    expect(reasonsOf(root, "allow")).toContain("not yet available — it is delivered by flow 301");
+    expect(loadTriggersConfig(root).triggers.map((t) => t.name)).toEqual(["full", "off"]);
+  });
+
+  test("an agent-task in the committed triggers.json is refused — it lives only in the per-machine store", async () => {
+    const root = await storeWith([], [agentTask({}, "committed")]);
+    expect(reasonsOf(root, "committed")).toContain("never in the committed triggers.json");
+  });
+
+  test("granted tools without named repositories are refused", async () => {
+    const root = await storeWith([agentTask({ grants: { network: "off", tools: ["gh.pr.list"], repos: [] } })]);
+    expect(reasonsOf(root, "check-github")).toContain("action.grants.repos: required when granted tools are listed");
+  });
+
+  test("scheduleContentCanonical ignores key order and `enabled`, but changes with the grants", () => {
+    const a = agentTask();
+    const reordered = { action: a["action"], on: a["on"], name: a["name"], enabled: false };
+    expect(scheduleContentCanonical(reordered)).toBe(scheduleContentCanonical(a));
+    const widened = agentTask({ grants: { network: "full", tools: ["gh.pr.list"], repos: ["MrCipherSmith/keryx"], bins: { gh: "/usr/bin/gh" } } });
+    expect(scheduleContentCanonical(widened)).not.toBe(scheduleContentCanonical(a));
+  });
+
+  // --- flow 295 security review --------------------------------------------------
+
+  test("F1c: a stored schedule that fires on a git event is refused on load, and never hooked", async () => {
+    const root = await storeWith([{ ...agentTask(), on: { kind: "event", event: "post-merge" } }]);
+    expect(reasonsOf(root, "check-github")).toContain("fires only on {\"kind\": \"schedule\"}");
+    expect(loadTriggersConfig(root).triggers).toEqual([]);
+  });
+
+  test("F1c: the store holds only agent-task schedules", async () => {
+    const root = await storeWith([{ name: "sneaky", on: { kind: "schedule", cron: "0 2 * * *" }, action: { kind: "rebuild" } }]);
+    expect(reasonsOf(root, "sneaky")).toContain("the schedule store holds only agent-task schedules");
+  });
+
+  test("F1d: bins must name the program they stand for — bins.gh = /bin/bash is refused", async () => {
+    const root = await storeWith([agentTask({ grants: { network: "off", tools: ["gh.pr.list"], repos: ["a/b"], bins: { gh: "/bin/bash" } } })]);
+    expect(reasonsOf(root, "check-github")).toContain('"/bin/bash" is not a program named "gh"');
+  });
+
+  test("F1b: a schedule store tracked by git is refused whole", async () => {
+    const root = await storeWith([agentTask()]);
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root });
+    expect(loadTriggersConfig(root).triggers.map((t) => t.name)).toEqual(["check-github"]);
+    execFileSync("git", ["add", "-f", path.relative(root, scheduleStorePath(root))], { cwd: root });
+    const loaded = loadTriggersConfig(root);
+    expect(loaded.triggers).toEqual([]);
+    expect(loaded.rejected.map((r) => r.reasons.join(" ")).join("\n")).toContain("is tracked by git");
+  });
+
+  test("F4: a committed trigger with a local schedule's name is refused; the local schedule is kept", async () => {
+    const root = await storeWith(
+      [agentTask({}, "nightly")],
+      [{ name: "nightly", on: { kind: "schedule", cron: "0 2 * * *" }, action: { kind: "rebuild" } }],
+    );
+    const loaded = loadTriggersConfig(root);
+    expect(loaded.triggers.map((t) => `${t.name}/${t.source}`)).toEqual(["nightly/store"]);
+    expect(loaded.rejected.find((r) => r.source === "config")?.reasons.join(" ")).toContain("also a local schedule on this machine");
   });
 });

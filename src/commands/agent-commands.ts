@@ -169,6 +169,20 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 295 (AC6): create a scheduled background task. TUI-only: the
+    // confirmation card and its yes/no dialog need the OpenTUI surface.
+    name: "/schedule",
+    description: "Schedule a background agent task — shows a confirmation card first (keryx schedule add)",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 295 (AC12): the Schedules list and detail modals — keyboard access to
+    // everything the sidebar section offers (pause/resume, run now, delete, report).
+    name: "/schedules",
+    description: "Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete",
+    modes: AGENT_ONLY,
+  },
+  {
     // The installer view under the name that says what it does: it wires this
     // project into an editor, the TUI half of `keryx integrate`.
     name: "/integrations",

@@ -1286,11 +1286,14 @@ deleted.
 ## trigger
 
 Fire one declared project trigger — the single entry point every git hook, cron
-line, and CI job calls. A trigger is declared by hand in
+line, systemd timer and CI job calls. A trigger is declared by hand in
 `.metaproject/triggers.json` (keryx never writes this file — see
 [sync](#sync) and [update](#update) for the files it *does* own), each entry
 naming what fires it (a repository event or a schedule) and what it does
-(`reconcile`, `rebuild`, `open-flow`, or `flow-next`).
+(`reconcile`, `rebuild`, `open-flow`, or `flow-next`). Scheduled agent tasks
+(`agent-task`) are the one kind keryx writes. It writes them only after you
+confirm, and into a separate per-machine store, never into `triggers.json`. See
+[schedule](#schedule).
 
 ### The config file
 
@@ -1325,7 +1328,7 @@ digits, `-`, `_`, `.`, max 64 chars), `on` (`{ kind: "event", event:
 a git hook for it; it exists so an entry can say "a CI job calls `keryx
 trigger run` for this itself" and show up in `list`/`status`.
 
-Four action kinds:
+Action kinds:
 
 - `{ "kind": "reconcile" }` — one pass of `keryx sync --apply`.
 - `{ "kind": "rebuild" }` — one pass of `keryx gdgraph build`.
@@ -1339,6 +1342,10 @@ Four action kinds:
 - `{ "kind": "flow-next", "flow": "<flow id>", "dispatch": { … } }` —
   **dispatches** a keryx agent to work the flow's next task, unattended. See
   **Dispatching `flow-next`** below.
+- `{ "kind": "agent-task", … }`: a free-form scheduled agent task that leaves
+  a report. It is created only with `keryx schedule add` or `/schedule` and lives in
+  `.metaproject/data/trigger/schedules.json`. An `agent-task` written into
+  `triggers.json` is refused on load. See [schedule](#schedule).
 
 An entry that fails validation is refused on load with the reason, and its
 neighbours still load; a later entry re-using an already-used `name` is
@@ -1353,7 +1360,7 @@ keryx trigger install           # write a git hook block for every event-fired e
 keryx trigger uninstall         # remove those hook blocks
 keryx trigger list              # list declared entries: enabled state, fire, action, hook status
 keryx trigger status [<name>]   # show the last recorded outcome for one or every entry
-keryx trigger schedule <name>   # print the cron line / systemd timer unit for a schedule entry
+keryx trigger schedule <name>   # print the cron line / systemd timer unit (real OnCalendar=) for a schedule entry
 ```
 
 | Subcommand | Description |
@@ -1363,7 +1370,7 @@ keryx trigger schedule <name>   # print the cron line / systemd timer unit for a
 | `uninstall` | Remove those blocks. Every other managed block in the same hook file is untouched. |
 | `list` | List every declared entry — name, enabled state, what fires it, what it does, and whether its hook is installed — plus every rejected entry and why it was refused. |
 | `status [<name>]` | Print the last recorded outcome for one entry, or every entry, read from the run record (below). |
-| `schedule <name>` | Print the cron line and the systemd service/timer pair for a schedule-fired entry. Installs nothing. |
+| `schedule <name>` | Print the cron line and the systemd service/timer pair for a schedule-fired entry, with a real `OnCalendar=` translated from the cron and a project-unique unit name. Installs nothing. `keryx schedule add` installs a timer for you. |
 | `--help`, `-h` | Print `trigger` usage and exit. |
 
 **Exit codes.** Non-zero only when the action itself failed (for a dispatch:
@@ -1506,7 +1513,9 @@ what fired it (`on`, verbatim), what it did (`action`, verbatim), the outcome
 `failed`), a human-readable detail, and its cost — `{ recorded: false, reason }`
 for every action that calls no model, `{ recorded: true, usd, tokens }` for a
 dispatched `flow-next`. A dispatch also records `dispatch: { runId, flow,
-task, attempt, branch, closing, refusal?, denials? }`. Lines written before
+task, attempt, branch, closing, refusal?, denials? }`. A scheduled `agent-task`
+run records `agentTask: { runId, reportPath?, grantedCalls, denials?,
+refusal?, permissionMode, network }`. Lines written before
 `tokens`/`dispatch` existed still read. A run that never reaches a concrete entry (no config,
 unknown name, malformed entry) is not recorded — that stays a stderr line and
 an exit code. `status` reads this file; it never resolves or re-runs anything.
@@ -1547,7 +1556,13 @@ content already in the file, coexist regardless of install order.
 
 **Scheduling.** `schedule <name>` runs no daemon and installs nothing itself —
 it prints a ready-to-use cron line and an alternative systemd service+timer
-pair for you to install with your own scheduler. Both bake in the absolute
+pair for you to install with your own scheduler. The timer carries a real
+`OnCalendar=`: each cron field is expanded to an explicit list, which systemd
+always accepts, and a test checks it with `systemd-analyze calendar`. A cron
+with no systemd equivalent (day-of-month AND day-of-week both restricted) keeps a
+commented placeholder and says why. Unit names are `keryx-<projecthash>-<name>`,
+so two projects never share one. To have keryx install the timer for you, after a
+confirmation, use [schedule](#schedule). Both bake in the absolute
 path to the interpreter (`node`/`bun`) and script actually running `keryx
 trigger schedule`, plus an explicit `PATH` (that interpreter's own directory,
 then `/usr/local/bin:/usr/bin:/bin`, for whatever the action shells out to,
@@ -1581,6 +1596,269 @@ regenerate-and-reinstall of the line.
 - **Cost is priced from your rates.** keryx has no price table; if `rates` are
   wrong, both ceilings are wrong by the same factor. Token counts are summed
   from every usage event the provider emits.
+
+---
+
+## schedule
+
+Scheduled agent tasks, run in the background. You describe a task and a cadence,
+for example "check open PRs on my repo every 4 hours and summarise what needs my
+attention". keryx shows you a **confirmation card**. Only after you confirm does it
+store the schedule and install an OS timer that runs the task unattended. Each run
+leaves a **report** you read later in `keryx shell` or with `keryx schedule show`.
+
+keryx still runs no daemon of its own. The OS scheduler calls `keryx trigger run
+<name>` from the project root:
+
+| Backend | Where | Catch-up after the machine was off/asleep |
+|---|---|---|
+| systemd `--user` (Linux) | `~/.config/systemd/user/keryx-<projecthash>-<name>.{service,timer}`, `OnCalendar=` translated from the cron, `Persistent=true` | one catch-up run at the next boot/wake |
+| launchd (macOS) | `~/Library/LaunchAgents/ai.keryx.<projecthash>.<name>.plist`, `StartCalendarInterval` | one catch-up run on wake |
+| cron (elsewhere) | a marked block in your crontab (`# >>> keryx-managed <projecthash> <name> >>>`) | none |
+
+```
+keryx schedule add --name <name> --every "<cadence>" --prompt "<task>" \
+    --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
+    [--max-seconds 600] [--mode ask|trust] [--network off|full] \
+    [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
+keryx schedule list
+keryx schedule show <name>
+keryx schedule pause <name>
+keryx schedule resume <name>
+keryx schedule run <name>
+keryx schedule remove <name> [--yes]
+```
+
+| Subcommand | Description |
+|---|---|
+| `add` | Draft the schedule, print the confirmation card, then store it and install its timer **only after you confirm**: `y` at the prompt, or `--yes`. Without a TTY and without `--yes` it refuses (exit 1). Declining writes nothing and installs nothing. |
+| `list` | Every schedule: cadence, enabled or paused, timer installed or not, next run, last outcome with its cost, and the last report's path. |
+| `show <name>` | The same row plus the prompt, the runner and budget, the grants, the last five runs, and the latest report. |
+| `pause <name>` | Disable the timer and mark the entry disabled. A fire while paused records `no-op`. |
+| `resume <name>` | Re-enable both. No new confirmation is asked, so resume first checks that the entry still carries this machine's signature and that every granted binary still matches its pin, and refuses with the reason otherwise. It reinstalls the keryx recorded when you confirmed the card, never the one running `resume`. |
+| `run <name>` | One pass now (`keryx trigger run --schedule <name>`: local schedules only). |
+| `remove <name>` | After a confirmation, uninstall the timer and delete the entry. keryx deletes only files that carry its `# keryx-managed <projecthash> <name>` header. Anything else found at those paths is left untouched and named. |
+
+**Cadence.** A five-field cron expression, or one of `every N hours` (a divisor of
+24), `every N minutes` (5, 10, 15, 20 or 30), `hourly`, `daily at HH:MM`,
+`weekdays at HH:MM`, `every monday at HH:MM`. The phrase is turned into cron by
+fixed code, never by the model. The card shows the cron and the next three run
+times, so a wrong translation is visible before anything is installed. A cron that
+restricts both day-of-month and day-of-week is refused: cron fires on either,
+systemd and launchd only on both.
+
+**The confirmation card** lists:
+
+- the cadence and the next three run times;
+- the prompt;
+- the provider and model, with the permission mode;
+- the schedule's ceiling, its max seconds, and your rates;
+- the network mode;
+- every granted tool, with the absolute binary it runs, the repositories it may
+  touch, and the account it acts as;
+- the backend and file paths, and the exact command the scheduler will execute;
+- the linger status;
+- the limits.
+
+The same card appears in `keryx shell` for `/schedule` and for the agent's
+`schedule_create` tool.
+
+**What the scheduled run is, and what it may do.** An `agent-task` runs one
+unattended agent turn on your prompt. The unattended posture and the text floor are
+exactly those of a dispatched `flow-next` (see [trigger](#trigger)). The differences:
+
+- there is no flow, task, worktree branch, commit or health gate;
+- the agent's working directory is a scratch directory, and the project is bound
+  **read-only**;
+- the roster is `get_cwd`, `list_dir`, `read_file`, `shell_exec` (inside the hardened
+  sandbox) and the granted tools. There is no `apply_patch`, web, MCP, subagents or
+  `ask_user`.
+
+`--mode ask` (the default) makes every shell command an approval request, and an
+unattended run denies every approval request. Granted tools still run under `ask`,
+because they are read-only. `--mode trust` lets non-destructive shell commands run
+inside the sandbox, and refuses to start without one. `auto` is never accepted.
+The floor additionally refuses `keryx schedule add|remove|pause|resume|run`,
+`keryx trigger schedule`, `systemctl … enable|disable|start|stop|daemon-reload`,
+`crontab`, `launchctl` and `loginctl`. It also refuses any write to the schedule
+store or the reports. **No grant lifts any of it.**
+
+**Grants.**
+
+- **Network:** `off` (default: `--unshare-net`) or `full` (the host's whole network,
+  always shown with the NETWORK ON warning). An allowlist mode (only listed domains,
+  host loopback unreachable) is not available yet. It is flow 301, and an entry
+  asking for it is refused on load with that reason.
+- **Granted tools:** a fixed, reviewed catalogue: `gh.pr.list`, `gh.pr.view`,
+  `gh.pr.checks`, `gh.issue.list`, `gh.issue.view`, `gh.run.list`. It includes no
+  `gh api` and no free-form argv. **keryx runs a granted tool itself, outside the
+  sandbox, with your credentials**, via `execFile`:
+  - there is no shell;
+  - the argv is fixed;
+  - parameters are pattern-checked, and none may start with `-`;
+  - the repository must be one listed with `--repo`;
+  - each call has a 30-second timeout and a 64 KB output cap.
+
+  The model only ever receives the tool's output, after the secret detector has run
+  over it and the exact value of every credential-looking environment variable has
+  been scrubbed. Your token is never in the sandbox, the model context, the provider
+  request or the report. A granted tool's output (PR bodies, comments) is marked
+  untrusted: under `trust`, a later write that follows it asks, and so is denied.
+
+**Security.**
+
+- **Signed by this machine.** Every stored schedule is signed with an HMAC-SHA256.
+  The key is a per-machine secret in keryx's user-global directory
+  (`schedule-hmac.key`, 0600), created the first time you confirm a schedule. The key
+  lives outside the project and is hidden from every sandboxed run. A committed or
+  hand-written store entry cannot carry a valid signature, so it never runs. A missing
+  or group-readable key refuses every stored schedule (`schedule-key-unavailable`).
+- **Never committed.** A schedule store tracked by git is refused whole.
+- **Timers only, never git hooks.** A stored schedule can only be `on.kind:
+  "schedule"`. It is never a git-event trigger and never gets a git hook.
+- **Your own name wins.** A committed `triggers.json` entry with the same name as a
+  local schedule is refused, and the local schedule wins. The installed timer runs
+  `keryx trigger run --schedule <name>`, which resolves only local schedules.
+- **Granted binaries are pinned.** Each granted program is recorded with its
+  realpath and sha256, and both are signed. Its basename must equal the program
+  (`bins.gh` is a program named `gh`), and it must resolve outside the project. A
+  swapped binary or a repointed symlink refuses the run with `grants-changed`.
+- **Scrubbed output.** Output is scrubbed first and capped after, and the trailing
+  partial line is dropped. The scrubber removes:
+  - the exact value of every `*TOKEN*`/`*SECRET*`/`*KEY*`/`*AUTH*` variable;
+  - the exact value of `gh auth token`, which keryx reads once per run, outside the
+    sandbox, and never logs or shows;
+  - classic `gh?_` and fine-grained `github_pat_` tokens;
+  - `Authorization: token|bearer` header values.
+- **No shortcut around the card.** In any agent's shell, including `auto` mode, these
+  always ask, are never remembered, and are refused as allowlist patterns:
+  - `keryx schedule add|remove|pause|resume|run`;
+  - `keryx trigger schedule|install`;
+  - `crontab`, `launchctl` and `loginctl`;
+  - `systemctl` with `enable|link|start|restart|daemon-reload|edit|disable|stop|…`;
+  - any write into `~/.config/systemd/user` or `~/Library/LaunchAgents`;
+  - starting an interactive keryx (`keryx`, `keryx shell` without `-p`), a terminal
+    driver around one (`script`, `screen`, `tmux`, `unbuffer`), or typing into a
+    running session (`tmux send-keys`, `screen -X stuff`).
+
+  `keryx schedule add|remove|pause|resume|run` also refuse outright inside an agent's
+  shell (`KERYX_TOOL_CALL=1`). So do a nested keryx's `/schedule`, `schedule_create`,
+  and the `/schedules` pause, resume, run-now and delete keys, because an agent can
+  type into a keryx it started through a pseudo-terminal.
+- **Clean cards.** Model-supplied text on the card has ANSI and control characters
+  removed, and newlines are shown as `⏎`.
+- **Operator-only storage.** `schedule_create` stores only the draft whose card the
+  operator confirmed. That draft is bound to a one-time token and dropped when the
+  operator declines.
+- **Isolated runs.** One run cannot read another run's scratch directory. The scratch
+  parent is `$XDG_RUNTIME_DIR/keryx-agent-tasks`, or `<tmpdir>/keryx-agent-tasks-<uid>`
+  when that variable is unset. It must be a real directory you own with mode 0700, or
+  the run is refused.
+- **A terminal is required.** `keryx schedule add`, `resume` and `run` need an
+  interactive terminal on stdin and stdout, `--yes` included. `remove` and `pause` do
+  not, because they only reduce what runs. The shell's `/schedule` card and the
+  `schedule_create` tool are the in-shell paths.
+- **Granted programs run from an empty directory.** Granted programs, `gh auth token`
+  and the account lookup on the card all run from an empty keryx-owned directory, never
+  from the project, so a committed `.tool-versions`/`.mise.toml`/`.envrc` cannot steer
+  them. Drafting refuses a version-manager shim (`…/shims/gh`) and suggests the real
+  binary (`mise which gh`, `asdf which gh`).
+- **Script wrappers are pinned.** A `#!` script wrapper outside the project (for example
+  a `~/.local/bin/gh` that picks an account) is allowed. Its sha256, inode and mtime are
+  pinned and signed, and so is its interpreter: for `#!/usr/bin/env X`, X is resolved on
+  PATH. The run re-checks both, and resolves the interpreter again on the run's PATH.
+  The card shows `gh: script wrapper … (interpreter …) — pinned`.
+- **The config directory is hidden and pinned.** keryx's config directory (auth.json,
+  provider keys, the signing key) is always hidden inside the unattended sandbox, even
+  when `XDG_DATA_HOME` is outside `$HOME`. A config directory inside the project is
+  refused. The installed timer pins `XDG_DATA_HOME` when you have it set, so the
+  scheduler finds the same key.
+- **Binaries are re-checked before each exec.** A granted binary's inode, size and mtime
+  are re-checked before every exec, not only at the start of the run.
+- **The timer runs the keryx you confirmed.** The card's `runs:` line is the exact
+  command, quoted as the unit carries it. That command and the pinned environment are
+  signed with the entry, so resume and reinstall never swap in another keryx. A keryx
+  running from inside the project (for example `bun src/cli.ts`) is refused when the
+  schedule is drafted: install keryx globally for schedules.
+- **Reports are read only from their own place.** The Report tab and the notices read
+  only `.metaproject/data/trigger/reports/<name>/<runId>.md`: a regular file (never a
+  link or a FIFO), under a size cap, with control characters removed. A `reportPath`
+  in `runs.jsonl` that points anywhere else is ignored.
+- **Honest limit.** The shell floor is text analysis, and a same-user shell in `trust`
+  mode can get past it with a variable or a script. The terminal requirement, the
+  nested-keryx refusal and the signing key are the gates behind it.
+
+**Where things live.**
+
+- The schedules are stored in `.metaproject/data/trigger/schedules.json`. The file
+  is per machine and never committed: `.metaproject/data/trigger/.gitignore` lists
+  it and the reports. Only keryx writes it, and only after a confirmation.
+- A schedule is never read from the committed `triggers.json`. An `agent-task` there
+  is refused on load.
+- Each entry carries the hash of the content you confirmed: name, cadence, prompt,
+  runner, budget and grants. `keryx trigger run` refuses an entry whose content no
+  longer matches that hash (`dispatch-refused`, refusal `grants-changed`) and calls
+  no model, so an edit behind an installed timer never runs.
+- Reports are written by the dispatcher, never by the agent, to
+  `.metaproject/data/trigger/reports/<name>/<runId>.md`. Each report has a header
+  (outcome, cost, granted calls, denials) and keeps the last 20 per schedule.
+- Every run, including a refusal, is a line in `.metaproject/data/trigger/runs.jsonl`.
+  The line carries `agentTask: { runId, reportPath, grantedCalls, denials, refusal? }`
+  and the cost, so `keryx trigger status` and `keryx governance report` see it.
+
+**Spend.** Before the first model call, a run reserves spend under the project-wide
+spend lock. The reservation is the smaller of the project ceiling and the schedule's
+own `--ceiling`. At or over either ceiling it records `budget-refused` and calls no
+model. The run's closing record carries the runId, tokens and USD, and closes the
+reservation.
+
+**In `keryx shell`:**
+
+- `/schedule` creates a schedule from the shell, with the same card.
+- The sidebar's **Schedules** section (after Triggers) shows one compact row per
+  schedule: name, next run time (or `paused`, or `not installed` when the timer files
+  are gone), and last outcome with its cost (`ok`, `failed`, `refused`; a hand-resolved
+  run shows `resolved` in the attention colour). A click on a row opens that schedule's
+  detail.
+- `/schedules` opens the list: `↑/↓` to select, `Enter` to open, `Esc` to close.
+  `/schedules <name>` opens one schedule directly.
+- The detail modal has four tabs: **Overview** (cadence, next runs in local time, last
+  run, installed timer, its unit, the linger state, whether the entry still verifies,
+  runner, budget, prompt), **Grants** (network, account, repos, granted tools, and each
+  program's pinned realpath and short sha256, with a wrapper's interpreter), **Runs**
+  (the last 12 outcomes with cost and refusal; reservations do not count),
+  and **Report** (the latest report, scrollable). The first line of every tab lists its
+  keys:
+  - `p` pauses or resumes, in one step;
+  - `r` then `y` runs it now, as `keryx trigger run --schedule <name>` in a detached
+    child process with its own log;
+  - `d` then `y` deletes it (uninstalls the timer and removes the entry);
+  - any other key cancels an armed action.
+
+  These actions call the same functions as `keryx schedule pause|resume|remove`.
+- When a scheduled run finishes in the background (another process), the section and
+  an open modal update on the next check, without a restart. Each new report is
+  announced once in the transcript.
+- The agent's `schedule_create` tool creates a schedule from plain language. It
+  **always asks**, in every permission mode including `auto`, is never remembered,
+  and never offers "always". The model can propose a schedule; only you confirm it.
+
+### Honest limits
+
+- **The machine must be on.** A suspended laptop misses runs. systemd
+  (`Persistent=true`) and launchd run **one** catch-up run on the next boot or
+  wake, not one per missed slot. cron catches up nothing.
+- **Linger.** Without linger (`loginctl show-user $USER -p Linger`), a systemd
+  `--user` timer does not run while you are logged out. keryx reads and shows
+  the linger state and never runs `loginctl enable-linger` for you.
+- **The hardened sandbox is Linux-only.** On macOS, `trust` refuses, so a
+  schedule there is `ask` with granted tools only.
+- **Pinned paths.** The installed timer bakes in the absolute interpreter and
+  script that created it, and the absolute path of each granted program. After a
+  version-manager switch, remove the schedule and add it again.
+- **Report text from third parties.** Granted tools return text anyone can
+  write (PR bodies). Under `ask` it cannot cause a write, but it can mislead the
+  summary.
 
 ---
 
