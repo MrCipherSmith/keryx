@@ -37,7 +37,13 @@ the work.
 
 - flow.json is CLI-owned. Never edit it by hand.
 - Acceptance criteria are frozen after `flow freeze`; edits only via
-  `keryx flow ac update <id> --reason`. Implementors NEVER touch them.
+  `keryx flow ac update <id> --reason "<why>"` (re-freezes as edited) or
+  `keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"`
+  (rewrites/appends one line). Implementors NEVER touch them. Every `ac`
+  subcommand refuses an argument it does not use.
 - Status changes only through the CLI; invalid transitions are rejected.
 - Only flow-manager declares implementation complete (`flow implemented`),
   and only after a reviewed PR has merged into the recorded base branch.
+- `flow init --owner "<name>"` / `flow owner set <id> --owner "<name>" --reason
+  "<why>"` names who is accountable; never inferred. Opted-in flows fail
+  `flow complete` while no owner is set.

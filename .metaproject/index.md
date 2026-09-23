@@ -12,6 +12,7 @@ Routing pointers. Everything else is in [`routing.md`](routing.md) — read it o
 | what tests to run, test context | `keryx test related <file>` |
 | lint/type/test/quality status | `keryx health run` |
 | current work state | `keryx flow status` |
+| spend, confirmations, signatures, gate outcomes across flows | `keryx governance report` |
 | secrets, PII, prompt injection | `keryx security check-output` |
 | implement, review, refactor, plan | `skills/catalog.md` |
 

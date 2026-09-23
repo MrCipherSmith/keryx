@@ -3,6 +3,141 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.155] — 2026-09-23
+
+Six flows landed the day after 0.2.154 first reached a real editor and a real
+trigger: the operator's own Zed session and the first `flow-next` dispatch
+each found what a scripted test suite could not. `keryx acp` now runs the
+model it is actually configured for, accepts the MCP servers the editor
+already knows about, gives that session keryx's own project tools and slash
+commands, and switches models on request. A `flow-next` trigger can now
+dispatch an agent to work the next task completely unattended, inside a
+hardened sandbox with a spend ceiling it cannot raise. A flow can name the
+human accountable for it, and every confirmation and completion carries a
+signature. `keryx governance report` brings spend, confirmations, signatures
+and gate outcomes together in one place, and `flow ac update` can finally
+amend a criterion's own wording instead of silently doing nothing.
+
+### Added
+- **`keryx acp` runs the provider and model `keryx shell` would run, not a
+  fake one.** Flags, else the saved selection with saved keys and OAuth
+  grants, resolve the same way for both; the scripted `FakeProvider` is
+  reachable only through the test-only `--fixture` flag, and with nothing
+  configured every session request is refused with `-32600` naming the
+  remedy instead of answering from a stand-in. (#648, flow 287)
+- **`keryx acp` accepts the client's own MCP servers.** Stdio entries an
+  editor sends on `session/new`/`session/load` start through keryx's shared
+  MCP manager and are offered through the same `search_tool`/`use_tool` pair
+  the shell uses, gated by `session/request_permission` like any other
+  destructive call, and stopped when the connection or a reload replaces the
+  set; `http`/`sse` entries are refused by name with the reason. (#648, flow 287)
+- **An ACP session now gets keryx's own project tools, not just five generic
+  ones.** Graph, wiki, memory, flow, skills and `search_code` are offered
+  under the same `offersIndexTools` gate `keryx shell` uses, built from the
+  same shared assembly so the two rosters cannot drift. `/help`, `/model`,
+  `/reasoning` and `/status` are advertised as ACP commands and handled as
+  prompt text before they reach the model; TUI-only commands stay out. Model
+  switching is a `configOptions` entry of category `model`, changed through
+  `session/set_config_option` or `/model`, and takes effect from the next
+  turn. (#651, flow 288)
+- **A flow can name an owner, and `ac confirm`/`complete` sign what they
+  do.** `flow init --owner "<name>"` and `flow owner set <id> --owner
+  "<name>" --reason "<why>"` record who is accountable — never inferred from
+  git or the environment, and every change is kept as history rather than
+  overwritten. `ac confirm` and `complete` now append a signature (who, when,
+  what was signed), and every recorded identity carries a basis — `stated`,
+  `derived`, or `unknown` — so a name read from local git configuration is
+  never presented as proof a human acted. New flows carry an opt-in owner
+  gate that fails `complete` while no owner is set; the ~290 flows that
+  predate it are unaffected. (#649, flow 289)
+- **A `flow-next` trigger can dispatch an agent to do the work, not just
+  report it.** A `dispatch` block starts a keryx agent on the next task in a
+  dedicated worktree, unattended, inside a hardened Linux/bwrap sandbox:
+  read-only filesystem, home and runtime directories hidden, only the
+  worktree and a scratch home writable, no network unless the entry opts in,
+  no tokens or SSH agent. A floor checked before the permission mode denies
+  pushing, merging, tagging, publishing and any write to flow state or the
+  spend ledger even under `trust`; nobody is there to approve, so an
+  unresolvable request fails closed. Every dispatch reserves its spend
+  against a per-trigger ceiling — stacked on top of the project-wide one —
+  before the first model call, and a dispatch with no rates or no ceiling is
+  refused at load. Interactive `sync --apply` and `gdgraph build` now take
+  the same maintenance lock the triggered actions take. (#650, flow 290)
+- **`keryx governance report`.** One read-only report over what is already
+  recorded — review spend, confirmations and their signers' identity basis,
+  completion signatures, and gate outcomes, per flow — plus a project-level
+  trigger-spend line, filterable by flow/owner/date and extendable to every
+  registered project with `--all-projects`. It never re-runs a gate or calls
+  a model; a figure nobody recorded reads as "not recorded", never as zero.
+  `flow complete` now persists every attempt's gate outcomes (name, status,
+  detail, the criteria checksum) rather than reducing them to one prose
+  history line. (#652, flow 291)
+- **`flow ac update --criterion ACn --text "<criterion>" --reason "<why>"`
+  amends one criterion's own wording**, rewriting the single line or
+  appending it when `ACn` is the next unused number, then re-freezing and
+  recording the before/after text in history. Every `flow ac` subcommand now
+  refuses an argument it does not use, rather than accepting and silently
+  dropping it. (#653, flow 293)
+- <!-- 292 placeholder: ACP client / `keryx agents external run` is not
+  merged for this release. Add its Added entry here once it lands. -->
+
+### Fixed
+- **`keryx acp` no longer runs on a stale OAuth token.**
+  `resolveTuiStartup` copies a saved grok/copilot token into the environment
+  before grants are refreshed, so the first real turn on an expired token
+  failed with 401; grants now refresh before resolution, the way `keryx
+  shell` already did it. (flow 287)
+- **Secrets in an MCP server's own output no longer reach a transcript.** A
+  credential a server echoed back in a tool result or error reached the tool
+  update, the transcript and the next model request; tool output is now
+  scrubbed through the same redact hook, matched both raw and JSON-escaped,
+  before truncation rather than after — the 20,000-byte cap used to cut a
+  token before the scrub ran. Secrets shorter than eight characters are no
+  longer treated as secrets (`DEBUG=1` was mangling ordinary text). (flow 287)
+- **A server that failed to start, or died later, no longer stays dead for
+  every new ACP thread.** Sharing one server set per connection had removed
+  the old per-thread recovery path; a thread binding to a running set now
+  restarts only the servers known to be dead. (flow 287)
+- **An unreachable model gateway could no longer stall every new ACP
+  session.** `session/new`/`session/load` awaited an unbounded Ollama
+  model-list probe aimed at the launch provider's base URL; it now waits at
+  most 8 seconds and starts on the saved default rather than blocking, and a
+  failed list is retried rather than cached. (flow 288)
+- **A completion attempt is no longer lost when the criteria change
+  mid-gate.** `flow complete` persisted an attempt's gate outcomes only on
+  its final, unguarded transition; an edit to the criteria file while gates
+  were running threw before the attempt reached disk. The attempt is now
+  checked and saved on its own first; a tamper caught there is recorded as a
+  failed acceptance-criteria gate. (flow 291)
+- **`flow ac update <id> --text "…"` used to print "Acceptance criteria
+  re-frozen" and change nothing.** The command took no criterion and no text
+  and silently ignored both; two flows in this repository ended up with
+  amendments recorded in history but absent from the criteria file, one
+  completed against wording it had meant to replace. `--criterion`/`--text`
+  now writes the change it claims to make, refuses a criterion that spans
+  more than one line (a wrapped criterion, a sub-bullet, a fenced block —
+  there is no way to tell which from the bytes), and preserves each line's
+  own ending in a CRLF or mixed-ending file instead of rewriting it wholesale.
+  (flow 293)
+
+### Security
+- **An unattended trigger dispatch is now sandboxed, not just
+  floor-limited.** The health gate used to run the worktree's own tests and
+  configs — written by the dispatched agent — with the operator's full
+  rights and no sandbox. It now runs inside the same hardened, read-only,
+  network-off-by-default sandbox as the rest of the dispatch, or not at all
+  when the sandbox can't be engaged; the dispatcher's own commit runs with
+  hooks disabled so a tracked hooks directory the agent edited can't run
+  with the operator's rights. (flow 290)
+- **The sandbox's network-off mode hid host sockets, not host
+  networking.** `--unshare-net` isolates IP networking, not unix sockets:
+  with the sandbox's network off, a probe could still resolve names through
+  `systemd-resolved`, list the operator's tailnet through `tailscaled`, and
+  reach D-Bus and libvirt over the host's `/run`, which had been bound in
+  read-only. `/run` (and `/var/run`) is now hidden behind an empty tmpfs like
+  the home directory; nothing under it is bound back unless the dispatch
+  opts into the host's full network. (flow 290)
+
 ## [0.2.154] — 2026-09-22
 Two ways to start work without a person typing the first line: an editor can
 now drive the keryx harness over the Agent Client Protocol, and a repository

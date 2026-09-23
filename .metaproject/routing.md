@@ -67,6 +67,7 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 | Check secrets, PII, prompt injection, egress, unsafe external/tool output | `security` | `modules/security.md`; MCP `security.*` if available | Scan or check content before writing it into project artifacts. |
 | Implement, review, refactor, document, plan, analyze, or verify | `gdskills` | `skills/catalog.md`; `project-skills/`; `skills/gdskills/` | Route to local orchestrators/reviewers/quality skills before global skills. |
 | Start, resume, track, or finish managed work | `flow` / `flow-orchestrator` | `skills/flow/SKILL.md`; `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` | Use Task Manager state and never edit flow files by hand. |
+| Report spend, confirmations, signatures, or gate outcomes across flows | `governance` | `keryx governance report` | Read-only: never re-runs a gate or calls a model. |
 
 ## Agent Workflow
 

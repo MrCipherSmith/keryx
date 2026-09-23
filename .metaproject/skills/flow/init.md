@@ -19,8 +19,10 @@ line is `STATUS:` (`.metaproject/rules/core/subagent-status-protocol.md`). Set
 ## Workflow
 
 1. Create the package: `keryx flow init --issue <url>` or
-   `--title "<problem>"`. The CLI scaffolds the package and collects
-   deterministic context (issue body, memory search, gdgraph artifacts, health).
+   `--title "<problem>"`, adding `--owner "<name>"` when the accountable human
+   is already known (never inferred; set later with `flow owner set` if not).
+   The CLI scaffolds the package and collects deterministic context (issue
+   body, memory search, gdgraph artifacts, health).
 2. Enrich context - dispatch `context-collector` with `context_refs` to the
    flow package; it writes compact findings, not raw dumps. For an issue also
    dispatch `issue-analyzer`; for a described feature, `feature-analyzer`.

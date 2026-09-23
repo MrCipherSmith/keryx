@@ -60,7 +60,10 @@ CLI-owned files:
 - task status - only through `keryx flow task done ...`.
 - task attempt counts - only through `keryx flow task attempt ...`.
 - frozen acceptance criteria changes - only through
-  `keryx flow ac update <id> --reason "<why>"`.
+  `keryx flow ac update <id> --reason "<why>"` (re-freezes as edited) or
+  `keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"`
+  (rewrites/appends one line). Every `ac` subcommand refuses an argument it
+  does not use.
 
 Agent-editable files:
 
@@ -199,7 +202,7 @@ keryx flow init --issue <url>
 or:
 
 ```bash
-keryx flow init --title "<short formalized problem>" --base "<branch the work must land on>"
+keryx flow init --title "<short formalized problem>" --base "<branch the work must land on>" [--owner "<name>"]
 ```
 
 5. Run `keryx flow status <id>` and read the flow package.
@@ -633,6 +636,13 @@ Completion is allowed only after the PR merge has been confirmed. The merge
 target must be the base branch captured when the flow was created; do not
 silently retarget or close against another branch.
 
+If the flow opted into the owner gate (`flow init --owner` set the flag),
+completion also fails while no owner is recorded, naming
+`keryx flow owner set <id> --owner "<name>" --reason "<why>"` as the remedy.
+`ac confirm` and `flow complete` each append a signature; pass `--signed-by
+"<name>"` to name the signer explicitly rather than falling back to
+`KERYX_ACTOR` or local git identity.
+
 If gates fail, the CLI returns the flow to `in-progress`. Add a journal note,
 create fix tasks, and repeat Phase 2.
 
@@ -688,7 +698,7 @@ Stop and re-read this skill if you are thinking:
 |---|---|
 | "The worker's reply reads like it finished, so the task is done." | The STATUS protocol says read the `STATUS:` line first and never infer the outcome from prose. A reply without one is `NEEDS_CONTEXT` — a confident-sounding summary is exactly what an unusable result looks like. |
 | "`DONE_WITH_CONCERNS` is still done, so I can move on." | Every concern goes into `journal.md` and gets an explicit continue-or-fix decision before `flow task done`. Concerns dropped at the task boundary are invisible by the completion report, which is where they would have mattered. |
-| "The acceptance criterion no longer matches what we built, so I'll reword it." | Frozen AC changes only through `keryx flow ac update <id> --reason "<why>"`. Rewriting a criterion to fit the implementation makes the flow pass a gate it actually failed, and leaves no record that it moved. |
+| "The acceptance criterion no longer matches what we built, so I'll reword it." | Frozen AC changes only through `keryx flow ac update <id> --reason "<why>"`, or `--criterion ACn --text "<criterion>" --reason "<why>"` to rewrite the line itself. Rewriting a criterion to fit the implementation makes the flow pass a gate it actually failed, and leaves no record that it moved. |
 | "`flow.json` is just a file — editing one field is faster than the CLI." | `flow.json`, status transitions, task status and attempt counts are CLI-owned. A hand-written field desynchronises the durable state from the flow's own history, and the CLI's next gate check reads yours, not reality. |
 | "Tests pass and the review is clean, so I'll open the PR and complete the flow." | Phase 4 stops and asks the user how the flow should end; not every flow wants a PR. And completion requires a confirmed merge into the base branch captured at creation — not a green local run. |
 | "The worker returned BLOCKED twice — faster if I implement this task myself." | The implementer never self-accepts and the orchestrator never implements. Block the flow, escalate one concise question, then unblock and re-dispatch. Doing the work here erases the boundary the whole flow model rests on. |

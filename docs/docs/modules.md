@@ -656,17 +656,18 @@ deterministic mechanics; cognitive work is layered on by gdskills subagents
 
 | Subcommand | Behavior |
 |---|---|
-| `init (--issue <url> \| --title "<t>") [--slug <s>]` | scaffold a flow package |
+| `init (--issue <url> \| --title "<t>") [--slug <s>] [--owner "<name>"]` | scaffold a flow package |
 | `list` | list all flows with status + task counts |
-| `status <id>` | one flow: status, source, AC state, PR, tasks, last 5 history events |
+| `status <id>` | one flow: status, source, AC state, PR, owner, latest signature, tasks, last 5 history events |
 | `freeze <id>` | record AC checksum, `initializing → ready` |
 | `start <id>` | `ready → in-progress` |
 | `task add <id> --title "<t>" [--kind context\|implement\|test\|review\|docs]` | append a task |
 | `task done <id> <taskId>` | mark a task done |
-| `ac confirm <id> <ACn> [--note "<evidence>"]` | confirm one acceptance criterion |
-| `ac update <id> --reason "<why>"` | re-freeze AC checksum, void prior confirmations |
+| `owner set <id> --owner "<name>" --reason "<why>"` | set/change the flow's owner (accountable human, never inferred); appends a history event |
+| `ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]` | confirm one acceptance criterion; appends a signature |
+| `ac update <id> --reason "<why>"` \| `ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"` | re-freeze AC checksum, void prior confirmations; the `--criterion`/`--text` form (flow 293) additionally rewrites or appends that one criterion's line |
 | `implemented <id> --pr <url>` | `in-progress → implemented`, record draft PR |
-| `complete <id> [--comment]` | run completion gates; pass → `done`, fail → `in-progress` |
+| `complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"]` | run completion gates; pass → `done` (appends a completion signature and records the attempt's gate outcomes), fail → `in-progress` |
 | `block <id> --reason "<why>"` | `* → blocked` (saves previous status) |
 | `unblock <id>` | restore `previousStatus` |
 | `check` | consistency audit across all flows |
@@ -689,10 +690,18 @@ recomputes the checksum before most mutations and throws (directing to `ac updat
 if the file was edited outside the CLI. **Completion gates** (`complete`): (1)
 acceptance-criteria (intact + every criterion confirmed), (2) pull-request (PR exists
 + checks green, or skipped if tracker unavailable), (3) health
-(`deps.healthGate(cwd)`). `passed = gates.every(g => g.status !== "fail")` — **skipped
-gates do not block**. Every mutation goes through `save()` which bumps `updatedAt`,
-pushes history, writes `flow.json`, and appends to `journal.md`. The service is
-constructed with `FlowServiceDeps` (`tracker`, `healthGate`, `now`) for testability.
+(`deps.healthGate(cwd)`), (4) owner — **opt-in per package** (`gates.owner`, written
+by `flow init`; flows created before flow 289 report it `skipped` rather than being
+retroactively blocked) — fails while `flow.owner` is unset. `passed = gates.every(g
+=> g.status !== "fail")` — **skipped gates do not block**. `ac confirm` and
+`complete` each append a signature (who, when, what was signed, and the identity's
+basis — `stated`/`derived`/`unknown`; flow 289), and `complete` persists every
+attempt's gate outcomes onto `FlowState.completionAttempts` regardless of pass/fail
+(flow 291) — `keryx governance report` reads both, plus review-round spend and the
+trigger spend ledger, into one cross-flow summary. Every mutation goes through
+`save()` which bumps `updatedAt`, pushes history, writes `flow.json`, and appends to
+`journal.md`. The service is constructed with `FlowServiceDeps` (`tracker`,
+`healthGate`, `now`) for testability.
 
 **Data & artifacts.** Root `.metaproject/flows/`. Each flow is a directory
 `<NNN>-<YYYY-MM-DD>-<slug>/` containing `flow.json` (CLI-owned state),

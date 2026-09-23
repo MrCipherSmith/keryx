@@ -13,7 +13,9 @@ data and status.
 3. If genuinely stuck: `keryx flow block <id> --reason`; resume with
    `flow unblock <id>`.
 4. Acceptance criteria change ONLY when requirements truly changed:
-   `keryx flow ac update <id> --reason "<why>"` (logged; audit trail).
+   `keryx flow ac update <id> --reason "<why>"` re-freezes the file as edited;
+   `keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"`
+   rewrites or appends one line itself (logged; audit trail either way).
 5. Completion decision is yours alone: after the user selects the PR path,
    create the PR, run the bounded review/fix loop, and merge it only after the
    review is clean and required checks are green. The merge target must be the
