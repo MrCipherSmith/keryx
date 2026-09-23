@@ -1631,7 +1631,7 @@ keryx schedule remove <name> [--yes]
 
 | Subcommand | Description |
 |---|---|
-| `add` | Draft the schedule, print the confirmation card, then store it and install its timer **only after you confirm**: `y` at the prompt, or `--yes`. Without a TTY and without `--yes` it refuses (exit 1). Declining writes nothing and installs nothing. |
+| `add` | Draft the schedule, print the confirmation card, then store it and install its timer **only after you confirm**: `y` at the prompt, or `--yes`. It needs a terminal on both stdin and stdout; without one it refuses (exit 1), `--yes` included, so a pipe, an agent's shell or an unattended run cannot confirm it. Declining writes nothing and installs nothing. |
 | `list` | Every schedule: cadence, enabled or paused, timer installed or not, next run, last outcome with its cost, and the last report's path. |
 | `show <name>` | The same row plus the prompt, the runner and budget, the grants, the last five runs, and the latest report. |
 | `pause <name>` | Disable the timer and mark the entry disabled. A fire while paused records `no-op`. |
