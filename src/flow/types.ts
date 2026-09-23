@@ -144,6 +144,35 @@ export type FlowGates = {
    * concept at all, and this gate must not retroactively fail them.
    */
   owner?: boolean | undefined;
+  /**
+   * Require a terminal-minted confirmation token for `complete()` (flow 299,
+   * AC2). Written by `flow init --require-confirmation`, or by `flow init`
+   * when `.metaproject/tasks.config.json` has
+   * `completion.require_confirmation: true`. Stamped at creation only, so a
+   * later config change never alters an existing flow. ABSENT everywhere
+   * else, where the confirmation gate reports `skipped`.
+   */
+  confirmation?: boolean | undefined;
+};
+
+/**
+ * What a confirmation token recorded when it was spent on a completion
+ * (flow 299, AC3). This is a record of a mechanism, not an identity: it says
+ * an interactive confirmation step ran within the token's TTL for exactly
+ * this AC checksum. It does not say who ran that step (see TM-03).
+ */
+export type SignatureConfirmation = {
+  mechanism: "terminal-token";
+  /** A prefix of the stored hash, for correlation. Never the token. */
+  tokenRef: string;
+  mintedAt: string;
+  consumedAt: string;
+  /**
+   * `target` (security review of PR #661): `pr:<url>` or `merged`, the
+   * completion the operator was shown. Optional in the type so a signature
+   * written before it existed still reads.
+   */
+  boundTo: { kind: "complete"; acChecksum: string; target?: string | undefined };
 };
 
 /**
@@ -178,6 +207,11 @@ export type FlowSignature = {
    * recorded here — this field names only what the pull-request gate saw.
    */
   headCommit?: string | undefined;
+  /**
+   * Present only on a `complete` signature whose flow required a confirmation
+   * token (flow 299, AC3). Additive: `identity` is unchanged beside it.
+   */
+  confirmation?: SignatureConfirmation | undefined;
 };
 
 export type FlowState = {
@@ -320,7 +354,8 @@ export type GateOutcome = {
     | "security"
     | "review"
     | "base-branch"
-    | "owner";
+    | "owner"
+    | "confirmation";
   status: "pass" | "fail" | "skipped";
   detail: string;
 };
@@ -365,6 +400,12 @@ export type FlowServiceDeps = {
    * strength of having nothing to ask.
    */
   externalCommentsGate?: import("./review-gate").ExternalCommentsGate | undefined;
+  /**
+   * TEST SEAM, never set in production. Called by `complete()` right after an
+   * attempt is written to disk and before the flow moves on. Tests use it to
+   * change the criteria file in exactly that window (flow 299, AC5).
+   */
+  afterAttemptRecorded?: ((cwd: string, dir: string) => Promise<void>) | undefined;
   now: () => Date;
 };
 
@@ -379,6 +420,8 @@ export type FlowInitInput = {
   baseBranch?: string | undefined;
   /** The human accountable for this flow. See `FlowState.owner`. Never inferred. */
   owner?: string | undefined;
+  /** Opt this flow into the confirmation gate (flow 299). See `FlowGates.confirmation`. */
+  requireConfirmation?: boolean | undefined;
 };
 export type FlowInitResult = {
   flow: FlowState;
@@ -401,6 +444,20 @@ export type FlowCompleteResult = {
   passed: boolean;
   issueComment: string | null; // suggested/posted comment body
   commented: boolean;
+};
+
+export type FlowConfirmMintResult = {
+  flow: FlowState;
+  /** The plaintext token. Shown once; never written to disk. */
+  token: string;
+  tokenRef: string;
+  mintedAt: string;
+  expiresAt: string;
+  acChecksum: string;
+  confirmedCriteria: number;
+  totalCriteria: number;
+  /** The PR url, or the merged commit, being confirmed; null when neither is recorded. */
+  target: string | null;
 };
 
 export type FlowCheckIssue = {
@@ -548,7 +605,22 @@ export interface FlowService {
     signedBy?: string | undefined;
     signedByEnv?: string | undefined;
     gitIdentity?: string | undefined;
+    /** A token minted by `keryx flow confirm` (flow 299). Only checked when `gates.confirmation` is set. */
+    confirmToken?: string | undefined;
   }): Promise<FlowCompleteResult>;
+  /**
+   * Mint a completion confirmation token (flow 299, AC1). The service checks the
+   * flow's state; the CLI verb adds the terminal and typed-challenge
+   * requirements, which the service cannot observe. Returns the plaintext
+   * token once; only its hash is stored.
+   */
+  confirmMint(input: { cwd: string; id: string; merged?: boolean | undefined }): Promise<FlowConfirmMintResult>;
+  /**
+   * Move a flow stuck in `completing` back to `in-progress` (flow 299, AC6),
+   * recording why. Refuses from any other status, and while another process
+   * holds the flow lock (a `complete` still running).
+   */
+  recover(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
   block(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
   unblock(input: { cwd: string; id: string }): Promise<FlowState>;
   check(input: { cwd: string }): Promise<FlowCheckResult>;

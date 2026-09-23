@@ -1352,6 +1352,8 @@ test("the gate runs where the specification puts it: seventh, after owner", asyn
     "owner",
     "review",
     "health",
+    // Flow 299: evaluated when the attempt starts, reported last.
+    "confirmation",
   ]);
   expect(names.indexOf("review")).toBeGreaterThan(names.indexOf("tasks"));
   expect(names.indexOf("review")).toBeGreaterThan(names.indexOf("owner"));

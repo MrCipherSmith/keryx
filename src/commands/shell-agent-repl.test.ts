@@ -1039,3 +1039,24 @@ describe("the readline agent REPL advertises its own commands (was a source-text
     });
   });
 });
+
+describe("security review of PR #661 — no always-allow offer for `flow confirm`", () => {
+  test("the readline prompt for `keryx flow confirm` is plain [y/N], and answering 'always' persists nothing", async () => {
+    const configDir = path.join(root, "cfg-flow-confirm");
+    const output = await repl(["confirm the flow", "always", "/exit"], {
+      configDir,
+      deps: {
+        providerId: "s",
+        modelId: "m",
+        systemInstruction: "sys",
+        idSeq: () => randomUUID(),
+        tools: [fakeShellExecTool()],
+        provider: toolCallProvider("shell_exec", JSON.stringify({ command: "keryx flow confirm 299" })),
+      } as unknown as AgentDeps,
+    });
+    expect(output).toContain("[y/N] ");
+    expect(output).not.toContain("[y/N/A=always]");
+    expect(output).not.toContain("approved · remembered");
+    expect(loadShellPermissions(configDir).allow).toEqual([]);
+  });
+});

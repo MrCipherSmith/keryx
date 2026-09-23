@@ -217,6 +217,38 @@ test("auto mode still asks for a command touching SAC confirm-review (hard floor
   expect(ran()).toBe(false);
 });
 
+// Flow 299 (AC4): `keryx flow confirm` mints the completion confirmation
+// token, so it shares SAC's floor: asked in every mode, `auto` included.
+for (const mode of ["ask", "trust", "auto"] as const) {
+  test(`${mode} mode still asks for \`keryx flow confirm\` (flow 299 hard floor)`, async () => {
+    const { tool, ran } = fakeTool("shell_exec", "shell");
+    let approvalCalls = 0;
+    const io: AgentIO = {
+      write: () => {},
+      requestApproval: async () => {
+        approvalCalls += 1;
+        return false;
+      },
+      permissionMode: () => mode,
+    };
+    await runAgentTurn(
+      io,
+      {
+        provider: scriptedProvider(callScript("shell_exec", '{"command":"keryx flow confirm 299"}')),
+        providerId: "s",
+        modelId: "m",
+        tools: [tool],
+        systemInstruction: "sys",
+        idSeq,
+      },
+      [],
+      "go",
+    );
+    expect(approvalCalls).toBe(1);
+    expect(ran()).toBe(false);
+  });
+}
+
 test("trust mode auto-approves a benign shell command without prompting", async () => {
   const { tool, ran } = fakeTool("shell_exec", "shell");
   let approvalCalls = 0;

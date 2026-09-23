@@ -642,7 +642,9 @@ entries.
 | `keryx flow ac update <id> --reason "<reason>"` | Re-freeze changed criteria (as already edited). |
 | `keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<reason>"` | Rewrite/append one criterion's text, then re-freeze. |
 | `keryx flow implemented <id> --pr <url>` | Record implementation and PR. |
-| `keryx flow complete <id> [--comment] [--signed-by "<name>"]` | Run completion gates and finish; appends a completion signature. |
+| `keryx flow complete <id> [--comment] [--signed-by "<name>"] [--confirm-token <token>]` | Run completion gates and finish; appends a completion signature. |
+| `keryx flow confirm <id>` | In a terminal: mint the confirmation token a flow created with `--require-confirmation` needs to complete. |
+| `keryx flow recover <id> --reason "<reason>"` | Return a flow left in `completing` by an interrupted run to `in-progress`. |
 | `keryx flow block <id> --reason "<reason>"` | Block a flow. |
 | `keryx flow unblock <id>` | Restore the previous status. |
 | `keryx flow check` | Audit all flow packages. |

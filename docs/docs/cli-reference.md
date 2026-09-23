@@ -2081,7 +2081,9 @@ keryx flow ac update <id> --reason "<why>"
 keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"
 keryx flow ac reseal <id> --reason "<why>"
 keryx flow implemented <id> --pr <url>
-keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"]
+keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]
+keryx flow confirm <id> [--merged]
+keryx flow recover <id> --reason "<why>"
 keryx flow block <id> --reason "<why>"
 keryx flow unblock <id>
 keryx flow check
@@ -2110,7 +2112,9 @@ keryx flow schema [--out <path>]
 
 Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (the syntax before flow 293) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
-| `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. See [the owner gate](#the-owner-gate) and [the owner and completion signatures](#the-owner-and-completion-signatures). |
+| `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
+| `confirm <id>` | `--merged` | Mint a completion confirmation token for a flow that requires one. Refuses unless stdin and stdout are terminals, the flow is `implemented` (or `in-progress` with `--merged`), and its criteria are frozen and unchanged. Shows what is being confirmed, asks for a random code typed back on `/dev/tty`, then prints the token once. See [the confirmation token](#the-confirmation-token). With `--merged` the token binds only `merged`, not a commit: the commit is named later, at `flow complete --merged <commit>`, so the token does not pin which commit that is. `--merged` is accepted on an `implemented` flow that records a PR too, matching `flow complete --merged` being allowed from `implemented`; the token then binds `merged`, and a PR completion with it fails as `token_target_mismatch`. |
+| `recover <id>` | `--reason "<why>"` (required) | Move a flow left in `completing` (by a process that died mid-`complete`) back to `in-progress`, recording the reason, the last event before the interruption, and whether the criteria file is intact. Refuses from any other status and while another process holds the flow's lock. `flow status` and the TUI's `/flows` view label such a flow `interrupted` and name this command. |
 | `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |
 | `unblock <id>` | — | Restore the saved previous status. |
 | `check` | — | Consistency audit across all flows: structure, checksums, schema, duplicate ids, plus every `dependsOn` that can never be satisfied (unknown id, self-reference, cycle) and every task recorded `failed`/`blocked` with no attempt behind it. |
@@ -2290,6 +2294,72 @@ Every pre-existing `flow.json` with no `owner` or `signatures` field keeps
 loading, validating, passing `flow check`, and completing exactly as before —
 these fields are additive and optional, like every Task Manager v2 field, and
 reading an old file never rewrites it on disk.
+
+### The confirmation token
+
+A flow can require a **confirmation token** before it completes. It opts in when
+it is created, with `flow init --require-confirmation`, or with
+`completion.require_confirmation: true` in `.metaproject/tasks.config.json`.
+`flow init` stamps the answer into the new flow as `gates.confirmation`, so
+changing the config later never alters an existing flow. Every other flow, and
+every flow created before this existed, reports the `confirmation` gate as
+`skipped`.
+
+```
+keryx flow confirm <id>                              # in a terminal: review, type the code back, get a token
+keryx flow complete <id> --confirm-token <token>     # the confirmation gate passes; the token is spent
+```
+
+`flow confirm` refuses to mint unless all of these hold:
+- stdin and stdout are both terminals;
+- the flow is `implemented` (or `in-progress`, with `--merged`);
+- the criteria are frozen and unchanged;
+- a random code is typed back on `/dev/tty`, so a pipe on stdin cannot answer.
+
+It stores only the token's sha256, in `confirm-token.json` inside the flow
+directory, bound to the flow, the completion, the criteria checksum, and the
+**target** you were shown: the PR URL, or `merged` for `--merged`. A token
+minted while looking at one PR fails as `token_target_mismatch` if the flow is
+later pointed at another PR, or completed with `--merged` instead (and the
+reverse). Only
+the latest mint is valid. A token lives for ten minutes. `flow complete` checks
+it when the attempt starts, so a slow health gate cannot expire it midway. It is
+spent only on a passing completion, so a failed attempt can be fixed and retried
+with the same token. An expired, spent, other-flow, superseded or
+pre-criteria-change token each fails the gate with its own named reason.
+
+The completion signature keeps its `identity` exactly as before and gains a
+`confirmation` field: `mechanism: "terminal-token"`, a `tokenRef` (a prefix of
+the stored hash, never the token), `mintedAt`, `consumedAt` and `boundTo`.
+`flow status`, `flow complete` and `keryx governance report` show it.
+
+What the token does **not** prove, stated rather than implied:
+
+- **What it does prove.** A step that no agent tool can perform ran within the
+  TTL, for exactly this criteria checksum. Not that a human ran it, and not who.
+- **The command-text floors can be evaded.** keryx's own agent loop, its ACP
+  classifier and its supervised-codex path ask a human before running any
+  command that contains the words `flow confirm`, in every permission mode. No
+  session pattern or remembered grant answers that prompt, and "always" is
+  never offered for it. Unattended
+  trigger runs refuse it outright. But these checks match text: a variable, a
+  script file or `bun -e` spells the same thing without the words.
+- **A pseudo-terminal can be faked.** `script -qc '…' /dev/null` gives any
+  command a terminal with no person present. So an agent with an unrestricted
+  shell can run `flow confirm` and type the code itself.
+- **The hash store can be forged.** It is a plain file. An agent that can write
+  files can write the hash of a token it chose. The harness and ACP refuse to
+  edit it, but a shell redirect is not path-classified.
+- **Agents outside keryx supervision are not gated at all.** An editor's own
+  shell tool, for example, never passes through keryx's approval prompt.
+- **The opt-in lives in `flow.json`.** A shell-capable agent can hand-edit
+  `gates.confirmation` away.
+- **Handing the token to an agent delegates the completion.** That is the
+  intended handoff, and all the record can show is that someone completed the
+  interactive step.
+
+The same limits apply to SAC's `keryx workspace confirm-review` token. See
+[TM-03: Terminal Confirmation Token](https://github.com/MrCipherSmith/keryx/blob/main/docs/decisions/keryx-harness/TM-03-terminal-confirmation-token.md).
 
 ### Completion attempts (gate outcomes)
 

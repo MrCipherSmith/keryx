@@ -1,6 +1,6 @@
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
+import { DEFAULT_LOCK_STALE_MS, isLockHeld, pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import {
   assertTransition,
@@ -17,12 +17,25 @@ import { flowStateSchema } from "./schema";
 import { collectContext } from "./context";
 import { DEFAULT_TASKS } from "./default-tasks";
 import {
+  checkConfirmationToken,
+  completionTarget,
+  consumeConfirmationToken,
+  describeConfirmationFailure,
+  mintConfirmationToken,
+  readRequireConfirmationDefault,
+  type StoredConfirmationToken,
+} from "./confirm-token";
+// Re-exported so a client (the CLI) reads the caveat through this facade,
+// not from the zone's internals (import policy, rule 2).
+export { CONFIRMATION_CAVEAT } from "./confirm-token";
+import {
   acChecksum,
   acPath,
   appendJournal,
   assertAcIntact,
   duplicateFlowIds,
   flowIdOf,
+  flowLockPathFor,
   flowsRoot,
   groupFlowDirsById,
   listFlowDirs,
@@ -50,6 +63,7 @@ import type { NextTaskDecision } from "./machine";
 import type {
   FlowCheckResult,
   FlowCompleteResult,
+  FlowConfirmMintResult,
   FlowIdMapEntry,
   FlowInitInput,
   FlowInitResult,
@@ -186,7 +200,27 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
   }
 
   function flowLockPath(cwd: string, dir: string): string {
-    return path.join(flowsRoot(cwd), `.flow-lock-${dir}`);
+    return flowLockPathFor(cwd, dir);
+  }
+
+  /**
+   * Leave `completing` for `in-progress` WITHOUT re-checking the criteria
+   * (flow 299, AC5/AC6). Used only where the caller has just recorded why
+   * the completion did not finish, a changed criteria file included.
+   * `transition()` re-checks and throws on exactly that case, which is how
+   * flows used to be left in `completing`. Every forward transition out of
+   * `in-progress` still checks the criteria.
+   */
+  async function returnToInProgress(
+    cwd: string,
+    dir: string,
+    flow: FlowState,
+    event: string,
+    detail: string,
+  ): Promise<FlowState> {
+    assertTransition(flow.status, "in-progress");
+    flow.status = "in-progress";
+    return save(cwd, dir, flow, event, detail);
   }
 
   // Serialize load-mutate-save on one flow so concurrent agents cannot lose
@@ -274,7 +308,17 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           // `schemaVersion` cannot, since read-time migration makes every
           // package v2 (see FlowGates). `owner` (flow 289, AC5) follows the
           // same shape as `tasks`/`review`.
-          gates: { tasks: true, review: true, owner: true },
+          // `confirmation` (flow 299, AC2) is the one gate that is NOT on by
+          // default: it is written only when asked for, by the flag or by the
+          // project default read here, once, at creation.
+          gates: {
+            tasks: true,
+            review: true,
+            owner: true,
+            ...(input.requireConfirmation === true || (await readRequireConfirmationDefault(input.cwd))
+              ? { confirmation: true }
+              : {}),
+          },
           id,
           slug,
           title,
@@ -773,6 +817,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       signedBy,
       signedByEnv,
       gitIdentity,
+      confirmToken,
     }): Promise<FlowCompleteResult> {
       const dir = await resolveFlowDir(cwd, id);
       return withFileLock(flowLockPath(cwd, dir), async () => {
@@ -785,6 +830,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         flow = await transition(cwd, dir, flow, "completing", "completing");
       }
 
+      // Flow 299 (AC5): from here to the end of this function, every outcome
+      // except a dead process leaves the flow in `in-progress` or `done`, never
+      // in `completing`. Each gate that can throw is caught and recorded as
+      // unevaluable, naming the gate. The failure path returns to `in-progress`
+      // without re-checking the criteria (`returnToInProgress`), because a
+      // tamper is exactly what it is recording. A dead process is what
+      // `flow recover` is for.
       const gates: GateOutcome[] = [];
 
       // Gate 1: acceptance criteria (checksum + confirmations).
@@ -810,6 +862,28 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         gates.push(unevaluableGate("acceptance-criteria"));
       }
 
+      // Confirmation token (flow 299, AC2). Opt-in per flow, like `owner`.
+      // EVALUATED here, when the attempt starts, so a slow health gate cannot
+      // expire a token that was valid when completion began; REPORTED last,
+      // after every gate the specification already orders. The token is spent
+      // only on the passing path below.
+      let confirmationToken: StoredConfirmationToken | undefined;
+      let confirmationOutcome: GateOutcome;
+      try {
+        const confirmation = await confirmationGate(
+          cwd,
+          dir,
+          flow,
+          confirmToken,
+          completionTarget({ merged: Boolean(mergedCommit), prUrl: flow.pr.url }),
+          deps.now(),
+        );
+        confirmationOutcome = confirmation.outcome;
+        confirmationToken = confirmation.stored;
+      } catch {
+        confirmationOutcome = unevaluableGate("confirmation");
+      }
+
       // The commit the PULL-REQUEST GATE observed, when one is known —
       // captured here from that gate's own `prStatus()` call (not re-fetched)
       // so a completion signature can name it (AC4) without an extra tracker
@@ -827,33 +901,45 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
 
       // Gate 2: pull request, or an explicit proof that the implementation
       // commit is already contained in origin/main (direct-merge handoff).
+      // Flow 299 (AC5): caught. A throw here used to escape with the flow
+      // saved as `completing` and no attempt on the record.
       if (mergedCommit) {
-        const merge = deps.mainMergeGate
-          ? await deps.mainMergeGate(cwd, mergedCommit)
-          : await verifyCommitOnMain(cwd, mergedCommit);
-        gates.push({ name: "main-merge", status: merge.status, detail: merge.detail });
+        try {
+          const merge = deps.mainMergeGate
+            ? await deps.mainMergeGate(cwd, mergedCommit)
+            : await verifyCommitOnMain(cwd, mergedCommit);
+          gates.push({ name: "main-merge", status: merge.status, detail: merge.detail });
+        } catch {
+          gates.push(unevaluableGate("main-merge"));
+        }
       } else if (!flow.pr.url) {
         gates.push({ name: "pull-request", status: "fail", detail: "no PR recorded" });
-      } else if (deps.tracker && (await deps.tracker.detect())) {
-        const pr = await deps.tracker.prStatus(flow.pr.url);
-        if (typeof pr.headSha === "string" && pr.headSha !== "") {
-          evaluatedHeadCommit ??= pr.headSha;
-        }
-        gates.push(
-          pr.exists && pr.checksGreen === true
-            ? { name: "pull-request", status: "pass", detail: "PR exists, checks green" }
-            : {
-                name: "pull-request",
-                status: "fail",
-                detail: !pr.exists ? "PR not found" : "PR checks not green",
-              },
-        );
       } else {
-        gates.push({
-          name: "pull-request",
-          status: "skipped",
-          detail: "tracker unavailable; verify PR checks manually",
-        });
+        try {
+          if (deps.tracker && (await deps.tracker.detect())) {
+            const pr = await deps.tracker.prStatus(flow.pr.url);
+            if (typeof pr.headSha === "string" && pr.headSha !== "") {
+              evaluatedHeadCommit ??= pr.headSha;
+            }
+            gates.push(
+              pr.exists && pr.checksGreen === true
+                ? { name: "pull-request", status: "pass", detail: "PR exists, checks green" }
+                : {
+                    name: "pull-request",
+                    status: "fail",
+                    detail: !pr.exists ? "PR not found" : "PR checks not green",
+                  },
+            );
+          } else {
+            gates.push({
+              name: "pull-request",
+              status: "skipped",
+              detail: "tracker unavailable; verify PR checks manually",
+            });
+          }
+        } catch {
+          gates.push(unevaluableGate("pull-request"));
+        }
       }
 
       // Gate 2b: base branch. Asks the one question the others do not — where
@@ -862,18 +948,23 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       //
       // Placed after the merge evidence because it consumes it, and reported
       // even when the flow named no base, as `not recorded`. Silence there
-      // would be indistinguishable from a pass.
-      gates.push(
-        await baseBranchCondition(
-          cwd,
-          flow,
-          mergedCommit ?? undefined,
-          flow.pr.url && deps.tracker && (await deps.tracker.detect())
-            ? (await deps.tracker.prStatus(flow.pr.url)).baseRefName
-            : undefined,
-          commitContainedIn,
-        ),
-      );
+      // would be indistinguishable from a pass. Caught for the same reason as
+      // gate 2 (flow 299, AC5).
+      try {
+        gates.push(
+          await baseBranchCondition(
+            cwd,
+            flow,
+            mergedCommit ?? undefined,
+            flow.pr.url && deps.tracker && (await deps.tracker.detect())
+              ? (await deps.tracker.prStatus(flow.pr.url)).baseRefName
+              : undefined,
+            commitContainedIn,
+          ),
+        );
+      } catch {
+        gates.push(unevaluableGate("base-branch"));
+      }
 
       // Gate 3: tasks. Opt-in per package (`gates.tasks`, set by `flow init`):
       // 24 packages completed before this gate existed while carrying an open
@@ -933,6 +1024,8 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         }
       }
 
+      gates.push(confirmationOutcome);
+
       const passed = gates.every((gate) => gate.status !== "fail");
 
       // Flow 291, AC4 (review fix): re-check AC intactness HERE, explicitly
@@ -944,12 +1037,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // tamper caught here overrides this attempt to `failed`, naming the
       // tamper, rather than persisting a `passed: true` — or a signature —
       // built on a criteria file that no longer matches what was evaluated.
-      let tamperDetail: string | undefined;
-      try {
-        await assertAcIntact(cwd, dir, flow);
-      } catch (error) {
-        tamperDetail = error instanceof Error ? error.message : String(error);
-      }
+      const tamperDetail = await acTamperDetail(cwd, dir, flow);
       const recordedGates: GateOutcome[] =
         tamperDetail === undefined
           ? gates
@@ -979,9 +1067,8 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
 
       // Persisted NOW, independent of the transition below — a plain `save`,
       // not `transition`, so it carries no AC re-check of its own that could
-      // throw this record away a second time. Whatever happens next (a fresh
-      // tamper landing in the gap between this write and the transition
-      // below, however unlikely), THIS attempt already reached disk.
+      // throw this record away a second time. Whatever happens next, THIS
+      // attempt already reached disk.
       flow = await save(
         cwd,
         dir,
@@ -991,63 +1078,179 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           ? `attempt ${flow.completionAttempts.length}: acceptance criteria tampered — ${tamperDetail}`
           : `attempt ${flow.completionAttempts.length}: ${recordedPassed ? "passed" : "failed"}`,
       );
+      await deps.afterAttemptRecorded?.(cwd, dir);
 
       let issueComment: string | null = null;
       let commented = false;
 
-      if (recordedPassed) {
-        if (mergedCommit) {
-          flow.merged = { commit: mergedCommit, ref: "origin/main", at: now() };
-        }
-        // Append-only completion signature (flow 289, AC4): who signed this
-        // completion, when, and what was evaluated (the AC checksum in force,
-        // and the commit the gates observed, when one was known). A repeated
-        // `complete` call — should this flow ever be reopened and completed
-        // again — adds a NEW entry rather than replacing this one.
-        const completionIdentity = resolveSignerIdentity({ stated: signedBy, env: signedByEnv, gitIdentity });
-        flow.signatures = [
-          ...(flow.signatures ?? []),
-          {
-            at: now(),
-            kind: "complete",
-            identity: completionIdentity,
-            acChecksum: flow.acChecksum,
-            ...(evaluatedHeadCommit ? { headCommit: evaluatedHeadCommit } : {}),
-          },
-        ];
-        // T57 F-001: a `warn` health gate folds to `status: "pass"` (T56,
-        // unchanged) but must stay distinguishable from a genuine pass in the
-        // record a reader actually sees. `healthWarnNote` is the only place
-        // that surfaces it, into the one durable event this branch writes.
-        const warnNote = healthWarnNote(recordedGates);
-        flow = await transition(
-          cwd,
-          dir,
-          flow,
-          "done",
-          "done",
-          warnNote ? `all gates passed (${warnNote})` : "all gates passed",
-        );
-        issueComment = buildIssueComment(flow, recordedGates);
-        if (comment && flow.source.type === "github-issue" && flow.source.ref && deps.tracker) {
-          const ref = deps.tracker.parseRef(flow.source.ref);
-          if (ref && (await deps.tracker.detect())) {
-            commented = await deps.tracker.comment(ref, issueComment);
-          }
-        }
-      } else {
+      if (!recordedPassed) {
         const failed = recordedGates.filter((gate) => gate.status === "fail");
-        flow = await transition(
+        flow = await returnToInProgress(
           cwd,
           dir,
           flow,
-          "in-progress",
           "completion-failed",
           failed.map((gate) => `${gate.name}: ${gate.detail}`).join(" | "),
         );
+        return { flow, gates: recordedGates, passed: false, issueComment, commented };
       }
 
-      return { flow, gates: recordedGates, passed: recordedPassed, issueComment, commented };
+      // Flow 299 (AC5): a passing attempt reaches `done` only over criteria that
+      // still match. This check used to be `transition()`'s own, and a throw
+      // there left the flow in `completing`. A tamper that lands after the
+      // attempt above was recorded is now recorded too, as a SEPARATE failed
+      // attempt: the one above did pass its gates, and it is never rewritten.
+      // No signature is written and no token is spent.
+      const lateTamper = await acTamperDetail(cwd, dir, flow);
+      if (lateTamper !== undefined) {
+        const lateGates: GateOutcome[] = [
+          {
+            name: "acceptance-criteria",
+            status: "fail",
+            detail:
+              `acceptance criteria changed after attempt ${flow.completionAttempts?.length ?? 0} was recorded as ` +
+              `passing, before the flow could be marked done: ${lateTamper}`,
+          },
+        ];
+        flow.completionAttempts = [
+          ...(flow.completionAttempts ?? []),
+          { at: now(), gates: lateGates, passed: false, acChecksum: flow.acChecksum },
+        ];
+        flow = await save(
+          cwd,
+          dir,
+          flow,
+          "completion-attempt-recorded",
+          `attempt ${flow.completionAttempts.length}: acceptance criteria tampered — ${lateTamper}`,
+        );
+        flow = await returnToInProgress(cwd, dir, flow, "completion-failed", `acceptance-criteria: ${lateTamper}`);
+        return { flow, gates: lateGates, passed: false, issueComment, commented };
+      }
+
+      if (mergedCommit) {
+        flow.merged = { commit: mergedCommit, ref: "origin/main", at: now() };
+      }
+      // Spent only here, on the passing path, immediately before the one write
+      // that records the signature and `done` (flow 299, AC3). A token file and
+      // flow.json cannot be written atomically together. A process that dies
+      // between the two writes leaves a spent token and a flow in `completing`:
+      // `flow recover`, then a fresh mint.
+      const confirmation =
+        confirmationToken !== undefined
+          ? await consumeConfirmationToken(cwd, dir, confirmationToken, deps.now())
+          : undefined;
+      // Append-only completion signature (flow 289, AC4): who signed this
+      // completion, when, and what was evaluated (the AC checksum in force,
+      // and the commit the gates observed, when one was known). A repeated
+      // `complete` call — should this flow ever be reopened and completed
+      // again — adds a NEW entry rather than replacing this one.
+      const completionIdentity = resolveSignerIdentity({ stated: signedBy, env: signedByEnv, gitIdentity });
+      flow.signatures = [
+        ...(flow.signatures ?? []),
+        {
+          at: now(),
+          kind: "complete",
+          identity: completionIdentity,
+          acChecksum: flow.acChecksum,
+          ...(evaluatedHeadCommit ? { headCommit: evaluatedHeadCommit } : {}),
+          ...(confirmation ? { confirmation } : {}),
+        },
+      ];
+      // T57 F-001: a `warn` health gate folds to `status: "pass"` (T56,
+      // unchanged) but must stay distinguishable from a genuine pass in the
+      // record a reader actually sees. `healthWarnNote` is the only place
+      // that surfaces it, into the one durable event this branch writes.
+      const warnNote = healthWarnNote(recordedGates);
+      assertTransition(flow.status, "done");
+      flow.status = "done";
+      flow = await save(cwd, dir, flow, "done", warnNote ? `all gates passed (${warnNote})` : "all gates passed");
+      issueComment = buildIssueComment(flow, recordedGates);
+      if (comment && flow.source.type === "github-issue" && flow.source.ref && deps.tracker) {
+        const ref = deps.tracker.parseRef(flow.source.ref);
+        if (ref && (await deps.tracker.detect())) {
+          commented = await deps.tracker.comment(ref, issueComment);
+        }
+      }
+
+      return { flow, gates: recordedGates, passed: true, issueComment, commented };
+      });
+    },
+
+    async confirmMint({ cwd, id, merged }): Promise<FlowConfirmMintResult> {
+      const dir = await resolveFlowDir(cwd, id);
+      return withFileLock(flowLockPath(cwd, dir), async () => {
+        let flow = await readFlow(cwd, dir);
+        const refusal = confirmPreconditionError(flow, merged === true);
+        if (refusal !== undefined || !flow.acChecksum) {
+          throw new Error(refusal ?? `flow confirm: flow ${flow.id}'s acceptance criteria are not frozen.`);
+        }
+        await assertAcIntact(cwd, dir, flow);
+        const criteria = await readAcCriteria(cwd, dir);
+        const { token, stored } = await mintConfirmationToken(
+          cwd,
+          dir,
+          {
+            flowId: flow.id,
+            acChecksum: flow.acChecksum,
+            // The target the CLI just showed the operator (security review of
+            // PR #661): a later `flow implemented --pr <other>` cannot reuse it.
+            target: completionTarget({ merged: merged === true, prUrl: flow.pr.url }),
+          },
+          { now: deps.now },
+        );
+        // History names the token by its hash prefix only: the plaintext token
+        // exists once, in this function's return value.
+        flow = await save(cwd, dir, flow, "confirmation-minted", `token ${stored.tokenRef}, expires ${stored.expiresAt}`);
+        return {
+          flow,
+          token,
+          tokenRef: stored.tokenRef,
+          mintedAt: stored.mintedAt,
+          expiresAt: stored.expiresAt,
+          acChecksum: stored.acChecksum,
+          confirmedCriteria: criteria.filter((criterion) => Boolean(flow.acConfirmed[criterion])).length,
+          totalCriteria: criteria.length,
+          target: flow.pr.url ?? null,
+        };
+      });
+    },
+
+    async recover({ cwd, id, reason }): Promise<FlowState> {
+      if (!reason?.trim()) {
+        throw new Error('flow recover requires --reason "<why the completion was interrupted>"');
+      }
+      validateSingleLineReason(reason);
+      const dir = await resolveFlowDir(cwd, id);
+      const lock = flowLockPath(cwd, dir);
+      // A running `complete` holds this lock for as long as its gates take.
+      // Refuse outright rather than wait: recovering a completion that is still
+      // running would race it.
+      if (await isLockHeld(lock)) {
+        throw new Error(
+          `flow recover: flow ${id}'s lock is held. Either a \`flow complete\` is still running, or one was ` +
+            `killed less than ~${Math.round(DEFAULT_LOCK_STALE_MS / 1000)}s ago and its lock has not gone stale yet. ` +
+            "A crashed completion becomes recoverable once its lock goes stale: retry then. Recovering a completion " +
+            "that is still running would race it.",
+        );
+      }
+      return withFileLock(lock, async () => {
+        const flow = await readFlow(cwd, dir);
+        if (flow.status !== "completing") {
+          throw new Error(
+            `flow recover: flow ${flow.id} is "${flow.status}", not "completing". Only a completion that was ` +
+              "interrupted needs recovering.",
+          );
+        }
+        const lastEvent = flow.history.at(-1);
+        const acState = (await acTamperDetail(cwd, dir, flow)) === undefined ? "intact" : "changed since frozen";
+        const detail =
+          `${reason.trim()} (last event before the interruption: ` +
+          `${lastEvent ? `${lastEvent.event} at ${lastEvent.at}` : "none recorded"}; acceptance criteria: ${acState})`;
+        // Deliberately `returnToInProgress`, not `transition()`: a changed
+        // criteria file is one of the ways a flow got stuck here, and it is
+        // reported above, not required away. Every forward transition from
+        // `in-progress` still checks the criteria.
+        return returnToInProgress(cwd, dir, flow, "completion-recovered", detail);
       });
     },
 
@@ -1298,7 +1501,15 @@ async function appendIdMap(cwd: string, entry: FlowIdMapEntry): Promise<void> {
  * (and therefore potentially leaking) error message to this same constant.
  */
 function unevaluableGate(
-  name: "acceptance-criteria" | "review" | "health" | "security",
+  name:
+    | "acceptance-criteria"
+    | "review"
+    | "health"
+    | "security"
+    | "confirmation"
+    | "main-merge"
+    | "pull-request"
+    | "base-branch",
 ): GateOutcome {
   return {
     name,
@@ -1510,6 +1721,97 @@ function ownerGate(flow: FlowState): GateOutcome {
     };
   }
   return { name: "owner", status: "pass", detail: `owner: ${flow.owner.value}` };
+}
+
+/**
+ * Why `flow confirm` must refuse this flow before anything is shown or typed,
+ * or undefined (flow 299, AC1). Pure, so the CLI can refuse before it asks
+ * for the challenge. `confirmMint` repeats it under the lock and adds the
+ * criteria-file check, which needs the disk.
+ */
+export function confirmPreconditionError(
+  flow: Pick<FlowState, "id" | "status" | "gates" | "acChecksum">,
+  merged: boolean,
+): string | undefined {
+  const confirmable = flow.status === "implemented" || (flow.status === "in-progress" && merged);
+  if (!confirmable) {
+    return (
+      `flow confirm: flow ${flow.id} is "${flow.status}". A completion can be confirmed only when the flow is ` +
+      '"implemented", or "in-progress" with --merged for a direct-merge completion.'
+    );
+  }
+  if (!flow.gates?.confirmation) {
+    return (
+      `flow confirm: flow ${flow.id} does not require a confirmation token, so \`flow complete\` would ignore one. ` +
+      "A flow opts in when it is created: `keryx flow init --require-confirmation`, or " +
+      "`completion.require_confirmation: true` in .metaproject/tasks.config.json."
+    );
+  }
+  if (!flow.acChecksum) {
+    return `flow confirm: flow ${flow.id}'s acceptance criteria are not frozen, so there is nothing fixed to confirm.`;
+  }
+  return undefined;
+}
+
+/** The criteria-changed message, or undefined when the file still matches its checksum. */
+async function acTamperDetail(cwd: string, dir: string, flow: FlowState): Promise<string | undefined> {
+  try {
+    await assertAcIntact(cwd, dir, flow);
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+/**
+ * The confirmation gate (flow 299, AC2). Opt-in per flow: `gates.confirmation`
+ * is written only when a flow asks for it at creation, so every other flow,
+ * including every pre-existing one, reports `skipped`. An opted-in flow
+ * passes only with a valid, unexpired, unspent token bound to this flow and
+ * its current criteria checksum. The pass detail says what the token proves
+ * and what it does not.
+ */
+async function confirmationGate(
+  cwd: string,
+  dir: string,
+  flow: FlowState,
+  token: string | undefined,
+  target: string,
+  now: Date,
+): Promise<{ outcome: GateOutcome; stored?: StoredConfirmationToken }> {
+  if (!flow.gates?.confirmation) {
+    return {
+      outcome: {
+        name: "confirmation",
+        status: "skipped",
+        detail:
+          "confirmation gate not enabled for this flow; a flow opts in at creation with " +
+          "`flow init --require-confirmation` or `completion.require_confirmation: true`",
+      },
+    };
+  }
+  const check = await checkConfirmationToken(
+    cwd,
+    dir,
+    { flowId: flow.id, acChecksum: flow.acChecksum, target },
+    token,
+    now,
+  );
+  if (!check.ok) {
+    return {
+      outcome: { name: "confirmation", status: "fail", detail: `${check.reason}: ${describeConfirmationFailure(check.reason, flow.id)}` },
+    };
+  }
+  return {
+    outcome: {
+      name: "confirmation",
+      status: "pass",
+      detail:
+        `terminal token ${check.stored.tokenRef}, minted ${check.stored.mintedAt} for this criteria checksum ` +
+        "(an interactive confirmation step, not proof of who ran it)",
+    },
+    stored: check.stored,
+  };
 }
 
 async function isPlaceholderAc(cwd: string, dir: string): Promise<boolean> {

@@ -366,3 +366,37 @@ export function touchesSacConfirmReview(command: string): boolean {
   const text = command.toLowerCase();
   return SAC_REVIEW_MARKERS.some((marker) => text.includes(marker));
 }
+
+/**
+ * The flow-completion counterpart of {@link SAC_REVIEW_MARKERS} (flow 299,
+ * AC4). `keryx flow confirm` mints the token that a flow opted into the
+ * confirmation gate needs before `flow complete` passes. Like `confirm-review`,
+ * its whole value is that a person answers a prompt for it. `flow ac confirm`
+ * does not match: its text is `flow ac confirm`, not `flow confirm`.
+ *
+ * Text-matched, with the same limit as the SAC markers: a spelling that avoids
+ * the literal words (a variable, a script file, `bun -e`) is not caught. TM-03
+ * states this. The floor is friction for a cooperating agent. It is not a
+ * barrier against one working around it.
+ */
+const FLOW_CONFIRM_MARKER = /\bflow\s+confirm\b/i;
+
+/**
+ * True when `command` mentions `keryx flow confirm`. Pure. Word-bounded, so
+ * `workflow confirmation` or `overflow confirmed` does not match. Accepted
+ * false positive: a command that merely quotes the words, such as
+ * `grep "flow confirm" docs`, still asks.
+ */
+export function touchesFlowConfirm(command: string): boolean {
+  return FLOW_CONFIRM_MARKER.test(command);
+}
+
+/**
+ * Every command whose purpose is to show that a person, not the agent, took a
+ * step: SAC's review confirmation and flow 299's completion confirmation. The
+ * approval gate's `sacReviewConfirmation` floor is fed from this, so both force
+ * `ask` in every permission mode, `auto` included.
+ */
+export function touchesHumanConfirmation(command: string): boolean {
+  return touchesSacConfirmReview(command) || touchesFlowConfirm(command);
+}

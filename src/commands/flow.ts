@@ -1,10 +1,22 @@
+import { randomInt } from "node:crypto";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { acCriterionKnown, createFlowService, validateCriterionName } from "../flow/service";
+import {
+  CONFIRMATION_CAVEAT,
+  acCriterionKnown,
+  confirmPreconditionError,
+  createFlowService,
+  validateCriterionName,
+} from "../flow/service";
 import { durableExternalCommentsGate } from "../flow/review-gate";
 import { flowStateSchema } from "../flow/schema";
-import { duplicateFlowIds } from "../flow/store";
+import {
+  completionInProgressLine,
+  duplicateFlowIds,
+  interruptedCompletionLine,
+  isCompletionInterrupted,
+} from "../flow/store";
 import { githubAdapter } from "../flow/tracker/github";
 import { repairMovedFlowReviewRecords } from "../review/flow-move";
 import { createCodeHealthService } from "../health/service";
@@ -26,6 +38,7 @@ import type {
   AttemptCliOutcome,
   FlowService,
   FlowServiceDeps,
+  FlowSignature,
   FlowStatus,
   TaskDisposition,
   TaskKind,
@@ -329,6 +342,10 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runImplemented(args.slice(1));
       case "complete":
         return await runComplete(args.slice(1));
+      case "confirm":
+        return await runConfirm(args.slice(1));
+      case "recover":
+        return await runRecover(args.slice(1));
       case "block":
         return await runBlock(args.slice(1));
       case "unblock":
@@ -367,6 +384,9 @@ async function runInit(args: string[]): Promise<void> {
     baseBranch: optionValue(args, "--base"),
     // Never inferred (AC1): only an explicit --owner populates it.
     owner: optionValue(args, "--owner"),
+    // Flow 299 (AC2): opt this flow into the confirmation gate. The project
+    // default (`completion.require_confirmation`) is read by the service.
+    requireConfirmation: args.includes("--require-confirmation"),
   });
   banner("flow init", `Created flow ${result.flow.id}`);
   console.log(`  ${style.green(symbols.ok)} ${style.bold(result.flow.title)}`);
@@ -376,6 +396,9 @@ async function runInit(args: string[]): Promise<void> {
     console.log(`  base:   ${result.flow.baseBranch}`);
   }
   console.log(`  owner:  ${result.flow.owner?.value ?? style.dim("not set")}`);
+  if (result.flow.gates?.confirmation) {
+    console.log(`  confirmation: required ${style.dim("(a terminal-minted token: `keryx flow confirm <id>`)")}`);
+  }
   if (result.contextNotes.length > 0) {
     heading("Context collected");
     for (const contextNote of result.contextNotes) {
@@ -478,6 +501,13 @@ async function runStatus(args: string[]): Promise<void> {
   const flow = await getService().get({ cwd: process.cwd(), id });
   banner(`flow ${flow.id}`, flow.title);
   console.log(`  status:  ${flowStatusLabel(flow.status)}`);
+  // Flow 299 (AC6): a `completing` flow whose lock nobody holds is not being
+  // completed by anyone. It was interrupted, and only `flow recover` moves it.
+  if (await isCompletionInterrupted(process.cwd(), flow)) {
+    console.log(`  ${style.yellow(WARN)} ${style.yellow(interruptedCompletionLine(flow.id))}`);
+  } else if (flow.status === "completing") {
+    console.log(`  ${style.dim(completionInProgressLine(flow.id))}`);
+  }
   console.log(
     `  source:  ${flow.source.type}${flow.source.ref ? style.dim(` (${flow.source.ref})`) : ""}`,
   );
@@ -494,10 +524,17 @@ async function runStatus(args: string[]): Promise<void> {
   console.log(
     `  signed:  ${
       latestSignature
-        ? `${latestSignature.identity.value ?? "unknown"} ${style.dim(`[${latestSignature.identity.basis}]`)} ${style.dim(`(${latestSignature.kind}, ${latestSignature.at})`)}`
+        ? `${latestSignature.identity.value ?? "unknown"} ${style.dim(`[${latestSignature.identity.basis}]`)} ${style.dim(`(${latestSignature.kind}, ${latestSignature.at})`)}${
+            latestSignature.confirmation
+              ? ` ${style.dim(`+ terminal token ${latestSignature.confirmation.tokenRef}`)}`
+              : ""
+          }`
         : style.dim("no signatures yet")
     }`,
   );
+  if (flow.gates?.confirmation) {
+    console.log(`  confirm: ${style.dim("required — `keryx flow confirm " + flow.id + "` from a terminal, then `flow complete --confirm-token`")}`);
+  }
 
   const doneCount = flow.tasks.filter((task) => task.status === "done").length;
   const unresolvedTasks: string[] = [];
@@ -908,6 +945,26 @@ async function runImplemented(args: string[]): Promise<void> {
   );
 }
 
+/**
+ * The notes `flow complete` prints under a passing completion (flow 289 AC8,
+ * flow 299 AC3/AC8). They never present a stated or derived identity, or a
+ * spent confirmation token, as proof that a human signed.
+ */
+export function completionSignatureNotes(signature: FlowSignature): string[] {
+  const caveat =
+    signature.identity.basis === "unknown"
+      ? "no identity was available; this completion is signed as unknown."
+      : `this is a ${signature.identity.basis} claim (${signature.identity.source}), not proof a human signed.`;
+  const notes = [`Signed by: ${signature.identity.value ?? "unknown"} [${signature.identity.basis}] — ${caveat}`];
+  if (signature.confirmation) {
+    notes.push(
+      `Confirmed with terminal token ${signature.confirmation.tokenRef} (minted ${signature.confirmation.mintedAt}) — ` +
+        CONFIRMATION_CAVEAT,
+    );
+  }
+  return notes;
+}
+
 async function runComplete(args: string[]): Promise<void> {
   const id = requireId(args);
   const cwd = process.cwd();
@@ -917,6 +974,7 @@ async function runComplete(args: string[]): Promise<void> {
     comment: args.includes("--comment"),
     mergedCommit: optionValue(args, "--merged"),
     ...(await signerIdentityArgs(cwd, optionValue(args, "--signed-by"))),
+    confirmToken: optionValue(args, "--confirm-token"),
   });
 
   heading(
@@ -943,14 +1001,7 @@ async function runComplete(args: string[]): Promise<void> {
   if (result.passed) {
     const signature = result.flow.signatures?.at(-1);
     if (signature) {
-      // AC8: never present a stated/derived identity as proof of a human —
-      // only `stated` says so much as "explicitly claimed", and `derived`
-      // says outright that it is a weaker guess.
-      const caveat =
-        signature.identity.basis === "unknown"
-          ? "no identity was available; this completion is signed as unknown."
-          : `this is a ${signature.identity.basis} claim (${signature.identity.source}), not proof a human signed.`;
-      note(`Signed by: ${signature.identity.value ?? "unknown"} [${signature.identity.basis}] — ${caveat}`);
+      for (const line of completionSignatureNotes(signature)) note(line);
     }
   }
   if (result.passed && result.issueComment) {
@@ -1064,6 +1115,128 @@ function requireId(args: string[]): string {
 }
 
 /**
+ * What `flow confirm` needs from the process it runs in. Every field defaults
+ * to the real terminal. Tests replace them; nothing in production does.
+ */
+export type FlowConfirmSeams = {
+  /** Both stdin and stdout are terminals. Defaults to `process.stdin.isTTY && process.stdout.isTTY`. */
+  isTerminal?: boolean | undefined;
+  /** Show `prompt` on the controlling terminal and read one line back. Defaults to `/dev/tty`. */
+  readChallenge?: ((prompt: string) => Promise<string>) | undefined;
+  /** The code the operator must type. Defaults to six random characters. */
+  challenge?: (() => string) | undefined;
+};
+
+const CHALLENGE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
+
+function randomChallenge(): string {
+  return Array.from({ length: 6 }, () => CHALLENGE_ALPHABET[randomInt(CHALLENGE_ALPHABET.length)]).join("");
+}
+
+/**
+ * Read one line from the controlling terminal, not from stdin (flow 299, AC1).
+ * A pipe on stdin (`echo code | keryx flow confirm`) therefore cannot answer
+ * the challenge. A process that owns a pseudo-terminal (`script`) still can:
+ * see TM-03.
+ */
+async function readChallengeFromTty(prompt: string): Promise<string> {
+  // Plain synchronous reads on the terminal device. In canonical mode the
+  // kernel hands back one line when Enter is pressed. Node streams over a
+  // borrowed fd were tried first and double-closed it under Bun.
+  const { openSync, closeSync, readSync, writeSync } = await import("node:fs");
+  const fd = openSync("/dev/tty", "r+");
+  try {
+    writeSync(fd, prompt);
+    const chunk = Buffer.alloc(256);
+    let line = "";
+    while (!line.includes("\n")) {
+      const read = readSync(fd, chunk, 0, chunk.length, null);
+      if (read <= 0) break;
+      line += chunk.subarray(0, read).toString("utf8");
+      if (line.length > 4096) break;
+    }
+    return line.split(/\r?\n/)[0] ?? "";
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
+ * `keryx flow confirm <id> [--merged]` (flow 299, AC1).
+ *
+ * Mints a completion confirmation token. The refusals, in the order they run:
+ * - not a terminal;
+ * - the flow's own state (status, opt-in, frozen criteria), before anything is
+ *   shown or typed;
+ * - the typed challenge;
+ * - the criteria file itself, checked under the lock by `confirmMint`.
+ *
+ * It is never an MCP or agent-native tool. The approval floor
+ * (`touchesFlowConfirm`) and the unattended floor both name it.
+ */
+export async function runConfirm(args: string[], seams: FlowConfirmSeams = {}): Promise<void> {
+  const id = requireId(args);
+  const merged = args.includes("--merged");
+  const cwd = process.cwd();
+  const terminal = seams.isTerminal ?? (process.stdin.isTTY === true && process.stdout.isTTY === true);
+  if (!terminal) {
+    throw new Error(
+      "flow confirm: needs an interactive terminal on both stdin and stdout, and refuses to run from a pipe, " +
+        "an MCP or ACP client, or an unattended run. Run it yourself, in a terminal.",
+    );
+  }
+  const flow = await getService().get({ cwd, id });
+  const refusal = confirmPreconditionError(flow, merged);
+  if (refusal !== undefined) {
+    throw new Error(refusal);
+  }
+
+  banner("flow confirm", `Confirm completion of flow ${flow.id}`);
+  console.log(`  flow:      ${flow.id} — ${flow.title}`);
+  console.log(`  criteria:  ${flow.acChecksum}`);
+  console.log(`  confirmed: ${Object.keys(flow.acConfirmed).length} criteria`);
+  console.log(
+    `  target:    ${merged ? "direct merge (--merged); the commit is named at `flow complete`" : (flow.pr.url ?? "no PR recorded")}`,
+  );
+  note(CONFIRMATION_CAVEAT);
+
+  const code = (seams.challenge ?? randomChallenge)();
+  const answer = await (seams.readChallenge ?? readChallengeFromTty)(`  Type ${code} to confirm this completion: `);
+  if (answer.trim() !== code) {
+    throw new Error("flow confirm: the challenge was not typed back correctly; no token was minted.");
+  }
+
+  const result = await getService().confirmMint({ cwd, id, merged });
+  console.log("");
+  console.log(`  ${style.green(symbols.ok)} token: ${style.bold(result.token)}`);
+  console.log(
+    `     ${style.dim(`expires ${result.expiresAt}; single use; bound to criteria ${result.acChecksum} (${result.confirmedCriteria}/${result.totalCriteria} confirmed)`)}`,
+  );
+  nextSteps([
+    style.cyan(`keryx flow complete ${flow.id} --confirm-token ${result.token}${merged ? " --merged <commit>" : ""}`),
+    "Handing this token to an agent delegates the completion to it. That is the intended use, and it is what the token records.",
+  ]);
+}
+
+/** `keryx flow recover <id> --reason "<why>"` (flow 299, AC6). */
+async function runRecover(args: string[]): Promise<void> {
+  const id = requireId(args);
+  const reason = optionValue(args, "--reason");
+  if (!reason?.trim()) {
+    throw new Error('Usage: keryx flow recover <id> --reason "<why the completion was interrupted>"');
+  }
+  const flow = await getService().recover({ cwd: process.cwd(), id, reason });
+  console.log(
+    `  ${style.green(symbols.ok)} Flow ${flow.id} ${style.cyan(symbols.arrow)} ${flowStatusLabel(flow.status)} ${style.dim("(completion-recovered)")}`,
+  );
+  note(flow.history.at(-1)?.detail ?? "");
+  nextSteps([
+    "Fix whatever interrupted the completion (a changed criteria file needs `keryx flow ac update` or `ac reseal`).",
+    `Then ${style.cyan(`keryx flow implemented ${flow.id} --pr <url>`)} and ${style.cyan(`flow complete ${flow.id}`)} again.`,
+  ]);
+}
+
+/**
  * The single source of truth for `keryx flow`'s own help — also called
  * directly by `src/cli.ts` for the top-level `keryx flow --help` (AC5, flow
  * 294): the static `USAGE_BODY` slice `groupUsage` used to intercept with
@@ -1079,7 +1252,7 @@ export function printFlowHelp(): void {
 function printHelp(): void {
   helpTitle("keryx flow", "agent-first managed work (flows)");
   helpUsage([
-    'keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"]',
+    'keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"] [--require-confirmation]',
     "keryx flow list",
     "keryx flow status <id>",
     "keryx flow freeze <id>",
@@ -1096,7 +1269,9 @@ function printHelp(): void {
     'keryx flow ac reseal <id> --reason "<why>"   (checksum stale, file unchanged; KEEPS confirmations)',
     "  every `flow ac` subcommand refuses an argument it does not use — an extra positional, an unknown flag, or --criterion/--text given alone",
     "keryx flow implemented <id> --pr <url>",
-    'keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"]',
+    'keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]',
+    "keryx flow confirm <id> [--merged]   (mint a completion confirmation token; needs a terminal and a typed challenge)",
+    'keryx flow recover <id> --reason "<why>"   (move a flow left in `completing` back to `in-progress`)',
     'keryx flow block <id> --reason "<why>"   /   flow unblock <id>',
     "keryx flow check",
     'keryx flow renumber <dir> --to <id> --reason "<why>"   (repair a duplicate id)',
@@ -1110,5 +1285,11 @@ function printHelp(): void {
       "RAN the command, not necessarily who signed), then to `unknown`. None of these is proof " +
       "a human signed: a flag, an environment variable, and a local git identity can all be set " +
       "by an agent. `--owner` is never inferred at all — see docs/decisions/keryx-harness/.",
+  );
+  note(
+    "`flow confirm` mints a short-lived, single-use token only for a flow created with " +
+      "`--require-confirmation` (or `completion.require_confirmation: true`). " +
+      CONFIRMATION_CAVEAT +
+      " See docs/decisions/keryx-harness/TM-03-terminal-confirmation-token.md.",
   );
 }

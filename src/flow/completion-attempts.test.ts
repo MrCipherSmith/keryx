@@ -110,7 +110,7 @@ test("AC4: a failing attempt then a passing one both land on `completionAttempts
   // Every evaluated gate is on the record, including the PASSING ones — not
   // only what failed.
   expect((attempt2?.gates ?? []).map((gate): string => gate.name).sort()).toEqual(
-    ["acceptance-criteria", "base-branch", "health", "owner", "pull-request", "review", "tasks"].sort(),
+    ["acceptance-criteria", "base-branch", "confirmation", "health", "owner", "pull-request", "review", "tasks"].sort(),
   );
 });
 
@@ -182,14 +182,15 @@ test("AC4 review fix: a tamper caught between gate evaluation and persistence is
     await service.taskDone({ cwd: ROOT, id: flow.id, taskId });
   }
 
-  // The final transition's own AC re-check still throws on a genuine
-  // out-of-band edit — that contract is unchanged. What must not happen is
-  // losing the attempt's record because of it.
-  await expect(service.complete({ cwd: ROOT, id: flow.id, signedBy: "Aleks" })).rejects.toThrow(
-    /do not match their recorded checksum/,
-  );
+  // Flow 299 (AC5) changed the ending: this used to throw from the final
+  // transition's own AC re-check and leave the flow in `completing`. It now
+  // returns a failed result and puts the flow back in `in-progress`. What
+  // flow 291 pinned is unchanged: the attempt's record is not lost.
+  const result = await service.complete({ cwd: ROOT, id: flow.id, signedBy: "Aleks" });
+  expect(result.passed).toBe(false);
 
   const onDisk = JSON.parse(await readFile(flowJsonPath(dir), "utf8")) as {
+    status?: string;
     completionAttempts?: Array<{ passed: boolean; gates: Array<{ name: string; status: string; detail: string }> }>;
     signatures?: Array<{ kind: string }>;
   };
@@ -208,4 +209,5 @@ test("AC4 review fix: a tamper caught between gate evaluation and persistence is
   // setup is expected and untouched) — a tamper caught here must not let a
   // false "all gates passed" claim get signed.
   expect((onDisk.signatures ?? []).some((signature) => signature.kind === "complete")).toBe(false);
+  expect(onDisk.status).toBe("in-progress");
 });

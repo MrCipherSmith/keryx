@@ -439,8 +439,13 @@ Grouped by what you are trying to do, not by internal module layout.
   human **owner** (`flow init --owner`/`flow owner set`, never inferred), and
   `ac confirm`/`complete` append an honest, append-only **signature** — who
   acted, when, and what was signed, with its basis (`stated`/`derived`/
-  `unknown`) stated rather than assumed. See
-  [TM-02](docs/decisions/keryx-harness/TM-02-flow-owner-and-signed-completion.md).
+  `unknown`) stated rather than assumed. A flow can also require a
+  terminal-minted **confirmation token** (`flow init --require-confirmation`,
+  `flow confirm`) that no agent tool can mint. It adds friction for an agent
+  but does not prove a person was present. `flow recover` returns a flow left
+  in `completing` by an interrupted run. See
+  [TM-02](docs/decisions/keryx-harness/TM-02-flow-owner-and-signed-completion.md)
+  and [TM-03](docs/decisions/keryx-harness/TM-03-terminal-confirmation-token.md).
 - **triggers** — declared automation over `.metaproject/triggers.json` (a
   repository event or a cron/systemd schedule): `reconcile`/`rebuild` keep the
   graph and wiki current, `open-flow` opens Task Manager work, and `flow-next`
@@ -478,7 +483,8 @@ Grouped by what you are trying to do, not by internal module layout.
   (Facts / Work / Know-how) overview, evidence-linked wrap-up proposals with owner
   review, and a fail-closed runtime policy guard. Driven by `keryx workspace`
   (`keryx modules enable sac` to turn it on); accepting a proposal into real
-  project knowledge always passes through a human `confirm-review`, which
+  project knowledge always passes through an approval-gated `confirm-review`
+  (friction for an agent, not proof of a person — see TM-03), which
   refuses a security-flagged proposal until `--acknowledge-security` records
   that someone read the findings. The TUI's `/review` modal offers the same
   acknowledgement as an explicit `[s]` action, never as an automatic fallback

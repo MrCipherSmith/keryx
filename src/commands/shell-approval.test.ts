@@ -122,3 +122,52 @@ test("evaluateShellApproval reports tamper but still auto-approves a matching gr
   expect(ev.tampered).toBe(true);
   expect(ev.autoApprove).toBe(true);
 });
+
+// --- security review of PR #661: `flow confirm` shares SAC's never-remember floor ---
+
+test("review #661: a `keryx flow *` session pattern auto-approves `flow status` but never `flow confirm`", () => {
+  const io = { loadAudit: () => ({ permissions: { allow: [] as string[] }, rejected: [] as const }), fingerprint: () => "start" };
+  const control = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "keryx flow status 299" }),
+    sessionAllow: new Set(["keryx flow *"]),
+    fingerprintAtStart: "start",
+    io,
+  });
+  expect(control.autoApprove).toBe(true);
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "keryx flow confirm 299" }),
+    sessionAllow: new Set(["keryx flow *"]),
+    fingerprintAtStart: "start",
+    io,
+  });
+  expect(ev.sacReviewConfirmation).toBe(true);
+  expect(ev.autoApprove).toBe(false);
+  expect(formatShellApprovalHints(ev).join(" ")).toContain("will not be remembered");
+});
+
+test("review #661: an exact remembered grant for `keryx flow confirm 299` does not auto-approve it", () => {
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "keryx flow confirm 299" }),
+    sessionAllow: new Set(),
+    fingerprintAtStart: "start",
+    io: { loadAudit: () => ({ permissions: { allow: ["keryx flow confirm 299"] }, rejected: [] as const }), fingerprint: () => "start" },
+  });
+  expect(ev.autoApprove).toBe(false);
+});
+
+test("review #661: `flow confirm` is never offered or stored as an 'always' grant", async () => {
+  const { suggestShellPatterns, validateShellPattern } = await import("../lib/shell-permissions");
+  const offer = suggestShellPatterns("keryx flow confirm 299");
+  expect(offer.offerExact).toBe(false);
+  expect(offer.offerPrefix).toBe(false);
+  expect(validateShellPattern("keryx flow confirm *").ok).toBe(false);
+  expect(validateShellPattern("keryx flow confirm 299").ok).toBe(false);
+  // readline's `rememberable` is the negation of these flags (shell.ts); the floor flag is set.
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "keryx flow confirm 299" }),
+    sessionAllow: new Set(),
+    fingerprintAtStart: "start",
+    io: cleanIo,
+  });
+  expect(ev.sacReviewConfirmation).toBe(true);
+});

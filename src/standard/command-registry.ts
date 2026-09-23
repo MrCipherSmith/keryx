@@ -405,6 +405,12 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       { name: "slug", type: "string", required: false, desc: "override the slug the directory name derives from the title" },
       { name: "base", type: "string", required: false, desc: "the branch this work is intended to land on; read back by `flow complete`'s base-branch gate" },
       { name: "owner", type: "string", required: false, desc: "the human accountable for this flow; left unset (not inferred) when omitted" },
+      {
+        name: "require-confirmation",
+        type: "bool",
+        required: false,
+        desc: "opt this flow into the confirmation gate: `flow complete` then needs a token minted by `flow confirm` (flow 299)",
+      },
     ],
     json: false,
     read: false,
@@ -504,13 +510,58 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       { name: "comment", type: "bool", required: false, desc: "post the completion summary as a tracker issue comment, for a github-issue-sourced flow that passes" },
       { name: "merged", type: "string", required: false, desc: "commit sha for a direct-merge handoff, evaluated against origin/main instead of the pull-request gate" },
       { name: "signed-by", type: "string", required: false, desc: "explicit signer identity for the completion signature" },
+      {
+        name: "confirm-token",
+        type: "string",
+        required: false,
+        desc: "a token minted by `flow confirm`; checked only for a flow that opted into the confirmation gate, spent only on a passing completion",
+      },
     ],
     json: false,
     read: false,
     sideEffects: [
       "writes flow.json (status, every gate's outcome, and a completion signature)",
+      "with a valid --confirm-token on a passing completion: marks the flow's confirm-token.json spent",
       "with --comment, on a github-issue-sourced flow that passes: posts a comment on the source issue",
     ],
+  },
+  {
+    module: "tasks",
+    command: "flow confirm",
+    summary:
+      "OPERATOR-ONLY — not for agents to run. A person mints, in their own terminal, the completion confirmation " +
+      "token a flow that requires one needs; an agent asked to confirm a completion should ask the operator to run " +
+      "this, not run it. Refuses unless stdin and stdout are TTYs, shows what is being confirmed, and reads a typed " +
+      "challenge from /dev/tty; every approval mode asks before it runs. An interactive step, not proof of a person (TM-03).",
+    // Operator-phrased only (security re-review of PR #661): no agent-facing
+    // "confirm completion" phrasing, so an agent is never routed to a
+    // human-only verb by intent matching.
+    intent: ["flow confirm", "operator mints flow confirmation token"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "merged", type: "bool", required: false, desc: "confirm a direct-merge completion of an in-progress flow" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: [
+      "writes .metaproject/flows/<dir>/confirm-token.json (the token's sha256 and binding, never the token)",
+      "appends a confirmation-minted history entry naming only a hash prefix",
+    ],
+  },
+  {
+    module: "tasks",
+    command: "flow recover",
+    summary:
+      "Move a flow left in `completing` by an interrupted `flow complete` back to in-progress, recording the " +
+      "reason. Refuses from any other status and while the flow lock is held; never touches signatures or attempts.",
+    intent: ["восстанови флоу", "flow recover", "flow stuck in completing", "recover interrupted completion"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "reason", type: "string", required: true, desc: "why the completion was interrupted" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["writes flow.json's status (completing -> in-progress) and appends a completion-recovered history entry"],
   },
   // ---- gdskills / job packages ------------------------------------------
   {
