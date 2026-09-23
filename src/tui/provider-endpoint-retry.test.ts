@@ -239,7 +239,9 @@ describe("REGRESSION — an unreachable endpoint re-opens the URL step", () => {
       h.renderer.destroy();
       await rm(configDir, { recursive: true, force: true });
     }
-  });
+    // Two Esc waits of up to 5s each run inside this test; bun's default 5s
+    // per-test limit cut it short on a loaded macOS runner.
+  }, 20_000);
 });
 
 describe("BOUNDARY — the endpoint step stays shut when the URL is not the problem", () => {

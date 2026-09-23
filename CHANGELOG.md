@@ -3,6 +3,24 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.160] — 2026-09-23
+
+A patch to `keryx help`, found by the 0.2.159 smoke run.
+
+### Fixed
+- **`keryx help` in the terminal shows the shell's slash commands too.** It
+  listed only CLI verbs, so a group made of slash commands alone — Look and
+  feel, with `/theme` — never appeared, and `keryx help connect` left out
+  `/connect`. Each group now lists its CLI verbs, then its commands under
+  "in keryx shell:", and every group appears.
+- **`keryx help /<command>` stays within 80 columns**; its explanation
+  line ran to 94. A test holds every group and every command's help to 80.
+- **The `/help` modal's tabs read as words.** Nine full group names did not
+  fit the tab bar and were cut mid-phrase. The tabs now read Start, Connect,
+  Look, Shell, Knowledge, Work, Automate, Agents, Maintain, fall back to
+  short forms only when the modal is too narrow for them, and each tab
+  opens with its group's full name.
+
 ## [0.2.159] — 2026-09-23
 
 A new user can now find their way in. `keryx help` and a tabbed `/help`
