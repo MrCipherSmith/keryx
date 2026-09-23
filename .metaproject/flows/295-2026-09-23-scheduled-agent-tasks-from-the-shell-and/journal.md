@@ -1,0 +1,54 @@
+# Flow Journal
+
+- 2026-09-23T05:23:44.195Z - flow created
+- 2026-09-23T05:35:13.887Z - frozen: 15 criteria; checksum recorded
+- 2026-09-23T05:35:14.010Z - started
+- 2026-09-23T05:35:14.135Z - task-added: T5: agent-task action kind, dispatcher report, confirmed-content hash
+- 2026-09-23T05:35:14.254Z - task-added: T6: Granted tools outside the sandbox; network off/full; floor unchanged
+- 2026-09-23T05:35:14.369Z - task-added: T7: Schedule store, installer (systemd/launchd/cron), renderer fixes, keryx schedule CLI
+- 2026-09-23T05:35:14.488Z - task-added: T8: /schedule and schedule_create with the always-ask confirmation card
+- 2026-09-23T05:35:14.606Z - task-added: T9: TUI: Schedules sidebar section, detail modal, /schedules, live refresh
+- 2026-09-23T05:35:14.724Z - task-added: T10: Spend and governance; docs and agent skill
+- 2026-09-23T05:35:14.843Z - task-added: T11: Verification: CI green, keryx health run
+- 2026-09-23T05:35:14.962Z - task-attempt: T5: started (attempt 1)
+- 2026-09-23T06:40:00.000Z - note (implementer): T5 done in the working tree (nothing committed).
+  - The new `agent-task` kind is in `src/trigger/config.ts`. It loads only from the per-machine, self-ignoring store `.metaproject/data/trigger/schedules.json` (`src/trigger/store.ts`); `triggers.json` refuses it.
+  - `scheduleContentHash` covers name, on and action, and excludes `enabled`.
+  - The dispatcher is `src/commands/trigger-agent-task.ts`. It checks the per-schedule lock, then the hash (`grants-changed`), then runs one turn in a scratch workdir with the project read-only and the provider guard and spend reservation in place. It writes the report to `.metaproject/data/trigger/reports/<name>/<runId>.md`.
+  - The spend meter and the denying approver are shared with flow-next (C4) in trigger-dispatch.ts.
+  - The floor gains the schedule, systemctl, crontab, launchctl and loginctl verbs.
+  - Tests: the flow 295 block in `src/trigger/config.test.ts`, and `src/commands/trigger-agent-task.test.ts`.
+- 2026-09-23T07:10:00.000Z - note (implementer): T6 done.
+  - The granted-tool catalogue is `src/trigger/granted-tools.ts`: gh pr list/view/checks, gh issue list/view, gh run list. There is no `gh api`, no free argv, no leading `-` in a parameter, and repos are scoped. Every entry is floor-checked at load.
+  - The tool is executed by keryx through `execFile` outside the sandbox (`grantedTool` in trigger-agent-task.ts) and its output is scrubbed with `scrubGrantedOutput`.
+  - Network is `off` or `full`; `allowlist` is refused naming flow 301, and the capability matrix is unchanged.
+  - Tests: AC3 uses a sentinel GH_TOKEN with the real bwrap sandbox for the shell half. AC5 covers ask/trust × off/full floor denials, `sandbox-unavailable` and `grants-changed`.
+- 2026-09-23T07:40:00.000Z - note (implementer): T7 done.
+  - `src/trigger/cron.ts` translates cron to OnCalendar and launchd intervals, computes the next runs and parses cadence phrases.
+  - `src/trigger/install.ts` handles systemd --user, launchd and cron, and is idempotent. Files carry the managed header, and linger is read-only.
+  - `src/trigger/schedules.ts` is the draft/confirm service with the card, list, pause, resume and remove.
+  - `keryx schedule` is `src/commands/schedule.ts`. It is registered in the cli.ts routes and usage, and in `src/standard/schedule-descriptors.ts` (one spread line in command-registry.ts).
+  - The `trigger schedule` renderer now emits a real OnCalendar= and the unit name `keryx-<projecthash>-<name>`.
+  - Tests: cron.test.ts (checked against systemd-analyze calendar), install.test.ts (fake systemctl, temp unit dir, verify), schedule.test.ts (printed timer checked by calendar), commands/schedule.test.ts (lifecycle; a paused fire records no-op).
+- 2026-09-23T08:20:00.000Z - note (implementer): T8 done.
+  - `InteractiveTool.confirmation` is added. In `executeCall`'s write branch it is a credentials-class floor: every mode asks, the answer is never remembered, and `ApprovalMeta.alwaysAsk` and `card` are set. A non-write tool that carries it is refused.
+  - `schedule_create` and `schedule_list` are in `src/commands/schedule-tools.ts`. The TUI roster gets them through `schedules:` in shell.ts makeAgentDeps; the readline, subagent and unattended rosters do not.
+  - `schedule_create` is added to UNATTENDED_EXCLUDED_TOOLS.
+  - The TUI shows the card through `confirmScheduleCard` (two choices only), which both the approval branch and `/schedule` (`src/tui/schedule-command.ts`) use.
+  - `/schedule` is registered in AGENT_SLASH_COMMANDS, agent-only, and the registry tests are updated.
+  - Tests: schedule-tools.test.ts (the real agent loop under auto, trust and ask), tui/schedule-command.test.ts.
+  - The redact import now goes through the security facade, which keeps the import-policy ratchet at 150.
+- 2026-09-23T08:50:00.000Z - note (implementer): T10 done except the TUI part of AC14's "the sidebar row and the modal show that outcome", which moves to T9.
+  - Governance: an end-to-end test in `src/governance/report.test.ts` drives an agent-task run with `runTriggerOnce` and checks that its cost appears in project trigger spend. No change to governance code.
+  - Docs:
+    - `docs/docs/cli-reference.md` has a new `## schedule` section and trigger-section updates (agent-task kind, real OnCalendar, agentTask record).
+    - `README.md` has a schedule bullet.
+    - `docs/docs/limitations.md` has a scheduled-tasks section.
+  - Skill: `platform/scheduled-tasks` is registered in catalog.ts, the length ceiling is 88, and there is a routing corpus case. Its 3 positives rank first, and RANK1 is now 308/310.
+  - `skills verify --bundled`: 72 skills, 0 findings.
+- 2026-09-23T08:55:00.000Z - note (implementer): T9 (sidebar, modal, /schedules, live refresh) is deferred at the coordinator's request.
+  - Flow 300 owns `src/tui/trigger-ledger.ts` and the watcher. T9 builds on it after flow 300 merges.
+  - The sidebar order is fixed: sb-jobs → sb-governance → sb-triggers → sb-schedules.
+  - Run-now will be a child process of `keryx trigger run` (`resolveKeryxInvocation`).
+  - Schedule entries use `fire.kind "schedule"`, so flow 300's `isScheduledEntry` counts them.
+- 2026-09-23T08:58:00.000Z - note (implementer): flake observed. `sandbox/unattended.test.ts` "T14: no unix socket … find /" hit its 5s timeout twice when run in a large parallel batch, and passes alone every time (3/3, and again after). This flow does not touch that file.

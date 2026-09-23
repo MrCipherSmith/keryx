@@ -1,6 +1,7 @@
 // Single factory for the interactive agent tool set (TUI + readline).
 // Adding a tool here is the only way either surface gets it.
 
+import { scheduleTools, type ScheduleToolBinding } from "./schedule-tools";
 import { randomUUID } from "node:crypto";
 import { buildBusTools } from "../bus/agent-tools";
 import type { BusClient } from "../bus/client";
@@ -127,6 +128,12 @@ export type InteractiveAgentToolsInput = {
    * offered to subagents or external children in v1."
    */
   bus?: { client: () => BusClient | undefined };
+  /**
+   * Flow 295 (AC7): `schedule_create` / `schedule_list`. Passed only by the TUI's
+   * main-session roster, the one surface whose approver renders the confirmation
+   * card. Omitted → no schedule tools, the same way `bus` is scoped.
+   */
+  schedules?: ScheduleToolBinding;
 };
 
 /**
@@ -228,6 +235,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
     ...executionPlanTools(getSessionDir),
+    ...(input.schedules === undefined ? [] : scheduleTools(input.schedules)),
     // Flow 274 T6: main-agent-only bus tools (specification §7.1). Never
     // reached by a subagent or external child — neither tool-build path calls
     // this factory (see `spawn-subagent-tool.ts`, which builds its own child

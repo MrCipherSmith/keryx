@@ -105,9 +105,10 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // without its author's account, the one that settles a dependency call
     // against the build installed here rather than against recollection, and
     // the one that walks a published spelling out of the surface without
-    // handing its callers a successful-looking run that does nothing.
+    // handing its callers a successful-looking run that does nothing. Plus
+    // `scheduled-tasks` (flow 295): when to propose an operator-confirmed schedule.
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(71);
+    expect(files.length).toBe(72);
 
     const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);

@@ -46,6 +46,14 @@ export interface InteractiveToolContext {
 export interface InteractiveTool {
   definition: NormalizedToolDefinition;
   invoke: (input: Record<string, unknown>, ctx?: InteractiveToolContext) => Promise<InteractiveToolResult>;
+  /**
+   * Flow 295 (AC7): a tool whose every call needs the OPERATOR's explicit yes, whatever
+   * the permission mode. `auto` included, it is never auto-approved, never remembered,
+   * and never offered "always". The driver awaits this before asking. A `card` becomes
+   * `ApprovalMeta.card` (the exact text the operator confirms). An `error` refuses the
+   * call without asking. Only a `write`-risk tool may carry it.
+   */
+  confirmation?: (input: Record<string, unknown>) => Promise<{ readonly card: readonly string[] } | { readonly error: string }>;
 }
 
 /** Read-file output cap so a tool result stays modest. */

@@ -39,6 +39,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/schedule",
     "/integrations",
     "/mcp",
     "/compact",
@@ -127,6 +128,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/schedule",
     "/integrations",
     "/mcp",
     "/compact",
@@ -247,6 +249,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/schedule",
     "/integrations",
     "/mcp",
     "/compact",
@@ -310,6 +313,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/search-connect",
     "/sessions",
     "/status",
+    "/schedule",
   ]);
   expect(filterCommands("/i", "agent").map((c) => c.name)).toEqual([
     "/integrations",

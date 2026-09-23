@@ -236,6 +236,7 @@ import { setBackgroundJobListener } from "./job-bridge";
 import { openJobInspector, paintBackgroundJobSidebar } from "./background-job-inspector";
 import { getExecutionPlan } from "../session/execution-plan";
 import { mountExecutionPlanPanel } from "./execution-plan-panel";
+import { runScheduleSlashCommand } from "./schedule-command";
 import { openExecutionPlanInspector } from "./execution-plan-inspector";
 import { BackgroundJobStore, type BackgroundJobStoreHint } from "./background-job-session";
 import { formatFleetSidebarWithPeers, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet, type FleetPeer } from "./worker-fleet";
@@ -3919,6 +3920,41 @@ export async function launchTuiAgentShell(opts: {
     // The flow-041 advisory context (blast radius + memory note) is loaded through
     // this loader — the same information the readline shell shows above its prompt.
     const approvalContext = createApprovalContextLoader(opts.session?.cwd ?? process.cwd());
+    // Flow 295 (AC6/AC7): the ONE confirmation dialog for a schedule — used by the
+    // `schedule_create` tool's approval and by `/schedule`. Prints the card, then
+    // offers exactly two choices; Esc/cancel is "no".
+    const confirmScheduleCard = async (card: readonly string[]): Promise<boolean> => {
+      for (const line of card) {
+        transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
+      }
+      chrome.hideMenu();
+      setMainAgent("blocked", "approval");
+      const id = await chrome.withOverlay(() =>
+        showComposerChoice(otui, r, chrome.dock, {
+          title: "Create this schedule and install its background timer?",
+          subtitle: card[0] ?? "",
+          cancelId: "cancel",
+          onOpen: () => chrome.blurComposer(),
+          signal: foregroundOperation.signal,
+          options: [
+            { id: "create", label: "Create and install", description: "Store it and install the timer shown above" },
+            { id: "cancel", label: "Cancel", description: "Nothing is written or installed" },
+          ],
+        }),
+      );
+      input.focus();
+      setMainAgent("running", id === "create" ? "schedule" : "denied");
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `ap${uid++}`,
+          content:
+            id === "create"
+              ? otui.t`${roleChunk(otui, "ok", "◇ schedule confirmed")}`
+              : otui.t`${roleChunk(otui, "error", "◇ schedule not created — nothing written or installed")}`,
+        }),
+      );
+      return id === "create";
+    };
     io.requestApproval = async (tool, inputJson, meta) => {
       if (meta?.untrustedOrigin === true) {
         // `agent.ts`'s untrusted-content gate asks the human instead of refusing
@@ -3929,6 +3965,13 @@ export async function launchTuiAgentShell(opts: {
             content: otui.t`${roleChunk(otui, "attention", "⚠ follows untrusted external content — it cannot authorize this call; your answer does")}`,
           }),
         );
+      }
+
+      // Flow 295 (AC6/AC7): an operator-confirmed call (schedule_create). The
+      // card is printed verbatim, the only choices are yes/no, and the answer is
+      // never remembered — no mode and no saved pattern answers it.
+      if (meta?.alwaysAsk === true && meta.card !== undefined) {
+        return confirmScheduleCard(meta.card);
       }
 
       // Multi-agent spawn: auto-allow read_only; ask for general.
@@ -6378,6 +6421,21 @@ export async function launchTuiAgentShell(opts: {
               `New session ${shortSessionId(liveSession.summary.id)} (previous kept on disk · /resume)\n`,
             );
           })();
+          return;
+        }
+        if (command.name === "/schedule") {
+          // Flow 295 (AC6): create a scheduled background task — the same draft,
+          // card and confirmation as `keryx schedule add` and `schedule_create`.
+          void runScheduleSlashCommand(line.slice(command.name.length).trim(), {
+            cwd: sessionCwd,
+            defaults: () => ({ provider: deps.providerId ?? "", model: deps.modelId ?? "" }),
+            print: (text, tone) => {
+              const chunk =
+                tone === "ok" ? roleChunk(otui, "ok", text) : tone === "error" ? roleChunk(otui, "error", text) : dimChunk(otui, text);
+              transcript.add(new otui.TextRenderable(r, { id: `sch${uid++}`, content: otui.t`${chunk}` }));
+            },
+            confirm: (card) => confirmScheduleCard(card),
+          });
           return;
         }
         if (command.name === "/goal") {

@@ -3568,6 +3568,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           // `tui-shell.ts`'s join-success rebuild calls this again with
           // `busClientRef.client()` finally resolving.
           ...(bus !== undefined ? { bus } : {}),
+          // Flow 295 (AC7): the TUI's approver renders schedule_create's card.
+          schedules: { projectRoot: cwd, defaults: () => ({ provider: sel.provider, model: sel.model }) },
         }),
         // The EXISTING runtime, never a new one. `/mcp` is a read-only
         // view; opening it must not be the thing that spawns every

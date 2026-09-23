@@ -59,8 +59,9 @@ import { hasGitHooksRoot, installTriggerHooks, isTriggerHookInstalled, uninstall
 import { renderScheduleLines, resolveKeryxInvocation, resolveScheduleEntry } from "../trigger/schedule";
 import type { FlowService } from "../flow/types";
 import type { NextTaskDecision } from "../flow/machine";
-import type { TriggerDispatchRecord } from "../trigger/record";
+import type { TriggerAgentTaskRecord, TriggerDispatchRecord } from "../trigger/record";
 import { NETWORK_ON_WARNING, runFlowNextDispatch, type DispatchDeps, type DispatchResult } from "./trigger-dispatch";
+import { runAgentTaskDispatch, type AgentTaskDeps } from "./trigger-agent-task";
 
 /**
  * Flow 290: in-process seams for `keryx trigger run` — the flow service and
@@ -70,6 +71,8 @@ import { NETWORK_ON_WARNING, runFlowNextDispatch, type DispatchDeps, type Dispat
 export interface TriggerRunOverrides {
   readonly service?: FlowService;
   readonly dispatch?: Omit<DispatchDeps, "service">;
+  /** Flow 295: seams for an `agent-task` run. */
+  readonly agentTask?: AgentTaskDeps;
 }
 
 /** One `keryx trigger run <name>` pass against `projectRoot`, with optional seams (tests). */
@@ -214,6 +217,10 @@ async function runReadyTrigger(
   }
   if (action.kind === "flow-next") {
     await runFlowNext(projectRoot, name, entry, action, overrides);
+    return;
+  }
+  if (action.kind === "agent-task") {
+    await runAgentTask(projectRoot, name, entry, action, overrides);
     return;
   }
 
@@ -515,6 +522,50 @@ async function runFlowNext(
   }
 }
 
+// ---------------------------------------------------------------------------
+// agent-task (flow 295)
+// ---------------------------------------------------------------------------
+
+async function runAgentTask(
+  projectRoot: string,
+  name: string,
+  entry: TriggerEntry,
+  action: Extract<TriggerAction, { kind: "agent-task" }>,
+  overrides: TriggerRunOverrides,
+): Promise<void> {
+  // The fast, lock-free budget refusal; the authoritative decision is the
+  // reservation the run takes under the spend lock before its first model call.
+  const budget = await evaluateTriggerBudget(projectRoot, "agent-task", {}, { name: entry.name, ceilingUsd: action.dispatch.ceilingUsd });
+  if (!budget.allowed) {
+    await refuseOnBudget(projectRoot, name, entry, budget.reason);
+    return;
+  }
+  let result;
+  try {
+    result = await runAgentTaskDispatch(projectRoot, entry, action, overrides.agentTask ?? {});
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`keryx trigger run ${name}: agent task failed: ${message}`);
+    process.exitCode = 1;
+    await recordRun(projectRoot, entry, {
+      outcome: "failed",
+      detail: `agent task failed: ${message}`,
+      cost: { recorded: false, reason: "the run failed before its cost could be measured" },
+    });
+    return;
+  }
+  const line = `keryx trigger run ${name}: ${result.outcome} — ${result.detail}`;
+  if (result.exitCode === 0) console.log(line);
+  else console.error(line);
+  if (result.exitCode !== 0) process.exitCode = result.exitCode;
+  await recordRun(projectRoot, entry, {
+    outcome: result.outcome,
+    detail: result.detail,
+    cost: result.cost,
+    agentTask: result.agentTask,
+  });
+}
+
 function describeNextTaskDecision(flowId: string, decision: NextTaskDecision): string {
   const unresolvedNote =
     decision.unresolved.length > 0
@@ -555,7 +606,13 @@ async function refuseOnBudget(projectRoot: string, name: string, entry: TriggerE
 async function recordRun(
   projectRoot: string,
   entry: TriggerEntry,
-  outcome: { outcome: TriggerRunOutcomeKind; detail: string; cost: TriggerRunCost; dispatch?: TriggerDispatchRecord },
+  outcome: {
+    outcome: TriggerRunOutcomeKind;
+    detail: string;
+    cost: TriggerRunCost;
+    dispatch?: TriggerDispatchRecord;
+    agentTask?: TriggerAgentTaskRecord;
+  },
 ): Promise<void> {
   const append = await appendTriggerRunRecord(projectRoot, {
     at: new Date().toISOString(),
@@ -566,6 +623,7 @@ async function recordRun(
     detail: outcome.detail,
     cost: outcome.cost,
     ...(outcome.dispatch !== undefined ? { dispatch: outcome.dispatch } : {}),
+    ...(outcome.agentTask !== undefined ? { agentTask: outcome.agentTask } : {}),
   });
   if (append.status === "failed") {
     console.error(`keryx trigger run ${entry.name}: ! ${append.reason}`);
@@ -733,6 +791,15 @@ function describeAction(action: TriggerAction): string {
       ")"
     );
   }
+  if (action.kind === "agent-task") {
+    const d = action.dispatch;
+    return (
+      `agent-task(${d.provider}/${d.model}, mode ${d.permissionMode}, ceiling $${d.ceilingUsd}, max ${d.maxSeconds}s, ` +
+      `granted: ${action.grants.tools.length > 0 ? action.grants.tools.join(",") : "none"}` +
+      (action.grants.network === "full" ? `, NETWORK ON — ${NETWORK_ON_WARNING}` : ", network off") +
+      ")"
+    );
+  }
   return action.kind;
 }
 
@@ -842,7 +909,13 @@ async function scheduleSubcommand(args: string[]): Promise<void> {
         cron: resolution.entry.fire.cron,
         invocation: resolveKeryxInvocation(),
       });
-      console.log(`keryx trigger schedule ${name}: keryx runs no daemon for this — install ONE of the two below with your own scheduler.\n`);
+      console.log(
+        `keryx trigger schedule ${name}: keryx runs no daemon of its own — install ONE of the two below with your own scheduler ` +
+          "(or create the schedule with `keryx schedule add`, which installs a --user timer for you after you confirm).\n",
+      );
+      if (!lines.onCalendar.ok) {
+        console.log(`# NOTE: the systemd timer below has no OnCalendar= — ${lines.onCalendar.reason}\n`);
+      }
       console.log(`# --- cron (crontab -e) --------------------------------------------------`);
       console.log(lines.cronLine);
       // Machine-parseable line, for anything (including this task's own AC6
@@ -869,12 +942,13 @@ Usage:
   keryx trigger uninstall         Remove those hook blocks (other managed blocks are untouched)
   keryx trigger list              List declared entries: enabled state, fire, action, hook status
   keryx trigger status [<name>]   Show the last recorded outcome for one or every entry
-  keryx trigger schedule <name>   Print the cron line / systemd timer unit for a schedule entry
+  keryx trigger schedule <name>   Print the cron line / systemd timer unit (real OnCalendar=) for a schedule entry
   keryx trigger resolve <runId> --spent <usd>
                                   Close a killed dispatch's spend reservation with what it really spent
 
 Triggers are declared by hand in .metaproject/triggers.json (keryx never
-writes it) and loaded by name. \`run\`:
+writes it) and loaded by name, together with the schedules \`keryx schedule add\`
+created (the per-machine store .metaproject/data/trigger/schedules.json). \`run\`:
   - exits 0 and says "nothing to do" when there is no trigger config, or the
     named trigger is disabled;
   - exits non-zero when the name is unknown, the matching entry is malformed,
@@ -924,7 +998,12 @@ Actions:
               reservation. A killed run's reservation stays counted until
               \`keryx trigger resolve <runId> --spent <usd>\`.
 
+  agent-task  (flow 295) a free-form scheduled agent task: one unattended turn on
+              the operator's prompt, a report in .metaproject/data/trigger/reports/.
+              Created only by \`keryx schedule add\` / /schedule, never by hand.
+
 \`install\` writes hooks for event-fired entries only; a schedule entry's line
-comes from \`trigger schedule\`, and keryx never runs a daemon of its own.
+comes from \`trigger schedule\` (or \`keryx schedule add\` installs a timer), and
+keryx never runs a daemon of its own.
 `);
 }

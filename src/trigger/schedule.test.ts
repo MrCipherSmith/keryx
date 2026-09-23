@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { renderScheduleLines, resolveScheduleEntry, type KeryxInvocation } from "./schedule";
+import { projectScheduleHash, renderScheduleLines, resolveScheduleEntry, type KeryxInvocation } from "./schedule";
 import { triggersConfigPath } from "./config";
 
 async function writeTriggers(root: string, triggers: unknown[]): Promise<void> {
@@ -68,8 +68,33 @@ describe("renderScheduleLines", () => {
     const lines = renderScheduleLines({ projectRoot: "/srv/project", name: "nightly", cron: "0 2 * * *", invocation: FAKE_INVOCATION });
     expect(lines.systemdService).toContain("ExecStart=/opt/node/bin/node /opt/keryx/dist/cli.js trigger run nightly");
     expect(lines.systemdService).toContain("WorkingDirectory=/srv/project");
-    expect(lines.systemdTimer).toContain('OnCalendar=');
-    expect(lines.systemdTimer).toContain("0 2 * * *"); // the cron expression is at least surfaced for translation
+    // Flow 295 (AC8): a REAL OnCalendar= (flow 286 printed only a commented
+    // placeholder, which never fired), and a project-unique unit name.
+    expect(lines.systemdTimer).toContain("\nOnCalendar=*-*-* 02:00:00\n");
+    expect(lines.systemdTimer).not.toContain("# OnCalendar=");
+    expect(lines.systemdTimer).toContain("0 2 * * *"); // the cron expression it was translated from
+    expect(lines.timerUnitName).toBe(`keryx-${projectScheduleHash("/srv/project")}-nightly.timer`);
+  });
+
+  test("a cron with no systemd equivalent keeps the placeholder and says why", () => {
+    const lines = renderScheduleLines({ projectRoot: "/srv/project", name: "odd", cron: "0 9 1 * 1", invocation: FAKE_INVOCATION });
+    expect(lines.onCalendar.ok).toBe(false);
+    expect(lines.systemdTimer).toContain("# OnCalendar=");
+    expect(lines.systemdTimer).toContain("has no systemd equivalent");
+  });
+
+  // Flow 295 (AC8): the timer `keryx trigger schedule` prints fires when the cron
+  // says, proven by systemd itself.
+  const calendarTool = Bun.which("systemd-analyze");
+  test.skipIf(!calendarTool)("the printed timer's OnCalendar= fires on the translated schedule (systemd-analyze calendar)", async () => {
+    const lines = renderScheduleLines({ projectRoot: "/srv/project", name: "every4h", cron: "0 */4 * * *", invocation: FAKE_INVOCATION });
+    const value = /^OnCalendar=(.+)$/m.exec(lines.systemdTimer)?.[1];
+    expect(value).toBeDefined();
+    const proc = Bun.spawn([calendarTool!, "calendar", "--iterations=6", "--base-time=2026-09-23 00:30:00", value!], { stdout: "pipe", stderr: "pipe" });
+    const out = await new Response(proc.stdout).text();
+    expect(await proc.exited).toBe(0);
+    const hours = [...out.matchAll(/(?:Next elapse|Iteration #\d+): \w{3} 2026-09-23 (\d{2}):00:00/g)].map((m) => m[1]);
+    expect(hours).toEqual(["04", "08", "12", "16", "20"]);
   });
 
   test("a project root or name containing a single quote is still shell-safe", () => {

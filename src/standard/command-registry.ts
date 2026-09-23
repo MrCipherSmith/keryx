@@ -11,6 +11,8 @@
 // diffable. Consumers: `keryx commands` (agent-facing), `.metaproject/index.md`
 // intent router, and future MCP tool generation.
 
+import { SCHEDULE_DESCRIPTORS } from "./schedule-descriptors";
+
 /** One argument (positional or flag) of a command. */
 export interface CommandArg {
   /** Flag name without dashes (`page`) or `<positional>` for a positional arg. */
@@ -1066,6 +1068,8 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // Flow 295: `keryx schedule` (self-contained in ./schedule-descriptors.ts).
+  ...SCHEDULE_DESCRIPTORS,
 ];
 
 /**

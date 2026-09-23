@@ -49,8 +49,11 @@
 //      the project root resolved at generation time — neither cron nor
 //      systemd otherwise runs a job from inside the project.
 
+import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
 import path from "node:path";
 import { loadTriggersConfig, type TriggerEntry } from "./config";
+import { cronToOnCalendar } from "./cron";
 
 export interface KeryxInvocation {
   /** The interpreter actually running this process (`node` or `bun`), absolute. */
@@ -182,6 +185,31 @@ function cronEscapePercent(value: string): string {
   return value.replace(/%/g, "\\%");
 }
 
+/**
+ * Flow 295 (AC8): a short, stable hash of the project's real path. It makes unit, plist and
+ * crontab names unique per project, so two projects that both have a schedule named
+ * `check-github` never share a unit in `~/.config/systemd/user/`.
+ */
+export function projectScheduleHash(projectRoot: string): string {
+  let real: string;
+  try {
+    real = realpathSync(projectRoot);
+  } catch {
+    real = path.resolve(projectRoot);
+  }
+  return createHash("sha256").update(real).digest("hex").slice(0, 8);
+}
+
+/** `keryx-<projecthash>-<name>`: the base of every unit/plist/crontab-block name keryx installs. */
+export function scheduleUnitBase(projectRoot: string, name: string): string {
+  return `keryx-${projectScheduleHash(projectRoot)}-${name}`;
+}
+
+/** The header every file keryx installs carries; uninstall touches only files that carry it for this project. */
+export function managedHeader(projectRoot: string, name: string): string {
+  return `# keryx-managed ${projectScheduleHash(projectRoot)} ${name}`;
+}
+
 export interface ScheduleLines {
   /** The PATH baked into every generated command — see the file header. */
   readonly assumedPath: string;
@@ -194,6 +222,8 @@ export interface ScheduleLines {
   readonly serviceUnitName: string;
   readonly timerUnitName: string;
   readonly logPath: string;
+  /** Flow 295 (AC8): the translated `OnCalendar=` value, or why the cron cannot be translated. */
+  readonly onCalendar: { readonly ok: true; readonly value: string } | { readonly ok: false; readonly reason: string };
 }
 
 /**
@@ -234,14 +264,18 @@ export function renderScheduleLines(params: {
   // below), which never runs cron's line-preprocessing at all.
   const cronLine = `${cron} ${cronEscapePercent(cronCommand)}`;
 
-  const serviceUnitName = `keryx-trigger-${name}.service`;
-  const timerUnitName = `keryx-trigger-${name}.timer`;
+  const unitBase = scheduleUnitBase(projectRoot, name);
+  const serviceUnitName = `${unitBase}.service`;
+  const timerUnitName = `${unitBase}.timer`;
+  const header = managedHeader(projectRoot, name);
+  const onCalendar = cronToOnCalendar(cron);
   // Description= is free text (not word-split, not argv), so it only needs
   // `%` doubled — the literal decorative quotes around the name below stay
   // exactly as authored.
   const descriptionName = systemdEscapePercent(name);
   const descriptionProjectRoot = systemdEscapePercent(projectRoot);
-  const systemdService = `# ${serviceUnitName} — install under /etc/systemd/system/ (or ~/.config/systemd/user/ for --user)
+  const systemdService = `${header}
+# ${serviceUnitName} — a --user unit: ~/.config/systemd/user/ (keryx schedule installs it there for you)
 [Unit]
 Description=keryx trigger "${descriptionName}" (${descriptionProjectRoot})
 
@@ -257,19 +291,24 @@ ExecStart=${systemdValue(invocation.execPath)} ${systemdValue(invocation.scriptP
 StandardOutput=append:${systemdEscapePercent(logPath)}
 StandardError=append:${systemdEscapePercent(logPath)}
 `;
-  const systemdTimer = `# ${timerUnitName} — install alongside ${serviceUnitName}
+  // Flow 295 (AC8): a real OnCalendar= translated from the cron. Flow 286 printed
+  // only a commented placeholder here, so that timer never fired. An expression
+  // with no systemd equivalent keeps the comment and says why, and it is never installed.
+  const calendarLines = onCalendar.ok
+    ? `# cron "${cron}", translated; check it with: systemd-analyze calendar '${onCalendar.value}'\nOnCalendar=${onCalendar.value}`
+    : `# cron "${cron}" has no systemd equivalent: ${onCalendar.reason}\n# OnCalendar=`;
+  const systemdTimer = `${header}
+# ${timerUnitName} — install alongside ${serviceUnitName}
 [Unit]
 Description=Schedule for keryx trigger "${descriptionName}"
 
 [Timer]
-# Translate the cron expression "${cron}" into OnCalendar= syntax, e.g. with
-# \`systemd-analyze calendar '<expression>'\` to verify it, then uncomment:
-# OnCalendar=
+${calendarLines}
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 `;
 
-  return { assumedPath, cronCommand, cronLine, systemdService, systemdTimer, serviceUnitName, timerUnitName, logPath };
+  return { assumedPath, cronCommand, cronLine, systemdService, systemdTimer, serviceUnitName, timerUnitName, logPath, onCalendar };
 }

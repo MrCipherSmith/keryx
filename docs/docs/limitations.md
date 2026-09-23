@@ -96,6 +96,23 @@ for the containment matrix and the
 [Linux verification runbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/verification/linux-sandbox-verification.md)
 for what has been verified on a real host.
 
+## Scheduled agent tasks need the machine on
+
+`keryx schedule` hands a confirmed task to the OS scheduler. keryx itself runs no daemon.
+
+- **Missed runs:** a machine that is off or asleep misses runs. systemd
+  (`Persistent=true`) and launchd run one catch-up run at the next boot or wake;
+  cron runs none.
+- **Logged out:** without linger, a systemd `--user` timer does not run while you are
+  logged out. keryx shows the linger state on the confirmation card and never
+  enables it.
+- **Network:** an allowlist network mode for the scheduled agent's shell is not
+  available yet (flow 301); the choices are `off` and `full`.
+- **Platform:** the hardened unattended sandbox is Linux-only, so a macOS schedule
+  runs in `ask` mode with granted tools only.
+
+See [schedule](cli-reference.md#schedule).
+
 ## Remote approvals are not implemented
 
 `keryx serve` accepts turns over a loopback-bound authenticated HTTP listener,

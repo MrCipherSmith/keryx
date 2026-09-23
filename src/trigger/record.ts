@@ -131,6 +131,9 @@ export const DISPATCH_REFUSAL_CODES = [
   "sandbox-unavailable",
   "provider-usage-unknown",
   "worktree-conflict",
+  // Flow 295 (AC5): an agent-task whose stored content no longer matches the
+  // hash the operator confirmed — an edit behind an installed timer never runs.
+  "grants-changed",
 ] as const;
 export type DispatchRefusalCode = (typeof DISPATCH_REFUSAL_CODES)[number];
 
@@ -151,6 +154,27 @@ export interface TriggerDispatchRecord {
   /** The closing fact written to the flow: `done` or the attempt outcome. */
   readonly closing?: "done" | "failed" | "blocked";
   readonly denials?: readonly UnattendedDenial[];
+}
+
+/** Flow 295 (AC3): one granted-tool call an agent-task run made — what ran, never its output. */
+export interface GrantedCallRecord {
+  readonly tool: string;
+  /** The argv keryx ran (program resolved, parameters checked). No environment, no output. */
+  readonly argv: readonly string[];
+  readonly exitCode: number | null;
+  readonly ok: boolean;
+}
+
+/** Flow 295 (AC2): what an `agent-task` run did, beside the generic record fields. Additive. */
+export interface TriggerAgentTaskRecord {
+  readonly runId: string;
+  readonly refusal?: DispatchRefusalCode;
+  /** Repo-relative path of the report the dispatcher wrote, when it wrote one. */
+  readonly reportPath?: string;
+  readonly grantedCalls?: readonly GrantedCallRecord[];
+  readonly denials?: readonly UnattendedDenial[];
+  readonly permissionMode?: "ask" | "trust";
+  readonly network?: "off" | "full";
 }
 
 export const NO_MODEL_COST: TriggerRunCost = {
@@ -175,6 +199,8 @@ export interface TriggerRunRecord {
   readonly cost: TriggerRunCost;
   /** Flow 290: present only on a dispatching `flow-next` run. */
   readonly dispatch?: TriggerDispatchRecord;
+  /** Flow 295: present only on an `agent-task` run. */
+  readonly agentTask?: TriggerAgentTaskRecord;
   /** Flow 290 T13: on a `reserved` record — the amount held back for run `runId`. */
   readonly reservation?: { readonly runId: string; readonly usd: number };
   /** Flow 290 T13: on a `reservation-resolved` record — the run whose reservation an operator closed. */
@@ -202,7 +228,7 @@ export function openReservations(records: readonly TriggerRunRecord[]): OpenRese
       });
       continue;
     }
-    const closes = record.resolves ?? record.dispatch?.runId;
+    const closes = record.resolves ?? record.dispatch?.runId ?? record.agentTask?.runId;
     if (closes !== undefined) open.delete(closes);
   }
   return [...open.values()];

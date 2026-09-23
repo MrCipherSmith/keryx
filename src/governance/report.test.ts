@@ -11,6 +11,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { FlowState } from "../flow/types";
 import { appendTriggerRunRecord } from "../trigger/record";
+import { addConfirmedSchedule } from "../trigger/store";
+import { runTriggerOnce } from "../commands/trigger";
+import type { NormalizedEvent, ProviderPort } from "../harness/provider/types";
 import { registerProject } from "../lib/project-registry";
 import {
   buildGovernanceReport,
@@ -190,6 +193,53 @@ test("AC2: a trigger run record carries no flow reference, so project-wide spend
   // The flow's own review spend is unaffected by project-wide trigger spend.
   expect(flow?.spend.spentUsd).toBeUndefined();
   expect(report.projects[0]?.triggerSpend).toMatchObject({ state: "present", spentUsd: 9 });
+});
+
+// Flow 295 (AC14): a scheduled `agent-task` run, driven end to end through
+// `keryx trigger run`, lands in the same ledger, and its cost is in the report.
+test("flow 295 AC14: a scheduled agent-task run's cost is included in project trigger spend", async () => {
+  await addConfirmedSchedule(ROOT, {
+    name: "check-github",
+    on: { kind: "schedule", cron: "0 */4 * * *" },
+    action: {
+      kind: "agent-task",
+      prompt: "Summarise open PRs.",
+      dispatch: { provider: "scripted", model: "m", permissionMode: "ask", rates: { inputUsdPerMTok: 3, outputUsdPerMTok: 15 }, ceilingUsd: 1 },
+      grants: { network: "off", tools: [], repos: [] },
+    },
+  });
+  const provider: ProviderPort = {
+    describe: () => ({ capabilities: {} as never, descriptor: { providerId: "scripted" } }),
+    stream: (_request, opts) =>
+      (async function* (): AsyncGenerator<NormalizedEvent> {
+        yield { sequence: 0, attemptId: opts.attemptId, kind: "usage_update", usage: { inputTokens: 1000, outputTokens: 200 } } as NormalizedEvent;
+        yield { sequence: 1, attemptId: opts.attemptId, kind: "text_delta", text: "Nothing needs you." } as NormalizedEvent;
+        yield { sequence: 2, attemptId: opts.attemptId, kind: "model_end" } as NormalizedEvent;
+      })(),
+  };
+  const log = console.log;
+  console.log = () => {};
+  try {
+    await runTriggerOnce(ROOT, "check-github", {
+      agentTask: {
+        makeProvider: () => provider,
+        planSandbox: () => ({ ok: true, launcher: "none", args: [], env: {}, wrap: () => ["/bin/true"] }),
+      },
+    });
+  } finally {
+    console.log = log;
+  }
+  const usd = (1000 * 3 + 200 * 15) / 1_000_000;
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  // The reservation record carries no cost; the closing record carries the run's.
+  expect(report.projects[0]?.triggerSpend).toEqual({
+    state: "present",
+    spentUsd: usd,
+    runsWithCostRecorded: 1,
+    runsWithCostNotRecorded: 1,
+    runsTotal: 2,
+  });
+  expect(renderGovernanceMarkdown(report)).toContain("trigger spend (project-wide, never flow-attributed): $0.006 across 1 run(s) with recorded cost");
 });
 
 // --- AC3: confirmations, signatures, identity basis --------------------------

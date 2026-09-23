@@ -299,13 +299,15 @@ export async function reserveTriggerSpend(
     readonly perTrigger: PerTriggerCeiling;
     readonly options?: SpendCapOptions;
     readonly now?: () => Date;
+    /** Flow 295: the action being reserved for, named in a refusal. Default `flow-next`. */
+    readonly actionKind?: string;
   },
 ): Promise<SpendReservation> {
   await ensureLocksDir(projectRoot);
   return withFileLock(
     spendLockPath(projectRoot),
     async (): Promise<SpendReservation> => {
-      const budget = await evaluateTriggerBudget(projectRoot, "flow-next", input.options ?? {}, input.perTrigger);
+      const budget = await evaluateTriggerBudget(projectRoot, input.actionKind ?? "flow-next", input.options ?? {}, input.perTrigger);
       if (!budget.allowed) return { reserved: false, reason: budget.reason };
       if (!(budget.remainingUsd > 0)) {
         return {

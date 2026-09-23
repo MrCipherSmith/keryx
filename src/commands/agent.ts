@@ -125,6 +125,15 @@ export interface ApprovalMeta {
    */
   untrustedOrigin?: boolean;
   /**
+   * Flow 295 (AC7): the call is one only the operator can confirm (a tool with
+   * `InteractiveTool.confirmation`, e.g. `schedule_create`). An approver must show
+   * `card` verbatim, must offer only yes/no (no "always"), and must never answer it
+   * from a remembered decision. The permission mode never answers it either.
+   */
+  alwaysAsk?: boolean;
+  /** Flow 295 (AC7): the confirmation card, one line per element, for an `alwaysAsk` call. */
+  card?: readonly string[];
+  /**
    * Aborted when the caller stops waiting for this answer — the ACP client's
    * approval timeout (flow 292 T13). An approver holding a resource for the
    * question (a terminal readline, a dialog) releases it here. Optional: an
@@ -3473,6 +3482,11 @@ async function executeCall(
   }
   const mode: PermissionMode = permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
   const isReadOnly = readOnly?.() ?? false;
+  if (tool.confirmation !== undefined && risk !== "write") {
+    // Flow 295: the operator confirmation lives in the write branch only; any
+    // other risk would skip it, so such a tool is refused rather than run.
+    return { output: `tool "${call.name}" needs operator confirmation but is not a write tool; refused`, isError: true };
+  }
   if (risk === "shell" || risk === "destructive") {
     // Per-command escalation. A tool carries ONE static risk, so `shell_exec` is
     // `shell` whether it runs `ls` or `rm -rf /`; the classifier supplies the
@@ -3566,11 +3580,22 @@ async function executeCall(
       call.name === "apply_patch"
         ? classifyPatchRisk(typeof input.patch === "string" ? input.patch : "")
         : { destructive: false, credentials: false };
+    // Flow 295 (AC7): an operator-confirmed tool. The card is computed first; a
+    // draft that cannot be built refuses without asking. Then it is a hard floor like
+    // `credentials`: every mode, `auto` included, asks.
+    let card: readonly string[] | undefined;
+    if (tool.confirmation !== undefined) {
+      const confirmation = await tool.confirmation(input);
+      if ("error" in confirmation) {
+        return { output: `${call.name} refused: ${confirmation.error}`, isError: true };
+      }
+      card = confirmation.card;
+    }
     const decision = resolveApprovalDecision({
       mode,
       risk,
       destructive,
-      credentials,
+      credentials: credentials || card !== undefined,
       sacReviewConfirmation: false,
       readOnly: isReadOnly,
     });
@@ -3588,9 +3613,13 @@ async function executeCall(
               fingerprint,
               destructive,
               ...(credentials ? { credentials } : {}),
+              ...(card !== undefined ? { alwaysAsk: true, card } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
-        return { output: `patch not approved by the user; not executed`, isError: true };
+        return {
+          output: card !== undefined ? `${call.name} not confirmed by the operator; nothing was written or installed` : `patch not approved by the user; not executed`,
+          isError: true,
+        };
       }
     }
   } else if (risk !== "read") {
