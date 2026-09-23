@@ -17,6 +17,36 @@ machinery already shipped by `keryx-multi-agent-engine`: where a keryx child
 runs an in-process agent loop, an external child runs a vendor CLI subprocess
 and its event stream is folded into the same contracts.
 
+## Third transport: ACP (flow 292)
+
+Registry entries now carry a `transport`. Absent means `line-stream`: a pure
+codec parses the CLI's one-way stdout (`codex-cli`, `claude-cli`). `acp`
+(`gemini-acp`) means the child is an Agent Client Protocol agent and keryx is
+its **client**: a two-way JSON-RPC wire where the agent asks keryx for
+permission and files, which no one-way codec can express. `runExternalChild`
+routes such an entry to `superviseAcpRun` (`src/harness/external/acp-client.ts`)
+on the same `ExternalSpawnPort`, with every step before and after supervision
+unchanged — gate, depth, validation, prompt, disposable worktree, cleanup,
+result-schema validation. It is the third supervision path beside
+`superviseExternalRun` and the codex MCP supervisor.
+
+Two things differ for an ACP agent, and both are narrower than they sound:
+
+- **`worktree-write` is implemented for `transport: acp` only**
+  (`IMPLEMENTED_ACP_SANDBOX_MODES`). The agent's writes that reach keryx arrive
+  as `fs/write_text_file`, which keryx executes itself — confined by real path
+  to the disposable worktree and gated as risk `write` — and the worktree's
+  diff leaves as a patch artifact that is never applied. The operator's tree
+  is never touched; this is the write audit boundary D-04 asked for, not a
+  lifting of D-04 for the project tree. Codec agents still refuse
+  `worktree-write` with `not-implemented`.
+- **Permission mode is lowered to `ask`** for every foreign run, because the
+  tool calls it asks about are self-described.
+
+What keryx cannot control — the agent's own internal tools, which never reach
+ACP — is contained by the disposable worktree exactly as D-08 says for the
+codec agents. The operator guide is `docs/docs/guides/acp-client.md`.
+
 ## Status
 
 **implemented (read-only release), never run against a real process.**

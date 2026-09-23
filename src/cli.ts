@@ -276,7 +276,7 @@ export const USAGE_BODY = `Usage:
   keryx security incidents [--limit <n>]
   keryx security hooks install --runtime <claude|cursor|windsurf|generic-mcp|all>
   keryx security eval [--corpus <name|all>] [--with-model]
-  keryx serve-mcp [--http] [--cwd <project-root>]
+  keryx serve-mcp [--http] [--read-only] [--cwd <project-root>]
   keryx integrate [--remove] <cursor|claude|opencode|vscode|generic|all> [--dry-run]
   keryx mcp serve [--http] ...                  # retired: use keryx serve-mcp
   keryx workspace create --title <title> [--component <workspace-relative-ref>]

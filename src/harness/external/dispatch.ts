@@ -19,7 +19,7 @@
 // string is how an operator ends up debugging the wrong thing.
 //
 // Pure: no registry mutation, no process, no clock.
-import { getExternalAgent, supportsSandbox } from "./registry";
+import { getExternalAgent, supportsSandbox, transportOf } from "./registry";
 import type { ExternalAgentEntry, ExternalSandbox } from "./types";
 
 /** The `runtime` block as it appears on a dispatch. Absent means the native runtime. */
@@ -64,8 +64,27 @@ export type ValidateRuntimeResult =
     }
   | { readonly ok: false; readonly code: RuntimeRefusalCode; readonly reason: string };
 
-/** Sandbox levels this release actually implements. */
+/** Sandbox levels this release actually implements for a line-stream (codec) agent. */
 export const IMPLEMENTED_SANDBOX_MODES: readonly ExternalSandbox[] = ["read-only"];
+
+/**
+ * Sandbox levels implemented for an ACP agent (flow 292).
+ *
+ * `worktree-write` is implemented HERE and nowhere else, and the difference is
+ * the audit boundary D-04 asked for rather than more spawn machinery: an ACP
+ * agent's writes that reach keryx arrive as `fs/write_text_file` requests, which
+ * keryx itself executes — confined by real path to the disposable worktree,
+ * gated as risk `write` — and the worktree's diff leaves the run as a patch
+ * artifact that is never applied. The operator's project tree is untouched on
+ * every path. What the agent writes through its OWN tools is contained by the
+ * same disposable worktree and is not seen at all (D-08).
+ */
+export const IMPLEMENTED_ACP_SANDBOX_MODES: readonly ExternalSandbox[] = ["read-only", "worktree-write"];
+
+/** The sandbox levels keryx implements for this entry's transport. */
+export function implementedSandboxModesFor(entry: ExternalAgentEntry): readonly ExternalSandbox[] {
+  return transportOf(entry) === "acp" ? IMPLEMENTED_ACP_SANDBOX_MODES : IMPLEMENTED_SANDBOX_MODES;
+}
 
 /**
  * Validate a dispatch's `runtime` block against the registry and the dispatch's
@@ -122,11 +141,12 @@ export function validateRuntimeBlock(
     };
   }
 
-  if (!IMPLEMENTED_SANDBOX_MODES.includes(sandbox)) {
+  const implemented = implementedSandboxModesFor(entry);
+  if (!implemented.includes(sandbox)) {
     return {
       ok: false,
       code: "not-implemented",
-      reason: `sandbox "${sandbox}" is not implemented in this release; only ${IMPLEMENTED_SANDBOX_MODES.join(", ")} is available`,
+      reason: `sandbox "${sandbox}" is not implemented in this release; only ${implemented.join(", ")} is available`,
     };
   }
 

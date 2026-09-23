@@ -10,15 +10,28 @@ import {
   parseAgentVersion,
   resolveAvailability,
   supportsSandbox,
+  transportOf,
 } from "./registry";
+import { getExternalCodec } from "./codec";
 import type { ExternalAgentEntry } from "./types";
 
 const CODEX = getExternalAgent("codex-cli") as ExternalAgentEntry;
 const CLAUDE = getExternalAgent("claude-cli") as ExternalAgentEntry;
 
 describe("registry shape", () => {
-  test("ships exactly the two agents this release specifies", () => {
-    expect(externalAgentIds()).toEqual(["codex-cli", "claude-cli"]);
+  test("ships exactly the agents this release specifies: two codec agents and one ACP agent (flow 292)", () => {
+    expect(externalAgentIds()).toEqual(["codex-cli", "claude-cli", "gemini-acp"]);
+  });
+
+  test("every codec agent has a codec; the ACP agent has none and says so by transport", () => {
+    for (const entry of EXTERNAL_AGENTS) {
+      if (transportOf(entry) === "acp") {
+        expect(getExternalCodec(entry.id)).toBeUndefined();
+        expect(entry.acpArgs?.length ?? 0).toBeGreaterThan(0);
+      } else {
+        expect(getExternalCodec(entry.id)).toBeDefined();
+      }
+    }
   });
 
   test("an unknown agent resolves to undefined so callers fail closed", () => {

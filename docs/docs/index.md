@@ -30,6 +30,7 @@ the one that describes shipped behaviour.
 - [Use Shared Agent Context (workspaces, FWK, proposals)](guides/shared-agent-context.md)
 - [Choose an approval mode: ask, trust, auto](guides/permission-modes.md)
 - [Run an agent against a repository without giving it my machine](guides/contain-an-agent.md)
+- [Drive a foreign ACP agent (Gemini CLI) under keryx's policy](guides/acp-client.md)
 - [Agent web search](guides/web-search.md)
 - [Use local SearXNG for agent web search](guides/use-local-searxng.md)
 - [Drive keryx from a bot or another product](guides/drive-keryx-remotely.md)

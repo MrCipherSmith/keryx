@@ -131,13 +131,17 @@ export async function createMcpServer(ctx: McpContext): Promise<SdkServer> {
 export interface ServeOptions {
   cwd: string;
   http?: boolean;
+  /** Expose only non-mutating tools (flow 292; `keryx serve-mcp --read-only`). */
+  readOnly?: boolean;
 }
 
 // Entry point for `keryx mcp serve`. Loads the SDK (hard-fail if missing),
 // builds the server, and connects the default stdio transport — or the isolated
 // HTTP/SSE opt-in when `--http` is passed and the capability is enabled.
 export async function serveMcp(options: ServeOptions): Promise<void> {
-  const ctx = await buildMcpContext(options.cwd, options.http ? "http" : "stdio");
+  const ctx = await buildMcpContext(options.cwd, options.http ? "http" : "stdio", {
+    readOnly: options.readOnly === true,
+  });
   const server = await createMcpServer(ctx);
 
   if (options.http) {

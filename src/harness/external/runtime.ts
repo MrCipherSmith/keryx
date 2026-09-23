@@ -30,11 +30,12 @@ import type { WorktreePort } from "../child/worktree";
 import { validateRuntimeBlock, type RuntimeBlock } from "./dispatch";
 import { buildExternalChildEnv, canNestExternalChild } from "./env";
 import { buildExternalPrompt } from "./prompt";
-import { resolveAvailability, type DetectionOutcome } from "./registry";
+import { resolveAvailability, transportOf, type DetectionOutcome } from "./registry";
+import { persistAcpRun, runAcpInWorktree, type AcpChildOptions, type AcpRunRecord } from "./acp-run";
 import { superviseExternalRun, type ExternalRunHandle, type ExternalSpawnPort } from "./supervise";
 import type { SupervisionConfig, SupervisionTrigger } from "./supervision";
 import { getExternalCodec } from "./codec";
-import type { ExternalEvent } from "./types";
+import type { ExternalAgentEntry, ExternalEvent } from "./types";
 
 /**
  * Fraction of `maxCostUnits`/`timeoutMs` that counts as a §7.6 `budget_threshold`
@@ -94,6 +95,12 @@ export interface ExternalChildOutcome {
   readonly skippedLines?: number;
   /** Reported cost, where the CLI reports one. Absent means missing, never zero. */
   readonly costUnits?: number;
+  /**
+   * An ACP run's durable record (flow 292): decisions, fs requests, usage/cost,
+   * the context offer, the mode clamp, the patch artifact and the keryx session
+   * it was persisted as. Present only for a `transport: "acp"` agent.
+   */
+  readonly acp?: AcpRunRecord;
 }
 
 /** One external child run. */
@@ -117,6 +124,11 @@ export interface RunExternalChildInput {
   readonly parentEnv: Readonly<Record<string, string | undefined>>;
   /** This child's nesting depth, written to the marker keryx honours on entry. */
   readonly depth: number;
+  /**
+   * The operator's project root (flow 292). An ACP run offers keryx's MCP server
+   * for it and persists its record as a session of it. Line-stream runs ignore it.
+   */
+  readonly projectRoot?: string;
   /**
    * Launch a STEERABLE run, so operator messages can reach the child mid-flight.
    *
@@ -158,6 +170,8 @@ export interface RunExternalChildDeps {
    * this callback; this runtime just delivers the trigger.
    */
   readonly onSupervisionTrigger?: (trigger: SupervisionTrigger) => void;
+  /** ACP-only wiring (flow 292): approver, unattended, requested mode, test seams. Ignored for a line-stream agent. */
+  readonly acp?: AcpChildOptions;
 }
 
 /**
@@ -339,8 +353,11 @@ export async function runExternalChild(
   }
 
   const { entry, sandbox } = validated;
-  const codec = getExternalCodec(entry.id);
-  if (codec === undefined) {
+  // An ACP agent has no codec by construction — the wire is two-way JSON-RPC,
+  // driven by `superviseAcpRun`. Every other step below is shared.
+  const isAcp = transportOf(entry) === "acp";
+  const codec = isAcp ? undefined : getExternalCodec(entry.id);
+  if (!isAcp && codec === undefined) {
     return refuse("Error", `no codec is registered for external agent "${entry.id}"`);
   }
 
@@ -396,6 +413,17 @@ export async function runExternalChild(
 
     const created = await deps.worktree.create(input.worktreeId);
     try {
+      if (codec === undefined) {
+        return await runAcpBranch({
+          input,
+          deps,
+          entry,
+          write: sandbox === "worktree-write",
+          worktreePath: created.path,
+          prompt: assembled.prompt,
+          validate: (built) => validateStructuredResult(built, resultSchema),
+        });
+      }
       const runInput = {
         prompt: assembled.prompt,
         cwd: created.path,
@@ -478,31 +506,7 @@ export async function runExternalChild(
 
       const cause = codec.classifyFailure(outcome);
       const built = buildOutcome({ cause, outcome, argv, worktreePath: created.path });
-      if (built.status !== "Completed") return built;
-
-      // AC13: a "Completed" run's final message must itself be a valid
-      // `subagent-result` document. A parse failure or a schema violation is an
-      // Error, never a silent downgrade to free text — the original text is
-      // preserved on `partial` rather than lost.
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(built.output);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return structuredResultError(`structured result is not valid JSON: ${message}`, built);
-      }
-      const validationErrors = await validateJson(parsed, resultSchema);
-      if (validationErrors.length > 0) {
-        const detail = validationErrors
-          .slice(0, 3)
-          .map((e) => `${e.path}: ${e.message}`)
-          .join("; ");
-        return structuredResultError(
-          `structured result failed subagent-result schema validation: ${detail}`,
-          built,
-        );
-      }
-      return built;
+      return await validateStructuredResult(built, resultSchema);
     } finally {
       // Unconditional. Containment rests on this directory being disposable, so a
       // leaked worktree is a leaked escape hatch — and the `remove` itself must not
@@ -516,6 +520,118 @@ export async function runExternalChild(
     // was ever created.
     await rm(schemaDir, { recursive: true, force: true }).catch(() => undefined);
   }
+}
+
+/**
+ * AC13: a "Completed" run's final message must itself be a valid
+ * `subagent-result` document. A parse failure or a schema violation is an
+ * Error, never a silent downgrade to free text — the original text is
+ * preserved on `partial` rather than lost. Shared by every transport.
+ */
+async function validateStructuredResult(
+  built: ExternalChildOutcome,
+  resultSchema: Awaited<ReturnType<typeof loadSchema>>,
+): Promise<ExternalChildOutcome> {
+  if (built.status !== "Completed") return built;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(built.output);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return structuredResultError(`structured result is not valid JSON: ${message}`, built);
+  }
+  const validationErrors = await validateJson(parsed, resultSchema);
+  if (validationErrors.length > 0) {
+    const detail = validationErrors
+      .slice(0, 3)
+      .map((e) => `${e.path}: ${e.message}`)
+      .join("; ");
+    return structuredResultError(`structured result failed subagent-result schema validation: ${detail}`, built);
+  }
+  return built;
+}
+
+/**
+ * The ACP transport inside the worktree (flow 292). Runs `superviseAcpRun`
+ * through `runAcpInWorktree`, folds its outcome onto the shared status
+ * vocabulary, validates the structured result like every other transport, and
+ * persists the run as a keryx session — all BEFORE the caller's `finally`
+ * removes the worktree, so the patch artifact is captured from a live tree.
+ *
+ * A throwing spawn port is caught here and reported as a named `Error`, never
+ * propagated: the worktree removal in the caller's `finally` runs either way.
+ */
+async function runAcpBranch(args: {
+  readonly input: RunExternalChildInput;
+  readonly deps: RunExternalChildDeps;
+  readonly entry: ExternalAgentEntry;
+  readonly write: boolean;
+  readonly worktreePath: string;
+  readonly prompt: string;
+  readonly validate: (built: ExternalChildOutcome) => Promise<ExternalChildOutcome>;
+}): Promise<ExternalChildOutcome> {
+  const { input, deps, entry, worktreePath } = args;
+  const options = deps.acp ?? {};
+  let ran: Awaited<ReturnType<typeof runAcpInWorktree>>;
+  try {
+    ran = await runAcpInWorktree({
+      entry,
+      worktreePath,
+      ...(input.projectRoot === undefined ? {} : { projectRoot: input.projectRoot }),
+      prompt: args.prompt,
+      env: buildExternalChildEnv({ parent: input.parentEnv, depth: input.depth }),
+      timeoutMs: input.timeoutMs,
+      write: args.write,
+      spawn: deps.spawn,
+      ...(deps.onEvent === undefined ? {} : { onEvent: deps.onEvent }),
+      options,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { status: "Error", output: `the ACP agent could not be started: ${message}`, isError: true, worktreePath };
+  }
+
+  const { supervised } = ran;
+  const costUnits = findCostUnits(supervised.events);
+  const base = {
+    argv: ran.record.argv,
+    worktreePath,
+    skippedLines: 0,
+    ...(supervised.sessionId === undefined ? {} : { sessionRef: supervised.sessionId }),
+    ...(costUnits === undefined ? {} : { costUnits }),
+  };
+  const text = supervised.assistantText.trim();
+  const built: ExternalChildOutcome =
+    supervised.status === "completed"
+      ? { status: "Completed", output: text, isError: false, ...base }
+      : {
+          status: supervised.status === "timeout" ? "Timeout" : "Error",
+          output: supervised.failure ?? "the ACP run failed",
+          isError: true,
+          ...base,
+          ...(text.length > 0 ? { partial: text } : {}),
+        };
+  const final = await args.validate(built);
+
+  let record: AcpRunRecord = ran.record;
+  if (input.projectRoot !== undefined) {
+    try {
+      record = persistAcpRun({
+        projectRoot: input.projectRoot,
+        ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }),
+        record,
+        prompt: args.prompt,
+        assistantText: supervised.assistantText,
+        status: final.status,
+        ...(ran.patch === undefined ? {} : { patch: ran.patch }),
+      });
+    } catch (error) {
+      // A record that could not be written is reported, never allowed to mask
+      // the run's own result.
+      deps.onWarning?.(`the ACP run record could not be persisted: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return { ...final, acp: record };
 }
 
 /** Fold a finished run into the status vocabulary of §7.7. */

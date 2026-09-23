@@ -12,8 +12,8 @@
 // nothing outside the root is ever read.
 
 import { readdir } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep } from "node:path";
-import { realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { lstatSync, realpathSync } from "node:fs";
 import type { NormalizedToolDefinition } from "../../provider/types";
 
 /** The content-returning result of an interactive tool invocation. */
@@ -129,13 +129,23 @@ async function readFromLine(
  * reads the target anyway. It is also segment-wise, so an in-project file named
  * `..hidden.ts` is not mistaken for a traversal.
  *
- * A path that does not exist yet is still checked lexically and allowed if it
- * would land inside the root; callers surface their own not-found error.
+ * A path that does not exist yet is resolved through its NEAREST EXISTING
+ * ANCESTOR (flow 292): that ancestor's real path, plus the segments that do not
+ * exist yet. Checking such a path lexically — which this did until flow 292 —
+ * let a not-yet-existing file under a symlinked directory that points outside
+ * the root pass, and a WRITER then created it outside. A dangling symlink on the
+ * way is refused outright: its target is unknowable without following it, and a
+ * write through it would land wherever it points. Paths that exist resolve
+ * exactly as before, so read-only callers see no change; callers still surface
+ * their own not-found error.
  */
 export function confineToRoot(root: string, candidate: string | undefined): string | null {
   const rootReal = realpathOr(root);
   const target = resolve(rootReal, candidate ?? ".");
-  const effective = realpathOr(target);
+  const effective = realpathThroughAncestors(target);
+  if (effective === undefined) {
+    return null; // a dangling symlink on the path: refuse rather than guess
+  }
 
   if (effective === rootReal) {
     return rootReal; // the root itself
@@ -153,6 +163,37 @@ function realpathOr(candidate: string): string {
     return realpathSync(candidate);
   } catch {
     return resolve(candidate);
+  }
+}
+
+/**
+ * The real path of `absolute`, or — when it does not exist — the real path of
+ * its nearest existing ancestor joined with the segments below it. Undefined
+ * when a segment on the way exists as a symlink whose target does not (a
+ * dangling link), because following it is the only way to learn where it goes.
+ */
+function realpathThroughAncestors(absolute: string): string | undefined {
+  const missing: string[] = [];
+  let current = absolute;
+  for (;;) {
+    try {
+      const real = realpathSync(current);
+      return missing.length === 0 ? real : join(real, ...missing.reverse());
+    } catch {
+      try {
+        // It exists but does not resolve: a dangling (or looping) symlink.
+        lstatSync(current);
+        return undefined;
+      } catch {
+        // Genuinely absent — step up one level.
+      }
+      const parent = dirname(current);
+      if (parent === current) {
+        return resolve(absolute);
+      }
+      missing.push(basename(current));
+      current = parent;
+    }
   }
 }
 
