@@ -1,5 +1,5 @@
 {
-  "note": "SYSTEM (compact) vs RAW fact sets for the gdctx fact-preservation oracle. Both sides captured from a REAL `keryx ctx run -- <command>` compaction of this repo's own tree (dogfood) and reduced to facts via the shared, documented extractFacts rule (src/metrics/oracle-runner.ts). rawFacts/compactFacts are what factPreservation scores; rawLines/compactLines are for human sanity-checking, not scored.",
+  "note": "SYSTEM (compact) vs RAW fact sets for the gdctx fact-preservation oracle. Both sides captured from a REAL `keryx ctx run -- <command>` compaction of this repo's own tree (dogfood) and reduced to facts via the shared, documented extractFacts rule (src/metrics/oracle-runner.ts). rawFacts/compactFacts are what factPreservation scores; rawLines/compactLines are for human sanity-checking, not scored. `inputs` (above) are captured dogfood compressions that are LOSSY BY DESIGN (a compression benchmark) and must stay untouched by the regenerator. `goldens` (below) are a SEPARATE, self-contained correctness benchmark (W7-AC6): each entry supplies its own input and is recomputed LIVE by src/metrics/gdctx-goldens.test.ts against the real src/commands/ctx.ts (summarizeCommandOutput) / src/security/guard.ts (redactRaw) functions — nothing here is captured output. `kind: \"ctx-run\"` goldens (GDCTX-1: a clean, exit-0 stdout line must not be misread as a failure verdict merely because it contains failure-shaped English prose) score fact agreement the documented way: rawFacts = extractFacts(mergedRaw), compactFacts = extractFacts(the rendered summary), and the test requires every rawFact to survive (agreement 1.0), plus `expectErrorsSection` and `mustContainInSummary` are checked literally. `kind: \"ctx-read-redaction\"` goldens (GDCTX-2: a trusted-project badge/logo URL survives redaction, but a credential-shaped query on the same URL shape still redacts) do NOT run their `content` through extractFacts — a bare badge URL embedded in `<img src=\"...\">`/`![alt](url)` markup contains no bare file-path or key:value token by extractFacts' narrow rule, so that would score a vacuous, always-passing 0/0 agreement. Instead, per golden, `mustContain` IS the fact set: the test's rawFacts are exactly `mustContain` (the literal, credential-free strings the content minus its `mustNotContain` entries is expected to survive as), and compactFacts is the subset of those found verbatim (substring match) in `redactRaw`'s output; agreement is required to be 1.0 (every mustContain string survives) and every `mustNotContain` string is additionally asserted absent from the output.",
   "repo": "keryx (dogfood, this repository)",
   "generated_by": "bun scripts/benchmark/run-gdctx-oracle.ts (keryx ctx run -- <command> per input)",
   "captured": "2026-08-12",
@@ -777,6 +777,72 @@
         "raw lines:155",
         "stderr bytes:0",
         "stdout bytes:10731"
+      ]
+    }
+  ],
+  "goldens": [
+    {
+      "id": "gdctx-1-refuse-stdout",
+      "kind": "ctx-run",
+      "description": "GDCTX-1 regression: a realistic `git log --oneline` on a clean, exit-0 run has commit subjects that read as failure-shaped English prose (\"refuse\", \"cannot resolve\") but must NOT be promoted into the Errors / Warnings section, since neither line came from stderr and the command did not fail.",
+      "command": "git log --oneline",
+      "stdout": "a1b2c3d fix(schedule): refuse an unpriceable provider at the card\ne4f5a6b fix: cannot resolve alias\n9b8c7d6 docs: crash course\n7d6e5f4 chore: bump src/commands/ctx.ts version marker\n6e5f4d3 test: add fixtures/benchmark/keryx/gdctx-fact-preservation.json case\n5f4d3c2 refactor: split src/metrics/oracle-runner.ts helpers\n4d3c2b1 fix: guard src/security/guard.ts redaction path\n3c2b1a0 chore: release notes update",
+      "stderr": "",
+      "exitCode": 0,
+      "expectErrorsSection": false,
+      "mustContainInSummary": [
+        "fix(schedule): refuse an unpriceable provider at the card",
+        "fix: cannot resolve alias",
+        "docs: crash course",
+        "src/commands/ctx.ts",
+        "fixtures/benchmark/keryx/gdctx-fact-preservation.json",
+        "src/metrics/oracle-runner.ts",
+        "src/security/guard.ts"
+      ]
+    },
+    {
+      "id": "gdctx-1-stderr-still-flags",
+      "kind": "ctx-run",
+      "description": "GDCTX-1 companion: the SAME stdout, but the run actually failed (non-zero exit, a stderr line) — the stderr line must still be flagged in Errors / Warnings, and (per the existing, already-shipped GDCTX-1 fix) a non-zero exit code makes the stdout's failure-shaped prose count too, since the whole run is now known to have failed.",
+      "command": "git log --oneline",
+      "stdout": "a1b2c3d fix(schedule): refuse an unpriceable provider at the card\ne4f5a6b fix: cannot resolve alias\n9b8c7d6 docs: crash course\n7d6e5f4 chore: bump src/commands/ctx.ts version marker\n6e5f4d3 test: add fixtures/benchmark/keryx/gdctx-fact-preservation.json case\n5f4d3c2 refactor: split src/metrics/oracle-runner.ts helpers\n4d3c2b1 fix: guard src/security/guard.ts redaction path\n3c2b1a0 chore: release notes update",
+      "stderr": "error: cannot lock ref",
+      "exitCode": 1,
+      "expectErrorsSection": true,
+      "mustContainInSummary": [
+        "error: cannot lock ref",
+        "src/commands/ctx.ts",
+        "fixtures/benchmark/keryx/gdctx-fact-preservation.json",
+        "src/metrics/oracle-runner.ts",
+        "src/security/guard.ts"
+      ]
+    },
+    {
+      "id": "gdctx-2-readme-badges",
+      "kind": "ctx-read-redaction",
+      "description": "GDCTX-2 regression: an HTML badge `<img src>`, a markdown badge `![alt](url)`, a markdown license badge, and a local logo path from a real README, read via `ctx read` (source: trusted-project) with the default sourceOverrides — every URL/path must survive redaction unmasked.",
+      "source": "trusted-project",
+      "content": "<img src=\"https://github.com/o/r/actions/workflows/ci.yml/badge.svg\">\n![npm](https://img.shields.io/npm/v/pkg.svg?style=flat)\n![license](https://img.shields.io/badge/license-MIT-blue.svg)\n<img src=\"./docs/logo.png\">",
+      "mustContain": [
+        "https://github.com/o/r/actions/workflows/ci.yml/badge.svg",
+        "https://img.shields.io/npm/v/pkg.svg?style=flat",
+        "https://img.shields.io/badge/license-MIT-blue.svg",
+        "./docs/logo.png"
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "gdctx-2-token-url-redacted",
+      "kind": "ctx-read-redaction",
+      "description": "GDCTX-2 companion: the same trusted-project source and default sourceOverrides, but two of the image URLs carry a credential-shaped query parameter (?token=, ?key=) — those must still redact (hasCredentialShapedQuery gates the allow override), while a credential-free badge URL in the same content survives.",
+      "source": "trusted-project",
+      "content": "<img src=\"https://img.shields.io/npm/v/pkg.svg?token=abc123secretvalue\">\n<img src=\"https://github.com/o/r/actions/workflows/ci.yml/badge.svg\">\n![npm](https://img.shields.io/npm/v/pkg.svg?key=verysecretkeyvalue123)",
+      "mustContain": [
+        "https://github.com/o/r/actions/workflows/ci.yml/badge.svg"
+      ],
+      "mustNotContain": [
+        "https://img.shields.io/npm/v/pkg.svg?token=abc123secretvalue",
+        "https://img.shields.io/npm/v/pkg.svg?key=verysecretkeyvalue123"
       ]
     }
   ]

@@ -158,6 +158,24 @@ export async function finalizeGdctxOracleRun(
   return 1;
 }
 
+// W7-AC6: the fixture also carries a `goldens` array — self-contained CORRECTNESS
+// regressions (GDCTX-1, GDCTX-2) scored live by src/metrics/gdctx-goldens.test.ts, never
+// captured output like `inputs` above. This regenerator only ever touches `inputs`
+// (a fresh dogfood capture); `goldens` is authored by hand and must survive a regenerate
+// byte-for-byte, so it is read back from whatever fixture is currently on disk before the
+// new one is written. A fixture with no `goldens` field (or that fails to parse) regenerates
+// with an empty array rather than failing the whole run — the AC6 test file's own
+// "goldens array is non-empty" assertion is what should catch that, not this script.
+async function readExistingGoldens(): Promise<unknown[]> {
+  try {
+    const text = await readFile(fixtureUrl, "utf8");
+    const parsed = JSON.parse(text) as { goldens?: unknown };
+    return Array.isArray(parsed.goldens) ? parsed.goldens : [];
+  } catch {
+    return [];
+  }
+}
+
 async function main(): Promise<void> {
   const cli = keryxCli();
 
@@ -167,17 +185,25 @@ async function main(): Promise<void> {
 
   const captured: CapturedInput[] = [];
   for (const command of DOGFOOD_COMMANDS) captured.push(await captureOne(cli, command));
+  const goldens = await readExistingGoldens();
 
   // Persist the captured fixture: the raw fact set + compact fact set + source command per
   // input, so the manifest recomputes byte-for-byte from a committed input without re-running
-  // gdctx (the same shape the CLI's loadGdctxFacts reads).
+  // gdctx (the same shape the CLI's loadGdctxFacts reads). `goldens` is carried forward
+  // unchanged (see readExistingGoldens above) — this script never derives it.
   const fixture = {
     note:
       "SYSTEM (compact) vs RAW fact sets for the gdctx fact-preservation oracle. Both sides " +
       "captured from a REAL `keryx ctx run -- <command>` compaction of this repo's own tree " +
       "(dogfood) and reduced to facts via the shared, documented extractFacts rule " +
       "(src/metrics/oracle-runner.ts). rawFacts/compactFacts are what factPreservation scores; " +
-      "rawLines/compactLines are for human sanity-checking, not scored.",
+      "rawLines/compactLines are for human sanity-checking, not scored. `inputs` (above) are " +
+      "captured dogfood compressions that are LOSSY BY DESIGN (a compression benchmark) and " +
+      "must stay untouched by this regenerator. `goldens` (below) are a SEPARATE, " +
+      "self-contained correctness benchmark (W7-AC6): each entry supplies its own input and " +
+      "is recomputed LIVE by src/metrics/gdctx-goldens.test.ts against the real " +
+      "src/commands/ctx.ts / src/security/guard.ts functions, never against captured output " +
+      "— this script carries that array forward unchanged rather than regenerating it.",
     repo: "keryx (dogfood, this repository)",
     generated_by: "bun scripts/benchmark/run-gdctx-oracle.ts (keryx ctx run -- <command> per input)",
     captured: new Date().toISOString().slice(0, 10),
@@ -188,6 +214,7 @@ async function main(): Promise<void> {
       rawFacts: c.rawFacts,
       compactFacts: c.compactFacts,
     })),
+    goldens,
   };
 
   // Score: compact fact set vs raw fact set per input.
