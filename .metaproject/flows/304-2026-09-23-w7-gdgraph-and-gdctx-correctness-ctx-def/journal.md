@@ -15,3 +15,23 @@
 - 2026-09-23T21:31:25.758Z - task-done: T1: Collect remaining context
 - 2026-09-23T21:31:25.874Z - task-done: T2: Implement per plan
 - 2026-09-23T21:31:25.986Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-23T21:31:47.296Z - task-attempt: T5: started (attempt 1) — 304-T5
+- 2026-09-23T21:31:47.426Z - task-attempt: T6: started (attempt 1) — 304-T6
+- 2026-09-23T21:31:47.546Z - task-attempt: T7: started (attempt 1) — 304-T7
+- 2026-09-23T21:31:47.682Z - task-attempt: T8: started (attempt 1) — 304-T8
+- 2026-09-23T21:31:47.799Z - task-attempt: T10: started (attempt 1) — 304-T10
+- 2026-09-24 - orchestrator: completion_outcome=create-pr-and-merge and operator_confirmed=true answered by the program dispatch (flow-runner brief, repo owner MrCipherSmith); base feat/agent-platform-expansion. Decision: one PR for the whole W7 slice unless review churn forces a split. GDCTX-5 slim gate verified already shipped (templates.ts renderIndexGateMarkdown, live index.md 1,470 bytes); remaining work is budget enforcement (T10). Existing gdctx-fact-preservation inputs are a lossy compression benchmark (18/18, 110/327, 108/155), so AC6's 100% applies to a new goldens section, not to those three.
+- 2026-09-24 - dispatched T5 (sonnet), T6 (sonnet), T7 (sonnet), T8 (sonnet), T10 (haiku) in parallel.
+- 2026-09-23T21:48:40.201Z - task-done: T5: GDCTX-1: stream- and exit-code-aware error classification in ctx run
+- 2026-09-23T21:48:40.348Z - task-done: T7: GDCTX-3 bundled rg short flags + GIT_READONLY_ALLOW in the ctx hook
+- 2026-09-23T21:48:40.469Z - task-done: T10: Index gate: enforce 400-token budget on template and live index.md
+- 2026-09-23T21:55:37.337Z - task-done: T6: GDCTX-2: trust-aware image-URL redaction for trusted-project sources
+- 2026-09-24 - T13 evidence (local build 0.2.161): ctx run printf 'refuse this' -> 0 Errors/Warnings sections; stderr 'cannot connect' exit 3 -> listed under Errors/Warnings; ctx read README.md --mode full shows CI/npm/License badge URLs unredacted; ctx rg -il builds 'rg ... -i -l -- todo src/ctx'; -iA refused 'bundled flag -iA: -A takes a value'; ctx hook claude exits 0 for git status --short, blame, branch -a, tag -l, log --oneline -5, log --oneline -n 3, diff --stat, -C /tmp status, and exits 2 (block) for git diff, git log, git show HEAD, git log --oneline -5 -p.
+- 2026-09-24 - T5/T7 concern (accepted): stderr membership is by line text, so a line printed identically on both streams counts as stderr. T8 concern: provenance-missing now yields unknown (shared primitive; downstream consumer tests pass); T8 asked to also detect content edits to tracked files (AC4). T6 concern: redactRaw had a second config-blind floor (output-validation) that also needed the exemption; pre-existing url-sensitive-query span garbling left out of scope.
+- 2026-09-23T21:56:44.108Z - task-done: T13: Verify: end-to-end CLI repro of GDCTX-1/2/3 and hook allowlist with the local build
+- 2026-09-23T21:56:55.155Z - task-done: T8: gdgraph: freshness note on every query path + golden edge and staleness fixtures
+- 2026-09-23T22:04:48.042Z - task-done: T9: Correctness benchmark goldens in gdctx-fact-preservation.json, run by bun test
+- 2026-09-23T22:04:48.169Z - task-done: T11: Memory: four known-mistake entries for the closed defects
+- 2026-09-24 - T12: bunx tsc --noEmit (project + scripts) clean; eslint on every changed .ts clean; targeted suites (src/ctx, src/gdgraph, src/security, src/metrics, commands ctx/gdgraph/gdgraph-freshness/sync, lib/templates, wiki/staleness, scripts oracle-emission-gating) 1263 pass / 0 fail. memory search gdctx -> 4 known-mistake entries.
+- 2026-09-24 - follow-up noted by T8: src/sync/provenance.ts gitCmd trims the whole porcelain blob, eating the leading space of ' M' on the first line; staleness.ts now spawns git status itself; other gitCmd porcelain consumers (src/ctx/orient.ts countCodePaths) not audited here. T9: optional GDCTX-4 diff-stat golden skipped (no cheap pure function).
+- 2026-09-23T22:06:03.383Z - task-done: T12: Verify: targeted tests, typecheck and eslint on changed files
