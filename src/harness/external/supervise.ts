@@ -29,6 +29,8 @@
 //   5. A NON-ZERO EXIT IS NEVER THROWN. A failed process is a `ProcessOutcome`
 //      and `classifyFailure` names the cause (§7.7). Throwing is reserved for a
 //      genuinely broken port.
+import { BoundedTranscript, DEFAULT_MAX_RUN_OUTPUT_BYTES, OutputBudget, eventCost, outputBudgetReason } from "./bounded";
+import { ExternalLineTooLongError } from "./bun-spawn-port";
 import { detectSupervisionTriggers } from "./supervision";
 import type { SupervisionConfig, SupervisionTrigger, SupervisionTriggerKind } from "./supervision";
 import type { ExternalAgentCodec, ExternalEvent, ProcessOutcome } from "./types";
@@ -160,6 +162,8 @@ export interface SuperviseInput {
    * not `"pipe"`.
    */
   readonly initialStdin?: readonly string[];
+  /** Ceiling on the run's canonical events (flow 292 T14). Defaults to {@link DEFAULT_MAX_RUN_OUTPUT_BYTES}. */
+  readonly maxOutputBytes?: number;
   /** Grace given to the exit signal AFTER a kill. Defaults to {@link DEFAULT_KILL_GRACE_MS}. */
   readonly killGraceMs?: number;
   /** Grace given to the streams after a terminal event. Defaults to {@link DEFAULT_TERMINAL_SETTLE_MS}. */
@@ -237,6 +241,15 @@ export interface SupervisedOutcome extends ProcessOutcome {
   readonly skippedLines: number;
   /** The supervisor terminated the child, for either the timeout or the settle reason. */
   readonly killed: boolean;
+  /**
+   * Set when the run was stopped for SIZE (flow 292 T14): its events passed the
+   * output budget, or a stream passed the line ceiling. The named reason; the
+   * runtime reports it as the run's failure instead of the codec's reading of a
+   * killed child.
+   */
+  readonly overflow?: string;
+  /** Bytes dropped from the middle of stdout and stderr to keep them bounded. */
+  readonly droppedBytes?: { readonly stdout: number; readonly stderr: number };
 }
 
 /**
@@ -247,6 +260,11 @@ export interface SupervisedOutcome extends ProcessOutcome {
  * reading a transcript.
  */
 export const EXTERNAL_TIMEOUT_EXIT_CODE = 124;
+
+/** Raw stdout head kept for a line-stream child: covers a prompt echo (prompts are capped at 4 MiB, typically 64 KiB). */
+export const STDOUT_HEAD_BYTES = 256 * 1024;
+/** Raw stdout tail kept: the terminal event and the lines before it. */
+export const STDOUT_TAIL_BYTES = 768 * 1024;
 
 /** How long the exit signal is given after a kill before its code is presumed lost. */
 export const DEFAULT_KILL_GRACE_MS = 2_000;
@@ -302,8 +320,14 @@ export async function superviseExternalRun(
 
   // Declared BEFORE anything is awaited, so every exit path — including the one
   // that abandons the pumps mid-stream — can still build an outcome from them.
-  const stdoutLines: string[] = [];
-  const stderrLines: string[] = [];
+  // Bounded (flow 292 T14). Raw stdout keeps a generous head (a CLI's prompt
+  // echo, which the codex classifier subtracts) and tail (the terminal event);
+  // stderr keeps the diagnostic head and tail. The canonical events are the
+  // run's result, so they are budgeted instead: passing the budget stops the run.
+  const stdoutLines = new BoundedTranscript(STDOUT_HEAD_BYTES, STDOUT_TAIL_BYTES);
+  const stderrLines = new BoundedTranscript();
+  const budget = new OutputBudget(input.maxOutputBytes ?? DEFAULT_MAX_RUN_OUTPUT_BYTES);
+  let overflow: string | undefined;
   const events: ExternalEvent[] = [];
   let skippedLines = 0;
   let killed = false;
@@ -401,8 +425,15 @@ export async function superviseExternalRun(
         continue;
       }
 
+      if (overflow !== undefined) continue;
       let terminal: ExternalEvent | undefined;
       for (const event of parsed) {
+        if (!budget.add(eventCost(event as ExternalEvent & Record<string, unknown>))) {
+          overflow = outputBudgetReason(budget.limit);
+          stderrLines.push(`[keryx] ${overflow}`);
+          handle.kill();
+          break;
+        }
         events.push(event);
         // Incremental, deliberately: the TUI and the supervision triggers are
         // defined over a live stream (§7.6).
@@ -436,6 +467,9 @@ export async function superviseExternalRun(
       await pump();
     } catch (error) {
       stderrLines.push(`[keryx] ${stream} stream read failed: ${describeError(error)}`);
+      // The line ceiling is a reason the run STOPPED, not only a diagnostic:
+      // the port already killed the child (flow 292 T14).
+      if (error instanceof ExternalLineTooLongError) overflow ??= error.message;
     }
   };
 
@@ -471,8 +505,10 @@ export async function superviseExternalRun(
 
   const build = (exitCode: number, timedOut: boolean): SupervisedOutcome => ({
     exitCode,
-    stdout: stdoutLines.join("\n"),
-    stderr: stderrLines.join("\n"),
+    stdout: stdoutLines.text(),
+    stderr: stderrLines.text(),
+    ...(overflow === undefined ? {} : { overflow }),
+    droppedBytes: { stdout: stdoutLines.droppedBytes, stderr: stderrLines.droppedBytes },
     timedOut,
     prompt: input.prompt,
     // Snapshotted: an abandoned pump may still be appending to `events` after

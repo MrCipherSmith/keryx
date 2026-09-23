@@ -132,3 +132,21 @@ describe("readRuntimeBlock reads defensively", () => {
     expect(validateRuntimeBlock(block, ["read"])).toEqual({ ok: true, runtime: "keryx" });
   });
 });
+
+describe("flow 292 — worktree-write is implemented for an ACP agent only", () => {
+  test("an ACP agent may run worktree-write: its writes reach keryx and land in the disposable worktree", () => {
+    const result = validateRuntimeBlock(external({ agent: "gemini-acp", sandbox: "worktree-write" }), ["read-file", "write"]);
+    expect(result.ok).toBe(true);
+    if (result.ok && result.runtime === "external") expect(result.sandbox).toBe("worktree-write");
+  });
+
+  test("a codec agent is still refused worktree-write with the not-implemented code", () => {
+    const result = validateRuntimeBlock(external({ sandbox: "worktree-write" }), ["read"]);
+    expect(result).toMatchObject({ ok: false, code: "not-implemented" });
+  });
+
+  test("an ACP read-only run still refuses write in its allowed actions", () => {
+    const result = validateRuntimeBlock(external({ agent: "gemini-acp", sandbox: "read-only" }), ["read", "write"]);
+    expect(result).toMatchObject({ ok: false, code: "inconsistent-actions" });
+  });
+});

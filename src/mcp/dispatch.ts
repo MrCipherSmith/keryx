@@ -25,12 +25,32 @@ export interface McpContext {
   transport: McpInvocationContext["transport"];
 }
 
-export async function buildMcpContext(cwd: string, transport: McpInvocationContext["transport"] = "in-process"): Promise<McpContext> {
+export interface BuildMcpContextOptions {
+  /**
+   * Expose only tools with `mutating: false` (flow 292). Used when keryx hands
+   * its own MCP server to a FOREIGN agent it drives over ACP: that agent's MCP
+   * calls go straight to this server and never pass keryx's permission bridge,
+   * so the server must not offer anything that changes state.
+   */
+  readonly readOnly?: boolean;
+}
+
+/** The tool registry, minus every mutating tool when `readOnly` is set. */
+export function registryFor(options: BuildMcpContextOptions = {}): ToolEntry[] {
+  const tools = buildToolRegistry();
+  return options.readOnly === true ? tools.filter((tool) => !tool.mutating) : tools;
+}
+
+export async function buildMcpContext(
+  cwd: string,
+  transport: McpInvocationContext["transport"] = "in-process",
+  options: BuildMcpContextOptions = {},
+): Promise<McpContext> {
   const [config, discovery] = await Promise.all([
     loadMcpConfig(cwd),
     loadDiscovery(cwd),
   ]);
-  return { cwd, config, discovery, tools: buildToolRegistry(), transport };
+  return { cwd, config, discovery, tools: registryFor(options), transport };
 }
 
 // A tool name passes the config filter when the include list contains "*" or the

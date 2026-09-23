@@ -475,6 +475,11 @@ export async function createRunExternal(
           // Checked on ENTRY against the inherited marker: this child runs one
           // level deeper than whatever this process already is.
           depth: readExternalDepth(env) + 1,
+          // Flow 292: an ACP agent offers keryx's MCP server for this project and
+          // persists its run record as a session of it. No approver is wired from
+          // here, so an ACP child dispatched by the model runs unattended — every
+          // permission that needs a human is refused.
+          projectRoot: options.cwd,
           // Steerability is decided HERE, before the process exists, and cannot
           // be revisited: the flag that accepts a later operator message also
           // forbids the positional prompt a one-shot run starts with. Honoured

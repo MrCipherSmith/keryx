@@ -48,8 +48,22 @@ export interface ExternalAgentEntry {
   readonly reportsCost: boolean;
   /** Whether the CLI accepts a native budget ceiling keryx can forward. */
   readonly budgetFlag: boolean;
+  /**
+   * How keryx talks to the child. Absent means `"line-stream"`: a codec parses
+   * one-way stdout (`./codec/`). `"acp"` (flow 292) means the child is an Agent
+   * Client Protocol agent and keryx is its CLIENT — a two-way JSON-RPC wire where
+   * the agent asks keryx for permission and files, so no one-way codec can
+   * express it; `runExternalChild` routes it to `superviseAcpRun`
+   * (`./acp-client.ts`) instead.
+   */
+  readonly transport?: ExternalTransportKind;
+  /** Argv after `binary` that starts the agent in ACP mode. Only read when `transport` is `"acp"`. */
+  readonly acpArgs?: readonly string[];
   readonly notes?: string;
 }
+
+/** The wire an external agent speaks. See {@link ExternalAgentEntry.transport}. */
+export type ExternalTransportKind = "line-stream" | "acp";
 
 /** What a codec needs to build one run's argv. */
 export interface ExternalRunInput {

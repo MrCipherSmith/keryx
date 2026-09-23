@@ -38,6 +38,12 @@ export interface AcpClientRequestsOptions {
   readonly send: (message: JsonRpcRequestMessage) => void;
   /** Id source; ids are prefixed so they can never collide with a tool-call id from the same sequence. */
   readonly idSeq: () => string;
+  /**
+   * The id prefix. `acp-agent-` by default — the agent side's questions to its
+   * client. keryx acting as a CLIENT (flow 292) passes its own, so a transcript
+   * of either wire says at a glance which side asked.
+   */
+  readonly idPrefix?: string;
 }
 
 export class AcpClientRequests {
@@ -71,7 +77,7 @@ export class AcpClientRequests {
     if (this.closedReason !== undefined) {
       return Promise.resolve({ kind: "closed", reason: this.closedReason });
     }
-    const id = `acp-agent-${this.options.idSeq()}`;
+    const id = `${this.options.idPrefix ?? "acp-agent-"}${this.options.idSeq()}`;
     onId?.(id);
     return new Promise<AcpClientRequestOutcome>((resolve) => {
       this.pending.set(id, resolve);

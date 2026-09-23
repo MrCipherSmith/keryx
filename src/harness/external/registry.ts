@@ -61,7 +61,37 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
       "streaming input. `--tools` is a genuine allow-list over the built-in roster (unlike " +
       "`--allowed-tools`, which is a permission rule and does not restrict it).",
   },
+  {
+    // Flow 292: keryx as an ACP CLIENT. No codec — the wire is two-way JSON-RPC,
+    // driven by `superviseAcpRun`. `worktree-write` here means what it says: the
+    // agent's writes that reach keryx over `fs/write_text_file` land in the
+    // disposable worktree only, and leave as a never-applied patch artifact.
+    id: "gemini-acp",
+    label: "Gemini (ACP)",
+    binary: "gemini",
+    detect: ["--version"],
+    versionPattern: "(\\d+\\.\\d+\\.\\d+)",
+    knownGoodRange: { min: "0.1.0" },
+    sandboxModes: ["read-only", "worktree-write"],
+    streamingInput: false,
+    resumable: false,
+    // ACP carries an optional `usage_update.cost`; whether this agent sends it
+    // is unverified, so the registry does not promise it. A reported figure is
+    // still recorded when it arrives.
+    reportsCost: false,
+    budgetFlag: false,
+    transport: "acp",
+    acpArgs: ["--experimental-acp"],
+    notes:
+      "Driven over the Agent Client Protocol (keryx is the client). The agent's own internal " +
+      "tools never reach ACP and are contained only by the disposable worktree.",
+  },
 ];
+
+/** The wire an entry speaks; absent means the one-way line stream. */
+export function transportOf(entry: ExternalAgentEntry): "line-stream" | "acp" {
+  return entry.transport ?? "line-stream";
+}
 
 /** Look up an entry by dispatch id. Undefined for an unknown agent — callers fail closed. */
 export function getExternalAgent(id: string): ExternalAgentEntry | undefined {

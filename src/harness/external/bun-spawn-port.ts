@@ -20,33 +20,105 @@
 //     reference implementation's `npx`-wrapped runs hung past their timeout.
 //     This port kills the process directly (no wrapper) and aborts its readers,
 //     so the abandoned generators terminate instead of leaking.
+import { ACP_DEFAULT_MAX_LINE_BYTES } from "../../acp/framing";
 import type { ExternalSpawnOptions, ExternalSpawnPort, SpawnedProcess } from "./supervise";
 
-/** Decode a byte stream and yield complete lines, newline stripped. */
-async function* readLines(stream: ReadableStream<Uint8Array> | undefined): AsyncGenerator<string> {
+/**
+ * The longest line this port buffers before giving up (flow 292 T13).
+ *
+ * The same 64 MiB ceiling keryx's own ACP agent side applies to its input
+ * (`ACP_DEFAULT_MAX_LINE_BYTES`, `src/acp/framing.ts`), measured the same way:
+ * UTF-16 code units in the undelimited buffer. A child that streams hundreds of
+ * megabytes without a newline — hostile or broken — otherwise grows this buffer
+ * until the keryx process dies of memory. Shared by every external transport:
+ * the claude/codex codecs see the overflow as a failed stream read plus a killed
+ * child; the ACP client sees its pending requests closed with this reason.
+ */
+export const DEFAULT_EXTERNAL_MAX_LINE_BYTES = ACP_DEFAULT_MAX_LINE_BYTES;
+
+/** Thrown from a line stream whose undelimited buffer passed the ceiling. */
+export class ExternalLineTooLongError extends Error {
+  constructor(
+    readonly stream: "stdout" | "stderr",
+    readonly maxLineBytes: number,
+  ) {
+    super(
+      `the child's ${stream} sent more than ${maxLineBytes} bytes without a newline; ` +
+        "the run was stopped and the child killed",
+    );
+    this.name = "ExternalLineTooLongError";
+  }
+}
+
+/**
+ * Decode a byte stream and yield complete lines, newline stripped. Over
+ * `maxLineBytes` without a newline, `onOverflow` runs (the port kills the child
+ * there) and the generator throws {@link ExternalLineTooLongError}.
+ *
+ * LINEAR in the input (flow 292 T14). The first version appended every chunk
+ * to one string and searched the whole string for a newline each time: a line
+ * built from many small chunks was copied and re-scanned once per chunk, and
+ * enforcing the 64 MiB ceiling peaked near 1 GB. Now each decoded chunk is
+ * scanned once, only from where the previous search in it stopped; the pieces
+ * of a pending line are kept in an array with a running length and joined once,
+ * when the line completes. `onScan` reports how many characters each search
+ * covered, so a test can pin that total to the input size.
+ */
+async function* readLines(
+  stream: ReadableStream<Uint8Array> | undefined,
+  name: "stdout" | "stderr",
+  maxLineBytes: number,
+  onOverflow: () => void,
+  onScan?: (chars: number) => void,
+): AsyncGenerator<string> {
   if (stream === undefined) return;
   const decoder = new TextDecoder();
-  let buffer = "";
+  const pending: string[] = [];
+  let pendingLength = 0;
   const reader = stream.getReader();
+  const strip = (line: string): string => (line.endsWith("\r") ? line.slice(0, -1) : line);
+  const take = (last: string): string => {
+    pending.push(last);
+    const line = pending.length === 1 ? last : pending.join("");
+    pending.length = 0;
+    pendingLength = 0;
+    return line;
+  };
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let newline = buffer.indexOf("\n");
+      const text = decoder.decode(value, { stream: true });
+      onScan?.(text.length);
+      let from = 0;
+      let newline = text.indexOf("\n", from);
       while (newline !== -1) {
-        const line = buffer.slice(0, newline);
-        buffer = buffer.slice(newline + 1);
         // `\r` so a CRLF-emitting CLI does not leave a stray carriage return
         // inside JSON that then fails to parse and is counted as version drift.
-        yield line.endsWith("\r") ? line.slice(0, -1) : line;
-        newline = buffer.indexOf("\n");
+        yield strip(take(text.slice(from, newline)));
+        from = newline + 1;
+        newline = text.indexOf("\n", from);
+      }
+      if (from < text.length) {
+        pending.push(text.slice(from));
+        pendingLength += text.length - from;
+      }
+      if (pendingLength > maxLineBytes) {
+        pending.length = 0;
+        pendingLength = 0;
+        onOverflow();
+        void reader.cancel().catch(() => undefined);
+        throw new ExternalLineTooLongError(name, maxLineBytes);
       }
     }
     // A final line without a trailing newline is still a line. Dropping it would
     // silently lose the terminal event of any CLI that does not end with one.
-    buffer += decoder.decode();
-    if (buffer.length > 0) yield buffer.endsWith("\r") ? buffer.slice(0, -1) : buffer;
+    const tail = decoder.decode();
+    if (tail.length > 0) {
+      pending.push(tail);
+      pendingLength += tail.length;
+    }
+    if (pendingLength > 0) yield strip(take(""));
   } finally {
     reader.releaseLock();
   }
@@ -80,7 +152,11 @@ export interface BunSpawnLike {
  * Note this is NOT the subsystem's test seam — that is `ExternalSpawnPort`
  * itself, which every other test substitutes wholesale.
  */
-export function createBunSpawnPort(spawnImpl: BunSpawnLike = Bun.spawn as unknown as BunSpawnLike): ExternalSpawnPort {
+export function createBunSpawnPort(
+  spawnImpl: BunSpawnLike = Bun.spawn as unknown as BunSpawnLike,
+  options: { readonly maxLineBytes?: number; readonly onScan?: (chars: number) => void } = {},
+): ExternalSpawnPort {
+  const maxLineBytes = options.maxLineBytes ?? DEFAULT_EXTERNAL_MAX_LINE_BYTES;
   return {
     spawn(argv: readonly string[], opts: ExternalSpawnOptions): SpawnedProcess {
       const proc = spawnImpl(argv, {
@@ -93,9 +169,16 @@ export function createBunSpawnPort(spawnImpl: BunSpawnLike = Bun.spawn as unknow
         stderr: "pipe",
       });
 
+      const killOnOverflow = (): void => {
+        try {
+          proc.kill();
+        } catch {
+          // Already gone: nothing left to stop.
+        }
+      };
       return {
-        stdout: readLines(proc.stdout),
-        stderr: readLines(proc.stderr),
+        stdout: readLines(proc.stdout, "stdout", maxLineBytes, killOnOverflow, options.onScan),
+        stderr: readLines(proc.stderr, "stderr", maxLineBytes, killOnOverflow, options.onScan),
         writeStdin(text: string): void {
           // A one-shot run has no stdin writer; the handle refuses the call
           // before it reaches here, so silence is correct rather than a throw.

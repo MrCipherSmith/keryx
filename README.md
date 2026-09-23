@@ -292,6 +292,21 @@ What is in it today:
   reference](docs/docs/cli-reference.md#acp) for the full method table, the
   tool roster and why each exclusion, the commands, and what keryx does when a
   capability is absent.
+- **ACP client — foreign agents under keryx's policy.** The other direction:
+  `keryx agents external run gemini-acp --task "…"` launches an external ACP
+  agent (Gemini CLI's `--experimental-acp`) as a subprocess and drives it as
+  its client, inside a disposable git worktree. keryx advertises only what it
+  serves (`fs.readTextFile`; `fs.writeTextFile` with `--write`; never
+  `terminal`), serves every `fs/*` request itself — confined by real path to
+  the worktree — and answers every `session/request_permission` through its
+  own approval gate with the mode lowered to `ask`: only an explicit allow
+  selects `allow_once`, `allow_always` is never chosen, and an unattended run
+  refuses anything that needs a human. The agent gets keryx's context as a
+  read-only `serve-mcp` launched from the running build, and every run is a
+  keryx session with its decisions, fs requests, usage and cost (or
+  `missing`). Honest limit: an agent's own internal tools never reach ACP, so
+  keryx cannot see or gate them — the disposable worktree is what contains
+  them. See the [ACP client guide](docs/docs/guides/acp-client.md).
 - **Plans that survive the turn.** For multi-step work, the agent can keep a
   structured execution plan in the session's own `plan.json` — beside the
   transcript, not inside the Slate — so closing a Slate (or a Flow reporting

@@ -2432,19 +2432,22 @@ Runtime ids: `claude` (`~/.claude/CLAUDE.md`), `opencode`
 
 ### agents external
 
-Inspect the registry of vendor coding CLIs keryx can host as read-only child
-agents. Both subcommands are read-only and neither spends subscription quota: the
-only process either starts is the registry entry's own `--version`.
+Inspect the registry of vendor coding CLIs keryx can host as child agents, or
+drive one ACP agent. `list` and `probe` are read-only and neither spends
+subscription quota: the only process either starts is the registry entry's own
+`--version`. `run` starts a real agent and spends the operator's quota.
 
 ```
 keryx agents external list [--json] [--no-probe]
 keryx agents external probe <id> [--json]
+keryx agents external run <id> --task "<text>" [--unattended] [--write] [--timeout <ms>] [--json]
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `list` | `--json`, `--no-probe` | Print every registered agent with its detected availability, sandbox modes, and streaming/resume/cost facts, plus the capability gate's verdict. `--no-probe` skips detection entirely and reports every entry as `not probed`. |
-| `probe` | `<id>`, `--json` | The same report for one agent id (`codex-cli`, `claude-cli`). An unknown id lists the known ones and exits `1`. |
+| `list` | `--json`, `--no-probe` | Print every registered agent with its detected availability, transport (`line-stream` or `acp`), sandbox modes, and streaming/resume/cost facts, plus the capability gate's verdict. `--no-probe` skips detection entirely and reports every entry as `not probed`. |
+| `probe` | `<id>`, `--json` | The same report for one agent id (`codex-cli`, `claude-cli`, `gemini-acp`). An unknown id lists the known ones and exits `1`. |
+| `run` | `<id>`, `--task`, `--unattended`, `--write`, `--timeout`, `--json` | Drive one registry agent whose transport is `acp` (today `gemini-acp`, which starts `gemini --experimental-acp`), with keryx as its ACP **client**, in a disposable git worktree. Guarded by the same `externalAgents` capability (hard-disabled in CI and under a remote transport) and per-agent config as every external run. Without a TTY, or with `--unattended`, every permission that would need a human is refused. `--write` advertises `fs.writeTextFile`: writes land in the worktree only and leave as a patch artifact that is never applied. Prints the status, the permission mode (always `ask` — `trust`/`auto` are lowered for a foreign agent), whether keryx's MCP server was offered, the permission and fs counts, the cost (or `missing`), the patch path and the session id. Exits `1` unless the run is `Completed`. A line-stream agent is refused: delegate to it from `keryx shell`. See the [ACP client guide](guides/acp-client.md). |
 
 Availability has **three** states, and the third is not a placeholder:
 
@@ -3473,11 +3476,18 @@ and prints a deprecation line.
 ```
 keryx serve-mcp [--cwd <project-root>]     # stdio JSON-RPC (default transport)
 keryx serve-mcp --http [--cwd <root>]      # HTTP/SSE, localhost only, opt-in
+keryx serve-mcp --read-only [--cwd <root>] # hide every tool marked mutating
 ```
 
 `--cwd` names the project root whose `.metaproject` workspace is exposed; it
 defaults to the process working directory. `--http` requires
-`capabilities.http.enabled` in the workspace.
+`capabilities.http.enabled` in the workspace. `--read-only` drops every tool
+the registry marks `mutating` from `tools/list`, and a call to one by name
+answers "Unknown or unavailable tool." keryx launches its own server this way
+when it hands it to a foreign agent it drives over ACP (see
+[agents external](#agents-external) and the
+[ACP client guide](guides/acp-client.md)): that agent's MCP calls go straight
+to this server and never pass keryx's permission bridge.
 
 Under stdio, stdout is the JSON-RPC channel — diagnostics go to stderr, and so
 does the deprecation notice when the retired spelling is used.

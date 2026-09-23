@@ -22,6 +22,7 @@ import {
   internalError,
   methodNotFound,
   successResponse,
+  type JsonRpcErrorObject,
   type JsonRpcId,
   type JsonRpcNotificationMessage,
   type JsonRpcRequestMessage,
@@ -72,6 +73,16 @@ export interface AcpDispatcherOptions {
   readonly onUnhandledNotification?: (method: string, params: unknown) => void;
   /** Called when a handler throws, before the error is shaped into a reply. */
   readonly onHandlerError?: (method: string, error: unknown) => void;
+  /**
+   * The error for a request method no handler claimed.
+   *
+   * Defaults to the AGENT side's answer (the refusal table in `protocol.ts`,
+   * then a method-not-found listing what `keryx acp` implements). keryx acting
+   * as an ACP CLIENT (flow 292) answers different methods, and listing the agent
+   * roster to a foreign agent would be a wrong fix to read — so the client side
+   * supplies its own.
+   */
+  readonly unknownMethodError?: (method: string) => JsonRpcErrorObject;
 }
 
 export interface AcpHandlers {
@@ -198,7 +209,10 @@ export class AcpDispatcher {
    * what this agent does answer, so a client author reads the fix rather than
    * guessing at it.
    */
-  private unknownMethodError(method: string) {
+  private unknownMethodError(method: string): JsonRpcErrorObject {
+    if (this.options.unknownMethodError !== undefined) {
+      return this.options.unknownMethodError(method);
+    }
     return (
       refusalError(method) ??
       methodNotFound(method, {
