@@ -238,6 +238,8 @@ export function renderScheduleLines(params: {
   readonly invocation: KeryxInvocation;
   /** Flow 295 (F4): run `trigger run --schedule <name>`, which resolves only the local schedule store. */
   readonly scheduleOnly?: boolean;
+  /** Flow 295 (N4): extra environment pinned into the unit (e.g. `XDG_DATA_HOME`, so the timer finds the same signing key). */
+  readonly environment?: Readonly<Record<string, string>>;
 }): ScheduleLines {
   const { projectRoot, name, cron, invocation } = params;
   const runFlag = params.scheduleOnly === true ? "--schedule " : "";
@@ -256,8 +258,10 @@ export function renderScheduleLines(params: {
   // the redirect is what makes the first-ever scheduled fire, not just every
   // one after it, actually perform the pass — measured by this task's own
   // AC6 test failing exactly this way before this line was added.
+  const extraEnv = Object.entries(params.environment ?? {});
+  const cronEnv = extraEnv.map(([k, v]) => `${k}=${shQuote(v)} `).join("");
   const cronCommand =
-    `cd ${shQuote(projectRoot)} && mkdir -p ${shQuote(logDir)} && PATH=${shQuote(assumedPath)} ` +
+    `cd ${shQuote(projectRoot)} && mkdir -p ${shQuote(logDir)} && ${cronEnv}PATH=${shQuote(assumedPath)} ` +
     `${shQuote(invocation.execPath)} ${shQuote(invocation.scriptPath)} trigger run ${runFlag}${shQuote(name)} ` +
     `>> ${shQuote(logPath)} 2>&1`;
   // `cronLine` (what actually goes into a crontab) gets cron's own `%`
@@ -286,7 +290,7 @@ Description=keryx trigger "${descriptionName}" (${descriptionProjectRoot})
 Type=oneshot
 WorkingDirectory=${systemdEscapePercent(projectRoot)}
 Environment=${systemdQuote(systemdEscapePercent(`PATH=${assumedPath}`))}
-# Same reason as the cron line's own \`mkdir -p\`: StandardOutput=append: does
+${extraEnv.map(([k, v]) => `Environment=${systemdQuote(systemdEscapePercent(`${k}=${v}`))}\n`).join("")}# Same reason as the cron line's own \`mkdir -p\`: StandardOutput=append: does
 # not create a missing PARENT directory, only a missing file. The leading "-"
 # means systemd ignores this step's own exit status.
 ExecStartPre=-/bin/mkdir -p ${systemdValue(logDir)}

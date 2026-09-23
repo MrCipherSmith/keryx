@@ -147,7 +147,7 @@ export async function planInstall(projectRoot: string, name: string, cron: strin
   // another control character in one of them would start a new directive or a new
   // crontab line, so such a path is refused rather than escaped.
   // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
-  const unsafe = [projectRoot, invocation.execPath, invocation.scriptPath, name].find((v) => /[\u0000-\u001f\u007f]/.test(v));
+  const unsafe = [projectRoot, invocation.execPath, invocation.scriptPath, name, process.env["XDG_DATA_HOME"] ?? ""].find((v) => /[\u0000-\u001f\u007f]/.test(v));
   if (unsafe !== undefined) {
     return {
       backend,
@@ -158,7 +158,11 @@ export async function planInstall(projectRoot: string, name: string, cron: strin
       problem: `a path or name contains a newline or control character (${JSON.stringify(unsafe)}); keryx will not write it into a scheduler file`,
     };
   }
-  const lines = renderScheduleLines({ projectRoot, name, cron, invocation, scheduleOnly: true });
+  // N4: pin where keryx's config dir (and so the signing key) is, so the systemd --user
+  // manager, launchd or cron (none of which has the operator's shell environment) finds
+  // the same key the schedule was signed with.
+  const pinned: Record<string, string> = process.env["XDG_DATA_HOME"] ? { XDG_DATA_HOME: process.env["XDG_DATA_HOME"] } : {};
+  const lines = renderScheduleLines({ projectRoot, name, cron, invocation, scheduleOnly: true, environment: pinned });
   const base = scheduleUnitBase(projectRoot, name);
   const execStart = `${invocation.execPath} ${invocation.scriptPath} trigger run --schedule ${name}`;
   if (backend === "systemd") {
@@ -202,7 +206,7 @@ export async function planInstall(projectRoot: string, name: string, cron: strin
   </array>
   <key>WorkingDirectory</key><string>${xml(projectRoot)}</string>
   <key>EnvironmentVariables</key>
-  <dict><key>PATH</key><string>${xml(lines.assumedPath)}</string></dict>
+  <dict><key>PATH</key><string>${xml(lines.assumedPath)}</string>${Object.entries(pinned).map(([k, v]) => `<key>${xml(k)}</key><string>${xml(v)}</string>`).join("")}</dict>
   <key>StartCalendarInterval</key>
   <array>
 ${dicts}

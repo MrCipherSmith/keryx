@@ -119,6 +119,23 @@ for what has been verified on a real host.
   way the text floor does not recognise. The floor turns every command or patch that
   names the key, the schedule store or the systemd/launchd unit directories into a
   prompt. That makes reading the key an ask, not an impossibility.
+- **The scheduler-control floor is text analysis.** The shell floor parses commands the
+  way a shell would, so quoting, escapes, wrappers (`env -u`, `sudo`, `nohup`,
+  `bash -c '…'`) and a `cd` into a unit directory are all seen. But a same-user shell
+  in `trust` mode can always spell a command so no text check sees it: a variable, a
+  script file, an interpreter one-liner. The real gates are elsewhere:
+  - `keryx schedule add`, `resume` and `run` require an interactive terminal on stdin
+    and stdout, `--yes` included, so an agent's shell, a pipe or an MCP/ACP client
+    cannot create, re-enable or fire a schedule;
+  - every stored schedule must carry this machine's signature.
+- **A script wrapper's own configuration.** A pinned `#!` wrapper (and its interpreter)
+  cannot change without the schedule being refused, and it runs from an empty directory,
+  so the project cannot steer it. What the wrapper reads from its own global
+  configuration (`~/.config/...`, an account file) is the operator's machine, and outside
+  what keryx pins.
+- **Granted binaries between checks.** A granted program is hashed once at the start of
+  a run, and its inode, size and mtime are re-checked before every exec. What is left is
+  the window between that last stat and the kernel's exec, which is milliseconds.
 
 See [schedule](cli-reference.md#schedule).
 

@@ -34,9 +34,9 @@
 // The operator's token therefore never reaches the model, the provider or the report (AC3).
 
 import { execFile } from "node:child_process";
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { realpathSync } from "node:fs";
-import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import { lstatSync } from "node:fs";
+import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
@@ -48,7 +48,8 @@ import { withFileLock } from "../lib/fs";
 import { ensureLocksDir } from "../lib/maintenance-lock";
 import { redactSensitiveText } from "../security/service";
 import { scheduleContentCanonical, type AgentTaskAction, type TriggerDispatch, type TriggerEntry } from "../trigger/config";
-import { readScheduleKey, scheduleMac } from "../trigger/schedule-key";
+import { configDirInsideProjectReason, readScheduleKey, scheduleMac } from "../trigger/schedule-key";
+import { identityOf, sameIdentity, verifyGrantedBinary, type VerifiedFile } from "../trigger/granted-binary";
 import {
   buildGrantedArgv,
   grantedToolInputSchema,
@@ -176,12 +177,15 @@ async function runGrantedCommand(
 export function grantedTool(
   spec: GrantedToolSpec,
   action: AgentTaskAction,
-  projectRoot: string,
+  /** Flow 295 (N2): an empty keryx-owned directory, never the project root. */
+  cwd: string,
   env: Record<string, string | undefined>,
   calls: GrantedCallRecord[],
   /** Flow 295 (F1d): the realpaths `verifyGrantedBinaries` just checked. Only these are executed. */
   verified: Readonly<Record<string, string>>,
   scrubValues: readonly string[] = [],
+  /** Flow 295 (N6): the verified files (binary, and a wrapper's interpreter), re-checked before every exec. */
+  stats: Readonly<Record<string, readonly VerifiedFile[]>> = {},
 ): InteractiveTool {
   return {
     definition: {
@@ -200,7 +204,14 @@ export function grantedTool(
           isError: true,
         };
       }
-      const result = await runGrantedCommand(bin, built.argv, projectRoot, env, ctx?.signal, scrubValues);
+      // N6: the binary was hashed once, at run start. Before each exec, re-check that it is
+      // still the same file (device, inode, size, mtime). The window left is between this
+      // stat and the kernel's exec, which is milliseconds, not the run's whole duration.
+      const changed = (stats[spec.program] ?? []).find((f) => !sameIdentity(f.identity, identityOf(f.file)));
+      if (changed !== undefined) {
+        return { output: `${spec.tool}: refused — ${changed.file} changed since it was verified at the start of this run`, isError: true };
+      }
+      const result = await runGrantedCommand(bin, built.argv, cwd, env, ctx?.signal, scrubValues);
       calls.push({ tool: spec.tool, argv: [bin, ...built.argv], exitCode: result.exitCode, ok: result.ok });
       // Third-party text (PR bodies, comments) — it may be shown, never obeyed.
       return { output: result.output, isError: !result.ok, untrusted: true };
@@ -251,19 +262,6 @@ function refusal(runId: string, code: DispatchRefusalCode, detail: string, actio
 }
 
 /** True when `child` is `parent` or inside it (both already resolved). */
-function isInside(parent: string, child: string): boolean {
-  const rel = path.relative(parent, child);
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
-}
-
-function realOr(p: string): string {
-  try {
-    return realpathSync(p);
-  } catch {
-    return path.resolve(p);
-  }
-}
-
 /**
  * Flow 295 (F1d/F6): every granted program must still be exactly the binary the operator
  * confirmed. The basename must equal the program, it must resolve outside the project
@@ -271,34 +269,62 @@ function realOr(p: string): string {
  * those recorded at confirmation. Returns the verified realpath per program, or the
  * reason for refusing.
  */
+/**
+ * Flow 295 (N3): where every run's scratch lives. It prefers `$XDG_RUNTIME_DIR`, which is
+ * per-user and 0700 by design. Otherwise it uses a per-uid name under tmpdir. A shared
+ * `/tmp` name let another local user pre-create the directory world-writable and swap
+ * our children, so the directory must be a real directory (not a symlink), owned by us,
+ * and mode 0700. Anything else refuses the run.
+ */
+export function agentTaskScratchParent(env: Record<string, string | undefined> = process.env): string {
+  const uid = typeof process.getuid === "function" ? process.getuid() : 0;
+  const runtime = env["XDG_RUNTIME_DIR"];
+  if (runtime !== undefined && runtime.length > 0 && path.isAbsolute(runtime)) return path.join(runtime, "keryx-agent-tasks");
+  return path.join(tmpdir(), `keryx-agent-tasks-${uid}`);
+}
+
+async function ensureScratchParent(): Promise<{ readonly ok: true; readonly dir: string } | { readonly ok: false; readonly reason: string }> {
+  const dir = agentTaskScratchParent();
+  try {
+    await mkdir(dir, { mode: 0o700 });
+  } catch (error) {
+    if (!(typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST")) {
+      return { ok: false, reason: `could not create the scratch parent ${dir} (${error instanceof Error ? error.message : String(error)})` };
+    }
+  }
+  const st = lstatSync(dir);
+  const uid = typeof process.getuid === "function" ? process.getuid() : undefined;
+  if (st.isSymbolicLink() || !st.isDirectory()) return { ok: false, reason: `the scratch parent ${dir} is not a plain directory (a symlink?) — refusing` };
+  if (uid !== undefined && st.uid !== uid) return { ok: false, reason: `the scratch parent ${dir} is owned by uid ${st.uid}, not by you (${uid}) — refusing` };
+  if (process.platform !== "win32" && (st.mode & 0o777) !== 0o700) {
+    return { ok: false, reason: `the scratch parent ${dir} has mode ${(st.mode & 0o777).toString(8)}, not 700 — refusing; remove it and rerun` };
+  }
+  return { ok: true, dir };
+}
+
+/**
+ * Flow 295 (F1d/N2/N6): every granted program must still be exactly what the operator
+ * confirmed: the binary, or for a `#!` wrapper the script and its interpreter (resolved
+ * on the runtime PATH). See `../trigger/granted-binary.ts`. Returns the verified realpath
+ * per program, and the files whose identity is re-checked before every exec.
+ */
 export async function verifyGrantedBinaries(
   projectRoot: string,
   action: AgentTaskAction,
-): Promise<{ readonly ok: true; readonly realpaths: Record<string, string> } | { readonly ok: false; readonly reason: string }> {
+  pathEnv: string | undefined = process.env["PATH"],
+): Promise<
+  | { readonly ok: true; readonly realpaths: Record<string, string>; readonly stats: Record<string, readonly VerifiedFile[]> }
+  | { readonly ok: false; readonly reason: string }
+> {
   const realpaths: Record<string, string> = {};
-  const root = realOr(projectRoot);
+  const stats: Record<string, readonly VerifiedFile[]> = {};
   for (const [program, bin] of Object.entries(action.grants.bins)) {
-    const recorded = action.grants.binDigests[program];
-    if (path.basename(bin) !== program) return { ok: false, reason: `granted binary for "${program}" is "${bin}", not a program named "${program}"` };
-    if (recorded === undefined) return { ok: false, reason: `granted binary "${bin}" has no recorded digest — recreate the schedule` };
-    let real: string;
-    try {
-      real = realpathSync(bin);
-    } catch {
-      return { ok: false, reason: `granted binary "${bin}" no longer exists` };
-    }
-    if (isInside(root, real) || isInside(root, path.resolve(bin))) {
-      return { ok: false, reason: `granted binary "${bin}" resolves inside the project (${real}) — a project may not supply the program that holds your credentials` };
-    }
-    if (real !== recorded.realpath) return { ok: false, reason: `granted binary "${bin}" now resolves to ${real}, not ${recorded.realpath} as confirmed` };
-    let digest: string;
-    try {
-      digest = createHash("sha256").update(await readFile(real)).digest("hex");
-    } catch (error) {
-      return { ok: false, reason: `granted binary ${real} could not be read (${error instanceof Error ? error.message : String(error)})` };
-    }
-    if (digest !== recorded.sha256) return { ok: false, reason: `granted binary ${real} changed since it was confirmed (sha256 differs)` };
-    realpaths[program] = real;
+    const pin = action.grants.binDigests[program];
+    if (pin === undefined) return { ok: false, reason: `granted binary "${bin}" has no recorded digest — recreate the schedule` };
+    const verified = await verifyGrantedBinary(program, bin, pin, projectRoot, pathEnv);
+    if (!verified.ok) return verified;
+    realpaths[program] = verified.realpath;
+    stats[program] = verified.files;
   }
   for (const id of action.grants.tools) {
     const program = grantedToolSpec(id)?.program;
@@ -306,7 +332,7 @@ export async function verifyGrantedBinaries(
       return { ok: false, reason: `granted tool ${id} has no confirmed binary for "${program}"` };
     }
   }
-  return { ok: true, realpaths };
+  return { ok: true, realpaths, stats };
 }
 
 /**
@@ -317,6 +343,8 @@ async function confirmedContentProblem(
   projectRoot: string,
   entry: TriggerEntry,
 ): Promise<{ readonly code: DispatchRefusalCode; readonly reason: string } | undefined> {
+  const inside = configDirInsideProjectReason(projectRoot);
+  if (inside !== undefined) return { code: "schedule-key-unavailable", reason: `no stored schedule runs: ${inside}` };
   const key = readScheduleKey();
   if (!key.ok) return { code: "schedule-key-unavailable", reason: `no stored schedule runs: ${key.reason}` };
   const reason = await signatureProblem(projectRoot, entry, key.key);
@@ -397,20 +425,36 @@ async function runLocked(
   // --- 2. confirmed content (AC5, F1) ---------------------------------------
   const changed = await confirmedContentProblem(projectRoot, entry);
   if (changed !== undefined) return refusal(runId, changed.code, changed.reason, action);
-  const binaries = await verifyGrantedBinaries(projectRoot, action);
+  const binaries = await verifyGrantedBinaries(projectRoot, action, (deps.grantedEnv ?? process.env)["PATH"]);
   if (!binaries.ok) return refusal(runId, "grants-changed", `refusing to run: ${binaries.reason}`, action);
 
   // --- 3. containment -------------------------------------------------------
   // Every run's scratch lives under one 0700 parent, and that parent is hidden inside
   // the sandbox (only this run's own directories are bound back), so one run cannot
   // read another's scratch however TMPDIR is set.
-  const scratchParent = path.join(tmpdir(), "keryx-agent-tasks");
-  await mkdir(scratchParent, { recursive: true, mode: 0o700 });
+  const parent = await ensureScratchParent();
+  if (!parent.ok) {
+    return {
+      outcome: "failed",
+      detail: `schedule "${entry.name}" not started: ${parent.reason}`,
+      cost: { recorded: false, reason: "no model was called — the scratch directory was not safe" },
+      agentTask: { runId, permissionMode: action.dispatch.permissionMode, network: action.grants.network },
+      exitCode: 1,
+    };
+  }
+  const scratchParent = parent.dir;
   const scratch = await mkdtemp(path.join(scratchParent, `${entry.name.replace(/[^A-Za-z0-9._-]/g, "-")}-`));
   const workdir = path.join(scratch, "work");
   const scratchHome = path.join(scratch, "home");
+  // Flow 295 (N2): granted programs, `gh auth token` included, run from this EMPTY,
+  // keryx-owned directory, never from the project root. A version-manager shim, or a
+  // wrapper that reads `.tool-versions`/`.mise.toml`/`.envrc` from its cwd, can then
+  // never be steered by a file someone committed to the project. Every granted tool
+  // names its repository explicitly (`--repo`), so nothing needs the project cwd.
+  const grantedCwd = path.join(scratch, "granted-cwd");
   await mkdir(workdir, { recursive: true });
   await mkdir(scratchHome, { recursive: true });
+  await mkdir(grantedCwd, { recursive: true, mode: 0o700 });
   const cleanup = async (): Promise<void> => {
     await rm(scratch, { recursive: true, force: true }).catch(() => {});
   };
@@ -490,11 +534,11 @@ async function runLocked(
       const env = deps.grantedEnv ?? process.env;
       // F5: gh's own token, fetched once, outside the sandbox. It is never logged or
       // shown, and it is scrubbed by exact value from every granted-tool output.
-      const extraSecrets = await ghAuthToken(binaries.realpaths["gh"], projectRoot, env);
+      const extraSecrets = await ghAuthToken(binaries.realpaths["gh"], grantedCwd, env);
       const granted = action.grants.tools
         .map((id) => grantedToolSpec(id))
         .filter((spec): spec is GrantedToolSpec => spec !== undefined)
-        .map((spec) => grantedTool(spec, action, projectRoot, env, grantedCalls, binaries.realpaths, extraSecrets));
+        .map((spec) => grantedTool(spec, action, grantedCwd, env, grantedCalls, binaries.realpaths, extraSecrets, binaries.stats));
       const tools = [...builtinReadOnlyTools(projectRoot), shellExecTool(workdir, sandboxedRunner(workdir, sandbox)), ...granted];
       const offending = tools.filter((t) => UNATTENDED_EXCLUDED_TOOLS.includes(t.definition.name));
       if (offending.length > 0) throw new Error(`agent-task roster must not offer: ${offending.map((t) => t.definition.name).join(", ")}`);

@@ -144,7 +144,7 @@ export function validateShellPattern(pattern: string): PatternValidation {
   // A wildcard pattern such as `systemctl *` or `keryx schedule *` has no control verb
   // in its text, yet it would cover one. So the pattern is refused by the command
   // family it can reach, not only by the verb it happens to spell out.
-  if (touchesSchedulerControl(trimmed) || /\b(?:schedule|crontab|systemctl|launchctl|loginctl)\b|\btrigger\s+(?:\*|schedule|install)/i.test(trimmed)) {
+  if (touchesSchedulerControl(trimmed) || /\b(?:schedule|crontab|systemctl|launchctl|loginctl)\b|\btrigger\s+(?:\*|schedule|install|run)/i.test(trimmed.replace(/['"\\]/g, ""))) {
     return {
       ok: false,
       reason:

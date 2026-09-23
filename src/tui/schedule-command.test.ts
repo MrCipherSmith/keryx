@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync } from "node:fs";
 // Flow 295 (AC6): the `/schedule` handler. It collects the cadence, prompt and
 // grants, shows ONE card listing every required element, and declining writes nothing
 // and installs nothing.
@@ -36,7 +36,9 @@ function fakeProgram(program: string): string {
   const dir = path.join(keyHome, "bin");
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, program);
-  writeFileSync(file, "#!/bin/sh\necho '[]'\n", { mode: 0o755 });
+  // A real binary, not a `#!` script: drafting refuses scripts and shims (flow 295 N2).
+  copyFileSync("/bin/true", file);
+  chmodSync(file, 0o755);
   return file;
 }
 

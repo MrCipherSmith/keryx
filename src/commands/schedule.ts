@@ -41,7 +41,19 @@ export interface ScheduleCommandDeps {
   readonly cwd?: string;
   /** The environment to read the agent-shell marker from (default `process.env`). */
   readonly env?: Record<string, string | undefined>;
+  /** Both stdin and stdout are terminals. Default: `process.stdin.isTTY && process.stdout.isTTY` (flow 295 N1). */
+  readonly isTerminal?: boolean;
 }
+
+/**
+ * Flow 295 (N1): subcommands that ADD to what runs unattended (create, re-enable, run
+ * now) need the operator at a real terminal, on both stdin and stdout, the way flow 299's
+ * `flow confirm` does. An agent's `shell_exec`, an MCP or ACP client and a pipe have no
+ * terminal, so `--yes` from any of them is refused whatever the command text looked
+ * like to the approval floor. `remove` and `pause` only reduce what runs, so they need
+ * no terminal (the approval floor still asks about them).
+ */
+const NEEDS_TERMINAL = new Set(["add", "resume", "run"]);
 
 /** Subcommands that create, change or run a schedule: never from inside an agent's shell (flow 295 F2). */
 const OPERATOR_ONLY = new Set(["add", "remove", "pause", "resume", "run"]);
@@ -56,6 +68,11 @@ async function ttyConfirm(question: string): Promise<boolean> {
     rl.close();
   }
 }
+
+const NO_TERMINAL_REASON =
+  "needs an interactive terminal on both stdin and stdout, and refuses to run from a pipe, an agent's shell, " +
+  "an MCP or ACP client, or an unattended run (--yes included). Run it yourself in a terminal, or confirm the card " +
+  "that /schedule or the schedule_create tool shows in `keryx shell`.";
 
 function flagValues(args: readonly string[], flag: string): string[] {
   const out: string[] = [];
@@ -123,6 +140,14 @@ export async function scheduleCommand(args: string[], deps: ScheduleCommandDeps 
     );
     process.exitCode = 1;
     return;
+  }
+  if (sub !== undefined && NEEDS_TERMINAL.has(sub) && !args.includes("--help")) {
+    const terminal = deps.isTerminal ?? (process.stdin.isTTY === true && process.stdout.isTTY === true);
+    if (!terminal) {
+      console.error(`keryx schedule ${sub}: ${NO_TERMINAL_REASON}`);
+      process.exitCode = 1;
+      return;
+    }
   }
   try {
     switch (sub) {

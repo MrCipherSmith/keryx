@@ -1651,7 +1651,34 @@ store or the reports. **No grant lifts any of it.**
 - **Operator-only storage.** `schedule_create` stores only the draft whose card the
   operator confirmed. That draft is bound to a one-time token and dropped when the
   operator declines.
-- **Isolated runs.** One run cannot read another run's scratch directory.
+- **Isolated runs.** One run cannot read another run's scratch directory. The scratch
+  parent is `$XDG_RUNTIME_DIR/keryx-agent-tasks`, or `<tmpdir>/keryx-agent-tasks-<uid>`
+  when that variable is unset. It must be a real directory you own with mode 0700, or
+  the run is refused.
+- **A terminal is required.** `keryx schedule add`, `resume` and `run` need an
+  interactive terminal on stdin and stdout, `--yes` included. `remove` and `pause` do
+  not, because they only reduce what runs. The shell's `/schedule` card and the
+  `schedule_create` tool are the in-shell paths.
+- **Granted programs run from an empty directory.** Granted programs, `gh auth token`
+  and the account lookup on the card all run from an empty keryx-owned directory, never
+  from the project, so a committed `.tool-versions`/`.mise.toml`/`.envrc` cannot steer
+  them. Drafting refuses a version-manager shim (`…/shims/gh`) and suggests the real
+  binary (`mise which gh`, `asdf which gh`).
+- **Script wrappers are pinned.** A `#!` script wrapper outside the project (for example
+  a `~/.local/bin/gh` that picks an account) is allowed. Its sha256, inode and mtime are
+  pinned and signed, and so is its interpreter: for `#!/usr/bin/env X`, X is resolved on
+  PATH. The run re-checks both, and resolves the interpreter again on the run's PATH.
+  The card shows `gh: script wrapper … (interpreter …) — pinned`.
+- **The config directory is hidden and pinned.** keryx's config directory (auth.json,
+  provider keys, the signing key) is always hidden inside the unattended sandbox, even
+  when `XDG_DATA_HOME` is outside `$HOME`. A config directory inside the project is
+  refused. The installed timer pins `XDG_DATA_HOME` when you have it set, so the
+  scheduler finds the same key.
+- **Binaries are re-checked before each exec.** A granted binary's inode, size and mtime
+  are re-checked before every exec, not only at the start of the run.
+- **Honest limit.** The shell floor is text analysis, and a same-user shell in `trust`
+  mode can get past it with a variable or a script. The terminal requirement and the
+  signing key are the real gates.
 
 **Where things live.**
 

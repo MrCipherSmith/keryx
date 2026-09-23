@@ -46,6 +46,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { readConfigFile } from "../lib/config-dir";
+import type { BinaryPin } from "./granted-binary";
 import { grantedToolProblems } from "./granted-tools";
 
 // ---------------------------------------------------------------------------
@@ -141,7 +142,7 @@ export interface AgentTaskGrants {
    * the operator confirmed. Both are covered by the signed hash and checked again before
    * every `execFile`, so a swapped binary or a repointed symlink refuses with `grants-changed`.
    */
-  readonly binDigests: Readonly<Record<string, { readonly realpath: string; readonly sha256: string }>>;
+  readonly binDigests: Readonly<Record<string, BinaryPin>>;
   /** The account the granted tools act as, as shown on the confirmation card (display only). */
   readonly account?: string;
 }
@@ -361,10 +362,23 @@ function grantsProblems(grants: Record<string, unknown>): string[] {
   if (digests === null || typeof digests !== "object" || Array.isArray(digests)) {
     problems.push("action.grants.binDigests: must be an object");
   } else {
+    const filePinOk = (d: unknown): boolean => {
+      const f = d as { realpath?: unknown; sha256?: unknown; ino?: unknown; mtimeMs?: unknown } | null;
+      return (
+        f !== null &&
+        typeof f === "object" &&
+        typeof f.realpath === "string" &&
+        path.isAbsolute(f.realpath) &&
+        typeof f.sha256 === "string" &&
+        /^[0-9a-f]{64}$/.test(f.sha256) &&
+        (f.ino === undefined || typeof f.ino === "number") &&
+        (f.mtimeMs === undefined || typeof f.mtimeMs === "number")
+      );
+    };
     for (const [program, digest] of Object.entries(digests as Record<string, unknown>)) {
-      const d = digest as { realpath?: unknown; sha256?: unknown } | null;
-      if (d === null || typeof d !== "object" || typeof d.realpath !== "string" || !path.isAbsolute(d.realpath) || typeof d.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(d.sha256)) {
-        problems.push(`action.grants.binDigests.${program}: must be {realpath (absolute), sha256 (hex)}`);
+      const interp = (digest as { interpreter?: unknown } | null)?.interpreter as { command?: unknown } | undefined;
+      if (!filePinOk(digest) || (interp !== undefined && (!filePinOk(interp) || typeof interp.command !== "string"))) {
+        problems.push(`action.grants.binDigests.${program}: must be {realpath (absolute), sha256 (hex), ino?, mtimeMs?, interpreter?}`);
       }
     }
   }

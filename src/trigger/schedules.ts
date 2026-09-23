@@ -19,8 +19,8 @@
 // is an operator surface: a TTY prompt, `--yes` typed by the operator, or a TUI card.
 
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
-import { accessSync, constants as fsConstants, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { accessSync, constants as fsConstants, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadTriggersConfig, triggerEntryProblems, type AgentTaskAction, type TriggerEntry } from "./config";
 import { nextCronRuns, parseCadence } from "./cron";
@@ -38,6 +38,8 @@ import {
 } from "./install";
 import { latestRunByTrigger, readTriggerRuns, type TriggerRunRecord } from "./record";
 import { addConfirmedSchedule, removeStoredSchedule, setScheduleEnabled, triggerReportsDir } from "./store";
+import { configDirInsideProjectReason, scheduleKeyPath } from "./schedule-key";
+import { pinGrantedBinary, type BinaryPin } from "./granted-binary";
 
 /** Shown on the card whenever the shell gets the host network. Kept in step with trigger-dispatch's NETWORK_ON_WARNING. */
 export const FULL_NETWORK_CARD_WARNING =
@@ -83,19 +85,6 @@ export interface ScheduleDraft {
 
 export type DraftResult = { readonly ok: true; readonly draft: ScheduleDraft } | { readonly ok: false; readonly problems: readonly string[] };
 
-function realOr(p: string): string {
-  try {
-    return realpathSync(p);
-  } catch {
-    return path.resolve(p);
-  }
-}
-
-function isInside(parent: string, child: string): boolean {
-  const rel = path.relative(parent, child);
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
-}
-
 /** Search PATH for an executable. */
 export function resolveOnPath(program: string, pathEnv: string | undefined = process.env["PATH"]): string | undefined {
   for (const dir of (pathEnv ?? "").split(path.delimiter)) {
@@ -111,15 +100,25 @@ export function resolveOnPath(program: string, pathEnv: string | undefined = pro
   return undefined;
 }
 
-function defaultAccountOf(projectRoot: string): (program: string, bin: string) => Promise<string | undefined> {
-  return (program, bin) =>
-    program !== "gh"
-      ? Promise.resolve(undefined)
-      : new Promise((resolve) => {
-          execFile(bin, ["api", "user", "--jq", ".login"], { cwd: projectRoot, timeout: 10_000 }, (error, stdout) => {
-            resolve(error === null && stdout.trim().length > 0 ? stdout.trim() : undefined);
-          });
+/**
+ * Who `gh` acts as, for the card. It runs ONLY while the card is drafted (never at run
+ * time), and (flow 295 N2) from a fresh empty directory, never from the project, so no
+ * committed `.tool-versions`/`.mise.toml`/`.envrc` can steer it.
+ */
+function defaultAccountOf(): (program: string, bin: string) => Promise<string | undefined> {
+  return async (program, bin) => {
+    if (program !== "gh") return undefined;
+    const cwd = mkdtempSync(path.join(tmpdir(), "keryx-account-"));
+    try {
+      return await new Promise<string | undefined>((resolve) => {
+        execFile(bin, ["api", "user", "--jq", ".login"], { cwd, timeout: 10_000 }, (error, stdout) => {
+          resolve(error === null && stdout.trim().length > 0 ? stdout.trim() : undefined);
         });
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  };
 }
 
 /** Build a draft. Writes nothing and installs nothing. */
@@ -130,38 +129,29 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
   const programs = [...new Set(tools.map((id) => grantedToolSpec(id)?.program).filter((p): p is string => p !== undefined))];
   const resolve = ctx.resolveProgram ?? ((p: string) => resolveOnPath(p));
   const bins: Record<string, string> = {};
-  const binDigests: Record<string, { realpath: string; sha256: string }> = {};
+  const binDigests: Record<string, BinaryPin> = {};
   const problems: string[] = [];
-  const root = realOr(ctx.projectRoot);
+  const wrappers: Record<string, string> = {};
   for (const program of programs) {
     const bin = resolve(program);
     if (bin === undefined) {
       problems.push(`grants: "${program}" is not on PATH, so the granted tools that run it cannot be confirmed`);
       continue;
     }
-    const real = realOr(bin);
-    // F1d/F6: the program that will hold the operator's credentials must be named what
-    // it claims to be, and must not come from the project (direnv's `PATH_add bin` puts
-    // a project directory first on PATH).
-    if (path.basename(bin) !== program) {
-      problems.push(`grants: "${bin}" is not a program named "${program}"`);
-      continue;
-    }
-    if (isInside(root, real) || isInside(root, path.resolve(bin))) {
-      problems.push(`grants: "${program}" resolves inside this project (${real}) — a granted program must come from outside the project`);
-      continue;
-    }
-    let sha256: string;
-    try {
-      sha256 = createHash("sha256").update(readFileSync(real)).digest("hex");
-    } catch (error) {
-      problems.push(`grants: ${real} could not be read (${error instanceof Error ? error.message : String(error)})`);
+    // F1d/F6/N2: named what it claims, outside the project, not a shim; realpath,
+    // sha256, inode and mtime pinned, and a `#!` wrapper's interpreter pinned as well.
+    const pinned = pinGrantedBinary(program, bin, ctx.projectRoot);
+    if (!pinned.ok) {
+      problems.push(`grants: ${pinned.reason}`);
       continue;
     }
     bins[program] = bin;
-    binDigests[program] = { realpath: real, sha256 };
+    binDigests[program] = pinned.pin;
+    if (pinned.pin.interpreter !== undefined) wrappers[program] = pinned.pin.interpreter.realpath;
   }
-  const accountOf = ctx.accountOf ?? defaultAccountOf(ctx.projectRoot);
+  const configInside = configDirInsideProjectReason(ctx.projectRoot);
+  if (configInside !== undefined) problems.push(`schedule: ${configInside}`);
+  const accountOf = ctx.accountOf ?? defaultAccountOf();
   const accounts: string[] = [];
   for (const [program, bin] of Object.entries(bins)) {
     const account = await accountOf(program, bin).catch(() => undefined);
@@ -205,7 +195,7 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
     nextRuns,
     plan,
     linger,
-    card: renderCard({ request, cron: cadence.cron, phrase: cadence.phrase, nextRuns, bins, accounts, plan, linger }),
+    card: renderCard({ request, cron: cadence.cron, phrase: cadence.phrase, nextRuns, bins, wrappers, accounts, plan, linger }),
   };
   return { ok: true, draft };
 }
@@ -216,6 +206,8 @@ function renderCard(input: {
   phrase: string;
   nextRuns: readonly Date[];
   bins: Record<string, string>;
+  /** Program → pinned interpreter realpath, for granted programs that are `#!` wrappers. */
+  wrappers: Record<string, string>;
   accounts: readonly string[];
   plan: InstallPlan;
   linger: string;
@@ -248,10 +240,15 @@ function renderCard(input: {
       const spec = grantedToolSpec(id);
       return `  - ${id}: ${spec !== undefined ? input.bins[spec.program] ?? "(unresolved)" : "(unknown)"}`;
     }),
+    ...Object.entries(input.wrappers).map(
+      ([program, interpreter]) =>
+        `  ${program}: script wrapper ${input.bins[program]} (interpreter ${interpreter}) — pinned; it runs from an empty directory, so it cannot see the project`,
+    ),
     ...(tools.length > 0 ? [`  repositories: ${(request.repos ?? []).join(", ")}`, `  account: ${input.accounts.join("; ") || "unknown"}`] : []),
     `install: ${plan.backend} — ${plan.location}`,
     `runs: ${plan.execStart}`,
     lingerLine,
+    `signing key: ${scheduleKeyPath()} (outside the project; the installed timer is pinned to it)`,
     "the machine must be on; a missed run is caught up once at the next boot/wake (systemd Persistent=true, launchd) — never by cron",
   ].map(cardSafe);
 }

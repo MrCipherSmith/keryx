@@ -79,3 +79,19 @@
     - `cli.ts`: 294's help imports plus `scheduleCommand`.
     - `governance/report.test.ts`: both test blocks kept. 295's expectation gains `attributedToFlowsUsd: undefined`, because an agent task names no flow.
   - Follow-up edit: the `trigger run` descriptor documents `--schedule` and agent-task.
+- 2026-09-23T12:20:00.000Z - note (implementer): re-review fixes N1-N6 on top of 60d0d045. Each has a regression test in `src/commands/schedule-security.test.ts`, and each was shown to fail with its fix reverted (11 revert demos).
+  - N1a: `touchesSchedulerControl` now also matches on PARSED words. This handles quotes and escapes, wrappers (env/sudo/nice/nohup/exec/timeout/…), `sh -c` and `eval` reparsing, and a `cd` into a unit dir. The raw regexes stay as a second net. Patterns are checked with the quotes removed.
+  - N1b: `keryx schedule add|resume|run` require a stdin and stdout TTY, `--yes` included. The KERYX_TOOL_CALL refusal stays.
+  - N1c: docs and the skill state the honest limit.
+  - N2: granted execs and `gh auth token` run from an empty `granted-cwd`, and the account lookup runs from a fresh temp dir. Drafting refuses shims and `#!` scripts and suggests `mise which` / `asdf which`.
+  - N3: the scratch parent is `$XDG_RUNTIME_DIR/keryx-agent-tasks`, or `<tmpdir>/keryx-agent-tasks-<uid>`. It must not be a symlink, must be owned by the current uid, and must be mode 0700.
+  - N4: keryxConfigDir is always hidden in the unattended sandbox, which covers flow-next too. A config dir inside the project is refused at draft and at run. XDG_DATA_HOME is pinned into systemd, launchd and cron units, and the card names the key path.
+  - N5: `trigger run … --schedule` is part of the scheduler family, and `keryx trigger run *` is refused as a pattern.
+  - N6: dev, inode, size and mtime are recorded at verification and re-checked before every exec.
+- 2026-09-23T13:10:00.000Z - note (implementer): changed N2 per the coordinator's decision.
+  - A `#!` wrapper outside the project is now allowed. Shims are still refused.
+  - The new `src/trigger/granted-binary.ts` pins a granted program's realpath, sha256, inode and mtime. For a wrapper it also pins the interpreter (`#!/usr/bin/env X` is resolved on PATH).
+  - At run time both files are verified, the interpreter is re-resolved on the runtime PATH, and both identities are re-checked before every exec.
+  - The card shows `gh: script wrapper … (interpreter …) — pinned`.
+  - Tests: pinned wrapper runs; changed wrapper refused; changed interpreter refused; interpreter shadowed on PATH refused; card line; shim refused; wrapper inside the project refused. Four revert demos fail as expected.
+  - Docs and the skill state that a wrapper's own global config is outside what keryx pins.

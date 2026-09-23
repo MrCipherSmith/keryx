@@ -40,7 +40,9 @@ operator reads in the shell's Schedules section.
 - `tools`: pick from the fixed catalogue: `gh.pr.list`, `gh.pr.view`,
   `gh.pr.checks`, `gh.issue.list`, `gh.issue.view`, `gh.run.list`. keryx
   runs them OUTSIDE the sandbox with the operator's credentials, and the
-  scheduled agent sees only redacted output.
+  scheduled agent sees only redacted output. A version-manager shim is refused. A `#!`
+  wrapper is pinned together with its interpreter, but its own global config
+  (its own config directory) stays outside what keryx pins.
 - `repos`: every repository those tools may touch (`owner/name`).
 - `network`: leave it `off`. Checking GitHub needs no sandbox network, because the
   granted tools cover it. `full` hands the agent's shell the host's whole
@@ -66,8 +68,10 @@ that nothing was written. Point to `/schedules` for the list and the reports.
   shell, `systemctl`, `crontab`, `launchctl`). Each of these asks the operator.
   `keryx schedule add` refuses inside your shell, and a hand-written entry lacks
   this machine's signature, so it never runs.
-- NEVER read or copy the schedule signing key (`schedule-hmac.key`). The floor asks
-  about it, but that is a prompt, not a wall. Leave it alone.
+- NEVER read or copy the schedule signing key (`schedule-hmac.key`), and never try to
+  reach the scheduler another way (quoting, `env -u`, a script). The text floor can be
+  worked around, and that is exactly why it is not the gate. `keryx schedule add|resume|run`
+  need the operator's own terminal, and a schedule without this machine's signature never runs.
 - NEVER run `loginctl enable-linger`. If linger is off, tell the operator the
   timer runs only while they are logged in and that the command is theirs to run.
 - State the limits when they matter: the machine must be on; systemd and launchd

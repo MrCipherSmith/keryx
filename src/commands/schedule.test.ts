@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync } from "node:fs";
 // Flow 295 (AC9, and AC6's "declining writes nothing"): `keryx schedule` end to end,
 // using a temporary unit directory and a fake systemctl. Nothing is installed on this
 // machine and no model is called: the provider is "fake", which the dispatcher refuses
@@ -38,7 +38,9 @@ function fakeProgram(program: string): string {
   const dir = path.join(keyHome, "bin");
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, program);
-  writeFileSync(file, "#!/bin/sh\necho '[]'\n", { mode: 0o755 });
+  // A real binary, not a `#!` script: drafting refuses scripts and shims (flow 295 N2).
+  copyFileSync("/bin/true", file);
+  chmodSync(file, 0o755);
   return file;
 }
 
@@ -63,6 +65,7 @@ function deps(extra: Partial<ScheduleCommandDeps> = {}): ScheduleCommandDeps {
   };
   return {
     cwd: root,
+    isTerminal: true,
     host,
     now: () => new Date(2026, 8, 23, 5, 7, 0),
     resolveProgram: (p) => fakeProgram(p),

@@ -3,9 +3,10 @@
 // journal). The reviewer's probes p1-p3 are ported here; they are not kept as scripts.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { pinGrantedBinary, type BinaryPin } from "../trigger/granted-binary";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -15,7 +16,7 @@ import { scheduleCommand } from "./schedule";
 import { scheduleTools } from "./schedule-tools";
 import { evaluateShellApproval } from "./shell-approval";
 import { runTriggerOnce } from "./trigger";
-import { scrubGrantedOutput, scrubThenCap } from "./trigger-agent-task";
+import { agentTaskScratchParent, scrubGrantedOutput, scrubThenCap } from "./trigger-agent-task";
 import { planUnattendedSandbox, type UnattendedSandboxPlan } from "../harness/process/sandbox/unattended";
 import type { NormalizedEvent, NormalizedRequest, ProviderDescription, ProviderPort, StreamOptions } from "../harness/provider/types";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
@@ -75,7 +76,13 @@ const RATES = { inputUsdPerMTok: 3, outputUsdPerMTok: 15 };
 let root = "";
 let aside = "";
 let keyHome = "";
-const savedEnv = { HOME: process.env["HOME"], XDG_DATA_HOME: process.env["XDG_DATA_HOME"], GH_TOKEN: process.env["GH_TOKEN"], TMPDIR: process.env["TMPDIR"] };
+const savedEnv = {
+  HOME: process.env["HOME"],
+  XDG_DATA_HOME: process.env["XDG_DATA_HOME"],
+  GH_TOKEN: process.env["GH_TOKEN"],
+  TMPDIR: process.env["TMPDIR"],
+  XDG_RUNTIME_DIR: process.env["XDG_RUNTIME_DIR"],
+};
 const realLog = console.log;
 const realError = console.error;
 let printed: string[] = [];
@@ -111,16 +118,18 @@ function markerGh(dir: string, marker: string): string {
   return bin;
 }
 
-function digests(bins: Record<string, string>): Record<string, { realpath: string; sha256: string }> {
+function digests(bins: Record<string, string>, pathEnv?: string): Record<string, BinaryPin> {
+  // Exactly what `draftSchedule` records: realpath, sha256, inode, mtime, and a `#!` wrapper's interpreter.
   return Object.fromEntries(
     Object.entries(bins).map(([p, b]) => {
-      const real = realpathSync(b);
-      return [p, { realpath: real, sha256: createHash("sha256").update(readFileSync(real)).digest("hex") }];
+      const pinned = pinGrantedBinary(p, b, "/nonexistent-project-root", pathEnv);
+      if (!pinned.ok) throw new Error(pinned.reason);
+      return [p, pinned.pin];
     }),
   );
 }
 
-function agentTaskEntry(bins: Record<string, string>, extra: Record<string, unknown> = {}, name = "nightly"): Record<string, unknown> {
+function agentTaskEntry(bins: Record<string, string>, extra: Record<string, unknown> = {}, name = "nightly", pathEnv?: string): Record<string, unknown> {
   return {
     name,
     on: { kind: "schedule", cron: "0 */4 * * *" },
@@ -128,7 +137,7 @@ function agentTaskEntry(bins: Record<string, string>, extra: Record<string, unkn
       kind: "agent-task",
       prompt: "Call gh_pr_list for a/b and summarise.",
       dispatch: { provider: "scripted", model: "m", permissionMode: "ask", rates: RATES, ceilingUsd: 1 },
-      grants: { network: "off", tools: ["gh.pr.list"], repos: ["a/b"], bins, binDigests: digests(bins) },
+      grants: { network: "off", tools: ["gh.pr.list"], repos: ["a/b"], bins, binDigests: digests(bins, pathEnv) },
       ...extra,
     },
   };
@@ -567,11 +576,15 @@ describe("one run cannot read another run's scratch", () => {
       const varTmp = await mkdtemp("/var/tmp/keryx-sched-sec-");
       try {
         process.env["TMPDIR"] = varTmp;
-        const sibling = path.join(varTmp, "keryx-agent-tasks", "other-run", "work");
+        delete process.env["XDG_RUNTIME_DIR"];
+        const parent = agentTaskScratchParent();
+        expect(parent.startsWith(varTmp)).toBe(true);
+        await mkdir(parent, { mode: 0o700 });
+        const sibling = path.join(parent, "other-run", "work");
         await mkdir(sibling, { recursive: true });
         await writeFile(path.join(sibling, "secret.txt"), "SIBLING-SECRET-42");
         await addConfirmedSchedule(root, agentTaskEntry({ gh: markerGh(aside, path.join(aside, "m")) }, { dispatch: { provider: "scripted", model: "m", permissionMode: "trust", rates: RATES, ceilingUsd: 1 } }));
-        const provider = scripted([toolCall("shell_exec", { command: `cat ${sibling}/secret.txt; ls ${varTmp}/keryx-agent-tasks` }, "c1")]);
+        const provider = scripted([toolCall("shell_exec", { command: `cat ${sibling}/secret.txt; ls ${parent}` }, "c1")]);
         await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => provider } });
         const wire = JSON.stringify(provider.requests);
         expect(wire).toContain("No such file");
@@ -582,4 +595,269 @@ describe("one run cannot read another run's scratch", () => {
     },
     60_000,
   );
+});
+
+// --- flow 295 re-review: N1-N6 -------------------------------------------------------
+
+describe("N1 (probe p4): quoting, escapes and wrappers do not hide scheduler control", () => {
+  test.each([
+    "keryx 'schedule' add --name x --yes",
+    'env -u KERYX_TOOL_CALL keryx "schedule" add --name x --yes',
+    "keryx sched''ule add --name x --yes",
+    "keryx sch\\edule add --name x --yes",
+    "sys''temctl --user enable x.timer",
+    "cron''tab -l",
+    "/usr/bin/crontab -l",
+    "sudo -u me nice -n 5 systemctl --user enable x",
+    "nohup env FOO=1 keryx schedule resume x",
+    "bash -c 'systemctl --user enable x'",
+    "sh -lc \"keryx 'schedule' run x\"",
+    "cd ~/.config/systemd && cp /tmp/x.service user/",
+    "cd ~/Library/LaunchAgents; cp /tmp/x.plist .",
+  ])("%s", (command) => {
+    expect(touchesSchedulerControl(command)).toBe(true);
+    expect(
+      resolveApprovalDecision({ mode: "trust", risk: "shell", destructive: false, credentials: false, sacReviewConfirmation: touchesHumanConfirmation(command), readOnly: false }),
+    ).toBe("ask");
+  });
+
+  test("patterns that could reach it through quoting are refused", () => {
+    for (const pattern of ["keryx 'schedule' *", "sys''temctl *"]) expect(validateShellPattern(pattern).ok).toBe(false);
+  });
+
+  test("`keryx schedule add|resume|run` refuse without a terminal, --yes included; remove/pause do not need one", async () => {
+    for (const sub of [["add", "--name", "x", "--yes"], ["resume", "x"], ["run", "x"]]) {
+      printed = [];
+      process.exitCode = 0;
+      await scheduleCommand(sub, { cwd: root, env: {}, isTerminal: false });
+      expect(process.exitCode).toBe(1);
+      expect(printed.join("\n")).toContain("needs an interactive terminal");
+    }
+    printed = [];
+    await scheduleCommand(["pause", "nope"], { cwd: root, env: {}, isTerminal: false });
+    expect(printed.join("\n")).not.toContain("needs an interactive terminal");
+    expect(existsSync(scheduleStorePath(root))).toBe(false);
+  });
+});
+
+describe("N5: `trigger run --schedule`", () => {
+  test("is scheduler control, and patterns covering it are refused", () => {
+    expect(touchesSchedulerControl("keryx trigger run --schedule nightly")).toBe(true);
+    expect(touchesSchedulerControl("keryx 'trigger' run --schedule nightly")).toBe(true);
+    for (const pattern of ["keryx trigger run *", "keryx trigger *"]) expect(validateShellPattern(pattern).ok).toBe(false);
+  });
+});
+
+describe("N2: granted programs run from an empty directory, and shims/scripts are refused at draft", () => {
+  test("a granted exec and `gh auth token` never run with the project as cwd", async () => {
+    const seen = path.join(aside, "cwds");
+    const bin = path.join(aside, "gh");
+    writeFileSync(bin, `#!/bin/sh\npwd >> '${seen}'\nls -A >> '${seen}'\necho '[]'\n`, { mode: 0o755 });
+    await writeFile(path.join(root, ".mise.toml"), "[env]\nEVIL = '1'\n");
+    await addConfirmedSchedule(root, agentTaskEntry({ gh: bin }));
+    await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => scripted(ghRounds()), planSandbox: () => INERT_SANDBOX } });
+    const lines = readFileSync(seen, "utf8").trim().split("\n");
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    expect(lines.some((l) => l === realpathSync(root) || l === root)).toBe(false);
+    expect(lines.some((l) => l.includes(".mise.toml"))).toBe(false);
+  });
+
+  test("a shim is refused, and the real binary is suggested", async () => {
+    mkdirSync(path.join(aside, "shims"), { recursive: true });
+    const shim = path.join(aside, "shims", "gh");
+    writeFileSync(shim, readFileSync("/bin/true"), { mode: 0o755 });
+    const drafted = await draftSchedule(
+      { name: "x", cadence: "hourly", prompt: "p", provider: "scripted", model: "m", rates: RATES, ceilingUsd: 1, tools: ["gh.pr.list"], repos: ["a/b"] },
+      { projectRoot: root, host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) }, resolveProgram: () => shim, accountOf: async () => "me" },
+    );
+    expect(drafted.ok).toBe(false);
+    if (!drafted.ok) {
+      expect(drafted.problems.join(" ")).toContain("version-manager shim");
+      expect(drafted.problems.join(" ")).toContain("mise which gh");
+    }
+  });
+
+  test("a #! wrapper outside the project is allowed: its interpreter is pinned and the card says so", async () => {
+    const wrapper = path.join(aside, "gh");
+    writeFileSync(wrapper, "#!/bin/sh\nexec /usr/bin/true \"$@\"\n", { mode: 0o755 });
+    const drafted = await draftSchedule(
+      { name: "x", cadence: "hourly", prompt: "p", provider: "scripted", model: "m", rates: RATES, ceilingUsd: 1, tools: ["gh.pr.list"], repos: ["a/b"] },
+      { projectRoot: root, host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) }, resolveProgram: () => wrapper, accountOf: async () => "me" },
+    );
+    if (!drafted.ok) throw new Error(drafted.problems.join("; "));
+    const pin = (drafted.draft.entry["action"] as { grants: { binDigests: Record<string, BinaryPin> } }).grants.binDigests["gh"]!;
+    expect(pin.interpreter?.command).toBe("/bin/sh");
+    expect(pin.interpreter?.realpath).toBe(realpathSync("/bin/sh"));
+    expect(drafted.draft.card).toContain(
+      `  gh: script wrapper ${wrapper} (interpreter ${realpathSync("/bin/sh")}) — pinned; it runs from an empty directory, so it cannot see the project`,
+    );
+  });
+
+  test("a #! wrapper inside the project is refused", async () => {
+    const inside = path.join(root, "tools", "gh");
+    mkdirSync(path.dirname(inside), { recursive: true });
+    writeFileSync(inside, "#!/bin/sh\nexec /usr/bin/true\n", { mode: 0o755 });
+    const drafted = await draftSchedule(
+      { name: "x", cadence: "hourly", prompt: "p", provider: "scripted", model: "m", rates: RATES, ceilingUsd: 1, tools: ["gh.pr.list"], repos: ["a/b"] },
+      { projectRoot: root, host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) }, resolveProgram: () => inside, accountOf: async () => "me" },
+    );
+    expect(drafted.ok).toBe(false);
+  });
+});
+
+describe("pinned #! wrappers at run time", () => {
+  /** A private interpreter (a copy of /bin/sh) named on the wrapper's `#!/usr/bin/env` line. */
+  function envWrapper(): { wrapper: string; interp: string; binDir: string; marker: string } {
+    const binDir = path.join(aside, "bin");
+    mkdirSync(binDir, { recursive: true });
+    const interp = path.join(binDir, "kxsh");
+    writeFileSync(interp, readFileSync(realpathSync("/bin/sh")), { mode: 0o755 });
+    const marker = path.join(aside, "WRAPPER-RAN");
+    const wrapper = path.join(aside, "gh");
+    writeFileSync(wrapper, `#!/usr/bin/env kxsh\necho ran > '${marker}'\necho '[]'\n`, { mode: 0o755 });
+    return { wrapper, interp, binDir, marker };
+  }
+  const envFor = (binDir: string): Record<string, string | undefined> => ({ PATH: `${binDir}:/usr/bin:/bin` });
+
+  test("a pinned wrapper runs", async () => {
+    const { wrapper, binDir, marker } = envWrapper();
+    await addConfirmedSchedule(root, agentTaskEntry({ gh: wrapper }, {}, "nightly", envFor(binDir)["PATH"]));
+    await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => scripted(ghRounds()), planSandbox: () => INERT_SANDBOX, grantedEnv: envFor(binDir) } });
+    expect((await lastRecord()).outcome).toBe("ok");
+    expect(existsSync(marker)).toBe(true);
+  });
+
+  test("a changed wrapper is refused", async () => {
+    const { wrapper, binDir, marker } = envWrapper();
+    await addConfirmedSchedule(root, agentTaskEntry({ gh: wrapper }, {}, "nightly", envFor(binDir)["PATH"]));
+    writeFileSync(wrapper, `#!/usr/bin/env kxsh\necho changed > '${marker}'\n`, { mode: 0o755 });
+    await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => scripted(ghRounds()), planSandbox: () => INERT_SANDBOX, grantedEnv: envFor(binDir) } });
+    const record = await lastRecord();
+    expect(record.agentTask?.refusal).toBe("grants-changed");
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  test("a changed interpreter is refused, and so is one resolved elsewhere on the runtime PATH", async () => {
+    const { wrapper, interp, binDir, marker } = envWrapper();
+    await addConfirmedSchedule(root, agentTaskEntry({ gh: wrapper }, {}, "nightly", envFor(binDir)["PATH"]));
+
+    // Another `kxsh` earlier on the runtime PATH: env would run that one.
+    const other = path.join(aside, "other");
+    mkdirSync(other, { recursive: true });
+    writeFileSync(path.join(other, "kxsh"), readFileSync(realpathSync("/bin/sh")), { mode: 0o755 });
+    await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => scripted(ghRounds()), planSandbox: () => INERT_SANDBOX, grantedEnv: { PATH: `${other}:${binDir}:/usr/bin:/bin` } } });
+    expect((await lastRecord()).detail).toContain("the interpreter");
+    expect(existsSync(marker)).toBe(false);
+
+    // The pinned interpreter itself changed.
+    writeFileSync(interp, Buffer.concat([readFileSync(interp), Buffer.from("\n")]), { mode: 0o755 });
+    await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => scripted(ghRounds()), planSandbox: () => INERT_SANDBOX, grantedEnv: envFor(binDir) } });
+    const record = await lastRecord();
+    expect(record.agentTask?.refusal).toBe("grants-changed");
+    expect(record.detail).toContain("the interpreter");
+    expect(existsSync(marker)).toBe(false);
+  });
+});
+
+describe("N3: the scratch parent must be ours", () => {
+  test("a pre-existing world-writable parent, or a symlink, refuses the run before any model call", async () => {
+    const tmp = await mkdtemp(path.join(tmpdir(), "keryx-sched-sec-tmp-"));
+    try {
+      process.env["TMPDIR"] = tmp;
+      delete process.env["XDG_RUNTIME_DIR"];
+      const parent = agentTaskScratchParent();
+      mkdirSync(parent);
+      chmodSync(parent, 0o777);
+      await addConfirmedSchedule(root, agentTaskEntry({ gh: markerGh(aside, path.join(aside, "m")) }));
+      let provider = scripted(ghRounds());
+      await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => provider, planSandbox: () => INERT_SANDBOX } });
+      expect((await lastRecord()).detail).toContain("has mode 777, not 700");
+      expect(provider.calls()).toBe(0);
+
+      await rm(parent, { recursive: true, force: true });
+      const elsewhere = await mkdtemp(path.join(tmpdir(), "keryx-sched-sec-else-"));
+      symlinkSync(elsewhere, parent);
+      provider = scripted(ghRounds());
+      await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => provider, planSandbox: () => INERT_SANDBOX } });
+      expect((await lastRecord()).detail).toContain("is not a plain directory");
+      expect(provider.calls()).toBe(0);
+      await rm(elsewhere, { recursive: true, force: true });
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("XDG_RUNTIME_DIR is preferred when set", () => {
+    expect(agentTaskScratchParent({ XDG_RUNTIME_DIR: "/run/user/4242" })).toBe("/run/user/4242/keryx-agent-tasks");
+  });
+});
+
+describe("N4: keryx's config dir is always hidden, never inside the project, and pinned into the unit", () => {
+  test("the unattended sandbox hides the config dir even when XDG_DATA_HOME is outside $HOME", () => {
+    const outside = path.join(aside, "data");
+    mkdirSync(path.join(outside, "keryx"), { recursive: true });
+    process.env["XDG_DATA_HOME"] = outside;
+    const plan = planUnattendedSandbox({
+      worktree: aside,
+      scratchHome: aside,
+      network: false,
+      readOnly: [],
+      env: process.env,
+      home: keyHome,
+      probe: () => true,
+      platform: "linux",
+      detect: { existsSync: () => true },
+    });
+    if (!plan.ok) throw new Error(plan.reason);
+    const args = plan.args.join(" ");
+    expect(args).toContain(`--tmpfs ${realpathSync(path.join(outside, "keryx"))}`);
+  });
+
+  test("a config dir inside the project refuses drafting and running", async () => {
+    await addConfirmedSchedule(root, agentTaskEntry({ gh: markerGh(aside, path.join(aside, "m")) }));
+    process.env["XDG_DATA_HOME"] = path.join(root, ".data");
+    const drafted = await draftSchedule(
+      { name: "y", cadence: "hourly", prompt: "p", provider: "scripted", model: "m", rates: RATES, ceilingUsd: 1 },
+      { projectRoot: root, host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) } },
+    );
+    expect(drafted.ok).toBe(false);
+    if (!drafted.ok) expect(drafted.problems.join(" ")).toContain("is inside this project");
+    const provider = scripted(ghRounds());
+    await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => provider, planSandbox: () => INERT_SANDBOX } });
+    expect((await lastRecord()).detail).toContain("is inside this project");
+    expect(provider.calls()).toBe(0);
+  });
+
+  test("the installed unit pins XDG_DATA_HOME, so the timer finds the same key", async () => {
+    const plan = await planInstall(root, "x", "0 2 * * *", { backend: "systemd", unitDir: aside, invocation: { execPath: "/bin/true", scriptPath: "/bin/true" } });
+    expect(plan.files[0]!.content).toContain(`Environment=XDG_DATA_HOME=${process.env["XDG_DATA_HOME"]}`);
+  });
+});
+
+describe("N6: a binary swapped mid-run is not executed", () => {
+  test("after the run-start verification, a changed inode/size/mtime refuses the exec", async () => {
+    const marker = path.join(aside, "SWAPPED-RAN");
+    const bin = markerGh(aside, path.join(aside, "first"));
+    await addConfirmedSchedule(root, agentTaskEntry({ gh: bin }));
+    const rounds = ghRounds();
+    let call = 0;
+    const requests: NormalizedRequest[] = [];
+    const provider: ProviderPort = {
+      describe: () => DESCRIPTION,
+      stream: (request, opts) => {
+        requests.push(request);
+        // The first model call comes AFTER verification. Swap the binary now, the way
+        // a process racing the run would.
+        if (call === 0) writeFileSync(bin, `#!/bin/sh\necho swapped > '${marker}'\necho '[]'\n`, { mode: 0o755 });
+        const round = rounds[call++] ?? rounds[1]!;
+        return (async function* (): AsyncGenerator<NormalizedEvent> {
+          let sequence = 0;
+          for (const partial of round) yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end", ...partial } as NormalizedEvent;
+        })();
+      },
+    };
+    await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => provider, planSandbox: () => INERT_SANDBOX } });
+    expect(existsSync(marker)).toBe(false);
+    expect(JSON.stringify(requests)).toContain("changed since it was verified at the start of this run");
+  });
 });

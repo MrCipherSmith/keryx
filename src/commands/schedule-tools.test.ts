@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync } from "node:fs";
 // Flow 295 (AC7): `schedule_create` from plain language, through the REAL agent
 // loop. The model is scripted. The approval must ask in EVERY permission mode,
 // `auto` included, and show the card. A declined card writes and installs nothing.
@@ -39,7 +39,9 @@ function fakeProgram(program: string): string {
   const dir = path.join(keyHome, "bin");
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, program);
-  writeFileSync(file, "#!/bin/sh\necho '[]'\n", { mode: 0o755 });
+  // A real binary, not a `#!` script: drafting refuses scripts and shims (flow 295 N2).
+  copyFileSync("/bin/true", file);
+  chmodSync(file, 0o755);
   return file;
 }
 

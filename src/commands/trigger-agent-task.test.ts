@@ -1,11 +1,10 @@
-import { createHash } from "node:crypto";
-import { readFileSync, realpathSync } from "node:fs";
 // Flow 295 (AC2, AC3, AC5, AC14): an `agent-task` schedule end to end through
 // `runTriggerOnce`. The model is scripted, and the sandbox is the real one where
 // the test is about containment. The granted tool is a real `execFile` of a fake
 // `gh` script.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { pinGrantedBinary, type BinaryPin } from "../trigger/granted-binary";
 import { execFileSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
@@ -126,13 +125,15 @@ async function stubGh(): Promise<string> {
 }
 
 /** What `draftSchedule` records per granted program: its realpath and sha256. */
-function digestsFor(bins: Record<string, string>): Record<string, { realpath: string; sha256: string }> {
-  const out: Record<string, { realpath: string; sha256: string }> = {};
-  for (const [program, bin] of Object.entries(bins)) {
-    const real = realpathSync(bin);
-    out[program] = { realpath: real, sha256: createHash("sha256").update(readFileSync(real)).digest("hex") };
-  }
-  return out;
+function digestsFor(bins: Record<string, string>): Record<string, BinaryPin> {
+  // Exactly what `draftSchedule` records: realpath, sha256, inode, mtime, and a `#!` wrapper's interpreter.
+  return Object.fromEntries(
+    Object.entries(bins).map(([p, b]) => {
+      const pinned = pinGrantedBinary(p, b, "/nonexistent-project-root");
+      if (!pinned.ok) throw new Error(pinned.reason);
+      return [p, pinned.pin];
+    }),
+  );
 }
 
 async function lastRecord(): Promise<TriggerRunRecord> {

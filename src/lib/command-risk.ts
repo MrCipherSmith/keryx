@@ -418,6 +418,7 @@ export function touchesFlowConfirm(command: string): boolean {
 const SCHEDULER_CONTROL_PATTERNS: readonly RegExp[] = [
   /\bschedule\s+(?:add|remove|pause|resume|run)\b/,
   /\btrigger\s+(?:schedule|install)\b/,
+  /\btrigger\s+run\b[^\n;&|]*--schedule\b/,
   /\bcrontab\b/,
   /\bsystemctl\b[^\n;&|]*\b(?:enable|reenable|link|start|restart|reload-or-restart|try-restart|daemon-reload|edit|disable|stop|mask|unmask|preset|revert|set-property|set-environment|import-environment)\b/,
   /\blaunchctl\b/,
@@ -426,10 +427,131 @@ const SCHEDULER_CONTROL_PATTERNS: readonly RegExp[] = [
   /\blibrary\/launchagents\b/,
 ];
 
-/** True when `command` creates, changes or runs a schedule, or drives the OS scheduler. Pure. */
+/** `systemctl` verbs that change what runs (install, start, reload or remove units). */
+const SYSTEMCTL_CONTROL_VERBS: ReadonlySet<string> = new Set([
+  "enable", "reenable", "link", "start", "restart", "reload-or-restart", "try-restart", "daemon-reload",
+  "edit", "disable", "stop", "mask", "unmask", "preset", "revert", "set-property", "set-environment", "import-environment",
+]);
+
+/** `keryx schedule <verb>` verbs that create, change or run a schedule. */
+const SCHEDULE_VERBS: ReadonlySet<string> = new Set(["add", "remove", "pause", "resume", "run"]);
+
+/** Command words that run the rest of the line as another command. */
+const WRAPPER_COMMANDS: ReadonlySet<string> = new Set([
+  "env", "sudo", "doas", "nice", "nohup", "command", "exec", "time", "timeout", "stdbuf", "ionice", "setsid", "chrt", "caffeinate", "xargs", "builtin",
+]);
+
+/** Wrapper flags that consume the next word (`env -u NAME`, `sudo -u user`, `nice -n 5`, `env -C dir`). */
+const WRAPPER_FLAGS_WITH_VALUE: ReadonlySet<string> = new Set(["-u", "-g", "-n", "-C", "-p", "-U", "-h", "--unset", "--user", "--group", "--chdir", "-s", "-k", "-o", "-e", "-i0"]);
+
+/** Shells whose `-c '<script>'` argument is another command line to inspect. */
+const SHELLS: ReadonlySet<string> = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish", "busybox"]);
+
+/** Directories the OS scheduler reads units from; a write into one installs a timer. */
+const UNIT_DIR_MARKERS: readonly string[] = ["systemd/user", "config/systemd", "launchagents"];
+
+/** Remove backslash escapes a shell would drop (`sys\temctl` → `systemctl`). Quotes are already gone. */
+function unescapeWord(word: string): string {
+  return word.replace(/\\(.)/g, "$1");
+}
+
+/**
+ * Peel wrappers off a word list (`env -u X VAR=1 sudo -u me nice -n 5 <cmd …>`), returning
+ * the real command's words, or the inner script when the command is `sh|bash -c '<script>'`.
+ */
+function peelWrappers(input: readonly string[]): { words: string[]; inner?: string } {
+  let words = stripAssignments(input.map(unescapeWord));
+  for (let guard = 0; guard < 16 && words.length > 0; guard++) {
+    const cmd = (words[0]!.split("/").pop() ?? "").toLowerCase();
+    if (SHELLS.has(cmd)) {
+      const at = words.findIndex((w, i) => i > 0 && /^-[a-z]*c[a-z]*$/i.test(w));
+      const script = at > 0 ? words[at + 1] : undefined;
+      if (script !== undefined) return { words, inner: script };
+      return { words };
+    }
+    if (cmd === "eval") return { words, inner: words.slice(1).join(" ") };
+    if (!WRAPPER_COMMANDS.has(cmd)) return { words };
+    let i = 1;
+    while (i < words.length) {
+      const w = words[i]!;
+      if (w === "--") {
+        i++;
+        break;
+      }
+      if (w.startsWith("-")) {
+        i += WRAPPER_FLAGS_WITH_VALUE.has(w) ? 2 : 1;
+        continue;
+      }
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) {
+        i++;
+        continue;
+      }
+      // `timeout 30 cmd`, `nice 5 cmd` (rare): a bare number before the command.
+      if ((cmd === "timeout" || cmd === "nice") && /^[0-9.]+[smhd]?$/.test(w)) {
+        i++;
+        continue;
+      }
+      break;
+    }
+    words = words.slice(i);
+  }
+  return { words };
+}
+
+/** One parsed segment: does it control a schedule or the OS scheduler? */
+function segmentControlsScheduler(input: readonly string[], cwdHint: string, depth: number): boolean {
+  const peeled = peelWrappers(input);
+  if (peeled.inner !== undefined) return depth < 4 && parsedSchedulerControl(peeled.inner, depth + 1);
+  const words = peeled.words;
+  if (words.length === 0) return false;
+  const cmd = (words[0]!.split("/").pop() ?? "").toLowerCase();
+  const rest = words.slice(1).map((w) => w.toLowerCase());
+  const positional = rest.filter((w) => !w.startsWith("-"));
+  if (cmd === "crontab" || cmd === "launchctl" || cmd === "loginctl") return true;
+  if (cmd === "systemctl" && positional.some((w) => SYSTEMCTL_CONTROL_VERBS.has(w))) return true;
+  for (let i = 0; i + 1 < positional.length; i++) {
+    if (positional[i] === "schedule" && SCHEDULE_VERBS.has(positional[i + 1]!)) return true;
+    if (positional[i] === "trigger" && (positional[i + 1] === "schedule" || positional[i + 1] === "install")) return true;
+    if (positional[i] === "trigger" && positional[i + 1] === "run" && rest.includes("--schedule")) return true;
+  }
+  // A unit directory named anywhere in the segment (a cp/mv/ln/install/tee target, a
+  // redirect, an editor), directly or relative to a directory an earlier `cd` entered.
+  const named = [words.join(" "), ...words.map((w) => (w.startsWith("/") || w.startsWith("~") ? w : `${cwdHint}/${w}`))]
+    .map((w) => w.toLowerCase());
+  return named.some((w) => UNIT_DIR_MARKERS.some((marker) => w.includes(marker)));
+}
+
+/** Parsed-word check over every simple command, `cd` targets carried forward. */
+function parsedSchedulerControl(command: string, depth = 0): boolean {
+  let cwdHint = "";
+  for (const seg of splitSegments(command)) {
+    const words = seg.words.map(unescapeWord);
+    if ((words[0] ?? "") === "cd") {
+      cwdHint = words[1] ?? "";
+      if (UNIT_DIR_MARKERS.some((marker) => cwdHint.toLowerCase().includes(marker))) return true;
+      continue;
+    }
+    if (segmentControlsScheduler(words, cwdHint, depth)) return true;
+  }
+  return false;
+}
+
+/**
+ * True when `command` creates, changes or runs a schedule, or drives the OS scheduler. Pure.
+ *
+ * Flow 295 (N1): matched on PARSED words, the way `isPublishCommand` is, so quoting
+ * (`keryx 'schedule' add`, `sys''temctl`, `cron''tab`), backslash escapes, wrappers
+ * (`env -u KERYX_TOOL_CALL …`, `sudo`, `nohup`, `bash -c '…'`) and a `cd` into a unit
+ * directory followed by a relative copy are all seen. The raw-text regexes stay as a
+ * second net. HONEST LIMIT: this is a text floor. A same-uid shell can still reach the
+ * scheduler through a variable, a script file or an interpreter one-liner. The real
+ * gates are that `keryx schedule add|resume|run` require a terminal, and that stored
+ * schedules are signed with the per-machine key.
+ */
 export function touchesSchedulerControl(command: string): boolean {
   const text = command.toLowerCase();
-  return SCHEDULER_CONTROL_PATTERNS.some((pattern) => pattern.test(text));
+  if (SCHEDULER_CONTROL_PATTERNS.some((pattern) => pattern.test(text))) return true;
+  return parsedSchedulerControl(command);
 }
 
 /**

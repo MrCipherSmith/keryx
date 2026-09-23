@@ -22,7 +22,7 @@
 // schedule, with the reason, rather than falling back to an unkeyed hash.
 
 import { createHmac, randomBytes } from "node:crypto";
-import { statSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { createOwnerOnlyFileExclusive, ensureKeryxConfigDir, keryxConfigDir, readConfigFile } from "../lib/config-dir";
 
@@ -60,6 +60,29 @@ export function ensureScheduleKey(dir?: string): ScheduleKeyRead {
   ensureKeryxConfigDir(dir);
   createOwnerOnlyFileExclusive(scheduleKeyPath(dir), `${randomBytes(32).toString("hex")}\n`);
   return readScheduleKey(dir);
+}
+
+/**
+ * Flow 295 (N4): keryx's config directory must not be inside the project. If it
+ * were, the project would carry the signing key and auth.json, and the key would sit
+ * inside the read-only project bind every run gets. Returns the refusal reason, or
+ * `undefined` when the layout is sound.
+ */
+export function configDirInsideProjectReason(projectRoot: string, dir?: string): string | undefined {
+  const real = (p: string): string => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return path.resolve(p);
+    }
+  };
+  const config = real(keryxConfigDir(dir));
+  const root = real(projectRoot);
+  const rel = path.relative(root, config);
+  if (rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))) {
+    return `keryx's config directory ${config} is inside this project (${root}); the schedule signing key and auth.json must live outside every project — point XDG_DATA_HOME elsewhere`;
+  }
+  return undefined;
 }
 
 /** HMAC-SHA256 of already-canonical content. */
