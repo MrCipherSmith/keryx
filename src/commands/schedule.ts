@@ -101,7 +101,7 @@ Usage:
   keryx schedule add --name <name> --every "<cadence>" --prompt "<task>" \\
       --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \\
       [--max-seconds 600] [--mode ask|trust] [--network off|full|allowlist] \\
-      [--domain example.com]... [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
+      [--domain example.com]... [--port 443]... [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
   keryx schedule list
   keryx schedule show <name>
   keryx schedule pause <name>
@@ -122,6 +122,8 @@ Network: "off" (default), "full" (the host's whole network) or "allowlist" (the 
 shell reaches only --domain names, through a loopback proxy keryx runs; Linux only).
 "allowlist" governs ONLY the agent's own shell_exec commands inside the sandbox — the
 model call and every granted tool already run outside the sandbox on your network.
+The allowlist restricts host AND port: 443 (CONNECT/HTTPS) and 80 (plain HTTP) by
+default, or exactly the --port list when you give one (applies to every --domain).
 
 Keryx runs no daemon. The OS scheduler (systemd --user, launchd, or cron) calls
 \`keryx trigger run <name>\`. The machine must be on. systemd and launchd catch up one
@@ -212,6 +214,11 @@ export function requestFromArgs(args: readonly string[]): ScheduleRequest {
   const tools = flagValues(args, "--tool").flatMap((t) => t.split(",")).filter((t) => t.length > 0);
   const repos = flagValues(args, "--repo").flatMap((t) => t.split(",")).filter((t) => t.length > 0);
   const domains = flagValues(args, "--domain").flatMap((t) => t.split(",")).filter((t) => t.length > 0);
+  const portStrings = flagValues(args, "--port").flatMap((t) => t.split(",")).filter((t) => t.length > 0);
+  const ports = portStrings.map((p) => Number(p));
+  if (ports.some((p) => !Number.isInteger(p) || p < 1 || p > 65535)) {
+    throw new Error("--port must be an integer 1-65535 (repeatable, or comma-separated)");
+  }
   const maxSeconds = numberFlag(args, "--max-seconds");
   return {
     name: flag(args, "--name")!,
@@ -227,6 +234,7 @@ export function requestFromArgs(args: readonly string[]): ScheduleRequest {
     tools,
     repos,
     ...(domains.length > 0 ? { domains } : {}),
+    ...(ports.length > 0 ? { ports } : {}),
   };
 }
 
@@ -288,7 +296,7 @@ async function showSubcommand(cwd: string, name: string | undefined, host: Sched
   console.log(`    prompt: ${a.prompt}`);
   console.log(`    runner: ${a.dispatch.provider}/${a.dispatch.model}, mode ${a.dispatch.permissionMode}, ceiling $${a.dispatch.ceilingUsd}, max ${a.dispatch.maxSeconds}s`);
   console.log(
-    `    network: ${a.grants.network}${a.grants.network === "allowlist" ? ` [${a.grants.domains.join(", ")}]` : ""}; ` +
+    `    network: ${a.grants.network}${a.grants.network === "allowlist" ? ` [${a.grants.domains.join(", ")}] port ${a.grants.ports !== undefined && a.grants.ports.length > 0 ? a.grants.ports.join("/") : "443/80 default"}` : ""}; ` +
       `granted tools: ${a.grants.tools.join(", ") || "none"}; repos: ${a.grants.repos.join(", ") || "none"}`,
   );
   const read = await readTriggerRuns(cwd);

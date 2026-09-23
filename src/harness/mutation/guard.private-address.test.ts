@@ -64,4 +64,23 @@ describe("isPrivateOrReservedAddress", () => {
   test("fails closed on a malformed IPv4 octet", () => {
     expect(isPrivateOrReservedAddress("999.1.1.1")).toBe(true);
   });
+
+  describe("flow 301 F4: NAT64", () => {
+    test("64:ff9b::/96 (RFC 6052) decodes the embedded IPv4 and classifies THAT address", () => {
+      // 64:ff9b::7f00:1 embeds 127.0.0.1 (7f00:1 -> 127.0.0.1) — private.
+      expect(isPrivateOrReservedAddress("64:ff9b::7f00:1")).toBe(true);
+      // 64:ff9b::a9fe:a9fe embeds 169.254.169.254 (a9fe:a9fe) — cloud metadata.
+      expect(isPrivateOrReservedAddress("64:ff9b::a9fe:a9fe")).toBe(true);
+      // 64:ff9b::808:808 embeds 8.8.8.8 — a legitimate public NAT64 address, allowed.
+      expect(isPrivateOrReservedAddress("64:ff9b::808:808")).toBe(false);
+      // Mixed dotted-tail notation some stacks print.
+      expect(isPrivateOrReservedAddress("64:ff9b::127.0.0.1")).toBe(true);
+      expect(isPrivateOrReservedAddress("64:ff9b::8.8.8.8")).toBe(false);
+    });
+
+    test("64:ff9b:1::/48 (RFC 8215 Local-Use) is refused outright — never a global address", () => {
+      expect(isPrivateOrReservedAddress("64:ff9b:1::1")).toBe(true);
+      expect(isPrivateOrReservedAddress("64:ff9b:1:8:aabb:ccdd::")).toBe(true);
+    });
+  });
 });

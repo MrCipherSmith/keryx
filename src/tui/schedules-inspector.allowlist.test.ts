@@ -43,6 +43,22 @@ describe("grantsLines — network: allowlist (flow 301 AC10)", () => {
     expect(text).not.toContain("off (the agent's shell has no network)");
     expect(text).not.toContain("NETWORK ON");
   });
+
+  test("flow 301 F2 (security review): shows the default port restriction, and the grant's own ports when set", () => {
+    const defaultText = grantsLines(view()).join("\n");
+    expect(defaultText).toContain("443 (CONNECT) / 80 (HTTP) default");
+
+    const withPorts = view({
+      entry: {
+        name: "check-github",
+        fire: { kind: "schedule", cron: "0 */4 * * *" },
+        action: { ...AGENT_TASK, grants: { ...AGENT_TASK.grants, ports: [443, 8443] } },
+        enabled: true,
+        source: "store",
+      },
+    });
+    expect(grantsLines(withPorts).join("\n")).toContain("port 443/8443");
+  });
 });
 
 describe("runsLines — a run's network refusals are visible (flow 301 AC10)", () => {

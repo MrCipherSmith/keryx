@@ -401,6 +401,10 @@ async function runLocked(
           allowedDomains: [...action.grants.domains],
           unixSocketPath: proxySocketPath,
           refuseReservedAddresses: true,
+          // Flow 301 (F2): absent, the proxy's own default applies (443 CONNECT / 80
+          // plain HTTP) — the allowlist restricts host AND port, not "any port on an
+          // allowed host".
+          ...(action.grants.ports !== undefined ? { allowedPorts: action.grants.ports } : {}),
           onDecision: (d) => {
             networkDecisions.push({
               host: d.host,
@@ -446,7 +450,7 @@ async function runLocked(
           action.grants.network === "full"
             ? `ON — ${NETWORK_ON_WARNING}`
             : action.grants.network === "allowlist"
-              ? `allowlist (${action.grants.domains.join(", ")}) — governs only shell_exec`
+              ? `allowlist (${action.grants.domains.join(", ")}, port ${action.grants.ports !== undefined ? action.grants.ports.join("/") : "443 (CONNECT) / 80 (HTTP) default"}) — governs only shell_exec`
               : "off"
         }`
       : `none (${sandbox.reason}) — "ask" mode, every shell_exec refused`;

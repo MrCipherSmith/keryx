@@ -67,4 +67,46 @@ describe("draftSchedule card — network: allowlist (flow 301)", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("flow 301 F2 (security review): the card shows the default port restriction, and the grant's own ports when set", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-schedule-card-"));
+    try {
+      const defaulted = await draftSchedule(
+        {
+          name: "check-github",
+          cadence: "every 4 hours",
+          prompt: "check github",
+          provider: "anthropic",
+          model: "m",
+          rates: RATES,
+          ceilingUsd: 1,
+          network: "allowlist",
+          domains: ["api.github.com"],
+        },
+        { projectRoot: root, host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) } },
+      );
+      expect(defaulted.ok).toBe(true);
+      if (defaulted.ok) expect(defaulted.draft.card.join("\n")).toContain("443 (CONNECT) / 80 (HTTP) default");
+
+      const withPorts = await draftSchedule(
+        {
+          name: "check-github-2",
+          cadence: "every 4 hours",
+          prompt: "check github",
+          provider: "anthropic",
+          model: "m",
+          rates: RATES,
+          ceilingUsd: 1,
+          network: "allowlist",
+          domains: ["api.github.com"],
+          ports: [443, 8443],
+        },
+        { projectRoot: root, host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) } },
+      );
+      expect(withPorts.ok).toBe(true);
+      if (withPorts.ok) expect(withPorts.draft.card.join("\n")).toContain("port 443/8443");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

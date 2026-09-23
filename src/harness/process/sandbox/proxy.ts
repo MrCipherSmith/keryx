@@ -16,7 +16,7 @@ import https from "node:https";
 import net from "node:net";
 import dns from "node:dns";
 import { unlinkSync } from "node:fs";
-import { isPrivateOrReservedAddress } from "../../mutation/guard";
+import { isPrivateOrReservedAddress, looksLikeIpHost } from "../../mutation/guard";
 import type { RunCa } from "./tls-ca";
 
 /** Canonical host form for comparison: lowercase, no trailing dot. */
@@ -61,9 +61,53 @@ export interface ProxyDecision {
   at?: string;
 }
 
-/** True when `host` is an IPv4 dotted-quad or an IPv6 literal — never a hostname. Domain names never contain a colon. */
-function isIpLiteral(host: string): boolean {
-  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(":");
+/**
+ * Flow 301 (F1): strictly parse a TCP port — digits only, no sign, no whitespace,
+ * no trailing junk, 1-65535 — or `undefined` for anything else. A client-controlled
+ * port string (a CONNECT authority, a Host header) is NEVER handed to `Number()`
+ * and then straight to `net.connect`/`http.request`: an out-of-range value there
+ * throws a SYNCHRONOUS `ERR_SOCKET_BAD_PORT` that nothing in this file caught,
+ * crashing the whole dispatcher process (confirmed: `nc`-ing a `CONNECT
+ * allowed.test:-1` request killed it and leaked the run's scratch tree, because
+ * the crash skipped every `finally`). This is the one place a port string becomes
+ * a number; every call site below uses it and refuses rather than parses again.
+ */
+function parsePort(raw: string | undefined): number | undefined {
+  if (raw === undefined || !/^[1-9][0-9]{0,4}$/.test(raw)) return undefined;
+  const n = Number(raw);
+  return n >= 1 && n <= 65535 ? n : undefined;
+}
+
+/**
+ * Flow 301 (F2): is `port` reachable for a request of this `kind`, given the
+ * grant's `allowedPorts`? Absent `allowedPorts` (not hardened, or a hardened run
+ * that named none) falls back to the historical default: 443 for `connect`
+ * (HTTPS), 80 for `http` (plain) — the allowlist restricts host AND port, not
+ * "any port on an allowed host". A non-empty `allowedPorts` REPLACES that default
+ * for both kinds at once (the grant's `ports` field applies to every listed
+ * domain, for whichever kind of request reaches it).
+ */
+function portAllowed(port: number, kind: "http" | "connect", allowedPorts: readonly number[] | undefined): boolean {
+  if (allowedPorts !== undefined && allowedPorts.length > 0) return allowedPorts.includes(port);
+  return kind === "connect" ? port === 443 : port === 80;
+}
+
+/**
+ * Flow 301 (F1 defence-in-depth): run a synchronous call that MIGHT throw on
+ * client-controlled input (a malformed port/host that somehow reaches
+ * `net.connect`/`http.request`/`https.request` despite the strict checks above —
+ * for instance a Node/Bun version whose validation differs) and report failure
+ * through `onError` instead of letting the exception escape a request handler
+ * and crash the whole dispatcher process. Every constructor call below goes
+ * through this, not only the ones the strict port parser already protects.
+ */
+function trySync<T>(make: () => T, onError: () => void): T | undefined {
+  try {
+    return make();
+  } catch {
+    onError();
+    return undefined;
+  }
 }
 
 /** Default DNS resolver: one A/AAAA lookup through the OS resolver. */
@@ -139,6 +183,18 @@ export interface AllowlistProxyOptions {
   refuseReservedAddresses?: boolean;
   /** Test seam for `refuseReservedAddresses`. Default: one OS `dns.lookup`. */
   resolveHost?: (hostname: string) => Promise<string | undefined>;
+  /**
+   * Flow 301 (F2): restrict every allowed domain to these ports, for BOTH plain HTTP
+   * and `CONNECT` — "the allowlist is domains only" otherwise means every port on an
+   * allowed host is reachable, not just the API endpoint the grant intended. A
+   * non-empty list here is enforced on its own — it is an explicit instruction —
+   * even without `refuseReservedAddresses`; the DEFAULT restriction (443 for
+   * `CONNECT`, 80 for plain HTTP, when this is absent/empty) is enforced only when
+   * `refuseReservedAddresses` is on, so the pre-flow-301 `network: "restricted"`
+   * posture (flow 098/142, arbitrary test-upstream ports, neither option set) is
+   * unaffected.
+   */
+  allowedPorts?: readonly number[];
 }
 
 /**
@@ -151,7 +207,10 @@ async function checkedAddress(
   hostname: string,
   resolveHost: (h: string) => Promise<string | undefined>,
 ): Promise<{ address: string } | { reason: string }> {
-  if (isIpLiteral(hostname)) return { reason: "IP-literal targets are refused — the allowlist is domains only" };
+  // Flow 301 (F3): `looksLikeIpHost` catches more than a strict dotted-quad — inet_aton
+  // short/mixed-radix forms (`127.1`), flat encoded integers, and a numeric final
+  // label — every shape that let an IP slip past the original, narrower check.
+  if (looksLikeIpHost(hostname)) return { reason: "IP-literal targets are refused — the allowlist is domains only" };
   const address = await resolveHost(hostname);
   if (address === undefined) return { reason: "could not be resolved" };
   if (isPrivateOrReservedAddress(address)) return { reason: `resolved to ${address}, a loopback/private/link-local/metadata address` };
@@ -196,24 +255,44 @@ export interface AllowlistProxy {
   close: () => Promise<void>;
 }
 
-/** Parse the target host:port from a plain-HTTP proxied request. */
-function httpTarget(req: http.IncomingMessage): { hostname: string; port: number } | undefined {
+/**
+ * Flow 301 (F1): the target host/port from a plain-HTTP proxied request, or WHY
+ * there is none — `"no-target"` (no absolute URL and no Host header) is a
+ * different finding from `"invalid-port"` (a port present but not 1-65535 digits),
+ * and the caller reports each with its own reason rather than a single silent
+ * `undefined`. Never returns a `port` that was not parsed by {@link parsePort}, so
+ * nothing downstream can hand an unchecked value to `http.request`.
+ */
+type HttpTarget =
+  | { readonly kind: "ok"; readonly hostname: string; readonly port: number }
+  | { readonly kind: "invalid-port"; readonly hostname: string }
+  | { readonly kind: "no-target" };
+
+function httpTarget(req: http.IncomingMessage): HttpTarget {
   // Proxied HTTP requests carry an absolute URL; fall back to the Host header.
   const raw = req.url ?? "";
   try {
     if (/^https?:\/\//i.test(raw)) {
       const u = new URL(raw);
-      return { hostname: u.hostname, port: u.port ? Number(u.port) : 80 };
+      if (u.hostname.length === 0) return { kind: "no-target" };
+      if (u.port.length === 0) return { kind: "ok", hostname: u.hostname, port: 80 };
+      const port = parsePort(u.port);
+      return port === undefined ? { kind: "invalid-port", hostname: u.hostname } : { kind: "ok", hostname: u.hostname, port };
     }
   } catch {
     // fall through to Host header
   }
   const hostHeader = req.headers.host;
-  if (hostHeader) {
-    const [hostname, port] = hostHeader.split(":");
-    if (hostname) return { hostname, port: port ? Number(port) : 80 };
+  if (hostHeader !== undefined && hostHeader.length > 0) {
+    const colon = hostHeader.lastIndexOf(":");
+    const hostname = colon === -1 ? hostHeader : hostHeader.slice(0, colon);
+    const portRaw = colon === -1 ? undefined : hostHeader.slice(colon + 1);
+    if (hostname.length === 0) return { kind: "no-target" };
+    if (portRaw === undefined || portRaw.length === 0) return { kind: "ok", hostname, port: 80 };
+    const port = parsePort(portRaw);
+    return port === undefined ? { kind: "invalid-port", hostname } : { kind: "ok", hostname, port };
   }
-  return undefined;
+  return { kind: "no-target" };
 }
 
 /** Create + start a loopback allowlist proxy. */
@@ -221,6 +300,12 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
   const host = opts.host ?? "127.0.0.1";
   const allowed = opts.allowedDomains;
   const hardened = opts.refuseReservedAddresses === true;
+  // F2: the default port restriction (443/80) is part of the SAME opt-in hardening
+  // as `refuseReservedAddresses` (flow-098's existing tests use arbitrary ports and
+  // must stay unaffected) — but an explicit, non-empty `allowedPorts` is an
+  // unambiguous instruction on its own, so it is enforced even when a caller has
+  // not also turned on address hardening.
+  const portRestricted = hardened || (opts.allowedPorts !== undefined && opts.allowedPorts.length > 0);
   const resolveHost = opts.resolveHost ?? defaultResolveHost;
   const decide = (d: Omit<ProxyDecision, "at">): boolean => {
     opts.onDecision?.({ ...d, at: new Date().toISOString() });
@@ -229,26 +314,54 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
 
   const server = http.createServer((req, res) => {
     const target = httpTarget(req);
-    const hostname = target?.hostname ?? "";
-    const refuse = (reason?: string): void => {
-      decide({ host: hostname, allowed: false, kind: "http", ...(target !== undefined ? { port: target.port } : {}), ...(reason !== undefined ? { reason } : {}) });
+    const hostname = target.kind === "no-target" ? "" : target.hostname;
+    const refuse = (reason: string): void => {
+      decide({ host: hostname, allowed: false, kind: "http", ...(target.kind === "ok" ? { port: target.port } : {}), reason });
       res.writeHead(403, { "content-type": "text/plain" });
       res.end("blocked by keryx sandbox network allowlist");
     };
-    if (!target || !matchesAllowlist(hostname, allowed)) {
-      refuse(target ? "not on the allowlist" : "no target host");
+    if (target.kind === "no-target") {
+      refuse("no target host");
+      return;
+    }
+    if (target.kind === "invalid-port") {
+      // F1: a malformed port (`-1`, `99999`, non-digits) is refused here, strictly
+      // parsed by {@link parsePort} — never handed to `http.request`, which throws
+      // synchronously (uncaught) on an out-of-range port.
+      refuse("invalid port");
+      return;
+    }
+    if (!matchesAllowlist(hostname, allowed)) {
+      refuse("not on the allowlist");
+      return;
+    }
+    // F2: host allowed does not mean every port on it is — 80 by default, or the
+    // grant's own `ports` list when the caller (the unattended allowlist) set one.
+    if (portRestricted && !portAllowed(target.port, "http", opts.allowedPorts)) {
+      refuse(`port ${target.port} is not allowed`);
       return;
     }
     const proceed = (connectHost: string): void => {
       decide({ host: hostname, allowed: true, kind: "http", port: target.port });
       const headers = applyMasks(req.headers, opts.masks ?? [], target.hostname);
-      const upstream = http.request(
-        { host: connectHost, port: target.port, method: req.method, path: pathFromUrl(req.url), headers: { ...headers, host: target.hostname } },
-        (up) => {
-          res.writeHead(up.statusCode ?? 502, up.headers);
-          up.pipe(res);
+      // F1 defence-in-depth: `target.port` is already strictly parsed above, but
+      // wrap the call anyway — nothing client-controlled may throw synchronously in
+      // a request handler and crash the whole dispatcher.
+      const upstream = trySync(
+        () =>
+          http.request(
+            { host: connectHost, port: target.port, method: req.method, path: pathFromUrl(req.url), headers: { ...headers, host: target.hostname } },
+            (up) => {
+              res.writeHead(up.statusCode ?? 502, up.headers);
+              up.pipe(res);
+            },
+          ),
+        () => {
+          if (!res.headersSent) res.writeHead(502);
+          res.end("upstream error");
         },
       );
+      if (upstream === undefined) return;
       upstream.on("error", () => {
         if (!res.headersSent) res.writeHead(502);
         res.end("upstream error");
@@ -293,36 +406,50 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
     (pinnedHost: string, pinnedPort: number) =>
     (req: http.IncomingMessage, res: http.ServerResponse): void => {
       const hostHeader = req.headers.host ?? "";
-      const [rawHost, rawPort] = hostHeader.split(":");
-      const hostname = rawHost ?? "";
-      // An absent port in `Host` means the tunnel's own port, not a bare 443:
-      // the request cannot go anywhere other than where the tunnel points.
-      const upstreamPort = rawPort ? Number(rawPort) : pinnedPort;
+      const colon = hostHeader.lastIndexOf(":");
+      const hostname = colon === -1 ? hostHeader : hostHeader.slice(0, colon);
+      const rawPort = colon === -1 ? undefined : hostHeader.slice(colon + 1);
+      // F1: strictly parsed — never `Number(rawPort)` straight into `https.request`,
+      // which throws synchronously on an out-of-range port. An absent port in `Host`
+      // means the tunnel's own port, not a bare 443: the request cannot go anywhere
+      // other than where the tunnel points. A malformed port simply cannot equal
+      // `pinnedPort` (a known-good number), so it falls out of `permitted` below —
+      // strict parsing here is about an accurate decision record, not just safety.
+      const upstreamPort = rawPort === undefined || rawPort.length === 0 ? pinnedPort : parsePort(rawPort);
       const permitted =
+        upstreamPort !== undefined &&
         matchesAllowlist(hostname, allowed) &&
         normalizeHost(hostname) === pinnedHost &&
         upstreamPort === pinnedPort;
-      if (!decide({ host: hostname, allowed: permitted, kind: "http" })) {
+      if (!decide({ host: hostname, allowed: permitted, kind: "http", ...(upstreamPort !== undefined ? { port: upstreamPort } : {}) })) {
         res.writeHead(403, { "content-type": "text/plain" });
         res.end("blocked by keryx sandbox network allowlist");
         return;
       }
       const headers = applyMasks(req.headers, opts.masks ?? [], hostname);
-      const upstreamReq = https.request(
-        {
-          host: hostname,
-          port: upstreamPort,
-          method: req.method,
-          path: req.url ?? "/",
-          headers,
-          servername: hostname,
-          ...(opts.upstreamCa !== undefined ? { ca: opts.upstreamCa } : {}),
-        },
-        (up) => {
-          res.writeHead(up.statusCode ?? 502, up.headers);
-          up.pipe(res);
+      const upstreamReq = trySync(
+        () =>
+          https.request(
+            {
+              host: hostname,
+              port: upstreamPort,
+              method: req.method,
+              path: req.url ?? "/",
+              headers,
+              servername: hostname,
+              ...(opts.upstreamCa !== undefined ? { ca: opts.upstreamCa } : {}),
+            },
+            (up) => {
+              res.writeHead(up.statusCode ?? 502, up.headers);
+              up.pipe(res);
+            },
+          ),
+        () => {
+          if (!res.headersSent) res.writeHead(502);
+          res.end("upstream error");
         },
       );
+      if (upstreamReq === undefined) return;
       upstreamReq.on("error", () => {
         if (!res.headersSent) res.writeHead(502);
         res.end("upstream error");
@@ -350,16 +477,35 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
   };
 
   server.on("connect", (req, clientSocket, head) => {
-    const [reqHost, reqPort] = (req.url ?? "").split(":");
-    const hostname = reqHost ?? "";
-    const port = Number(reqPort) || 443;
-    const refuse = (reason?: string): void => {
-      decide({ host: hostname, allowed: false, kind: "connect", port, ...(reason !== undefined ? { reason } : {}) });
+    const url = req.url ?? "";
+    const colon = url.lastIndexOf(":");
+    const hostname = colon === -1 ? url : url.slice(0, colon);
+    const portRaw = colon === -1 ? undefined : url.slice(colon + 1);
+    // F1: strictly parsed (digits only, 1-65535) — the original `Number(reqPort) ||
+    // 443` handed `-1`/`99999`/garbage straight to `net.connect`, which throws
+    // SYNCHRONOUSLY and UNCAUGHT on an out-of-range port (`ERR_SOCKET_BAD_PORT`).
+    // Confirmed from inside a real sandbox: a single crafted `CONNECT
+    // allowed.test:-1` killed the whole dispatcher process, and because the crash
+    // skipped every `finally`, the run's socket and scratch tree leaked with it.
+    const parsedPort = portRaw === undefined || portRaw.length === 0 ? 443 : parsePort(portRaw);
+    const refuse = (reason: string): void => {
+      decide({ host: hostname, allowed: false, kind: "connect", ...(parsedPort !== undefined ? { port: parsedPort } : {}), reason });
       clientSocket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
       clientSocket.end();
     };
+    if (parsedPort === undefined) {
+      refuse("invalid port");
+      return;
+    }
+    const port = parsedPort;
     if (!matchesAllowlist(hostname, allowed)) {
       refuse("not on the allowlist");
+      return;
+    }
+    // F2: host allowed does not mean every port on it is — 443 by default, or the
+    // grant's own `ports` list when the caller (the unattended allowlist) set one.
+    if (portRestricted && !portAllowed(port, "connect", opts.allowedPorts)) {
+      refuse(`port ${port} is not allowed`);
       return;
     }
 
@@ -376,6 +522,8 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
             clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
             // The client now speaks TLS; hand the raw bytes to this host's
             // internal HTTPS terminator, which does the handshake and decrypts.
+            // `terminatorPort` is this process's OWN ephemeral listen port, never
+            // client-controlled, but the whole branch is inside this try anyway.
             const internal = net.connect(terminatorPort, "127.0.0.1", () => {
               if (head && head.length > 0) internal.write(head);
               clientSocket.pipe(internal);
@@ -395,16 +543,22 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
       // just checked when hardened, never a fresh lookup: flow 301 AC4's
       // DNS-rebinding pin). Never terminated, so it cannot see SNI or an
       // in-tunnel Host — an inherent limit of a relay that inspects nothing.
-      const upstream = net.connect(port, connectHost, () => {
+      // F1 defence-in-depth: `port` is already strictly parsed above, but wrap the
+      // call anyway — nothing client-controlled may throw synchronously here.
+      const onUpstreamConnect = (upstream: net.Socket): void => {
         clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         if (head && head.length > 0) upstream.write(head);
         upstream.pipe(clientSocket);
         clientSocket.pipe(upstream);
-      });
-      upstream.on("error", () => {
+      };
+      const onUpstreamFailure = (): void => {
         clientSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
         clientSocket.end();
-      });
+      };
+      const upstream = trySync(() => net.connect(port, connectHost), onUpstreamFailure);
+      if (upstream === undefined) return;
+      upstream.once("connect", () => onUpstreamConnect(upstream));
+      upstream.on("error", onUpstreamFailure);
       clientSocket.on("error", () => upstream.destroy());
     };
 

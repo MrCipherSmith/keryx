@@ -527,6 +527,41 @@ describe("flow 295: agent-task entries", () => {
     expect(loadTriggersConfig(root).triggers).toEqual([]);
   });
 
+  test("flow 301 F3 (security review): inet_aton short/mixed-radix forms and a numeric final label are refused", async () => {
+    const root = await storeWith([
+      agentTask({ grants: { network: "allowlist", domains: ["127.1"], tools: [], repos: [] } }, "short-form"),
+      agentTask({ grants: { network: "allowlist", domains: ["10.1.2"], tools: [], repos: [] } }, "three-part"),
+      agentTask({ grants: { network: "allowlist", domains: ["0x7f.0.0.1"], tools: [], repos: [] } }, "hex-octet"),
+      agentTask({ grants: { network: "allowlist", domains: ["example.123"], tools: [], repos: [] } }, "numeric-final-label"),
+      agentTask({ grants: { network: "allowlist", domains: ["example.0x1a"], tools: [], repos: [] } }, "hex-final-label"),
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], tools: [], repos: [] } }, "still-loads"),
+    ]);
+    expect(reasonsOf(root, "short-form")).toContain("inet_aton");
+    expect(reasonsOf(root, "three-part")).toContain("inet_aton");
+    expect(reasonsOf(root, "hex-octet")).toContain("inet_aton");
+    expect(reasonsOf(root, "numeric-final-label")).toContain("final label is numeric");
+    expect(reasonsOf(root, "hex-final-label")).toContain("final label is numeric");
+    expect(loadTriggersConfig(root).triggers.map((t) => t.name)).toEqual(["still-loads"]);
+  });
+
+  test("flow 301 F2 (security review): an agent-task grant's ports must be a non-empty array of integers 1-65535", async () => {
+    const root = await storeWith([
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], ports: [], tools: [], repos: [] } }, "empty-ports"),
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], ports: [0], tools: [], repos: [] } }, "zero-port"),
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], ports: [70000], tools: [], repos: [] } }, "too-big"),
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], ports: [443.5], tools: [], repos: [] } }, "non-integer"),
+      agentTask({ grants: { network: "allowlist", domains: ["api.github.com"], ports: [443, 8443], tools: [], repos: [] } }, "valid"),
+    ]);
+    expect(reasonsOf(root, "empty-ports")).toContain("action.grants.ports");
+    expect(reasonsOf(root, "zero-port")).toContain("action.grants.ports");
+    expect(reasonsOf(root, "too-big")).toContain("action.grants.ports");
+    expect(reasonsOf(root, "non-integer")).toContain("action.grants.ports");
+    expect(reasonsOf(root, "valid")).toBe("");
+    const valid = loadTriggersConfig(root).triggers.find((t) => t.name === "valid")!.action;
+    if (valid.kind !== "agent-task") throw new Error("expected an agent-task");
+    expect(valid.grants.ports).toEqual([443, 8443]);
+  });
+
   test("an agent-task in the committed triggers.json is refused — it lives only in the per-machine store", async () => {
     const root = await storeWith([], [agentTask({}, "committed")]);
     expect(reasonsOf(root, "committed")).toContain("never in the committed triggers.json");

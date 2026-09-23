@@ -13,12 +13,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import http from "node:http";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
-import { rmSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { createAllowlistProxy, type AllowlistProxy } from "./proxy";
-import { planUnattendedSandbox } from "./unattended";
+import { planUnattendedSandbox, type UnattendedSandboxPlan } from "./unattended";
 
 const projectRoot = process.cwd();
 const forwarderArgv = [process.execPath, path.join(projectRoot, "src", "cli.ts"), "__sandbox-net-forward"];
@@ -160,6 +160,54 @@ describe("network: allowlist — real bwrap integration (flow 301 AC6)", () => {
         expect(result.stdout).toContain("CURL_EXIT:7"); // curl 7 = could not connect
       } finally {
         await new Promise<void>((r) => hostListener.close(() => r()));
+      }
+    },
+    30_000,
+  );
+
+  test.skipIf(!realSandbox.ok)(
+    "flow 301 F5: a forwarder that never becomes ready gives up within the bound, with a clear message and a distinct exit code — not a hang",
+    async () => {
+      let workdir = "";
+      let scratchHome = "";
+      try {
+        sockPath = path.join(tmpdir(), `keryx-allowlist-it-${randomUUID()}.sock`);
+        // The bind-mount source just needs to EXIST — this test's forwarder never
+        // dials it, so an empty regular file stands in for the real proxy socket.
+        writeFileSync(sockPath, "");
+        workdir = await mkdtemp(path.join(tmpdir(), "keryx-allowlist-it-work-"));
+        scratchHome = await mkdtemp(path.join(tmpdir(), "keryx-allowlist-it-home-"));
+        // A "forwarder" that ignores --ready-fifo entirely and just hangs — exactly
+        // the failure mode a crashed-before-bind or wedged forwarder looks like.
+        const plan: UnattendedSandboxPlan = planUnattendedSandbox({
+          worktree: workdir,
+          scratchHome,
+          network: {
+            mode: "allowlist",
+            proxySocketPath: sockPath,
+            forwarderArgv: ["/bin/sleep", "999"],
+            readyTimeoutSeconds: 1, // test seam — production uses the real, longer default
+          },
+          readOnly: [projectRoot],
+          env: process.env,
+          home: homedir(),
+        });
+        if (!plan.ok) throw new Error(`sandbox plan refused: ${plan.reason}`);
+        const argv = plan.wrap(["/bin/sh", "-c", "echo SHOULD-NEVER-RUN"]);
+        const start = Date.now();
+        const proc = Bun.spawn(argv, { env: plan.env, stdout: "pipe", stderr: "pipe" });
+        const stdout = await new Response(proc.stdout).text();
+        const stderr = await new Response(proc.stderr).text();
+        const exitCode = await proc.exited;
+        const elapsedMs = Date.now() - start;
+        expect(stdout).not.toContain("SHOULD-NEVER-RUN");
+        expect(stderr).toContain("did not become ready");
+        expect(exitCode).toBe(97);
+        // Bounded, not a hang: well under the 30s test timeout, close to the 1s bound.
+        expect(elapsedMs).toBeLessThan(10_000);
+      } finally {
+        if (workdir) await rm(workdir, { recursive: true, force: true });
+        if (scratchHome) await rm(scratchHome, { recursive: true, force: true });
       }
     },
     30_000,

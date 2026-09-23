@@ -70,6 +70,8 @@ export interface UnattendedNetworkAllowlist {
   readonly proxySocketPath: string;
   /** How to invoke keryx's hidden `__sandbox-net-forward` helper from inside the sandbox — `keryxInvocation().argv` with the subcommand name appended. */
   readonly forwarderArgv: readonly string[];
+  /** Test seam for F5's readiness bound. Default: `UNATTENDED_ALLOWLIST_FORWARDER_READY_TIMEOUT_SECONDS`. Never set in production. */
+  readonly readyTimeoutSeconds?: number;
 }
 
 /** `false` (off, the default) | `true` (full host network) | an allowlist grant (flow 301). */
@@ -77,6 +79,15 @@ export type UnattendedNetwork = boolean | UnattendedNetworkAllowlist;
 
 /** Fixed: each `shell_exec` bwrap invocation gets its own private netns, so no run can collide with another's forwarder port. */
 export const UNATTENDED_ALLOWLIST_FORWARDER_PORT = 8917;
+
+/**
+ * Flow 301 (F5): how long `wrap()`'s script waits for the forwarder to signal
+ * readiness before giving up. Without a bound, a forwarder that dies or hangs
+ * before opening the ready FIFO for write leaves the wrapping `read` blocked
+ * FOREVER — the command never runs, and the run hangs until something outside
+ * (the dispatcher's `maxSeconds` abort) kills it.
+ */
+export const UNATTENDED_ALLOWLIST_FORWARDER_READY_TIMEOUT_SECONDS = 10;
 
 /** Single-quote `value` for embedding in a POSIX `/bin/sh -c` script. */
 function shQuote(value: string): string {
@@ -326,7 +337,16 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
       // writes to it, which happens only after its TCP listener is bound — so a client
       // that connects the instant `exec "$@"` runs never races an unbound port. Plain
       // POSIX (`mkfifo`, blocking `read -r`), no bash-only syntax.
+      //
+      // F5: that `read` has no timeout of its own — POSIX `sh`'s builtin `read` has no
+      // portable `-t` (dash does not support it) — so a background WATCHDOG races the
+      // forwarder to the same FIFO: whichever writes first wins the single blocking
+      // `read`, and the script branches on WHAT it read (`ready` vs `TIMEOUT`) rather
+      // than on a signal. A forwarder that dies or hangs before it binds its listener
+      // therefore still gives up, with a clear message and a distinct exit code,
+      // instead of hanging forever.
       const readyFifo = "/tmp/.keryx-net-fwd-ready";
+      const readyTimeoutSeconds = allowlist.readyTimeoutSeconds ?? UNATTENDED_ALLOWLIST_FORWARDER_READY_TIMEOUT_SECONDS;
       const forwarderCmd = [
         ...allowlist.forwarderArgv,
         "--socket",
@@ -341,7 +361,16 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
       const script = [
         `mkfifo ${shQuote(readyFifo)}`,
         `${forwarderCmd} >/tmp/.keryx-net-fwd.log 2>&1 &`,
-        `read -r _ < ${shQuote(readyFifo)}`,
+        `FWD_PID=$!`,
+        `( sleep ${readyTimeoutSeconds}; echo TIMEOUT > ${shQuote(readyFifo)} 2>/dev/null ) &`,
+        `WATCHDOG_PID=$!`,
+        `read -r FWD_STATUS < ${shQuote(readyFifo)}`,
+        `kill "$WATCHDOG_PID" 2>/dev/null`,
+        `if [ "$FWD_STATUS" != "ready" ]; then`,
+        `  kill "$FWD_PID" 2>/dev/null`,
+        `  echo "keryx: the allowlist network forwarder did not become ready within ${readyTimeoutSeconds}s — see /tmp/.keryx-net-fwd.log" >&2`,
+        `  exit 97`,
+        `fi`,
         `exec "$@"`,
       ].join("\n");
       return [launcherPath, ...args, "--", "/bin/sh", "-c", script, "sh", ...argv];

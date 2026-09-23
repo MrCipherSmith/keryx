@@ -133,6 +133,22 @@ export function isPrivateOrReservedAddress(ip: string): boolean {
   // IPv4-mapped IPv6 (`::ffff:a.b.c.d`) — classify the embedded IPv4.
   const mapped = stripped.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
   if (mapped !== null) return isPrivateOrReservedAddress(mapped[1] as string);
+  // NAT64 (RFC 6052) Well-Known Prefix 64:ff9b::/96 embeds an IPv4 address in the
+  // low 32 bits, as two hex groups (`64:ff9b::7f00:1`) or, on some stacks, a mixed
+  // dotted tail (`64:ff9b::127.0.0.1`). Decode it and classify the EMBEDDED address —
+  // NAT64 legitimately carries a public v4, so this recurses rather than blanket-refusing.
+  const nat64Hex = stripped.match(/^64:ff9b::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (nat64Hex !== null) {
+    const hi = parseInt(nat64Hex[1] as string, 16);
+    const lo = parseInt(nat64Hex[2] as string, 16);
+    return isPrivateOrReservedAddress(`${(hi >>> 8) & 255}.${hi & 255}.${(lo >>> 8) & 255}.${lo & 255}`);
+  }
+  const nat64Mixed = stripped.match(/^64:ff9b::(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (nat64Mixed !== null) return isPrivateOrReservedAddress(nat64Mixed[1] as string);
+  // RFC 8215 Local-Use NAT64 prefix 64:ff9b:1::/48 is, by definition, never a global
+  // address — refuse the whole block rather than decoding its non-contiguous
+  // embedded-v4 bit layout (a `u`-bit plus a suffix split the 32 bits in two places).
+  if (/^64:ff9b:1:/.test(stripped)) return true;
   if (stripped === "::1" || stripped === "::" || stripped === "0:0:0:0:0:0:0:1" || stripped === "0:0:0:0:0:0:0:0") return true; // loopback / unspecified
   if (/^fe[89ab][0-9a-f]:/.test(stripped)) return true; // fe80::/10 link-local
   if (/^f[cd][0-9a-f]{2}:/.test(stripped)) return true; // fc00::/7 unique-local
@@ -182,6 +198,32 @@ function decodeDottedIPv4(s: string): [number, number, number, number] | null {
   const [a, b] = nums as [number, number];
   if (a > 255 || b > 0xffffff) return null;
   return [a, (b >>> 16) & 255, (b >>> 8) & 255, b & 255];
+}
+
+/**
+ * Flow 301 (F3): true when `host` is, or encodes, an IP address rather than a real
+ * domain name — refused wherever a "domain" is expected (`agentTaskDomainProblem` in
+ * `src/trigger/config.ts` duplicates the essential decode logic below, because a
+ * core-zone module may not import this client-zone one — see `src/lib/import-zones.ts`;
+ * keep the two in step by hand). Catches, beyond a strict dotted-quad:
+ *
+ *   - `inet_aton` short/mixed-radix forms (`127.1`, `10.1.2`) and flat decimal/hex/
+ *     octal 32-bit integers (`2130706433`, `0x7f000001`) — {@link decodeEncodedIPv4}.
+ *   - bracketed or bare IPv6 (any colon).
+ *   - a final label that is all-decimal or hex-numeric (`0x…`) — no real public TLD
+ *     is purely numeric, so `example.123` is refused even though `123` alone does not
+ *     decode as a full address; this is the "final label" rule the finding names.
+ *
+ * Pure lexical/arithmetic — no DNS, no sockets.
+ */
+export function looksLikeIpHost(host: string): boolean {
+  const stripped = host.replace(/^\[|\]$/g, "");
+  if (stripped.includes(":")) return true; // bracketed or bare IPv6
+  if (decodeEncodedIPv4(stripped) !== null) return true;
+  const labels = stripped.split(".");
+  const last = labels[labels.length - 1] ?? "";
+  if (/^\d+$/.test(last) || /^0x[0-9a-f]+$/i.test(last)) return true;
+  return false;
 }
 
 /**

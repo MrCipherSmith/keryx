@@ -82,6 +82,30 @@ test("AC7: without a registry, a long command still goes through the injected sy
   expect(result).toEqual({ output: "sync-only", isError: false });
 });
 
+// Flow 301 F5 (security review): CONFIRMS a gap the review asked about, does not
+// fix it — this is the no-`jobRegistry` shape `trigger-agent-task.ts`/
+// `trigger-dispatch.ts` build their unattended roster with (`buildUnattendedRoster`,
+// `sandboxedRunner`), so it is exactly the path a run's `maxSeconds` abort would need
+// to reach. It does not: `invoke`'s `jobRegistry === undefined` branch (this file,
+// `return run(command);`) never reads `ctx.signal` at all — the branch that DOES
+// (`ctx.signal` racing `jobRegistry.waitForExit`, a few lines below in the source)
+// is unreachable without a registry. So an ALREADY-ABORTED signal changes nothing:
+// the injected runner still runs to completion. In production the runner is
+// `makeCommandRunner`'s `Bun.spawn` of the sandboxed command, whose only deadline is
+// its OWN per-command `KERYX_SHELL_TIMEOUT_MS` (default 120s) — independent of, and
+// potentially longer than, the run's own `maxSeconds` — so a run-level abort does not
+// kill an in-flight `shell_exec`'s bwrap/sh process tree; only that separate,
+// per-command timer (or the process finishing on its own) does.
+test("F5 finding: an already-aborted signal does not stop the no-registry runner from completing", async () => {
+  const { run, calls } = recordingRunner({ output: "ran-to-completion", isError: false });
+  const tool = shellExecTool("/proj", run);
+  const controller = new AbortController();
+  controller.abort();
+  const result = await tool.invoke({ command: "echo hi" }, { signal: controller.signal });
+  expect(calls).toEqual(["echo hi"]);
+  expect(result).toEqual({ output: "ran-to-completion", isError: false });
+});
+
 test("shell_exec passes the command through to the runner", async () => {
   const { run, calls } = recordingRunner();
   const tool = shellExecTool("/proj", run);
