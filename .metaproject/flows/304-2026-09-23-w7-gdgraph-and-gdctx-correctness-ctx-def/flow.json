@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "304",
   "slug": "w7-gdgraph-and-gdctx-correctness-ctx-def",
   "title": "W7: gdgraph and gdctx correctness — ctx defects, read-only git allowlist, correctness benchmark, slim index",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-23T21:26:28.813Z",
-  "updatedAt": "2026-09-23T21:26:28.813Z",
+  "updatedAt": "2026-09-23T21:31:25.986Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,284 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7 (per-defect implementation lanes)"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T8-T10 (test lanes) and T12 (verification)"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "GDCTX-1: stream- and exit-code-aware error classification in ctx run",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "GDCTX-2: trust-aware image-URL redaction for trusted-project sources",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "GDCTX-3 bundled rg short flags + GIT_READONLY_ALLOW in the ctx hook",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "gdgraph: freshness note on every query path + golden edge and staleness fixtures",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Correctness benchmark goldens in gdctx-fact-preservation.json, run by bun test",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Index gate: enforce 400-token budget on template and live index.md",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Memory: four known-mistake entries for the closed defects",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Verify: targeted tests, typecheck and eslint on changed files",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Verify: end-to-end CLI repro of GDCTX-1/2/3 and hook allowlist with the local build",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-23T21:26:28.813Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-23T21:31:19.374Z",
+      "event": "task-added",
+      "detail": "T5: GDCTX-1: stream- and exit-code-aware error classification in ctx run"
+    },
+    {
+      "at": "2026-09-23T21:31:19.487Z",
+      "event": "task-added",
+      "detail": "T6: GDCTX-2: trust-aware image-URL redaction for trusted-project sources"
+    },
+    {
+      "at": "2026-09-23T21:31:19.608Z",
+      "event": "task-added",
+      "detail": "T7: GDCTX-3 bundled rg short flags + GIT_READONLY_ALLOW in the ctx hook"
+    },
+    {
+      "at": "2026-09-23T21:31:19.728Z",
+      "event": "task-added",
+      "detail": "T8: gdgraph: freshness note on every query path + golden edge and staleness fixtures"
+    },
+    {
+      "at": "2026-09-23T21:31:19.846Z",
+      "event": "task-added",
+      "detail": "T9: Correctness benchmark goldens in gdctx-fact-preservation.json, run by bun test"
+    },
+    {
+      "at": "2026-09-23T21:31:19.961Z",
+      "event": "task-added",
+      "detail": "T10: Index gate: enforce 400-token budget on template and live index.md"
+    },
+    {
+      "at": "2026-09-23T21:31:20.077Z",
+      "event": "task-added",
+      "detail": "T11: Memory: four known-mistake entries for the closed defects"
+    },
+    {
+      "at": "2026-09-23T21:31:20.191Z",
+      "event": "task-added",
+      "detail": "T12: Verify: targeted tests, typecheck and eslint on changed files"
+    },
+    {
+      "at": "2026-09-23T21:31:20.305Z",
+      "event": "task-added",
+      "detail": "T13: Verify: end-to-end CLI repro of GDCTX-1/2/3 and hook allowlist with the local build"
+    },
+    {
+      "at": "2026-09-23T21:31:25.520Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T21:31:25.643Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T21:31:25.758Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T21:31:25.874Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T21:31:25.986Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ]
 }

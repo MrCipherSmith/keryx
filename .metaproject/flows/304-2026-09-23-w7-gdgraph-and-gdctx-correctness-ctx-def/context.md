@@ -55,4 +55,14 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+Verified by the orchestrator on 2026-09-24 in this worktree (local CLI 0.2.161; installed `keryx` is 0.2.154 and stale — use `bun ./src/cli.ts` for the code under change):
+
+- GDCTX-1: `src/ctx/lines.ts` `FAILURE_STEMS`/`classifyLine`/`rankByVerdict`/`importantLines`/`compactLines`; callers in `src/commands/ctx.ts` `importantSection` (two call sites: ~851 test summary, ~1160 `summarizeCommandOutput`) and `compactLines` (~1147, ~1271). `runCommand` (~640) keeps `stdout`/`stderr`/`exitCode` separately and builds a merged `raw`.
+- GDCTX-2: `src/commands/ctx.ts:317` passes `source: "trusted-project"` to `redactRaw`; `src/security/resolve.ts` (`policyFor` 37-51, `buildFinding`, `resolveDecision` ~184) never branches on source; `IMAGE_URL` detector in `src/security/detect/exfil.ts`.
+- GDCTX-3: `buildRgCommand` `src/commands/ctx.ts:932`; `RG_SAFE_FLAGS` 875, `RG_SAFE_VALUE_FLAGS` after it.
+- Hook: `src/ctx/hook-classify.ts` `GIT_ROUTABLE = /^(diff|log|show)$/` (~76). Note flow 305 (W5-a) concurrently reworks `src/ctx/runtimes.ts`/`orient-runtimes.ts`, not this file.
+- Freshness: `src/gdgraph/staleness.ts` `checkGraphStaleness`; `printStaleNote` in `src/commands/gdgraph.ts` (~577-593).
+- Benchmark: `fixtures/benchmark/keryx/gdctx-fact-preservation.json` (3 captured dogfood inputs; not loaded by any test; preservation is 18/18, 110/327, 108/155 — lossy by design, a compression benchmark, not a golden). Generator `scripts/benchmark/run-gdctx-oracle.ts` rewrites the file wholesale. `extractFacts` in `src/metrics/oracle-runner.ts:598`.
+- CI: `test:core` in package.json covers `src/ctx/ src/commands/ src/gdgraph/ src/security/ src/metrics/ src/lib/ src/memory/`.
+- GDCTX-5: already shipped — `renderIndexGateMarkdown` in `src/lib/templates.ts:381`, live `.metaproject/index.md` = 1,470 bytes (~368 tokens) and matches the template; existing test only bounds it at <2000 chars (`src/lib/templates.test.ts:155`). Remaining: enforce ≤400 tokens and pin the live file to the template.
+- The ctx PreToolUse hook blocks heredoc `cat > file` writes; use the Write tool or an escape marker.
