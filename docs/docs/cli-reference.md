@@ -1629,7 +1629,7 @@ keryx schedule remove <name> [--yes]
 | `list` | Every schedule: cadence, enabled or paused, timer installed or not, next run, last outcome with its cost, and the last report's path. |
 | `show <name>` | The same row plus the prompt, the runner and budget, the grants, the last five runs, and the latest report. |
 | `pause <name>` | Disable the timer and mark the entry disabled. A fire while paused records `no-op`. |
-| `resume <name>` | Re-enable both. The content is unchanged, so no new confirmation is needed. |
+| `resume <name>` | Re-enable both. No new confirmation is asked, so resume first checks that the entry still carries this machine's signature and that every granted binary still matches its pin, and refuses with the reason otherwise. It reinstalls the keryx recorded when you confirmed the card, never the one running `resume`. |
 | `run <name>` | One pass now (`keryx trigger run --schedule <name>`: local schedules only). |
 | `remove <name>` | After a confirmation, uninstall the timer and delete the entry. keryx deletes only files that carry its `# keryx-managed <projecthash> <name>` header. Anything else found at those paths is left untouched and named. |
 
@@ -1730,10 +1730,15 @@ store or the reports. **No grant lifts any of it.**
   - `keryx trigger schedule|install`;
   - `crontab`, `launchctl` and `loginctl`;
   - `systemctl` with `enable|link|start|restart|daemon-reload|edit|disable|stop|…`;
-  - any write into `~/.config/systemd/user` or `~/Library/LaunchAgents`.
+  - any write into `~/.config/systemd/user` or `~/Library/LaunchAgents`;
+  - starting an interactive keryx (`keryx`, `keryx shell` without `-p`), a terminal
+    driver around one (`script`, `screen`, `tmux`, `unbuffer`), or typing into a
+    running session (`tmux send-keys`, `screen -X stuff`).
 
   `keryx schedule add|remove|pause|resume|run` also refuse outright inside an agent's
-  shell (`KERYX_TOOL_CALL=1`).
+  shell (`KERYX_TOOL_CALL=1`). So do a nested keryx's `/schedule`, `schedule_create`,
+  and the `/schedules` pause, resume, run-now and delete keys, because an agent can
+  type into a keryx it started through a pseudo-terminal.
 - **Clean cards.** Model-supplied text on the card has ANSI and control characters
   removed, and newlines are shown as `⏎`.
 - **Operator-only storage.** `schedule_create` stores only the draft whose card the
@@ -1764,9 +1769,18 @@ store or the reports. **No grant lifts any of it.**
   scheduler finds the same key.
 - **Binaries are re-checked before each exec.** A granted binary's inode, size and mtime
   are re-checked before every exec, not only at the start of the run.
+- **The timer runs the keryx you confirmed.** The card's `runs:` line is the exact
+  command, quoted as the unit carries it. That command and the pinned environment are
+  signed with the entry, so resume and reinstall never swap in another keryx. A keryx
+  running from inside the project (for example `bun src/cli.ts`) is refused when the
+  schedule is drafted: install keryx globally for schedules.
+- **Reports are read only from their own place.** The Report tab and the notices read
+  only `.metaproject/data/trigger/reports/<name>/<runId>.md`: a regular file (never a
+  link or a FIFO), under a size cap, with control characters removed. A `reportPath`
+  in `runs.jsonl` that points anywhere else is ignored.
 - **Honest limit.** The shell floor is text analysis, and a same-user shell in `trust`
-  mode can get past it with a variable or a script. The terminal requirement and the
-  signing key are the real gates.
+  mode can get past it with a variable or a script. The terminal requirement, the
+  nested-keryx refusal and the signing key are the gates behind it.
 
 **Where things live.**
 
@@ -1796,13 +1810,17 @@ reservation.
 
 - `/schedule` creates a schedule from the shell, with the same card.
 - The sidebar's **Schedules** section (after Triggers) shows one compact row per
-  schedule: name, next run time (or `paused`), and last outcome with its cost (`ok`,
-  `failed`, `refused`). A click on a row opens that schedule's detail.
+  schedule: name, next run time (or `paused`, or `not installed` when the timer files
+  are gone), and last outcome with its cost (`ok`, `failed`, `refused`; a hand-resolved
+  run shows `resolved` in the attention colour). A click on a row opens that schedule's
+  detail.
 - `/schedules` opens the list: `↑/↓` to select, `Enter` to open, `Esc` to close.
   `/schedules <name>` opens one schedule directly.
-- The detail modal has four tabs: **Overview** (cadence, next runs, last run, installed
-  timer, runner, budget, prompt), **Grants** (network, account, repos, granted tools
-  with their pinned binaries), **Runs** (the last runs with outcome, cost and refusal),
+- The detail modal has four tabs: **Overview** (cadence, next runs in local time, last
+  run, installed timer, its unit, the linger state, whether the entry still verifies,
+  runner, budget, prompt), **Grants** (network, account, repos, granted tools, and each
+  program's pinned realpath and short sha256, with a wrapper's interpreter), **Runs**
+  (the last 12 outcomes with cost and refusal; reservations do not count),
   and **Report** (the latest report, scrollable). The first line of every tab lists its
   keys:
   - `p` pauses or resumes, in one step;

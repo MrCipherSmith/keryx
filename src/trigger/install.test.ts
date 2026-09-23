@@ -54,6 +54,8 @@ afterEach(async () => {
 });
 
 const CRON = "0 */4 * * *";
+/** The runner the operator confirmed (M1): resume reinstalls exactly this. */
+const CONFIRMED = { argv: ["/bin/true", "/bin/true"], env: {} };
 
 describe("systemd --user", () => {
   test("writes a project-unique service+timer with a real OnCalendar, Persistent=true, WorkingDirectory and absolute ExecStart, then enables it", async () => {
@@ -102,7 +104,7 @@ describe("systemd --user", () => {
     expect(host.calls).toEqual([`systemctl --user disable --now ${base}.timer`]);
     expect((await readdir(unitDir)).length).toBe(2);
     host.calls.length = 0;
-    await resumeSchedule(root, "check-github", CRON, host);
+    await resumeSchedule(root, "check-github", CRON, host, CONFIRMED);
     expect(host.calls).toContain(`systemctl --user enable --now ${base}.timer`);
   });
 
@@ -124,7 +126,7 @@ describe("systemd --user", () => {
     expect(await lingerStatus(host)).toBe("no");
     await installSchedule(root, "check-github", CRON, host);
     await pauseSchedule(root, "check-github", CRON, host);
-    await resumeSchedule(root, "check-github", CRON, host);
+    await resumeSchedule(root, "check-github", CRON, host, CONFIRMED);
     await uninstallSchedule(root, "check-github", CRON, host);
     expect(host.calls.filter((c) => c.includes("enable-linger"))).toEqual([]);
     expect(host.calls.filter((c) => c.startsWith("loginctl"))).toEqual(["loginctl show-user someone -p Linger"]);

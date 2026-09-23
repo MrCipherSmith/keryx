@@ -15,7 +15,7 @@
 
 import { requestFromArgs } from "../commands/schedule";
 import type { ScheduleHost } from "../trigger/install";
-import { confirmSchedule, draftSchedule, type DraftContext } from "../trigger/schedules";
+import { confirmSchedule, draftSchedule, nestedAgentScheduleRefusal, type DraftContext } from "../trigger/schedules";
 
 export const SCHEDULE_SLASH_USAGE = [
   "usage: /schedule --name <name> --every \"<cadence>\" --rates <in>,<out> --ceiling <usd> [--tool <id>]... [--repo owner/name]...",
@@ -63,10 +63,17 @@ export interface ScheduleSlashDeps {
   readonly now?: () => Date;
   readonly resolveProgram?: DraftContext["resolveProgram"];
   readonly accountOf?: DraftContext["accountOf"];
+  /** M3a: the process environment (default `process.env`). */
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 /** Run `/schedule <raw>`. Returns whether a schedule was created. */
 export async function runScheduleSlashCommand(raw: string, deps: ScheduleSlashDeps): Promise<boolean> {
+  const nested = nestedAgentScheduleRefusal(deps.env);
+  if (nested !== undefined) {
+    deps.print(`/schedule: ${nested}`, "error");
+    return false;
+  }
   const tokens = tokenizeArgs(raw);
   if (tokens.length === 0 || tokens[0] === "--help" || tokens[0] === "-h") {
     for (const line of SCHEDULE_SLASH_USAGE) deps.print(line, "dim");

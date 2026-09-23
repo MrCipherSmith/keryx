@@ -20,21 +20,28 @@
 // Actions apply only to local schedules (`keryx schedule add`, /schedule). A schedule-fired
 // trigger declared in the committed triggers.json is read-only here.
 
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import type { AgentTaskAction } from "../trigger/config";
 import { describeCost, describeFire, NETWORK_ON_WARNING } from "../trigger/describe";
 import { grantedToolSpec } from "../trigger/granted-tools";
-import type { ScheduleHost } from "../trigger/install";
-import type { TriggerRunRecord } from "../trigger/record";
+import { isScheduleInstalled, lingerStatus, planInstall, type ScheduleHost } from "../trigger/install";
+import { expectedReportRelPath, type TriggerRunRecord } from "../trigger/record";
 import { nextCronRuns } from "../trigger/cron";
-import { latestReportPath, pauseStoredSchedule, removeSchedule, resumeStoredSchedule } from "../trigger/schedules";
+import {
+  cardSafe,
+  latestReportPath,
+  nestedAgentScheduleRefusal,
+  pauseStoredSchedule,
+  removeSchedule,
+  resumeStoredSchedule,
+  scheduleVerification,
+} from "../trigger/schedules";
+import { readScheduleReport } from "../trigger/store";
 import { clampScroll, scrollToReveal, windowLines, wrapLines } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
 import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
 import { dimChunk, roleChunk } from "./theme-text";
-import { formatLastOutcome, formatNextRun, latestOutcome } from "./schedules-panel";
+import { formatLastOutcome, formatLocalDateTime, formatNextRun, latestOutcome } from "./schedules-panel";
 import { loadTriggerLedgerView, scheduledEntries, type TriggerEntryView, type TriggerLedgerView } from "./trigger-ledger";
 import type { TriggerRunNow } from "./trigger-run-now";
 
@@ -82,14 +89,27 @@ function isLocal(item: TriggerEntryView): boolean {
 
 function recordLine(record: TriggerRunRecord): string {
   const refusal = record.agentTask?.refusal ?? record.dispatch?.refusal;
-  return `${record.at}  ${record.outcome}${refusal !== undefined ? ` (${refusal})` : ""} — ${record.detail}  [${describeCost(record.cost)}]`;
+  // M2: `detail` comes from runs.jsonl, which a commit can plant — no control characters reach the terminal.
+  return cardSafe(`${record.at}  ${record.outcome}${refusal !== undefined ? ` (${refusal})` : ""} — ${record.detail}  [${describeCost(record.cost)}]`);
+}
+
+/** What the Overview says about the installed timer (M4, L1). */
+export interface InstallDescription {
+  /** "yes (…)" / "NO — …" / "n/a (…)". */
+  readonly installed: string;
+  /** The timer unit, launchd label or crontab marker. */
+  readonly unit: string;
+  readonly linger: "yes" | "no" | "unknown" | "n/a";
+  /** L1: does the stored entry still verify (signature and binary pins)? */
+  readonly verified: string;
 }
 
 /** Overview tab (unwrapped lines). */
-export function overviewLines(item: TriggerEntryView, now: Date, install: string): string[] {
+export function overviewLines(item: TriggerEntryView, now: Date, install: InstallDescription | undefined): string[] {
   const { entry } = item;
   const cron = entry.fire.kind === "schedule" ? entry.fire.cron : "";
-  const next = entry.enabled ? nextCronRuns(cron, now, 3).map((d) => d.toISOString()) : [];
+  // L4: local time, as the sidebar row shows it.
+  const next = entry.enabled ? nextCronRuns(cron, now, 3).map(formatLocalDateTime) : [];
   const task = agentTask(item);
   const latest = latestOutcome(item);
   const lines = [
@@ -97,8 +117,11 @@ export function overviewLines(item: TriggerEntryView, now: Date, install: string
     "",
     `cadence    ${describeFire(entry.fire)}`,
     `next runs  ${entry.enabled ? next.join(", ") || "none within a year" : "— (paused)"}`,
-    `last run   ${latest === undefined ? "never ran" : `${formatLastOutcome(latest, now)} — ${latest.detail}`}`,
-    `installed  ${install}`,
+    `last run   ${latest === undefined ? "never ran" : cardSafe(`${formatLastOutcome(latest, now)} — ${latest.detail}`)}`,
+    `installed  ${install?.installed ?? "…"}`,
+    `unit       ${install?.unit ?? "…"}`,
+    `linger     ${install?.linger ?? "…"}${install?.linger === "no" ? " (the timer runs only while you are logged in)" : ""}`,
+    `verified   ${install?.verified ?? "…"}`,
   ];
   if (task !== undefined) {
     lines.push(
@@ -126,11 +149,24 @@ export function grantsLines(item: TriggerEntryView): string[] {
   ];
   for (const id of g.tools) {
     const program = grantedToolSpec(id)?.program;
-    const pin = program === undefined ? undefined : g.binDigests[program];
     const bin = program === undefined ? undefined : g.bins[program];
-    lines.push(`  - ${id}: ${bin ?? "(unresolved)"}${pin?.interpreter !== undefined ? ` (script wrapper, interpreter ${pin.interpreter.realpath})` : ""}`);
+    lines.push(`  - ${id}: ${bin ?? "(unresolved)"}`);
   }
-  return lines;
+  // L4: what each program is pinned to — checked again before every run and every exec.
+  const programs = Object.keys(g.bins);
+  if (programs.length > 0) lines.push("", "pinned programs (a changed file refuses the run):");
+  for (const program of programs) {
+    const pin = g.binDigests[program];
+    if (pin === undefined) {
+      lines.push(`  ${program}: NOT pinned — the run refuses; recreate the schedule`);
+      continue;
+    }
+    lines.push(`  ${program}: pinned ${pin.realpath}  sha256 ${pin.sha256.slice(0, 12)}`);
+    if (pin.interpreter !== undefined) {
+      lines.push(`    script wrapper — interpreter ${pin.interpreter.command} → ${pin.interpreter.realpath}  sha256 ${pin.interpreter.sha256.slice(0, 12)}, pinned`);
+    }
+  }
+  return lines.map(cardSafe);
 }
 
 /** Runs tab. */
@@ -142,10 +178,27 @@ export function runsLines(item: TriggerEntryView): string[] {
   return lines;
 }
 
-/** The report the Report tab shows: the newest record's, else the newest file on disk. */
+/**
+ * The report the Report tab shows: the newest record's, else the newest file on disk.
+ * M2: a record's path counts only when it is exactly where keryx writes that run's report.
+ */
 export function reportPathOf(cwd: string, item: TriggerEntryView): string | undefined {
-  const fromRecord = item.records.find((r) => r.agentTask?.reportPath !== undefined)?.agentTask?.reportPath;
+  const fromRecord = item.records.find((r) => {
+    const task = r.agentTask;
+    return task?.reportPath !== undefined && task.reportPath === expectedReportRelPath(item.entry.name, task.runId);
+  })?.agentTask?.reportPath;
   return fromRecord ?? latestReportPath(cwd, item.entry.name);
+}
+
+/** M2: the Report tab's text — read bounded, a regular file only, control characters stripped. */
+export async function reportText(cwd: string, item: TriggerEntryView): Promise<string> {
+  const reportPath = reportPathOf(cwd, item);
+  if (reportPath === undefined) return "";
+  const read = await readScheduleReport(cwd, item.entry.name, reportPath);
+  if (!read.ok) return cardSafe(`(${read.reason})`);
+  const lines = read.text.split(/\r?\n/).map(cardSafe);
+  if (read.truncated) lines.push("", "(report truncated at the read cap)");
+  return lines.join("\n");
 }
 
 export interface SchedulesModalOptions {
@@ -154,8 +207,12 @@ export interface SchedulesModalOptions {
   onKeypress: (handler: (key: { name: string; sequence: string }) => void) => () => void;
   actions?: ScheduleActions;
   load?: (cwd: string) => Promise<TriggerLedgerView>;
-  /** "installed (systemd: …)" for the Overview tab. Default: a cheap file check, no scheduler query. */
-  describeInstall?: (cwd: string, item: TriggerEntryView) => Promise<string>;
+  /** The Overview's timer facts (M4) and verification (L1). Default: `defaultDescribeInstall(host)`. */
+  describeInstall?: (cwd: string, item: TriggerEntryView) => Promise<InstallDescription>;
+  /** The scheduler host for the default `describeInstall`. */
+  host?: ScheduleHost;
+  /** M3a: the process environment (default `process.env`). */
+  env?: Readonly<Record<string, string | undefined>>;
   now?: () => Date;
   renderer?: { width?: number; height?: number };
   visibleRows?: number;
@@ -187,12 +244,29 @@ function bodyRowsFor(chrome: unknown, options: Pick<SchedulesModalOptions, "rend
   return Math.max(1, (options.visibleRows ?? rows) - 2);
 }
 
-async function defaultDescribeInstall(cwd: string, item: TriggerEntryView): Promise<string> {
-  if (!isLocal(item)) return "n/a (declared in triggers.json — see `keryx trigger schedule`)";
-  const { isScheduleInstalled } = await import("../trigger/install");
-  const cron = item.entry.fire.kind === "schedule" ? item.entry.fire.cron : "";
-  const installed = await isScheduleInstalled(cwd, item.entry.name, cron).catch(() => false);
-  return installed ? "yes (keryx-managed timer present)" : "NO — the timer files are missing; remove and add the schedule again";
+/**
+ * The Overview's timer facts. Cheap: files (or the crontab) and `loginctl show-user`, never a
+ * scheduler query. The backend probe is cached per process (`detectBackend`), so a reload
+ * does not spawn `systemctl` again.
+ */
+export function defaultDescribeInstall(host: ScheduleHost = {}): (cwd: string, item: TriggerEntryView) => Promise<InstallDescription> {
+  return async (cwd, item) => {
+    if (!isLocal(item)) {
+      return { installed: "n/a (declared in triggers.json — see `keryx trigger schedule`)", unit: "—", linger: "n/a", verified: "n/a (not a local schedule)" };
+    }
+    const { entry } = item;
+    const cron = entry.fire.kind === "schedule" ? entry.fire.cron : "";
+    const plan = await planInstall(cwd, entry.name, cron, host, entry.install);
+    const installed = await isScheduleInstalled(cwd, entry.name, cron, host, entry.install).catch(() => false);
+    const linger = plan.backend === "systemd" ? await lingerStatus(host) : "n/a";
+    const verification = await scheduleVerification(cwd, entry.name);
+    return {
+      installed: installed ? `yes (${plan.backend}: keryx-managed timer present)` : `NO — the timer files are missing (${plan.backend}); remove and add the schedule again`,
+      unit: plan.unit,
+      linger,
+      verified: verification.ok ? "yes — signature and binary pins match what you confirmed" : `NO — ${verification.reason}`,
+    };
+  };
 }
 
 /** The detail modal for one schedule. */
@@ -201,12 +275,12 @@ export function openScheduleDetail(otui: unknown, chrome: unknown, name: string,
   const r = (chrome as { renderer?: unknown } | undefined)?.renderer;
   const load = options.load ?? loadTriggerLedgerView;
   const actions = options.actions ?? defaultScheduleActions();
-  const describeInstall = options.describeInstall ?? defaultDescribeInstall;
+  const describeInstall = options.describeInstall ?? defaultDescribeInstall(options.host);
   const now = options.now ?? (() => new Date());
   const bodyRows = bodyRowsFor(chrome, options);
 
   let item: TriggerEntryView | undefined;
-  let install = "…";
+  let install: InstallDescription | undefined;
   let report = "";
   let scroll = 0;
   let width: number | undefined;
@@ -258,9 +332,13 @@ export function openScheduleDetail(otui: unknown, chrome: unknown, name: string,
       paint();
       return;
     }
-    install = await describeInstall(options.cwd, item).catch(() => "unknown");
-    const reportPath = reportPathOf(options.cwd, item);
-    report = reportPath === undefined ? "" : await readFile(path.join(options.cwd, reportPath), "utf8").catch(() => `(could not read ${reportPath})`);
+    install = await describeInstall(options.cwd, item).catch((error: unknown) => ({
+      installed: `unknown (${error instanceof Error ? error.message : String(error)})`,
+      unit: "unknown",
+      linger: "unknown" as const,
+      verified: "unknown",
+    }));
+    report = await reportText(options.cwd, item);
     paint();
   };
 
@@ -311,13 +389,30 @@ export function openScheduleDetail(otui: unknown, chrome: unknown, name: string,
   );
 
   keys.off = options.onKeypress((key) => {
-    if (closed || options.inputBlocked?.() === true) return;
+    if (closed) return;
+    if (options.inputBlocked?.() === true) {
+      // L3: another overlay took the keyboard. An armed action is dropped, so a `y`
+      // typed for that overlay can never confirm it.
+      if (armed !== undefined) {
+        statusText = `${armed === "run" ? "run-now" : "delete"} of ${name} cancelled (another prompt took the keyboard)`;
+        armed = undefined;
+        paint();
+      }
+      return;
+    }
     const token = key.name || key.sequence;
     if (armed !== undefined) {
       const what = armed;
       armed = undefined;
       if (token !== "y") {
         statusText = `${what === "run" ? "run-now" : "delete"} of ${name} cancelled`;
+        paint();
+        return;
+      }
+      // L3: the schedule may have vanished (another process removed it) while armed.
+      const current = item;
+      if (current === undefined) {
+        statusText = `no schedule named "${name}" any more — nothing was ${what === "run" ? "run" : "deleted"}`;
         paint();
         return;
       }
@@ -328,13 +423,13 @@ export function openScheduleDetail(otui: unknown, chrome: unknown, name: string,
         });
         return;
       }
-      const run = options.runNow.run(name, isLocal(item as TriggerEntryView) ? { schedule: true } : {});
+      const run = options.runNow.run(name, isLocal(current) ? { schedule: true } : {});
       if (run === undefined) {
         statusText = `${name} is already running from this shell`;
         paint();
         return;
       }
-      statusText = `running ${name}… (keryx trigger run${isLocal(item as TriggerEntryView) ? " --schedule" : ""} ${name})`;
+      statusText = `running ${name}… (keryx trigger run${isLocal(current) ? " --schedule" : ""} ${name})`;
       paint();
       pending = pending.then(async () => {
         const result = await run;
@@ -346,7 +441,10 @@ export function openScheduleDetail(otui: unknown, chrome: unknown, name: string,
       return;
     }
     if (token === "p" || token === "r" || token === "d") {
-      if (item === undefined) {
+      const nested = nestedAgentScheduleRefusal(options.env);
+      if (nested !== undefined) {
+        statusText = nested;
+      } else if (item === undefined) {
         statusText = `no schedule named "${name}"`;
       } else if (token !== "r" && !isLocal(item)) {
         statusText = `${name} is declared in triggers.json — edit that file; only local schedules are paused or deleted here`;
@@ -404,6 +502,8 @@ export function openSchedulesList(
   let loaded = false;
   let error: string | undefined;
   let selected = 0;
+  // L4: the selection follows the schedule's NAME across reloads, not its row index.
+  let selectedKey: string | undefined;
   let scroll = 0;
   let bodyNode: { content: unknown } | undefined;
   let closed = false;
@@ -436,7 +536,9 @@ export function openSchedulesList(
       error = caught instanceof Error ? caught.message : String(caught);
     }
     loaded = true;
-    selected = Math.min(selected, Math.max(0, entries.length - 1));
+    const byName = selectedKey === undefined ? -1 : entries.findIndex((e) => e.entry.name === selectedKey);
+    selected = byName >= 0 ? byName : Math.min(selected, Math.max(0, entries.length - 1));
+    selectedKey = entries[selected]?.entry.name;
     paint();
   };
 
@@ -465,9 +567,13 @@ export function openSchedulesList(
   keys.off = options.onKeypress((key) => {
     if (closed || options.inputBlocked?.() === true) return;
     const token = key.name || key.sequence;
-    if (token === "up" || token === "k") selected = Math.max(0, selected - 1);
-    else if (token === "down" || token === "j") selected = Math.min(Math.max(0, entries.length - 1), selected + 1);
-    else if (token === "return" || token === "enter") {
+    if (token === "up" || token === "k") {
+      selected = Math.max(0, selected - 1);
+      selectedKey = entries[selected]?.entry.name;
+    } else if (token === "down" || token === "j") {
+      selected = Math.min(Math.max(0, entries.length - 1), selected + 1);
+      selectedKey = entries[selected]?.entry.name;
+    } else if (token === "return" || token === "enter") {
       const chosen = entries[selected];
       if (chosen !== undefined) options.onOpenDetail(chosen.entry.name);
       return;

@@ -98,7 +98,7 @@ export function resolveScheduleEntry(projectRoot: string, name: string): Schedul
 }
 
 /** Quote one shell word single-quoted, safe for any byte a path or name can contain. */
-function shQuote(value: string): string {
+export function shQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
@@ -182,7 +182,7 @@ function systemdEscapePercent(value: string): string {
 }
 
 /** `systemdEscapePercent` then `systemdQuote`, in the order every interpolated systemd value below needs. */
-function systemdValue(value: string): string {
+export function systemdValue(value: string): string {
   return systemdQuote(systemdEscapePercent(value));
 }
 

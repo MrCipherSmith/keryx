@@ -450,6 +450,64 @@ const SHELLS: ReadonlySet<string> = new Set(["sh", "bash", "zsh", "dash", "ksh",
 /** Directories the OS scheduler reads units from; a write into one installs a timer. */
 const UNIT_DIR_MARKERS: readonly string[] = ["systemd/user", "config/systemd", "launchagents"];
 
+/** How keryx is named on a command line: the binary, or its entry script run by a JS runtime. */
+const KERYX_ENTRY_NAMES: ReadonlySet<string> = new Set(["keryx", "cli.ts", "cli.js"]);
+/** Runtimes that run keryx's entry script (`bun src/cli.ts shell`, `npx keryx shell`). */
+const JS_RUNNERS: ReadonlySet<string> = new Set(["bun", "bunx", "node", "npx", "pnpx", "tsx", "deno"]);
+/** Programs that give another program a terminal, so the caller can type into it. */
+const TERMINAL_DRIVERS: ReadonlySet<string> = new Set(["script", "screen", "tmux", "unbuffer", "dtach", "abduco", "expect", "socat", "zpty"]);
+
+function baseName(word: string | undefined): string {
+  return ((word ?? "").split("/").pop() ?? "").toLowerCase();
+}
+
+/**
+ * Flow 295 (M3b): does this simple command start an INTERACTIVE keryx — `keryx` with no
+ * subcommand, or `keryx shell` in any interactive form? `keryx shell -p/--print` runs one
+ * headless turn: it has no TUI, no `/schedule`, no `/schedules` and no schedule tools,
+ * so it is not caught.
+ */
+function launchesInteractiveKeryx(words: readonly string[]): boolean {
+  let at = 0;
+  if (JS_RUNNERS.has(baseName(words[0]))) {
+    at = words.findIndex((w, i) => i > 0 && !w.startsWith("-") && !["run", "x", "exec"].includes(w));
+    if (at < 0) return false;
+  }
+  if (!KERYX_ENTRY_NAMES.has(baseName(words[at]))) return false;
+  const after = words.slice(at + 1);
+  const sub = after.find((w) => !w.startsWith("-"));
+  if (sub === undefined) return !after.some((w) => w === "--help" || w === "-h" || w === "--version" || w === "-v");
+  if (sub !== "shell") return false;
+  return !after.some((w) => w === "-p" || w === "--print" || w.startsWith("--print="));
+}
+
+/**
+ * M3b: a terminal driver (`script`, `screen`, `tmux`, `unbuffer`, …) that starts an
+ * interactive keryx, or types into a running session (`tmux send-keys`, `screen -X stuff`).
+ * An agent could otherwise drive a nested keryx TUI through a pseudo-terminal and answer
+ * its `/schedule` card or press its `/schedules` keys itself.
+ */
+function drivesKeryxTerminal(words: readonly string[], depth: number): boolean {
+  const cmd = baseName(words[0]);
+  if (!TERMINAL_DRIVERS.has(cmd)) return false;
+  const rest = words.slice(1);
+  if (cmd === "tmux" && rest.some((w) => w === "send-keys" || w === "send" || w === "paste-buffer" || w === "pasteb")) return true;
+  if (cmd === "screen" && rest.some((w, i) => w === "-X" && ["stuff", "paste", "eval"].includes((rest[i + 1] ?? "").toLowerCase()))) return true;
+  // A command string argument (`script -qfc 'keryx shell' /dev/null`, `tmux new 'keryx'`).
+  for (let i = 0; i < rest.length; i += 1) {
+    const w = rest[i]!;
+    const commandFlag = /^-[a-z]*c$/i.test(w) || w === "--command";
+    const value = commandFlag ? rest[i + 1] : w.startsWith("--command=") ? w.slice("--command=".length) : /\s/.test(w) ? w : undefined;
+    if (value !== undefined && depth < 4 && parsedSchedulerControl(value, depth + 1)) return true;
+  }
+  // The rest of the line as a program and its arguments (`screen keryx shell`, BSD
+  // `script -q /dev/null keryx`, `unbuffer bun src/cli.ts shell`).
+  for (let i = 1; i < words.length; i += 1) {
+    if (launchesInteractiveKeryx(words.slice(i))) return true;
+  }
+  return false;
+}
+
 /** Remove backslash escapes a shell would drop (`sys\temctl` → `systemctl`). Quotes are already gone. */
 function unescapeWord(word: string): string {
   return word.replace(/\\(.)/g, "$1");
@@ -508,6 +566,7 @@ function segmentControlsScheduler(input: readonly string[], cwdHint: string, dep
   const rest = words.slice(1).map((w) => w.toLowerCase());
   const positional = rest.filter((w) => !w.startsWith("-"));
   if (cmd === "crontab" || cmd === "launchctl" || cmd === "loginctl") return true;
+  if (launchesInteractiveKeryx(words) || drivesKeryxTerminal(words, depth)) return true;
   if (cmd === "systemctl" && positional.some((w) => SYSTEMCTL_CONTROL_VERBS.has(w))) return true;
   for (let i = 0; i + 1 < positional.length; i++) {
     if (positional[i] === "schedule" && SCHEDULE_VERBS.has(positional[i + 1]!)) return true;
@@ -537,7 +596,8 @@ function parsedSchedulerControl(command: string, depth = 0): boolean {
 }
 
 /**
- * True when `command` creates, changes or runs a schedule, or drives the OS scheduler. Pure.
+ * True when `command` creates, changes or runs a schedule, drives the OS scheduler, or
+ * (M3b) starts an interactive keryx or a terminal driver around one. Pure.
  *
  * Flow 295 (N1): matched on PARSED words, the way `isPublishCommand` is, so quoting
  * (`keryx 'schedule' add`, `sys''temctl`, `cron''tab`), backslash escapes, wrappers

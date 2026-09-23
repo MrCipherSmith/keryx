@@ -67,7 +67,7 @@ import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
 import { describeDetachedRuns } from "./trigger-run-now";
-import { isSchedulesCommand, mountSchedulesSidebar, type SchedulesSidebar } from "./schedules-sidebar";
+import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
 import { createSplashLifecycle, mountEmptyTranscriptSplash, playBootAnimation, type SplashLifecycle } from "./boot-animation";
@@ -6283,7 +6283,7 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "schedules": {
-            schedules.handleCommand(line);
+            routeSchedulesCommand(line, true, schedules);
             return;
           }
           case "mcp": {
@@ -6656,7 +6656,7 @@ export async function launchTuiAgentShell(opts: {
         if (routeOpsCommand(line, false, ops)) {
           return;
         }
-        if (isSchedulesCommand(command.name) && schedules.handleCommand(line)) {
+        if (routeSchedulesCommand(line, false, schedules)) {
           return;
         }
         if (isMcpConsumerCommand(command.name)) {

@@ -342,6 +342,34 @@ export function latestRunByTrigger(records: readonly TriggerRunRecord[]): Map<st
   return latest;
 }
 
+/**
+ * Flow 295 (M2): the ONE place a scheduled run's report may be, repo-relative:
+ * `.metaproject/data/trigger/reports/<trigger>/<runId>.md`. `undefined` when the trigger
+ * name or run id could not have come from keryx (a separator, `..`, a leading dot).
+ */
+export function expectedReportRelPath(trigger: string, runId: string): string | undefined {
+  const safe = (s: string): boolean => /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(s) && !s.includes("..");
+  if (!safe(trigger) || !safe(runId)) return undefined;
+  return path.join(".metaproject", "data", "trigger", "reports", trigger, `${runId}.md`);
+}
+
+/**
+ * M2: `runs.jsonl` is trackable, so a commit can plant a record. A `reportPath` that is not
+ * exactly where keryx writes this run's report is dropped when the record is read, so no
+ * reader can be pointed at `../../etc/hostname` or a FIFO somewhere else.
+ */
+function withSafeReportPath(raw: Record<string, unknown>): Record<string, unknown> {
+  const task = raw["agentTask"];
+  if (task === null || typeof task !== "object" || Array.isArray(task)) return raw;
+  const t = task as Record<string, unknown>;
+  if (t["reportPath"] === undefined) return raw;
+  const expected =
+    typeof t["runId"] === "string" && typeof raw["trigger"] === "string" ? expectedReportRelPath(raw["trigger"], t["runId"]) : undefined;
+  if (expected !== undefined && t["reportPath"] === expected) return raw;
+  const { reportPath: _dropped, ...rest } = t;
+  return { ...raw, agentTask: rest };
+}
+
 function parseRecord(line: string): TriggerRunRecord | null {
   let value: unknown;
   try {
@@ -354,5 +382,5 @@ function parseRecord(line: string): TriggerRunRecord | null {
   if (typeof raw["at"] !== "string" || typeof raw["trigger"] !== "string" || typeof raw["outcome"] !== "string") {
     return null;
   }
-  return raw as unknown as TriggerRunRecord;
+  return withSafeReportPath(raw) as unknown as TriggerRunRecord;
 }

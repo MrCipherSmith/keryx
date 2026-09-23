@@ -11,10 +11,14 @@
 //     wrote while the shell is open. Reports that already existed when it started are
 //     the baseline and are not announced.
 
+import { findAgentCommand } from "../commands/agent-commands";
+import type { ScheduleHost } from "../trigger/install";
+import { cardSafe } from "../trigger/schedules";
+import { classifyBusyDispatch } from "./busy-dispatch";
 import type { OpsSidebar } from "./ops-sidebar";
 import type { ModalChrome } from "./modal-host";
 import { commandToken } from "./ops-sidebar";
-import { mountSchedulesPanel, type SchedulesPanelHandle } from "./schedules-panel";
+import { mountSchedulesPanel, type SchedulesPanelHandle, type SchedulesPanelOptions } from "./schedules-panel";
 import {
   openScheduleDetail,
   openSchedulesList,
@@ -42,6 +46,12 @@ export interface SchedulesSidebarOptions {
   actions?: ScheduleActions;
   load?: (cwd: string) => Promise<TriggerLedgerView>;
   describeInstall?: SchedulesModalOptions["describeInstall"];
+  /** The row's "not installed" check (L4). */
+  isInstalled?: SchedulesPanelOptions["isInstalled"];
+  /** The scheduler host the default Overview facts read. */
+  host?: ScheduleHost;
+  /** M3a: the process environment (default `process.env`). */
+  env?: Readonly<Record<string, string | undefined>>;
   now?: () => Date;
   inputBlocked?: () => boolean;
 }
@@ -60,6 +70,32 @@ export interface SchedulesSidebar {
 
 export function isSchedulesCommand(line: string): boolean {
   return commandToken(line) === SCHEDULES_COMMAND;
+}
+
+/**
+ * The shell's routing of `/schedules`, called from BOTH of `runLine`'s branches in
+ * `tui-shell.ts` (as `routeOpsCommand` is for `/governance` and `/triggers`):
+ *   - idle: the line resolves through the agent-mode registry (`findAgentCommand`);
+ *   - busy: `classifyBusyDispatch` must name it `schedules` (read-only, never deferred).
+ * Returns whether the line was handled.
+ */
+export function routeSchedulesCommand(line: string, busy: boolean, schedules: Pick<SchedulesSidebar, "handleCommand">): boolean {
+  const command = findAgentCommand(line, "agent");
+  if (command === undefined || command.name !== SCHEDULES_COMMAND) return false;
+  if (busy) {
+    const target = classifyBusyDispatch({
+      line,
+      commandName: command.name,
+      isSessionInfo: false,
+      isFlows: false,
+      isWorkspace: false,
+      isReview: false,
+      isMcp: false,
+      isMcpConsumer: false,
+    });
+    if (target !== "schedules") return false;
+  }
+  return schedules.handleCommand(line);
 }
 
 export function mountSchedulesSidebar(options: SchedulesSidebarOptions): SchedulesSidebar {
@@ -89,8 +125,11 @@ export function mountSchedulesSidebar(options: SchedulesSidebarOptions): Schedul
     for (const [reportPath, info] of current) {
       if (knownReports.has(reportPath)) continue;
       knownReports.add(reportPath);
+      // M2: the ledger is trackable; nothing from it reaches the transcript with control characters.
       notice(
-        `Schedule ${info.name}: new report (${info.outcome}${info.usd !== undefined ? `, $${Number(info.usd.toFixed(4))}` : ""}) — ${SCHEDULES_COMMAND} ${info.name} to read it · ${reportPath}\n`,
+        `${cardSafe(
+          `Schedule ${info.name}: new report (${info.outcome}${info.usd !== undefined ? `, $${Number(info.usd.toFixed(4))}` : ""}) — ${SCHEDULES_COMMAND} ${info.name} to read it · ${reportPath}`,
+        )}\n`,
       );
     }
   };
@@ -103,6 +142,8 @@ export function mountSchedulesSidebar(options: SchedulesSidebarOptions): Schedul
     ...(options.actions !== undefined ? { actions: options.actions } : {}),
     ...(options.load !== undefined ? { load: options.load } : {}),
     ...(options.describeInstall !== undefined ? { describeInstall: options.describeInstall } : {}),
+    ...(options.host !== undefined ? { host: options.host } : {}),
+    ...(options.env !== undefined ? { env: options.env } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
     onChanged: () => {
       void panel.refresh();
@@ -129,6 +170,7 @@ export function mountSchedulesSidebar(options: SchedulesSidebarOptions): Schedul
       show(name);
     },
     onRead: announceNewReports,
+    ...(options.isInstalled !== undefined ? { isInstalled: options.isInstalled } : {}),
     ...(options.load !== undefined ? { load: options.load } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });

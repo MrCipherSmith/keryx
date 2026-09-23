@@ -35,8 +35,19 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
 import path from "node:path";
 import { isNotFound } from "../lib/fs";
+import type { ConfirmedRunner } from "./config";
 import { cronToLaunchdIntervals, cronToOnCalendar } from "./cron";
-import { invocationArgv, managedHeader, projectScheduleHash, renderScheduleLines, resolveKeryxInvocation, scheduleUnitBase, type KeryxInvocation } from "./schedule";
+import {
+  invocationArgv,
+  managedHeader,
+  projectScheduleHash,
+  renderScheduleLines,
+  resolveKeryxInvocation,
+  scheduleUnitBase,
+  shQuote,
+  systemdValue,
+  type KeryxInvocation,
+} from "./schedule";
 
 export type ScheduleBackend = "systemd" | "launchd" | "cron";
 
@@ -75,9 +86,20 @@ function runner(host: ScheduleHost): NonNullable<ScheduleHost["run"]> {
   return host.run ?? defaultRun;
 }
 
-/** Which scheduler this host uses. */
-export async function detectBackend(host: ScheduleHost = {}): Promise<ScheduleBackend> {
-  if (host.backend !== undefined) return host.backend;
+/**
+ * L4: the probe's answer, cached per host for this process (one key for the default host).
+ * Every list reload (the sidebar, `/schedules`) plans each schedule's install, and without
+ * the cache each reload spawned `systemctl --user is-system-running` once per schedule.
+ */
+let backendCache = new WeakMap<object, Promise<ScheduleBackend>>();
+const DEFAULT_HOST_KEY = {};
+
+/** Test seam: forget every cached backend. */
+export function resetDetectedBackendCache(): void {
+  backendCache = new WeakMap();
+}
+
+async function probeBackend(host: ScheduleHost): Promise<ScheduleBackend> {
   const platform = host.platform ?? process.platform;
   if (platform === "darwin") return "launchd";
   if (platform === "linux") {
@@ -86,6 +108,34 @@ export async function detectBackend(host: ScheduleHost = {}): Promise<ScheduleBa
     if (["running", "degraded", "starting", "initializing"].includes(state)) return "systemd";
   }
   return "cron";
+}
+
+/** Which scheduler this host uses. Probed once per host object (once per process for the default host). */
+export async function detectBackend(host: ScheduleHost = {}): Promise<ScheduleBackend> {
+  if (host.backend !== undefined) return host.backend;
+  const key = host.run === undefined && host.platform === undefined ? DEFAULT_HOST_KEY : host;
+  let cached = backendCache.get(key);
+  if (cached === undefined) {
+    cached = probeBackend(host);
+    backendCache.set(key, cached);
+  }
+  return cached;
+}
+
+/**
+ * Flow 295 (M1): the keryx invocation and pinned environment of THIS process, as the draft
+ * records it. It is used only when a schedule is drafted; after confirmation every install,
+ * resume and reinstall uses the signed copy in the entry.
+ */
+export function currentRunner(host: ScheduleHost = {}): ConfirmedRunner {
+  const invocation = host.invocation ?? resolveKeryxInvocation();
+  const xdg = process.env["XDG_DATA_HOME"];
+  return { argv: invocationArgv(invocation), env: xdg !== undefined && xdg.length > 0 ? { XDG_DATA_HOME: xdg } : {} };
+}
+
+function runnerInvocation(confirmed: ConfirmedRunner): KeryxInvocation {
+  const [execPath, scriptPath] = confirmed.argv;
+  return scriptPath === undefined ? { execPath: execPath! } : { execPath: execPath!, scriptPath };
 }
 
 export function systemdUserUnitDir(host: ScheduleHost = {}): string {
@@ -139,15 +189,28 @@ function cronMarkers(projectRoot: string, name: string): { begin: string; end: s
   return { begin: `# >>> ${id} >>>`, end: `# <<< ${id} <<<` };
 }
 
-/** Build the install plan. Pure apart from reading `host` defaults. */
-export async function planInstall(projectRoot: string, name: string, cron: string, host: ScheduleHost = {}): Promise<InstallPlan> {
+/**
+ * Build the install plan. Pure apart from reading `host` defaults. `confirmed` is the signed
+ * runner stored with the entry (M1); without it (drafting) this process's own runner is used.
+ */
+export async function planInstall(
+  projectRoot: string,
+  name: string,
+  cron: string,
+  host: ScheduleHost = {},
+  confirmed: ConfirmedRunner = currentRunner(host),
+): Promise<InstallPlan> {
   const backend = await detectBackend(host);
-  const invocation = host.invocation ?? resolveKeryxInvocation();
+  const invocation = runnerInvocation(confirmed);
+  // N4: pin where keryx's config dir (and so the signing key) is, so the systemd --user
+  // manager, launchd or cron (none of which has the operator's shell environment) finds
+  // the same key the schedule was signed with. M1: the CONFIRMED value, never this process's.
+  const pinned: Record<string, string> = { ...confirmed.env };
   // Every value below lands in a unit file, a plist or a crontab line. A newline or
   // another control character in one of them would start a new directive or a new
   // crontab line, so such a path is refused rather than escaped.
   // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
-  const unsafe = [projectRoot, ...invocationArgv(invocation), name, process.env["XDG_DATA_HOME"] ?? ""].find((v) => /[\u0000-\u001f\u007f]/.test(v));
+  const unsafe = [projectRoot, ...invocationArgv(invocation), name, ...Object.values(pinned)].find((v) => /[\u0000-\u001f\u007f]/.test(v));
   if (unsafe !== undefined) {
     return {
       backend,
@@ -158,13 +221,13 @@ export async function planInstall(projectRoot: string, name: string, cron: strin
       problem: `a path or name contains a newline or control character (${JSON.stringify(unsafe)}); keryx will not write it into a scheduler file`,
     };
   }
-  // N4: pin where keryx's config dir (and so the signing key) is, so the systemd --user
-  // manager, launchd or cron (none of which has the operator's shell environment) finds
-  // the same key the schedule was signed with.
-  const pinned: Record<string, string> = process.env["XDG_DATA_HOME"] ? { XDG_DATA_HOME: process.env["XDG_DATA_HOME"] } : {};
   const lines = renderScheduleLines({ projectRoot, name, cron, invocation, scheduleOnly: true, environment: pinned });
   const base = scheduleUnitBase(projectRoot, name);
-  const execStart = `${invocationArgv(invocation).join(" ")} trigger run --schedule ${name}`;
+  // L4: the card shows the command quoted exactly the way the unit (or plist argv) carries it.
+  const execStart =
+    backend === "systemd"
+      ? `${invocationArgv(invocation).map(systemdValue).join(" ")} trigger run --schedule ${systemdValue(name)}`
+      : `${invocationArgv(invocation).map(shQuote).join(" ")} trigger run --schedule ${shQuote(name)}`;
   if (backend === "systemd") {
     const dir = systemdUserUnitDir(host);
     const calendar = cronToOnCalendar(cron);
@@ -299,8 +362,14 @@ export interface InstallResult {
  * Install (or re-install) the timer for a confirmed schedule. Idempotent. Refuses when the
  * plan has a `problem` (for example a cadence the backend cannot express).
  */
-export async function installSchedule(projectRoot: string, name: string, cron: string, host: ScheduleHost = {}): Promise<InstallResult> {
-  const plan = await planInstall(projectRoot, name, cron, host);
+export async function installSchedule(
+  projectRoot: string,
+  name: string,
+  cron: string,
+  host: ScheduleHost = {},
+  confirmed?: ConfirmedRunner,
+): Promise<InstallResult> {
+  const plan = await planInstall(projectRoot, name, cron, host, confirmed ?? currentRunner(host));
   if (plan.problem !== undefined) throw new Error(`cannot install "${name}" on ${plan.backend}: ${plan.problem}`);
   const run = runner(host);
   const wrote: string[] = [];
@@ -334,8 +403,8 @@ export async function installSchedule(projectRoot: string, name: string, cron: s
 }
 
 /** Pause: stop the timer, and keep its files so resume needs no new confirmation. Cron removes the block (resume re-adds it). */
-export async function pauseSchedule(projectRoot: string, name: string, cron: string, host: ScheduleHost = {}): Promise<void> {
-  const plan = await planInstall(projectRoot, name, cron, host);
+export async function pauseSchedule(projectRoot: string, name: string, cron: string, host: ScheduleHost = {}, confirmed?: ConfirmedRunner): Promise<void> {
+  const plan = await planInstall(projectRoot, name, cron, host, confirmed ?? currentRunner(host));
   const run = runner(host);
   if (plan.backend === "systemd") {
     await check(await run("systemctl", ["--user", "disable", "--now", plan.unit]), `systemctl --user disable --now ${plan.unit}`);
@@ -348,9 +417,9 @@ export async function pauseSchedule(projectRoot: string, name: string, cron: str
   }
 }
 
-/** Resume: the reverse of pause. It installs the same confirmed content again. */
-export async function resumeSchedule(projectRoot: string, name: string, cron: string, host: ScheduleHost = {}): Promise<void> {
-  await installSchedule(projectRoot, name, cron, host);
+/** Resume: the reverse of pause. It installs the same confirmed content, with the confirmed runner (M1), again. */
+export async function resumeSchedule(projectRoot: string, name: string, cron: string, host: ScheduleHost, confirmed: ConfirmedRunner): Promise<void> {
+  await installSchedule(projectRoot, name, cron, host, confirmed);
 }
 
 export interface UninstallResult {
@@ -360,8 +429,14 @@ export interface UninstallResult {
 }
 
 /** Uninstall: stop the timer and delete ONLY files carrying this project's managed header. */
-export async function uninstallSchedule(projectRoot: string, name: string, cron: string, host: ScheduleHost = {}): Promise<UninstallResult> {
-  const plan = await planInstall(projectRoot, name, cron, host);
+export async function uninstallSchedule(
+  projectRoot: string,
+  name: string,
+  cron: string,
+  host: ScheduleHost = {},
+  confirmed?: ConfirmedRunner,
+): Promise<UninstallResult> {
+  const plan = await planInstall(projectRoot, name, cron, host, confirmed ?? currentRunner(host));
   const run = runner(host);
   const removed: string[] = [];
   const skipped: string[] = [];
@@ -394,8 +469,14 @@ export async function uninstallSchedule(projectRoot: string, name: string, cron:
 }
 
 /** Is the timer's content installed (files with our header, or the crontab block)? Cheap: no scheduler query. */
-export async function isScheduleInstalled(projectRoot: string, name: string, cron: string, host: ScheduleHost = {}): Promise<boolean> {
-  const plan = await planInstall(projectRoot, name, cron, host);
+export async function isScheduleInstalled(
+  projectRoot: string,
+  name: string,
+  cron: string,
+  host: ScheduleHost = {},
+  confirmed?: ConfirmedRunner,
+): Promise<boolean> {
+  const plan = await planInstall(projectRoot, name, cron, host, confirmed ?? currentRunner(host));
   if (plan.backend === "cron") {
     const crontab = await currentCrontab(host).catch(() => "");
     return crontab.includes(cronMarkers(projectRoot, name).begin);

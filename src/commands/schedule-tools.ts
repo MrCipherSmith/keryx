@@ -19,7 +19,15 @@ import { randomUUID } from "node:crypto";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import { GRANTED_TOOL_CATALOGUE } from "../trigger/granted-tools";
 import type { ScheduleHost } from "../trigger/install";
-import { confirmSchedule, draftSchedule, listSchedules, type DraftContext, type ScheduleDraft, type ScheduleRequest } from "../trigger/schedules";
+import {
+  confirmSchedule,
+  draftSchedule,
+  listSchedules,
+  nestedAgentScheduleRefusal,
+  type DraftContext,
+  type ScheduleDraft,
+  type ScheduleRequest,
+} from "../trigger/schedules";
 
 export interface ScheduleToolBinding {
   readonly projectRoot: string;
@@ -29,6 +37,8 @@ export interface ScheduleToolBinding {
   readonly now?: () => Date;
   readonly resolveProgram?: DraftContext["resolveProgram"];
   readonly accountOf?: DraftContext["accountOf"];
+  /** M3a: the process environment (default `process.env`). */
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 function str(v: unknown): string | undefined {
@@ -128,6 +138,8 @@ export function scheduleTools(binding: ScheduleToolBinding): InteractiveTool[] {
       risk: "write",
     },
     confirmation: async (input) => {
+      const nested = nestedAgentScheduleRefusal(binding.env);
+      if (nested !== undefined) return { error: `schedule_create ${nested}` };
       const request = requestFromToolInput(input, binding);
       if ("error" in request) return request;
       const drafted = await draftSchedule(request, {

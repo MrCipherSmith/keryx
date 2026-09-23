@@ -114,7 +114,15 @@ export async function loadTriggerLedgerView(
   }
   const entries = loaded.triggers.map((entry): TriggerEntryView => {
     const all = byName.get(entry.name) ?? [];
-    const newestFirst = all.slice(-limit).reverse();
+    // Flow 295 (L4): the cap counts CLOSING records (outcomes). A spend reservation rides
+    // along with its run, so a ledger full of reservations still shows `limit` outcomes.
+    const newestFirst: TriggerRunRecord[] = [];
+    let closing = 0;
+    for (let i = all.length - 1; i >= 0 && closing < limit; i -= 1) {
+      const record = all[i]!;
+      newestFirst.push(record);
+      if (record.outcome !== "reserved") closing += 1;
+    }
     return {
       entry,
       scheduled: isScheduledEntry(entry),

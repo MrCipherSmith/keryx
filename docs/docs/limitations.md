@@ -123,11 +123,29 @@ for what has been verified on a real host.
   way a shell would, so quoting, escapes, wrappers (`env -u`, `sudo`, `nohup`,
   `bash -c '…'`) and a `cd` into a unit directory are all seen. But a same-user shell
   in `trust` mode can always spell a command so no text check sees it: a variable, a
-  script file, an interpreter one-liner. The real gates are elsewhere:
+  script file, an interpreter one-liner. The gates behind it:
   - `keryx schedule add`, `resume` and `run` require an interactive terminal on stdin
-    and stdout, `--yes` included, so an agent's shell, a pipe or an MCP/ACP client
-    cannot create, re-enable or fire a schedule;
-  - every stored schedule must carry this machine's signature.
+    and stdout, `--yes` included, so a pipe or an MCP/ACP client cannot create,
+    re-enable or fire a schedule;
+  - the terminal requirement alone is not enough, because an agent can make a
+    terminal: `script -qfc 'keryx shell' /dev/null`, `tmux`, `screen` or `unbuffer`
+    give a nested keryx a pseudo-terminal the agent types into, and so reaches the
+    `/schedule` card and the `/schedules` keys. Two things cover that path. A keryx
+    started from an agent's shell inherits `KERYX_TOOL_CALL=1`, and its `/schedule`,
+    `schedule_create`, pause, resume, run-now and delete all refuse. And starting an
+    interactive keryx (`keryx`, `keryx shell`) or a terminal driver around one, or
+    typing into a running session (`tmux send-keys`, `screen -X stuff`), is in the
+    always-ask family: you are asked every time, and the answer is never remembered;
+  - every stored schedule must carry this machine's signature, and resume checks the
+    signature and every binary pin before it re-enables a timer. The timer runs the
+    keryx recorded (and signed) when you confirmed the card, never the one that
+    pressed resume, and a keryx running from inside the project is refused when the
+    schedule is drafted.
+
+  The honest limit stays: an agent running as your user, in `trust` mode, can unset
+  `KERYX_TOOL_CALL` in a way the text floor does not see, or drive a terminal through
+  a program the floor does not know. The floor makes that an ask, and your answer is
+  the boundary.
 - **A script wrapper's own configuration.** A pinned `#!` wrapper (and its interpreter)
   cannot change without the schedule being refused, and it runs from an empty directory,
   so the project cannot steer it. What the wrapper reads from its own global

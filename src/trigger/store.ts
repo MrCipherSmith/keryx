@@ -18,13 +18,14 @@
 // Writes are atomic (temp file + rename) under a lock in the self-ignoring
 // locks directory, so two shells creating schedules at once cannot interleave.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { constants as fsConstants, realpathSync } from "node:fs";
+import { lstat, mkdir, open, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { ensureLocksDir, keryxLocksDir } from "../lib/maintenance-lock";
 import { scheduleContentCanonical, scheduleStorePath, TRIGGERS_SCHEMA_VERSION, triggerEntryProblems } from "./config";
 import { ensureScheduleKey, scheduleMac } from "./schedule-key";
-import { triggerDataDir } from "./record";
+import { expectedReportRelPath, triggerDataDir } from "./record";
 
 /** What `.metaproject/data/trigger/.gitignore` lists: the store and the reports. `runs.jsonl` stays trackable. */
 const TRIGGER_DATA_GITIGNORE =
@@ -36,6 +37,52 @@ const TRIGGER_DATA_GITIGNORE =
 /** Reports live here: `<dir>/<name>/<runId>.md`. */
 export function triggerReportsDir(projectRoot: string): string {
   return path.join(triggerDataDir(projectRoot), "reports");
+}
+
+/** M2: the most of a report any reader loads. A report keryx writes is a few KiB. */
+export const REPORT_READ_CAP_BYTES = 256 * 1024;
+
+export type ReportRead = { readonly ok: true; readonly text: string; readonly truncated: boolean } | { readonly ok: false; readonly reason: string };
+
+/**
+ * Flow 295 (M2): read one schedule's report, and only a real report.
+ *
+ *   - the path must normalise to `triggerReportsDir(root)/<name>/<runId>.md`, and the
+ *     directory it is in must really be that directory (no symlinked parent);
+ *   - `lstat` must show a regular file (not a symlink, FIFO or device) under the cap;
+ *   - it is opened `O_NOFOLLOW | O_NONBLOCK`, so a file swapped for a FIFO after the
+ *     `lstat` can neither hang the reader nor redirect it, and at most the cap is read.
+ */
+export async function readScheduleReport(projectRoot: string, name: string, reportPath: string): Promise<ReportRead> {
+  const abs = path.resolve(projectRoot, reportPath);
+  const runId = path.basename(abs).replace(/\.md$/, "");
+  const expected = expectedReportRelPath(name, runId);
+  if (expected === undefined || !abs.endsWith(".md") || abs !== path.resolve(projectRoot, expected)) {
+    return { ok: false, reason: `${reportPath} is not where keryx writes ${name}'s reports — not read` };
+  }
+  try {
+    const realDir = realpathSync(path.dirname(abs));
+    if (realDir !== path.join(realpathSync(projectRoot), path.dirname(expected))) {
+      return { ok: false, reason: `the reports directory of ${name} is a link to somewhere else — not read` };
+    }
+    const st = await lstat(abs);
+    if (st.isSymbolicLink() || !st.isFile()) return { ok: false, reason: `${reportPath} is not a regular file — not read` };
+    if (st.size > REPORT_READ_CAP_BYTES) return { ok: false, reason: `${reportPath} is ${st.size} bytes, over the ${REPORT_READ_CAP_BYTES}-byte report cap — not read` };
+    const nofollow = (fsConstants as { O_NOFOLLOW?: number }).O_NOFOLLOW ?? 0;
+    const nonblock = (fsConstants as { O_NONBLOCK?: number }).O_NONBLOCK ?? 0;
+    const handle = await open(abs, fsConstants.O_RDONLY | nofollow | nonblock);
+    try {
+      const fst = await handle.stat();
+      if (!fst.isFile()) return { ok: false, reason: `${reportPath} is not a regular file — not read` };
+      const buffer = Buffer.alloc(Math.min(fst.size, REPORT_READ_CAP_BYTES));
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+      return { ok: true, text: buffer.subarray(0, bytesRead).toString("utf8"), truncated: fst.size > REPORT_READ_CAP_BYTES };
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    return { ok: false, reason: `could not read ${reportPath} (${error instanceof Error ? error.message : String(error)})` };
+  }
 }
 
 /** Make `.metaproject/data/trigger/` ignore the store and the reports. Idempotent; appends missing lines only. */

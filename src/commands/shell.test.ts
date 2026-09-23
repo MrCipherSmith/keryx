@@ -840,6 +840,10 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "read_file",
     "read_wiki",
     "repomap",
+    // Flow 295: operator-confirmed scheduling — schedule_create always asks and shows
+    // the card; schedule_list is read-only. TUI roster only.
+    "schedule_create",
+    "schedule_list",
     "search_code",
     // The MCP consumer pair (keryx-mcp-servers P0). TWO entries however many
     // servers the operator has connected — if a qualified name like

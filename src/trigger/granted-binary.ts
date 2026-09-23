@@ -67,6 +67,15 @@ function realOr(p: string): string {
   }
 }
 
+/**
+ * Flow 295 (M1): does `file` (as given, or through its realpath) resolve inside the project?
+ * The same rule decides a granted binary and the keryx the timer runs.
+ */
+export function resolvesInsideProject(projectRoot: string, file: string): boolean {
+  const root = realOr(projectRoot);
+  return isInside(root, realOr(file)) || isInside(root, path.resolve(file));
+}
+
 function isInside(parent: string, child: string): boolean {
   const rel = path.relative(parent, child);
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));

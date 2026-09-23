@@ -114,3 +114,49 @@
   - Suites: 3016 pass, 5 skip, 0 fail.
   - `skills verify`: 0 findings. `flow check`: consistent.
   - `keryx health run`: PASS (score 94).
+
+## 2026-09-23 — CI fixes for PR #664 (committed as 122b25be)
+
+- Skills count 71 → 72 (`platform/scheduled-tasks`): `skills.bundled-verify.test.ts`. No other test pins 71 for skills.
+- Agent TUI tool roster gained `schedule_create`/`schedule_list`: `shell.test.ts`.
+- `/schedule` vs `/schedules` declared in `ALLOWED_CONFUSABLE`, with the reason for both directions.
+- Core gate "Cannot find module './target' … gdgraph/query.ts": this branch did not cause it. It is stderr from the PASSING test "a FAILED delegated build does not record provenance", which builds a broken fixture on purpose. The same line is in main's green run 35831635851. `test:core` exited 1 only because of the other failures.
+- macOS: `/bin/true` does not exist there (`/usr/bin/true`). Test helpers now copy `Bun.which("true")`, so the tests run on darwin rather than skip.
+
+## 2026-09-23 — review of T9 and the merge: M1–M4, L1–L4
+
+Each confirmed finding has a regression test. A mutation sweep reverted each fix one at a time: 18 of 19 were caught. The one that survived is M2's `lstat` check, and that was expected, because `O_NOFOLLOW|O_NONBLOCK` plus `fstat().isFile()` still refuse the symlink and the FIFO. It is defence in depth.
+
+- M1: the signed entry records `install {argv, env}`, and `scheduleContentCanonical` covers it. Install, pause, resume and remove use it. A draft refuses a keryx that resolves inside the project. Tests: `schedule-review.test.ts` M1, plus the TUI crontab assertions.
+- L1: `resumeStoredSchedule` runs `verifyStoredSchedule` first (MAC + pins), moved to `src/trigger/schedule-verify.ts`. Overview shows `verified`. The TUI fixture is now signed and pinned, and the `"0"*64` hash is gone.
+- M2: `record.ts` drops any `reportPath` that is not `reports/<trigger>/<runId>.md`. `readScheduleReport` requires the real directory, and uses `lstat` for a regular file under 256 KiB, then `O_NOFOLLOW|O_NONBLOCK` and a bounded read. The report, `detail` and the notice go through `cardSafe`.
+- M3a: `nestedAgentScheduleRefusal` (KERYX_TOOL_CALL=1) is applied in `/schedule`, `schedule_create`'s card, and the modal's p/r/d.
+- M3b: the always-ask family now covers `keryx`, `keryx shell` (except `-p/--print`), a terminal driver around keryx (script/screen/tmux/unbuffer/…), and `tmux send-keys`/`screen -X stuff`.
+- M3c: `limitations.md` names the nested-TUI path and both layers, and keeps the same-uid limit. `cli-reference.md` is updated to match.
+- M4: Overview has `unit`, `linger` and `verified` lines from `defaultDescribeInstall(host)`.
+- L2: added these tests:
+  - a non-`n` key cancels;
+  - `keyboardOwnedElsewhere`;
+  - an unchanged tick repaints nothing (`paintCount`, same node);
+  - the exact next run;
+  - crontab effects of pause, resume and remove;
+  - `triggerRunArgv({schedule:true})`;
+  - AC12 through `routeSchedulesCommand`, now used by both branches of `tui-shell.ts`.
+- L3: `y` re-checks `item`, and an armed action is dropped when another overlay takes the keyboard.
+- L4:
+  - ACP pins `schedule`/`schedules`;
+  - Overview shows local time;
+  - `reservation-resolved` uses the attention role;
+  - the row shows `not installed`;
+  - Grants shows the pinned realpath and sha, and the interpreter;
+  - `detectBackend` is cached per host;
+  - the card's execStart is quoted like the unit;
+  - the Runs cap counts closing records;
+  - list selection follows the name.
+- Checks:
+  - typecheck and full eslint are clean;
+  - `test:client:terminal` 1396 pass / 3 skip; `test:client:runtime` 3749 pass / 16 skip, the same skips as before;
+  - no-skip `src/tui` 1111 pass, 0 skipped;
+  - `test:core` 7753 pass, 0 fail;
+  - `skills verify --bundled` finds 72 skills and no findings;
+  - `flow check` is consistent; doc links are clean.

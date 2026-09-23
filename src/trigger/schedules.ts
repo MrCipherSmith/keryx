@@ -22,10 +22,11 @@ import { execFile } from "node:child_process";
 import { accessSync, constants as fsConstants, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { loadTriggersConfig, triggerEntryProblems, type AgentTaskAction, type TriggerEntry } from "./config";
+import { loadTriggersConfig, triggerEntryProblems, type AgentTaskAction, type ConfirmedRunner, type TriggerEntry } from "./config";
 import { nextCronRuns, parseCadence } from "./cron";
 import { grantedToolSpec } from "./granted-tools";
 import {
+  currentRunner,
   installSchedule,
   isScheduleInstalled,
   lingerStatus,
@@ -39,11 +40,26 @@ import {
 import { latestRunByTrigger, readTriggerRuns, type TriggerRunRecord } from "./record";
 import { addConfirmedSchedule, removeStoredSchedule, setScheduleEnabled, triggerReportsDir } from "./store";
 import { configDirInsideProjectReason, scheduleKeyPath } from "./schedule-key";
-import { pinGrantedBinary, type BinaryPin } from "./granted-binary";
+import { pinGrantedBinary, resolvesInsideProject, type BinaryPin } from "./granted-binary";
+import { verifyStoredSchedule } from "./schedule-verify";
 
 /** Shown on the card whenever the shell gets the host network. Kept in step with trigger-dispatch's NETWORK_ON_WARNING. */
 export const FULL_NETWORK_CARD_WARNING =
   "NETWORK ON — the agent's shell commands get the host's FULL network: the internet, every service on the host's loopback, and the host's abstract unix sockets.";
+
+/**
+ * Flow 295 (M3a): a keryx started from an agent's `shell_exec` inherits KERYX_TOOL_CALL=1.
+ * An agent can drive such a nested TUI through a pseudo-terminal, so every surface that
+ * creates or changes a schedule (the `/schedule` card, `schedule_create`, the modal's
+ * pause/resume, run-now and delete) refuses there, whatever answers its prompts.
+ */
+export function nestedAgentScheduleRefusal(env: Readonly<Record<string, string | undefined>> = process.env): string | undefined {
+  if (env["KERYX_TOOL_CALL"] !== "1") return undefined;
+  return (
+    "refused: this keryx was started from an agent's shell (KERYX_TOOL_CALL=1), and an agent can type into it. " +
+    "Schedules are created, run and changed only from your own terminal's keryx."
+  );
+}
 
 /** What a caller asks for. Everything money-shaped is required; the rest has safe defaults. */
 export interface ScheduleRequest {
@@ -151,6 +167,17 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
   }
   const configInside = configDirInsideProjectReason(ctx.projectRoot);
   if (configInside !== undefined) problems.push(`schedule: ${configInside}`);
+  // M1: the keryx the timer will run is recorded now, signed with the entry, and reused by
+  // every later install and resume. Like a granted binary, it may not come from the
+  // project: an agent can edit the project's source, and the timer would then run its edit.
+  const runnerNow = currentRunner(ctx.host ?? {});
+  const insideRunner = runnerNow.argv.find((file) => resolvesInsideProject(ctx.projectRoot, file));
+  if (insideRunner !== undefined) {
+    problems.push(
+      `runner: keryx is running from ${insideRunner}, inside this project — a timer would run project files an agent can edit. ` +
+        "Install keryx globally (for example `npm install -g` or a release binary) and create the schedule from that keryx.",
+    );
+  }
   const accountOf = ctx.accountOf ?? defaultAccountOf();
   const accounts: string[] = [];
   for (const [program, bin] of Object.entries(bins)) {
@@ -177,14 +204,19 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
       ...(accounts.length > 0 ? { account: accounts.join("; ") } : {}),
     },
   };
-  const entry: Record<string, unknown> = { name: request.name, on: { kind: "schedule", cron: cadence.cron }, action };
+  const entry: Record<string, unknown> = {
+    name: request.name,
+    on: { kind: "schedule", cron: cadence.cron },
+    action,
+    install: { argv: [...runnerNow.argv], env: { ...runnerNow.env } },
+  };
   problems.push(...triggerEntryProblems(entry));
   const existing = loadTriggersConfig(ctx.projectRoot).triggers.find((t) => t.name === request.name);
   if (existing !== undefined) problems.push(`name: "${request.name}" is already used by a ${existing.source === "store" ? "schedule" : "trigger"}`);
   if (problems.length > 0) return { ok: false, problems };
 
   const host = ctx.host ?? {};
-  const plan = await planInstall(ctx.projectRoot, request.name, cadence.cron, host);
+  const plan = await planInstall(ctx.projectRoot, request.name, cadence.cron, host, runnerNow);
   if (plan.problem !== undefined) return { ok: false, problems: [`cadence: ${plan.problem}`] };
   const linger = plan.backend === "systemd" ? await lingerStatus(host) : "n/a";
   const now = (ctx.now ?? (() => new Date()))();
@@ -285,7 +317,7 @@ export interface CreateResult {
 export async function confirmSchedule(projectRoot: string, draft: ScheduleDraft, host: ScheduleHost = {}): Promise<CreateResult> {
   const stored = await addConfirmedSchedule(projectRoot, draft.entry);
   try {
-    const installed = await installSchedule(projectRoot, stored.name, draft.cron, host);
+    const installed = await installSchedule(projectRoot, stored.name, draft.cron, host, draft.entry["install"] as ConfirmedRunner);
     return { name: stored.name, backend: installed.backend, unit: installed.unit, confirmedHash: stored.confirmedHash };
   } catch (error) {
     await removeStoredSchedule(projectRoot, stored.name).catch(() => false);
@@ -337,7 +369,7 @@ export async function listSchedules(projectRoot: string, options: { host?: Sched
   const out: ScheduleSummary[] = [];
   for (const entry of scheduleEntries(projectRoot)) {
     const record = outcomes.get(entry.name);
-    const installed = await isScheduleInstalled(projectRoot, entry.name, entry.fire.cron, options.host ?? {}).catch(() => false);
+    const installed = await isScheduleInstalled(projectRoot, entry.name, entry.fire.cron, options.host ?? {}, entry.install).catch(() => false);
     out.push({
       name: entry.name,
       cron: entry.fire.cron,
@@ -371,20 +403,37 @@ function findSchedule(projectRoot: string, name: string): TriggerEntry & { actio
 export async function pauseStoredSchedule(projectRoot: string, name: string, host: ScheduleHost = {}): Promise<void> {
   const entry = findSchedule(projectRoot, name);
   await setScheduleEnabled(projectRoot, name, false);
-  await pauseSchedule(projectRoot, name, entry.fire.cron, host);
+  await pauseSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
 }
 
-/** Resume: re-enable both. The content (and its confirmed hash) is unchanged, so no new confirmation is needed. */
+/**
+ * Resume: re-enable both. No new confirmation is asked, so resume first proves the entry is
+ * still exactly what was confirmed (L1: the MAC and every binary pin), and it reinstalls the
+ * CONFIRMED runner (M1), never the invocation of whichever process pressed the key.
+ */
 export async function resumeStoredSchedule(projectRoot: string, name: string, host: ScheduleHost = {}): Promise<void> {
   const entry = findSchedule(projectRoot, name);
-  await resumeSchedule(projectRoot, name, entry.fire.cron, host);
+  const verified = await verifyStoredSchedule(projectRoot, entry);
+  if (!verified.ok) throw new Error(`resume refused: ${verified.reason}`);
+  if (entry.install === undefined) {
+    throw new Error(`resume refused: schedule "${name}" has no confirmed runner recorded — remove it and create it again`);
+  }
+  await resumeSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
   await setScheduleEnabled(projectRoot, name, true);
+}
+
+/** L1: is the stored entry still exactly what was confirmed? Shown on the Overview tab. */
+export async function scheduleVerification(projectRoot: string, name: string): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }> {
+  const entry = scheduleEntries(projectRoot).find((e) => e.name === name);
+  if (entry === undefined) return { ok: false, reason: `no schedule named "${name}"` };
+  const verified = await verifyStoredSchedule(projectRoot, entry);
+  return verified.ok ? verified : { ok: false, reason: verified.reason };
 }
 
 /** Remove: uninstall the timer (only our own files) and delete the entry. Callers confirm first. */
 export async function removeSchedule(projectRoot: string, name: string, host: ScheduleHost = {}): Promise<{ removed: readonly string[]; skipped: readonly string[] }> {
   const entry = findSchedule(projectRoot, name);
-  const result = await uninstallSchedule(projectRoot, name, entry.fire.cron, host);
+  const result = await uninstallSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
   await removeStoredSchedule(projectRoot, name);
   return result;
 }

@@ -665,7 +665,7 @@ describe("N2: granted programs run from an empty directory, and shims/scripts ar
   test("a shim is refused, and the real binary is suggested", async () => {
     mkdirSync(path.join(aside, "shims"), { recursive: true });
     const shim = path.join(aside, "shims", "gh");
-    writeFileSync(shim, readFileSync("/bin/true"), { mode: 0o755 });
+    writeFileSync(shim, readFileSync(Bun.which("true") ?? "/usr/bin/true"), { mode: 0o755 });
     const drafted = await draftSchedule(
       { name: "x", cadence: "hourly", prompt: "p", provider: "scripted", model: "m", rates: RATES, ceilingUsd: 1, tools: ["gh.pr.list"], repos: ["a/b"] },
       { projectRoot: root, host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) }, resolveProgram: () => shim, accountOf: async () => "me" },

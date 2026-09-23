@@ -196,6 +196,36 @@ export interface TriggerEntry {
   readonly source: TriggerEntrySource;
   /** Flow 295 (AC5): the content hash the operator confirmed. Present only on schedule-store entries. */
   readonly confirmedHash?: string;
+  /**
+   * Flow 295 (M1): the keryx invocation and pinned environment the operator confirmed on the
+   * card. Signed with the rest of the content. Install, resume and reinstall write exactly
+   * this into the unit, whichever process presses the key.
+   */
+  readonly install?: ConfirmedRunner;
+}
+
+/** Flow 295 (M1): what the installed timer executes — `argv` then `trigger run --schedule <name>` — and the environment it pins. */
+export interface ConfirmedRunner {
+  readonly argv: readonly string[];
+  readonly env: Readonly<Record<string, string>>;
+}
+
+/** Problems with a stored `install` block; empty means valid. */
+export function confirmedRunnerProblems(value: unknown): string[] {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return ["install: must be an object {argv, env}"];
+  const raw = value as { argv?: unknown; env?: unknown };
+  const problems: string[] = [];
+  if (!Array.isArray(raw.argv) || raw.argv.length < 1 || raw.argv.length > 2 || !raw.argv.every((a) => typeof a === "string" && path.isAbsolute(a))) {
+    problems.push("install.argv: must be one or two absolute paths (the keryx binary, or the interpreter and keryx's entry script)");
+  }
+  if (raw.env === null || typeof raw.env !== "object" || Array.isArray(raw.env)) {
+    problems.push("install.env: must be an object of string values");
+  } else {
+    for (const [k, v] of Object.entries(raw.env as Record<string, unknown>)) {
+      if (!/^[A-Z_][A-Z0-9_]*$/.test(k) || typeof v !== "string") problems.push(`install.env.${k}: must be an upper-case name with a string value`);
+    }
+  }
+  return problems;
 }
 
 export type TriggerEntrySource = "config" | "store";
@@ -545,7 +575,9 @@ function normalizeAgentTask(action: AgentTaskAction): AgentTaskAction {
  */
 export function scheduleContentCanonical(entry: unknown): string {
   const raw = (entry ?? {}) as Record<string, unknown>;
-  return canonicalJson({ name: raw.name, on: raw.on, action: raw.action });
+  // M1: `install` (the confirmed keryx invocation and pinned env) is signed too, so an
+  // edit that points the timer at another program fails verification.
+  return canonicalJson({ name: raw.name, on: raw.on, action: raw.action, install: raw.install });
 }
 
 function canonicalJson(value: unknown): string {
@@ -602,6 +634,7 @@ export function triggerEntryProblems(value: unknown): string[] {
   if (raw.confirmedHash !== undefined && (typeof raw.confirmedHash !== "string" || !/^[0-9a-f]{64}$/.test(raw.confirmedHash))) {
     problems.push("confirmedHash: must be a sha256 hex string when present");
   }
+  if (raw.install !== undefined) problems.push(...confirmedRunnerProblems(raw.install));
 
   return problems;
 }
@@ -616,6 +649,7 @@ function parseTriggerEntry(value: unknown, source: TriggerEntrySource = "config"
       action: TriggerAction;
       enabled?: boolean;
       confirmedHash?: string;
+      install?: ConfirmedRunner;
     };
     const fire: TriggerFire =
       raw.on.kind === "event" ? { kind: "event", event: raw.on.event } : { kind: "schedule", cron: raw.on.cron };
@@ -626,6 +660,7 @@ function parseTriggerEntry(value: unknown, source: TriggerEntrySource = "config"
       enabled: raw.enabled ?? true,
       source,
       ...(raw.confirmedHash !== undefined ? { confirmedHash: raw.confirmedHash } : {}),
+      ...(raw.install !== undefined ? { install: { argv: [...raw.install.argv], env: { ...raw.install.env } } } : {}),
     };
   } catch {
     return undefined;

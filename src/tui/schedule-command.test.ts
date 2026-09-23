@@ -37,7 +37,8 @@ function fakeProgram(program: string): string {
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, program);
   // A real binary, not a `#!` script: drafting refuses scripts and shims (flow 295 N2).
-  copyFileSync("/bin/true", file);
+  // `true` lives in /bin on Linux and in /usr/bin on macOS (flow 295: macOS CI).
+  copyFileSync(Bun.which("true") ?? "/usr/bin/true", file);
   chmodSync(file, 0o755);
   return file;
 }
