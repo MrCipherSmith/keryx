@@ -24,6 +24,9 @@ import {
   readRequireConfirmationDefault,
   type StoredConfirmationToken,
 } from "./confirm-token";
+// Re-exported so a client (the CLI) reads the caveat through this facade,
+// not from the zone's internals (import policy, rule 2).
+export { CONFIRMATION_CAVEAT } from "./confirm-token";
 import {
   acChecksum,
   acPath,
