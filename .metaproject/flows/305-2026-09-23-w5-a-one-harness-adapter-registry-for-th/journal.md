@@ -30,3 +30,8 @@
 - 2026-09-23T23:07:24.893Z - task-done: T10: Fix review round 1 findings F1-F11 (owner refusal propagation, round-trip validation, honest slots + slot-coverage test, registry-derived runtime lists, flat security orphan cleanup, owner input hygiene, test mutations, interface gaps)
 - 2026-09-23T23:07:33Z - T10 round-1 fixes committed. Worker concern: refusalAction/allowAction for the dynamic --runtime path (security CLI) still switch on ids inside codecs.ts to avoid a codecs->registry cycle; ctx-guard surfaces themselves carry decisionCodec. Left for round-2 review to judge.
 - 2026-09-23T23:07:33.658Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-23T23:08:19.167Z - task-attempt: T8: started (attempt 1) — PR #675 review round 2 (opus) + CI
+- 2026-09-23T23:26:01.299Z - task-attempt: T8: failed (attempt 2) — round 2: 0 blocker/major, 4 minor (R2-F1..F4); CI 18/18 green; fix dispatched
+- 2026-09-23T23:26:01.383Z - task-added: T11: Fix review round 2 minors R2-F1..F4 (registry-resolved refusal codecs, migrates-legacy verification, per-file surface id uniqueness, regression tests for round-1 fixes)
+- 2026-09-23T23:26:01.464Z - task-attempt: T11: started (attempt 1) — 305-T11 sonnet
+- 2026-09-23T23:40:30.632Z - task-done: T11: Fix review round 2 minors R2-F1..F4 (registry-resolved refusal codecs, migrates-legacy verification, per-file surface id uniqueness, regression tests for round-1 fixes)

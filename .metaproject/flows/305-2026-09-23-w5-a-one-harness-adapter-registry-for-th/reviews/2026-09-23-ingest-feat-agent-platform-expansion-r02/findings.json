@@ -1,0 +1,54 @@
+[
+  {
+    "id": "R2-F1",
+    "reviewer": "opus-adversarial-r2",
+    "severity": "minor",
+    "problem": "refusalAction/allowAction id switch still decides refusal shape for ctx native-search refusals and security --runtime; new stdout-JSON adapters would fail open",
+    "impact": "A W5-b stdout-JSON adapter would fail open on native-search and security --runtime refusals.",
+    "suggested_fix": "Host decisionCodecFor/refusalAction/allowAction in registry.ts, decisionCodec on HarnessAdapter, CtxRuntime.refuse for hook.ts, parity test.",
+    "evidence": "keryx ctx rg refusalAction; no test references decisionCodec.",
+    "confidence": "high",
+    "file": "src/integrations/codecs.ts",
+    "line": 104,
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F1"
+  },
+  {
+    "id": "R2-F2",
+    "reviewer": "opus-adversarial-r2",
+    "severity": "minor",
+    "problem": "access migrates-legacy is an unverified self-declaration that bypasses the OQ-3 coherence check",
+    "impact": "A future surface can reintroduce hooks:array by mislabelling its slot.",
+    "suggested_fix": "Assert migrates-legacy slots are never created/retyped by merge/strip; negative control.",
+    "evidence": "probe2 Q1.",
+    "confidence": "high",
+    "file": "src/integrations/registry.test.ts",
+    "line": 400,
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F2"
+  },
+  {
+    "id": "R2-F3",
+    "reviewer": "opus-adversarial-r2",
+    "severity": "minor",
+    "problem": "Surface id uniqueness enforced per adapter but owners key by id per file across adapters",
+    "impact": "Latent for W5-b/W8 shared files.",
+    "suggested_fix": "Reject duplicate surface ids per relativePath with a negative control.",
+    "evidence": "probe2 Q2.",
+    "confidence": "high",
+    "file": "src/integrations/registry.ts",
+    "line": 187,
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F3"
+  },
+  {
+    "id": "R2-F4",
+    "reviewer": "opus-adversarial-r2",
+    "severity": "minor",
+    "problem": "Round-1 fixes F2, F7 and F1 have no regression tests",
+    "impact": "Fixes can regress silently.",
+    "suggested_fix": "Owner tests for antigravity array container, unknown id, shuffled order; one CLI test for refused install exit 1.",
+    "evidence": "mutation copy run: 215 pass / 0 fail.",
+    "confidence": "high",
+    "file": "src/integrations/settings-file.ts",
+    "line": 43,
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F4"
+  }
+]
