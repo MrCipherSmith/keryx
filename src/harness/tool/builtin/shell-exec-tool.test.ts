@@ -19,12 +19,16 @@ import {
 function recordingRunner(result = { output: "done", isError: false }): {
   run: CommandRunner;
   calls: string[];
+  signals: (AbortSignal | undefined)[];
 } {
   const calls: string[] = [];
+  const signals: (AbortSignal | undefined)[] = [];
   return {
     calls,
-    run: async (command) => {
+    signals,
+    run: async (command, options) => {
       calls.push(command);
+      signals.push(options?.signal);
       return result;
     },
   };
@@ -82,28 +86,51 @@ test("AC7: without a registry, a long command still goes through the injected sy
   expect(result).toEqual({ output: "sync-only", isError: false });
 });
 
-// Flow 301 F5 (security review): CONFIRMS a gap the review asked about, does not
-// fix it — this is the no-`jobRegistry` shape `trigger-agent-task.ts`/
+// Flow 301 F5b: the no-`jobRegistry` shape `trigger-agent-task.ts`/
 // `trigger-dispatch.ts` build their unattended roster with (`buildUnattendedRoster`,
-// `sandboxedRunner`), so it is exactly the path a run's `maxSeconds` abort would need
-// to reach. It does not: `invoke`'s `jobRegistry === undefined` branch (this file,
-// `return run(command);`) never reads `ctx.signal` at all — the branch that DOES
-// (`ctx.signal` racing `jobRegistry.waitForExit`, a few lines below in the source)
-// is unreachable without a registry. So an ALREADY-ABORTED signal changes nothing:
-// the injected runner still runs to completion. In production the runner is
-// `makeCommandRunner`'s `Bun.spawn` of the sandboxed command, whose only deadline is
-// its OWN per-command `KERYX_SHELL_TIMEOUT_MS` (default 120s) — independent of, and
-// potentially longer than, the run's own `maxSeconds` — so a run-level abort does not
-// kill an in-flight `shell_exec`'s bwrap/sh process tree; only that separate,
-// per-command timer (or the process finishing on its own) does.
-test("F5 finding: an already-aborted signal does not stop the no-registry runner from completing", async () => {
-  const { run, calls } = recordingRunner({ output: "ran-to-completion", isError: false });
+// `sandboxedRunner`) is exactly the path a run's `maxSeconds` abort needs to reach.
+// Fixed by threading `ctx.signal` through to the runner here — a runner built to
+// honour it (`makeCommandRunner`, tested separately below with a real process) kills
+// the command's whole process group instead of leaving it orphaned. This test proves
+// the WIRING: the exact signal `invoke` received is the one `run` is called with —
+// previously it was dropped on the floor (this test used to assert the opposite,
+// that an aborted signal changed nothing; reverting the fix turns it back red).
+test("F5b: the no-registry branch passes ctx.signal through to the runner unchanged", async () => {
+  const { run, calls, signals } = recordingRunner({ output: "done", isError: false });
   const tool = shellExecTool("/proj", run);
   const controller = new AbortController();
-  controller.abort();
   const result = await tool.invoke({ command: "echo hi" }, { signal: controller.signal });
   expect(calls).toEqual(["echo hi"]);
-  expect(result).toEqual({ output: "ran-to-completion", isError: false });
+  expect(signals).toEqual([controller.signal]);
+  expect(result).toEqual({ output: "done", isError: false });
+});
+
+test("F5b: with no ctx at all, the runner is still called (signal simply undefined)", async () => {
+  const { run, calls, signals } = recordingRunner();
+  const tool = shellExecTool("/proj", run);
+  await tool.invoke({ command: "echo hi" });
+  expect(calls).toEqual(["echo hi"]);
+  expect(signals).toEqual([undefined]);
+});
+
+// Flow 301 F5b: the REAL runner, not a fake — `makeCommandRunner`'s own process-group
+// kill on abort, proven without needing bwrap (that full path is covered by the real
+// integration test in `../../process/sandbox/unattended.abort-kill.test.ts`). A
+// `sleep 5` aborted after ~50ms must resolve almost immediately (well under 5s) with
+// a clear "aborted: run time limit" result, not run to completion.
+test("F5b: makeCommandRunner kills an in-flight command on abort, quickly, with a clear result", async () => {
+  const run = makeCommandRunner(process.cwd(), async (command) => ({
+    ok: true,
+    plan: { spawnArgs: ["/bin/sh", "-c", command], env: { PATH: process.env["PATH"] ?? "/usr/bin:/bin" }, netClose: async () => {} },
+  }));
+  const controller = new AbortController();
+  const start = Date.now();
+  setTimeout(() => controller.abort(), 50);
+  const result = await run("sleep 5", { signal: controller.signal });
+  const elapsedMs = Date.now() - start;
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain("aborted: run time limit");
+  expect(elapsedMs).toBeLessThan(3_000); // nowhere near the full 5s sleep
 });
 
 test("shell_exec passes the command through to the runner", async () => {
@@ -131,11 +158,18 @@ test("shell_exec propagates a runner failure", async () => {
 });
 
 describe("C-06 through C-08: timeout cleanup dispositions", () => {
-  test("C-06/C-07: an already-exited process makes both TERM and KILL cleanup fail-soft", () => {
+  // Flow 301 (F5b): the kill is now GROUP-wide (`process.kill(-proc.pid, signal)`,
+  // valid because the process is spawned `detached` — its own process-group leader —
+  // so one signal reaches every descendant, not only the directly-spawned process),
+  // through one shared `killGroup` used for both the per-command deadline and an
+  // external abort. Same fail-soft-on-already-exited property, one catch site.
+  test("C-06/C-07: an already-exited process makes group-kill cleanup fail-soft, for both TERM and KILL", () => {
     const source = readFileSync(new URL("./shell-exec-tool.ts", import.meta.url), "utf8");
 
-    expect(source).toMatch(/proc\.kill\("SIGTERM"\);\s*}\s*catch\s*{\s*\/\/ already gone/s);
-    expect(source).toMatch(/proc\.kill\("SIGKILL"\);\s*}\s*catch\s*{\s*\/\/ already gone/s);
+    expect(source).toMatch(/process\.kill\(-proc\.pid, signal\);\s*}\s*catch\s*{\s*\/\/ already gone/s);
+    expect(source).toContain('killGroup("SIGTERM")');
+    expect(source).toContain('killGroup("SIGKILL")');
+    expect(source).toContain("detached: true");
     expect(source).toContain("shell_exec: timed out after ${timeoutMs}ms and was killed");
   });
 

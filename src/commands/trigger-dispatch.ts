@@ -51,7 +51,7 @@ import { promisify } from "node:util";
 import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
-import { makeCommandRunner, shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
+import { makeCommandRunner, shellExecTool, type CommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 import { makeProvider } from "../harness/provider/make-provider";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import type { NormalizedEvent, NormalizedMessage, NormalizedUsage, ProviderPort } from "../harness/provider/types";
@@ -120,7 +120,7 @@ export { NETWORK_ON_WARNING, UNATTENDED_ROSTER_DESCRIPTION } from "../trigger/de
  */
 export function buildUnattendedRoster(
   worktree: string,
-  runner: (command: string) => Promise<{ output: string; isError: boolean }> = async () => ({
+  runner: CommandRunner = async () => ({
     output: "shell_exec is unavailable in this unattended run",
     isError: true,
   }),
@@ -352,7 +352,7 @@ function usageTokens(usage: NormalizedUsage): { input: number; output: number } 
 }
 
 /** The sandboxed `shell_exec` runner: the hardened plan, or a refusal of every command when there is none. */
-function unattendedRunner(worktree: string, plan: UnattendedSandboxPlan): (command: string) => Promise<{ output: string; isError: boolean }> {
+function unattendedRunner(worktree: string, plan: UnattendedSandboxPlan): CommandRunner {
   if (!plan.ok) {
     return async () => ({
       output: `shell_exec refused: this unattended run has no sandbox (${plan.reason})`,

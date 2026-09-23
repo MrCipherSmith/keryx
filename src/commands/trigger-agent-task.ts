@@ -41,7 +41,7 @@ import path from "node:path";
 import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
 import { ensureScratchParent } from "./unattended-scratch";
 import { builtinReadOnlyTools, type InteractiveTool, type InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
-import { makeCommandRunner, shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
+import { makeCommandRunner, shellExecTool, type CommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
 import {
   planUnattendedSandbox,
@@ -620,7 +620,7 @@ async function runLocked(
   }
 }
 
-function sandboxedRunner(workdir: string, plan: UnattendedSandboxPlan): (command: string) => Promise<{ output: string; isError: boolean }> {
+function sandboxedRunner(workdir: string, plan: UnattendedSandboxPlan): CommandRunner {
   if (!plan.ok) {
     return async () => ({ output: `shell_exec refused: this unattended run has no sandbox (${plan.reason})`, isError: true });
   }
