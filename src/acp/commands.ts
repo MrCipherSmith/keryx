@@ -16,6 +16,13 @@
 // and every picker or transcript command) is not advertised.
 
 import type { AcpAvailableCommand } from "./protocol";
+// Flow 303 (AC7): group `/help`'s text the same way `keryx help` and the TUI's
+// `/help` modal do — reached ONLY through this core facade (see the zone note
+// in `src/standard/help-groups.ts`), never `../standard/help-groups` directly.
+// ACP keeps its OWN editor-specific descriptions (see the file header on
+// `ACP_SLASH_COMMANDS`); only the GROUP an entry falls under, and the order
+// groups print in, come from the shared table.
+import { findSlashEntry, HELP_GROUP_ORDER } from "../standard/service";
 
 export interface AcpSlashCommandSpec {
   /** Without the leading slash, as ACP's `AvailableCommand.name` carries it. */
@@ -141,8 +148,32 @@ export function unknownAcpCommandText(name: string): string {
   return `keryx does not handle /${name} in this editor. Available commands:\n${acpCommandHelpText()}`;
 }
 
+/** One command's rendered line, in ACP's own wording (never the shared table's generic summary). */
+function acpCommandLine(command: AcpSlashCommandSpec): string {
+  return `  /${command.name}${command.hint !== undefined ? ` [${command.hint}]` : ""} — ${command.description}`;
+}
+
+/**
+ * Flow 303 (AC7): grouped the same way `keryx help` and the TUI's `/help`
+ * modal group everything — by the onboarding task table — because a modal
+ * cannot render over ACP. Only four commands are advertised here at all, so
+ * most groups are empty and printed nothing; that is expected, not a bug.
+ */
 export function acpCommandHelpText(): string {
-  return ACP_SLASH_COMMANDS.map(
-    (command) => `  /${command.name}${command.hint !== undefined ? ` [${command.hint}]` : ""} — ${command.description}`,
-  ).join("\n");
+  const byGroup = new Map<string, AcpSlashCommandSpec[]>();
+  for (const command of ACP_SLASH_COMMANDS) {
+    const group = findSlashEntry(`/${command.name}`)?.group ?? "Other";
+    const list = byGroup.get(group) ?? [];
+    list.push(command);
+    byGroup.set(group, list);
+  }
+  const lines: string[] = [];
+  for (const group of HELP_GROUP_ORDER) {
+    const commands = byGroup.get(group.name);
+    if (commands === undefined) {
+      continue;
+    }
+    lines.push(`${group.name}:`, ...commands.map(acpCommandLine));
+  }
+  return lines.join("\n");
 }

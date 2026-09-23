@@ -16,6 +16,7 @@ the one that describes shipped behaviour.
 - [harness.md](./harness.md) — The agent runtime: doors, providers, sessions and forking, policy, containment, evidence and the completion gate, record/replay.
 - [modules.md](./modules.md) — Per-module reference: purpose, CLI surface, key files, mechanics, and data paths.
 - [cli-reference.md](./cli-reference.md) — Every command, subcommand, flag, and exit code.
+- [commands-by-task.md](./commands-by-task.md) — Every command grouped by task, generated from the same table `keryx help` and the TUI's `/help` modal use.
 - [workspace-and-lifecycle.md](./workspace-and-lifecycle.md) — The `.metaproject/` contract, manifest, agent entrypoints, and `init`/`update` lifecycle.
 - [limitations.md](./limitations.md) — Known gaps, platform support, optional AI features, and what to use instead.
 

@@ -45,7 +45,7 @@ bun ./src/cli.ts status
 | `bun run build`     | Bundle the CLI to `./dist`                    |
 | `bun run typecheck` | Type-check with `tsc --noEmit`                |
 | `bun test`          | Run the test suite                            |
-| `bun run check`     | Full gate: `tsc --noEmit && bun test`         |
+| `bun run check`     | Full gate: `lint && typecheck && typecheck:scripts && test` |
 
 Run `bun run check` before opening a pull request. It is the same gate reviewers
 expect to pass.

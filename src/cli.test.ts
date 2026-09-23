@@ -56,6 +56,21 @@ test("dash alias is advertised in CLI help", async () => {
   expect(output).toContain("dash      Rebuild and open .metaproject/keryx-dashboard.html");
 });
 
+test("flow 303 AC5: --help, -h and bare `keryx` print the identical flat usage, and `keryx help` (grouped) differs from all three", async () => {
+  const cliPath = path.join(import.meta.dir, "cli.ts");
+  const [helpFlag, hFlag, bare, grouped] = await Promise.all([
+    runBun([cliPath, "--help"]),
+    runBun([cliPath, "-h"]),
+    runBun([cliPath]),
+    runBun([cliPath, "help"]),
+  ]);
+  expect(helpFlag).toBe(hFlag);
+  expect(helpFlag).toBe(bare);
+  expect(grouped).not.toBe(helpFlag);
+  expect(grouped).toMatch(/Start here:/);
+  expect(grouped).toMatch(/Maintenance and diagnostics:/);
+});
+
 test("agents bootstrap help is available without touching global files", async () => {
   const cliPath = path.join(import.meta.dir, "cli.ts");
   const output = await runBun([cliPath, "agents", "bootstrap", "--help"]);

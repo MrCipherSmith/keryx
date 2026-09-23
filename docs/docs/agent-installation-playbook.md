@@ -1,10 +1,19 @@
 # Agent Installation Playbook
 
-This playbook is the autonomous-agent companion to the
+**Audience.** An AI coding agent driving keryx's own installation unattended
+— not a human reading step by step. It defines Gherkin scenarios, parameters
+and a structured handoff report an agent follows and verifies against, rather
+than prose instructions. A human wanting to install keryx themselves should
+read [Onboarding](onboarding.md) instead; an operator wanting the exhaustive
+manual reference this playbook's scenarios are built from should read the
 [Complete Installation, Project Setup, and Agent Workflow Guide](./complete-setup-and-agent-workflows.md).
-It converts the installation process into explicit Gherkin scenarios that an AI
-coding agent can execute and verify without requiring the user to remember keryx
-commands.
+
+This playbook is the autonomous-agent companion to that guide. It converts the
+installation process into explicit Gherkin scenarios that an AI coding agent
+can execute and verify without requiring the user to remember keryx commands.
+Its restatement here is a different shape than the guide's or Onboarding's,
+not the same one twice: Given/When/Then steps and exact command strings an
+agent matches against and verifies the exit code of, not prose a human reads.
 
 ## Minimal invocation prompt
 

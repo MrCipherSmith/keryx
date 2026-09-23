@@ -15,6 +15,36 @@ import type {
 // src/commands/standard.ts stay thin and delegate here; these functions return
 // structured results and never print.
 
+// Flow 303: HELP_GROUPS re-export. `src/standard/help-groups.ts` is a core
+// module with no facade of its own; `src/commands/help.ts` (adapter) and
+// `src/tui/help-modal.ts` (client) import it ONLY through this file, because
+// an edge whose target basename is not literally `service.ts` is an
+// AVOIDABLE bypass under `src/lib/import-policy.ts`'s
+// `client-imports-core-internal` rule, and that ratchet
+// (`import-policy.live.test.ts`) was already at its ceiling with zero slack
+// when this flow landed. Do not import `./help-groups` directly from either
+// zone — re-export what is needed here instead.
+export {
+  allHelpTokens,
+  closestHelpTopics,
+  entriesInGroup,
+  findCliEntry,
+  findEntry,
+  findSlashEntry,
+  groupBySlug,
+  HELP_DEFAULT_COLUMNS,
+  HELP_GROUP_ORDER,
+  HELP_GROUPS,
+  HIDDEN_FROM_HELP,
+  renderCliGroupHelp,
+  renderCommandsByTaskMarkdown,
+  renderEntryDetail,
+  renderGroupedCliHelp,
+  renderGroupedNamedHelp,
+  renderGroupedSlashHelp,
+} from "./help-groups";
+export type { HelpEntry, HelpEntryKind, HelpGroupDef, HelpGroupName, NamedHelpOption } from "./help-groups";
+
 export type DoctorReport = ValidationResult;
 
 export async function runValidate(cwd: string): Promise<ValidationResult> {

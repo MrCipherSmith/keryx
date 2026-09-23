@@ -52,6 +52,7 @@ rules sync regenerates it. That index text is prompt guidance, not enforcement.
 
 | Command | Purpose |
 |---|---|
+| `help` | Grouped command help by task — `keryx help [group|command]`. |
 | `shell` | Start the interactive TUI agent shell (sessions are per-project). |
 | `version` | Check whether the installed Keryx version has a newer npm release. |
 | `sessions` | List, fork, export, or locate agent sessions for the current project. |
@@ -96,6 +97,41 @@ example `memory index --embeddings` builds the lexical index only, and
 `security eval --with-model` silently uses the pure detector path). The single
 sanctioned exception is **`mcp serve`**, which hard-fails with an actionable
 message when the optional MCP SDK is not installed.
+
+---
+
+## help
+
+Grouped command help by task, added by flow 303. Separate from `--help`/`-h`
+and a bare `keryx`, which keep printing the flat usage block above unchanged.
+
+```
+keryx help [group|command]
+```
+
+- `keryx help` (no argument) prints every command group, in onboarding order
+  (Start here; Connect a model provider; Look and feel; Working in keryx
+  shell; Project knowledge; Managed work; Automation; External agents, ACP
+  and MCP; Maintenance and diagnostics), each with its commands and a
+  one-line summary.
+- `keryx help <group>` — a group slug (`start-here`, `connect`,
+  `look-and-feel`, `shell-work`, `project-knowledge`, `managed-work`,
+  `automation`, `external-agents`, `maintenance`) — prints just that group.
+- `keryx help <command>` prints that command's full usage: the same rich
+  help `keryx <command> --help` prints today (`flow`, `trigger`, `serve-mcp`
+  and `governance` keep their own richer help; every other verb gets its
+  `USAGE_BODY` usage block). `keryx help <slash-command>` (e.g.
+  `keryx help /theme`) explains a `keryx shell` command, since those have no
+  standalone CLI form.
+- An unknown group, command or slash-command name exits non-zero and
+  suggests the closest matches by edit distance.
+
+In the OpenTUI shell, `/help` opens a tabbed modal built on the same grouped
+table — one tab per group, arrow keys to move, Enter for a command's detail,
+Esc to close. The readline shell, `--no-tui`, and the ACP host print the
+same grouping as text, since a modal cannot render there. On a brand-new
+`keryx shell` with no model provider configured yet, the modal opens once,
+already on the "Connect a model provider" tab.
 
 ---
 
