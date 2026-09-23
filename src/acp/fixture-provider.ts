@@ -28,12 +28,30 @@ export type AcpFixtureEvent = Partial<NormalizedEvent> & Pick<NormalizedEvent, "
 export interface AcpFixtureFile {
   /** `turns[N]` is what the (N+1)th `stream()` call replays. */
   readonly turns: readonly (readonly AcpFixtureEvent[])[];
+  /**
+   * The models a session may switch between (flow 288). Omitted: one model,
+   * `fixture-model`. A scripted `text` containing `{{model}}` is replayed with
+   * the id of the model the turn actually ran — the wire-visible proof that a
+   * switch took effect on the turn it should have, and not on another.
+   */
+  readonly models?: readonly string[];
 }
 
-export function loadAcpFixtureProvider(path: string): ProviderPort {
+export interface AcpFixture {
+  readonly models: readonly string[];
+  /** A provider for `modelId`. Every provider built from one fixture shares its call counter. */
+  readonly providerFor: (modelId: string) => ProviderPort;
+}
+
+const MODEL_PLACEHOLDER = "{{model}}";
+
+export function loadAcpFixture(path: string): AcpFixture {
   const raw = readFileSync(path, "utf-8");
   const parsed = JSON.parse(raw) as AcpFixtureFile;
   const turns = parsed.turns;
+  const models = parsed.models !== undefined && parsed.models.length > 0 ? [...parsed.models] : ["fixture-model"];
+  // ONE counter for the process, whichever model's provider asks: the script
+  // is ordered by turn, not by model.
   let call = 0;
 
   const description: ProviderDescription = {
@@ -51,7 +69,7 @@ export function loadAcpFixtureProvider(path: string): ProviderPort {
     descriptor: { providerId: "acp-fixture" },
   };
 
-  return {
+  const providerFor = (modelId: string): ProviderPort => ({
     describe: () => description,
     stream: (_request: NormalizedRequest, opts: StreamOptions): AsyncIterable<NormalizedEvent> => {
       const events = turns[call] ?? [];
@@ -59,9 +77,19 @@ export function loadAcpFixtureProvider(path: string): ProviderPort {
       return (async function* (): AsyncGenerator<NormalizedEvent> {
         let sequence = 0;
         for (const partial of events) {
-          yield { sequence: sequence++, attemptId: opts.attemptId, ...partial };
+          const text =
+            typeof partial.text === "string" ? { text: partial.text.split(MODEL_PLACEHOLDER).join(modelId) } : {};
+          yield { sequence: sequence++, attemptId: opts.attemptId, ...partial, ...text };
         }
       })();
     },
-  };
+  });
+
+  return { models, providerFor };
+}
+
+/** The fixture's provider for its first model — what a launch without a switch runs. */
+export function loadAcpFixtureProvider(path: string): ProviderPort {
+  const fixture = loadAcpFixture(path);
+  return fixture.providerFor(fixture.models[0] ?? "fixture-model");
 }
