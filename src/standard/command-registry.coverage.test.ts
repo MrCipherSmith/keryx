@@ -72,6 +72,11 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
     reason:
       "binds stdio as a JSON-RPC channel and runs until signalled, like serve-mcp and shell; it owns stdout as the protocol wire, so it has no machine-consumable result a descriptor could describe",
   },
+  {
+    verb: "__sandbox-net-forward",
+    reason:
+      "internal helper keryx starts inside an unattended sandbox to bridge a local port to the allowlist proxy's socket; it runs until the sandboxed command ends and is never an operation for an agent to call",
+  },
 ];
 
 /** Verbs that carry at least one descriptor, derived from the registry. */
