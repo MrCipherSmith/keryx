@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "305",
+  "slug": "w5-a-one-harness-adapter-registry-for-th",
+  "title": "W5-a: one harness adapter registry for the ctx guard, orient injector and security hooks",
+  "status": "initializing",
+  "createdAt": "2026-09-23T21:26:30.854Z",
+  "updatedAt": "2026-09-23T21:26:30.854Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "feat/agent-platform-expansion",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-23T21:26:30.854Z",
+      "event": "created"
+    }
+  ]
+}
