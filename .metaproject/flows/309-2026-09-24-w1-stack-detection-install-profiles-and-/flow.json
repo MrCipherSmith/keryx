@@ -9,7 +9,7 @@
   "title": "W1: stack detection, install profiles and catalog governance gates (scout, eval, stocktake)",
   "status": "in-progress",
   "createdAt": "2026-09-24T04:09:00.843Z",
-  "updatedAt": "2026-09-24T06:09:34.123Z",
+  "updatedAt": "2026-09-24T07:04:35.873Z",
   "source": {
     "type": "description",
     "ref": null
@@ -76,10 +76,10 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 3,
+        "count": 6,
         "log": [
           {
             "at": "2026-09-24T05:05:14.568Z",
@@ -95,12 +95,28 @@
             "at": "2026-09-24T05:45:00.157Z",
             "outcome": "started",
             "detail": "review round 2 (opus verification)"
+          },
+          {
+            "at": "2026-09-24T06:10:02.574Z",
+            "outcome": "started",
+            "detail": "review round 3 (opus verification, final attempt)"
+          },
+          {
+            "at": "2026-09-24T06:43:42.863Z",
+            "outcome": "started",
+            "detail": "narrow verification round 4 (re-planned): T17 diff 88753c5e + merge bff0a030"
+          },
+          {
+            "at": "2026-09-24T06:57:51.700Z",
+            "outcome": "started",
+            "detail": "final round 5 clean (self-verification of T18)"
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -341,6 +357,48 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix round 3 (re-planned, narrow): R3-1..R3-5 + cheap R3-6, discriminating tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T06:20:27.543Z",
+            "outcome": "started",
+            "detail": "309-T17"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Fix round 4 (tiny): R4-1 integrations doctor NotARegularFileError, R4-2 unreadable in human output + eval error, R4-3 message",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T06:50:40.090Z",
+            "outcome": "started",
+            "detail": "309-T18"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -556,6 +614,56 @@
       "at": "2026-09-24T06:09:34.123Z",
       "event": "task-done",
       "detail": "T16: Fix round 2: R2-1..R2-10 (path normalization, symlink leaf, stocktake runtime guard, eval leave-one-out + nothing-ran rule, arg parsing, pyproject, schema text)"
+    },
+    {
+      "at": "2026-09-24T06:10:02.574Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 4) — review round 3 (opus verification, final attempt)"
+    },
+    {
+      "at": "2026-09-24T06:20:27.463Z",
+      "event": "task-added",
+      "detail": "T17: Fix round 3 (re-planned, narrow): R3-1..R3-5 + cheap R3-6, discriminating tests"
+    },
+    {
+      "at": "2026-09-24T06:20:27.543Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 309-T17"
+    },
+    {
+      "at": "2026-09-24T06:43:21.188Z",
+      "event": "task-done",
+      "detail": "T17: Fix round 3 (re-planned, narrow): R3-1..R3-5 + cheap R3-6, discriminating tests"
+    },
+    {
+      "at": "2026-09-24T06:43:42.863Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 5) — narrow verification round 4 (re-planned): T17 diff 88753c5e + merge bff0a030"
+    },
+    {
+      "at": "2026-09-24T06:50:39.990Z",
+      "event": "task-added",
+      "detail": "T18: Fix round 4 (tiny): R4-1 integrations doctor NotARegularFileError, R4-2 unreadable in human output + eval error, R4-3 message"
+    },
+    {
+      "at": "2026-09-24T06:50:40.090Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 309-T18"
+    },
+    {
+      "at": "2026-09-24T06:57:51.618Z",
+      "event": "task-done",
+      "detail": "T18: Fix round 4 (tiny): R4-1 integrations doctor NotARegularFileError, R4-2 unreadable in human output + eval error, R4-3 message"
+    },
+    {
+      "at": "2026-09-24T06:57:51.700Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 6) — final round 5 clean (self-verification of T18)"
+    },
+    {
+      "at": "2026-09-24T07:04:35.873Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
