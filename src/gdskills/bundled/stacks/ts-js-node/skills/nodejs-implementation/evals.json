@@ -23,17 +23,47 @@
       "prompt": "Implement a Node.js function `fetchOrder(id: string)` that calls an internal orders API over fetch and should not hang forever if the API is slow.",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "[Aa]bort[Ss]ignal" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct implementation threads an AbortSignal (e.g. AbortSignal.timeout(ms) or a caller-supplied signal) into the fetch call so a slow orders API cannot hang the function forever, and handles the resulting abort/timeout as a typed failure.",
+          "pass_criteria": [
+            "Passes an AbortSignal into the fetch call (via { signal }), using AbortSignal.timeout(ms) or an equivalent caller/composed signal for a fixed time budget",
+            "Handles the abort case explicitly (catches the abort error / times out with a clear error) rather than leaving an unbounded await"
+          ],
+          "fail_criteria": [
+            "Leaves the fetch call with no signal/timeout at all, relying on the API being reliable",
+            "Implements a bespoke manual timeout (e.g. racing a setTimeout Promise) instead of using AbortSignal, when nothing in the prompt rules out AbortSignal"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "async function fetchOrder(id: string): Promise<Order> { const signal = AbortSignal.timeout(5000); try { const res = await fetch(`/internal/orders/${id}`, { signal }); if (!res.ok) { throw new Error(`fetchOrder failed: ${res.status}`, { cause: await res.text() }); } return (await res.json()) as Order; } catch (err) { if (err instanceof DOMException && err.name === 'TimeoutError') { throw new Error(`fetchOrder timed out for id=${id}`, { cause: err }); } throw new Error(`fetchOrder failed for id=${id}`, { cause: err }); } } AbortSignal.timeout(5000) gives the request a fixed 5s budget and aborts the underlying request automatically if the internal orders API stalls, instead of the caller waiting indefinitely. The abort surfaces as a TimeoutError which is caught and re-thrown as a typed error with the original cause chained, so callers get a clear, bounded failure rather than a hang.",
+        "known_wrong": "async function fetchOrder(id: string) { const res = await fetch(`/internal/orders/${id}`); return res.json(); } The internal orders API is generally reliable and on the same network, so a timeout isn't really necessary here -- if it does hang occasionally, that's more of an infra problem than something this function needs to handle. Keeping it simple like this is easier to read and there's less to go wrong; if timeouts become an actual issue in practice we can always add one later."
+      }
     },
     {
       "id": "unknown-over-any",
       "prompt": "I'm implementing a Node.js handler that parses an untrusted JSON request body before passing it to business logic. What type should the parsed body have before I validate it?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "contains", "value": "unknown" },
-        { "grader": "not-contains", "value": "use `any`" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct answer types the not-yet-validated parsed JSON body as unknown, to be narrowed by a validator or type guard before use, and rejects typing it as any.",
+          "pass_criteria": [
+            "States the parsed body should be typed unknown before validation",
+            "Says the value must be narrowed (schema validator or type guard) before it reaches business logic, rather than trusted as-is"
+          ],
+          "fail_criteria": [
+            "Recommends typing the parsed body as any",
+            "Mentioning the suppression only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Type it as unknown, not any. JSON.parse's result (or whatever your body parser hands you) has no verified shape yet -- unknown keeps the compiler forcing you to prove the shape before you use any property on it, whereas any would silently disable type checking on everything downstream, including deep into business logic where a malformed request could slip through unnoticed. Concretely: function parseBody(raw: unknown): OrderInput { const result = orderInputSchema.safeParse(raw); if (!result.success) throw new Error('invalid order body', { cause: result.error }); return result.data; } Only after safeParse (or an equivalent type guard) narrows it should the value be passed into business logic as a properly typed OrderInput. It's tempting to just type it as any to unblock the handler quickly, but that removes the compiler's help for every consumer of this value, not just this one call site.",
+        "known_wrong": "Simplest option: just type the parsed body as any at the top of the handler -- const body: any = JSON.parse(raw) -- and access whatever fields you need directly. Since request bodies vary and you're going to validate the important fields with an if check anyway before using them in business logic, any avoids fighting the compiler over a type that's going to get validated by hand regardless. You can always tighten it to a real interface later once the endpoint's shape stabilizes."
+      },
+      "anti_patterns": ["any"]
     }
   ]
 }

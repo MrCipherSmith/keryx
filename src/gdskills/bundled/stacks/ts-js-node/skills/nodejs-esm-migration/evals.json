@@ -23,17 +23,46 @@
       "prompt": "I'm migrating this Node.js package to ES modules. Should the package.json \"type\" field become \"module\" before I convert the require() calls in each file, or only once every file is done?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "require\\([^\\n]{0,150}break|break[^\\n]{0,150}require\\(|remaining[\\s\\S]{0,80}require\\(" },
-        { "grader": "regex", "value": "[Cc]onvert[\\s\\S]{0,150}(then|once|before|prior to|ahead of)[\\s\\S]{0,100}(add|flip|set|switch)[\\s\\S]{0,30}\"?type|(once|after)[\\s\\S]{0,60}(every|all|each)[\\s\\S]{0,30}(file|code)[\\s\\S]{0,300}(then|add|flip|set)[\\s\\S]{0,30}\"?type" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct answer says to convert the require()/module.exports usages in each file to import/export first, and only add \"type\": \"module\" to package.json once every file in the package is converted -- flipping it first breaks every remaining CommonJS file at once.",
+          "pass_criteria": [
+            "States the ordering: convert files (require -> import, module.exports -> export) first, add/flip \"type\": \"module\" only once the whole package is converted",
+            "Explains why flipping \"type\": \"module\" early breaks any remaining file that still calls require()"
+          ],
+          "fail_criteria": [
+            "Says to add/flip \"type\": \"module\" before converting the require() calls, or treats the order as not mattering"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Convert the files first, flip \"type\": \"module\" last. Node decides how to interpret every .js file in the package by that field: once it says \"module\", every remaining file that still has require()/module.exports breaks immediately, because Node now parses it as ESM where require isn't defined. So the safe order is: (1) convert each file's require(...) to import, module.exports = to export default, exports.foo = to export const foo/export function foo, one file (or a small batch) at a time, running tsc --noEmit/tests after each batch; (2) only once every file in the package has been converted -- no require()/module.exports left -- add \"type\": \"module\" to package.json and fix whatever the flip still reveals (missing file extensions on relative imports, __dirname usage, etc). Doing it in this order means the package stays runnable throughout the migration instead of breaking wholesale partway through.",
+        "known_wrong": "I'd just add \"type\": \"module\" to package.json right away -- that declares the intent up front and Node/tools will immediately tell you (via errors) which files still need converting, which is actually a faster way to find everything that needs fixing than grepping for require( manually. Then go through and fix each require()/module.exports as the errors point them out, file by file, until it all runs again. It doesn't really matter which order you do it in as long as you get to the same end state."
+      }
     },
     {
       "id": "dirname-replacement",
       "prompt": "In this Node.js file being migrated to ESM, __dirname is undefined. What should replace it?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "import\\.meta\\.dirname|fileURLToPath" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct answer replaces __dirname with import.meta.dirname (Node 20.11+/22+), or a fileURLToPath(import.meta.url)-derived equivalent for older Node targets -- not a hardcoded path.",
+          "pass_criteria": [
+            "Names import.meta.dirname (or fileURLToPath(import.meta.url) for an older Node floor) as the replacement",
+            "Ties the choice to the project's Node version floor (engines.node) rather than assuming one Node version"
+          ],
+          "fail_criteria": [
+            "Suggests hardcoding the directory path as the fix",
+            "Mentioning the suppression only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "__dirname doesn't exist in ESM, but import.meta.dirname replaces it directly on Node 20.11+/22+ -- no import needed, just swap __dirname for import.meta.dirname everywhere it's used in this file. If the package's engines.node floor is older than that, use the classic derivation instead: import { fileURLToPath } from 'node:url'; import { dirname } from 'node:path'; const __dirname = dirname(fileURLToPath(import.meta.url)); near the top of the file, which gives you an equivalent __dirname binding without relying on the newer import.meta.dirname shortcut. Either way, check engines.node first so the fix actually runs on every Node version this package claims to support -- don't hardcode the path as a shortcut, since that breaks the moment the package is installed or run from a different location.",
+        "known_wrong": "Since __dirname is undefined in ESM and this is annoying to work around properly, easiest fix is to just hardcode the path this file expects, e.g. const dirname = '/app/src/lib', and use that constant wherever __dirname was referenced. That sidesteps the whole import.meta API and works immediately without worrying about which Node version supports import.meta.dirname."
+      },
+      "anti_patterns": ["hardcode"]
     }
   ]
 }

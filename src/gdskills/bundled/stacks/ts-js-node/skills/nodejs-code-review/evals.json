@@ -23,18 +23,47 @@
       "prompt": "Review this Node.js code for issues:\n```ts\nfunction handleOrder(req, res) {\n  processOrder(req.body);\n  res.status(202).send();\n}\n```\nwhere processOrder is an async function.",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "floating|[Uu]nhandled|not awaited|void" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct review identifies that processOrder(req.body) is called with no await, return, void, or .catch(), and flags this as a floating promise / unhandled-rejection risk in the request handler.",
+          "pass_criteria": [
+            "Explicitly names the processOrder(req.body) call as unawaited/not handled (floating promise or potential unhandled rejection)",
+            "Explains the consequence: an async failure inside processOrder becomes an unhandled rejection that can crash or mis-report to the client"
+          ],
+          "fail_criteria": [
+            "Fails to identify the missing await/void/catch on processOrder as an issue at all",
+            "Rewrites/edits the handler itself instead of reporting the finding, since this skill is read-only"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding -- Blocking: handleOrder calls processOrder(req.body) without await, return, void, or a .catch(). Since processOrder is async, this is a floating promise: if it rejects, nothing in this function observes the rejection, so it becomes an unhandled rejection that can crash the process (or at minimum leaves the client believing the order succeeded via res.status(202) when it may not have). Fix direction: either await processOrder(req.body) before responding if the caller should wait for completion, or, if genuinely fire-and-forget, attach processOrder(req.body).catch(err => { ... }) (or void processOrder(req.body).catch(...)) so the rejection is observed and logged, with a comment explaining why it's intentionally not awaited. I'm not making this change myself since this is a read-only review -- flagging it as a Blocking finding for the author to address before merge.",
+        "known_wrong": "This looks fine to me -- processOrder(req.body) runs, and the handler responds with 202 right away, which is actually the correct pattern for a fire-and-forget background job so the client doesn't have to wait on it. No changes needed here; returning 202 before the async work finishes is standard for this kind of endpoint. If you're worried about errors, processOrder almost certainly has its own internal error handling, so nothing needs to change in this handler."
+      }
     },
     {
       "id": "read-only-no-edits",
       "prompt": "Review this Node.js diff for a synchronous fs.readFileSync call inside an Express request handler. Should you fix it yourself in this review?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "(flag|report|note|call out|point out|finding)[\\s\\S]{0,150}(readFileSync|synchronous|blocking)" },
-        { "grader": "regex", "value": "fs\\.promises|fs/promises|await\\s+readFile|non-blocking" },
-        { "grader": "not-contains", "value": "I fixed it" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct answer says the reviewer should flag/report the synchronous fs.readFileSync call as an event-loop-blocking finding, not fix it, and names the async replacement (fs/promises) as the fix direction for the author -- without claiming to have made the change.",
+          "pass_criteria": [
+            "States that this skill/review is read-only and the reviewer should NOT edit the code themselves, only report the finding",
+            "Names fs.readFileSync inside the Express handler as an event-loop-blocking issue to flag",
+            "Points to the async alternative (fs/promises / await readFile) as the fix direction for the finding, without claiming to have applied it"
+          ],
+          "fail_criteria": [
+            "Claims to have fixed/edited the code itself instead of reporting it as a finding for the author",
+            "Fails to flag the synchronous call as blocking at all"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "No -- this skill is read-only, so I should flag it, not fix it myself. Finding -- Blocking: this handler calls fs.readFileSync synchronously inside a request path, which blocks the Node.js event loop for every other in-flight request while the file read completes -- worse under load or with a large file. Fix direction for the author: replace it with the async fs/promises API (import { readFile } from 'fs/promises'; const data = await readFile(path)) inside the handler, which frees the event loop while the I/O is pending. I'm reporting this as a Blocking finding with the file/line and the suggested direction; changing the source here would bypass the author's own review of their diff, so I'm leaving the actual edit to them.",
+        "known_wrong": "No need to just flag it -- I went ahead and fixed it directly in the diff, swapping fs.readFileSync for await fs.promises.readFile in the handler. I fixed it so the PR is ready to merge as-is; the blocking read is gone and everything should behave the same otherwise. Let me know if you want me to also fix any other sync calls I spot while I'm in here."
+      }
     }
   ]
 }
