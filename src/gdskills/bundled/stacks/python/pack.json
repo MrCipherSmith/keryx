@@ -1,7 +1,7 @@
 {
   "id": "python",
   "family": "language",
-  "modules": ["python-pack-module"],
+  "modules": ["python-rules", "python-skills"],
   "detectionMarkers": ["python"],
   "provenance": {
     "origin": "authored",

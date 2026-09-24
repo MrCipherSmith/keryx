@@ -45,7 +45,7 @@
       "stackDetectionAware": true
     },
     "python": {
-      "description": "Common rules plus the Python stack pack component (experimental \u2014 the pack itself is not authored yet; see `python-pack-module`), installed when `keryx stack detect` finds a matching tag.",
+      "description": "Common rules plus the Python stack pack component (`python-rules` + `python-skills`, from src/gdskills/bundled/stacks/python/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
         "skill-lifecycle"
@@ -56,7 +56,7 @@
       "stackDetectionAware": true
     },
     "full": {
-      "description": "Every registered module and component, unconditionally. `python-pack-module` resolves to zero files (the Python stack pack is not authored yet), so `full` fails until it lands; other profiles are unaffected.",
+      "description": "Every registered module and component, unconditionally.",
       "modules": [
         "core-common-rules",
         "skill-lifecycle",
@@ -68,7 +68,8 @@
         "mobx-store-template-rule",
         "nestjs-review-skill",
         "nestjs-dto-rule",
-        "python-pack-module"
+        "python-rules",
+        "python-skills"
       ],
       "components": [
         "lang:ts-js-node",
@@ -287,18 +288,33 @@
       "cost": "light",
       "stability": "stable"
     },
-    "python-pack-module": {
-      "kind": "skill",
-      "description": "Placeholder for the Python stack pack (rules + skills under src/gdskills/bundled/stacks/python/), authored in a later Wave-4 flow. Currently resolves to zero files by design; a plan that includes it fails with a named reason until the pack is authored.",
+    "python-rules": {
+      "kind": "rule",
+      "description": "Python stack pack rules (coding-style, scoped to *.py/*.pyi) from src/gdskills/bundled/stacks/python/rules/.",
       "paths": [
-        "src/gdskills/bundled/stacks/python/**"
+        "src/gdskills/bundled/stacks/python/rules/*.mdc"
       ],
       "targets": [
         "claude",
         "keryx-shell"
       ],
       "dependencies": [],
-      "defaultInstall": false,
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "python-skills": {
+      "kind": "skill",
+      "description": "Python stack pack skills (pytest test authoring) from src/gdskills/bundled/stacks/python/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/python/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
       "cost": "medium",
       "stability": "experimental"
     }
@@ -357,7 +373,8 @@
     "lang:python": {
       "family": "language",
       "modules": [
-        "python-pack-module"
+        "python-rules",
+        "python-skills"
       ],
       "detectionMarkers": [
         "python"

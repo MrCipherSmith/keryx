@@ -8,6 +8,30 @@
 // path in a plan is repo-relative. Two calls with the same `manifest`,
 // `profileId`, `with`/`without`, `target`, and `stack` input produce
 // byte-identical JSON.
+//
+// `defaultInstall` semantics (decided in flow 309 W1 T14, fixing a defect
+// where a per-stack profile installed zero pack files): `defaultInstall`
+// governs whether a module that reaches the candidate set *only* through an
+// owning component installs without the operator asking for it by name.
+// - A module a profile lists directly under `profile.modules` always
+//   installs (`unconditionalModuleIds`, below) — `defaultInstall` is not
+//   consulted for those at all.
+// - A module reached through `component.modules` installs when
+//   `defaultInstall: true`, OR when it (or its owning component) was named
+//   explicitly via `--with`, OR when something already selected depends on
+//   it. `defaultInstall: false` on a component-sourced module means
+//   "catalog-listed but never installed implicitly" — reserved for
+//   placeholder/scaffold modules that resolve to zero files or are not yet
+//   ready for a default install; it is NOT how a real, shippable stack
+//   pack's modules should be marked, because every per-stack profile
+//   (`python`, `react`, `nestjs`, ...) reaches its pack's modules only
+//   through a component, and W1-AC6 requires the profile's plan to include
+//   every module the profile's resolved component set requires. Concretely:
+//   `python-rules`/`python-skills` (real pack content, reachable via
+//   `lang:python`) are `defaultInstall: true`, matching every other stack
+//   component's modules (`react-review-skills`, `nestjs-review-skill`,
+//   etc.); only a genuine placeholder module (none remain as of this flow)
+//   should ever ship `defaultInstall: false`.
 
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -154,17 +178,35 @@ function parseSkillSource(source: string): SkillDestination | undefined {
   return undefined;
 }
 
+/** Extract `{pack, file}` from a stack-pack rule source path, or `undefined` if unrecognised. */
+function parseStackRuleSource(source: string): { pack: string; file: string } | undefined {
+  const match = /^src\/gdskills\/bundled\/stacks\/([^/]+)\/rules\/([^/]+)$/.exec(source);
+  return match ? { pack: match[1]!, file: match[2]! } : undefined;
+}
+
 /**
  * Destination table, v1 (docs/requirements/.../workstreams/W1-stack-catalog.md
  * §"Install: profiles → modules → components"):
  *   claude      skill -> .claude/skills/<name>/<rest>       rule -> .claude/rules/<basename>
  *   keryx-shell skill -> .metaproject/skills/gdskills/<category>/<name>/<rest>
  *               rule -> .metaproject/rules/core/<basename>
+ * A stack-pack rule (source under `stacks/<pack>/rules/`) is namespaced by
+ * pack id instead of landing at the bare `core` rule destination, so two
+ * packs shipping a same-named file (e.g. both ship `coding-style.mdc`) never
+ * collide:
+ *   claude      rule -> .claude/rules/<pack>-<basename>
+ *   keryx-shell rule -> .metaproject/rules/stacks/<pack>/<basename>
  * Any other target, or a module kind with no entry here (agent-ref,
  * hook-runtime, schema, doc), has no destination in v1.
  */
 function destinationFor(target: HarnessId, kind: ModuleKind, source: string): string | { error: string } {
   if (kind === "rule") {
+    const stackRule = parseStackRuleSource(source);
+    if (stackRule !== undefined) {
+      if (target === "claude") return `.claude/rules/${stackRule.pack}-${stackRule.file}`;
+      if (target === "keryx-shell") return `.metaproject/rules/stacks/${stackRule.pack}/${stackRule.file}`;
+      return { error: `target "${target}" has no rule destination in the v1 destination table` };
+    }
     const basename = path.posix.basename(source);
     if (target === "claude") return `.claude/rules/${basename}`;
     if (target === "keryx-shell") return `.metaproject/rules/core/${basename}`;
@@ -380,6 +422,24 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
   }
 
   modules.sort((a, b) => a.id.localeCompare(b.id));
+
+  // Collision check: two sources (possibly from different modules) mapping
+  // to the same destination is always a planning error — one of them would
+  // silently overwrite the other at apply time.
+  const destinationOwners = new Map<string, { moduleId: string; source: string }>();
+  for (const module of modules) {
+    for (const file of module.files) {
+      const existing = destinationOwners.get(file.destination);
+      if (existing !== undefined) {
+        errors.push(
+          `destination collision at "${file.destination}": module "${existing.moduleId}" source "${existing.source}" ` +
+            `and module "${module.id}" source "${file.source}" both write it`,
+        );
+        continue;
+      }
+      destinationOwners.set(file.destination, { moduleId: module.id, source: file.source });
+    }
+  }
 
   return {
     schemaVersion: "1.0.0",

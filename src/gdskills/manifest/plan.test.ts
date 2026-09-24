@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { InstallManifest } from "./manifest";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { defaultBundledSourceRoot, loadBundledManifest, type InstallManifest } from "./manifest";
 import { planInstall } from "./plan";
 import type { CapabilityMatrixDocument } from "../../integrations/matrix";
 
@@ -16,6 +16,15 @@ beforeEach(async () => {
   await writeFile(
     path.join(root, "src", "gdskills", "bundled", "skills", "review", "fake-skill", "SKILL.md"),
     "---\nname: fake-skill\ndescription: fixture\n---\nbody\n",
+    "utf8",
+  );
+  // A second, distinctly-named skill directory so `skill-b` and `skill-c`
+  // (both members of `lang:x`) resolve to different destinations — two
+  // modules sharing one destination is a collision the planner now rejects.
+  await mkdir(path.join(root, "src", "gdskills", "bundled", "skills", "review", "fake-skill-c"), { recursive: true });
+  await writeFile(
+    path.join(root, "src", "gdskills", "bundled", "skills", "review", "fake-skill-c", "SKILL.md"),
+    "---\nname: fake-skill-c\ndescription: fixture\n---\nbody\n",
     "utf8",
   );
 });
@@ -55,7 +64,7 @@ const FIXTURE_MANIFEST: InstallManifest = {
     "skill-c": {
       kind: "skill",
       description: "skill c, opt-in only",
-      paths: ["src/gdskills/bundled/skills/review/fake-skill/**"],
+      paths: ["src/gdskills/bundled/skills/review/fake-skill-c/**"],
       targets: ["claude", "keryx-shell"],
       dependencies: ["rule-a"],
       defaultInstall: false,
@@ -249,4 +258,109 @@ test("an unknown profile id fails cleanly", async () => {
   const plan = await planInstall({ manifest: FIXTURE_MANIFEST, profileId: "nope", target: "claude", repoRoot: root });
   expect(plan.ok).toBe(false);
   expect(plan.errors[0]).toContain("unknown profile");
+});
+
+test("destination collision: two modules mapping to the same destination fails the plan naming both", async () => {
+  const manifest: InstallManifest = {
+    schemaVersion: "1.0.0",
+    profiles: {
+      collide: { description: "collide", modules: ["skill-x", "skill-y"], components: [] },
+    },
+    modules: {
+      "skill-x": {
+        kind: "skill",
+        description: "skill x",
+        paths: ["src/gdskills/bundled/skills/review/fake-skill/**"],
+        targets: ["claude"],
+        dependencies: [],
+        defaultInstall: true,
+        cost: "light",
+        stability: "stable",
+      },
+      "skill-y": {
+        kind: "skill",
+        description: "skill y, same backing files as skill-x",
+        paths: ["src/gdskills/bundled/skills/review/fake-skill/**"],
+        targets: ["claude"],
+        dependencies: [],
+        defaultInstall: true,
+        cost: "light",
+        stability: "stable",
+      },
+    },
+    components: {},
+  };
+  const plan = await planInstall({ manifest, profileId: "collide", target: "claude", repoRoot: root });
+  expect(plan.ok).toBe(false);
+  expect(
+    plan.errors.some(
+      (e) => e.includes("destination collision") && e.includes("skill-x") && e.includes("skill-y"),
+    ),
+  ).toBe(true);
+});
+
+describe("real bundled manifest (flow 309, W1 T14 — python stack pack destination wiring)", () => {
+  const repoRoot = defaultBundledSourceRoot();
+  const manifest = loadBundledManifest();
+
+  test("`full` plans ok with no errors, for both claude and keryx-shell", async () => {
+    for (const target of ["claude", "keryx-shell"] as const) {
+      const plan = await planInstall({ manifest, profileId: "full", target, repoRoot });
+      expect(plan.errors).toEqual([]);
+      expect(plan.ok).toBe(true);
+    }
+  });
+
+  test("`python` profile plan includes python-testing SKILL.md and the coding-style rule, for both targets", async () => {
+    const claudePlan = await planInstall({ manifest, profileId: "python", target: "claude", repoRoot });
+    expect(claudePlan.ok).toBe(true);
+    const claudeDestinations = claudePlan.modules.flatMap((m) => m.files.map((f) => f.destination));
+    expect(claudeDestinations).toContain(".claude/skills/python-testing/SKILL.md");
+    expect(claudeDestinations).toContain(".claude/rules/python-coding-style.mdc");
+
+    const shellPlan = await planInstall({ manifest, profileId: "python", target: "keryx-shell", repoRoot });
+    expect(shellPlan.ok).toBe(true);
+    const shellDestinations = shellPlan.modules.flatMap((m) => m.files.map((f) => f.destination));
+    expect(shellDestinations).toContain(
+      ".metaproject/skills/gdskills/python/python-testing/SKILL.md",
+    );
+    expect(shellDestinations).toContain(".metaproject/rules/stacks/python/coding-style.mdc");
+  });
+
+  test("`--with lang:python` on `core` adds the python pack modules", async () => {
+    const plan = await planInstall({
+      manifest,
+      profileId: "core",
+      target: "claude",
+      repoRoot,
+      with: ["lang:python"],
+    });
+    expect(plan.ok).toBe(true);
+    const moduleIds = plan.modules.map((m) => m.id);
+    expect(moduleIds).toContain("python-rules");
+    expect(moduleIds).toContain("python-skills");
+  });
+
+  test("`--without lang:python` on `python` removes the python pack component and its modules", async () => {
+    const plan = await planInstall({
+      manifest,
+      profileId: "python",
+      target: "claude",
+      repoRoot,
+      without: ["lang:python"],
+    });
+    expect(plan.ok).toBe(true);
+    const component = plan.components.find((c) => c.id === "lang:python");
+    expect(component?.included).toBe(false);
+    const moduleIds = plan.modules.map((m) => m.id);
+    expect(moduleIds).not.toContain("python-rules");
+    expect(moduleIds).not.toContain("python-skills");
+  });
+
+  test("the `python` profile plan is byte-identical across two runs (W1-AC6)", async () => {
+    const input = { manifest, profileId: "python", target: "claude" as const, repoRoot };
+    const first = await planInstall(input);
+    const second = await planInstall(input);
+    expect(JSON.stringify(first)).toBe(JSON.stringify(second));
+  });
 });
