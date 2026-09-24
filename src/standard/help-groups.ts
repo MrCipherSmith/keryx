@@ -292,6 +292,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     summary: "Read-only report over already-recorded spend, confirmations, signatures and gate outcomes.",
   },
   {
+    kind: "cli",
+    name: "hooks",
+    group: "Automation",
+    summary: "Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration.",
+  },
+  {
     kind: "slash",
     name: "/triggers",
     group: "Automation",

@@ -1,5 +1,9 @@
 # W6 — Keryx shell lifecycle hooks
-Version: 0.1.2
+Version: 0.1.3
+
+Implemented in flow 306. See "Implementation notes" below for where the shipped
+runtime deviates from (or fills a gap left open by) this design; user-facing
+documentation lives at [docs/docs/hooks.md](../../../docs/hooks.md).
 
 ## Summary
 
@@ -387,3 +391,119 @@ review or W1 stocktake can find silently-failing hooks without grepping raw logs
 - **Input-rewriting revisit criteria for v2**: what audit-trail design (e.g. re-validating a rewritten
   input through `decide()` as if it were the original call, with the substitution itself a
   non-suppressible session event) would make `updatedInput` safe enough to reconsider?
+
+## Implementation notes (flow 306)
+
+The runtime, CLI, and `keryx shell` wiring described above shipped in flow 306
+(`src/harness/hooks/`, `src/commands/hooks.ts`, `src/commands/agent-hooks.ts`).
+User-facing documentation is at
+[docs/docs/hooks.md](../../../docs/hooks.md). Decisions D1–D6 below are the
+plan's own record (`.metaproject/flows/306-.../plan.md`); the rest are
+deviations or gaps this design left open, found while implementing and
+documenting it.
+
+- **D1 — Hooks integrate through optional deps.** `RunDeps.hooks?`,
+  `AgentDeps.hooks?`. Absent is byte-identical to hooks never having existed
+  (replay-safe).
+- **D2 — No new sandbox.** Hooks reuse the existing `wrapWithSandbox` +
+  `detectSandboxLauncher` layer inside a new async runner, rather than
+  extending the sync `ProcessAdapter`.
+- **D3 — Dual-shape stdin/stdout.** Stdin carries both the camelCase W6
+  fields and Claude-Code-style snake_case aliases (`hook_event_name`,
+  `session_id`, `cwd`, `tool_name`, `tool_input`, `tool_response`,
+  `prompt`); stdout accepts both `decision`/`additionalContext`/`reason` and
+  `hookSpecificOutput.*`, so one hook command runs unmodified under either
+  convention.
+- **D4 — The two stub built-ins run in-process.** `keryx.learning-observer`
+  and `keryx.impact-evidence` are the only `{kind: "builtin"}` handlers,
+  invoked through the `LearningObservationSink`/`ImpactEvidenceProvider`
+  ports (`src/harness/hooks/builtins.ts`) rather than spawned — never
+  available to a user/project registration.
+- **D5 — Env allowlist**: `PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_ALL`, `TERM`
+  (inherited, only if already set), plus `KERYX_HOOK_EVENT`,
+  `KERYX_HOOK_ID`, `KERYX_SESSION_ID`, `KERYX_RUN_ID`, `KERYX_PROJECT_ROOT`,
+  `KERYX_POLICY_PROFILE`, `CLAUDE_PROJECT_DIR` (= project root), then
+  `command.env`. Nothing else reaches a hook process — this resolves the
+  "exact env allowlist" open question above.
+- **D6 — PR shape**: runtime+`run.ts` integration landed first, with
+  built-ins/CLI/shell wiring stacked on top, per the plan's fallback.
+
+**Deviations from this design, documented rather than silently accepted:**
+
+- **`PreToolUse` fires AFTER `decide()`, not before it, in the production
+  `run.ts` wiring** — the opposite of the "hooks before `decide()`" order the
+  pipeline diagram above shows. This is deliberate: `decide()` is pure and a
+  hook cannot influence its inputs, so the only point a hook decision and the
+  policy decision actually meet is `composeDecision`, which runs after both
+  are known regardless of firing order — and running `decide()` first is
+  what makes the gate malformed-output asymmetry (fails closed only when
+  `decide()`'s own outcome was `ask`) implementable at all: that rule cannot
+  be evaluated by a hook that fires before `decide()` has run. See
+  `src/harness/run/run.ts:529-542` and docs/docs/hooks.md's "Where
+  `PreToolUse` actually fires" section.
+- **Tool-name aliases for matcher matching**: `executeCall`'s Keryx tool
+  names are aliased to the Claude-Code-shaped names a built-in/host matcher
+  expects before matcher evaluation — `shell_exec` → `Bash`,
+  `apply_patch` → `Edit` (`HOOK_TOOL_NAME_ALIASES` in
+  `src/commands/agent-hooks.ts`). This table is not named in the design
+  above; it exists because `keryx shell`'s builtin tool names
+  (`shell-exec-tool`, `apply-patch-tool`, ...) do not literally match the
+  Claude Code tool names the built-in matchers (`Bash`, `Write|Edit`) are
+  written against. The hook still receives the original Keryx tool name in
+  its payload (`toolName`) — only the value tested against `matcher` is
+  aliased.
+- **`hook-config-invalid` fail-closed runtime**: not itself part of the
+  `src/harness/hooks/` runtime design above — it is `buildShellHookRuntime`'s
+  own addition (`src/commands/agent-hooks.ts`) for the case `loadHookConfig`
+  reports `ok: false`. Rather than the ambiguous "config missing" treatment
+  (empty, no diagnostic), a load *failure* builds a runtime whose every
+  gate-capable event unconditionally denies with reason
+  `hook-config-invalid`, so a broken/tampered config file cannot silently
+  degrade to "hooks disabled".
+- **`keryx.impact-evidence`'s W8 strict mode is not implemented.** The
+  Built-ins table above describes `gate-advisory (default); gate in W8
+  strict mode`; the shipped registration's `class` is fixed at
+  `gate-advisory` in `builtins.ts` and is not conditioned on any strict-mode
+  flag. `ImpactEvidenceResult` only supports escalating to `decision: "ask"`
+  (tightening within the advisory hook's own gate-capable power), not a
+  class change to full `gate`. W8 can add strict mode without touching this
+  runtime, either by making the registration's `class` conditional when the
+  registration list is built, or by having the provider always return
+  `decision: "ask"` on a disqualifying failure and relying on
+  `composeDecision`'s existing tighten-only rule. See docs/docs/hooks.md's
+  "Extension points for W3 and W8" section for the two candidate paths.
+- **Built-in command hooks run unsandboxed off `required-fail-closed`
+  profiles (T15).** Wiring a real `HookRuntime` into ACP (`src/acp/
+  server.ts`) surfaced a usability regression the sandboxed-by-default design
+  above did not anticipate: `keryx.ctx-guard`, `keryx.security-check-input`
+  and `keryx.security-check-output` spawn the running `keryx` binary itself
+  — the same trust domain as the process that spawns them — but sandboxing
+  them anyway meant every ordinary prompt was denied on a host without a
+  working OS-sandbox launcher (no bubblewrap on Linux, in particular), via
+  the fail-closed `sandbox-unavailable` path. Since there is no containment
+  boundary between Keryx and Keryx, `resolveBuiltinCommandRunsIn`
+  (`src/harness/hooks/runtime.ts`) now resolves a `scope: "builtin"` +
+  `handler.kind: "command"` registration to `runsIn: "unsandboxed"` for
+  whichever `PolicyProfileId` is active on THIS `fire()`, whenever
+  `resolveLocalProfile(profileId).requiredControls.isolation !==
+  "required-fail-closed"` — `read-only-review` and `monitored-trusted-local`
+  today (`src/harness/policy/profiles.ts`). Under `unattended-untrusted`
+  (`required-fail-closed`), the three stay `sandbox` and fail closed exactly
+  as the original design specified — an unattended/untrusted turn gets no
+  exception. A user/project hook's own `runsIn` (default `sandbox`, same
+  `hook-sandbox-unavailable` fail-closed path) is never touched — the
+  override only ever widens a built-in's own registration, never a
+  configured one, even when a project file names an id starting with
+  `keryx.` (`config.ts` already refuses that as a built-in-id collision
+  before it can reach a `HookRegistration`, so the only way to see a
+  `keryx.*` id at `scope: "project"` is a runtime-constructed test double,
+  never a real load path). `keryx hooks list`/`keryx hooks test` (both now
+  accept `--profile <id>`) print the EFFECTIVE `runsIn` under that profile,
+  not just the registration's static default, so an operator can see which
+  mode a built-in will actually run in before relying on it. See
+  docs/docs/hooks.md's "Execution" section for the operator-facing writeup,
+  and `src/harness/hooks/runtime.test.ts`'s "built-in command hooks run
+  unsandboxed off required-isolation profiles" suite for the pinned
+  behavior (including the negative case: a `sandbox-unavailable` launcher
+  still fails a default-`runsIn` user hook closed on the exact same profile
+  and event).

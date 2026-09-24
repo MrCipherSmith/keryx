@@ -14,6 +14,7 @@ import { describe, expect, test } from "bun:test";
 
 import { HARNESS_ADAPTERS, getHarnessAdapter, surfacesOf } from "./registry";
 import { UNSUPPORTED_ORIENT } from "./surfaces";
+import type { SurfaceFlag } from "./types";
 import { createSettingsFileOwner, installSurfaces, uninstallSurfaces } from "./settings-file";
 import {
   COPILOT_DECISION_CODEC,
@@ -192,35 +193,63 @@ describe("AC3 (W5-b): opencode/antigravity unchanged; no pre-existing adapter/su
   });
 });
 
-describe("W5-b: keryx-shell placeholder", () => {
-  test("registered with no surfaces and all 12 flags unsupported with the W6 reason", () => {
+// Flow 306 (W6, T20): keryx-shell grew real (`policy-travels-with-agent`)
+// surfaces for the eight flags its own compiled-in hook runtime natively
+// supports — see `surfaces-w5b.ts`'s own doc comment on
+// `KERYX_SHELL_SURFACES`/`shellHookSurface`. Only the four flags with no
+// runtime capability yet (`skills`/`agents`/`instructions`/`mcp`) stay in
+// `unsupported`.
+describe("W5-b/W6 (T20): keryx-shell's native hook-runtime surfaces", () => {
+  const SUPPORTED_FLAGS: SurfaceFlag[] = [
+    "block",
+    "prompt-gate",
+    "pre-tool-context",
+    "inject-context",
+    "observe",
+    "post-tool",
+    "session-start",
+    "stop",
+  ];
+  const UNSUPPORTED_FLAGS: SurfaceFlag[] = ["skills", "agents", "instructions", "mcp"];
+
+  test("registers a verified surface for each of the eight native flags, installing nothing", () => {
     const shell = getHarnessAdapter("keryx-shell")!;
-    expect(shell.surfaces).toEqual([]);
-    expect(shell.confidence).toBe("experimental");
-    expect((shell.riskNotes ?? []).length).toBeGreaterThan(0);
+    expect(shell.confidence).toBe("verified");
+    expect(shell.adapterKind).toBe("policy-travels-with-agent");
+    expect(shell.surfaces.map((s) => s.flag).sort()).toEqual([...SUPPORTED_FLAGS].sort());
     expect(shell.sourceDocs).toContain(
       "docs/requirements/keryx-agent-platform-expansion/workstreams/W6-shell-hooks.md",
     );
-    const flags: string[] = [
-      "block",
-      "prompt-gate",
-      "pre-tool-context",
-      "inject-context",
-      "observe",
-      "post-tool",
-      "session-start",
-      "stop",
-      "skills",
-      "agents",
-      "instructions",
-      "mcp",
-    ];
-    expect(Object.keys(shell.unsupported).sort()).toEqual(flags.sort());
-    for (const flag of flags) {
+    for (const surface of shell.surfaces) {
+      expect(surface.confidence).toBe("verified");
+      expect(surface.sourceDocs).toContain("docs/docs/hooks.md");
+      // Never installs into a file: no settings artifact, no merge/strip/customInstall.
+      expect(surface.settingsFile).toBeUndefined();
+      expect(surface.relativePath).toBeUndefined();
+      expect(surface.merge).toBeUndefined();
+      expect(surface.strip).toBeUndefined();
+      expect(surface.customInstall).toBeUndefined();
+    }
+  });
+
+  test("the remaining four flags (no runtime capability yet) stay unsupported with the W6 reason", () => {
+    const shell = getHarnessAdapter("keryx-shell")!;
+    expect(Object.keys(shell.unsupported).sort()).toEqual([...UNSUPPORTED_FLAGS].sort());
+    for (const flag of UNSUPPORTED_FLAGS) {
       expect(shell.unsupported[flag as keyof typeof shell.unsupported]).toBe(
         "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet.",
       );
     }
+  });
+
+  test("supported ∪ unsupported covers exactly the 12 W5 flags, disjoint", () => {
+    const shell = getHarnessAdapter("keryx-shell")!;
+    const supported = new Set(shell.surfaces.map((s) => s.flag));
+    const unsupported = new Set(Object.keys(shell.unsupported));
+    for (const flag of supported) {
+      expect(unsupported.has(flag)).toBe(false);
+    }
+    expect(supported.size + unsupported.size).toBe(12);
   });
 });
 

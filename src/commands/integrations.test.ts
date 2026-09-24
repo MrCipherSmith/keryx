@@ -175,7 +175,7 @@ describe("M3 (round 3): doctor --runtime all survives one runtime's corrupt sett
 });
 
 describe("--runtime all", () => {
-  test("install includes every adapter with surfaces and reports keryx-shell unsupported", async () => {
+  test("install includes every adapter with surfaces (flow 306 T20: keryx-shell now has its own)", async () => {
     await withMetaproject(async (root) => {
       await integrationsCommand(["install", "--runtime", "all", "--json"], root);
       expect(process.exitCode).toBe(0);
@@ -184,9 +184,17 @@ describe("--runtime all", () => {
         unsupported: { runtimeId: string; unsupported: true; reasons: string[] }[];
       };
       const withSurfaces = HARNESS_ADAPTERS.filter((a) => a.surfaces.length > 0);
+      const withoutSurfaces = HARNESS_ADAPTERS.filter((a) => a.surfaces.length === 0);
       expect(parsed.results.map((r) => r.runtimeId).sort()).toEqual(withSurfaces.map((a) => a.id).sort());
-      expect(parsed.unsupported.map((u) => u.runtimeId)).toEqual(["keryx-shell"]);
-      expect(parsed.unsupported[0]!.reasons.length).toBeGreaterThan(0);
+      // keryx-shell registered eight native surfaces (T20) and moved from
+      // `unsupported` into `results` — no adapter today has zero surfaces,
+      // so `unsupported` is empty. This still asserts the general rule
+      // (every zero-surface adapter is reported unsupported) rather than a
+      // fixed id, so it stays true whether or not that remains the case.
+      expect(parsed.unsupported.map((u) => u.runtimeId).sort()).toEqual(withoutSurfaces.map((a) => a.id).sort());
+      for (const entry of parsed.unsupported) {
+        expect(entry.reasons.length).toBeGreaterThan(0);
+      }
     });
   });
 });
