@@ -7,17 +7,82 @@
   "id": "306",
   "slug": "w6-lifecycle-hooks-in-keryx-shell-that-c",
   "title": "W6: lifecycle hooks in keryx shell that can only tighten the policy engine",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-24T00:56:52.772Z",
-  "updatedAt": "2026-09-24T05:39:24.521Z",
+  "updatedAt": "2026-09-24T05:54:35.578Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:4a701b3524b8a511c0e72fb5af5fc0b4784487860c25c8db13bd0ae462ba868b",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-24T05:54:27.048Z",
+      "note": "src/harness/run/run.hooks.test.ts: PreToolUse ask on decide()-allow -> final ask, interactive false -> deny, executor not invoked; PR #678 merged 5fdf212d"
+    },
+    "AC2": {
+      "at": "2026-09-24T05:54:27.127Z",
+      "note": "src/harness/hooks/guard.test.ts (W6 exit criterion): runOffline x 3 profiles x 11 hook result sets + property sweep over composeDecision/failureEffect; deny never loosened, hardDeny preserved"
+    },
+    "AC3": {
+      "at": "2026-09-24T05:54:27.206Z",
+      "note": "run.hooks.test.ts + failure-matrix.test.ts: gate timeout -> deny hook-timeout in all 3 profiles with hook_invocation session entry; real runner timeout kill incl. escaped grandchild (runner.test.ts)"
+    },
+    "AC4": {
+      "at": "2026-09-24T05:54:27.284Z",
+      "note": "failure-matrix.test.ts: crashing and hanging observe hooks do not block past their timeout, do not change the tool result, record hook-observer-failed"
+    },
+    "AC5": {
+      "at": "2026-09-24T05:54:27.362Z",
+      "note": "failure-matrix.test.ts + semantics.test.ts: every class x failure x profile cell incl. malformed-on-ask deny, gate-advisory profile split, SessionStart fail-open"
+    },
+    "AC6": {
+      "at": "2026-09-24T05:54:27.441Z",
+      "note": "src/commands/hooks.test.ts + config.test.ts: validate rejects hook-id-collides-with-builtin and schema-invalid files with non-zero exit; runtime schema copy byte-identical to docs schema"
+    },
+    "AC7": {
+      "at": "2026-09-24T05:54:27.519Z",
+      "note": "spawn-subagent-tool.hooks.test.ts: external path SubagentStart inheritedHookIds exact, deny/ask prevents runExternal and releases ledger, SubagentStop on resolve/throw"
+    },
+    "AC8": {
+      "at": "2026-09-24T05:54:27.603Z",
+      "note": "spawn-hooks.test.ts + spawn-subagent-tool.hooks.test.ts internal path: SubagentStart deny -> ok:false/no child built, SubagentStop fired; children run under forChild() inherited set"
+    },
+    "AC9": {
+      "at": "2026-09-24T05:54:27.684Z",
+      "note": "agent-lifecycle-hooks.test.ts + failure-matrix.test.ts: trigger/schedule deps build hooks with interactive false (unattended-untrusted); gate ask -> deny"
+    },
+    "AC10": {
+      "at": "2026-09-24T05:54:27.762Z",
+      "note": "hooks.test.ts + manual bun ./src/cli.ts hooks list --json in empty project: exactly the five built-ins, enabled true"
+    },
+    "AC11": {
+      "at": "2026-09-24T05:54:27.839Z",
+      "note": "builtins.test.ts/runtime.test.ts: five built-ins with W6 events/matchers/classes; learning-observer on exactly seven events; LearningObservationSink no-op default; ImpactEvidenceProvider default no context (production wires W8 provider)"
+    },
+    "AC12": {
+      "at": "2026-09-24T05:54:27.920Z",
+      "note": "hooks.test.ts + manual run: test reports decision/exit/stdout/stderr/duration; enable/disable flip only enabled on every event, maintain managedHookIds, refuse to remove a hand-authored built-in override"
+    },
+    "AC13": {
+      "at": "2026-09-24T05:54:28.004Z",
+      "note": "runner.test.ts (real processes: stdin, exit 2, timeout kill, env allowlist strips secrets, isolationRequired refusal) + runtime.test.ts ordering/short-circuit/parallel; manual sandboxed curl had no network"
+    },
+    "AC14": {
+      "at": "2026-09-24T05:54:28.087Z",
+      "note": "codec.test.ts + runtime.test.ts: decision honoured only for gate classes on gate events, hook-decision-ignored, updatedInput dropped with once-per-session anomaly, exit 2 deny with stderr, context cap"
+    },
+    "AC15": {
+      "at": "2026-09-24T05:54:28.168Z",
+      "note": "existing run/replay/agent suites unchanged with hooks absent; agent-lifecycle-hooks.test.ts: deny refuses, ask forces approval (hookAsk) even in auto/ask modes, allow never skips approval or lifts /plan"
+    },
+    "AC16": {
+      "at": "2026-09-24T05:54:28.246Z",
+      "note": "tsc/eslint clean; PR #678 CI 18 pass at ef2bed7e; 5 opus review rounds, final round r5 0 findings >= minor (ingested); merged 5fdf212d"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/678"
   },
   "baseBranch": "feat/agent-platform-expansion",
   "tasks": [
@@ -233,7 +298,7 @@
       "id": "T12",
       "title": "Local checks (targeted tests, typecheck, lint), open draft PR on stack/wave0, adversarial review/fix loop, CI green",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 9,
@@ -287,7 +352,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
@@ -772,6 +838,105 @@
       "at": "2026-09-24T05:39:24.521Z",
       "event": "task-attempt",
       "detail": "T12: started (attempt 9) — narrow verification round r5 after T22"
+    },
+    {
+      "at": "2026-09-24T05:53:48.372Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/678 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T05:54:27.049Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/harness/run/run.hooks.test.ts: PreToolUse ask on decide()-allow -> final ask, interactive false -> deny, executor not invoked; PR #678 merged 5fdf212d"
+    },
+    {
+      "at": "2026-09-24T05:54:27.127Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/harness/hooks/guard.test.ts (W6 exit criterion): runOffline x 3 profiles x 11 hook result sets + property sweep over composeDecision/failureEffect; deny never loosened, hardDeny preserved"
+    },
+    {
+      "at": "2026-09-24T05:54:27.206Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: run.hooks.test.ts + failure-matrix.test.ts: gate timeout -> deny hook-timeout in all 3 profiles with hook_invocation session entry; real runner timeout kill incl. escaped grandchild (runner.test.ts)"
+    },
+    {
+      "at": "2026-09-24T05:54:27.284Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: failure-matrix.test.ts: crashing and hanging observe hooks do not block past their timeout, do not change the tool result, record hook-observer-failed"
+    },
+    {
+      "at": "2026-09-24T05:54:27.362Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: failure-matrix.test.ts + semantics.test.ts: every class x failure x profile cell incl. malformed-on-ask deny, gate-advisory profile split, SessionStart fail-open"
+    },
+    {
+      "at": "2026-09-24T05:54:27.441Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/commands/hooks.test.ts + config.test.ts: validate rejects hook-id-collides-with-builtin and schema-invalid files with non-zero exit; runtime schema copy byte-identical to docs schema"
+    },
+    {
+      "at": "2026-09-24T05:54:27.519Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: spawn-subagent-tool.hooks.test.ts: external path SubagentStart inheritedHookIds exact, deny/ask prevents runExternal and releases ledger, SubagentStop on resolve/throw"
+    },
+    {
+      "at": "2026-09-24T05:54:27.603Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: spawn-hooks.test.ts + spawn-subagent-tool.hooks.test.ts internal path: SubagentStart deny -> ok:false/no child built, SubagentStop fired; children run under forChild() inherited set"
+    },
+    {
+      "at": "2026-09-24T05:54:27.684Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: agent-lifecycle-hooks.test.ts + failure-matrix.test.ts: trigger/schedule deps build hooks with interactive false (unattended-untrusted); gate ask -> deny"
+    },
+    {
+      "at": "2026-09-24T05:54:27.762Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: hooks.test.ts + manual bun ./src/cli.ts hooks list --json in empty project: exactly the five built-ins, enabled true"
+    },
+    {
+      "at": "2026-09-24T05:54:27.839Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: builtins.test.ts/runtime.test.ts: five built-ins with W6 events/matchers/classes; learning-observer on exactly seven events; LearningObservationSink no-op default; ImpactEvidenceProvider default no context (production wires W8 provider)"
+    },
+    {
+      "at": "2026-09-24T05:54:27.920Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: hooks.test.ts + manual run: test reports decision/exit/stdout/stderr/duration; enable/disable flip only enabled on every event, maintain managedHookIds, refuse to remove a hand-authored built-in override"
+    },
+    {
+      "at": "2026-09-24T05:54:28.004Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: runner.test.ts (real processes: stdin, exit 2, timeout kill, env allowlist strips secrets, isolationRequired refusal) + runtime.test.ts ordering/short-circuit/parallel; manual sandboxed curl had no network"
+    },
+    {
+      "at": "2026-09-24T05:54:28.087Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: codec.test.ts + runtime.test.ts: decision honoured only for gate classes on gate events, hook-decision-ignored, updatedInput dropped with once-per-session anomaly, exit 2 deny with stderr, context cap"
+    },
+    {
+      "at": "2026-09-24T05:54:28.168Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: existing run/replay/agent suites unchanged with hooks absent; agent-lifecycle-hooks.test.ts: deny refuses, ask forces approval (hookAsk) even in auto/ask modes, allow never skips approval or lifts /plan"
+    },
+    {
+      "at": "2026-09-24T05:54:28.246Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: tsc/eslint clean; PR #678 CI 18 pass at ef2bed7e; 5 opus review rounds, final round r5 0 findings >= minor (ingested); merged 5fdf212d"
+    },
+    {
+      "at": "2026-09-24T05:54:28.324Z",
+      "event": "task-done",
+      "detail": "T12: Local checks (targeted tests, typecheck, lint), open draft PR on stack/wave0, adversarial review/fix loop, CI green"
+    },
+    {
+      "at": "2026-09-24T05:54:28.401Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T05:54:35.578Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

@@ -1,0 +1,65 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "opus-verification-r5",
+    "severity": "info",
+    "problem": "W8's acknowledgement is request-level, so W6 correctly withholds it when any file in the call lacks an approval. As a result, in a batch mixing an already-approved file with a new one, W8 treats the approved file as a pendingReAsk and bumps its never-acknowledged denial counter (provider.ts:389-403), even though the operator approved it. The acknowledged follow-up request also recomputes and re-injects the full evidence block once more. All T22 tests use a fake port; no checked-in test drives the real strict provider across ask, approve, then ack.",
+    "impact": "Two mixed batches reach dampenAfter (2), after which the approved file's evidence collapses to the 'dampened after repeated denials' notice for the rest of the session although nobody denied it. There is also one extra evidence computation and injection per acknowledged file. No loosening.",
+    "suggested_fix": "Split a mixed batch's acknowledgement per file, or let W8 accept a per-file acknowledgement list. Add a runtime test against the real createImpactEvidenceProvider in strict mode covering ask, acknowledgeImpactEvidence, allow, then no further call.",
+    "evidence": "Probe scratchpad/r5probe.ts with the real createImpactEvidenceProvider (strict) through createShellImpactEvidenceProvider and createHookRuntime. Acknowledging only a.ts and then patching a.ts+b.ts gives ask. Acknowledging both and repeating the batch gives none with full evidence for both. The strict interactive sequence ran computeEvidence twice for one file. provider.ts:389-403 bumps denials for pendingReAsk when there is no acknowledgement.",
+    "confidence": "high",
+    "file": "src/harness/hooks/runtime.ts",
+    "line": 635,
+    "quote": "files.length > 0 && files.every((f) => this.acknowledgedImpactEvidenceFiles.has(f))",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 635
+    },
+    "symbol": "HookRuntimeImpl.runBuiltinHook",
+    "blocking_merge": false,
+    "global_id": "2026-09-24-ingest-origin-feat-agent-platform-expansion#F-001"
+  },
+  {
+    "id": "F-002",
+    "reviewer": "opus-verification-r5",
+    "severity": "info",
+    "problem": "W8 spec lines 271-275 define strict-mode acknowledgement as the agent's next call referencing the injected evidence. T22 instead treats the operator's approval as the acknowledgement. But the apply_patch approval card (tui-shell.ts:4672-4727, shell.ts:1850-1876) shows only the diff: neither the impact evidence nor the fact that keryx.impact-evidence asked. The evidence reaches the model only after execution (agent.ts:4068). The substitution is documented only in code comments, not in the W6/W8 specs.",
+    "impact": "The acknowledgement attests that a human approved the diff, not that anyone saw the evidence before the edit ran. This is not a loosening, since a human is required, but strict mode's intent (the evidence is read before the edit proceeds) is only partly met, and the spec does not record the deviation.",
+    "suggested_fix": "When an impact-evidence ask is present, show 'impact-evidence asked' plus the evidence, or a condensed form, on the approval card. Record the operator-approval-as-acknowledgement rule in W6-shell-hooks.md and W8-harness-security-audit.md (OQ-W8.3).",
+    "evidence": "Read of agent.ts:3974-4005 and 4068-4072, tui-shell.ts:4672-4727, shell.ts:1850-1876, and W8-harness-security-audit.md:269-275. git diff 2e6a57b8..ef2bed7e touches no docs.",
+    "confidence": "high",
+    "file": "src/commands/agent.ts",
+    "line": 4004,
+    "quote": "hooks?.runtime.acknowledgeImpactEvidence?.(extractFilePathsFromToolInput(input));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 4004
+    },
+    "symbol": "executeCall",
+    "blocking_merge": false,
+    "global_id": "2026-09-24-ingest-origin-feat-agent-platform-expansion#F-002"
+  },
+  {
+    "id": "F-003",
+    "reviewer": "opus-verification-r5",
+    "severity": "info",
+    "problem": "git C-quotes paths containing a double quote, a backslash, control characters or (by default) non-ASCII characters, for example rename from \"d\\303\\251j\\303\\240.ts\". extractRenameSourcePaths takes the captured text verbatim, quotes and escapes included.",
+    "impact": "The gate still fires, but W8 computes evidence for a path that does not exist, so the reported importers are empty and misleading for exactly the renamed file. parsePatchTargets has the same gap for quoted ---/+++ headers, so this is a shared parser limitation.",
+    "suggested_fix": "Unquote git C-style quoted paths (strip the surrounding quotes, decode octal and backslash escapes) in extractRenameSourcePaths and parsePatchTargets. Add a test with a quoted rename source.",
+    "evidence": "Probe scratchpad/r5probe.ts: extractFilePathsFromToolInput on a patch containing 'rename from \"sp ace.ts\"' returned [\"a.ts\", \"\\\"sp ace.ts\\\"\"].",
+    "confidence": "medium",
+    "file": "src/harness/hooks/runtime.ts",
+    "line": 262,
+    "quote": "const RENAME_FROM_LINE = /^rename from (.+)$/;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 262
+    },
+    "symbol": "extractRenameSourcePaths",
+    "blocking_merge": false,
+    "global_id": "2026-09-24-ingest-origin-feat-agent-platform-expansion#F-003"
+  }
+]
