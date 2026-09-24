@@ -4,7 +4,7 @@ target: pr
 ref: 690
 mode: ingest
 flow: 313 (explicit-flow-id)
-created_at: 2026-09-24T08:47:53.928Z
+created_at: 2026-09-24T18:02:53.903Z
 context_mode: light
 
 ## Stage counts
@@ -21,20 +21,22 @@ This is NOT `dropped 0`: nothing ran, so nothing is known.
 ### Refuted by the verifier
 
 verification_mode: annotate
-claims_received: 0
-claims_applied: 0
+claims_received: 28
+claims_applied: 28
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
 confirmed: 0
-refuted: 0
+refuted: 28
 unverifiable: 0
-unverified: 33
+unverified: 5
 
 ### Retained
 
 findings_in: 33
 findings_removed_by_verifier: 0
 findings_retained: 33
+
+`annotate` records verdicts and removes nothing: 28 finding(s) are marked refuted and still reported.
 
 ### Verification claims discarded
 
@@ -49,7 +51,7 @@ cap that dropped nothing are different facts.
 
 ### Findings cap
 
-limit_per_reviewer: 40
+limit_per_reviewer: 50
 findings_seen: 33
 findings_retained: 33
 findings_truncated: 0

@@ -17,7 +17,17 @@
       ],
       "enumeration_method": "read the only decode-selection site after T19 and ran a 16-case encoding matrix through runHarnessAudit, vetExternalCatalog, CLI import --external and CLI bundle import"
     },
-    "global_id": "2026-09-24-ingest-690-r06#R5-F2"
+    "global_id": "2026-09-24-ingest-690-r06#R5-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R5-F2: resolved. Skill files with FF FE/FE FF + ASCII, and genuine UTF-16 + a lone surrogate or trailing byte, are rejected on audit, vetExternalCatalog, CLI --external (not recorded) and CLI bundle import (bom6.out h-/l- rows). The new tests fail on ca745d67.",
+      "verifier": "round-7 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R5-F2: resolved. Skill files with FF FE/FE FF + ASCII, and genuine UTF-16 + a lone surrogate or trailing byte, are rejected on audit, vetExternalCatalog, CLI --external (not recorded) and CLI bundle import (bom6.out h-/l- rows). The new tests fail on ca745d67."
+    }
   },
   {
     "id": "R3-F18",
@@ -38,7 +48,17 @@
       ],
       "enumeration_method": "enumerated every sourceProject reader/writer in src/bundle via keryx ctx rg; exercised the plan conflict rule, the identical re-claim and --force reporting through the CLI"
     },
-    "global_id": "2026-09-24-ingest-690-r06#R3-F18"
+    "global_id": "2026-09-24-ingest-690-r06#R3-F18",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R3-F18: resolved. The identical-bucket laundering (round-6 L1/L2/L2b) is closed. Different-path, --force, --target-scope, case-variant and ledger-rewrite variants all conflict (own7.out B1-B5). The docs now describe provenance as trust-on-first-use and forgeable, and no \"unforgeable\" claim remains.",
+      "verifier": "round-7 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R3-F18: resolved. The identical-bucket laundering (round-6 L1/L2/L2b) is closed. Different-path, --force, --target-scope, case-variant and ledger-rewrite variants all conflict (own7.out B1-B5). The docs now describe provenance as trust-on-first-use and forgeable, and no \"unforgeable\" claim remains."
+    }
   },
   {
     "id": "R6-F1",

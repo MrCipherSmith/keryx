@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-24-ingest-690-r04",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "690",
@@ -180,8 +180,8 @@
       "source": "the finding's own title"
     }
   ],
-  "createdAt": "2026-09-24T11:38:21.300Z",
-  "updatedAt": "2026-09-24T11:38:21.300Z",
+  "createdAt": "2026-09-24T18:03:12.134Z",
+  "updatedAt": "2026-09-24T18:03:12.247Z",
   "flow": {
     "id": "313",
     "path": ".metaproject/flows/313-2026-09-24-w4-portability-bundles-keryx-user-scope-"

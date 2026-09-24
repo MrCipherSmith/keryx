@@ -11,9 +11,15 @@
     "file": "src/security/audit-harness/audit-harness.test.ts",
     "line": 2001,
     "global_id": "2026-09-24-ingest-690-r08#R8-F1",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Re-checked at 7b06de44: R8-F1 (minor, test quality): the agent-kind R7-F1 test (audit-harness.test.ts:2001) passes on pre-fix code. Its assertion (bundle-agent-unrestricted-tools) is satisfied by the NUL-interleaved noise view, and tools: '*' is not an unrestricted-tools trigger even in UTF-8. Reverting the agent branch to a UTF-8-only read would not fail any test.",
+      "verifier": "round-8 opus reviewer"
+    },
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "Deferred to the W4 follow-up flow (test-only: agent test at audit-harness.test.ts:2001 passes pre-fix; replace with restricted agent + auto-run body asserting bundle-auto-run-directive). decided-by: MrCipherSmith (owner, in chat), standing rule: 0 blocker/major => merge, minors deferred"
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R8-F1 (minor, test quality): the agent-kind R7-F1 test (audit-harness.test.ts:2001) passes on pre-fix code. Its assertion (bundle-agent-unrestricted-tools) is satisfied by the NUL-interleaved noise view, and tools: '*' is not an unrestricted-tools trigger even in UTF-8. Reverting the agent branch to a UTF-8-only read would not fail any test."
     }
   },
   {

@@ -21,7 +21,17 @@
       ],
       "enumeration_method": "keryx ctx rg over write verbs and every *Contained( call in src/integrations, src/rules, src/agents, src/bundle, src/lib/private-dir.ts, src/commands/{rules,update,bundle,integrations}.ts and lib helpers; each root argument classified as project root vs sub-root; CLI repro with .metaproject and .metaproject/data links"
     },
-    "global_id": "2026-09-24-ingest-690-r04#R1-F20"
+    "global_id": "2026-09-24-ingest-690-r04#R1-F20",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: rules sync, rules distill, integrations install (claude and all) and bundle import are now CLEAN in all 21 escaping-ancestor variants, including the reviewer's .metaproject -> ../../.claude: exit 1 with a named escaping-symlink reason, or a no-op. The update writers that were routed are refused. The residual, scoped to `keryx init`, is tracked separately as R5-F1 (pre-existing on main).",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: rules sync, rules distill, integrations install (claude and all) and bundle import are now CLEAN in all 21 escaping-ancestor variants, including the reviewer's .metaproject -> ../../.claude: exit 1 with a named escaping-symlink reason, or a no-op. The update writers that were routed are refused. The residual, scoped to `keryx init`, is tracked separately as R5-F1 (pre-existing on main)."
+    }
   },
   {
     "id": "R3-F1",
@@ -42,7 +52,17 @@
       ],
       "enumeration_method": "read the binary skip branch and its validator; ran old and new polyglot shapes through vetExternalCatalog and CLI bundle import"
     },
-    "global_id": "2026-09-24-ingest-690-r04#R3-F1"
+    "global_id": "2026-09-24-ingest-690-r04#R3-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 5f38eb58) by the round-5 opus reviewer: The binary skip is gone: isTextContent, the allowlist and the trailer checks are all deleted (index.ts:122-150, :402). pl5.out: the r4 polyglots polyglot-gif-sh, -pdf-inj, -png-inj and -webp-inj are now rejected by vetting (fail 1-7) and refused by import. CLI keryx bundle import <catalog> --external rejects all four with audit-failed.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 5f38eb58) by the round-5 opus reviewer: The binary skip is gone: isTextContent, the allowlist and the trailer checks are all deleted (index.ts:122-150, :402). pl5.out: the r4 polyglots polyglot-gif-sh, -pdf-inj, -png-inj and -webp-inj are now rejected by vetting (fail 1-7) and refused by import. CLI keryx bundle import <catalog> --external rejects all four with audit-failed."
+    }
   },
   {
     "id": "R3-F6",
@@ -55,7 +75,17 @@
     "confidence": "high",
     "file": "src/security/audit-harness/checks.ts",
     "line": 851,
-    "global_id": "2026-09-24-ingest-690-r04#R3-F6"
+    "global_id": "2026-09-24-ingest-690-r04#R3-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 5f38eb58) by the round-5 opus reviewer: pl5 fence-first-then-real is rejected and refused (bundle-hook-remote-exec). The fence shapes stay refused.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 5f38eb58) by the round-5 opus reviewer: pl5 fence-first-then-real is rejected and refused (bundle-hook-remote-exec). The fence shapes stay refused."
+    }
   },
   {
     "id": "R3-F7",
@@ -68,7 +98,11 @@
     "confidence": "high",
     "file": "src/memory/store.ts",
     "line": 437,
-    "global_id": "2026-09-24-ingest-690-r04#R3-F7"
+    "global_id": "2026-09-24-ingest-690-r04#R3-F7",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F7: partial. Still absent: the Cyrillic homoglyph (documented as a known gap at store.ts:430), a no-colon line and =. Fails open only for the entry's own author. Re-listed, info. (review-313-r5.md)"
+    }
   },
   {
     "id": "R3-F8",
@@ -81,7 +115,17 @@
     "confidence": "high",
     "file": "src/memory/templates.ts",
     "line": 34,
-    "global_id": "2026-09-24-ingest-690-r04#R3-F8"
+    "global_id": "2026-09-24-ingest-690-r04#R3-F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 0401a79e) by the round-5 opus reviewer: p7b: all five near-miss spellings are now refused by memory.propose, and handoff stays complete before and after. The guard and parser share isHarnessHeaderKey and extractHeaderKey.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 0401a79e) by the round-5 opus reviewer: p7b: all five near-miss spellings are now refused by memory.propose, and handoff stays complete before and after. The guard and parser share isHarnessHeaderKey and extractHeaderKey."
+    }
   },
   {
     "id": "R3-F10",
@@ -94,7 +138,17 @@
     "confidence": "high",
     "file": "src/memory/store.ts",
     "line": 75,
-    "global_id": "2026-09-24-ingest-690-r04#R3-F10"
+    "global_id": "2026-09-24-ingest-690-r04#R3-F10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 0401a79e) by the round-5 opus reviewer: p6b: with decisions -> outside, resources list, memory.search and wiki.ask serve only lessons/ok.md; the outside decisions/x.md is not served.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 0401a79e) by the round-5 opus reviewer: p6b: with decisions -> outside, resources list, memory.search and wiki.ask serve only lessons/ok.md; the outside decisions/x.md is not served."
+    }
   },
   {
     "id": "R3-F13",
@@ -107,7 +161,11 @@
     "confidence": "high",
     "file": "src/lib/symlink-safety.ts",
     "line": 79,
-    "global_id": "2026-09-24-ingest-690-r04#R3-F13"
+    "global_id": "2026-09-24-ingest-690-r04#R3-F13",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F13 (not fixed), classification: info. The link (.gemini/settings.json -> ../.claude/settings.json) and its target are both inside the project. A hostile repo gains nothing it could not get by committing .claude/settings.json directly. (review-313-r5.md)"
+    }
   },
   {
     "id": "R3-F18",
@@ -120,7 +178,17 @@
     "confidence": "high",
     "file": "src/bundle/plan.ts",
     "line": 442,
-    "global_id": "2026-09-24-ingest-690-r04#R3-F18"
+    "global_id": "2026-09-24-ingest-690-r04#R3-F18",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R3-F18: resolved. The identical-bucket laundering (round-6 L1/L2/L2b) is closed. Different-path, --force, --target-scope, case-variant and ledger-rewrite variants all conflict (own7.out B1-B5). The docs now describe provenance as trust-on-first-use and forgeable, and no \"unforgeable\" claim remains.",
+      "verifier": "round-7 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R3-F18: resolved. The identical-bucket laundering (round-6 L1/L2/L2b) is closed. Different-path, --force, --target-scope, case-variant and ledger-rewrite variants all conflict (own7.out B1-B5). The docs now describe provenance as trust-on-first-use and forgeable, and no \"unforgeable\" claim remains."
+    }
   },
   {
     "id": "R1-F13",
@@ -133,7 +201,11 @@
     "confidence": "high",
     "file": "src/security/audit-harness/checks.ts",
     "line": 876,
-    "global_id": "2026-09-24-ingest-690-r04#R1-F13"
+    "global_id": "2026-09-24-ingest-690-r04#R1-F13",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
+    }
   },
   {
     "id": "R2-F6",
@@ -146,7 +218,17 @@
     "confidence": "high",
     "file": "src/integrations/surfaces-rules.ts",
     "line": 85,
-    "global_id": "2026-09-24-ingest-690-r04#R2-F6"
+    "global_id": "2026-09-24-ingest-690-r04#R2-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: f6.out: the dry-run shows the unsafe-rule warning in human output, and --json warnings[] carries it, identical to the real run.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: f6.out: the dry-run shows the unsafe-rule warning in human output, and --json warnings[] carries it, identical to the real run."
+    }
   },
   {
     "id": "R2-F10",
@@ -159,7 +241,11 @@
     "confidence": "high",
     "file": "src/security/audit-harness/checks.ts",
     "line": 137,
-    "global_id": "2026-09-24-ingest-690-r04#R2-F10"
+    "global_id": "2026-09-24-ingest-690-r04#R2-F10",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F10: unresolved. pc2 tag-chars still gives 0/0. Genuine ASCII smuggling in tag characters IS caught. Same class as R3-I5 (ZWJ). Re-listed, info. (review-313-r5.md)"
+    }
   },
   {
     "id": "R2-F15",
@@ -172,7 +258,17 @@
     "confidence": "high",
     "file": "src/rules/agent-entrypoints.ts",
     "line": 133,
-    "global_id": "2026-09-24-ingest-690-r04#R2-F15"
+    "global_id": "2026-09-24-ingest-690-r04#R2-F15",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: Behaviour is fixed (f15). A: a fenced lone marker no longer refuses sync. B: the fenced example survives and the real block is replaced. agent-entrypoints and distill share src/rules/marker-matching.ts.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: Behaviour is fixed (f15). A: a fenced lone marker no longer refuses sync. B: the fenced example survives and the real block is replaced. agent-entrypoints and distill share src/rules/marker-matching.ts."
+    }
   },
   {
     "id": "R2-F21",
@@ -185,7 +281,11 @@
     "confidence": "high",
     "file": "src/bundle/archive.test.ts",
     "line": 1,
-    "global_id": "2026-09-24-ingest-690-r04#R2-F21"
+    "global_id": "2026-09-24-ingest-690-r04#R2-F21",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F21: partial. Still missing: R1-F12 bundle content-validation test. No test asserts content-invalid; the behaviour itself works (f12.ts). Re-listed, info. (review-313-r5.md)"
+    }
   },
   {
     "id": "R4-F1",
@@ -198,7 +298,11 @@
     "confidence": "high",
     "file": "src/lib/contained-write.ratchet.test.ts",
     "line": 19,
-    "global_id": "2026-09-24-ingest-690-r04#R4-F1"
+    "global_id": "2026-09-24-ingest-690-r04#R4-F1",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R4-F1: a ratchet test-adequacy gap, with no runtime defect of its own. The runtime sites are R5-F1 and R5-F3. Downgraded to info this round, per the calibration rule that a minor must be a reproduced correctness or safety defect. (review-313-r5.md)"
+    }
   },
   {
     "id": "R4-F2",
@@ -211,7 +315,17 @@
     "confidence": "high",
     "file": "src/lib/contained-write.ts",
     "line": 81,
-    "global_id": "2026-09-24-ingest-690-r04#R4-F2"
+    "global_id": "2026-09-24-ingest-690-r04#R4-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: cw-probe.out: .GIT/config and .Git/hooks/pre-commit refused; removeContained of .GIT, \"\" and \".\" refused (the root survives); nested SUB.md -> sub/.git/config refused; atomic:false removed, so hardlink writes (3b, 3d) leave the outside file and .git/config untouched.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: cw-probe.out: .GIT/config and .Git/hooks/pre-commit refused; removeContained of .GIT, \"\" and \".\" refused (the root survives); nested SUB.md -> sub/.git/config refused; atomic:false removed, so hardlink writes (3b, 3d) leave the outside file and .git/config untouched."
+    }
   },
   {
     "id": "R4-F3",
@@ -224,7 +338,17 @@
     "confidence": "high",
     "file": "src/lib/contained-write.ts",
     "line": 237,
-    "global_id": "2026-09-24-ingest-690-r04#R4-F3"
+    "global_id": "2026-09-24-ingest-690-r04#R4-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: cw-probe 6a/6b: 0600 stays 600 and 0755 stays 755. The comment documents that owner, ACLs and hardlinks are not kept.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: cw-probe 6a/6b: 0600 stays 600 and 0755 stays 755. The comment documents that owner, ACLs and hardlinks are not kept."
+    }
   },
   {
     "id": "R4-F5",
@@ -237,7 +361,11 @@
     "confidence": "high",
     "file": "src/security/audit-harness/checks.ts",
     "line": 330,
-    "global_id": "2026-09-24-ingest-690-r04#R4-F5"
+    "global_id": "2026-09-24-ingest-690-r04#R4-F5",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R4-F5: partial. Unrelated quote pairs inside one sentence still downgrade a bare directive to medium. This gives an attacker nothing beyond the accepted design, where a fully quoted directive is also medium. Re-listed, info. (review-313-r5.md)"
+    }
   },
   {
     "id": "R4-F6",
@@ -250,7 +378,17 @@
     "confidence": "high",
     "file": "src/bundle/plan.ts",
     "line": 442,
-    "global_id": "2026-09-24-ingest-690-r04#R4-F6"
+    "global_id": "2026-09-24-ingest-690-r04#R4-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 6c781507) by the round-5 opus reviewer: Real case-sensitive APFS volume (csb/r4f6.out): a forced transfer writes to the recorded rules/owned.md, and OWNED.md is never created. After both uninstalls neither file remains.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 6c781507) by the round-5 opus reviewer: Real case-sensitive APFS volume (csb/r4f6.out): a forced transfer writes to the recorded rules/owned.md, and OWNED.md is never created. After both uninstalls neither file remains."
+    }
   },
   {
     "id": "R4-F4",
