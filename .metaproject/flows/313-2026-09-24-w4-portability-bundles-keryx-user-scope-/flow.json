@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T13:37:26.787Z",
+  "updatedAt": "2026-09-24T13:51:23.144Z",
   "source": {
     "type": "description",
     "ref": null
@@ -379,15 +379,22 @@
       "id": "T19",
       "title": "Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T13:37:39.427Z",
+            "outcome": "started",
+            "detail": "313-T19 closure fix dispatch"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -627,6 +634,16 @@
     {
       "at": "2026-09-24T13:37:26.787Z",
       "event": "task-added",
+      "detail": "T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force"
+    },
+    {
+      "at": "2026-09-24T13:37:39.427Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 313-T19 closure fix dispatch"
+    },
+    {
+      "at": "2026-09-24T13:51:23.144Z",
+      "event": "task-done",
       "detail": "T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force"
     }
   ]

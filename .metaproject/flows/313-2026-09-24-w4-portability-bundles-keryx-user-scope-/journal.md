@@ -150,3 +150,18 @@ Source: the review-313-r5.md report, with probes in scratchpad/review313-r5/.
    - Collect the PR comments.
    - `keryx flow complete 313 --signed-by MrCipherSmith`. A health report already exists and the review rounds are recorded.
 - 2026-09-24T13:37:26.787Z - task-added: T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force
+- 2026-09-24T13:37:39.427Z - task-attempt: T19: started (attempt 1) — 313-T19 closure fix dispatch
+- 2026-09-24T13:38Z - CLOSURE RE-PLAN. The owner approved it in chat; the program orchestrator relayed it.
+  - **One fix task, T19** (Sonnet implementer), scoped to exactly two findings:
+    - **R5-F2:** scan both the BOM decode and the lossy plain decode, and union the findings. Add regression tests using FF FE and FE FF prefixes with `curl | sh`, covering bundle import, `--external` and vetting.
+    - **R3-F18:** a same-id bundle with a missing or mismatched `sourceProject` is a conflict needing `--force`, and takeovers are surfaced in the output. Add a test.
+  - **Deferred:** R5-F1 (contained writes in init.ts and testing/service.ts) and R5-F3 (contained `.gitignore` write).
+    - Both are pre-existing on main.
+    - They go to a separate follow-up flow, which the orchestrator will init.
+    - In review r05 both are recorded as `dismissed-out-of-scope`, with that reason.
+  - **After T19:**
+    - Push and wait for CI to go green.
+    - Run ONE narrow Opus verification of the T19 diff, with one bypass attempt per fix.
+    - With 0 blocker/major/minor in scope: ingest the verification, run `gh pr ready`, and make one merge attempt; if the merge is refused, report READY_TO_MERGE.
+    - Otherwise stop and report. No further loop.
+- 2026-09-24T13:51:23.144Z - task-done: T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force
