@@ -233,6 +233,131 @@ describe("runExtract — a draft whose trigger/action names a configured login i
   });
 });
 
+// R4-F1 (review round 4, PR #691, minor): `upsertDraft`'s login gate used to
+// check a reviewer-comment draft's FULL `trigger`, which carries the
+// signal's own fixed wording ("When preparing a change for review in this
+// project (...)") around the variable keyword hint. `containsConfiguredLogin`'s
+// 5+-char substring fallback then matched a configured login that was
+// merely a substring of that fixed prose ("chang" inside "change", "guida"
+// inside... a hint containing "guidance") rather than of anything the
+// reviewer actually said, refusing every reviewer-comment lesson from that
+// project outright. Fixed by stripping the known fixed prefix before the
+// login gate inspects a reviewer-comment draft's trigger.
+function writeReviewLearningConfig(root: string, authors: readonly string[]): void {
+  mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+  writeFileSync(
+    path.join(root, ".metaproject", "review-learning.config.json"),
+    JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors }),
+  );
+}
+
+function writePrCommentFixture(root: string, author: string, body: string, commentId = "c1"): void {
+  const prDir = path.join(root, ".metaproject", "reviews", "pr-comments");
+  mkdirSync(prDir, { recursive: true });
+  writeFileSync(
+    path.join(prDir, "acme__widgets__1.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      repo: "acme/widgets",
+      number: 1,
+      self: null,
+      rounds_collected: 1,
+      collected_sha: "deadbeef",
+      collected_round: 1,
+      replies_posted_at: null,
+      seen: [
+        {
+          id: commentId,
+          thread_id: null,
+          author,
+          url: `https://github.com/acme/widgets/pull/1#${commentId}`,
+          first_seen_round: 1,
+          last_seen_round: 1,
+          submitted_at: "2026-09-20T00:00:00.000Z",
+          body,
+        },
+      ],
+      handled_comments: [],
+      backlog: [],
+      escalated: [],
+    }),
+  );
+}
+
+describe("runExtract — a configured login that is a substring of the reviewer-comment fixed trigger wording (R4-F1)", () => {
+  test("login 'chang' (substring of the fixed word 'change'): a clean lesson is stored, not refused", async () => {
+    await withProjectRoot(async (root) => {
+      // The configured login must be a comment AUTHOR for `selectLearnableComments`
+      // to pick up the comment at all — "chang" here plays the project's
+      // configured reviewer, not a name merely mentioned in the text.
+      writeReviewLearningConfig(root, ["chang"]);
+      writePrCommentFixture(root, "chang", "Prefer early returns over nested conditionals for readability.");
+
+      const report = await runExtract(root, { now: NOW, domain: "review-conventions" });
+      expect(report.refused).toEqual([]);
+      expect(report.created.length).toBeGreaterThanOrEqual(1);
+
+      // The stored trigger legitimately contains "chang" as part of the
+      // signal's own fixed word "change" ("When preparing a change for
+      // review...") — that is fine; what must never happen is the record
+      // being refused outright because of it. The comment's own author
+      // login never leaks into the generalized action, though.
+      const records = await listPatterns(root, { domain: "review-conventions" });
+      expect(records.length).toBeGreaterThanOrEqual(1);
+      expect(records[0]?.action.toLowerCase()).not.toContain("chang");
+    });
+  });
+
+  test("login 'guida' (substring of the fixed word 'guidance' were it to appear): a clean lesson is stored, not refused", async () => {
+    await withProjectRoot(async (root) => {
+      writeReviewLearningConfig(root, ["guida"]);
+      writePrCommentFixture(root, "guida", "Prefer early returns over nested conditionals for readability.");
+
+      const report = await runExtract(root, { now: NOW, domain: "review-conventions" });
+      expect(report.refused).toEqual([]);
+      expect(report.created.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // A genuine `@mention` of the login is stripped by `generalizeLesson`
+  // itself before a draft is even produced — the stored record is fine, as
+  // long as the login is gone from it (R2-F6's "comment from alice naming a
+  // co-reviewer" case).
+  test("a comment that genuinely @mentions the login has it stripped, not leaked, by generalizeLesson", async () => {
+    await withProjectRoot(async (root) => {
+      // "octocat" is the comment's own author (so `selectLearnableComments`
+      // picks it up); "chang" is a co-reviewer named IN the comment text.
+      writeReviewLearningConfig(root, ["chang", "octocat"]);
+      writePrCommentFixture(root, "octocat", "As @chang pointed out, prefer early returns over nested conditionals.", "c1");
+
+      const report = await runExtract(root, { now: NOW, domain: "review-conventions" });
+      expect(report.refused).toEqual([]);
+      const records = await listPatterns(root, { domain: "review-conventions" });
+      expect(records.length).toBeGreaterThanOrEqual(1);
+      for (const record of records) {
+        expect(record.action.toLowerCase()).not.toContain("chang");
+        expect(record.action).not.toContain("@");
+      }
+    });
+  });
+
+  // A login glued to surrounding text with no identifier boundary at all
+  // (`changhee`) survives `generalizeLesson`'s strip pass but is still
+  // caught by its own final substring safety net (R2-F6) — dropped
+  // entirely, never reaching a draft, so extract's own defense-in-depth
+  // check is never even exercised for this case.
+  test("a login glued to surrounding text with no boundary ('changhee') is dropped by generalizeLesson, storing nothing", async () => {
+    await withProjectRoot(async (root) => {
+      writeReviewLearningConfig(root, ["chang", "octocat"]);
+      writePrCommentFixture(root, "octocat", "changhee reviewers always prefer early returns over nested conditionals.", "c2");
+
+      const report = await runExtract(root, { now: NOW, domain: "review-conventions" });
+      expect(report.created.length).toBe(0);
+      expect(await listPatterns(root, { domain: "review-conventions" })).toEqual([]);
+    });
+  });
+});
+
 describe("runExtract — model extractor capability gate", () => {
   const fakeExtractor: ModelExtractor = {
     id: "fake",

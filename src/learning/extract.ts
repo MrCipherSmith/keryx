@@ -13,7 +13,7 @@ import { loadLearningConfig } from "./config";
 import { resolveProjectIdentity } from "./identity";
 import { observationsDir } from "./paths";
 import { pruneObservationFilesPass } from "./prune";
-import { containsConfiguredLogin } from "./reviewer-id";
+import { containsConfiguredLogin, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { validateObservationEvent } from "./schema";
 import { FAILING_TO_PASSING_TEST_SIGNAL } from "./signals/failing-to-passing-test";
@@ -268,7 +268,19 @@ async function upsertDraft(
   // again here as extract's own choke point, since a draft can originate
   // from a signal other than `reviewer-comment` (or, in principle, an
   // out-of-tree model-backed extractor) that never called it at all.
-  if (containsConfiguredLogin(draft.trigger, configuredLogins) || containsConfiguredLogin(draft.action, configuredLogins)) {
+  //
+  // R4-F1: a `reviewer-comment` draft's `trigger` carries the signal's own
+  // FIXED wording (`REVIEWER_COMMENT_TRIGGER_PREFIX`, "When preparing a
+  // change for review in this project (...)") around the variable keyword
+  // hint. `containsConfiguredLogin`'s 5+-char substring fallback is a
+  // plain substring test, so it does not distinguish that constant prose
+  // from the comment's actual content — a configured login like `chang`
+  // (a substring of "change") would refuse every reviewer-comment draft
+  // outright. Strip the known fixed prefix before checking a
+  // reviewer-comment draft's trigger, leaving only the keyword hint a login
+  // could actually appear in; every other signal's trigger is unaffected.
+  const triggerForLoginCheck = draft.extractor === "reviewer-comment" ? stripReviewerCommentTriggerPrefix(draft.trigger) : draft.trigger;
+  if (containsConfiguredLogin(triggerForLoginCheck, configuredLogins) || containsConfiguredLogin(draft.action, configuredLogins)) {
     report.refused.push({ signal: draft.extractor, categories: ["attribution"] });
     return;
   }

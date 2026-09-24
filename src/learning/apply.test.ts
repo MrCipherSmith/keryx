@@ -5,6 +5,7 @@ import path from "node:path";
 import { applyLearningProposal } from "../gdskills/learn";
 import { createAcceptCapability } from "./accept-capability";
 import { applyLearnedPattern, learnedPatternToProposal, LearningApplyError } from "./apply";
+import { REVIEWER_COMMENT_TRIGGER_PREFIX } from "./reviewer-id";
 import { writePattern } from "./store";
 import type { LearnedPattern } from "./types";
 
@@ -267,6 +268,61 @@ describe("applyLearnedPattern", () => {
       await writeFile(
         path.join(root, ".metaproject", "review-learning.config.json"),
         JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["octocat"] }),
+        "utf8",
+      );
+
+      await expect(applyLearnedPattern(root, record.id, { skill: "alpha/module" })).rejects.toMatchObject({
+        reason: "learning-text-refused",
+      });
+    });
+  });
+
+  // R4-F1 (review round 4, PR #691, minor): a `reviewer-comment`-extracted
+  // record's `trigger` carries that signal's own FIXED wording
+  // (`REVIEWER_COMMENT_TRIGGER_PREFIX`, "When preparing a change for review
+  // in this project (...)") around the variable keyword hint.
+  // `containsConfiguredLogin`'s 5+-char substring fallback does not
+  // distinguish that constant prose from a real login, so a configured
+  // login that is merely a substring of the fixed wording ("chang" inside
+  // "change") used to refuse this gate unconditionally. `domain:
+  // "review-conventions"` records never reach this function in practice
+  // (refused above with `use-review-learn-reviewer`), but the login gate is
+  // exercised directly here (a `reviewer-comment`-extractor record on a
+  // different domain) as the defense-in-depth check it is.
+  test("R4-F1: a configured login that is a substring of the fixed reviewer-comment trigger wording ('chang' in 'change') does not false-refuse a clean record", async () => {
+    await withProject(async (root) => {
+      await seedRegistry(root, [{ module: "alpha", name: "module" }]);
+      await seedSkill(root, "alpha", "module");
+      const record = makeAccepted({
+        trigger: `${REVIEWER_COMMENT_TRIGGER_PREFIX}prefer early returns over nested conditionals)`,
+        provenance: { extractor: "reviewer-comment", extractorKind: "deterministic" },
+      });
+      await writePattern(root, record, { capability: createAcceptCapability() });
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      await writeFile(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["chang"] }),
+        "utf8",
+      );
+
+      const result = await applyLearnedPattern(root, record.id, { skill: "alpha/module" });
+      expect(result.applied.skillPath).toBe(".metaproject/project-skills/alpha/module");
+    });
+  });
+
+  test("R4-F1: a real login occurrence in a reviewer-comment record's trigger (outside the fixed prefix) is still refused", async () => {
+    await withProject(async (root) => {
+      await seedRegistry(root, [{ module: "alpha", name: "module" }]);
+      await seedSkill(root, "alpha", "module");
+      const record = makeAccepted({
+        trigger: `${REVIEWER_COMMENT_TRIGGER_PREFIX}changhee always prefers early returns)`,
+        provenance: { extractor: "reviewer-comment", extractorKind: "deterministic" },
+      });
+      await writePattern(root, record, { capability: createAcceptCapability() });
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      await writeFile(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["chang"] }),
         "utf8",
       );
 

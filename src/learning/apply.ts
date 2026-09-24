@@ -14,7 +14,7 @@ import { renderProposalMarkdown, resolveRegisteredSkillTarget, suggestedSections
 import type { ApplyLearningProposalResult, LearningProposal, LearningSourceType } from "../gdskills/learn";
 import { applyLearningProposal } from "../gdskills/learn";
 import { loadReviewLearningConfigSafe } from "../review/review-learning";
-import { containsConfiguredLogin } from "./reviewer-id";
+import { containsConfiguredLogin, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { readPattern, type StoreEnvOptions } from "./store";
 import type { EvidenceSourceType, LearnedPattern, LearningDomain } from "./types";
@@ -204,7 +204,19 @@ export async function applyLearnedPattern(
   }
   const configuredLogins =
     configResult.config === null ? [] : [...new Set([...configResult.config.authors, ...(configResult.config.reviewerProfiles ?? [])])];
-  if (configuredLogins.length > 0 && (containsConfiguredLogin(record.trigger, configuredLogins) || containsConfiguredLogin(record.action, configuredLogins))) {
+  // R4-F1: a record produced by the `reviewer-comment` extractor carries
+  // that signal's own FIXED trigger wording (`REVIEWER_COMMENT_TRIGGER_
+  // PREFIX`) around the variable keyword hint — strip it before the login
+  // gate inspects `record.trigger`, the same fix `extract.ts`'s upsert
+  // applies, so a configured login that happens to be a substring of that
+  // constant prose (e.g. `chang` inside "change") does not refuse a clean
+  // record. Every other extractor's trigger is unaffected.
+  const triggerForLoginCheck =
+    record.provenance.extractor === "reviewer-comment" ? stripReviewerCommentTriggerPrefix(record.trigger) : record.trigger;
+  if (
+    configuredLogins.length > 0 &&
+    (containsConfiguredLogin(triggerForLoginCheck, configuredLogins) || containsConfiguredLogin(record.action, configuredLogins))
+  ) {
     throw new LearningApplyError("learning-text-refused", `record "${id}" refused: contains a configured reviewer login`);
   }
 

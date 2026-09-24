@@ -83,6 +83,43 @@ export function containsConfiguredLogin(text: string, logins: readonly string[])
 }
 
 /**
+ * Fixed wording `signals/reviewer-comment.ts` prepends to every generalized
+ * lesson's keyword hint to build a reviewer-comment record's `trigger`
+ * (`` `${REVIEWER_COMMENT_TRIGGER_PREFIX}${hint})` ``). Exported so every
+ * caller that runs a login gate over a record's `trigger`
+ * (`extract.ts`'s upsert, `apply.ts`'s apply gate) can strip this constant
+ * wording first via `stripReviewerCommentTriggerPrefix` below, rather than
+ * checking Keryx's own fixed prose for a configured login.
+ */
+export const REVIEWER_COMMENT_TRIGGER_PREFIX = "When preparing a change for review in this project (";
+
+/**
+ * R4-F1 (review round 4, PR #691, minor): `containsConfiguredLogin`'s 5+
+ * char substring fallback (see its own doc comment above) is intentionally
+ * a plain substring test — real defense-in-depth for a login glued to
+ * surrounding text with no identifier boundary. Run against a
+ * reviewer-comment record's FULL trigger, that same fallback also matches a
+ * configured login that is merely a substring of Keryx's own FIXED trigger
+ * wording rather than of the comment's actual (variable) content: a
+ * 5+-character login `chang` sits inside "change" in
+ * `REVIEWER_COMMENT_TRIGGER_PREFIX` ("...preparing a **chang**e for
+ * review..."), so a project that configures that login would have EVERY
+ * reviewer-comment record's extract/apply refused, unconditionally, no
+ * matter what the comment said. The fix is not to weaken the fallback (that
+ * would reopen R2-F6) but to never hand it the fixed wording in the first
+ * place: strip the known constant prefix (and its matching trailing `)`)
+ * before a login gate inspects a reviewer-comment trigger, leaving only the
+ * variable keyword-hint text a login could actually appear in. A trigger
+ * that does not carry the prefix (every other signal's trigger) is returned
+ * unchanged.
+ */
+export function stripReviewerCommentTriggerPrefix(trigger: string): string {
+  if (!trigger.startsWith(REVIEWER_COMMENT_TRIGGER_PREFIX)) return trigger;
+  const rest = trigger.slice(REVIEWER_COMMENT_TRIGGER_PREFIX.length);
+  return rest.endsWith(")") ? rest.slice(0, -1) : rest;
+}
+
+/**
  * Strips `@mentions`, every literal `login` in `logins` (case-insensitive,
  * word-bounded), and leading first-person/courtesy phrasing, collapses
  * whitespace, and returns the result — or `null` when the generalized text

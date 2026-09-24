@@ -8,7 +8,7 @@ import path from "node:path";
 import { loadReviewLearningConfig, selectLearnableComments } from "../../review/review-learning";
 import { splitSentences, type PrCommentState } from "../../review/pr-comments";
 import { resolveProjectIdentity } from "../identity";
-import { generalizeLesson, reviewerIdFor } from "../reviewer-id";
+import { generalizeLesson, REVIEWER_COMMENT_TRIGGER_PREFIX, reviewerIdFor } from "../reviewer-id";
 import { clampLearningText } from "./text";
 import type { ObservationLine, SignalDraft, SignalRunner } from "./types";
 
@@ -75,7 +75,7 @@ export async function reviewerCommentSignal(root: string, _window: ObservationLi
           const isProfiled = profiledAuthors.has(author.toLowerCase());
           drafts.push({
             domain: "review-conventions",
-            trigger: clampLearningText(`When preparing a change for review in this project (${shortHint(lesson)})`),
+            trigger: clampLearningText(`${REVIEWER_COMMENT_TRIGGER_PREFIX}${shortHint(lesson)})`),
             action: lesson,
             evidence: [
               {

@@ -488,11 +488,23 @@ function renderAgentMarkdown(definition: AgentDefinition): string {
   return `---\n${lines.join("\n")}\n---\n\n${definition.body}\n`;
 }
 
-async function buildAgentCandidate(root: string, proposal: GraduationProposalFile, storeOptions: StoreEnvOptions): Promise<AgentDefinition> {
+interface AgentCandidateBuild {
+  readonly definition: AgentDefinition;
+  /** Every member record's raw `trigger`/`action` (variable, comment-derived text) — what a login gate should inspect, NOT the assembled `role`/`body`, which also carry this function's own fixed template wording (R4-F1, see `applyGraduation`). */
+  readonly memberTexts: readonly string[];
+}
+
+async function buildAgentCandidate(root: string, proposal: GraduationProposalFile, storeOptions: StoreEnvOptions): Promise<AgentCandidateBuild> {
   const members: string[] = [];
+  const memberTexts: string[] = [];
   for (const id of proposal.members) {
     const record = await readMember(root, id, storeOptions);
-    members.push(record !== undefined ? `- ${record.trigger} -> ${record.action} (source: ${id})` : `- (source record "${id}" not found)`);
+    if (record !== undefined) {
+      members.push(`- ${record.trigger} -> ${record.action} (source: ${id})`);
+      memberTexts.push(record.trigger, record.action);
+    } else {
+      members.push(`- (source record "${id}" not found)`);
+    }
   }
 
   const description = proposal.summary.length > 0 && proposal.summary.length <= 1024 ? proposal.summary : proposal.summary.slice(0, 1024);
@@ -501,18 +513,21 @@ async function buildAgentCandidate(root: string, proposal: GraduationProposalFil
     "Read-only: report findings and suggested guidance rather than making changes yourself.";
 
   return {
-    name: proposal.suggestedName,
-    description,
-    role,
-    tools: GRADUATED_AGENT_TOOLS,
-    model_tier: "light",
-    policy_profile: "read-only",
-    skills: [],
-    stacks: [],
-    output_contract: "subagent-result",
-    isolation: "none",
-    origin: { kind: "learned", sourceRef: proposal.members[0] as string },
-    body: `## Guidance graduated from learned patterns\n\n${members.join("\n")}\n`,
+    definition: {
+      name: proposal.suggestedName,
+      description,
+      role,
+      tools: GRADUATED_AGENT_TOOLS,
+      model_tier: "light",
+      policy_profile: "read-only",
+      skills: [],
+      stacks: [],
+      output_contract: "subagent-result",
+      isolation: "none",
+      origin: { kind: "learned", sourceRef: proposal.members[0] as string },
+      body: `## Guidance graduated from learned patterns\n\n${members.join("\n")}\n`,
+    },
+    memberTexts,
   };
 }
 
@@ -551,7 +566,7 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
     );
   }
 
-  const candidate = await buildAgentCandidate(root, proposal, storeOptions);
+  const { definition: candidate, memberTexts } = await buildAgentCandidate(root, proposal, storeOptions);
 
   const scan = await scanLearnedText(root, [candidate.description, candidate.role, candidate.body]);
   if (scan.findings.length > 0) {
@@ -559,12 +574,22 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
   }
 
   // R2-F6: the same case-insensitive configured-login substring refusal
-  // `generalizeLesson`/extract's upsert apply, run here too — a graduated
-  // agent body concatenates every member record's stored `trigger`/`action`
-  // text (`buildAgentCandidate` above), so an attribution fragment that
-  // somehow survived into a stored record (or arrived via a differently
-  // configured login list at graduation time) is still refused before it
-  // reaches `.metaproject/agents/<name>.md`.
+  // `generalizeLesson`/extract's upsert apply, run here too — an attribution
+  // fragment that somehow survived into a stored member record (or arrived
+  // via a differently configured login list at graduation time) is still
+  // refused before it reaches `.metaproject/agents/<name>.md`.
+  //
+  // R4-F1: unlike the security scan above, this login gate checks only the
+  // VARIABLE content — `candidate.description` (the proposal's own summary),
+  // `proposal.suggestedName`, and every member record's raw `trigger`/
+  // `action` (`memberTexts`) — never the assembled `candidate.role`/`.body`.
+  // Those two are built from this function's own FIXED template wording
+  // ("Applies guidance graduated from...", "## Guidance graduated from
+  // learned patterns") plus the member text, and `containsConfiguredLogin`'s
+  // 5+-char substring fallback cannot tell the constant prose from the
+  // member's content — a configured login like `guida` (inside "guidance")
+  // would refuse EVERY agent candidate outright, regardless of what any
+  // member record actually said.
   //
   // R3-F3: a malformed config surfaces as `LearningGraduateConfigError` from
   // `configuredReviewLogins` — converted here into the named
@@ -584,7 +609,7 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
   }
   if (
     configuredLogins.length > 0 &&
-    [candidate.description, candidate.role, candidate.body].some((text) => containsConfiguredLogin(text, configuredLogins))
+    [candidate.description, proposal.suggestedName, ...memberTexts].some((text) => containsConfiguredLogin(text, configuredLogins))
   ) {
     throw new LearningGraduateError(
       "learning-text-refused",

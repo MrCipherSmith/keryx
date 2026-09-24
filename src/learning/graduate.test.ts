@@ -333,6 +333,84 @@ describe("applyGraduation: malformed review-learning config (R3-F3)", () => {
   });
 });
 
+// R4-F1 (review round 4, PR #691, minor): `applyGraduation`'s login gate
+// used to check the ASSEMBLED `candidate.role`/`candidate.body`, both built
+// from this function's own FIXED template wording ("Applies guidance
+// graduated from...", "...without making **chang**es yourself", "##
+// **Guida**nce graduated from learned patterns") around the member text.
+// `containsConfiguredLogin`'s 5+-char substring fallback cannot tell that
+// constant prose from a member's actual content, so a configured login that
+// happens to be a substring of it (`chang` inside "changes", `guida` inside
+// "guidance") refused EVERY agent candidate outright, regardless of what
+// any member record said. Fixed by checking only the proposal's own summary
+// (`candidate.description`), `suggestedName`, and every member's raw
+// `trigger`/`action` — never the assembled `role`/`body`.
+describe("applyGraduation: a configured login that is a substring of the fixed agent-candidate template wording (R4-F1)", () => {
+  test("login 'chang' (substring of 'changes' in the fixed role text) does not false-refuse a clean agent candidate", async () => {
+    await withProjectRoot(async (root, env) => {
+      await seedClusters(root, env);
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["chang"] }),
+      );
+
+      const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+      expect(existsSync(result.path)).toBe(true);
+    });
+  });
+
+  test("login 'guida' (substring of 'guidance' in the fixed role/body text) does not false-refuse a clean agent candidate", async () => {
+    await withProjectRoot(async (root, env) => {
+      await seedClusters(root, env);
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["guida"] }),
+      );
+
+      const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+      expect(existsSync(result.path)).toBe(true);
+    });
+  });
+
+  test("a member record that genuinely names the login 'chang' is still refused", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      for (const [id, trigger, action] of AGENT_CLUSTER) {
+        const withLogin = id === AGENT_CLUSTER[0]?.[0] ? `chang says: ${trigger}` : trigger;
+        await writePattern(root, makeAccepted(id, withLogin, action, "code-style", 0.8), { env, capability });
+      }
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["chang"] }),
+      );
+
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
+      await expect(
+        applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW }),
+      ).rejects.toMatchObject({ reason: "learning-text-refused" });
+
+      expect(existsSync(path.join(root, ".metaproject", "agents", `${agentProposal!.suggestedName}.md`))).toBe(false);
+    });
+  });
+});
+
 describe("applyGraduation: skill/rule targets refuse", () => {
   test("skill target refuses graduate-apply-agent-only with the proposal's own next step", async () => {
     await withProjectRoot(async (root, env) => {

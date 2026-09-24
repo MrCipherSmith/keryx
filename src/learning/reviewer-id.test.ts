@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { containsConfiguredLogin, generalizeLesson, reviewerIdFor } from "./reviewer-id";
+import {
+  containsConfiguredLogin,
+  generalizeLesson,
+  REVIEWER_COMMENT_TRIGGER_PREFIX,
+  reviewerIdFor,
+  stripReviewerCommentTriggerPrefix,
+} from "./reviewer-id";
 
 const PROJECT_IDENTITY = "a".repeat(64);
 
@@ -166,5 +172,39 @@ describe("containsConfiguredLogin", () => {
     expect(containsConfiguredLogin("ed[bot] flagged this in review", ["ed"])).toBe(true);
     expect(containsConfiguredLogin("Per ed's review, keep it small", ["ed"])).toBe(true);
     expect(containsConfiguredLogin("ed_reviewer left a comment", ["ed"])).toBe(true);
+  });
+
+  // R4-F1 (review round 4, PR #691, minor): unlike R3-F2's short-login case
+  // (handled by the boundary-only rule for <5 char logins), a 5+ char login
+  // still uses the substring fallback, and `reviewer-comment.ts`'s own FIXED
+  // trigger wording ("When preparing a **chang**e for **review**...") is
+  // ordinary English containing "chang"/"review" as plain substrings with no
+  // identifier boundary anywhere around them. The fix lives in the callers
+  // (extract.ts/apply.ts strip `REVIEWER_COMMENT_TRIGGER_PREFIX` before
+  // calling this function) — this function's own contract (a real login
+  // still caught, even glued to surrounding text) does not change.
+  test("R4-F1: the fixed reviewer-comment trigger wording trips a 5+ char configured login via the substring fallback (why callers must strip the prefix first)", () => {
+    const fixedTrigger = `${REVIEWER_COMMENT_TRIGGER_PREFIX}prefer early returns over nested conditionals)`;
+    expect(containsConfiguredLogin(fixedTrigger, ["chang"])).toBe(true); // "change"
+    expect(containsConfiguredLogin(fixedTrigger, ["review"])).toBe(true); // "review" (the fixed word itself)
+    expect(containsConfiguredLogin(stripReviewerCommentTriggerPrefix(fixedTrigger), ["chang"])).toBe(false);
+    expect(containsConfiguredLogin(stripReviewerCommentTriggerPrefix(fixedTrigger), ["review"])).toBe(false);
+  });
+});
+
+describe("stripReviewerCommentTriggerPrefix", () => {
+  test("strips the fixed prefix and trailing ')', leaving only the keyword hint", () => {
+    const trigger = `${REVIEWER_COMMENT_TRIGGER_PREFIX}prefer early returns over nested conditionals)`;
+    expect(stripReviewerCommentTriggerPrefix(trigger)).toBe("prefer early returns over nested conditionals");
+  });
+
+  test("returns a trigger unchanged when it does not carry the fixed prefix (every other signal's trigger)", () => {
+    const trigger = "the same file region is edited twice in one turn window";
+    expect(stripReviewerCommentTriggerPrefix(trigger)).toBe(trigger);
+  });
+
+  test("a real login occurrence in the stripped keyword hint is still caught", () => {
+    const trigger = `${REVIEWER_COMMENT_TRIGGER_PREFIX}@changhee flagged this)`;
+    expect(containsConfiguredLogin(stripReviewerCommentTriggerPrefix(trigger), ["chang"])).toBe(true);
   });
 });
