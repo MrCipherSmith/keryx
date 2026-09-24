@@ -627,6 +627,48 @@ describe("N2 (round 2): uninstall presence is judged PER SURFACE, not by a senti
   });
 });
 
+describe("M2 (round 3): presence is judged by validate/sentinel-group, never by strip's own empty-container cleanup", () => {
+  test("claude: an UNRELATED empty hooks.PreToolUse array (never touched by ctx-guard) reports nothing-to-remove, not removed", async () => {
+    await withMetaproject(async (root) => {
+      const file = path.join(root, ".claude", "settings.json");
+      await mkdir(path.dirname(file), { recursive: true });
+      // The round-3 repro: `strip`'s own empty-container cleanup used to make
+      // the OLD strip-diff presence check ("did strip change anything?")
+      // report "installed" here, even though ctx-guard was never installed —
+      // `stripFromHookArray` deletes an empty `hooks` object regardless of
+      // who emptied it.
+      await writeFile(file, `${JSON.stringify({ hooks: { PreToolUse: [] }, x: 1 }, null, 2)}\n`, "utf8");
+
+      const uninstall = await uninstallIntegration(root, "claude", { surfaces: ["ctx-guard"] });
+      expect(uninstall.results[0]!.status).toBe("nothing-to-remove");
+
+      // The unrelated key survives — `strip`'s own empty-container cleanup
+      // (a harmless normalisation `uninstallSurfaces` always applies) is not
+      // what the STATUS is judged on any more.
+      const after = JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
+      expect(after.x).toBe(1);
+    });
+  });
+
+  test("claude: a genuinely installed ctx-guard, even with a STALE matcher, still reports removed", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["ctx-guard"] });
+      const file = path.join(root, ".claude", "settings.json");
+      const settings = JSON.parse(await readFile(file, "utf8")) as {
+        hooks: { PreToolUse: Array<Record<string, unknown>> };
+      };
+      // Corrupt the matcher by hand so `validate` fails (stale) while the
+      // sentinel-tagged group is still there — presence must still be judged
+      // "installed" via the group fallback, not only via `validate`.
+      settings.hooks.PreToolUse[0]!.matcher = "SomethingElse";
+      await writeFile(file, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+
+      const uninstall = await uninstallIntegration(root, "claude", { surfaces: ["ctx-guard"] });
+      expect(uninstall.results[0]!.status).toBe("removed");
+    });
+  });
+});
+
 describe("F7 (round 2): a malformed RECORD inside installedModules invalidates the whole state, never crashes", () => {
   async function writeState(root: string, runtimeId: string, installedModules: unknown): Promise<void> {
     const file = installStatePath(root, runtimeId);

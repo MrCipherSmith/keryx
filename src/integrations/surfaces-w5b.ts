@@ -169,6 +169,9 @@ export const CTX_GUARD_KIRO: SurfaceAdapter = {
     return present ? [] : ["kiro: missing PreToolUse ctx-guard hook"];
   },
   label: ".kiro/hooks/keryx-ctx-guard.json",
+  // review round 3, M2: kiro's entries sit directly in the top-level `hooks`
+  // array (no nested container) — `groupContainer` is deliberately omitted.
+  groupKey: "hooks",
   payloadCodec: parseKiroCommand,
   // F6: this file is written by no one but this surface — safe to delete
   // outright on uninstall once stripped to `{}` (see `settings-file.ts`).

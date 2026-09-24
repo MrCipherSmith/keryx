@@ -15,13 +15,41 @@
 // the whole bootstrap block verbatim into a file this workstream cannot
 // confirm any harness reads end-to-end.
 //
-// Review round 2 (N4): every splice below operates on the file's RAW bytes
-// directly — never a normalised-then-reapplied copy — so a mixed-EOL file
-// (some `\r\n` lines, some bare `\n`) is untouched everywhere outside the
-// block itself; only NEW content this module writes (the block, and a
-// freshly-prepended front matter) is rendered in the file's DOMINANT line
-// ending. See `dominantEol`/`applyEol` and `computeFencedRanges` (which walks
-// raw content directly rather than a normalised copy).
+// Review round 3 re-plan: rounds 1 and 2 kept this byte-exact by growing a
+// second bookkeeping layer on top of the markers — a `CREATED_FILE_MARKER`
+// sentinel to remember whether install itself created the file, plus
+// front-matter-aware prefix detection — and round 3 still found edge cases
+// (CRLF-converted created files, orphaned markers after a user edit, user
+// front matter identical to Keryx's own). That growth is the bug, not any
+// one edge case in it: this rewrite drops the second layer entirely for a
+// SIMPLER, purely content-based contract —
+//   - install into an ABSENT file creates it (front matter, kiro only, then
+//     the block; LF).
+//   - install into an EXISTING file never adds front matter (even one
+//     Keryx itself previously created and the user then emptied back out) —
+//     it only ever touches the block itself.
+//   - uninstall removes every block plus (at most) the one blank separator
+//     line immediately before each, then deletes the file iff what remains
+//     is empty/whitespace-only OR equals Keryx's own front matter exactly
+//     (compared CRLF-normalised, trailing-whitespace-trimmed) — never by
+//     asking "did install create this file", only by looking at what is
+//     left.
+// Documented normalisation this trades for the simplicity: install -> then
+// -> uninstall on an existing file is byte-identical when the file ended
+// with a newline (the common case); a file that lacked a final newline may
+// gain one, and a pre-existing EMPTY (or whitespace-only) file that install
+// wrote the block into is removed on uninstall along with it — there is no
+// way to tell "this was empty before" from "install created this" without
+// the marker this rewrite deliberately removes. See `docs/docs/integrations.md`.
+//
+// Review round 2 (N4, kept): every splice below operates on the file's RAW
+// bytes directly — never a normalised-then-reapplied copy — so a mixed-EOL
+// file (some `\r\n` lines, some bare `\n`) is untouched everywhere outside
+// the block itself; only NEW content this module writes (the block, and a
+// freshly-prepended front matter on file CREATION) is rendered in the file's
+// DOMINANT line ending. See `dominantEol`/`applyEol` and
+// `computeFencedRanges` (which walks raw content directly rather than a
+// normalised copy).
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -73,18 +101,6 @@ function endsWithEol(text: string): boolean {
   return text.endsWith("\n"); // covers both "\n" and "\r\n" (which also ends in "\n")
 }
 
-/** True when `text` ends with two consecutive line endings (a blank line), either style. */
-function endsWithBlankLine(text: string): boolean {
-  return /(\r\n|\n)(\r\n|\n)$/.test(text);
-}
-
-/** Collapses a trailing blank line (either EOL style) to a single line ending, preserving which style was there. */
-function collapseTrailingBlankLine(text: string): string {
-  const match = text.match(/(\r\n|\n)(\r\n|\n)$/);
-  if (!match) return text;
-  return text.slice(0, text.length - match[0].length) + match[2];
-}
-
 /** Advances `cursor` past one line ending (`\r\n` or `\n`) at that position, if any. */
 function eatEol(text: string, cursor: number): number {
   if (text.startsWith("\r\n", cursor)) return cursor + 2;
@@ -93,18 +109,21 @@ function eatEol(text: string, cursor: number): number {
 }
 
 /**
- * Review round 2 (N4): a distinguishing marker written ONLY on the "file did
- * not exist yet" install path — the one case where `writeFile` creates the
- * file outright rather than editing existing bytes. Its presence (immediately
- * before the block, after `frontMatter` if any) is how `uninstallMarkdownBlock`
- * tells "install created this file" apart from "the file already existed
- * (even if empty/whitespace-only) and install only added the block" — two
- * cases that, before this marker existed, could write byte-identical content
- * and were therefore impossible to tell apart afterwards. Only the FORMER may
- * ever have its file deleted on uninstall; the latter always survives, even
- * when nothing but whitespace is left once the block is removed.
+ * `text` with ONE trailing line ending stripped off its very end, if the text
+ * ends with two consecutive line endings back to back (a blank line) —
+ * either style, and the two need not match each other. Used by uninstall to
+ * remove exactly the one blank separator line install may have added
+ * immediately before a block, never more.
  */
-const CREATED_FILE_MARKER = "<!-- keryx:created-file -->\n";
+function stripOneTrailingSeparatorEol(text: string): string {
+  const match = text.match(/(\r\n|\n)(\r\n|\n)$/);
+  return match ? text.slice(0, text.length - match[2]!.length) : text;
+}
+
+/** `text` with CRLF normalised to LF and trailing whitespace trimmed — comparison only, never written back. */
+function normalizeForCompare(text: string): string {
+  return text.replace(/\r\n/g, "\n").trimEnd();
+}
 
 /** The managed block body, byte-identical across every markdown-block surface. */
 export function renderInstructionsBlock(): string {
@@ -225,33 +244,39 @@ function collapseBlocks(content: string, blocks: Block[], replacement: string): 
   return result;
 }
 
-/** Remove every block entirely (F9: uninstall removes ALL duplicate blocks). Everything outside a block's own span is copied byte-for-byte. */
-function removeAllBlocks(content: string, blocks: Block[]): string {
+/**
+ * Remove every block entirely (F9: uninstall removes ALL duplicate blocks),
+ * ALSO removing exactly one blank separator line immediately before each
+ * block, if one is there (the re-plan's simplified uninstall contract — see
+ * the module header). Everything else — including a genuine blank line that
+ * was part of the surrounding content rather than a separator install added
+ * — is copied byte-for-byte; there is no way to tell the two apart without
+ * the marker this rewrite removes, so this is a deliberate, documented
+ * normalisation, not a bug.
+ */
+function removeBlocksAndSeparators(content: string, blocks: readonly Block[]): string {
   let result = "";
   let cursor = 0;
   for (const block of blocks) {
-    result += content.slice(cursor, block.start);
+    result += stripOneTrailingSeparatorEol(content.slice(cursor, block.start));
     cursor = eatEol(content, block.end);
   }
   result += content.slice(cursor);
   return result;
 }
 
+/**
+ * Append `block` to `content` per the re-plan's simplified contract: an
+ * EMPTY file gets just the block (no separator — nothing to separate it
+ * from); a file already ending in a line ending gets ONE blank separator
+ * line before the block; a file that does NOT end in a line ending gets its
+ * last line terminated first, THEN the same one blank separator line. Every
+ * new line ending here is the file's DOMINANT style (N4), never a hardcoded
+ * one.
+ */
 function appendBlock(content: string, block: string, eol: LineEnding): string {
   if (content.length === 0) return block;
-  const withTrailingNewline = endsWithEol(content) ? content : `${content}${eol}`;
-  const separator = endsWithBlankLine(withTrailingNewline) ? "" : eol;
-  return `${withTrailingNewline}${separator}${block}`;
-}
-
-/** True when `content` starts with a YAML front-matter block (any content, not just Keryx's own). Splits on either EOL style. */
-function hasAnyFrontMatter(content: string): boolean {
-  const lines = content.split(/\r\n|\n/);
-  if (lines[0] !== "---") return false;
-  for (let i = 1; i < lines.length; i += 1) {
-    if (lines[i] === "---") return true;
-  }
-  return false;
+  return endsWithEol(content) ? `${content}${eol}${block}` : `${content}${eol}${eol}${block}`;
 }
 
 function fileFor(root: string, relativePath: string): string {
@@ -259,69 +284,74 @@ function fileFor(root: string, relativePath: string): string {
 }
 
 /**
- * Install the managed block into `relativePath`, creating the file (and any
- * parent directories) and prepending `frontMatter` (kiro's steering front
- * matter) when the file does not exist yet, or exists but does not already
- * start with SOME front-matter block (F8 — a file the user already gave
- * front matter to is never double-prepended, even if that front matter isn't
- * byte-identical to Keryx's own).
+ * Install the managed block into `relativePath`.
  *
- * Idempotent: re-running replaces only the block, preserving everything else
- * in the file untouched. The block (and a freshly-prepended front matter) are
- * rendered in the file's DOMINANT line ending (N4); everything outside the
- * spliced region is copied from the file's raw bytes untouched, so a
- * mixed-EOL file is never homogenised by an install. A file with more than
- * one complete block collapses to one (replacing the first, dropping the
- * rest). Refuses — leaving the file completely untouched — when a block
- * cannot be parsed safely; see `UnterminatedInstructionsBlockError`.
+ * - The file does NOT exist: it is created (parent directories too) with
+ *   `frontMatter` (kiro's steering front matter) prepended when given, then
+ *   the block — LF throughout, since there is no existing file whose EOL
+ *   style to follow.
+ * - The file DOES exist: `frontMatter` is NEVER added, regardless of
+ *   whether the file already carries its own front matter, Keryx's own, or
+ *   none at all (re-plan simplification — see the module header) — only the
+ *   block itself is ever touched. Idempotent: re-running replaces only the
+ *   block, preserving everything else in the file untouched. The block is
+ *   rendered in the file's DOMINANT line ending (N4); everything outside the
+ *   spliced region is copied from the file's raw bytes untouched, so a
+ *   mixed-EOL file is never homogenised by an install. A file with more than
+ *   one complete block collapses to one (replacing the first, dropping the
+ *   rest).
+ *
+ * Refuses — leaving the file completely untouched — when a block cannot be
+ * parsed safely; see `UnterminatedInstructionsBlockError`.
  */
 export async function installMarkdownBlock(root: string, relativePath: string, frontMatter?: string): Promise<string[]> {
   const file = fileFor(root, relativePath);
   if (!(await pathExists(file))) {
     await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, `${frontMatter ?? ""}${CREATED_FILE_MARKER}${renderInstructionsBlock()}`, "utf8");
+    await writeFile(file, `${frontMatter ?? ""}${renderInstructionsBlock()}`, "utf8");
     return [];
   }
   const raw = await readFile(file, "utf8");
   const eol = dominantEol(raw);
-  const frontMatterForEol = frontMatter !== undefined ? applyEol(frontMatter, eol) : undefined;
-  const withFrontMatter = frontMatterForEol && !hasAnyFrontMatter(raw) ? `${frontMatterForEol}${raw}` : raw;
 
   let blocks: Block[];
   try {
-    blocks = parseBlocks(withFrontMatter, relativePath);
+    blocks = parseBlocks(raw, relativePath);
   } catch (error) {
     if (error instanceof UnterminatedInstructionsBlockError) return [error.message];
     throw error;
   }
 
   const block = applyEol(renderInstructionsBlock(), eol);
-  const next = blocks.length === 0 ? appendBlock(withFrontMatter, block, eol) : collapseBlocks(withFrontMatter, blocks, block);
+  const next = blocks.length === 0 ? appendBlock(raw, block, eol) : collapseBlocks(raw, blocks, block);
   if (next !== raw) await writeFile(file, next, "utf8");
   return [];
 }
 
 /**
- * Remove every managed block from `relativePath`. Deletes the file ONLY when
- * install itself CREATED it (review round 2, N4) — detected via
- * `CREATED_FILE_MARKER`, not by whether what remains is empty/whitespace: a
- * file that already existed (even empty, or whitespace-only) before install
- * ran always survives uninstall untouched, byte-identical to what it was
- * before install, even when nothing visible is left once the block (and any
- * front matter install added) is stripped back out. Returns `false` when
- * there was nothing to remove.
+ * Remove every managed block from `relativePath`, plus (at most) the one
+ * blank separator line immediately before each (`removeBlocksAndSeparators`
+ * — the re-plan's simplified contract, see the module header). The file
+ * itself is then deleted iff what remains is empty/whitespace-only, OR
+ * equals Keryx's own `frontMatter` exactly once compared CRLF-normalised
+ * and with trailing whitespace trimmed — NOT by asking whether install
+ * itself created the file (round 1/2's marker-based approach): a
+ * pre-existing file install wrote the block into is deleted here too when
+ * nothing else is left, including one that was empty before install ran —
+ * there is no byte-level way to tell that apart from a file install
+ * created outright, and this is documented as an accepted trade-off (see
+ * `docs/docs/integrations.md`) rather than tracked with a second marker. A
+ * pre-existing file with OTHER content is never deleted and never loses
+ * front matter it already had (it was never given Keryx's).
  *
- * Everything outside a block's own span (and, when install added it, the
- * exact `frontMatter` text it prepended) is preserved byte-for-byte,
- * including original mixed line endings (N4).
- *
- * Throws `UnterminatedInstructionsBlockError` — and leaves the file
- * completely untouched — rather than guess at, and potentially delete
- * content around, a block it cannot parse safely (F1). `customUninstall`'s
- * contract has no error channel (unlike `customInstall`'s `string[]`), so
- * throwing here — the same "refuse hard" idiom `readSettingsFile` already
- * uses for invalid JSON — is how this surface refuses; `installer.ts` (N1)
- * catches it into a `failed` `SurfaceResult` rather than letting it escape.
+ * Returns `false` when there was nothing to remove. Throws
+ * `UnterminatedInstructionsBlockError` — and leaves the file completely
+ * untouched — rather than guess at, and potentially delete content around, a
+ * block it cannot parse safely (F1). `customUninstall`'s contract has no
+ * error channel (unlike `customInstall`'s `string[]`), so throwing here —
+ * the same "refuse hard" idiom `readSettingsFile` already uses for invalid
+ * JSON — is how this surface refuses; `installer.ts` (N1) catches it into a
+ * `failed` `SurfaceResult` rather than letting it escape.
  */
 export async function uninstallMarkdownBlock(root: string, relativePath: string, frontMatter?: string): Promise<boolean> {
   const file = fileFor(root, relativePath);
@@ -330,30 +360,16 @@ export async function uninstallMarkdownBlock(root: string, relativePath: string,
   const blocks = parseBlocks(raw, relativePath);
   if (blocks.length === 0) return false;
 
-  const lastBlock = blocks[blocks.length - 1]!;
-  const afterLast = raw.slice(lastBlock.end);
-  const wasTrailingBlock = afterLast === "" || afterLast === "\n" || afterLast === "\r\n";
+  const remainder = removeBlocksAndSeparators(raw, blocks);
+  const normalizedRemainder = normalizeForCompare(remainder);
+  const deletable =
+    normalizedRemainder === "" || (frontMatter !== undefined && normalizedRemainder === normalizeForCompare(frontMatter));
 
-  const beforeFirstBlock = raw.slice(0, blocks[0]!.start);
-  const createdPrefix = `${frontMatter ?? ""}${CREATED_FILE_MARKER}`;
-  const createdByInstall = beforeFirstBlock === createdPrefix;
-  // The "file didn't exist yet" install path (direct concatenation) and the
-  // "existing file whose own content was empty, so front matter alone ends up
-  // right before the block" path both never ran `appendBlock`'s separator
-  // logic — collapsing a trailing blank line there would eat part of the
-  // front matter's OWN formatting, not a separator this module added.
-  const directConcatenation = createdByInstall || (frontMatter !== undefined && beforeFirstBlock === frontMatter);
-
-  let removed = removeAllBlocks(raw, blocks);
-  if (wasTrailingBlock && !directConcatenation) removed = collapseTrailingBlankLine(removed);
-
-  if (createdByInstall && removed === createdPrefix) {
+  if (deletable) {
     await rm(file, { force: true });
     return true;
   }
-
-  const withoutFrontMatter = frontMatter && removed.startsWith(frontMatter) ? removed.slice(frontMatter.length) : removed;
-  if (withoutFrontMatter !== raw) await writeFile(file, withoutFrontMatter, "utf8");
+  if (remainder !== raw) await writeFile(file, remainder, "utf8");
   return true;
 }
 

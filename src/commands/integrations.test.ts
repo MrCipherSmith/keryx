@@ -139,6 +139,41 @@ describe("doctor exit code", () => {
   });
 });
 
+describe("M3 (round 3): doctor --runtime all survives one runtime's corrupt settings file", () => {
+  test("a corrupt kiro settings file does not abort doctor for every OTHER runtime, and exits 1", async () => {
+    await withMetaproject(async (root) => {
+      // kiro's ctx-guard surface reads .kiro/hooks/keryx-ctx-guard.json —
+      // install it first so doctor has a RECORDED install-state entry for
+      // it (a live problem on a never-installed surface does not fail
+      // `doctor` on its own), then corrupt the file so `readSettingsFile`
+      // throws when doctor reaches kiro. Before the fix, that throw escaped
+      // `doctorIntegration` uncaught and aborted the whole `--runtime all`
+      // loop in `handleDoctor`, so no runtime AFTER kiro in iteration order
+      // printed anything.
+      await integrationsCommand(["install", "--runtime", "kiro", "--surface", "ctx-guard"], root);
+      await writeFile(path.join(root, ".kiro", "hooks", "keryx-ctx-guard.json"), "{ not valid json", "utf8");
+
+      captured = [];
+      await integrationsCommand(["doctor", "--runtime", "all", "--json"], root);
+      expect(process.exitCode).toBe(1);
+
+      const parsed = JSON.parse(captured.join("\n")) as {
+        results: { runtimeId: string; ok: boolean; surfaces: { surfaceId: string; live: string; problems: string[] }[] }[];
+      };
+      const withSurfaces = HARNESS_ADAPTERS.filter((a) => a.surfaces.length > 0);
+      // Every supported runtime is still printed — kiro's corrupt file did
+      // not stop the loop from reaching the rest.
+      expect(parsed.results.map((r) => r.runtimeId).sort()).toEqual(withSurfaces.map((a) => a.id).sort());
+
+      const kiro = parsed.results.find((r) => r.runtimeId === "kiro")!;
+      expect(kiro.ok).toBe(false);
+      const ctxGuard = kiro.surfaces.find((s) => s.surfaceId === "ctx-guard")!;
+      expect(ctxGuard.live).toBe("invalid");
+      expect(ctxGuard.problems.join(" ")).toContain("not valid JSON");
+    });
+  });
+});
+
 describe("--runtime all", () => {
   test("install includes every adapter with surfaces and reports keryx-shell unsupported", async () => {
     await withMetaproject(async (root) => {

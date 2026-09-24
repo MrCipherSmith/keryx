@@ -193,6 +193,16 @@ export interface SurfaceAdapter {
   readonly groupShape?: "flat" | "nested";
   readonly groupKey?: string;
   readonly groupContainer?: string;
+  /**
+   * Extra field a managed group must carry to belong to THIS surface, when
+   * `groupKey`/`groupContainer` alone are ambiguous — e.g. the flat security
+   * surfaces, where `security-check-input`/`security-check-output` share one
+   * array (`securityHooks`) and are told apart only by each entry's own `on`
+   * field. `installer.ts`'s `wasSurfaceInstalled` (review round 3, M2) reads
+   * this to judge per-surface presence without needing a second, surface-id-
+   * keyed special case.
+   */
+  readonly groupMatchField?: { readonly key: string; readonly value: string };
   /** Native tools (beyond the shell) this ctx-guard runtime's matcher also covers. */
   readonly nativeSearchTools?: readonly string[];
   /** Parses this harness's hook payload into the shell command it carries. */

@@ -21,7 +21,7 @@
 import path from "node:path";
 import { getHarnessAdapter, harnessAdapterIds, settingsFileOwnerFor } from "./registry";
 import { installSurfaces, uninstallSurfaces } from "./settings-file";
-import { readSettingsFile } from "./settings-json";
+import { arrayAt, isManagedBy, readSettingsFile } from "./settings-json";
 import {
   recordSurfaceInstalled,
   recordSurfaceUninstalled,
@@ -197,49 +197,46 @@ function resolveAdapterOrError(runtimeId: string): { adapter: HarnessAdapter } |
   return { adapter };
 }
 
-/** Structural deep-equality over JSON-shaped `Settings` values — no library dependency, and key ORDER never matters (only key membership + value equality). */
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (typeof a !== typeof b || a === null || b === null) return false;
-  if (Array.isArray(a) || Array.isArray(b)) {
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-    return a.every((item, i) => deepEqual(item, b[i]));
-  }
-  if (typeof a === "object" && typeof b === "object") {
-    const aRecord = a as Record<string, unknown>;
-    const bRecord = b as Record<string, unknown>;
-    const aKeys = Object.keys(aRecord);
-    const bKeys = Object.keys(bRecord);
-    if (aKeys.length !== bKeys.length) return false;
-    return aKeys.every((key) => Object.prototype.hasOwnProperty.call(bRecord, key) && deepEqual(aRecord[key], bRecord[key]));
-  }
-  return false;
-}
-
 /**
- * Whether `surface` was already installed in `settings` (review round 2, N2):
- * judged PER SURFACE, by actually applying THIS surface's own `strip` to a
- * deep clone and checking whether that changed anything — not by checking
- * for a shared `_keryxManaged` sentinel string at the settings file's top
- * level (`addSentinelTo`/`removeSentinelFrom` in `settings-json.ts`), which
- * more than one surface on the same file can carry (e.g.
- * `security-check-input`/`security-check-output` both use
- * `AGENT_HOOKS_SENTINEL`). The old sentinel-only check therefore reported a
- * surface as "installed" the moment its SIBLING was, even when this surface
- * itself was never touched — `claude install --surface security-check-output`
- * then `claude uninstall --surface security-check-input` must report nothing
- * to remove for security-check-input, not "removed".
+ * Whether `surface` was already installed in `settings` (review round 3,
+ * M2): judged in two steps, neither of which is "diff `strip`'s before/after
+ * and see if anything changed" — that approach (review round 2, N2's fix)
+ * over-reported "installed" the moment `strip` did ANY cleanup on the file,
+ * including pruning an empty container this surface never wrote (the round-3
+ * repro: `{hooks:{PreToolUse:[]}, x:1}` + uninstall `--surface ctx-guard`
+ * reported "removed" for a surface that was never installed, because
+ * `stripFromHookArray` deletes an empty `hooks` object regardless of who
+ * emptied it).
  *
- * NOT `surface.validate`, which checks shape correctness and can reject a
- * group written by an older/odd build (a different matcher, a flat entry, no
- * matcher at all, ...) that is nonetheless present and therefore still
- * something an uninstall must report as "removed" once it strips it.
+ * 1. `surface.validate` (when present) returning no problems means a
+ *    healthy, correctly-shaped install — done, present.
+ * 2. Otherwise, fall back to a direct look at `surface.groupKey` (+
+ *    `groupContainer`/`groupMatchField`, when the surface carries them): a
+ *    group tagged with THIS surface's own sentinel at that exact key is
+ *    "installed but stale/malformed" — still something an uninstall must
+ *    report as "removed" once it strips it (mirrors the historical-shape
+ *    coverage in `src/ctx/hook-install.test.ts`: a stale matcher, an inert
+ *    `type:"prompt"` entry, a flat `command` instead of nested `hooks[]`, a
+ *    missing `matcher` — every one of these fails `validate` yet must still
+ *    read as present). A surface with no `groupKey` (and no `validate`) has
+ *    no generic way to answer this and reports absent.
+ *
+ * `matchField`-equivalent disambiguation for two surfaces sharing one array
+ * (the flat security surfaces' `securityHooks`, told apart only by each
+ * entry's `on`) is `surface.groupMatchField` — never a second, surface-id-
+ * keyed special case here.
  */
 function wasSurfaceInstalled(settings: Settings, surface: SurfaceAdapter): boolean {
-  if (!surface.strip) return false;
-  const before = structuredClone(settings);
-  const after = surface.strip(structuredClone(settings));
-  return !deepEqual(before, after);
+  if (surface.validate && surface.validate(structuredClone(settings)).length === 0) return true;
+  if (!surface.groupKey) return false;
+  const isManaged = isManagedBy(surface.sentinel);
+  return arrayAt(settings, surface.groupContainer, surface.groupKey).some((entry) => {
+    if (!isManaged(entry)) return false;
+    if (!surface.groupMatchField) return true;
+    const value =
+      typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>)[surface.groupMatchField.key] : undefined;
+    return value === surface.groupMatchField.value;
+  });
 }
 
 /**
@@ -631,7 +628,19 @@ async function liveStatusOf(
     if (!(await pathExists(file))) {
       return { live: "missing", problems: [`${surface.relativePath}: file is missing`] };
     }
-    const settings = await readSettingsFile(file);
+    // review round 3, M3: `readSettingsFile` throws on invalid JSON —
+    // uncaught, that escaped `doctorIntegration` entirely and aborted
+    // `keryx integrations doctor --runtime all` on the FIRST corrupt file,
+    // printing nothing for every runtime after it. A parse failure is a live
+    // fact about this surface, exactly like a missing file: report it as
+    // `invalid` (so a recorded surface here shows as drift, same as any
+    // other live-vs-recorded mismatch) instead of throwing.
+    let settings: Settings;
+    try {
+      settings = await readSettingsFile(file);
+    } catch (error) {
+      return { live: "invalid", problems: [(error as Error).message] };
+    }
     const problems = surface.validate(settings);
     return { live: problems.length === 0 ? "valid" : "invalid", problems };
   }

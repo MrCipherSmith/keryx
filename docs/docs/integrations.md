@@ -122,6 +122,25 @@ To regenerate the matrix after a registry change:
 keryx integrations matrix --write
 ```
 
+### The `instructions` surface's managed markdown block
+
+Gemini CLI, Kiro, and GitHub Copilot agent's `instructions` surfaces all
+install the same short pointer between `<!-- keryx:instructions -->` /
+`<!-- /keryx:instructions -->` markers into a secondary instructions file.
+Install into an absent file creates it (Kiro only: with its
+`inclusion: always` front matter first), LF-terminated. Install into an
+existing file never adds front matter — even a file Keryx itself created
+that the user later emptied back out — and only ever touches the block
+itself, appending it (with one blank separator line) when absent or
+replacing it in place when present. Uninstall removes the block plus that
+one separator line, then deletes the file only when nothing but
+whitespace, or Keryx's own front matter, is left. One documented
+consequence of keeping this simple: install → uninstall on an existing file
+is byte-identical when the file ended with a newline (the common case); a
+file that lacked a final newline may gain one, and a pre-existing empty (or
+whitespace-only) file that install wrote the block into is removed on
+uninstall along with it, the same as a file install created outright.
+
 ## Per-harness notes (new in flow 307 / W5-b)
 
 These four harnesses had zero entries in any registry before this flow. Every

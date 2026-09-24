@@ -115,7 +115,11 @@ export function nestedCtxSurface(opts: {
     label: `${relativePath} (${key})`,
     groupShape: "nested",
     groupKey: key,
-    ...(container !== undefined ? { groupContainer: container } : {}),
+    // Always set explicitly (review round 3, M2) — `mergeIntoHookArray`/
+    // `stripFromHookArray` always nest under the `hooks` object by default,
+    // so `installer.ts`'s `wasSurfaceInstalled` must see the SAME default
+    // `container`, not treat "no container given" as "no container at all".
+    groupContainer: container ?? "hooks",
     ...(nativeSearchTools !== undefined ? { nativeSearchTools } : {}),
     payloadCodec: payloadCodec ?? parseToolInputCommand,
   };
@@ -180,6 +184,7 @@ export const CTX_GUARD_CURSOR: SurfaceAdapter = {
   label: ".cursor/hooks.json (beforeShellExecution)",
   groupShape: "flat",
   groupKey: "beforeShellExecution",
+  groupContainer: "hooks",
   payloadCodec: parseCursorCommand,
 };
 
@@ -209,6 +214,7 @@ export const CTX_GUARD_WINDSURF: SurfaceAdapter = {
   label: ".windsurf/hooks.json (pre_run_command)",
   groupShape: "flat",
   groupKey: "pre_run_command",
+  groupContainer: "hooks",
   payloadCodec: parseWindsurfCommand,
 };
 
@@ -409,6 +415,8 @@ export const ORIENT_CLAUDE: SurfaceAdapter = {
   strip: (s) => stripFromHookArray(s, "UserPromptSubmit", ORIENT_SENTINEL),
   validate: orientValidate("claude", "UserPromptSubmit", "claude: missing UserPromptSubmit orientation hook"),
   label: ".claude/settings.json (UserPromptSubmit)",
+  groupKey: "UserPromptSubmit",
+  groupContainer: "hooks",
 };
 
 export const ORIENT_CODEX: SurfaceAdapter = {
@@ -435,6 +443,8 @@ export const ORIENT_CODEX: SurfaceAdapter = {
   strip: (s) => stripFromHookArray(s, "UserPromptSubmit", ORIENT_SENTINEL),
   validate: orientValidate("codex", "UserPromptSubmit", "codex: missing UserPromptSubmit orientation hook"),
   label: ".codex/hooks.json (UserPromptSubmit)",
+  groupKey: "UserPromptSubmit",
+  groupContainer: "hooks",
 };
 
 export const ORIENT_CURSOR: SurfaceAdapter = {
@@ -464,6 +474,8 @@ export const ORIENT_CURSOR: SurfaceAdapter = {
   strip: (s) => stripFromHookArray(s, "sessionStart", ORIENT_SENTINEL),
   validate: orientValidate("cursor", "sessionStart", "cursor: missing sessionStart orientation hook"),
   label: ".cursor/hooks.json (sessionStart)",
+  groupKey: "sessionStart",
+  groupContainer: "hooks",
 };
 
 // Harnesses whose hooks CANNOT inject context (block-only / undocumented).
@@ -524,6 +536,8 @@ export const SECURITY_CHECK_INPUT_CLAUDE: SurfaceAdapter = {
     hasStartsWithCommand(s, "hooks", "UserPromptSubmit", AGENT_CHECK_INPUT_COMMAND)
       ? []
       : ["claude: missing UserPromptSubmit check-input hook"],
+  groupKey: "UserPromptSubmit",
+  groupContainer: "hooks",
 };
 
 export const SECURITY_CHECK_OUTPUT_CLAUDE: SurfaceAdapter = {
@@ -556,6 +570,8 @@ export const SECURITY_CHECK_OUTPUT_CLAUDE: SurfaceAdapter = {
     hasStartsWithCommand(s, "hooks", "PreToolUse", AGENT_CHECK_OUTPUT_COMMAND)
       ? []
       : ["claude: missing PreToolUse check-output hook"],
+  groupKey: "PreToolUse",
+  groupContainer: "hooks",
 };
 
 /**
@@ -697,6 +713,12 @@ function flatSecuritySurface(harnessId: string, on: "input" | "output", relative
         .filter((c): c is string => typeof c === "string");
       return managedCommands.some((c) => c.startsWith(base)) ? [] : [`${harnessId}: missing ${on} hook routing to check-${on}`];
     },
+    // review round 3, M2: input/output share one flat array — the `on` field
+    // (not the key/container, which are identical for both) is what tells
+    // `installer.ts`'s `wasSurfaceInstalled` which entries belong to THIS
+    // surface.
+    groupKey: SECURITY_HOOKS_KEY,
+    groupMatchField: { key: "on", value: on },
   };
 }
 

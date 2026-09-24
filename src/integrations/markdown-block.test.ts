@@ -120,24 +120,49 @@ describe("F1: unterminated/unpairable blocks never delete content", () => {
 });
 
 // ---------------------------------------------------------------------------
-// F8: kiro-style front matter is only prepended when the file does not
-// already start with SOME front-matter block; a file Keryx itself created
-// (front matter + only the block) is deleted on uninstall, a file whose
-// front matter Keryx did not write is not.
+// Re-plan (round 3, M1/M4): front matter is written ONLY when install itself
+// creates the file — never prepended to a file that already exists, even
+// one that is empty, one with no front matter of its own, or one whose
+// front matter happens to be byte-identical to Keryx's. There is no
+// created-file marker any more: uninstall decides whether to delete the
+// file purely by what is LEFT once the block (and its one separator line)
+// is removed — empty/whitespace-only, or exactly Keryx's own front matter.
 // ---------------------------------------------------------------------------
 
-describe("F8: front matter is prepended once, never doubled, and only Keryx's own is deleted with the file", () => {
+describe("front matter: written only on file creation, never added to an existing file", () => {
   const FRONT_MATTER = "---\ninclusion: always\n---\n\n";
 
-  test("file does not exist: front matter is written, file created", async () => {
+  test("file does not exist: front matter is written, file created, and is deleted again on uninstall", async () => {
     await withTempDir(async (root) => {
       await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
       const content = await readFile(path.join(root, RELATIVE_PATH), "utf8");
       expect(content.startsWith(FRONT_MATTER)).toBe(true);
+
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      expect(removed).toBe(true);
+      expect(existsSync(path.join(root, RELATIVE_PATH))).toBe(false);
     });
   });
 
-  test("file already starts with a DIFFERENT front-matter block: Keryx's is never prepended a second time", async () => {
+  test("file already exists (even with no front matter of its own): Keryx's front matter is never prepended", async () => {
+    await withTempDir(async (root) => {
+      const original = "# Hello\n\nSome existing text.\n";
+      const file = await writeRaw(root, RELATIVE_PATH, original);
+
+      await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      const content = await readFile(file, "utf8");
+      expect(content.startsWith(FRONT_MATTER)).toBe(false);
+      expect(content.startsWith("# Hello")).toBe(true);
+      expect(content).toContain(INSTRUCTIONS_START_MARKER);
+
+      // Idempotent: re-running does not double the block.
+      await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      const second = await readFile(file, "utf8");
+      expect(second).toBe(content);
+    });
+  });
+
+  test("file already starts with a DIFFERENT front-matter block: it is preserved untouched, exactly as any other pre-existing content", async () => {
     await withTempDir(async (root) => {
       const original = "---\ntitle: My Doc\n---\n\n# Hello\n";
       const file = await writeRaw(root, RELATIVE_PATH, original);
@@ -145,39 +170,35 @@ describe("F8: front matter is prepended once, never doubled, and only Keryx's ow
       await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
       const content = await readFile(file, "utf8");
       expect(content.startsWith("---\ntitle: My Doc\n---")).toBe(true);
-      expect(content.startsWith(FRONT_MATTER)).toBe(false);
       expect(content).toContain("# Hello");
       expect(content).toContain(INSTRUCTIONS_START_MARKER);
 
-      // Idempotent: re-running does not double the block or the front matter.
-      await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
-      const second = await readFile(file, "utf8");
-      expect(second).toBe(content);
-    });
-  });
-
-  test("uninstall deletes the file only when what remains is exactly Keryx's own front matter", async () => {
-    await withTempDir(async (root) => {
-      await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
       const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
       expect(removed).toBe(true);
-      expect(existsSync(path.join(root, RELATIVE_PATH))).toBe(false);
-    });
-  });
-
-  test("uninstall keeps the file when a DIFFERENT front matter (not Keryx's own) would remain", async () => {
-    await withTempDir(async (root) => {
-      const original = "---\ntitle: My Doc\n---\n\n# Hello\n";
-      const file = await writeRaw(root, RELATIVE_PATH, original);
-      await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
-
-      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
-      expect(removed).toBe(true);
+      // Other content survives, front matter and all — never deleted.
       expect(existsSync(file)).toBe(true);
-      const content = await readFile(file, "utf8");
-      expect(content).toContain("title: My Doc");
-      expect(content).toContain("# Hello");
-      expect(content).not.toContain(INSTRUCTIONS_START_MARKER);
+      const after = await readFile(file, "utf8");
+      expect(after).toContain("title: My Doc");
+      expect(after).toContain("# Hello");
+      expect(after).not.toContain(INSTRUCTIONS_START_MARKER);
+    });
+  });
+
+  test("file already starts with front matter IDENTICAL to Keryx's own: it is preserved, not mistaken for something Keryx wrote", async () => {
+    await withTempDir(async (root) => {
+      const original = `${FRONT_MATTER}# Hello\n`;
+      const file = await writeRaw(root, RELATIVE_PATH, original);
+
+      await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      expect(removed).toBe(true);
+      // The file pre-existed with real content beyond the front matter —
+      // never deleted, and the (user's own) front matter survives.
+      expect(existsSync(file)).toBe(true);
+      const after = await readFile(file, "utf8");
+      expect(after).toContain(FRONT_MATTER.trim());
+      expect(after).toContain("# Hello");
+      expect(after).not.toContain(INSTRUCTIONS_START_MARKER);
     });
   });
 });
@@ -233,6 +254,22 @@ describe("F9: CRLF handling, duplicate blocks, byte-identical round trip", () =>
     });
   });
 
+  test("CRLF file ending with CRLF: install -> uninstall round trip is byte-identical", async () => {
+    await withTempDir(async (root) => {
+      const original = "# Notes\r\n\r\nSome notes.\r\n";
+      const file = await writeRaw(root, RELATIVE_PATH, original);
+
+      await installMarkdownBlock(root, RELATIVE_PATH);
+      const afterInstall = await readFile(file, "utf8");
+      expect(afterInstall).not.toBe(original);
+      expect(afterInstall.startsWith(original)).toBe(true);
+
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH);
+      expect(removed).toBe(true);
+      expect(await readFile(file, "utf8")).toBe(original);
+    });
+  });
+
   test("duplicate complete blocks: install collapses them into one (replacing the first, removing the rest)", async () => {
     await withTempDir(async (root) => {
       const block = renderInstructionsBlock();
@@ -284,15 +321,19 @@ describe("F9: CRLF handling, duplicate blocks, byte-identical round trip", () =>
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// N4 (review round 2): uninstall deletes the file ONLY when install itself
-// created it — a pre-existing empty/whitespace-only file always survives,
-// byte-identical, even though nothing but the block would otherwise remain.
-// Mixed-EOL files are untouched outside the block, and kiro's prepended
-// front matter round-trips byte-identical on a file that already had content.
+// Re-plan (round 3, M1): uninstall deletes the file whenever what is LEFT
+// once the block (and its one separator line) is removed is empty/
+// whitespace-only, or exactly Keryx's own front matter — never by asking
+// whether install itself created the file. This means a pre-existing empty
+// (or whitespace-only) file install wrote the block into is now removed on
+// uninstall too, same as one install created outright — an accepted,
+// documented trade-off for dropping the created-file marker (see the module
+// header and docs/docs/integrations.md). A file with REAL content beyond the
+// block is still never deleted.
 // ---------------------------------------------------------------------------
 
-describe("N4: uninstall deletes the file only when install created it", () => {
-  test("file did not exist before install: uninstall deletes it (unchanged from before)", async () => {
+describe("uninstall deletes the file once nothing but the block/front matter is left", () => {
+  test("file did not exist before install: uninstall deletes it", async () => {
     await withTempDir(async (root) => {
       const file = path.join(root, RELATIVE_PATH);
       await installMarkdownBlock(root, RELATIVE_PATH);
@@ -303,7 +344,7 @@ describe("N4: uninstall deletes the file only when install created it", () => {
     });
   });
 
-  test("pre-existing EMPTY file (0 bytes): survives uninstall, byte-identical to \"\"", async () => {
+  test("pre-existing EMPTY file (0 bytes): install wrote only the block into it, so uninstall removes the file too", async () => {
     await withTempDir(async (root) => {
       const file = await writeRaw(root, RELATIVE_PATH, "");
       await installMarkdownBlock(root, RELATIVE_PATH);
@@ -311,12 +352,11 @@ describe("N4: uninstall deletes the file only when install created it", () => {
 
       const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH);
       expect(removed).toBe(true);
-      expect(existsSync(file)).toBe(true);
-      expect(await readFile(file, "utf8")).toBe("");
+      expect(existsSync(file)).toBe(false);
     });
   });
 
-  test("pre-existing WHITESPACE-only file (\"  \\n\"): survives uninstall, byte-identical", async () => {
+  test("pre-existing WHITESPACE-only file (\"  \\n\"): same treatment as empty — nothing but the block was ever added, so uninstall removes the file", async () => {
     await withTempDir(async (root) => {
       const original = "  \n";
       const file = await writeRaw(root, RELATIVE_PATH, original);
@@ -324,39 +364,96 @@ describe("N4: uninstall deletes the file only when install created it", () => {
 
       const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH);
       expect(removed).toBe(true);
+      expect(existsSync(file)).toBe(false);
+    });
+  });
+
+  test("pre-existing file with REAL content: never deleted, block removed, content preserved", async () => {
+    await withTempDir(async (root) => {
+      const original = "# Existing\n\nSome notes that were already here.\n";
+      const file = await writeRaw(root, RELATIVE_PATH, original);
+      await installMarkdownBlock(root, RELATIVE_PATH);
+
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH);
+      expect(removed).toBe(true);
       expect(existsSync(file)).toBe(true);
       expect(await readFile(file, "utf8")).toBe(original);
     });
   });
 
-  test("kiro (front matter): pre-existing EMPTY steering file survives uninstall, byte-identical to \"\"", async () => {
+  test("kiro (front matter): pre-existing EMPTY steering file — install wrote only front matter + block, uninstall removes the file", async () => {
     const FRONT_MATTER = "---\ninclusion: always\n---\n\n";
     await withTempDir(async (root) => {
       const file = await writeRaw(root, RELATIVE_PATH, "");
       await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
-      expect(await readFile(file, "utf8")).not.toBe("");
+      const afterInstall = await readFile(file, "utf8");
+      // Existing file: front matter is NEVER prepended, even for kiro.
+      expect(afterInstall.startsWith(FRONT_MATTER)).toBe(false);
 
       const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
       expect(removed).toBe(true);
-      expect(existsSync(file)).toBe(true);
-      expect(await readFile(file, "utf8")).toBe("");
+      expect(existsSync(file)).toBe(false);
     });
   });
 
-  test("kiro (front matter): a file that pre-existed with real content ('mine\\n') round-trips byte-identical — front matter added by install is removed again, file is never deleted", async () => {
+  test("kiro (front matter): a file that pre-existed with real content ('mine\\n') round-trips byte-identical — no front matter is ever added to it", async () => {
     const FRONT_MATTER = "---\ninclusion: always\n---\n\n";
     await withTempDir(async (root) => {
       const original = "mine\n";
       const file = await writeRaw(root, RELATIVE_PATH, original);
       await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
       const afterInstall = await readFile(file, "utf8");
-      expect(afterInstall).toContain(FRONT_MATTER);
-      expect(afterInstall).toContain("mine\n");
+      expect(afterInstall.startsWith(FRONT_MATTER)).toBe(false);
+      expect(afterInstall.startsWith("mine\n")).toBe(true);
 
       const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
       expect(removed).toBe(true);
       expect(existsSync(file)).toBe(true);
       expect(await readFile(file, "utf8")).toBe(original);
+    });
+  });
+
+  test("kiro: a NEW file install creates, with user lines added around the block, keeps the file with user lines intact and no Keryx leftovers on uninstall", async () => {
+    const FRONT_MATTER = "---\ninclusion: always\n---\n\n";
+    await withTempDir(async (root) => {
+      const file = path.join(root, RELATIVE_PATH);
+      await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      const created = await readFile(file, "utf8");
+
+      // The user hand-edits the file Keryx created, adding their own lines
+      // both before and after the block (front matter stays first).
+      const withUserLines = created.replace(
+        INSTRUCTIONS_START_MARKER,
+        `user note before the block\n\n${INSTRUCTIONS_START_MARKER}`,
+      ) + "\nuser note after the block\n";
+      await writeFile(file, withUserLines, "utf8");
+
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      expect(removed).toBe(true);
+      expect(existsSync(file)).toBe(true);
+      const after = await readFile(file, "utf8");
+      expect(after).toContain("user note before the block");
+      expect(after).toContain("user note after the block");
+      expect(after).not.toContain(INSTRUCTIONS_START_MARKER);
+      expect(after).not.toContain(INSTRUCTIONS_END_MARKER);
+      expect(after).not.toContain("keryx:created-file");
+    });
+  });
+
+  test("kiro: a CREATED file, whose whole-file line endings are later converted to CRLF, is still deleted on uninstall once only front matter+block are left", async () => {
+    const FRONT_MATTER = "---\ninclusion: always\n---\n\n";
+    await withTempDir(async (root) => {
+      const file = path.join(root, RELATIVE_PATH);
+      await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      const created = await readFile(file, "utf8");
+
+      // Simulate a whole-file CRLF conversion (e.g. a git autocrlf checkout)
+      // happening to the file Keryx just created.
+      await writeFile(file, created.replace(/\n/g, "\r\n"), "utf8");
+
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      expect(removed).toBe(true);
+      expect(existsSync(file)).toBe(false);
     });
   });
 });
