@@ -765,6 +765,61 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // Flow 310 (W2 agent-definitions catalog): `list`/`show`/`verify` are
+  // read-only; `export` is the one subcommand that writes, and only into a
+  // keryx-managed path (a file lacking the managed sentinel is refused, never
+  // overwritten).
+  {
+    module: "agents",
+    command: "agents list",
+    summary: "List the agent-definitions catalog (bundled + project), optionally filtered to one stack.",
+    intent: ["список агентов", "list agent definitions", "agent catalog", "which agents are available"],
+    args: [
+      { name: "stack", type: "string", required: false, desc: "only definitions whose stacks[] names this stack id" },
+      { name: "json", type: "bool", required: false, desc: "emit the catalog summary as JSON" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "agents",
+    command: "agents show",
+    summary: "Render one agent definition's frontmatter and compiled keryx-shell task.",
+    intent: ["покажи агента", "show agent definition", "agent details"],
+    args: [
+      { name: "<name>", type: "string", required: true, desc: "agent name, from `agents list`" },
+      { name: "json", type: "bool", required: false, desc: "emit the definition + compiled result as JSON" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "agents",
+    command: "agents export",
+    summary: "Compile and write (or preview with --dry-run) one agent definition for one export runtime.",
+    intent: ["экспортируй агента", "export agent definition", "write agent file for claude/codex/kiro/opencode"],
+    args: [
+      { name: "runtime", type: "string", required: true, desc: "claude | codex | kiro | opencode | keryx-shell" },
+      { name: "<name>", type: "string", required: true, desc: "agent name, from `agents list`" },
+      { name: "dry-run", type: "bool", required: false, desc: "plan and print without writing a file" },
+      { name: "json", type: "bool", required: false, desc: "emit the export plan and outcome as JSON" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["writes the runtime's managed agent file (e.g. .claude/agents/<name>.md) unless --dry-run"],
+  },
+  {
+    module: "agents",
+    command: "agents verify",
+    summary: "Verify the agent-definitions catalog against its schema, tool/skill vocabulary, policy profiles, and origin rules.",
+    intent: ["проверь агентов", "verify agent definitions", "agent catalog health"],
+    args: [
+      { name: "<name>", type: "string", required: false, desc: "verify only this agent name" },
+      { name: "json", type: "bool", required: false, desc: "emit the full verification report as JSON" },
+    ],
+    json: true,
+    read: true,
+  },
   // `agents external list`/`probe`: flow 176 made both read-only and
   // quota-free — they run the candidate CLI's own `--version` and nothing
   // else (`agents.ts`: "list/probe are read-only and quota-free"). Safe to

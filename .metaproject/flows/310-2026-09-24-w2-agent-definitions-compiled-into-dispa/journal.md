@@ -1,3 +1,71 @@
 # Flow Journal
 
 - 2026-09-24T04:09:02.681Z - flow created
+- 2026-09-24T04:14:33.071Z - task-added: T5: Core src/agents module: types, schema validator, frontmatter, catalog loader, baseline, tool vocabulary, policy map, compiler + tests
+- 2026-09-24T04:14:33.153Z - task-added: T6: Author ten bundled generic agent definitions in src/gdskills/bundled/agents
+- 2026-09-24T04:14:33.231Z - task-added: T7: Exporters (claude/codex/kiro/opencode/keryx-shell) + opt-in W5 agents surfaces + matrix regeneration with first-party docs check
+- 2026-09-24T04:14:33.322Z - task-added: T8: CLI keryx agents list/show/export/verify + xref guard extension + agent-commands regression
+- 2026-09-24T04:14:33.450Z - task-added: T9: Docs: D-2 cross-reference in multi-agent-engine README, agent catalogue guide
+- 2026-09-24T04:14:33.534Z - task-added: T10: Verify: every generic agent passes keryx agents verify (exit criterion)
+- 2026-09-24T04:14:33.619Z - task-added: T11: Verify: every exporter output scanned clean by keryx security audit-harness (exit criterion)
+- 2026-09-24T04:14:33.700Z - task-added: T12: Adversarial review round on the PR diff (opus) and fix loop
+- 2026-09-24 - flow-orchestrator (dispatched subagent): completion_outcome=create-pr-and-merge, operator_confirmed=true, base_branch=feat/agent-platform-expansion — answered by the dispatch brief from the program orchestrator on behalf of owner MrCipherSmith (flow-runner-template.md). Execution-metrics question skipped (dispatched run).
+- 2026-09-24 - D-2 accepted by owner MrCipherSmith as part of the authorized agent-platform-expansion program: a canonical agent-definition layer is added that COMPILES INTO the existing spawn_subagent dispatch contract; this revises (does not reverse) the keryx-multi-agent-engine non-goal "A separate .claude/agents/*.md-style loader". The dispatch contract stays the sole execution surface; no change to src/harness/child/ or spawn_subagent's inputSchema.
+- 2026-09-24 - Decisions: OQ-W2.1 resolved as a per-target policy_profile lookup table (canonical values read-only / workspace-write). OQ-W2.2: individual export per agent plus integrations `--surface agents` bulk install for the catalogue. OQ-W2.3 deferred (subagent-result only). Claude export emits `model: inherit` (tier is not mapped to model aliases: model-selection.mdc forbids a model-name table; inherit never downgrades). Agents surfaces are opt-in so default `keryx integrations install` is unchanged. keryx-shell matrix row left to W6; the keryx-shell exporter is the native engine by definition (documented special case).
+- 2026-09-24 - Default T2/T3/T4 kept as umbrella tasks; concrete work in T5–T12.
+- 2026-09-24T04:14:50.243Z - frozen: 12 criteria; checksum recorded
+- 2026-09-24T04:14:50.325Z - started
+- 2026-09-24T04:14:50.404Z - task-done: T1: Collect remaining context
+- 2026-09-24T04:14:59.759Z - task-attempt: T5: started (attempt 1) — 310-T5
+- 2026-09-24T04:14:59.840Z - task-attempt: T6: started (attempt 1) — 310-T6
+- 2026-09-24T04:15:40.786Z - task-attempt: T9: started (attempt 1) — 310-T9
+- 2026-09-24T04:17:32.456Z - task-done: T9: Docs: D-2 cross-reference in multi-agent-engine README, agent catalogue guide
+- 2026-09-24T04:19:22.582Z - task-done: T6: Author ten bundled generic agent definitions in src/gdskills/bundled/agents
+- 2026-09-24 - T6 DONE_WITH notes: tiers deep=architect,security-reviewer; light=code-explorer; rest standard. workspace-write: tdd-guide, refactor-cleaner (worktree), doc-updater, e2e-runner. Judgment calls accepted: architect has web_search; doc-updater/e2e-runner/code-explorer/silent-failure-hunter declare no skills. Verified by `keryx agents verify` in T10 once T5/T8 land. T9 DONE (docs). Host-format research recorded in context.md.
+- 2026-09-24T04:32:25.886Z - task-done: T5: Core src/agents module: types, schema validator, frontmatter, catalog loader, baseline, tool vocabulary, policy map, compiler + tests
+- 2026-09-24T04:32:37.145Z - task-attempt: T7: started (attempt 1) — 310-T7
+- 2026-09-24T04:32:37.243Z - task-attempt: T8: started (attempt 1) — 310-T8
+- 2026-09-24T04:46:34.901Z - task-done: T8: CLI keryx agents list/show/export/verify + xref guard extension + agent-commands regression
+- 2026-09-24 - T5 DONE_WITH_CONCERNS: `agents` import-zone segment reclassified client→core (pre-existing bootstrap.ts only imports src/lib) — flagged for T12 reviewer. T8 DONE: verify.ts + agents-catalog CLI; `keryx agents verify` ok for all ten bundled agents; `list --stack` includes only definitions tagged with that stack (by design). Concern: claude export resolved instruction-only until T7 registers the verified agents surface — re-check after T7 (T10/T11). T8 committed while T7 still in flight (T8 imports T7's export.ts; HEAD compiles once T7 lands).
+- 2026-09-24T04:51:59.698Z - task-done: T7: Exporters (claude/codex/kiro/opencode/keryx-shell) + opt-in W5 agents surfaces + matrix regeneration with first-party docs check
+- 2026-09-24T04:56:27.466Z - task-added: T13: Fix: audit-harness hooks discovery errors on agents surfaces; extend agent-definitions scan to codex/kiro/opencode exports
+- 2026-09-24T04:56:27.546Z - task-attempt: T13: started (attempt 1) — 310-T13
+- 2026-09-24T05:06:01.614Z - task-done: T13: Fix: audit-harness hooks discovery errors on agents surfaces; extend agent-definitions scan to codex/kiro/opencode exports
+- 2026-09-24 - T13: manual verification found audit-harness vacuous for codex/kiro/opencode exports and a hooks coverage error on agents dirs; fixed (format-aware checks, registry-derived discovery, sentinel carries model_tier=). Facade-bypass ratchet fixed by routing commands through src/agents/service.ts.
+- 2026-09-24 - T10 evidence: `bun ./src/cli.ts agents verify --json` → ok=true, 10/10 bundled agents. T11 evidence: 10 agents × {claude,codex,kiro,opencode,keryx-shell} exported into a temp git repo (keryx-shell compiled-only, no file) + the 10 canonical definitions under .metaproject/agents; `security audit-harness --json` → 0 findings, coverage complete, agent-definitions scanned 50 files, hooks not-applicable. Local-only failures in src/lib/git-hooks.test.ts and security-pre-push.test.ts come from this machine's global git author-email guard (unrelated to this diff); CI decides.
+- 2026-09-24T05:06:44.528Z - task-done: T10: Verify: every generic agent passes keryx agents verify (exit criterion)
+- 2026-09-24T05:06:44.615Z - task-done: T11: Verify: every exporter output scanned clean by keryx security audit-harness (exit criterion)
+- 2026-09-24T05:06:44.707Z - task-done: T2: Implement per plan
+- 2026-09-24 - T3: targeted suites (src/agents, src/integrations, src/security/audit-harness, agents commands, src/gdskills, import-policy/zones, src/standard) 1141 pass; 1 local failure src/gdskills/install.test.ts read-only retired-rule (EACCES) reproduces identically on the base branch worktree — pre-existing, unrelated. tsc + eslint on changed files clean.
+- 2026-09-24T05:07:25.493Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-24T05:08:01.318Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-24T05:08:01.407Z - task-attempt: T12: started (attempt 1) — review round 1
+- 2026-09-24T05:18:05.432Z - task-added: T14: Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle
+- 2026-09-24T05:18:05.519Z - task-added: T15: Fix round 1 (B): verify sourceRef/policy-tool checks, audit sentinel-scoped tier annotation, guide accuracy
+- 2026-09-24T05:18:05.599Z - task-attempt: T14: started (attempt 1) — 310-T14
+- 2026-09-24T05:18:05.682Z - task-attempt: T15: started (attempt 1) — 310-T15
+- 2026-09-24 - PR #684 opened (draft). Review round 1 (opus, adversarial): 2 blocker, 4 major, 5 minor, 4 info — ingested (reviews/2026-09-24-ingest-684). Blockers: unescaped YAML frontmatter in claude/opencode exports (6/10 agents invalid YAML, newline key injection); `integrations install --surface agents` EISDIR. Majors: symlink-following writes, empty tools ⇒ unrestricted Claude agent, read-only policy not enforced in host exports, keryx-shell sidecar unenforced but reported as nothing dropped. Reviewer incident: a probe ran `integrations install` against the review worktree (unsupported --root flag ignored) and restored it; confirmed clean. Info R1-F15 (bundled agent names coincide with a third-party catalogue's) — names are set by the W2 spec; left for owner awareness, no change. Fix tasks T14 (code) and T15 (verify/audit/docs) dispatched in parallel.
+- 2026-09-24T05:25:43.770Z - task-done: T15: Fix round 1 (B): verify sourceRef/policy-tool checks, audit sentinel-scoped tier annotation, guide accuracy
+- 2026-09-24 - T15 DONE (verify invalid-source-ref + policy-tool-conflict, sentinel-scoped audit tier, empty tools flagged, guide corrected). Orchestrator fixed one doc anchor (D-2 link) that check:doc-links rejected; its slug collapses the em-dash gap to a single hyphen.
+- 2026-09-24T05:35:56.347Z - task-done: T14: Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle
+- 2026-09-24 - T14 DONE: R1-F1..F10, F14 fixed with regression tests (555 targeted pass). Left: frontmatter.ts read-side quote-doubling (info).
+- 2026-09-24T05:36:25.225Z - task-attempt: T12: started (attempt 2) — review round 2
+- 2026-09-24T05:41:34.626Z - task-added: T16: Fix round 2: sentinel must be the managed header line, hash self-reference, null tools audit, guide codex empty-tools, doctor --surface, kiro tier line
+- 2026-09-24T05:41:34.704Z - task-attempt: T16: started (attempt 1) — 310-T16
+- 2026-09-24T06:13:21.508Z - task-done: T16: Fix round 2: sentinel must be the managed header line, hash self-reference, null tools audit, guide codex empty-tools, doctor --surface, kiro tier line
+- 2026-09-24 - Round 2 (opus): 0 blocker/0 major/4 minor/2 info (ingested r02). CI round 1: test:core failed on cli-reference coverage (agents subcommands), docs index (guide), SAC core-graph AFC-19 (stale CLIENT_ZONES src/agents/ entry after client→core reclassification). T16 fixed all six R2 findings + three CI failures (new src/agents/sentinel.ts leaf; audit imports it instead of compile.ts).
+- 2026-09-24T06:13:32.803Z - task-attempt: T12: started (attempt 3) — review round 3 (verification)
+- 2026-09-24 - PR #684 was CONFLICTING after W6 (#678) landed on feat; merged origin/feat/agent-platform-expansion (535f20af), resolved types.ts (SUBSYSTEM_AGENTS + SUBSYSTEM_SHELL_HOOKS) and registry.test.ts (flag set union), regenerated the matrix. tsc clean; integrations/agents/cli/audit targets green; 34 local src/sac failures are the machine's git author-email guard (tempGitCwd commits), unrelated.
+- 2026-09-24T06:20:21.774Z - task-added: T17: Re-plan fix (after 3 review attempts): whole-file content hash at the structural hash field, end-anchored sentinel, --force docs, doctor --surface validation, uninstall refuses hand-edited exports
+- 2026-09-24T06:20:21.870Z - task-attempt: T17: started (attempt 1) — 310-T17
+- 2026-09-24 - Round 3 (opus, verification): 0 blocker/0 major/2 minor (R3-F1 content hash excludes kiro extra keys + unanchored sentinel tail; R3-F2 --force docs), 2 info; all R2 findings resolved; ingested r03. Review/fix budget of three attempts is spent → RE-PLAN (skill Phase 4 step 5): the recurring theme is the managed-file integrity check; narrower strategy = one hash definition for every format: sha256 over the entire rendered file with ONLY the structurally located hash value blanked (no global string replacement), sentinel regex end-anchored, one shared predicate for export/uninstall/audit; uninstall treats hand-edited managed files like export (refuse without --force). Then a narrow verification round over exactly that fix + merge commit 535f20af, CI green, then merge.
+- 2026-09-24T06:38:43.967Z - task-done: T17: Re-plan fix (after 3 review attempts): whole-file content hash at the structural hash field, end-anchored sentinel, --force docs, doctor --surface validation, uninstall refuses hand-edited exports
+- 2026-09-24 - CI on merge head 535f20af: all checks green. T17 DONE (578 targeted pass): whole-file hash with only the structural hash span blanked; uninstall keeps hand-edited managed exports with a warning; doctor --surface validated; --force docs precise. Known limitation (info): dry-run uninstall of a dir holding only hand-edited files reports would-remove (inspect state enum has no would-keep).
+- 2026-09-24T06:43:08.176Z - task-added: T18: Fix R4: doctor lenient multi-runtime selectors; dry-run uninstall agrees with real run for hand-edited exports
+- 2026-09-24T06:43:08.258Z - task-attempt: T18: started (attempt 1) — 310-T18
+- 2026-09-24T06:50:34.695Z - task-done: T18: Fix R4: doctor lenient multi-runtime selectors; dry-run uninstall agrees with real run for hand-edited exports
+- 2026-09-24 - Round 4 (opus, narrow verification of 9e77c3d6 + merge 535f20af): R3 findings resolved, merge clean; 2 new minor (R4-F1 doctor strict selectors across runtimes, R4-F2 dry-run uninstall disagreement) — ingested r04; fixed in T18 (485 targeted pass). CI was green on bb521e75.
+- 2026-09-24T06:53:00.196Z - task-added: T19: Fix R5-F1: multi-runtime doctor still checks runtimes without the selected surface
+- 2026-09-24T06:53:00.278Z - task-attempt: T19: started (attempt 1) — 310-T19
+- 2026-09-24T06:58:45.046Z - task-done: T19: Fix R5-F1: multi-runtime doctor still checks runtimes without the selected surface
+- 2026-09-24 - Round 5 (opus, narrow on T18): R4-F2 resolved; R5-F1 minor (multi-runtime doctor skipped runtimes lacking the selected surface, hiding drift) — ingested r05; fixed in T19 (doctor --surface is additive; 486 targeted pass). CI green on 7fd965c5.

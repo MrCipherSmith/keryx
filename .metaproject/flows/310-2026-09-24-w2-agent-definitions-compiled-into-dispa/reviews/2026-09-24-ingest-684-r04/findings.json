@@ -1,0 +1,44 @@
+[
+  {
+    "id": "R4-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "`integrations doctor --runtime all|<list> --surface agents` now fails every runtime without an agents surface with 'unknown surface selector', although install/uninstall accept the same selector across several runtimes",
+    "impact": "In r-dall, `install --runtime all --surface agents` succeeds (exit 0), and the natural follow-up `integrations doctor --runtime all --surface agents` exits 1. It reports 7 false problems ('✗ cursor|windsurf|antigravity|zed|generic-mcp|gemini-cli|github-copilot-agent: unknown surface selector(s) agents'), so a healthy install reads as broken. `doctor --runtime claude,cursor --surface agents` fails the same way. At round 3 the same command was silently accepted. For comparison, the four agents hosts named explicitly (`--runtime claude,codex,kiro,opencode --surface agents`) exit 0.",
+    "suggested_fix": "Follow the install/uninstall pattern. In handleDoctor, compute `lenientSelectors = surfaces.length > 0 && isMultiRuntimeRequest(runtimeArg)` and pass it through. In doctorIntegration, use the strict check only when it is false. With lenient selection, skip or mark `noMatchingSurface` for a runtime none of whose surfaces match, and fail only when no selected runtime matched any selector. Add a test for `doctor --runtime all --surface agents` after `install --runtime all --surface agents`, and reword the cli-reference sentence to match.",
+    "evidence": "scratchpad/review310-r4/r-dall: install all agents exit=0; `doctor --runtime all --surface agents` exit=1, with lines like '✗ cursor: unknown surface selector(s) agents — valid flags: block, inject-context, prompt-gate; ...' for 7 runtimes while claude, codex, opencode and kiro show 'ok'; `doctor --runtime all` (no --surface) exit=0; `doctor --runtime claude,codex,kiro,opencode --surface agents` exit=0.",
+    "confidence": "high",
+    "file": "src/integrations/installer.ts",
+    "line": 712,
+    "class_scope": {
+      "sites": [
+        "src/integrations/installer.ts:710-713 (doctorIntegration strict selector validation)",
+        "src/commands/integrations.ts:340-382 (handleDoctor: no isMultiRuntimeRequest/lenient path, unlike handleInstall:294 and handleUninstall:323)",
+        "docs/docs/cli-reference.md doctor row ('errors the same way it does there')"
+      ],
+      "enumeration_method": "Found every resolveSurfaceSelection/lenientSelectors/isMultiRuntimeRequest site in src/commands/integrations.ts and src/integrations/installer.ts with `keryx ctx rg --all`. Only doctor uses the strict resolver for a multi-runtime request. Reproduced with the CLI in scratchpad/review310-r4/r-dall."
+    },
+    "global_id": "2026-09-24-ingest-684-r04#R4-F1"
+  },
+  {
+    "id": "R4-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "`integrations uninstall --surface agents --dry-run` reports would-remove for exports that are all hand-edited, but the real uninstall keeps them (nothing-to-remove), which breaks the dry-run/real parity R1-F8 established",
+    "impact": "The uninstall preview is wrong. An operator is told the agents exports would be removed, when running it would keep all 10 files. The preview also gives no sign that anything will be kept.",
+    "suggested_fix": "Make the dry-run follow the real rule. Have inspect report `present` only when `verified.length > 0`, for example with a `hasRemovableAgentExports` that returns the verified/handEdited split. Ideally, also surface the would-keep list as dry-run warnings through an optional warnings field on the inspect result. Add a dry-run test for an all-hand-edited directory next to the new installer.test.ts real-uninstall test.",
+    "evidence": "scratchpad/review310-r4/r-dry: `install --runtime claude --surface agents`, append a line to all 10 .claude/agents/*.md, then `uninstall --dry-run` gives 'agents (agents) -> .claude/agents would-remove'; the real uninstall gives 'agents (agents) -> .claude/agents nothing-to-remove' with 'kept .claude/agents/architect.md — …' warnings, and 10 files remain.",
+    "confidence": "high",
+    "file": "src/agents/export.ts",
+    "line": 548,
+    "class_scope": {
+      "sites": [
+        "src/agents/export.ts:548-552 (hasManagedAgentExports counts handEdited)",
+        "src/integrations/surfaces-agents.ts:120-123 (inspectAgentsExports, the only caller)",
+        "src/integrations/installer.ts:260-272 (customUninstallDryRun consumer; no warnings channel)"
+      ],
+      "enumeration_method": "Enumerated every hasManagedAgentExports reference with `keryx ctx rg --all` (the definition plus one caller, inspectAgentsExports). Every customUninstall site with `keryx ctx rg --all`: the installer.ts:587 real path and the ctx/runtimes.ts:175 normalizer, which is ctx-guard only. Reproduced with the CLI in scratchpad/review310-r4/r-dry."
+    },
+    "global_id": "2026-09-24-ingest-684-r04#R4-F2"
+  }
+]

@@ -52,13 +52,13 @@ export function installStatePath(root: string, runtimeId: string): string {
 }
 
 /**
- * R3-3 (flow 309 review round 3): thrown by `sha256OfFile` when the path
- * exists but is not a regular file (almost always a directory sitting where
- * a recorded/planned file was expected) — never the raw `EISDIR` node's
- * `readFile` would otherwise throw. `writtenPaths`/planned destinations are
- * always individual files; a directory there means the on-disk state has
- * drifted in a way `doctor`/`uninstall`/`apply` must report explicitly
- * rather than crash trying to hash.
+ * Thrown by {@link sha256OfRegularFile} when the path exists but is not a
+ * regular file (almost always a directory where a recorded file was
+ * expected). Flow 309 (skills install-state) needs this strict variant:
+ * `keryx skills doctor/uninstall/apply` record only individual files, so a
+ * directory there is drift that must be reported, never silently skipped.
+ * `sha256OfFile` itself stays lenient (a directory hashes to `undefined`)
+ * because the `agents` surface records whole directories.
  */
 export class NotARegularFileError extends Error {
   constructor(readonly relativePath: string) {
@@ -67,14 +67,44 @@ export class NotARegularFileError extends Error {
   }
 }
 
-/** sha256 hex of a project-relative file's current on-disk content, or `undefined` when it does not exist. Throws `NotARegularFileError` (R3-3) when the path exists but is not a regular file — never a raw `EISDIR`. */
+/** Strict sibling of {@link sha256OfFile}: `undefined` only when the path does not exist; throws {@link NotARegularFileError} when it exists but is not a regular file. */
+export async function sha256OfRegularFile(root: string, relativePath: string): Promise<string | undefined> {
+  const file = path.join(root, ...relativePath.split("/"));
+  let stats;
+  try {
+    stats = await stat(file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || (error as NodeJS.ErrnoException).code === "ENOTDIR") return undefined;
+    throw error;
+  }
+  if (!stats.isFile()) throw new NotARegularFileError(relativePath);
+  const content = await readFile(file);
+  return createHash("sha256").update(content).digest("hex");
+}
+
+/**
+ * sha256 hex of a project-relative FILE's current on-disk content, or
+ * `undefined` when it does not exist. R1-F2: a directory-valued
+ * `writtenPaths`/`hashPaths` entry (the `agents` surface's `relativePath` is
+ * a whole directory, e.g. `.claude/agents`, unlike every other surface's
+ * single settings file) previously reached `readFile` here and crashed with
+ * EISDIR — after every agent file was already written, escaping
+ * `installIntegration`'s try/catch and reporting the whole install failed.
+ * `stat` + `isFile()` makes a directory (or anything else that is not a
+ * plain file) a quiet `undefined` instead: nothing to hash, not an error —
+ * `doctor`'s drift check (`shaDriftedSinceInstall`, which calls this per
+ * recorded path) degrades the same way, simply reporting no drift signal for
+ * a path it cannot hash rather than throwing.
+ */
 export async function sha256OfFile(root: string, relativePath: string): Promise<string | undefined> {
   const file = path.join(root, ...relativePath.split("/"));
-  if (!(await pathExists(file))) return undefined;
-  const stats = await stat(file);
-  if (!stats.isFile()) {
-    throw new NotARegularFileError(relativePath);
+  let stats;
+  try {
+    stats = await stat(file);
+  } catch {
+    return undefined;
   }
+  if (!stats.isFile()) return undefined;
   const content = await readFile(file);
   return createHash("sha256").update(content).digest("hex");
 }

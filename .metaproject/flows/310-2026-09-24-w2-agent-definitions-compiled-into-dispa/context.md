@@ -55,3 +55,25 @@ Use `keryx gdgraph affected <file>` for blast radius.
 ## Agent Findings
 
 _(flow-init skill appends here)_
+
+## Agent Findings (flow-orchestrator, T1)
+
+- Spec: `docs/requirements/keryx-agent-platform-expansion/workstreams/W2-agent-catalog.md`, schema `schemas/agent-definition.schema.json`, implementation-plan Wave 2, brainstorm D-2.
+- Wave interfaces: scratchpad `wave0-interfaces.md` / `wave1-interfaces.md` (W5-a registry, W5-b matrix + installer, W8 audit-harness).
+- `spawn_subagent` inputSchema: `src/harness/tool/builtin/spawn-subagent-tool.ts` ~L390 (task, mode, label, max_tool_calls, max_rounds, model_tier, runtime; `additionalProperties:false`). `createSpawnSubagentTool(deps)` is instantiable with stub deps (see `spawn-subagent-model-tier.test.ts`).
+- Tier module: `src/gdskills/model-tier.ts` (`MODEL_TIERS`, `isModelTier`, `parseModelTier`, `concreteModelDeclarations`, `MODEL_RANK_HINTS`).
+- Policy profiles: `src/harness/policy/profiles.ts` (`shellChildReadOnlyProfile`, `shellParentProfile`), child inheritance `src/harness/child/isolation.ts` (`inheritPolicy`).
+- Builtin tool names: read_file, list_dir, get_cwd (interactive-tools.ts); search_code, graph_affected, memory_search (metaproject-tools.ts); shell_exec; apply_patch; web_fetch; web_search; ask_user; plan_*; slate_*; workspace_*; spawn_subagent.
+- Existing CLI: `src/commands/agents.ts` (bootstrap/external/monitor); regression `agent-commands.test.ts`.
+- W8 audit: `src/security/audit-harness/surfaces.ts` `discoverAgentDefinitions` scans `.metaproject/agents/*.md` and `.claude/agents/*.md`; checks `agent-unrestricted-tools` (frontmatter `tools` key present) and `agent-missing-model-tier` (`model_tier` or `model`). Facade `runHarnessAudit` in `src/security/service.ts`.
+- W5 registry: `src/integrations/{types,registry,surfaces,surfaces-w5b,matrix,installer}.ts`; `SurfaceFlag` already includes `agents`; matrix state: instructions subsystem → instruction-only; host-hook+verified+installs → native; else adapter. `resolveSurfaceSelection` with no selectors selects every surface (hence opt-in flag needed).
+- Bundled content ships from `src/gdskills/bundled/` (package.json files). W1 packs will live at `src/gdskills/bundled/stacks/<id>/` (W1 spec L197) — W2 must not edit W1 code.
+- Skill catalogue: `BUNDLED_GDSKILLS` in `src/gdskills/catalog.ts`; xref lint `src/gdskills/agent-catalogue-xref.test.ts`.
+- Multi-agent-engine non-goal: `docs/requirements/keryx-multi-agent-engine/README.md` ~L162.
+## Host agent-file formats (first-party docs check, 2026-09-24)
+
+- Claude Code — https://code.claude.com/docs/en/sub-agents — `.claude/agents/<name>.md`, YAML frontmatter (`name`, `description` required; `tools` comma string or list; `model` accepts `inherit`; `permissionMode` e.g. `plan`/`default`); unknown keys ignored; body = system prompt; HTML comment in body safe. Tools: Read, Grep, Glob, Edit, Write, Bash, WebFetch, WebSearch. Confidence: verified.
+- Codex — https://developers.openai.com/codex/subagents — `.codex/agents/<name>.toml`, required `name`, `description`, `developer_instructions`; optional `model` (omit = inherit parent), `model_reasoning_effort`, `sandbox_mode` (`read-only` | `workspace-write`). NO per-tool allowlist (access governed by sandbox_mode only). `#` comments are standard TOML. Confidence: fields verified; register surface as experimental (tool allowlist cannot be expressed) → matrix `adapter`.
+- Kiro (IDE 1.0 / CLI 3.0) — https://kiro.dev/docs/custom-agents/configuration-reference/ — `.kiro/agents/<name>.json`: `name`, `description`, `prompt`, optional `model`, `tools` (tags `read`, `write`, `shell`, `web`, or builtin names `fs_read`, `fs_write`, `execute_bash`), `allowedTools`. Unknown-key tolerance NOT documented → do not add `_keryxManaged`; put the managed sentinel as the first line of `prompt`. Omit `model`. Kiro adapter is experimental → `adapter`.
+- OpenCode — https://opencode.ai/docs/agents/ — `.opencode/agents/<name>.md` (plural), frontmatter `description` (required), `mode: subagent`, `permission` map (`edit`, `bash`, `webfetch`, `websearch`... values allow|ask|deny; read-only = edit: deny, bash: deny); `tools` boolean map deprecated; omit `model` = inherit. Tool names: read, write, edit, apply_patch, glob, grep, list, bash, webfetch, websearch. OpenCode adapter experimental → `adapter`.
+- Research subagent output tripped the harness's "bypass-permissions" pattern detector only because it listed Claude Code's documented `permissionMode` enum values; no instruction was acted on. Exporters must NOT emit that value.

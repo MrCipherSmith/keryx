@@ -10,7 +10,7 @@
 import { lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
-import { NotARegularFileError, sha256OfFile, type InstallState, type InstalledModuleRecord } from "../../integrations/install-state";
+import { NotARegularFileError, sha256OfRegularFile as sha256OfFile, type InstallState, type InstalledModuleRecord } from "../../integrations/install-state";
 import { validateAgainstSchemaObject } from "../../contracts/validator";
 import installManifestSchemaJson from "../../../docs/requirements/keryx-agent-platform-expansion/schemas/install-manifest.schema.json" with {
   type: "json",

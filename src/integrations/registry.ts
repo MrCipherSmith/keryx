@@ -35,6 +35,7 @@ import {
   KERYX_SHELL_UNSUPPORTED,
   LAST_VERIFIED_W5B,
 } from "./surfaces-w5b";
+import { AGENTS_CLAUDE, AGENTS_CODEX, AGENTS_KIRO, AGENTS_OPENCODE } from "./surfaces-agents";
 import { ANTIGRAVITY_DECISION_CODEC, COPILOT_DECISION_CODEC, CURSOR_DECISION_CODEC, EXIT_CODE_DECISION_CODEC } from "./codecs";
 import type { DecisionCodec, HarnessAdapter, HookAction, SettingsFileOwner, SurfaceAdapter, SurfaceFlag } from "./types";
 import { createSettingsFileOwner } from "./settings-file";
@@ -52,7 +53,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "Claude Code",
     confidence: "verified",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_CLAUDE, ORIENT_CLAUDE, SECURITY_CHECK_INPUT_CLAUDE, SECURITY_CHECK_OUTPUT_CLAUDE],
+    surfaces: [CTX_GUARD_CLAUDE, ORIENT_CLAUDE, SECURITY_CHECK_INPUT_CLAUDE, SECURITY_CHECK_OUTPUT_CLAUDE, AGENTS_CLAUDE],
     unsupported: {},
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "src/security/agent-hooks/runtimes.ts"],
     lastVerified: LAST_VERIFIED,
@@ -63,7 +64,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "Codex",
     confidence: "verified",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_CODEX, ORIENT_CODEX],
+    surfaces: [CTX_GUARD_CODEX, ORIENT_CODEX, AGENTS_CODEX],
     unsupported: {},
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "docs/docs/harness.md"],
     lastVerified: LAST_VERIFIED,
@@ -107,7 +108,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "OpenCode",
     confidence: "experimental",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_OPENCODE],
+    surfaces: [CTX_GUARD_OPENCODE, AGENTS_OPENCODE],
     unsupported: { "inject-context": UNSUPPORTED_ORIENT.opencode! },
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts"],
     lastVerified: LAST_VERIFIED,
@@ -175,7 +176,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "Kiro",
     confidence: "experimental",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_KIRO, INSTRUCTIONS_KIRO],
+    surfaces: [CTX_GUARD_KIRO, INSTRUCTIONS_KIRO, AGENTS_KIRO],
     unsupported: {},
     riskNotes: [
       "Kiro's hook stdin field names and its shell tool's name are third-party-reported only, not confirmed by first-party docs.",

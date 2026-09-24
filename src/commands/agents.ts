@@ -6,8 +6,10 @@ import {
   renderAgentBootstrapBlock,
   resolveAgentBootstrapRuntimes,
   uninstallAgentBootstrap,
-} from "../agents/bootstrap";
+  AGENT_EXPORT_RUNTIMES,
+} from "../agents/service";
 import { agentsExternalCommand } from "./agents-external";
+import { agentsCatalogCommand } from "./agents-catalog";
 import { reduceAgents } from "../harness/monitor/reduce";
 import type { AgentEvent, AgentsSnapshot } from "../harness/monitor/reduce";
 import { optionValue } from "../lib/args";
@@ -32,6 +34,14 @@ export async function agentsCommand(args: string[] = []): Promise<void> {
   // which drives one ACP agent with keryx as its client (see agents-external.ts).
   if (subcommand === "external") {
     await agentsExternalCommand(args.slice(1));
+    return;
+  }
+
+  // Flow 310 (W2 agent-definitions catalog): the bundled + project agent
+  // catalog surface. `list`/`show`/`verify` are read-only; `export` is the
+  // one subcommand that writes a file, and only into a keryx-managed path.
+  if (subcommand === "list" || subcommand === "show" || subcommand === "export" || subcommand === "verify") {
+    await agentsCatalogCommand(subcommand, args.slice(1));
     return;
   }
 
@@ -206,6 +216,10 @@ function printAgentsHelp(): void {
     "keryx agents external list [--json] [--no-probe]",
     "keryx agents external probe <id> [--json]",
     'keryx agents external run <id> --task "<text>" [--unattended] [--write]',
+    "keryx agents list [--stack <id>] [--json]",
+    "keryx agents show <name> [--json]",
+    `keryx agents export --runtime <${AGENT_EXPORT_RUNTIMES.join("|")}> <name> [--dry-run] [--json]`,
+    "keryx agents verify [<name>] [--json]",
   ]);
 }
 

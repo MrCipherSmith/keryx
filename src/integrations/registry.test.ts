@@ -117,11 +117,13 @@ describe("AC1: the SurfaceFlag vocabulary is exactly the 12 W5 flags", () => {
     // (flow 307) adds the `instructions` surfaces for
     // gemini-cli/kiro/github-copilot-agent/zed; W6 (flow 306, T20) adds
     // keryx-shell's native `pre-tool-context`/`observe`/`post-tool`/
-    // `session-start`/`stop` surfaces — still a proper subset of the 12,
-    // never all of them (skills/agents/mcp have no surface anywhere yet).
+    // `session-start`/`stop` surfaces; flow 310 (W2) adds the opt-in
+    // `agents` surfaces for claude/codex/kiro/opencode — still a proper
+    // subset of the 12, never all of them (skills/mcp have no surface yet).
     expect(seen.size).toBeGreaterThan(0);
     expect([...seen].sort()).toEqual(
       [
+        "agents",
         "block",
         "inject-context",
         "instructions",

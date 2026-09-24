@@ -161,6 +161,13 @@ contracts).
   (providers report usage inconsistently; see PRD risk R3).
 - A separate `.claude/agents/*.md`-style loader — the dispatch contract is the
   definition surface.
+  > Revised by D-2 (2026-09-24, accepted by owner MrCipherSmith): not
+  > reversed — a canonical agent-definition layer
+  > (`.metaproject/agents/<name>.md`) is added that **compiles into** this
+  > same dispatch contract, which remains the sole execution surface. See
+  > [D-2](../keryx-agent-platform-expansion/brainstorm.md#d-2-agent-definitions-layer-compiles-into-dispatch-contracts)
+  > and
+  > [W2 — Agent Definitions Catalog](../keryx-agent-platform-expansion/workstreams/W2-agent-catalog.md).
 - Any relaxation of the D-02 invariant (a child never writes flow state).
 - New runtime dependencies — the zero-`dependencies` policy holds; any optional
   provider SDK follows the optional-deps + dynamic-import + ADR + AC15 rule.
