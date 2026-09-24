@@ -34,8 +34,7 @@
             "Recommends starting by just bumping the react/react-dom version and fixing whatever breaks, without first reading the upgrade guide for this specific version jump.",
             "Relies on memory of a previous major-version migration instead of checking the current guide/release notes."
           ]
-        },
-        { "grader": "regex", "value": "codemod" }
+        }
       ],
       "calibration": {
         "known_right": "Start by reading the official React 19 upgrade guide and release notes — don't rely on how the 17-to-18 jump went, since the set of removed/changed APIs is specific to this version range. From the guide, build an inventory of what this codebase actually uses that's affected: string refs, legacy context (contextTypes/getChildContext), propTypes/defaultProps on function components, ReactDOM.render/hydrate, and the react-dom/test-utils act import, plus anything else the guide calls out as removed rather than merely deprecated (ReactDOM.findDOMNode and unmountComponentAtNode, for instance). Once you know the scope, run the official react-codemod/types-react-codemod transforms for the mechanical parts (the ref-as-prop change in particular has good codemod coverage) and review their diffs before committing, then hand-fix what the codemods can't express — mainly propTypes-to-TypeScript conversions and any custom ReactDOM.render wrapper. Update @types/react/@types/react-dom to match the target major early, since a types/runtime mismatch produces confusing unrelated errors. Only bump the actual react/react-dom dependency once the codebase is already compatible, so the version bump itself is a small, low-risk commit.",

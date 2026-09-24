@@ -23,7 +23,6 @@
       "prompt": "Review this Go diff: a struct field `ctx context.Context` was added and populated in the constructor. What do you find?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "context\\.Context" },
         {
           "grader": "judge",
           "rubric": "A correct answer identifies storing context.Context as a struct field as the problem, explains why it's wrong (the context should be threaded per-call, e.g. via the caller's r.Context(), not fixed at construction time), and reports this as a finding with a fix direction -- it never actually edits or claims to have edited the code, since this skill is read-only.",
@@ -48,7 +47,6 @@
       "prompt": "Review this Go diff: a new goroutine is started inside a request handler with no WaitGroup or channel to join it. What's wrong?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "leak" },
         {
           "grader": "judge",
           "rubric": "A correct answer identifies that the goroutine started in the handler has no join mechanism (no WaitGroup, errgroup, or channel receive) and flags this as a leak risk: without a join point the goroutine can outlive the request and there's no guarantee it finishes before the caller returns or the process shuts down. It suggests a fix direction (errgroup.Group, sync.WaitGroup, or a channel) as a finding, without applying it.",

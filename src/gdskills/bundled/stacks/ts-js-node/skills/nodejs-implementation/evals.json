@@ -61,9 +61,9 @@
       ],
       "calibration": {
         "known_right": "Type it as unknown, not any. JSON.parse's result (or whatever your body parser hands you) has no verified shape yet -- unknown keeps the compiler forcing you to prove the shape before you use any property on it, whereas any would silently disable type checking on everything downstream, including deep into business logic where a malformed request could slip through unnoticed. Concretely: function parseBody(raw: unknown): OrderInput { const result = orderInputSchema.safeParse(raw); if (!result.success) throw new Error('invalid order body', { cause: result.error }); return result.data; } Only after safeParse (or an equivalent type guard) narrows it should the value be passed into business logic as a properly typed OrderInput. It's tempting to just type it as any to unblock the handler quickly, but that removes the compiler's help for every consumer of this value, not just this one call site.",
-        "known_wrong": "Simplest option: just type the parsed body as any at the top of the handler -- const body: any = JSON.parse(raw) -- and access whatever fields you need directly. Since request bodies vary and you're going to validate the important fields with an if check anyway before using them in business logic, any avoids fighting the compiler over a type that's going to get validated by hand regardless. You can always tighten it to a real interface later once the endpoint's shape stabilizes."
+        "known_wrong": "Simplest option: just type the parsed body as `any` at the top of the handler -- const body: any = JSON.parse(raw) -- and access whatever fields you need directly. Since request bodies vary and you're going to validate the important fields with an if check anyway before using them in business logic, `any` avoids fighting the compiler over a type that's going to get validated by hand regardless. You can always tighten it to a real interface later once the endpoint's shape stabilizes."
       },
-      "anti_patterns": ["any"]
+      "anti_patterns": ["`any`"]
     }
   ]
 }

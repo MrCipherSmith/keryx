@@ -23,7 +23,6 @@
       "prompt": "go build fails saying go.sum is out of date after I bumped a dependency in go.mod. How do I fix it?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "go mod tidy" },
         {
           "grader": "judge",
           "rubric": "A correct answer identifies that go.sum is stale relative to go.mod's requirements after the dependency bump and fixes it by running `go mod tidy`. For a genuine version conflict it checks `go mod why`/`go mod graph` before bumping a version by hand, rather than routing around the error some other way.",

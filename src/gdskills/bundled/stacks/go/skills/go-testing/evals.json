@@ -47,7 +47,6 @@
       "prompt": "My Go test starts a goroutine and I want to wait for it to finish before asserting. What's the right way?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "WaitGroup|<-\\s*\\w+|chan\\s" },
         {
           "grader": "judge",
           "rubric": "A correct answer waits for the goroutine to finish using an actual synchronization primitive -- a sync.WaitGroup (Add/Done/Wait) or a channel send/receive -- before running assertions, never a fixed time.Sleep delay as a stand-in for a real join.",

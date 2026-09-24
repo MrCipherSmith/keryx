@@ -54,7 +54,7 @@
       "expected_behavior": [
         {
           "grader": "regex",
-          "value": "with open"
+          "value": "with\\s+[^\\n]*\\bopen\\("
         },
         {
           "grader": "judge",

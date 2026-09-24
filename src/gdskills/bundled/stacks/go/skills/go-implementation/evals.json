@@ -24,7 +24,6 @@
       "strictness": "high",
       "expected_behavior": [
         { "grader": "regex", "value": "context\\.Context" },
-        { "grader": "regex", "value": "%w" },
         {
           "grader": "judge",
           "rubric": "A correct answer explains passing context.Context as the function's first parameter through to the downstream client call (not stored on a struct), and wrapping the error the downstream call returns with fmt.Errorf(\"...: %w\", err) so callers can unwrap it with errors.Is/errors.As, rather than discarding it or replacing it with a plain %v/string.",
@@ -49,12 +48,11 @@
       "prompt": "I want to start a few goroutines to process items concurrently in Go. What should I watch out for?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "[Ee]rrgroup|WaitGroup" },
         {
           "grader": "judge",
-          "rubric": "A correct answer explains that every goroutine needs a known owner and an explicit exit condition decided before it's started: errgroup.Group when the first error and shared cancellation matter, sync.WaitGroup (or WaitGroup.Go on a project targeting Go 1.25+) when only completion matters, with ctx cancellation either way -- not goroutines started with no join point on the assumption they're short-lived.",
+          "rubric": "A correct answer explains that every goroutine needs a known owner and an explicit exit condition decided before it's started: errgroup.Group when the first error and shared cancellation matter, sync.WaitGroup (or WaitGroup.Go on a project targeting Go 1.25+) when only completion matters, or a done channel, with ctx cancellation either way -- not goroutines started with no join point on the assumption they're short-lived.",
           "pass_criteria": [
-            "Recommends errgroup.Group or sync.WaitGroup (or WaitGroup.Go) as the join mechanism for the goroutines processing items.",
+            "Recommends errgroup.Group, sync.WaitGroup (or WaitGroup.Go), or a done channel as the join mechanism for the goroutines processing items.",
             "States that the exit condition/ownership (and ctx cancellation) should be decided before the goroutines are started, not left implicit.",
             "Addresses propagating an error from a goroutine back to the caller when relevant (e.g. errgroup returning the first error)."
           ],

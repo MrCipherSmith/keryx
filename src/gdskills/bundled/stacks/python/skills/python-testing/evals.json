@@ -48,14 +48,10 @@
       "strictness": "high",
       "expected_behavior": [
         {
-          "grader": "regex",
-          "value": "mocker\\.patch|monkeypatch"
-        },
-        {
           "grader": "judge",
           "rubric": "A correct answer mocks only the external HTTP call and leaves the internal helper in the same package unmocked, so the test still verifies the real integration between the function and its internal collaborator.",
           "pass_criteria": [
-            "mocks the external HTTP API call (e.g. via `mocker.patch`/`monkeypatch` at the point of use), not the definition site",
+            "mocks the external HTTP API call (e.g. via `mocker.patch`/`monkeypatch`, `unittest.mock.patch`, or a `responses`/`respx` HTTP mock at the point of use), not the definition site",
             "explicitly leaves the internal helper in the same package unmocked so the test exercises the real integration between the function and the helper",
             "explains why: mocking the internal collaborator away would only verify the mocks agree with each other, not that the real code works together"
           ],

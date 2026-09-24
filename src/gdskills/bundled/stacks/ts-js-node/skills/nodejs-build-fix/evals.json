@@ -39,9 +39,9 @@
       ],
       "calibration": {
         "known_right": "The error means the OrderDraft type genuinely doesn't have a total property, but the code reads it. Don't reach for @ts-ignore or cast to any -- that just hides a real mismatch instead of fixing it. First check where total actually comes from: if every OrderDraft should carry a running total, add total: number to the OrderDraft interface/type definition so the type reflects what the object actually holds. If total is meant to be derived instead (e.g. summed from line items), don't add it to the type at all -- compute it with a helper function and use that value instead of reading a nonexistent property. Either way, trace the value back to where OrderDraft objects are constructed, confirm which case applies, then apply that fix. After the change, re-run tsc --noEmit and confirm it exits clean with no new suppressions added anywhere in the diff.",
-        "known_wrong": "Easiest fix: put // @ts-ignore on the line above order.total so tsc stops complaining, or just cast it with (order as any).total if you want it inline. This unblocks the build immediately without having to touch the OrderDraft type definition. You can always come back and add the real property later once someone has time to figure out where total should come from -- for now this keeps CI green and doesn't risk breaking anything else in the type."
+        "known_wrong": "Easiest fix: put // @ts-ignore on the line above order.total so tsc stops complaining, or just type it as `any` for now and cast it with (order as `any`).total if you want it inline. This unblocks the build immediately without having to touch the OrderDraft type definition. You can always come back and add the real property later once someone has time to figure out where total should come from -- for now this keeps CI green and doesn't risk breaking anything else in the type."
       },
-      "anti_patterns": ["@ts-ignore", "any"]
+      "anti_patterns": ["@ts-ignore", "`any`"]
     },
     {
       "id": "reproduce-before-fix",
