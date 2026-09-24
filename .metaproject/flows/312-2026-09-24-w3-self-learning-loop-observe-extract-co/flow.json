@@ -9,7 +9,7 @@
   "title": "W3: self-learning loop — observe, extract, consent-gated learned patterns, reviewer profiles, promote and graduate",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:32.725Z",
-  "updatedAt": "2026-09-24T14:31:39.342Z",
+  "updatedAt": "2026-09-24T14:41:28.457Z",
   "source": {
     "type": "description",
     "ref": null
@@ -81,7 +81,7 @@
         "T16"
       ],
       "attempts": {
-        "count": 6,
+        "count": 7,
         "log": [
           {
             "at": "2026-09-24T10:59:24.782Z",
@@ -112,6 +112,11 @@
             "at": "2026-09-24T12:12:33.687Z",
             "outcome": "failed",
             "detail": "PR review round 3 (final): 0 blocker/major, 4 minor, 1 info; consent invariant confirmed"
+          },
+          {
+            "at": "2026-09-24T14:41:28.457Z",
+            "outcome": "failed",
+            "detail": "final verification R10 of T29: 0 blocker/major, 2 minor, 2 info; CI green 08dc37d0; health PASS; stopped for owner decision"
           }
         ]
       },
@@ -1219,6 +1224,11 @@
       "at": "2026-09-24T14:31:39.342Z",
       "event": "task-done",
       "detail": "T29: Fix R9-F1..F3: recompute graduation name/summary from members with current logins at apply; word-boundary id slug"
+    },
+    {
+      "at": "2026-09-24T14:41:28.457Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 7) — final verification R10 of T29: 0 blocker/major, 2 minor, 2 info; CI green 08dc37d0; health PASS; stopped for owner decision"
     }
   ],
   "owner": {
