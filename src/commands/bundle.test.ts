@@ -22,7 +22,11 @@ async function makeTempDir(prefix: string): Promise<string> {
 }
 
 let originalKeryxHome: string | undefined;
-let originalExitCode: number | undefined;
+// `process.exitCode`'s own type is `number | string | undefined` (Node's
+// typings) — matched exactly here rather than narrowed to `number |
+// undefined`, so the assignment back to `process.exitCode` in `afterEach`
+// below needs no cast.
+let originalExitCode: typeof process.exitCode;
 
 beforeEach(() => {
   originalKeryxHome = process.env.KERYX_HOME;
