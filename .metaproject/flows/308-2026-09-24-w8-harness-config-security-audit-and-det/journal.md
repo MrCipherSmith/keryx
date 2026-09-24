@@ -39,3 +39,38 @@
 - 2026-09-24 - T10 verified: git diff stack/wave0 -- src/harness src/integrations is empty.
 - 2026-09-24T01:47:55.267Z - task-done: T8: Run audit-harness on the labeled fixture set end to end; confirm --fix-proposals writes nothing
 - 2026-09-24T01:47:55.342Z - task-done: T10: Confirm no diff under src/harness and src/integrations (AC17)
+- 2026-09-24T01:48:37.726Z - task-attempt: T4: started (attempt 1) — review round 1 (opus) on PR #676
+- 2026-09-24 - Draft PR #676 opened (base stack/wave0). Review round 1 dispatched (opus).
+- 2026-09-24 - CI round 1: typecheck-and-tests failed — fixtures mcp-poisoning/mcp-unpinned .mcp.json were gitignored (root .gitignore:36), so CI saw no MCP config. Force-tracked both files; pushed.
+- 2026-09-24T01:55:56.307Z - task-attempt: T4: failed (attempt 2) — round 1: 2 blocker, 12 major, 10 minor, 3 info (F1-F27)
+- 2026-09-24 - Review round 1 (opus): 2 blocker (F1 hook emits allow = auto-approve; F2 text-replace apply corrupts JSON), 12 major (F3-F14), 10 minor (F15-F24), 3 info (F25-F27). All to be fixed in round-1 fix tasks T13 (audit-harness) and T14 (impact-evidence); info F25-F27 addressed too where cheap.
+- 2026-09-24T01:55:56.388Z - task-added: T13: Review round 1 fixes: audit-harness (F2-F10, F16, F20, F21, F23, F24, F27)
+- 2026-09-24T01:55:56.466Z - task-added: T14: Review round 1 fixes: impact-evidence (F1, F11-F15, F17-F19, F22, F25, F26)
+- 2026-09-24T01:56:48.994Z - task-attempt: T13: started (attempt 1) — 308-T13
+- 2026-09-24T01:56:49.071Z - task-attempt: T14: started (attempt 1) — 308-T14
+- 2026-09-24T02:12:48.859Z - task-done: T14: Review round 1 fixes: impact-evidence (F1, F11-F15, F17-F19, F22, F25, F26)
+- 2026-09-24 - T14 DONE (relayed): F1 F11-F15 F17 F18 F22 F25 F26 fixed with tests, F19 documented as W6 dependency. New: resolveImpactEvidenceConfigTrusted, normalizeRequestFiles, redactCommandForLog; reasons +hook-failed; events +config-tampered, path-rejected. Committed.
+- 2026-09-24T02:16:06.063Z - task-done: T13: Review round 1 fixes: audit-harness (F2-F10, F16, F20, F21, F23, F24, F27)
+- 2026-09-24 - T13 DONE (relayed): F2-F10 F16 F20 F21 F23 F24 F27 fixed with tests, plus realpath-root containment when root sits behind a symlink. New CLI flag --reseal; apply accepts [path]; proposal ids p-<16hex>. Combined targeted run: 176 tests, 0 fail; tsc clean. Committed; pushing; review round 2 next.
+- 2026-09-24T02:16:12.063Z - task-attempt: T4: started (attempt 3) — review round 2 (opus)
+- 2026-09-24 - CI on 9d765bae (round-1 fixes + tracked fixtures): all checks green (typecheck-and-tests included).
+- 2026-09-24T02:22:10.383Z - task-attempt: T4: failed (attempt 4) — round 2: 23/27 fixed; open 2 major (F11 absent checksum, F14 path normalization/root), 6 minor (N3-N8), 2 info (N9,N10)
+- 2026-09-24 - Review round 2 (opus): 23 of 27 fixed. Open: major F11 (absent checksum trusted for impactEvidence loosening), major F14 regression (hook root/realpath/mid-path ../rejected paths allow), minor N3-N8, info N9-N10. Repetition: F11/F14 recurred with narrower scope — the strategy changes this round: fixes target the named mechanism (trust rule, a single normalize function with realpath) with tests from the reviewer's own repro scripts in scratchpad/review2/. Dispatching T15 (impact-evidence: F11 F14 N5 N8 N10) and T16 (audit-harness: N3 N4 N6 N7 N9).
+- 2026-09-24T02:22:10.541Z - task-added: T15: Review round 2 fixes: impact-evidence (F11, F14, N5, N8, N10)
+- 2026-09-24T02:22:10.622Z - task-added: T16: Review round 2 fixes: audit-harness (N3, N4, N6, N7, N9)
+- 2026-09-24T02:22:45.847Z - task-attempt: T15: started (attempt 1) — 308-T15
+- 2026-09-24T02:22:45.933Z - task-attempt: T16: started (attempt 1) — 308-T16
+- 2026-09-24T02:34:28.617Z - task-done: T16: Review round 2 fixes: audit-harness (N3, N4, N6, N7, N9)
+- 2026-09-24 - T16 DONE (relayed): N3 N4 N6 N7 N9 fixed with tests; docs updated. Committed.
+- 2026-09-24T02:38:19.572Z - task-done: T15: Review round 2 fixes: impact-evidence (F11, F14, N5, N8, N10)
+- 2026-09-24 - T15 DONE (relayed): F11 (loosening needs present+matching checksum; event config-untrusted absent|mismatch), F14 (realpath normalizeRequestFiles, root from payload.cwd, path-outside-root deny under gate/unattended), N5 (hook-crashed), N8 (pendingAck), N10 verified. tsc clean; targeted 575 tests: only 8 read-source.test.ts failures, identical on stack/wave0 (sandbox git commit in temp repos). Committed, pushing, review round 3 (last of budget).
+- 2026-09-24T02:38:25.404Z - task-attempt: T4: started (attempt 5) — review round 3 (opus), last attempt
+- 2026-09-24T02:43:20.789Z - task-attempt: T4: failed (attempt 6) — round 3: 9/10 fixed; open 3 minor (NEW-1 payload.cwd root, NEW-2 reason/log, NEW-3 kill switch order), 4 info
+- 2026-09-24 - Review round 3 (opus): 9/10 round-2 items fixed, no round-1 regression. Open: 3 minor (NEW-1 hook root steerable via payload.cwd; NEW-2 CLI hook failure reason/log; NEW-3 path-outside-root deny precedes kill switch), 4 info (N10 batch-wide dampened event, I1 pendingAck denials inflation, I2 mid-command '; exit 0', I3 top-level skills symlink). Budget of 3 attempts spent. Re-plan: the open items are three narrow, localized minors in one file pair (security-impact-evidence.ts, provider.ts), unlike the broad round-1/2 sets; strategy = one focused fix task T17 (the three minors + I3 containment + I1/I2 cheap) followed by a narrow verification review scoped to exactly these items, not a fourth full review round.
+- 2026-09-24T02:43:20.944Z - task-added: T17: Re-planned narrow fix: NEW-1 hook root anchoring, NEW-2 failure reason+log, NEW-3 kill switch before path deny (+I1-I3)
+- 2026-09-24T02:43:21.022Z - task-attempt: T17: started (attempt 1) — 308-T17
+- 2026-09-24T03:00:27.401Z - task-done: T17: Re-planned narrow fix: NEW-1 hook root anchoring, NEW-2 failure reason+log, NEW-3 kill switch before path deny (+I1-I3)
+- 2026-09-24 - T17 DONE: NEW-1 (root = CLAUDE_PROJECT_DIR or hook process root; payload.cwd only for relative paths inside root), NEW-2 (strict ? hook-crashed : hook-advisory-failed; systemMessage; service-failed log record via facade), NEW-3 (kill switch evaluated before path deny), I1 fixed, I3 fixed, I2 partial (trailing '|| exit 0' stripped; mid-command exit 0 deliberately left — stripping it changes control flow, per F20 test). 152 targeted tests, tsc/eslint clean. Committed; narrow verification review next.
+- 2026-09-24T03:03:18.913Z - task-attempt: T4: started (attempt 7) — narrow verification review of T17 (re-planned): 0 findings >= minor; 4 info
+- 2026-09-24 - Narrow verification review (opus) of T17 commit 71557d1d: NEW-1..3, I1..I3 fixed, no regressions, keryx:findings []. Info (not blocking, reported in PR): payload.cwd containment textual (/tmp alias spurious warning); dangling top-level skills symlink skipped by pathExists (comment inaccurate); 'a && exit 0 && b' flagged as suppression (pre-existing); config-untrusted record not written when path-outside-root denies first. Review loop clean at threshold minor.
+- 2026-09-24 - CI green on 71557d1d (all required checks). Review clean at threshold minor. Per the stacked addendum: no gh pr ready / merge; T4 stays open — awaiting owner merge of PR #676 (then retarget to feat/agent-platform-expansion, flow implemented/ac confirm/complete).
