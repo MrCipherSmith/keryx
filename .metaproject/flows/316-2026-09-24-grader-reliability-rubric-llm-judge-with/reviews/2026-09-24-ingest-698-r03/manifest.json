@@ -6,7 +6,7 @@
   "target": {
     "kind": "pr",
     "ref": "698",
-    "head": "6f8cff7efdf7bd0cfd8943174ab0688488205dac"
+    "head": "0b468f70237e5adb758b77c1c01d5dd52686d517"
   },
   "artifacts": {
     "scope": ".metaproject/flows/316-2026-09-24-grader-reliability-rubric-llm-judge-with/reviews/2026-09-24-ingest-698-r03/scope.md",
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-24T22:09:39.273Z",
-  "updatedAt": "2026-09-24T22:09:39.273Z",
+  "createdAt": "2026-09-24T22:19:17.733Z",
+  "updatedAt": "2026-09-24T22:19:17.733Z",
   "flow": {
     "id": "316",
     "path": ".metaproject/flows/316-2026-09-24-grader-reliability-rubric-llm-judge-with"

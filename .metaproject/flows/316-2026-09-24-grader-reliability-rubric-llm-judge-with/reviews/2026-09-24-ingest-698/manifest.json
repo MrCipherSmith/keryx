@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-24-ingest-698",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "698",
-    "head": "75bf1df0b9bb576ab5c199d2a27f744cfd503c83"
+    "head": "75bf1df0"
   },
   "artifacts": {
     "scope": ".metaproject/flows/316-2026-09-24-grader-reliability-rubric-llm-judge-with/reviews/2026-09-24-ingest-698/scope.md",
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-24T20:34:21.366Z",
-  "updatedAt": "2026-09-24T20:34:21.366Z",
+  "createdAt": "2026-09-24T22:18:54.043Z",
+  "updatedAt": "2026-09-24T22:19:03.307Z",
   "flow": {
     "id": "316",
     "path": ".metaproject/flows/316-2026-09-24-grader-reliability-rubric-llm-judge-with"
