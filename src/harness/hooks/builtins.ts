@@ -7,6 +7,7 @@
 // `builtin`-handler-kind hooks in the runtime — invoked in-process through an
 // injectable port so W3/W8 plug in without a process boundary. Never
 // user/project-configurable: a project file can only disable them by id.
+import path from "node:path";
 import type { HookEventName, HookRegistration } from "./types";
 
 /** The seven events `keryx.learning-observer` is registered on, mapped to W3's observation kind. */
@@ -87,20 +88,46 @@ export interface ResolveKeryxArgvOptions {
   scriptPath?: string;
 }
 
+/** Basenames `process.argv[1]` may hold when it genuinely is the keryx CLI entry. */
+const KERYX_ENTRY_BASENAMES = new Set(["cli.ts", "cli.js"]);
+
 /**
- * Replace a leading `"keryx"` argv[0] with the actually-running binary: when
- * running from source that is `[execPath, scriptPath, ...rest]`; a packaged
- * `keryx` binary would resolve to itself (still `execPath` alone) — the
- * source-run shape is what this repo's dev/test invocations need, so it is
- * the only shape implemented, with both paths injectable for determinism.
+ * Replace a leading `"keryx"` argv[0] with the binary that can actually run
+ * it. Three shapes, in order:
+ *
+ * 1. Running from source / the built bundle: `process.argv[1]` (or the
+ *    injected `scriptPath`) is the keryx entry itself (basename `cli.ts` or
+ *    `cli.js`) — spawn `[execPath, scriptPath, ...rest]`, same interpreter
+ *    and entry this process was started with.
+ * 2. A compiled single-file `keryx` binary: `execPath`'s basename is `keryx`
+ *    — that binary IS the CLI, so spawn `[execPath, ...rest]` alone; passing
+ *    a second "script" argv would be handed to keryx as its first CLI arg.
+ * 3. Neither: `process.argv[1]` is something else entirely — a test runner
+ *    (`bun test`'s own entry), a REPL, whatever this process happens to be
+ *    embedded in. Re-exec'ing THAT as if it were keryx is exactly the bug
+ *    this guards against (flow 306, W6, T16): under `bun test`,
+ *    `process.argv[1]` is the test runner, so the naive
+ *    `[execPath, argv[1], ...rest]` spawn crashed and the gate hook failed
+ *    closed, denying every prompt/tool call. Fall back to plain `"keryx"`
+ *    and let the child process's own `PATH` resolve it — correct whenever
+ *    this process is embedded in something else, and a clear "command not
+ *    found" rather than a silent wrong-binary spawn when it is not.
  */
 export function resolveKeryxArgv(argv: readonly string[], opts: ResolveKeryxArgvOptions = {}): string[] {
   if (argv.length === 0 || argv[0] !== "keryx") {
     return [...argv];
   }
+  const rest = argv.slice(1);
   const execPath = opts.execPath ?? process.execPath;
-  const scriptPath = opts.scriptPath ?? process.argv[1] ?? "keryx";
-  return [execPath, scriptPath, ...argv.slice(1)];
+  const scriptPath = opts.scriptPath ?? process.argv[1];
+
+  if (scriptPath !== undefined && KERYX_ENTRY_BASENAMES.has(path.basename(scriptPath))) {
+    return [execPath, scriptPath, ...rest];
+  }
+  if (path.basename(execPath) === "keryx") {
+    return [execPath, ...rest];
+  }
+  return ["keryx", ...rest];
 }
 
 function builtin(reg: Omit<HookRegistration, "scope">, order: number): HookRegistration {

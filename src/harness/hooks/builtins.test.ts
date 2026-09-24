@@ -106,4 +106,34 @@ describe("resolveKeryxArgv", () => {
   test("an empty argv is passed through unchanged", () => {
     expect(resolveKeryxArgv([])).toEqual([]);
   });
+
+  test("recognizes a source-run entry by cli.ts basename", () => {
+    const resolved = resolveKeryxArgv(["keryx", "ctx", "hook", "claude"], {
+      execPath: "/usr/local/bin/bun",
+      scriptPath: "/repo/src/cli.ts",
+    });
+    expect(resolved).toEqual(["/usr/local/bin/bun", "/repo/src/cli.ts", "ctx", "hook", "claude"]);
+  });
+
+  test("a compiled keryx binary (execPath basename keryx) spawns itself alone, no second argv", () => {
+    const resolved = resolveKeryxArgv(["keryx", "ctx", "hook", "claude"], {
+      execPath: "/usr/local/bin/keryx",
+    });
+    expect(resolved).toEqual(["/usr/local/bin/keryx", "ctx", "hook", "claude"]);
+  });
+
+  test("an unrelated host entry (e.g. bun test's own runner) falls back to plain keryx on PATH, never re-execs the host", () => {
+    const resolved = resolveKeryxArgv(["keryx", "ctx", "hook", "claude"], {
+      execPath: "/usr/local/bin/bun",
+      scriptPath: "/usr/local/bin/bun-test-runner.js",
+    });
+    expect(resolved).toEqual(["keryx", "ctx", "hook", "claude"]);
+  });
+
+  test("a missing scriptPath and non-keryx execPath falls back to plain keryx on PATH", () => {
+    const resolved = resolveKeryxArgv(["keryx", "ctx", "hook", "claude"], {
+      execPath: "/usr/local/bin/bun",
+    });
+    expect(resolved).toEqual(["keryx", "ctx", "hook", "claude"]);
+  });
 });
