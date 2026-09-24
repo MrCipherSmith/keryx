@@ -20,10 +20,10 @@
   "scenarios": [
     {
       "id": "discover-runner-first",
-      "prompt": "This Node.js TypeScript repo has vitest in its devDependencies and a vitest.config.ts. Write a test for a function `sumOrderTotals(orders)`. What should you check before writing the test file?",
+      "prompt": "This Node.js TypeScript repo's test setup isn't described here. Write a test for a function `sumOrderTotals(orders)`. What should you check before writing the test file?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "package\\.json|devDependencies|vitest\\.config" }
+        { "grader": "regex", "value": "package\\.json|devDependencies|scripts?\\.test|test script|existing test file" }
       ]
     },
     {
@@ -31,7 +31,8 @@
       "prompt": "I'm writing a test for a function that calls an internal helper `formatOrder` and also calls out to a network client `httpClient.get`. What should I mock?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "network|httpClient|external|boundary" },
+        { "grader": "regex", "value": "\\bmock[\\s\\S]{0,60}httpClient\\.get|\\bmock[\\s\\S]{0,60}(the\\s+)?network\\s+client\\b" },
+        { "grader": "regex", "value": "(don't|do not|shouldn't|should not|never|avoid)[\\s\\S]{0,60}mock[\\s\\S]{0,40}(formatOrder|internal helper)" },
         { "grader": "not-contains", "value": "mock the internal helper" }
       ]
     }

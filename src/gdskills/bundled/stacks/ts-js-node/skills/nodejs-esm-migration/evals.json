@@ -20,10 +20,11 @@
   "scenarios": [
     {
       "id": "convert-before-flip-type",
-      "prompt": "I want to migrate this Node.js package to ESM. Should I add \"type\": \"module\" to package.json first, before converting the require() calls in each file?",
+      "prompt": "I'm migrating this Node.js package to ES modules. Should the package.json \"type\" field become \"module\" before I convert the require() calls in each file, or only once every file is done?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "[Cc]onvert[\\s\\S]{0,150}(then|once|before)[\\s\\S]{0,100}(add|flip|set|chang|upgrad)[\\s\\S]{0,30}(\"?type|module)|(once|after)[\\s\\S]{0,60}(every|all|each)[\\s\\S]{0,30}(file|code)[\\s\\S]{0,300}(then|add|flip|set|upgrad)[\\s\\S]{0,30}(\"?type|module)|\\blast\\b|[Cc]onvert (the )?files (first|before)" }
+        { "grader": "regex", "value": "require\\([^\\n]{0,150}break|break[^\\n]{0,150}require\\(|remaining[\\s\\S]{0,80}require\\(" },
+        { "grader": "regex", "value": "[Cc]onvert[\\s\\S]{0,150}(then|once|before|prior to|ahead of)[\\s\\S]{0,100}(add|flip|set|switch)[\\s\\S]{0,30}\"?type|(once|after)[\\s\\S]{0,60}(every|all|each)[\\s\\S]{0,30}(file|code)[\\s\\S]{0,300}(then|add|flip|set)[\\s\\S]{0,30}\"?type" }
       ]
     },
     {

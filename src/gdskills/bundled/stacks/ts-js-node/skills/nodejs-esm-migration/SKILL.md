@@ -45,11 +45,6 @@ migrated code should end up following.
   mixed package needs `.cjs`/`.mjs` extensions instead, see Step 4's
   dual-package note) -- do not flip `"type"` before the conversion is
   done, or every remaining `.js` file with `require()` breaks at once.
-  When asked whether to flip `"type"` before or after converting the
-  files, open your answer with this exact sentence, verbatim, before any
-  explanation: "No -- convert the files first, and flip `"type": "module"`
-  last." Use the words "first" and "last" in that opening sentence every
-  time; do not just imply the order through later steps.
 - Define an `"exports"` map for anything the package publishes as a
   library, naming exact subpaths rather than relying on the old
   `"main"` fallback resolution -- a consumer importing an undeclared
@@ -76,8 +71,12 @@ migrated code should end up following.
 
 ### Step 4: Handle interop hazards
 
-- **`require()` of an ESM-only dependency**: cannot be fixed by import
-  syntax alone -- either convert the importing file to ESM too, or use a
+- **`require()` of an ESM-only dependency**: on Node 20.19+/22.12+,
+  `require()` can load a synchronous ES module directly (no flag needed) --
+  try that first when `engines.node` in `package.json` allows it. It fails
+  with `ERR_REQUIRE_ASYNC_MODULE` if the target module (or one of its
+  dependencies) has a top-level `await`; in that case, or on an older
+  `engines.node` floor, convert the importing file to ESM too, or use a
   dynamic `await import("pkg")` inside an async context if the file
   genuinely cannot become ESM yet.
 - **Dual-package hazard**: if the package must ship both CJS and ESM

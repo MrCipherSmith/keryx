@@ -31,6 +31,8 @@
       "prompt": "Review this Node.js diff for a synchronous fs.readFileSync call inside an Express request handler. Should you fix it yourself in this review?",
       "strictness": "high",
       "expected_behavior": [
+        { "grader": "regex", "value": "(flag|report|note|call out|point out|finding)[\\s\\S]{0,150}(readFileSync|synchronous|blocking)" },
+        { "grader": "regex", "value": "fs\\.promises|fs/promises|await\\s+readFile|non-blocking" },
         { "grader": "not-contains", "value": "I fixed it" }
       ]
     }

@@ -23,6 +23,7 @@
       "prompt": "tsc reports: Property 'total' does not exist on type 'OrderDraft'. What's the right way to fix this?",
       "strictness": "high",
       "expected_behavior": [
+        { "grader": "regex", "value": "(add|declare|include)[\\s\\S]{0,80}total[\\s\\S]{0,80}(OrderDraft|interface|type definition)|(OrderDraft|interface|type definition)[\\s\\S]{0,80}(add|declare|include)[\\s\\S]{0,80}total" },
         { "grader": "not-contains", "value": "@ts-ignore" },
         { "grader": "not-contains", "value": "as any" }
       ]
