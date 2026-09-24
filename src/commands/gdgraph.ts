@@ -6,6 +6,7 @@ import { runAssetsSubcommand } from "../assets/command";
 import { buildGraph } from "../gdgraph/build";
 import { getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 import { computeAffected, type AffectedResult } from "../gdgraph/affected";
+import { buildAffectedReport } from "../gdgraph/affected-report";
 import { findCandidates } from "../gdgraph/find";
 import { querySymbol, resolveSymbolCandidates, resolveSymbols, transitiveCallers } from "../gdgraph/symbol";
 import {
@@ -736,9 +737,33 @@ async function runAffected(rest: string[]): Promise<void> {
 
   const ranked = rest.includes("--ranked");
   const asJson = rest.includes("--json");
-  const config = await loadGdgraphConfig(process.cwd());
   const depthArg = optionValue(rest, "--depth");
-  const depth = depthArg !== undefined ? Number.parseInt(depthArg, 10) : config.affected.defaultDepth;
+  const parsedDepth = depthArg !== undefined ? Number.parseInt(depthArg, 10) : undefined;
+
+  // Flow 308 (W8, Lane B, T6 / AC9): the `--json` path is now the shared
+  // `buildAffectedReport` builder — the same one the impact-evidence
+  // provider calls for its "importers" section — so the two are guaranteed
+  // to print byte-identical JSON at the same graph state instead of two
+  // independently-maintained copies of this logic drifting apart. Output is
+  // unchanged: this reproduces the exact three JSON shapes (and the
+  // caller-error stderr+exit-1 behavior) the inline version below printed.
+  if (asJson) {
+    try {
+      const report = await buildAffectedReport(process.cwd(), target, {
+        ...(parsedDepth !== undefined && Number.isFinite(parsedDepth) ? { depth: parsedDepth } : {}),
+        ranked: true,
+      });
+      console.log(JSON.stringify(report.json, null, 2));
+      process.exitCode = report.exitCode;
+    } catch (error) {
+      console.error(`gdgraph: ${error instanceof Error ? error.message : String(error)}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  const config = await loadGdgraphConfig(process.cwd());
+  const depth = parsedDepth !== undefined && Number.isFinite(parsedDepth) ? parsedDepth : config.affected.defaultDepth;
 
   const graph = await loadGraph(process.cwd());
 

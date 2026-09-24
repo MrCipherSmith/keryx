@@ -10,6 +10,7 @@ import {
 } from "../testing/service";
 import { buildCoverageMap, coverageMapPath, loadCoverageMap } from "../testing/coverage-map";
 import { isTestingCapabilityEnabled } from "../testing/capability";
+import { buildRelatedTestsReport } from "../testing/related-report";
 import { optionValue } from "../lib/args";
 
 export async function testCommand(args: string[]): Promise<void> {
@@ -361,12 +362,23 @@ async function runReport(args: string[]): Promise<void> {
 }
 
 async function runRelated(args: string[]): Promise<void> {
-  const target = args[0];
+  const target = args.find((arg) => !arg.startsWith("--"));
   if (!target) {
-    console.error("Usage: keryx test related <file>");
+    console.error("Usage: keryx test related <file> [--json]");
     process.exitCode = 1;
     return;
   }
+
+  // Flow 308 (W8, Lane B, T6): `--json` goes through the shared
+  // `buildRelatedTestsReport` builder — the same one the impact-evidence
+  // provider's "related tests" section calls — so the two never drift apart.
+  // Non-JSON output below is unchanged.
+  if (args.includes("--json")) {
+    const report = await buildRelatedTestsReport(process.cwd(), target);
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
   // F-003 (flow 234 review, MAJOR) / AC2: compute the context once (read-only,
   // no write) and share it with the relatedness lookup — the same pair
   // `findRelatedTests` itself calls internally — so the context's incomplete
@@ -568,7 +580,7 @@ Usage:
   keryx test status
   keryx test context
   keryx test explain <file-or-scope>
-  keryx test related <file>
+  keryx test related <file> [--json]
   keryx test report latest [--json]
   keryx test suggest <file> [--provider <p>] [--model <m>] [--json]
   keryx test coverage-map build

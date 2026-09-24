@@ -5,6 +5,7 @@ import { pathExists } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { SECURITY_CONFIG_SCHEMA, validateAgainstSchema } from "./schemas";
 import type {
+  ImpactEvidenceConfig,
   InjectionModelBackend,
   PolicyConfig,
   SecurityAction,
@@ -49,6 +50,18 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     },
   },
   gate: { failOn: "critical", minConfidence: 0.5 },
+};
+
+// Flow 308 (W8, Lane B, T6): defaults for the optional `impactEvidence`
+// block (per the Lane B design: enabled true, strict false, no exemptions,
+// dampen after 3 denials). Not part of `DEFAULT_SECURITY_CONFIG` itself —
+// see `mergeSecurityConfig` below for why the key is filled in only when the
+// parsed config actually declares it.
+export const DEFAULT_IMPACT_EVIDENCE_CONFIG: ImpactEvidenceConfig = {
+  enabled: true,
+  strict: false,
+  exemptGlobs: [],
+  dampenAfter: 3,
 };
 
 // GDCTX-2's shipped default: a static, committed badge/logo `<img src>`/
@@ -242,6 +255,43 @@ function mergePiiModel(
   return merged;
 }
 
+// Merge the optional `impactEvidence` block field-by-field over its defaults,
+// but ONLY when the parsed config actually has the key — an absent key stays
+// absent on the merged result (see `mergeSecurityConfig` below), which is
+// what keeps `computeConfigChecksum` byte-identical for every config written
+// before this feature shipped.
+function mergeImpactEvidence(
+  override: Partial<ImpactEvidenceConfig> | undefined,
+): ImpactEvidenceConfig {
+  const base = DEFAULT_IMPACT_EVIDENCE_CONFIG;
+  const exemptGlobs = Array.isArray(override?.exemptGlobs)
+    ? override.exemptGlobs.filter((g): g is string => typeof g === "string")
+    : base.exemptGlobs;
+  const dampenAfter =
+    typeof override?.dampenAfter === "number" && Number.isFinite(override.dampenAfter)
+      ? override.dampenAfter
+      : base.dampenAfter;
+  return {
+    enabled: override?.enabled ?? base.enabled,
+    strict: override?.strict ?? base.strict,
+    exemptGlobs,
+    dampenAfter,
+  };
+}
+
+/**
+ * The effective `impactEvidence` block for `config` — defaults filled in
+ * whether or not the config declared the key at all. Distinct from
+ * `config.impactEvidence` itself, which stays `undefined` on a config that
+ * never mentioned it (see `mergeSecurityConfig`); a caller that only wants
+ * to KNOW the effective policy (the impact-evidence provider, `security
+ * impact-evidence status`) should call this rather than read the field
+ * directly and risk treating an absent block as "disabled".
+ */
+export function resolveImpactEvidenceConfig(config: SecurityConfig): ImpactEvidenceConfig {
+  return config.impactEvidence ? mergeImpactEvidence(config.impactEvidence) : DEFAULT_IMPACT_EVIDENCE_CONFIG;
+}
+
 // Deep-merge a partial user config over the defaults. Unknown keys are ignored;
 // each known block falls back field-by-field to the default.
 export function mergeSecurityConfig(parsed: Partial<SecurityConfig>): SecurityConfig {
@@ -276,6 +326,13 @@ export function mergeSecurityConfig(parsed: Partial<SecurityConfig>): SecurityCo
   };
   if (parsed.configChecksum !== undefined) {
     merged.configChecksum = parsed.configChecksum;
+  }
+  // Flow 308 (W8, Lane B, T6): filled in ONLY when the parsed config
+  // actually has the key — an absent key must stay absent on `merged` too
+  // (never defaulted-in), which is what keeps `computeConfigChecksum`
+  // byte-identical for a config written before this feature shipped.
+  if (parsed.impactEvidence !== undefined) {
+    merged.impactEvidence = mergeImpactEvidence(parsed.impactEvidence);
   }
   return merged;
 }
@@ -390,8 +447,19 @@ export function computeObjectChecksum(value: unknown): string {
 }
 
 // §14: `configChecksum` = sha256 of the normalized `policies` block.
+//
+// Flow 308 (W8, Lane B, T6): when `impactEvidence` is present, the checksum
+// covers `{policies, impactEvidence}` instead — so tampering with the kill
+// switch (`impactEvidence.enabled: false` without resealing) is caught the
+// same way tampering with `policies` always was. When it is ABSENT the
+// checksum is exactly `computeObjectChecksum(config.policies)`, unchanged
+// from before this block existed, so every config written before this
+// feature shipped keeps verifying against its existing checksum.
 export function computeConfigChecksum(config: SecurityConfig): string {
-  return computeObjectChecksum(config.policies);
+  if (config.impactEvidence === undefined) {
+    return computeObjectChecksum(config.policies);
+  }
+  return computeObjectChecksum({ policies: config.policies, impactEvidence: config.impactEvidence });
 }
 
 export function verifyConfigChecksum(config: SecurityConfig): {
