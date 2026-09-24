@@ -31,6 +31,7 @@
 import type { CatalogEntry } from "../gdskills/governance/catalog-index";
 import type { Runner, RunnerOutput } from "../gdskills/governance/eval";
 import { defaultModelFor, hasCredential, runModelTurn, type ProviderFactory } from "../harness/provider/single-turn";
+import { envWithSavedApiKeys } from "../lib/shell-config";
 import { providerByName } from "./providers";
 
 /** Thrown when `--runner <spec>` cannot be turned into a usable `Runner` — the CLI maps this to exit 1. */
@@ -63,6 +64,15 @@ export interface BuildEvalRunnerOptions {
   readonly fetch?: typeof fetch;
   /** Injectable provider construction — tests use this to avoid any network call. */
   readonly providerFactory?: ProviderFactory;
+  /**
+   * R1-9 (flow 314 review round 1): the `auth.json` directory
+   * `envWithSavedApiKeys` reads from — defaults to the real
+   * `~/.local/share/keryx` the same way `envWithSavedApiKeys` itself
+   * defaults. Tests point this at a fixture directory instead, so the
+   * build-time credential check can be exercised with an injected saved key
+   * and never touches the real file.
+   */
+  readonly shellConfigDir?: string;
 }
 
 /**
@@ -88,7 +98,15 @@ export function buildEvalRunner(runnerSpec: string, options: BuildEvalRunnerOpti
     if (!isKnownProviderName(provider)) {
       throw new RunnerBuildError(`--runner ${JSON.stringify(runnerSpec)}: unknown provider "${provider}"`);
     }
-    if (!hasCredential(provider, env)) {
+    // R1-9 (flow 314 review round 1): `runModelTurn` itself merges
+    // `envWithSavedApiKeys` (a key saved once via `keryx shell`,
+    // `~/.local/share/keryx/auth.json`) before it ever checks credentials —
+    // this build-time check used to look at raw `env` only, so `--runner
+    // <provider>` was refused for a provider whose key the user had already
+    // saved, even though the actual model call a moment later would have
+    // succeeded. Checking the SAME merged env here keeps this fail-fast
+    // check consistent with what `runModelTurn` will actually see.
+    if (!hasCredential(provider, envWithSavedApiKeys(env, options.shellConfigDir))) {
       throw new RunnerBuildError(`--runner ${JSON.stringify(runnerSpec)}: no credential available for provider "${provider}"`);
     }
   }
@@ -117,6 +135,18 @@ export function buildEvalRunner(runnerSpec: string, options: BuildEvalRunnerOpti
     }
     if (result.error) {
       throw new RunnerBuildError(`--runner ${JSON.stringify(runnerSpec)}: provider error: ${result.error.message}`);
+    }
+    // R1-8 (flow 314 review round 1): a completion turn that reports no
+    // error but whose assembled text is empty/whitespace-only (a
+    // reasoning-only stream, a truncated stream, a model that emits nothing)
+    // used to flow straight through as `{ output: "" }` — a plausible pass
+    // for a `not-contains` grader that checked nothing. This module's own
+    // doc comment already promises the credential re-check exists so output
+    // is "never silently producing an empty completion that could be
+    // misread as 'the model said nothing'"; this closes the other way that
+    // same misread could happen.
+    if (result.text.trim().length === 0) {
+      throw new RunnerBuildError(`--runner ${JSON.stringify(runnerSpec)}: provider returned an empty completion`);
     }
     return { output: result.text };
   };

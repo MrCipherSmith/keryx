@@ -9,8 +9,9 @@ import { loadSkillCatalog, loadSkillCatalogWithDiagnostics, type CatalogScope } 
 import { evalSkill } from "../gdskills/governance/eval";
 import { recordScout, scoutImports, scoutSkill, scoutVetCandidate } from "../gdskills/governance/scout";
 import { runStocktake } from "../gdskills/governance/stocktake";
+import { defaultModelFor } from "../harness/provider/single-turn";
 import { optionValue } from "../lib/args";
-import { buildEvalRunner, RunnerBuildError } from "./model-eval-runner";
+import { buildEvalRunner, RunnerBuildError, splitRunnerSpec } from "./model-eval-runner";
 
 /** Whether `name` was given at all, in either `--name value` or `--name=value` spelling — distinct from `optionValue`'s `undefined`, which also means "given with no usable value" (R2-8, flow 309 review round 2). */
 function flagGiven(args: readonly string[], name: string): boolean {
@@ -249,7 +250,9 @@ function isStrictness(value: string | undefined): value is "low" | "medium" | "h
 async function evalCommand(args: readonly string[]): Promise<void> {
   const skillId = args[0];
   if (skillId === undefined || skillId.startsWith("--")) {
-    console.error("Usage: keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>] [--model-grader] [--json]");
+    console.error(
+      "Usage: keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>] [--scope bundled|all] [--model-grader] [--json]",
+    );
     process.exitCode = 1;
     return;
   }
@@ -287,6 +290,29 @@ async function evalCommand(args: readonly string[]): Promise<void> {
   const trials = trialsArg ?? 3;
   const modelGrader = args.includes("--model-grader");
   const json = args.includes("--json");
+
+  // R1-11 (flow 314 review round 1): `eval` used to always score triggers
+  // against `scope: "all"` (this repository's full catalog, project-local
+  // skills included) with no way to ask for anything else — a recorded
+  // "pass" could depend on a repo-local skill outside the shipped bundle
+  // tipping a trigger score, so it would not reproduce under the
+  // bundled-only catalog users actually install. `--scope` defaults to
+  // `"all"` for ad-hoc use (unchanged), but is now honored rather than
+  // ignored, and the resolved scope is recorded on the report so a
+  // consumer (the stable-pack gate) can require `"bundled"` specifically.
+  const scopeRaw = stringFlag(args, "--scope");
+  if (scopeRaw === "missing-value") {
+    console.error("--scope requires a value");
+    process.exitCode = 1;
+    return;
+  }
+  if (scopeRaw !== undefined && scopeRaw !== "bundled" && scopeRaw !== "all") {
+    console.error(`--scope must be 'bundled' or 'all' (got ${JSON.stringify(scopeRaw)})`);
+    process.exitCode = 1;
+    return;
+  }
+  const scope: CatalogScope = scopeRaw === "bundled" ? "bundled" : "all";
+
   const runnerFlag = stringFlag(args, "--runner");
   // R2-8: `--runner` given with no value silently read as `undefined`
   // (indistinguishable from omitted) and skipped straight past the warning
@@ -326,7 +352,7 @@ async function evalCommand(args: readonly string[]): Promise<void> {
   // the generic "unknown skill id" for it, indistinguishable from a skill id
   // that was never a skill at all. Loading with diagnostics lets this name
   // the actual read error instead.
-  const { entries: catalog, unreadable } = loadSkillCatalogWithDiagnostics(root, { scope: "all" });
+  const { entries: catalog, unreadable } = loadSkillCatalogWithDiagnostics(root, { scope });
   if (!catalog.some((entry) => entry.id === skillId)) {
     const unreadableMatch = unreadable.find((entry) => {
       const normalized = entry.path.split(path.sep).join("/");
@@ -340,12 +366,27 @@ async function evalCommand(args: readonly string[]): Promise<void> {
   }
 
   try {
-    const report = await evalSkill(skillId, catalog, {
+    const rawReport = await evalSkill(skillId, catalog, {
       strictness,
       trials,
       modelGrader,
+      scope,
       ...(runner !== undefined ? { runner } : {}),
     });
+    // R1-11/R1-15 (flow 314 review round 1): when `--runner` was used, this
+    // is a REAL model-backed run — stamp which provider/model actually
+    // produced it, and when, onto the report. `evalSkill` itself never sees
+    // `runnerName`/timestamp (it only sees the already-built `Runner`
+    // function), so the CLI is the one place that knows both.
+    const report =
+      runnerName !== undefined
+        ? {
+            ...rawReport,
+            runner: splitRunnerSpec(runnerName).provider,
+            model: splitRunnerSpec(runnerName).model ?? defaultModelFor(splitRunnerSpec(runnerName).provider),
+            recordedAt: new Date().toISOString(),
+          }
+        : rawReport;
     if (json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
