@@ -6,6 +6,7 @@ import { parseAgentFrontmatter } from "../agents/frontmatter";
 import { buildAgentDefinition, validateAgentFrontmatter } from "../agents/schema";
 import { createAcceptCapability } from "./accept-capability";
 import { applyGraduation, LearningGraduateError, runGraduate } from "./graduate";
+import { REVIEWER_COMMENT_TRIGGER_PREFIX } from "./reviewer-id";
 import { readPattern, writePattern } from "./store";
 import type { LearnedPattern, LearningDomain, LearningScope } from "./types";
 
@@ -52,6 +53,12 @@ function makeAccepted(
   };
 }
 
+/** Like `makeAccepted`, but with `provenance.extractor: "reviewer-comment"` and a trigger wrapped in the signal's own fixed wording. */
+function makeAcceptedReviewerComment(id: string, hint: string, action: string, domain: LearningDomain, confidence: number): LearnedPattern {
+  const record = makeAccepted(id, `${REVIEWER_COMMENT_TRIGGER_PREFIX}${hint})`, action, domain, confidence);
+  return { ...record, provenance: { extractor: "reviewer-comment", extractorKind: "deterministic" } };
+}
+
 function withProjectRoot<T>(fn: (root: string, env: NodeJS.ProcessEnv) => Promise<T>): Promise<T> {
   const root = mkdtempSync(path.join(tmpdir(), "keryx-learning-graduate-root-"));
   const home = mkdtempSync(path.join(tmpdir(), "keryx-learning-graduate-home-"));
@@ -83,6 +90,24 @@ const RULE_RECORD: [string, string, string] = [
   "commit work in small increments throughout the day",
   "avoid one giant end-of-day commit",
 ];
+
+// Three `reviewer-comment` records sharing enough trigger keywords to cluster
+// (size >= 3, avg confidence >= 0.75) -> agent, domain "review-conventions".
+// Every trigger carries `REVIEWER_COMMENT_TRIGGER_PREFIX`'s fixed wording
+// ("When preparing a change for review in this project (...)") — R5-F1/R5-F2's
+// probe cluster.
+const REVIEWER_COMMENT_CLUSTER: readonly [string, string, string][] = [
+  ["review-conventions.early-returns-aaaaaaaa", "prefer early returns", "Prefer early returns over nested conditionals"],
+  ["review-conventions.early-returns-bbbbbbbb", "prefer early returns always", "Prefer early returns to reduce nesting"],
+  ["review-conventions.early-returns-cccccccc", "use early returns", "Use early returns instead of nested if blocks"],
+];
+
+async function seedReviewerCommentCluster(root: string, env: NodeJS.ProcessEnv): Promise<void> {
+  const capability = createAcceptCapability();
+  for (const [id, hint, action] of REVIEWER_COMMENT_CLUSTER) {
+    await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+  }
+}
 
 async function seedClusters(root: string, env: NodeJS.ProcessEnv): Promise<void> {
   const capability = createAcceptCapability();
@@ -407,6 +432,88 @@ describe("applyGraduation: a configured login that is a substring of the fixed a
       ).rejects.toMatchObject({ reason: "learning-text-refused" });
 
       expect(existsSync(path.join(root, ".metaproject", "agents", `${agentProposal!.suggestedName}.md`))).toBe(false);
+    });
+  });
+});
+
+// R5-F1/R5-F2 (review round 5, PR #691): `containsConfiguredLogin`'s removed
+// 5+-char substring fallback used to match a configured login that was
+// merely a substring of `graduate.ts`'s OWN fixed wording never checked
+// before — not the assembled `role`/`body` (already excluded per R4-F1), but
+// `candidate.description` (== `proposal.summary`, built from the fixed
+// "N accepted "<domain>" pattern(s) sharing: ..." template plus the literal
+// `domain` string) and `proposal.suggestedName` (built from `topKeywords`,
+// which — before this fix — included `REVIEWER_COMMENT_TRIGGER_PREFIX`'s own
+// fixed words). A login like `chang`/`prepa` (fragments of "change"/
+// "preparing" in the fixed trigger prefix) or `accep`/`shari` (fragments of
+// "accepted"/"sharing" in the fixed summary template) or `revie`/`conve`
+// (fragments of the literal domain string "review-conventions") false-
+// refused a graduation that never actually named the login, no matter what
+// any member record said. Fixed two ways: (1) the login gate now checks
+// ONLY member `trigger`/`action` text (prefix-stripped for reviewer-comment
+// members), never `candidate.description`/`proposal.suggestedName`; (2)
+// `topKeywords`/`suggestedNameFor` now strip the fixed reviewer-comment
+// prefix before computing keywords, so proposal names/summaries are no
+// longer built out of Keryx's own template prose either.
+describe("applyGraduation/runGraduate: a configured login that is a substring of graduate's own fixed summary/domain/prefix wording (R5-F1, R5-F2)", () => {
+  test.each(["chang", "prepa", "accep", "shari", "revie", "conve"])(
+    "login '%s' (fragment of graduate's own fixed wording, never named by any member) does not false-refuse a clean reviewer-comment graduation",
+    async (login) => {
+      await withProjectRoot(async (root, env) => {
+        await seedReviewerCommentCluster(root, env);
+        const report = await runGraduate(root, { now: NOW, env });
+        const agentProposal = report.proposals.find((p) => p.target === "agent");
+        expect(agentProposal).toBeDefined();
+
+        const { mkdirSync, writeFileSync } = await import("node:fs");
+        mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+        writeFileSync(
+          path.join(root, ".metaproject", "review-learning.config.json"),
+          JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: [login] }),
+        );
+
+        const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+        expect(existsSync(result.path)).toBe(true);
+      });
+    },
+  );
+
+  test("a member action that genuinely names the login '@chang' is still refused", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      for (const [id, hint, action] of REVIEWER_COMMENT_CLUSTER) {
+        const withLogin = id === REVIEWER_COMMENT_CLUSTER[0]?.[0] ? `${action}, as @chang noted` : action;
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, withLogin, "review-conventions", 0.8), { env, capability });
+      }
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["chang"] }),
+      );
+
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
+      await expect(
+        applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW }),
+      ).rejects.toMatchObject({ reason: "learning-text-refused" });
+
+      expect(existsSync(path.join(root, ".metaproject", "agents", `${agentProposal!.suggestedName}.md`))).toBe(false);
+    });
+  });
+
+  test("suggestedName for a reviewer-comment cluster is built from member content, not from the fixed prefix's own words ('preparing'/'change')", async () => {
+    await withProjectRoot(async (root, env) => {
+      await seedReviewerCommentCluster(root, env);
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+      expect(agentProposal!.suggestedName).not.toContain("preparing");
+      expect(agentProposal!.suggestedName).not.toContain("change");
+      expect(agentProposal!.summary).not.toContain("preparing");
+      expect(agentProposal!.summary).not.toContain("change");
     });
   });
 });

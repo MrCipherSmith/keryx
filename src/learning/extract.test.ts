@@ -308,6 +308,24 @@ describe("runExtract — a configured login that is a substring of the reviewer-
     });
   });
 
+  // R5-F1/R5-F2: 'revie' is a fragment of the fixed prefix's own whole word
+  // "review" ("...for **review** in this project...") — under the OLD
+  // substring fallback this matched even though nobody named the login;
+  // boundary-only matching (post-fix) does not match a partial word, and the
+  // prefix is stripped before the check regardless.
+  test("login 'revie' (fragment of the fixed word 'review' in the trigger prefix): a clean lesson is stored, not refused", async () => {
+    await withProjectRoot(async (root) => {
+      writeReviewLearningConfig(root, ["revie"]);
+      writePrCommentFixture(root, "revie", "Prefer early returns over nested conditionals for readability.");
+
+      const report = await runExtract(root, { now: NOW, domain: "review-conventions" });
+      expect(report.refused).toEqual([]);
+      expect(report.created.length).toBeGreaterThanOrEqual(1);
+      const records = await listPatterns(root, { domain: "review-conventions" });
+      expect(records.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   test("login 'guida' (substring of the fixed word 'guidance' were it to appear): a clean lesson is stored, not refused", async () => {
     await withProjectRoot(async (root) => {
       writeReviewLearningConfig(root, ["guida"]);
@@ -341,19 +359,24 @@ describe("runExtract — a configured login that is a substring of the reviewer-
     });
   });
 
-  // A login glued to surrounding text with no identifier boundary at all
-  // (`changhee`) survives `generalizeLesson`'s strip pass but is still
-  // caught by its own final substring safety net (R2-F6) — dropped
-  // entirely, never reaching a draft, so extract's own defense-in-depth
-  // check is never even exercised for this case.
-  test("a login glued to surrounding text with no boundary ('changhee') is dropped by generalizeLesson, storing nothing", async () => {
+  // R4-F1/R5-F1/R5-F2: `containsConfiguredLogin`'s 5+-char substring
+  // fallback (the only thing that used to catch a login glued to
+  // surrounding text with no identifier boundary, e.g. `chang` inside
+  // `changhee`) is gone — see `reviewer-id.ts`'s doc comment. This is now a
+  // documented, accepted limitation: a login glued to other letters with no
+  // boundary character anywhere survives `generalizeLesson`'s strip pass AND
+  // its own final boundary-only safety net, and the record is stored rather
+  // than dropped.
+  test("documented limitation: a login glued to surrounding text with no boundary ('changhee') is NOT dropped — the record is stored", async () => {
     await withProjectRoot(async (root) => {
       writeReviewLearningConfig(root, ["chang", "octocat"]);
       writePrCommentFixture(root, "octocat", "changhee reviewers always prefer early returns over nested conditionals.", "c2");
 
       const report = await runExtract(root, { now: NOW, domain: "review-conventions" });
-      expect(report.created.length).toBe(0);
-      expect(await listPatterns(root, { domain: "review-conventions" })).toEqual([]);
+      expect(report.refused).toEqual([]);
+      expect(report.created.length).toBeGreaterThanOrEqual(1);
+      const records = await listPatterns(root, { domain: "review-conventions" });
+      expect(records.length).toBeGreaterThanOrEqual(1);
     });
   });
 });

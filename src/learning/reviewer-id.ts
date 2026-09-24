@@ -46,39 +46,51 @@ function escapeForRegExp(value: string): string {
  * `apply.ts`'s proposal rendering) re-runs this same check as a final gate
  * right before that text reaches disk.
  *
- * R3-F2: this used to be a plain case-insensitive substring test, so a short
- * configured login (`ed`, `al`, `rob`, `max`, `dev`) matched inside ordinary
- * English words (`named`, `already`, `problem`, `max-width`, `developer`)
- * and hard-refused every lesson/apply/graduate-apply that happened to
- * contain one — including `graduate.ts`'s own fixed agent-candidate
- * template text ("...learned pattern(s)...", "graduated from...") for a
- * project that configured a login like `ed`. It now uses the SAME
- * identifier-boundary rule `generalizeLesson`'s strip pass uses (never
- * preceded/followed by `[A-Za-z0-9-]`; `_` counts as a boundary, not a
- * word character, per R2-F6) — a real occurrence (`@login`, `login[bot]`,
- * `login-reviewer`, `Login's`) is still caught, since the character right
- * after a bare login mention is essentially never itself `[A-Za-z0-9-]`.
+ * Boundary-matched ONLY, for every login length, regardless of how long the
+ * login is (never preceded/followed by `[A-Za-z0-9-]`; `_` counts as a
+ * boundary, not a word character, per R2-F6). A real occurrence (`@login`,
+ * `login[bot]`, `login-reviewer`, `Login's`) is still caught, since the
+ * character right after a bare login mention is essentially never itself
+ * `[A-Za-z0-9-]`.
  *
- * A short login (under 5 characters) is boundary-matched ONLY — a false
- * positive there is common (see above) and the cost of a false negative is
- * small (a 2-4 character login gluing onto surrounding text without ANY
- * boundary character, e.g. `edmore`, is unlikely to occur by accident). A
- * login of 5+ characters ALSO falls back to a plain substring match — the
- * R2-F6 defense-in-depth case this file's own tests rely on
- * (`alicedeveloper`/`alicedevxreview` still catching `alicedev` with no
- * boundary character on either side) — because a false positive there is
- * rare (a 5+ character login is unlikely to be a true substring of an
- * unrelated English word) while a missed longer login is exactly the
- * attribution leak this function exists to catch.
+ * R3-F2: a short configured login (`ed`, `al`, `rob`, `max`, `dev`) used to
+ * match inside ordinary English words (`named`, `already`, `problem`,
+ * `max-width`, `developer`) under a plain substring test and hard-refused
+ * every lesson/apply/graduate-apply that happened to contain one — including
+ * `graduate.ts`'s own fixed agent-candidate template text ("...learned
+ * pattern(s)...", "graduated from...") for a project that configured a
+ * login like `ed`.
+ *
+ * R4-F1/R5-F1/R5-F2: a 5+ character login used to ALSO fall back to a plain
+ * substring match, as defense-in-depth against a login glued to surrounding
+ * text with no identifier boundary at all (`alicedev` inside
+ * `alicedeveloper`). That fallback could not distinguish a project's own
+ * FIXED prose from a member's variable content: a configured login like
+ * `chang` or `revie` sat inside Keryx's own constant wording
+ * (`REVIEWER_COMMENT_TRIGGER_PREFIX`'s "prepar**ing** a **chang**e for
+ * **revie**w...", or the literal domain name `review-conventions`, or
+ * `graduate.ts`'s own summary/keyword text) and false-refused every
+ * reviewer-comment lesson or graduation for that project, regardless of what
+ * any comment actually said (findings R4-F1, R5-F1, R5-F2). Every caller
+ * that assembles fixed wording around variable content is responsible for
+ * handing this function ONLY the variable part (see
+ * `stripReviewerCommentTriggerPrefix`, and `graduate.ts`'s login gate, which
+ * checks only member `trigger`/`action` text, never the proposal's own
+ * summary/suggestedName) — the fallback itself is gone. Accepted, documented
+ * limitation: a login glued to other letters on both sides with no boundary
+ * character anywhere (e.g. `alicedev` inside `alicedeveloper`, or
+ * `alicedev` inside `alicedevxreview`) is NOT caught by this function. That
+ * residual risk is intentional — a false positive against ordinary prose
+ * was the more frequent, more damaging failure mode (an entire project's
+ * self-learning loop silently refusing every lesson), while a login glued
+ * with zero boundary characters on either side is a narrow, unlikely shape.
  */
 export function containsConfiguredLogin(text: string, logins: readonly string[]): boolean {
-  const lower = text.toLowerCase();
   return logins.some((login) => {
     const trimmed = login.trim();
     if (trimmed.length === 0) return false;
     const escaped = escapeForRegExp(trimmed);
-    if (new RegExp(`(?<![A-Za-z0-9-])${escaped}(?![A-Za-z0-9-])`, "i").test(text)) return true;
-    return trimmed.length >= 5 && lower.includes(trimmed.toLowerCase());
+    return new RegExp(`(?<![A-Za-z0-9-])${escaped}(?![A-Za-z0-9-])`, "i").test(text);
   });
 }
 
@@ -126,9 +138,9 @@ export function stripReviewerCommentTriggerPrefix(trigger: string): string {
  * falls outside the 12-260 char bound `learn.ts`'s own extractor already
  * uses (too short to be a lesson, too long to have actually been
  * generalized rather than just trimmed), OR (R2-F6) when, after every strip,
- * any of `logins` still appears in the result as a case-insensitive
- * substring — the lesson is dropped entirely rather than shipped with a
- * residual attribution fragment.
+ * any of `logins` still appears in the result at an identifier boundary (see
+ * `containsConfiguredLogin`) — the lesson is dropped entirely rather than
+ * shipped with a residual attribution fragment.
  */
 export function generalizeLesson(text: string, logins: readonly string[]): string | null {
   let value = text.replace(MENTION_PATTERN, "");

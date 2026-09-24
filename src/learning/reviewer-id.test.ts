@@ -81,16 +81,18 @@ describe("generalizeLesson", () => {
     expect(result?.toLowerCase()).not.toContain("alice-dev");
   });
 
-  // The bounded-regex pass alone still does not strip `alicedev` out of
-  // `alicedeveloper` (glued to a trailing alphanumeric, no boundary) — but
-  // R2-F6's final substring safety net (`containsConfiguredLogin`) still
-  // finds "alicedev" sitting inside "alicedeveloper" either way and drops
-  // the whole lesson rather than shipping a record that merely LOOKS
-  // attribution-free. Conservative on purpose: a name-shaped false positive
-  // costs one dropped lesson; a missed one costs a stored login.
-  test("R2-F6: drops a lesson where the login is a substring of a longer word (alicedev inside alicedeveloper)", () => {
+  // R4-F1/R5-F1/R5-F2 removed `containsConfiguredLogin`'s 5+-char substring
+  // fallback (see its own doc comment): that fallback was the ONLY thing
+  // that used to catch `alicedev` sitting inside `alicedeveloper` with no
+  // identifier boundary on the right. Boundary-only matching does not strip
+  // or refuse it either (the bounded-regex strip pass never matched this
+  // shape — `alicedev` is glued to a trailing `e`, not a boundary). This is
+  // now a documented, accepted limitation: a login glued to other letters
+  // with no boundary character anywhere is not caught.
+  test("documented limitation: a login glued to a longer word with no boundary (alicedev inside alicedeveloper) is NOT stripped or dropped", () => {
     const result = generalizeLesson("alicedeveloper prefers early returns over nested conditionals for readability", ["alicedev"]);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result?.toLowerCase()).toContain("alicedeveloper");
   });
 
   // R2-F6 (review round 2, PR #691, PROBE p4.ts): `_` is punctuation to a
@@ -106,13 +108,13 @@ describe("generalizeLesson", () => {
     expect(result?.toLowerCase()).not.toContain("alicedev");
   });
 
-  // R2-F6: the final safety net — even when the boundary regex fails to
-  // strip a login (e.g. `alicedev` glued to `xreview`, no boundary
-  // character on either side at all), the lesson is dropped entirely rather
-  // than shipped with the login still in it.
-  test("R2-F6: drops (returns null for) a lesson whose login survives stripping with no boundary on either side", () => {
+  // R4-F1/R5-F1/R5-F2: same documented limitation as above — `alicedev`
+  // glued to `xreview` on both sides (no boundary character anywhere) is no
+  // longer caught now that the substring fallback is gone.
+  test("documented limitation: a login glued on both sides with no boundary anywhere (alicedev inside alicedevxreview) is NOT stripped or dropped", () => {
     const result = generalizeLesson("never merge without alicedevxreview signing off on the migration plan", ["alicedev"]);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result?.toLowerCase()).toContain("alicedevxreview");
   });
 
   test("R2-F6: passing every configured author (not just the comment's own) strips a login the comment merely names", () => {
@@ -174,19 +176,21 @@ describe("containsConfiguredLogin", () => {
     expect(containsConfiguredLogin("ed_reviewer left a comment", ["ed"])).toBe(true);
   });
 
-  // R4-F1 (review round 4, PR #691, minor): unlike R3-F2's short-login case
-  // (handled by the boundary-only rule for <5 char logins), a 5+ char login
-  // still uses the substring fallback, and `reviewer-comment.ts`'s own FIXED
-  // trigger wording ("When preparing a **chang**e for **review**...") is
-  // ordinary English containing "chang"/"review" as plain substrings with no
-  // identifier boundary anywhere around them. The fix lives in the callers
-  // (extract.ts/apply.ts strip `REVIEWER_COMMENT_TRIGGER_PREFIX` before
-  // calling this function) — this function's own contract (a real login
-  // still caught, even glued to surrounding text) does not change.
-  test("R4-F1: the fixed reviewer-comment trigger wording trips a 5+ char configured login via the substring fallback (why callers must strip the prefix first)", () => {
+  // R4-F1/R5-F1/R5-F2 (review rounds 4-5, PR #691): `containsConfiguredLogin`
+  // no longer has a substring fallback at all, so a 5+ char login that is
+  // merely a substring of the fixed prefix's words with no boundary (`chang`
+  // inside "change") no longer matches — boundary-only matching already
+  // handles that case. But the fixed prefix ALSO contains the literal WHOLE
+  // WORD "review", bounded by spaces on both sides ("...for **review** in
+  // this project...") — that IS a real boundary match, so a login equal to
+  // that whole word still trips the gate on the raw (unstripped) trigger.
+  // Callers must still strip `REVIEWER_COMMENT_TRIGGER_PREFIX`
+  // (`stripReviewerCommentTriggerPrefix`) before running a login gate over a
+  // reviewer-comment trigger.
+  test("R4-F1/R5-F1/R5-F2: the fixed reviewer-comment trigger wording no longer trips a partial-word login (boundary-only), but a whole-word login ('review') still needs the prefix stripped", () => {
     const fixedTrigger = `${REVIEWER_COMMENT_TRIGGER_PREFIX}prefer early returns over nested conditionals)`;
-    expect(containsConfiguredLogin(fixedTrigger, ["chang"])).toBe(true); // "change"
-    expect(containsConfiguredLogin(fixedTrigger, ["review"])).toBe(true); // "review" (the fixed word itself)
+    expect(containsConfiguredLogin(fixedTrigger, ["chang"])).toBe(false); // "change" — no boundary after "chang"
+    expect(containsConfiguredLogin(fixedTrigger, ["review"])).toBe(true); // "review" is a whole, bounded word in the fixed prefix
     expect(containsConfiguredLogin(stripReviewerCommentTriggerPrefix(fixedTrigger), ["chang"])).toBe(false);
     expect(containsConfiguredLogin(stripReviewerCommentTriggerPrefix(fixedTrigger), ["review"])).toBe(false);
   });
@@ -204,7 +208,7 @@ describe("stripReviewerCommentTriggerPrefix", () => {
   });
 
   test("a real login occurrence in the stripped keyword hint is still caught", () => {
-    const trigger = `${REVIEWER_COMMENT_TRIGGER_PREFIX}@changhee flagged this)`;
+    const trigger = `${REVIEWER_COMMENT_TRIGGER_PREFIX}@chang flagged this)`;
     expect(containsConfiguredLogin(stripReviewerCommentTriggerPrefix(trigger), ["chang"])).toBe(true);
   });
 });

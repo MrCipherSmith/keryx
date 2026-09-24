@@ -310,12 +310,18 @@ describe("applyLearnedPattern", () => {
     });
   });
 
-  test("R4-F1: a real login occurrence in a reviewer-comment record's trigger (outside the fixed prefix) is still refused", async () => {
+  // R5-F1/R5-F2: `containsConfiguredLogin`'s substring fallback is gone (see
+  // `reviewer-id.ts`), so this test now uses a login mention with a real
+  // identifier boundary (`@chang`, mirroring "a member action genuinely
+  // naming the login is still refused") rather than one glued to trailing
+  // letters (`changhee`) — a glued occurrence is now a documented, accepted
+  // limitation covered separately in `reviewer-id.test.ts`/`extract.test.ts`.
+  test("R4-F1/R5-F1/R5-F2: a real login occurrence in a reviewer-comment record's trigger (outside the fixed prefix) is still refused", async () => {
     await withProject(async (root) => {
       await seedRegistry(root, [{ module: "alpha", name: "module" }]);
       await seedSkill(root, "alpha", "module");
       const record = makeAccepted({
-        trigger: `${REVIEWER_COMMENT_TRIGGER_PREFIX}changhee always prefers early returns)`,
+        trigger: `${REVIEWER_COMMENT_TRIGGER_PREFIX}@chang always prefers early returns)`,
         provenance: { extractor: "reviewer-comment", extractorKind: "deterministic" },
       });
       await writePattern(root, record, { capability: createAcceptCapability() });

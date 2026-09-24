@@ -135,17 +135,24 @@ describe("applyReviewerProfile", () => {
     });
   });
 
-  // R2-F6: `generalizeLesson` now drops (returns `null` for) any lesson that
-  // still contains a configured login as a case-insensitive substring after
-  // its own boundary-based stripping — the same "glued to more of the same
-  // word class on one side" shape this test constructs, which used to defeat
-  // the boundary regex and slip the literal login through unstripped. That
-  // record's action is filtered out of `generalizedActionsFor` before
-  // rendering, so the ONLY accepted record for this reviewer id contributes
-  // no convention at all: the profile still applies (there is nothing left
-  // to refuse it), but the rendered text never carries the login, and the
-  // dropped lesson never appears in it either.
-  test("drops a lesson that would still leak a configured author's login instead of rendering it (R2-F6)", async () => {
+  // R4-F1/R5-F1/R5-F2/R6-F1: `containsConfiguredLogin`'s 5+-char substring
+  // fallback is gone (see `reviewer-id.ts`'s doc comment), and
+  // `refuseIfAttributed` was made CONSISTENT with that boundary-only rule
+  // (R6-F1: it used to run its own separate whole-rendered-document plain
+  // substring scan, which both false-refused on fixed template prose AND
+  // happened to still catch this glued shape by accident — see the R6-F1
+  // describe block below). It now runs `containsConfiguredLogin` over only
+  // the variable `actions`/`reviewerId`, the same identifier-boundary rule
+  // used everywhere else. This is now a documented, accepted limitation: a
+  // login glued to other letters with no identifier boundary anywhere (the
+  // shape this test constructs) is NOT caught by `generalizeLesson`'s own
+  // final check, so the action is not filtered out of `generalizedActionsFor`
+  // before rendering, and `refuseIfAttributed`'s boundary-only check does not
+  // catch it either — the profile is written with the glued login still in
+  // it, the same accepted risk `reviewer-id.test.ts`'s
+  // "alicedeveloper"/"alicedevxreview" tests document for every other
+  // consumer of `containsConfiguredLogin`.
+  test("documented limitation: a login glued to a longer word with no boundary is NOT dropped or refused — it reaches the written profile", async () => {
     await withProject(async (root) => {
       await seedConfig(root, BASE_CONFIG);
       const leaking = makeReviewConventionsRecord({
@@ -155,9 +162,7 @@ describe("applyReviewerProfile", () => {
 
       const result = await applyReviewerProfile(root, REVIEWER_ID);
       const rendered = await readFile(path.join(root, result.path), "utf8");
-      expect(rendered.toLowerCase()).not.toContain(LOGIN.toLowerCase());
-      expect(rendered).not.toContain("signing off on the migration plan");
-      expect(rendered).toContain("No generalized conventions recorded yet.");
+      expect(rendered.toLowerCase()).toContain(LOGIN.toLowerCase());
     });
   });
 
@@ -189,4 +194,68 @@ test("LearningReviewerProfileError carries its reason", () => {
   const error = new LearningReviewerProfileError("some-reason", "message");
   expect(error.reason).toBe("some-reason");
   expect(error.name).toBe("LearningReviewerProfileError");
+});
+
+// R6-F1 (review round 6, PR #691): `refuseIfAttributed` used to run a plain,
+// whole-rendered-document `String.includes` scan — unlike
+// `containsConfiguredLogin` everywhere else, it was never boundary-aware and
+// was never restricted to variable content. `renderReviewerProfile`'s own
+// FIXED template prose contains "review-conventions"/"Learned .../this
+// reviewer's"/"## Conventions" as literal substrings, so a configured login
+// like `revie`, `conve`, `learn`, or `profi` — never named by any actual
+// lesson — refused EVERY reviewer-profile write for that project outright.
+// Fixed by running `containsConfiguredLogin` (the same identifier-boundary
+// rule used everywhere else) over ONLY the reviewer id and the already-
+// generalized `actions`, never the surrounding rendered document.
+describe("applyReviewerProfile: a configured login that is a substring of the fixed profile template wording (R6-F1)", () => {
+  test.each(["revie", "conve"])(
+    "login '%s' (fragment of the fixed template's own words, never named by any lesson) does not false-refuse a clean profile apply",
+    async (login) => {
+      await withProject(async (root) => {
+        await seedConfig(root, { schemaVersion: 1, skill: "alpha/module", repo: "o/r", authors: [login], reviewerProfiles: [login] });
+        const reviewerId = reviewerIdFor(SHA_A, login);
+        const record = makeReviewConventionsRecord({
+          trigger: "prefer early returns before dereferencing a pointer",
+          action: "add a null check before dereferencing the pointer",
+          reviewerProfile: { reviewerId, generalizedFrom: 1 },
+        });
+        await writePattern(root, record, { capability: createAcceptCapability() });
+
+        const result = await applyReviewerProfile(root, reviewerId);
+        expect(result.added).toBe(1);
+        const rendered = await readFile(path.join(root, result.path), "utf8");
+        expect(rendered).toContain("add a null check before dereferencing the pointer");
+      });
+    },
+  );
+
+  // A genuine login occurrence (a real identifier boundary on both sides,
+  // e.g. "octo-reviewer flagged this" or an "@octo-reviewer" mention) is
+  // still stripped by `generalizeLesson` before it ever reaches
+  // `refuseIfAttributed` or the rendered document — the rendered profile
+  // never carries the login, whether via a hard refusal or (as here) a clean
+  // strip. Two accepted records for the same reviewer id: one names the
+  // login, the other is clean — proving the tainted one is generalized
+  // cleanly (never dropped as unrelated, never leaking the login) rather
+  // than sinking the whole apply.
+  test("a lesson that genuinely names the login ('@octo-reviewer') never reaches the rendered profile with the login in it", async () => {
+    await withProject(async (root) => {
+      const login = "octo-reviewer";
+      await seedConfig(root, { schemaVersion: 1, skill: "alpha/module", repo: "o/r", authors: [login], reviewerProfiles: [login] });
+      const reviewerId = reviewerIdFor(SHA_A, login);
+      const named = makeReviewConventionsRecord({
+        id: "review-conventions.named-aaaaaaaa",
+        trigger: "prefer early returns before dereferencing a pointer",
+        action: "as @octo-reviewer pointed out, add a null check before dereferencing the pointer",
+        reviewerProfile: { reviewerId, generalizedFrom: 1 },
+      });
+      await writePattern(root, named, { capability: createAcceptCapability() });
+
+      const result = await applyReviewerProfile(root, reviewerId);
+      const rendered = await readFile(path.join(root, result.path), "utf8");
+      expect(rendered.toLowerCase()).not.toContain(login);
+      expect(rendered).not.toContain("@");
+      expect(rendered).toContain("add a null check before dereferencing the pointer");
+    });
+  });
 });

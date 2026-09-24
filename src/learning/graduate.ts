@@ -22,7 +22,7 @@ import { isPathInside, pathExists, withFileLock, writeFileAtomic } from "../lib/
 import { loadReviewLearningConfigSafe, type ReviewLearningConfig } from "../review/review-learning";
 import { appendDecision } from "./decisions";
 import { assertInsideLearningRoot, graduationDir, learningDataDir, projectLockPath } from "./paths";
-import { containsConfiguredLogin } from "./reviewer-id";
+import { containsConfiguredLogin, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { listPatterns, readPattern, updatePattern, type StoreEnvOptions } from "./store";
 import type { GraduationTarget, LearnedPattern, LearningDomain, LearningScope } from "./types";
@@ -276,10 +276,25 @@ function classify(cluster: readonly LearnedPattern[]): GraduationTarget | undefi
   return undefined;
 }
 
+/**
+ * A record's `trigger`, with `reviewer-comment`'s fixed
+ * `REVIEWER_COMMENT_TRIGGER_PREFIX` wording stripped first (R5-F1/R5-F2):
+ * that prefix's own constant words ("preparing", "change", "review",
+ * "project") are not the member's actual content, and letting them into
+ * `topKeywords`/`suggestedNameFor` produced graduation proposal names and
+ * summaries built out of Keryx's own template prose rather than what any
+ * comment said — the same fixed-wording contamination `containsConfiguredLogin`'s
+ * removed substring fallback used to false-refuse on (see `reviewer-id.ts`).
+ */
+function keywordSourceFor(record: LearnedPattern): string {
+  const trigger = record.provenance.extractor === "reviewer-comment" ? stripReviewerCommentTriggerPrefix(record.trigger) : record.trigger;
+  return `${trigger} ${record.action}`;
+}
+
 function topKeywords(cluster: readonly LearnedPattern[], limit: number): string[] {
   const frequency = new Map<string, number>();
   for (const record of cluster) {
-    for (const word of keywordsOf(`${record.trigger} ${record.action}`)) {
+    for (const word of keywordsOf(keywordSourceFor(record))) {
       frequency.set(word, (frequency.get(word) ?? 0) + 1);
     }
   }
@@ -490,7 +505,16 @@ function renderAgentMarkdown(definition: AgentDefinition): string {
 
 interface AgentCandidateBuild {
   readonly definition: AgentDefinition;
-  /** Every member record's raw `trigger`/`action` (variable, comment-derived text) — what a login gate should inspect, NOT the assembled `role`/`body`, which also carry this function's own fixed template wording (R4-F1, see `applyGraduation`). */
+  /**
+   * Every member record's `trigger`/`action` (variable, comment-derived
+   * text) — `trigger` stripped of `REVIEWER_COMMENT_TRIGGER_PREFIX` first
+   * when the member's `provenance.extractor === "reviewer-comment"` — what a
+   * login gate should inspect. Never the proposal's own `description`
+   * (`proposal.summary`) or `suggestedName`, and never the assembled
+   * `role`/`body`: all of those also carry this function's own or
+   * `runGraduate`'s fixed template wording (R4-F1/R5-F1/R5-F2, see
+   * `applyGraduation`).
+   */
   readonly memberTexts: readonly string[];
 }
 
@@ -501,7 +525,9 @@ async function buildAgentCandidate(root: string, proposal: GraduationProposalFil
     const record = await readMember(root, id, storeOptions);
     if (record !== undefined) {
       members.push(`- ${record.trigger} -> ${record.action} (source: ${id})`);
-      memberTexts.push(record.trigger, record.action);
+      const triggerForLoginCheck =
+        record.provenance.extractor === "reviewer-comment" ? stripReviewerCommentTriggerPrefix(record.trigger) : record.trigger;
+      memberTexts.push(triggerForLoginCheck, record.action);
     } else {
       members.push(`- (source record "${id}" not found)`);
     }
@@ -573,23 +599,30 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
     throw new LearningGraduateError("learning-text-refused", `agent candidate refused by the security scan: ${scan.findings.join(", ")}`);
   }
 
-  // R2-F6: the same case-insensitive configured-login substring refusal
+  // R2-F6: the same case-insensitive configured-login refusal
   // `generalizeLesson`/extract's upsert apply, run here too — an attribution
   // fragment that somehow survived into a stored member record (or arrived
   // via a differently configured login list at graduation time) is still
   // refused before it reaches `.metaproject/agents/<name>.md`.
   //
-  // R4-F1: unlike the security scan above, this login gate checks only the
-  // VARIABLE content — `candidate.description` (the proposal's own summary),
-  // `proposal.suggestedName`, and every member record's raw `trigger`/
-  // `action` (`memberTexts`) — never the assembled `candidate.role`/`.body`.
-  // Those two are built from this function's own FIXED template wording
-  // ("Applies guidance graduated from...", "## Guidance graduated from
-  // learned patterns") plus the member text, and `containsConfiguredLogin`'s
-  // 5+-char substring fallback cannot tell the constant prose from the
-  // member's content — a configured login like `guida` (inside "guidance")
-  // would refuse EVERY agent candidate outright, regardless of what any
-  // member record actually said.
+  // R4-F1/R5-F1/R5-F2: this login gate checks ONLY `memberTexts` — each
+  // member's own `action`, and its `trigger` with
+  // `REVIEWER_COMMENT_TRIGGER_PREFIX` already stripped when
+  // `provenance.extractor === "reviewer-comment"` (`buildAgentCandidate`).
+  // It never checks `candidate.description` (== `proposal.summary`) or
+  // `proposal.suggestedName`: both are built by `runGraduate` (this
+  // proposal's `summary`/`topKeywords`/`suggestedNameFor`) out of a mix of
+  // member content AND fixed wording — the summary's own template prose
+  // ("accepted", "pattern(s)", "sharing"), the literal `domain` string
+  // (`"review-conventions"` itself contains `revie`/`conve` as substrings),
+  // and — before `topKeywords` stripped it — `REVIEWER_COMMENT_TRIGGER_PREFIX`
+  // ("preparing", "change", "review", "project"). A configured login that
+  // happens to be a fragment of any of that fixed prose (`chang`, `prepa`,
+  // `accep`, `shari`, `revie`, `conve`) would false-refuse a graduation that
+  // never actually named the login, no matter what any member record said.
+  // Checking only the per-member, prefix-stripped `trigger`/`action` text
+  // keeps this gate looking at exactly the variable content a login could
+  // actually appear in.
   //
   // R3-F3: a malformed config surfaces as `LearningGraduateConfigError` from
   // `configuredReviewLogins` — converted here into the named
@@ -607,10 +640,7 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
     }
     throw error;
   }
-  if (
-    configuredLogins.length > 0 &&
-    [candidate.description, proposal.suggestedName, ...memberTexts].some((text) => containsConfiguredLogin(text, configuredLogins))
-  ) {
+  if (configuredLogins.length > 0 && memberTexts.some((text) => containsConfiguredLogin(text, configuredLogins))) {
     throw new LearningGraduateError(
       "learning-text-refused",
       `agent candidate for proposal "${proposalId}" refused: contains a configured reviewer login`,
