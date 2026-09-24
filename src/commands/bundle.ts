@@ -34,7 +34,10 @@ import {
   type BundleScope,
   type PlanEntry,
 } from "../bundle/service";
+import { getHarnessAdapter, harnessAdapterIds } from "../integrations/registry";
 import { installedRulesExportHarnesses, renderRulesForHarnesses, type RulesExportResult } from "../integrations/rules-export";
+
+const RULES_EXPORT_SURFACE_ID = "rules-export";
 
 const CLI_VERSION = packageJson.version as string;
 
@@ -259,8 +262,29 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
     return;
   }
   const targetScope = targetScopeArg as BundleScope | undefined;
-  const renderFor = collectRepeatableCsv(args, "--render-for");
   const force = collectRepeatableRaw(args, "--force");
+
+  // Validate every `--render-for` id up front — before opening/planning the
+  // bundle — so an unknown or rules-export-less harness id refuses closed
+  // (exit 2, zero writes) instead of importing successfully and only being
+  // reported "unsupported" by `renderRulesForHarnesses` afterward.
+  const renderForRaw = collectRepeatableRaw(args, "--render-for");
+  const renderFor = collectRepeatableCsv(args, "--render-for");
+  if (renderForRaw.length > 0 && renderFor.length === 0) {
+    failUsage("--render-for requires at least one non-empty harness id");
+    return;
+  }
+  for (const harnessId of renderFor) {
+    const adapter = getHarnessAdapter(harnessId);
+    if (adapter === undefined) {
+      failUsage(`--render-for: unknown harness id ${JSON.stringify(harnessId)} (known: ${harnessAdapterIds().sort().join(", ")})`);
+      return;
+    }
+    if (!adapter.surfaces.some((surface) => surface.id === RULES_EXPORT_SURFACE_ID)) {
+      failUsage(`--render-for: harness ${JSON.stringify(harnessId)} has no rules-export surface`);
+      return;
+    }
+  }
 
   const opened = await openBundle(path.resolve(cwd, target));
   if (!opened.ok) {

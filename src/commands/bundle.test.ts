@@ -367,14 +367,11 @@ describe("keryx bundle import --render-for", () => {
     expect(existsSync(path.join(targetRoot, ".cursor", "rules", "keryx-rules.mdc"))).toBe(false);
   });
 
-  // BUG (reported under flow 313 T12/T13 verification, not fixed here — this
-  // lane owns tests only, not src/commands/bundle.ts): handleImport never
-  // validates --render-for values against known harness ids before writing.
-  // Today an unknown id still imports (exit 0, files written) and only
-  // renderRulesForHarnesses reports it "unsupported" afterwards — it does
-  // NOT refuse closed the way --scope/--target-scope do. Re-enable this test
-  // (drop `.todo`) once bundle.ts validates renderFor up front.
-  test.todo("an unknown --render-for harness id is refused (exit 2) before anything is written", async () => {
+  // handleImport validates every --render-for id up front — before
+  // opening/planning the bundle — against the W5 harness registry, so an
+  // unknown id refuses closed (exit 2, zero writes) instead of importing
+  // successfully and only being reported "unsupported" afterward.
+  test("an unknown --render-for harness id is refused (exit 2) before anything is written", async () => {
     const home = await makeTempDir("keryx-bundle-home-");
     process.env.KERYX_HOME = home;
 
@@ -393,6 +390,37 @@ describe("keryx bundle import --render-for", () => {
     install();
     try {
       await bundleCommand(["import", bundleDir, "--render-for", "not-a-real-harness", "--json"], targetRoot);
+      expect(process.exitCode).toBe(2);
+    } finally {
+      restore();
+    }
+
+    // Nothing was written: neither the imported rule file nor any harness file.
+    expect(existsSync(path.join(targetRoot, ".metaproject", "rules", "core", "acme-rule.mdc"))).toBe(false);
+  });
+
+  // A known harness id whose adapter registers no `rules-export` surface
+  // (e.g. "opencode") is refused the same way as an unknown id — never
+  // silently imported and reported "unsupported" only after the fact.
+  test("a known --render-for harness id with no rules-export surface is refused (exit 2) before anything is written", async () => {
+    const home = await makeTempDir("keryx-bundle-home-");
+    process.env.KERYX_HOME = home;
+
+    const sourceRoot = await makeSourceProjectWithRule();
+    const bundleDir = path.join(await makeTempDir("keryx-bundle-out-"), "bundle-out");
+
+    install();
+    try {
+      await bundleCommand(["export", "--scope", "project", "--id", "rule-bundle-no-surface", bundleDir, "--json"], sourceRoot);
+    } finally {
+      restore();
+    }
+
+    const targetRoot = await makeTempDir("keryx-bundle-target-");
+
+    install();
+    try {
+      await bundleCommand(["import", bundleDir, "--render-for", "opencode", "--json"], targetRoot);
       expect(process.exitCode).toBe(2);
     } finally {
       restore();
