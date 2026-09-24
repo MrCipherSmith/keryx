@@ -398,6 +398,89 @@ export function checkHookExfiltrationShape(relativePath: string, hookCommand: st
   ];
 }
 
+// --- hook-remote-exec / bundle-hook-remote-exec -----------------------------
+//
+// R1-F13 (flow 313 W4 review round 1): `checkHookExfiltrationShape` above
+// only flags a command that PIPES OUTPUT INTO curl/wget/nc (exfiltration).
+// It has nothing to say about the opposite, and more common, shape: a
+// download tool's OUTPUT piped into (or substituted into) a shell/interpreter
+// — the classic `curl ... | bash` supply-chain footgun. Five equivalent
+// forms are covered:
+//   1. `curl|wget|fetch ... | [sudo] sh|bash|zsh|dash|ksh|python[3]|node|perl|ruby`
+//   2. `sh|bash|... -c "$(curl|wget|fetch ...)"` (command substitution fed to `-c`)
+//   3. `sh|bash|... <(curl|wget|fetch ...)` (process substitution)
+//   4. `eval "$(curl|wget|fetch ...)"`
+//   5. PowerShell `iex (iwr ...)` / `Invoke-Expression (Invoke-WebRequest ...)`
+// Each shape is checked independent of an interpreter's own `-s`/`-`
+// stdin-marker flags, which never gate whether the shape is dangerous — only
+// whether the flag is present or absent, both still execute remote content.
+const SHELL_INTERPRETERS = "sh|bash|zsh|dash|ksh|python3?|node|perl|ruby";
+const DOWNLOAD_TOOLS = "curl|wget|fetch";
+
+const PIPE_TO_SHELL_RE = new RegExp(
+  `\\b(?:${DOWNLOAD_TOOLS})\\b[^\\n|]*\\|\\s*(?:sudo\\s+)?(?:${SHELL_INTERPRETERS})\\b`,
+  "i",
+);
+const DASH_C_COMMAND_SUB_RE = new RegExp(
+  `\\b(?:${SHELL_INTERPRETERS})\\s+-c\\s+["']?\\$\\(\\s*(?:${DOWNLOAD_TOOLS})\\b`,
+  "i",
+);
+const PROCESS_SUB_RE = new RegExp(`\\b(?:${SHELL_INTERPRETERS})\\s+<\\(\\s*(?:${DOWNLOAD_TOOLS})\\b`, "i");
+const EVAL_COMMAND_SUB_RE = new RegExp(`\\beval\\b[^\\n]*\\$\\(\\s*(?:${DOWNLOAD_TOOLS})\\b`, "i");
+const POWERSHELL_IEX_RE = /\b(?:iex|invoke-expression)\b[^\n]*\(\s*(?:iwr|invoke-webrequest)\b/i;
+
+const REMOTE_EXEC_SHAPES: Array<{ id: string; regex: RegExp }> = [
+  { id: "audit.hook.remote-exec.pipe-to-shell", regex: PIPE_TO_SHELL_RE },
+  { id: "audit.hook.remote-exec.dash-c-command-substitution", regex: DASH_C_COMMAND_SUB_RE },
+  { id: "audit.hook.remote-exec.process-substitution", regex: PROCESS_SUB_RE },
+  { id: "audit.hook.remote-exec.eval-command-substitution", regex: EVAL_COMMAND_SUB_RE },
+  { id: "audit.hook.remote-exec.powershell-iex", regex: POWERSHELL_IEX_RE },
+];
+
+function matchRemoteExecShape(text: string): { id: string; index: number } | undefined {
+  for (const shape of REMOTE_EXEC_SHAPES) {
+    const match = shape.regex.exec(text);
+    if (match) return { id: shape.id, index: match.index };
+  }
+  return undefined;
+}
+
+/** Hook-config `command` strings (JSON, pointer-addressed) — both the live `hooks` surface and, via `bundle-hook-remote-exec`, a staged bundle's `hook-config` entries. */
+export function checkHookRemoteExec(relativePath: string, hookCommand: string, pointer: string): RawFinding[] {
+  const match = matchRemoteExecShape(hookCommand);
+  if (!match) return [];
+  return [
+    {
+      surface: "hooks",
+      check: "hook-remote-exec",
+      severity: "high",
+      confidence: 0.85,
+      path: relativePath,
+      location: { pointer },
+      message: `${relativePath} downloads and executes remote content (${match.id}), a download-and-execute shape.`,
+      evidence: { category: "egress", policyId: match.id, matchedToken: match.id },
+    },
+  ];
+}
+
+/** Free-text content (skill scripts/instructions, line-addressed) — used against a staged bundle's `skill` entry text under `bundle-hook-remote-exec`. */
+export function checkRemoteExecInText(surface: SurfaceId, relativePath: string, content: string): RawFinding[] {
+  const match = matchRemoteExecShape(content);
+  if (!match) return [];
+  return [
+    {
+      surface,
+      check: "hook-remote-exec",
+      severity: "high",
+      confidence: 0.85,
+      path: relativePath,
+      location: { line: lineOfOffset(content, match.index) },
+      message: `${relativePath} downloads and executes remote content (${match.id}), a download-and-execute shape.`,
+      evidence: { category: "egress", policyId: match.id, matchedToken: match.id },
+    },
+  ];
+}
+
 // I2 (review round 3, investigated): only the SEPARATOR set was widened here
 // (adding `||`, alongside the already-handled `;`/`&&`) — the anchor to the
 // END of the string stays. A genuinely mid-command `exit 0` with more

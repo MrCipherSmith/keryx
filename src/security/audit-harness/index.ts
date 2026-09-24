@@ -25,12 +25,14 @@ import {
   checkBypassFlagPresent,
   checkHookCommandInjection,
   checkHookExfiltrationShape,
+  checkHookRemoteExec,
   checkHookSilentSuppression,
   checkHookSilentSuppressionInScript,
   checkInjectionInText,
   checkMcpManifest,
   checkMissingDenyList,
   checkOverPermissiveAllowlist,
+  checkRemoteExecInText,
   checkSecretsInText,
   checkUnpinnedMcpLauncher,
 } from "./checks";
@@ -106,6 +108,36 @@ async function safeReadText(absolute: string): Promise<string | undefined> {
     return await readFile(absolute, "utf8");
   } catch {
     return undefined;
+  }
+}
+
+async function safeReadBuffer(absolute: string): Promise<Buffer | undefined> {
+  try {
+    return await readFile(absolute);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * R1-F6/R1-F8 (flow 313 W4 review round 1): whether `buffer` is text content
+ * a bundle `skill` entry's checks can run against. Node's `Buffer#toString
+ * ("utf8")` is NEVER fatal — it silently replaces invalid byte sequences
+ * with U+FFFD — so a binary payload (an actual binary, or bytes crafted to
+ * dodge the secret/injection/auto-run regexes as raw bytes) used to decode
+ * to *something* and pass straight through the text checks. Decode with a
+ * FATAL `TextDecoder` instead: any invalid UTF-8 byte sequence throws. A NUL
+ * byte is refused separately — valid one-byte UTF-8, but never legitimate in
+ * a markdown/script skill file, and a NUL is exactly the kind of "make the
+ * later text checks misbehave" payload this guards against.
+ */
+function isTextContent(buffer: Buffer): boolean {
+  if (buffer.includes(0)) return false;
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -222,7 +254,52 @@ async function scanImportedBundle(
         raw.push(...asBundleFindings(checkHookCommandInjection(entry.path, command, pointer), "bundle-hook-command-injection"));
         raw.push(...asBundleFindings(checkHookExfiltrationShape(entry.path, command, pointer), "bundle-hook-exfiltration-shape"));
         raw.push(...asBundleFindings(checkHookSilentSuppression(entry.path, command, pointer), "bundle-hook-silent-suppression"));
+        raw.push(...asBundleFindings(checkHookRemoteExec(entry.path, command, pointer), "bundle-hook-remote-exec"));
       }
+      continue;
+    }
+
+    // R1-F6/R1-F8: a `skill` entry used to only be text-decoded via
+    // `safeReadText`, which never fails (Node's utf8 decode replaces invalid
+    // bytes rather than throwing), and only its EXACT-CASE `SKILL.md`
+    // basename got the auto-run/injection-in-instructions checks — so a
+    // `skill.md`/`Skill.MD` case variant (identical file on a case-
+    // insensitive filesystem), or any other file in the skill (a
+    // `reference.md`, a `notes.txt`), evaded both checks entirely. Every
+    // file of kind `skill` is now read as raw bytes first: a binary payload
+    // is refused outright (reason: binary-content) so the surface reports
+    // `error` and the caller (`bundle/audit.ts#auditBundlePlan`) fails
+    // closed rather than silently skipping unscanned content; every TEXT
+    // file — any name, any extension — gets the full check set, not just a
+    // canonically-cased `SKILL.md`.
+    if (entry.kind === "skill") {
+      const buffer = await safeReadBuffer(absolute);
+      if (buffer === undefined || !isTextContent(buffer)) {
+        unreadable.push(entry.path);
+        continue;
+      }
+      const content = buffer.toString("utf8");
+      scanned.push(entry.path);
+      raw.push(
+        ...asBundleFindings(
+          checkSecretsInText("skills", "skill-script-secret", entry.path, content, "high"),
+          "bundle-skill-script-secret",
+        ),
+      );
+      raw.push(
+        ...asBundleFindings(
+          checkInjectionInText("skills", "skill-script-injection", entry.path, content, "high"),
+          "bundle-skill-script-injection",
+        ),
+      );
+      raw.push(...asBundleFindings(checkAutoRunDirective("skills", entry.path, content), "bundle-auto-run-directive"));
+      raw.push(
+        ...asBundleFindings(
+          checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
+          "bundle-prompt-injection-in-instructions",
+        ),
+      );
+      raw.push(...asBundleFindings(checkRemoteExecInText("skills", entry.path, content), "bundle-hook-remote-exec"));
       continue;
     }
 
@@ -234,30 +311,6 @@ async function scanImportedBundle(
     scanned.push(entry.path);
 
     switch (entry.kind) {
-      case "skill": {
-        raw.push(
-          ...asBundleFindings(
-            checkSecretsInText("skills", "skill-script-secret", entry.path, content, "high"),
-            "bundle-skill-script-secret",
-          ),
-        );
-        raw.push(
-          ...asBundleFindings(
-            checkInjectionInText("skills", "skill-script-injection", entry.path, content, "high"),
-            "bundle-skill-script-injection",
-          ),
-        );
-        if (path.basename(entry.path) === "SKILL.md") {
-          raw.push(...asBundleFindings(checkAutoRunDirective("skills", entry.path, content), "bundle-auto-run-directive"));
-          raw.push(
-            ...asBundleFindings(
-              checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
-              "bundle-prompt-injection-in-instructions",
-            ),
-          );
-        }
-        break;
-      }
       case "rule": {
         raw.push(
           ...asBundleFindings(
@@ -296,6 +349,11 @@ async function scanImportedBundle(
             "bundle-prompt-injection-in-instructions",
           ),
         );
+        // R1-F8: a learned pattern or memory entry is loaded into agent
+        // context exactly like a rule/skill/agent file — it previously got
+        // no `checkAutoRunDirective` at all, so an auto-run directive
+        // smuggled in through learning/memory import evaded every check.
+        raw.push(...asBundleFindings(checkAutoRunDirective("instructions", entry.path, content), "bundle-auto-run-directive"));
         break;
       }
     }
@@ -493,6 +551,7 @@ export async function computeAuditInternal(
         raw.push(...checkHookCommandInjection(relativePath, command, pointer));
         raw.push(...checkHookExfiltrationShape(relativePath, command, pointer));
         raw.push(...checkHookSilentSuppression(relativePath, command, pointer));
+        raw.push(...checkHookRemoteExec(relativePath, command, pointer));
       }
     }
     for (const relativePath of nonJsonFiles) {

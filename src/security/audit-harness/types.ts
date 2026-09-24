@@ -29,6 +29,10 @@ export type CheckId =
   | "hook-command-injection"
   | "hook-exfiltration-shape"
   | "hook-silent-suppression"
+  // Flow 313 (W4 portability) review round 1, R1-F13: a curl/wget/fetch (or
+  // PowerShell iex/Invoke-Expression) download-and-execute shape on a hook
+  // command — see `checkHookRemoteExec`/`checkRemoteExecInText` in checks.ts.
+  | "hook-remote-exec"
   | "agent-unrestricted-tools"
   | "agent-missing-model-tier"
   | "skill-script-secret"
@@ -44,6 +48,9 @@ export type CheckId =
   | "bundle-hook-command-injection"
   | "bundle-hook-exfiltration-shape"
   | "bundle-hook-silent-suppression"
+  // R1-F13: same download-and-execute shape, on a staged bundle's hook-config
+  // command or skill script text.
+  | "bundle-hook-remote-exec"
   | "bundle-agent-unrestricted-tools"
   | "bundle-agent-missing-model-tier"
   | "bundle-skill-script-secret"
