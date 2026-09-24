@@ -15,6 +15,7 @@ the one that describes shipped behaviour.
 - [architecture.md](./architecture.md) — System overview, layered architecture, invariants, cross-module data flows, integrations.
 - [harness.md](./harness.md) — The agent runtime: doors, providers, sessions and forking, policy, containment, evidence and the completion gate, record/replay.
 - [integrations.md](./integrations.md) — The harness adapter registry: `keryx integrations install|doctor|uninstall|matrix`, install-state and drift, the generated capability matrix, and per-harness notes (Gemini CLI, Kiro, GitHub Copilot agent, Zed).
+- [hooks.md](./hooks.md) — The `keryx shell` lifecycle hook runtime: the ten events, config files, composition with the policy engine, built-ins, the `keryx hooks` CLI, and the W3/W8 extension points.
 - [modules.md](./modules.md) — Per-module reference: purpose, CLI surface, key files, mechanics, and data paths.
 - [cli-reference.md](./cli-reference.md) — Every command, subcommand, flag, and exit code.
 - [commands-by-task.md](./commands-by-task.md) — Every command grouped by task, generated from the same table `keryx help` and the TUI's `/help` modal use.

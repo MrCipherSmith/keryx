@@ -7,17 +7,86 @@
   "id": "308",
   "slug": "w8-harness-config-security-audit-and-det",
   "title": "W8: harness-config security audit and deterministic impact-evidence gate",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-24T00:56:54.436Z",
-  "updatedAt": "2026-09-24T03:03:18.913Z",
+  "updatedAt": "2026-09-24T04:10:57.812Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:719bc571f144a60920d9919526bb068689d873513e3ce234ba32f7dd45e62fd9",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-24T04:09:37.945Z",
+      "note": "audit-harness.test.ts: CLAUDE.md-only project reports all 7 surfaces, absent ones not-applicable (never scanned), JSON validated against harness-audit-report.schema.json; merged in #676 (412d7121), CI green"
+    },
+    "AC2": {
+      "at": "2026-09-24T04:09:38.033Z",
+      "note": "audit-harness.test.ts compares mcp-tool-poisoning (category, policyId, severity) against scanMcpManifest on the same manifest; fixture mcp-poisoning; #676"
+    },
+    "AC3": {
+      "at": "2026-09-24T04:09:38.123Z",
+      "note": "tests + fixtures mcp-unpinned and mcp-unpinned-codex-toml: unpinned npx flagged high, @1.2.3 not flagged; #676"
+    },
+    "AC4": {
+      "at": "2026-09-24T04:09:38.219Z",
+      "note": "score.ts tests (1 critical -> 75, grade C); CLI on fixture hook-injection gives score 75 grade C; #676"
+    },
+    "AC5": {
+      "at": "2026-09-24T04:09:38.317Z",
+      "note": "file+dir snapshot tests around runHarnessAudit/CLI --fix-proposals; e2e run on 15 fixtures: hashes unchanged; applyAuditProposal writes changelog.jsonl + applied marker, refuses repeat/manual; #676"
+    },
+    "AC6": {
+      "at": "2026-09-24T04:09:38.414Z",
+      "note": "security-audit-harness.test.ts CLI --ci exit 1 high / 0 medium-only via shared isPassGate (src/commands/security-gate.ts); e2e fixture run; #676"
+    },
+    "AC7": {
+      "at": "2026-09-24T04:09:38.510Z",
+      "note": "baseline tests: entry without justification fails schema; without expiresAt valid + low indefinite-suppression; fixture baseline-indefinite; #676"
+    },
+    "AC8": {
+      "at": "2026-09-24T04:09:38.629Z",
+      "note": "baseline tests + fixture baseline-tampered: tamperState mismatch, --ci exit 1 with zero findings; #676"
+    },
+    "AC9": {
+      "at": "2026-09-24T04:09:38.726Z",
+      "note": "affected-report.test.ts compares provider importers JSON with gdgraph affected --json stdout; orchestrator check on repo for 3 files incl. unindexed: byte-identical (journal T9); #676"
+    },
+    "AC10": {
+      "at": "2026-09-24T04:09:38.824Z",
+      "note": "provider.test.ts: repeat edit same session no block, dampened after N denials, different file full block; #676"
+    },
+    "AC11": {
+      "at": "2026-09-24T04:09:38.916Z",
+      "note": "evidence.test.ts: unindexed target renders 'not indexed', never 'no importers found'; #676"
+    },
+    "AC12": {
+      "at": "2026-09-24T04:09:39.003Z",
+      "note": "provider/evidence tests: batch of three first-touch files names all three; #676"
+    },
+    "AC13": {
+      "at": "2026-09-24T04:09:39.092Z",
+      "note": "provider.test.ts: rm -rf / asks rollback-line-required in every profile/mode, non-destructive never asks, KERYX_DISABLE_IMPACT_GATE bypass logged disabled-env; #676"
+    },
+    "AC14": {
+      "at": "2026-09-24T04:09:39.180Z",
+      "note": "provider.test.ts: gate-advisory default / gate strict; forced throw -> unattended-untrusted deny hook-advisory-failed, supervised allow + warning, strict deny hook-crashed; #676"
+    },
+    "AC15": {
+      "at": "2026-09-24T04:09:39.276Z",
+      "note": "provider/config tests: disabled-env and disabled-config log events distinct from injected; unsealed/mismatched config kill switch untrusted (config-untrusted); #676"
+    },
+    "AC16": {
+      "at": "2026-09-24T04:09:39.383Z",
+      "note": "fixtures.test.ts asserts exact check-id set per 15 labeled fixtures incl. clean control; e2e CLI run journal T8; proposals never self-apply (tests); #676"
+    },
+    "AC17": {
+      "at": "2026-09-24T04:09:39.510Z",
+      "note": "git diff stack/wave0 -- src/harness src/integrations empty (T10); W6 slot API documented in src/security/impact-evidence/index.ts header and PR body; #676"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/676"
   },
   "baseBranch": "feat/agent-platform-expansion",
   "tasks": [
@@ -76,7 +145,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 7,
@@ -120,7 +189,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -621,6 +691,110 @@
       "at": "2026-09-24T03:03:18.913Z",
       "event": "task-attempt",
       "detail": "T4: started (attempt 7) — narrow verification review of T17 (re-planned): 0 findings >= minor; 4 info"
+    },
+    {
+      "at": "2026-09-24T04:09:25.576Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/676 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T04:09:37.945Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: audit-harness.test.ts: CLAUDE.md-only project reports all 7 surfaces, absent ones not-applicable (never scanned), JSON validated against harness-audit-report.schema.json; merged in #676 (412d7121), CI green"
+    },
+    {
+      "at": "2026-09-24T04:09:38.033Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: audit-harness.test.ts compares mcp-tool-poisoning (category, policyId, severity) against scanMcpManifest on the same manifest; fixture mcp-poisoning; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:38.123Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tests + fixtures mcp-unpinned and mcp-unpinned-codex-toml: unpinned npx flagged high, @1.2.3 not flagged; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:38.219Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: score.ts tests (1 critical -> 75, grade C); CLI on fixture hook-injection gives score 75 grade C; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:38.317Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: file+dir snapshot tests around runHarnessAudit/CLI --fix-proposals; e2e run on 15 fixtures: hashes unchanged; applyAuditProposal writes changelog.jsonl + applied marker, refuses repeat/manual; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:38.415Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: security-audit-harness.test.ts CLI --ci exit 1 high / 0 medium-only via shared isPassGate (src/commands/security-gate.ts); e2e fixture run; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:38.510Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: baseline tests: entry without justification fails schema; without expiresAt valid + low indefinite-suppression; fixture baseline-indefinite; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:38.629Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: baseline tests + fixture baseline-tampered: tamperState mismatch, --ci exit 1 with zero findings; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:38.726Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: affected-report.test.ts compares provider importers JSON with gdgraph affected --json stdout; orchestrator check on repo for 3 files incl. unindexed: byte-identical (journal T9); #676"
+    },
+    {
+      "at": "2026-09-24T04:09:38.824Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: provider.test.ts: repeat edit same session no block, dampened after N denials, different file full block; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:38.916Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: evidence.test.ts: unindexed target renders 'not indexed', never 'no importers found'; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:39.003Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: provider/evidence tests: batch of three first-touch files names all three; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:39.092Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: provider.test.ts: rm -rf / asks rollback-line-required in every profile/mode, non-destructive never asks, KERYX_DISABLE_IMPACT_GATE bypass logged disabled-env; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:39.180Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: provider.test.ts: gate-advisory default / gate strict; forced throw -> unattended-untrusted deny hook-advisory-failed, supervised allow + warning, strict deny hook-crashed; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:39.276Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: provider/config tests: disabled-env and disabled-config log events distinct from injected; unsealed/mismatched config kill switch untrusted (config-untrusted); #676"
+    },
+    {
+      "at": "2026-09-24T04:09:39.384Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: fixtures.test.ts asserts exact check-id set per 15 labeled fixtures incl. clean control; e2e CLI run journal T8; proposals never self-apply (tests); #676"
+    },
+    {
+      "at": "2026-09-24T04:09:39.510Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: git diff stack/wave0 -- src/harness src/integrations empty (T10); W6 slot API documented in src/security/impact-evidence/index.ts header and PR body; #676"
+    },
+    {
+      "at": "2026-09-24T04:09:43.466Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T04:10:50.647Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T04:10:57.812Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

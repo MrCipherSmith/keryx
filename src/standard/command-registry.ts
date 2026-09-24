@@ -1107,6 +1107,82 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     read: true,
   },
   {
+    module: "hooks",
+    command: "hooks list",
+    summary:
+      "The merged, resolved keryx shell lifecycle hook set (built-in -> user -> project), with id, event(s), matcher, class, scope and enabled state. With no config files present, exactly the five built-ins, all enabled.",
+    intent: ["hooks list", "покажи хуки", "list lifecycle hooks", "какие хуки зарегистрированы"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the merged list as JSON instead of text" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "hooks",
+    command: "hooks validate",
+    summary:
+      "Validate .metaproject/hooks.json and ~/.keryx/hooks.json against hook-config.schema.json, reject an id colliding with a built-in, and best-effort (no execution) check that each hook command's argv[0] resolves.",
+    intent: ["hooks validate", "проверь конфиг хуков", "validate hook config"],
+    args: [
+      { name: "json", type: "bool", required: false, desc: "print diagnostics/result as JSON" },
+      { name: "ci", type: "bool", required: false, desc: "machine-friendly invocation for CI; same non-zero-on-error semantics as without it" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "hooks",
+    command: "hooks test",
+    summary:
+      "Run one registered hook once, through the real runner, against a synthetic (or --payload-file) event payload, and report its decision, exit code, stdout/stderr, duration and failure class.",
+    intent: ["hooks test", "протестируй хук", "test a lifecycle hook"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "the hook's registered id, from `keryx hooks list`" },
+      { name: "event", type: "string", required: false, desc: "which event to run it under, when the id is registered on more than one" },
+      { name: "payload-file", type: "path", required: false, desc: "JSON file to use as the event payload instead of a synthetic one" },
+      { name: "json", type: "bool", required: false, desc: "print the run report as JSON" },
+      {
+        name: "profile",
+        type: "enum",
+        required: false,
+        values: ["read-only-review", "monitored-trusted-local", "unattended-untrusted"],
+        desc: "policy profile to evaluate failure-semantics effects under",
+      },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "spawns the hook's own command (or invokes its in-process port), which may itself write or read arbitrary state — this command's own state is unaffected",
+    ],
+  },
+  {
+    module: "hooks",
+    command: "hooks enable",
+    summary:
+      "Re-enable a hook registration: removes a Keryx-managed disable override for a built-in, or flips `enabled: true` on a project/user hook.",
+    intent: ["hooks enable", "включи хук", "enable a lifecycle hook"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "the hook id to enable" },
+      { name: "user", type: "bool", required: false, desc: "target ~/.keryx/hooks.json instead of .metaproject/hooks.json" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["rewrites .metaproject/hooks.json, or ~/.keryx/hooks.json with --user, updating _keryxManaged.managedHookIds"],
+  },
+  {
+    module: "hooks",
+    command: "hooks disable",
+    summary:
+      "Disable a hook registration: writes a disable-only override for a built-in, or flips `enabled: false` on a project/user hook.",
+    intent: ["hooks disable", "выключи хук", "disable a lifecycle hook"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "the hook id to disable" },
+      { name: "user", type: "bool", required: false, desc: "target ~/.keryx/hooks.json instead of .metaproject/hooks.json" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["rewrites .metaproject/hooks.json, or ~/.keryx/hooks.json with --user, updating _keryxManaged.managedHookIds"],
+  },
+  {
     module: "testing",
     command: "test analyze",
     summary: "Analyze the test suite and refresh the testing context report.",

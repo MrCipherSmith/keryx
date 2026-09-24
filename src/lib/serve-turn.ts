@@ -20,6 +20,13 @@ import { randomUUID } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import type { HarnessConfig } from "../harness/config";
+import {
+  createHookRuntime,
+  createRealHookRunner,
+  loadHookConfig,
+  resolveHookHomeDir,
+  type HookRuntime,
+} from "../harness/hooks";
 import type { PolicyDecision, PolicyProfile } from "../harness/policy/types";
 import type { NormalizedEvent, ProviderPort } from "../harness/provider/types";
 import { type HarnessRunOutput, runOffline, type RunDeps } from "../harness/run/run";
@@ -28,6 +35,7 @@ import type { ToolExecutorPort, ToolInvocation, ToolResult } from "../harness/to
 import type { HarnessRunInput } from "../harness/types";
 import { createSecurityService } from "../security/service";
 import type { SecurityService } from "../security/types";
+import { createShellImpactEvidenceProvider } from "./impact-evidence-hook-adapter";
 import { listProjects } from "./project-registry";
 import {
   appendTurnEvent,
@@ -267,6 +275,17 @@ export interface RunTurnInput {
    */
   containmentAvailable?: () => boolean;
   /**
+   * Environment consulted for `KERYX_HOOKS=off` when building this turn's
+   * `RunDeps.hooks` (flow 306, W6, T15) — `process.env` by default. Its own
+   * seam for the same reason `AcpServerOptions.hooksEnv` exists (`../acp/
+   * server.ts`): a test that calls `runRemoteTurn` directly runs it
+   * IN-PROCESS, not as `keryx serve`'s own subprocess, so a built-in command
+   * hook's `resolveKeryxArgv` fallback (`[execPath, scriptPath, ...rest]`
+   * from `process.argv[1]`) would resolve the test runner's own entry, not
+   * `keryx`'s.
+   */
+  hooksEnv?: NodeJS.ProcessEnv;
+  /**
    * The tools a remote turn may call. EMPTY by default, and that is the whole
    * posture of this slice: a remote turn that registers no tools cannot execute
    * one, so the `denyingExecutor` below is a floor rather than a control.
@@ -308,6 +327,100 @@ export interface RunTurnOutput {
   turnId: string;
   sessionId: string;
   result: TurnResult;
+}
+
+/**
+ * Fail-closed placeholder for an invalid `hooks.json` (flow 306, W6, T15) —
+ * every gate-capable `fire()` denies. Mirrors `commands/agent-hooks.ts`'s
+ * `createInvalidConfigRuntime`, which this module cannot import: `lib/` sits
+ * BELOW `commands/` in this codebase's layering (`commands` depends on
+ * `lib`, never the reverse), so the two copies exist because one file that
+ * both could import does not. An invalid/tampered project config must never
+ * silently run a remote turn with hooks disabled — that would let a broken
+ * or tampered `.metaproject/hooks.json` quietly weaken every remote turn's
+ * `UserPromptSubmit`/`PreToolUse` gate to nothing.
+ */
+function invalidHookConfigRuntime(): HookRuntime {
+  const denyRecord = {
+    hookId: "keryx.hook-config-invalid",
+    class: "gate" as const,
+    scope: "builtin" as const,
+    outcome: "deny" as const,
+    failure: "malformed" as const,
+    reason:
+      "hooks.json failed to load; every PreToolUse/UserPromptSubmit is denied until it is fixed (see `keryx hooks validate`).",
+    durationMs: 0,
+    changedOutcome: true,
+  };
+  const self: HookRuntime = {
+    interactive: false,
+    registrations: () => [],
+    inheritedHookIds: () => [],
+    forChild: () => invalidHookConfigRuntime(),
+    async fire(event) {
+      const isGate = event === "PreToolUse" || event === "UserPromptSubmit" || event === "Stop" || event === "SubagentStart";
+      return {
+        decisions: isGate ? [{ hookId: denyRecord.hookId, decision: "deny" }] : [],
+        ...(isGate ? { tightened: "deny" as const, denyReason: "hook-config-invalid" } : {}),
+        additionalContext: [],
+        records: isGate ? [{ ...denyRecord, event }] : [],
+        warnings: [{ name: "hook-malformed-output" as const, hookId: denyRecord.hookId, detail: "hooks.json invalid" }],
+        anomalies: [],
+      };
+    },
+  };
+  return self;
+}
+
+/**
+ * Build this remote turn's `RunDeps.hooks` (flow 306, W6, T15) — the same
+ * config-file merge (`loadHookConfig`) and real spawned runner
+ * (`createRealHookRunner`) `commands/agent-hooks.ts`'s `buildShellHookRuntime`
+ * uses for `keryx shell`/ACP, built here directly (rather than importing that
+ * helper) for the layering reason `invalidHookConfigRuntime` above explains.
+ *
+ * `interactive: false` always — a remote turn already runs headless
+ * (`RunDeps.interactive` just below is the same `false`), so a hook `ask`
+ * tightens straight to `deny` (`tightenOutcome`'s headless-fail-closed rule),
+ * never opens an approval nothing here could answer.
+ */
+function buildRemoteHookRuntime(opts: {
+  projectRoot: string;
+  sessionId: string;
+  runId: string;
+  profileId: PolicyProfile["profileId"];
+  env?: NodeJS.ProcessEnv;
+}): HookRuntime | undefined {
+  const env = opts.env ?? process.env;
+  if (env.KERYX_HOOKS === "off") {
+    return undefined;
+  }
+  // Flow 306 fix round 2 (finding E): the SAME resolver `keryx hooks` and
+  // `buildShellHookRuntime` (`commands/agent-hooks.ts`) use, not a bare
+  // `os.homedir()` that (unlike them) never honored a `KERYX_HOME`
+  // operator/test override. `lib/` may not import from `commands/`, so the
+  // pure resolver lives in `harness/hooks/config.ts` and all three share it.
+  const loaded = loadHookConfig({ projectRoot: opts.projectRoot, homeDir: resolveHookHomeDir(env) });
+  if (!loaded.ok) {
+    return invalidHookConfigRuntime();
+  }
+  return createHookRuntime({
+    registrations: loaded.registrations,
+    runner: createRealHookRunner({ projectRoot: opts.projectRoot }),
+    clock: () => new Date().toISOString(),
+    profileId: opts.profileId,
+    interactive: false,
+    sessionId: opts.sessionId,
+    runId: opts.runId,
+    projectRoot: opts.projectRoot,
+    // T20: same real `keryx.impact-evidence` port `commands/agent-hooks.ts`'s
+    // `buildShellHookRuntime` wires for `keryx shell`/ACP — a remote turn gets
+    // the same gate, not a silent NOOP.
+    // Fix round 3 (F-005/hermeticity): forward the same resolved `env` local
+    // this function already checked `KERYX_HOOKS` against — see
+    // `commands/agent-hooks.ts`'s identical wiring for the full rationale.
+    ports: { impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot, env }) },
+  });
 }
 
 /** A tool executor that refuses. Remote turns register no tools in this slice. */
@@ -589,6 +702,16 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     limits: { maxRunSeconds: 300, maxConcurrentChildren: 1, maxToolOutputBytes: 65_536, maxRetries: 1 },
   };
   let idCounter = 0;
+  // Flow 306 (W6, T15): the serve session's own turn/session ids, and the
+  // profile already resolved and checked at startup (`input.profile` below,
+  // unchanged for the same reason `deps.policyProfile` is).
+  const hookRuntime = buildRemoteHookRuntime({
+    projectRoot: input.project,
+    sessionId,
+    runId: turnId,
+    profileId: input.profile.profileId,
+    ...(input.hooksEnv !== undefined ? { env: input.hooksEnv } : {}),
+  });
   const deps: RunDeps = {
     provider: input.provider,
     toolRegistry: input.toolRegistry ?? new ToolRegistry(),
@@ -603,6 +726,7 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     // `interactive: true` remote turn would be claiming a human is present to
     // answer, and there is not one.
     interactive: false,
+    ...(hookRuntime !== undefined ? { hooks: hookRuntime } : {}),
   };
 
   let events: NormalizedEvent[];
@@ -829,6 +953,8 @@ export interface SubmitDeps {
   clock?: () => string;
   newId?: () => string;
   toolRegistry?: ToolRegistry;
+  /** Forwarded to `RunTurnInput.hooksEnv` unchanged — see that field's own doc comment. */
+  hooksEnv?: NodeJS.ProcessEnv;
 }
 
 /**
@@ -933,6 +1059,7 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
         ...(deps.toolRegistry !== undefined ? { toolRegistry: deps.toolRegistry } : {}),
         ...(deps.clock !== undefined ? { clock: deps.clock } : {}),
         ...(deps.containmentAvailable !== undefined ? { containmentAvailable: deps.containmentAvailable } : {}),
+        ...(deps.hooksEnv !== undefined ? { hooksEnv: deps.hooksEnv } : {}),
       });
       return { kind: "accepted", turnId: run.turnId, sessionId: run.sessionId };
     } catch (cause) {

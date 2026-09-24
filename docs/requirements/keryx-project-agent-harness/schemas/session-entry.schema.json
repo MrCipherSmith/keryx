@@ -17,7 +17,7 @@
         { "type": "object", "additionalProperties": false, "required": ["type", "text"], "properties": { "type": { "enum": ["user_message", "assistant_message"] }, "text": { "type": "string" }, "provenance": { "$ref": "harness-envelope.schema.json#/$defs/provenance" } } },
         { "type": "object", "additionalProperties": false, "required": ["type", "modelAttemptId", "artifactRef"], "properties": { "type": { "enum": ["model_request", "model_response", "model_error"] }, "modelAttemptId": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "artifactRef": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" } } },
         { "type": "object", "additionalProperties": false, "required": ["type", "toolCallId"], "properties": { "type": { "enum": ["tool_call", "tool_result", "policy_decision", "approval_request", "approval_result"] }, "toolCallId": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "artifactRef": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" } } },
-        { "type": "object", "additionalProperties": false, "required": ["type", "artifactRef"], "properties": { "type": { "enum": ["checkpoint", "compaction", "branch_metadata", "evidence_link", "run_pause", "run_resume", "run_end"] }, "artifactRef": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" } } }
+        { "type": "object", "additionalProperties": false, "required": ["type", "artifactRef"], "properties": { "type": { "enum": ["checkpoint", "compaction", "branch_metadata", "evidence_link", "run_pause", "run_resume", "run_end", "hook_invocation"] }, "artifactRef": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" } } }
       ]
     }
   }

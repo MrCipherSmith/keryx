@@ -89,13 +89,19 @@ const OPTION_REJECT_ALWAYS: AcpPermissionOption = Object.freeze({
  * `allow_always` answer ITSELF and stops asking, which is exactly the saved
  * allowlist that rule forbids — so the option is not offered at all rather
  * than offered and then quietly ignored.
+ *
+ * Flow 306 fix (review finding 5): `meta.hookAsk` joins the same floor —
+ * `ApprovalMeta.hookAsk`'s own doc comment already commits a `PreToolUse`
+ * hook's tightened `ask` to "never satisfied from a saved/session allowlist
+ * or an 'always allow' grant", the same posture `publishLease` gets here.
  */
 export function permissionIsEscalated(meta?: ApprovalMeta): boolean {
   return (
     meta?.destructive === true ||
     meta?.credentials === true ||
     meta?.publishLease === true ||
-    meta?.untrustedOrigin === true
+    meta?.untrustedOrigin === true ||
+    meta?.hookAsk === true
   );
 }
 

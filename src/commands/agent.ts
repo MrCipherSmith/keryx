@@ -19,6 +19,12 @@ import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touche
 import { classifyPatchRisk } from "../lib/patch-risk";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
+import { aliasHookToolName, derivePolicyProfileId, type ShellHookContext } from "./agent-hooks";
+import { tightenOutcome } from "../harness/hooks/compose";
+import { IMPACT_EVIDENCE_HOOK_ID } from "../harness/hooks/builtins";
+import { extractFilePathsFromToolInput } from "../harness/hooks/runtime";
+import type { HookFireResult } from "../harness/hooks/runtime";
+import type { PolicyOutcome } from "../harness/policy/types";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { McpRuntime } from "../mcp-servers/runtime";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
@@ -133,6 +139,16 @@ export interface ApprovalMeta {
   alwaysAsk?: boolean;
   /** Flow 295 (AC7): the confirmation card, one line per element, for an `alwaysAsk` call. */
   card?: readonly string[];
+  /**
+   * Flow 306 (W6 T9): a `PreToolUse` lifecycle hook tightened this call's own
+   * risk-gate decision to `ask` (a mode that would otherwise have resolved
+   * `auto`, or a `read`-risk tool that never gates at all). Like
+   * `publishLease`, this is a hard floor an approver must never satisfy from
+   * a saved/session allowlist or an "always allow" grant — see
+   * `shell-approval.ts`'s `evaluateShellApproval`, which excludes it from
+   * `autoApprove` exactly like `publishLease`.
+   */
+  hookAsk?: boolean;
   /**
    * Aborted when the caller stops waiting for this answer — the ACP client's
    * approval timeout (flow 292 T13). An approver holding a resource for the
@@ -545,6 +561,19 @@ export interface AgentDeps {
    * mirrors it, and no `options.temperature` is set (AC3).
    */
   modelParams?: { temperature?: number; maxOutputTokens?: number; timeoutMs?: number };
+  /**
+   * Flow 306 (W6 T9): `keryx shell`'s own lifecycle hook runtime
+   * (`src/harness/hooks/`, T5), bundled with the session/run identity every
+   * fired payload needs (see `ShellHookContext`'s own doc comment for why
+   * this is not a bare `HookRuntime`). Absent (the default) is
+   * BYTE-IDENTICAL to every existing behavior — `executeCall`,
+   * `runAgentTurn`'s `UserPromptSubmit`/`Stop` firing, and every other call
+   * site added by T9 short-circuit to a no-op the moment this is undefined,
+   * so every test/call site written before T9 is completely unaffected.
+   * Built by `buildShellHookRuntime` (`./agent-hooks.ts`) for real sessions;
+   * a test constructs a fake `ShellHookContext` directly.
+   */
+  hooks?: ShellHookContext;
 }
 
 export interface RunAgentTurnOptions {
@@ -1756,7 +1785,9 @@ export async function runAgentTurn(
   options: RunAgentTurnOptions = {},
 ): Promise<RunAgentTurnResult> {
   try {
-    return await runAgentTurnCore(io, deps, history, userLine, options);
+    const result = await runAgentTurnCore(io, deps, history, userLine, options);
+    await fireStopHookBestEffort(io, deps, result);
+    return result;
   } finally {
     // `closeSlateOnFlowDone` never throws — it swallows every failure
     // itself (see its own doc comment) — but the `finally` block does not
@@ -1764,6 +1795,66 @@ export async function runAgentTurn(
     // itself throw, so it can never supersede `runAgentTurnCore`'s real
     // outcome via JS's finally-throw-replaces-original semantics.
     await closeSlateOnFlowDone(io, deps, options);
+  }
+}
+
+/**
+ * Flow 306 (W6 T9): fire `Stop` once the turn has actually ended (every
+ * `runAgentTurnCore` exit path funnels back through here, since this is the
+ * one place ALL of them return to). Per the spec's v1 scope ("no concrete
+ * Keryx use case for denying a `Stop` exists yet beyond an illustrative
+ * pattern"), a tightened `ask`/`deny` is surfaced as a NOTICE only — it never
+ * re-enters the loop, never blocks, never changes `result`. Never throws:
+ * `deps.hooks` absent is a no-op, and a firing failure degrades to silence
+ * rather than replacing the turn's real outcome (mirrors
+ * `closeSlateOnFlowDone`'s own "never supersede the real result" rule right
+ * above).
+ */
+/**
+ * Flow 306 (W6 T9): fire `PreCompact` right before the auto-compaction guard
+ * splices a shrunk context into `history` — the two call sites in this file
+ * (`runAgentTurnCore`'s round loop and `finishWithBudgetSummary`'s wrap-up)
+ * are the shell's own compaction points; `reason` is always `"auto"` here
+ * (both are the context-guard, never a manual `/compact`). Observe/context
+ * only per the spec ("may add context; cannot block compaction") — never
+ * awaited past its own bounded `fire()` call, never allowed to throw into the
+ * loop, and its `additionalContext`/decision are both discarded (there is
+ * nothing left here to append them to).
+ */
+async function firePreCompactBestEffort(deps: AgentDeps, tokenCount: number): Promise<void> {
+  if (deps.hooks === undefined) return;
+  try {
+    await deps.hooks.runtime.fire("PreCompact", {
+      sessionId: deps.hooks.sessionId,
+      runId: deps.hooks.runId,
+      reason: "auto",
+      tokenCount,
+    });
+  } catch {
+    // Observe/context-only: never let a failing hook block or alter compaction.
+  }
+}
+
+async function fireStopHookBestEffort(
+  io: AgentIO,
+  deps: AgentDeps,
+  result: RunAgentTurnResult,
+): Promise<void> {
+  if (deps.hooks === undefined) return;
+  try {
+    const fire = await deps.hooks.runtime.fire("Stop", {
+      sessionId: deps.hooks.sessionId,
+      runId: deps.hooks.runId,
+      ...(result.finishReason !== undefined ? { stopReason: result.finishReason } : {}),
+    });
+    if (fire.tightened === "deny" || fire.tightened === "ask") {
+      io.onSystem?.(
+        `\n[hook] a Stop hook ${fire.tightened === "deny" ? "denied" : "asked about"} ending this turn` +
+          `${fire.denyReason !== undefined ? ` (${fire.denyReason})` : ""} — v1 does not re-open the loop for this.\n`,
+      );
+    }
+  } catch {
+    // Observe/notice-only: never let a failing hook alter the turn's outcome.
   }
 }
 
@@ -1935,7 +2026,96 @@ async function runAgentTurnCore(
     io.onHistoryChange?.("user");
     deps.busAck?.(delivered);
   } else {
-    history.push({ role: "user", content: userLine, provenance: "project", ts: now() });
+    // Flow 306 (W6 T9): `UserPromptSubmit` fires ONLY for a genuine operator
+    // line — never for the synthesized task-notification/bus-message
+    // "continuation" turns above (there is no real prompt to submit) — and is
+    // skipped for an empty line (nothing to submit). A hook `deny` stops the
+    // turn before it reaches the model, reported through `io.onSystem` the
+    // same way other turn refusals are surfaced; `additionalContext` is
+    // appended (delimited, same `[hook context]` marker `executeCall` uses)
+    // to the message actually pushed into `history` and sent to the model.
+    let effectivePrompt = userLine;
+    if (deps.hooks !== undefined && userLine.trim().length > 0) {
+      try {
+        const fire = await deps.hooks.runtime.fire("UserPromptSubmit", {
+          sessionId: deps.hooks.sessionId,
+          runId: deps.hooks.runId,
+          prompt: userLine,
+        });
+        if (fire.tightened === "deny") {
+          io.onSystem?.(
+            `\n[blocked] your message was refused by a policy hook${
+              fire.denyReason !== undefined ? ` (${fire.denyReason})` : ""
+            }.\n`,
+          );
+          return {};
+        }
+        // Flow 306 fix (review finding 4): an `ask` tightening on this
+        // gate-capable event is NOT the same as `allow` — unlike the old
+        // deny-only check, a hook that only asks must actually reach an
+        // operator. `resolveApprovalDecision`/permission mode has no say
+        // here (same posture as the untrusted-content gate above): a
+        // standing `trust`/`auto` mode answers for the OPERATOR's own
+        // commands, never for a hook's verdict on what they typed. Fail
+        // CLOSED wherever nobody can answer — no approver wired (which is
+        // always true for an unattended run) denies without asking.
+        if (fire.tightened === "ask") {
+          const approver = io.requestApproval;
+          if (deps.unattended === true || approver === undefined) {
+            io.onSystem?.(
+              `\n[blocked] your message was refused by a policy hook${
+                fire.denyReason !== undefined ? ` (${fire.denyReason})` : ""
+              } (no operator available to ask).\n`,
+            );
+            return {};
+          }
+          const promptInput = JSON.stringify({ prompt: userLine });
+          const fingerprint = toolCallHash("user_prompt", promptInput);
+          let approved: boolean;
+          try {
+            const response = await approver("user_prompt", promptInput, {
+              fingerprint,
+              destructive: false,
+              hookAsk: true,
+              alwaysAsk: true,
+              card: [
+                `A policy hook wants to ask before this message reaches the model${
+                  fire.denyReason !== undefined ? ` (${fire.denyReason})` : ""
+                }:`,
+                userLine,
+              ],
+            });
+            approved = isApprovalFor(response, fingerprint);
+          } catch (err) {
+            io.onSystem?.(
+              `\n[blocked] your message was refused: the approval prompt failed (${
+                err instanceof Error ? err.message : String(err)
+              }).\n`,
+            );
+            return {};
+          }
+          if (!approved) {
+            io.onSystem?.(`\n[blocked] your message was not approved by the operator.\n`);
+            return {};
+          }
+        }
+        if (fire.additionalContext.length > 0) {
+          effectivePrompt = `${userLine}\n\n[hook context]\n${fire.additionalContext.join("\n")}`;
+        }
+      } catch (err) {
+        // Flow 306 fix (review finding 3): a hook CRASH on a gate-capable
+        // event (UserPromptSubmit) must fail CLOSED, never "ignored" — a
+        // thrown spawn/parse error must never silently let the prompt
+        // through unguarded.
+        io.onSystem?.(
+          `\n[blocked] your message was refused: UserPromptSubmit hook crashed (${
+            err instanceof Error ? err.message : String(err)
+          }).\n`,
+        );
+        return {};
+      }
+    }
+    history.push({ role: "user", content: effectivePrompt, provenance: "project", ts: now() });
     io.onHistoryChange?.("user");
   }
   const signal = options.signal;
@@ -2133,6 +2313,7 @@ async function runAgentTurnCore(
     // makes `needsCompaction` always `false` (AC2): byte-identical behavior.
     const preRequestEstimate = estimateRequestTokens(history, roundSystemInstruction, toolDefs);
     if (needsCompaction(preRequestEstimate, deps.contextWindow)) {
+      await firePreCompactBestEffort(deps, preRequestEstimate);
       const compacted = compactMessages(history, { keepLastUserTurns: 3 });
       if (!compacted.noop) {
         // Splice, never reassign — `runAgentTurn`'s own contract (see its doc
@@ -2823,6 +3004,7 @@ async function runAgentTurnCore(
           deps.hardDeny === undefined
             ? undefined
             : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
+          deps.hooks,
         ));
       io.onToolResult?.(call.name, result);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
@@ -3104,6 +3286,7 @@ async function finishWithBudgetSummary(
   // list — matching what actually goes over the wire here.
   const wrapUpEstimate = estimateRequestTokens(history, deps.systemInstruction, []);
   if (needsCompaction(wrapUpEstimate, deps.contextWindow)) {
+    await firePreCompactBestEffort(deps, wrapUpEstimate);
     const compacted = compactMessages(history, { keepLastUserTurns: 3 });
     if (!compacted.noop) {
       history.splice(0, history.length, ...compacted.context);
@@ -3312,6 +3495,7 @@ async function runConcurrentSpawnBatch(
       undefined,
       undefined,
       deps.hardDeny === undefined ? undefined : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
+      deps.hooks,
     );
 
   const plan = planWaves(tasks, {
@@ -3409,6 +3593,133 @@ async function runConcurrentSpawnBatch(
   }
 }
 
+/**
+ * Flow 306 (W6 T9): fire the `PreToolUse` hook event for one resolved call,
+ * BEFORE the risk gate consults it — see `executeCall`'s own call site.
+ * `risk`/`isReadOnly` feed `derivePolicyProfileId` (unattended > read-only >
+ * monitored-trusted-local); the Keryx tool name is aliased to its
+ * Claude-Code-shaped equivalent (`HOOK_TOOL_NAME_ALIASES`) for BOTH the
+ * matcher (`ctx.toolName`) and the payload's `toolName` field, with the
+ * original name carried alongside as `keryxToolName` so a hook command can
+ * always recover it.
+ */
+async function firePreToolUseHook(
+  hooks: ShellHookContext,
+  call: PendingCall,
+  input: Record<string, unknown>,
+  risk: string | undefined,
+  isReadOnly: boolean,
+  mode: PermissionMode,
+): Promise<HookFireResult> {
+  const aliasName = aliasHookToolName(call.name);
+  const profileId = derivePolicyProfileId(hooks.runtime.interactive, isReadOnly);
+  return hooks.runtime.fire(
+    "PreToolUse",
+    {
+      sessionId: hooks.sessionId,
+      runId: hooks.runId,
+      toolCallId: call.id,
+      toolName: aliasName,
+      keryxToolName: call.name,
+      toolInput: input,
+      ...(risk !== undefined ? { risk } : {}),
+      policyProfile: profileId,
+    },
+    // T14: select registrations against the LIVE profile (the runtime was
+    // constructed once for the whole session and cannot otherwise see a
+    // later `/plan` read-only toggle) — the same `profileId` this call
+    // already computed for the payload's own `policyProfile` field above.
+    //
+    // Flow 306 fix (review finding 6): also hand the runtime a PROVISIONAL
+    // `decideOutcome`, mirroring `run.ts`'s real `decide()` → `PreToolUse` →
+    // `composeDecision` ordering, so the SAME malformed-output failure-table
+    // asymmetry applies here (`buildFailureOutcome` denies a malformed/crash/
+    // timeout gate hook outcome whenever the underlying decision would have
+    // asked, instead of silently allowing). This is provisional because the
+    // per-command escalation (`destructive`/`credentials`, command text) is
+    // only known inside each risk branch below, AFTER this fire — computed
+    // here with the conservative (non-escalated) inputs, so it can only be
+    // as permissive as `read`, never more permissive than the real decision
+    // that follows.
+    { toolName: aliasName, profileId, decideOutcome: provisionalDecideOutcome(risk, mode, isReadOnly) },
+  );
+}
+
+/**
+ * Flow 306 fix (review finding 6): a conservative, provisional analogue of
+ * `resolveApprovalDecision` for the ONE `PreToolUse` fire that precedes
+ * `executeCall`'s per-branch escalation (see `firePreToolUseHook`'s doc
+ * comment). `network`/`credential` risk is never routed through
+ * `resolveApprovalDecision` (outside {@link GatedToolRisk}) — `executeCall`'s
+ * final `else` branch always refuses those, so they provisionally decide
+ * `deny` here too.
+ */
+function provisionalDecideOutcome(risk: string | undefined, mode: PermissionMode, isReadOnly: boolean): PolicyOutcome {
+  if (risk !== "read" && risk !== "shell" && risk !== "destructive" && risk !== "delegate" && risk !== "write") {
+    return "deny";
+  }
+  const rawDecision = resolveApprovalDecision({
+    mode,
+    risk,
+    destructive: false,
+    credentials: false,
+    sacReviewConfirmation: false,
+    readOnly: isReadOnly,
+  });
+  return rawDecision === "deny" ? "deny" : rawDecision === "auto" ? "allow" : "ask";
+}
+
+/** The three states this module gates a call to, mirroring `ApprovalGateDecision` plus the hook's own `PolicyOutcome`. */
+type HookComposedDecision = "auto" | "ask" | "deny";
+
+/**
+ * Tighten a risk-gate decision (`resolveApprovalDecision`'s `"auto"|"ask"|
+ * "deny"`, or the implicit `"auto"` baseline `read`-risk tools never
+ * otherwise gate on) with the `PreToolUse` hook decisions already fired for
+ * this call, via `compose.ts`'s `tightenOutcome` — the SAME tighten-only rule
+ * `run.ts`'s real `PolicyDecision` composition uses (deny wins; ask tightens
+ * allow; a hook can never loosen; `interactive: false` fails an ask closed to
+ * deny). `executeCall` has no `PolicyDecision` of its own (that is `run.ts`'s
+ * engine, a different call path), so this maps its own three-way decision
+ * onto `PolicyOutcome` (`deny`->`deny`, `auto`->`allow`, `ask`->`ask`) and
+ * back, rather than importing `composeDecision` (which is typed against a
+ * real `PolicyDecision`).
+ */
+function composeWithHook(
+  toolName: string,
+  rawDecision: HookComposedDecision,
+  hookResult: HookFireResult | undefined,
+  interactive: boolean,
+): { decision: HookComposedDecision; hookTightened: boolean; hookAsked: boolean; denyMessage?: string } {
+  if (hookResult === undefined || hookResult.decisions.length === 0) {
+    return { decision: rawDecision, hookTightened: false, hookAsked: false };
+  }
+  // Flow 306 fix round 2 (finding B): a hook `ask` decision must surface to the
+  // approver even when it did not itself CHANGE the composed decision — e.g. the
+  // default `ask` permission mode already asks, so the hook's own `ask` agrees
+  // with `rawDecision` and `tightenOutcome` reports no tightening at all. Without
+  // this, `hookAsk` (below) went unset for exactly that case, and the TUI
+  // read-only spawn fast path / saved shell allowlist / ACP `allow_always` all
+  // auto-answered an approval a hook specifically asked for. Computed from the
+  // raw hook decisions directly, independent of whether the outcome moved.
+  const hookAsked = hookResult.decisions.some((d) => d.decision === "ask" || d.decision === "deny");
+  const base: PolicyOutcome = rawDecision === "deny" ? "deny" : rawDecision === "auto" ? "allow" : "ask";
+  const tightened = tightenOutcome(base, hookResult.decisions, interactive);
+  const decision: HookComposedDecision =
+    tightened.outcome === "deny" ? "deny" : tightened.outcome === "allow" ? "auto" : "ask";
+  if (decision === rawDecision) {
+    return { decision: rawDecision, hookTightened: false, hookAsked };
+  }
+  let denyMessage: string | undefined;
+  if (decision === "deny") {
+    const denyRule = tightened.matchedRules.find((r) => r.endsWith(":deny"));
+    const hookId = denyRule?.split(":")[1] ?? "hook";
+    const reason = hookResult.records.find((r) => r.hookId === hookId)?.reason ?? "denied by policy hook";
+    denyMessage = `${toolName} refused by hook ${hookId}: ${reason}`;
+  }
+  return { decision, hookTightened: true, hookAsked, ...(denyMessage !== undefined ? { denyMessage } : {}) };
+}
+
 /** Resolve, gate (risk + approval + permission mode), validate, and invoke a call → a content result. */
 async function executeCall(
   call: PendingCall,
@@ -3433,6 +3744,10 @@ async function executeCall(
     check: NonNullable<AgentDeps["hardDeny"]>;
     onDenied: AgentIO["onUnattendedDenial"];
   },
+  // Flow 306 (W6 T9): `keryx shell`'s own lifecycle hook runtime. Absent
+  // reproduces every pre-T9 code path unchanged (see `AgentDeps.hooks`'s doc
+  // comment).
+  hooks?: ShellHookContext,
 ): Promise<InteractiveToolResult> {
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
@@ -3482,6 +3797,29 @@ async function executeCall(
   }
   const mode: PermissionMode = permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
   const isReadOnly = readOnly?.() ?? false;
+  // Flow 306 (W6 T9): fired ONCE per call, after schema validation/capacity/
+  // hardDeny and BEFORE every risk-gate branch below consults it — never
+  // re-fired per branch. Every branch (including the `read` one, which
+  // otherwise never gates at all) composes its own decision with the SAME
+  // `hookResult` via `composeWithHook`.
+  let hookResult: HookFireResult | undefined;
+  if (hooks !== undefined) {
+    try {
+      hookResult = await firePreToolUseHook(hooks, call, input, risk, isReadOnly, mode);
+    } catch (err) {
+      // Flow 306 fix (review finding 3): a hook CRASH on PreToolUse — a
+      // gate-capable event — must fail CLOSED, never let the call run
+      // ungated. Only observe-only events (PostToolUse/PostToolUseFailure
+      // below) stay swallowed.
+      return {
+        output: `${call.name} refused: PreToolUse hook crashed (${
+          err instanceof Error ? err.message : String(err)
+        })`,
+        isError: true,
+      };
+    }
+  }
+  const hookInteractive = hooks?.runtime.interactive ?? true;
   // Flow 295 (F8): set only in the write branch below, after the operator's yes.
   let confirmationToken: string | undefined;
   if (tool.confirmation !== undefined && risk !== "write") {
@@ -3507,7 +3845,7 @@ async function executeCall(
     // `busLeases` is consulted nowhere else in this function.
     const publishLease = isPublishCommand(command) && (busLeases?.appliesToMe("git-publish") ?? false);
     const publishLeaseHolder = publishLease ? busLeases?.heldBy?.("git-publish") : undefined;
-    const decision = resolveApprovalDecision({
+    const rawDecision = resolveApprovalDecision({
       mode,
       risk,
       destructive,
@@ -3516,10 +3854,16 @@ async function executeCall(
       readOnly: isReadOnly,
       publishLease,
     });
-    if (decision === "deny") {
-      return { output: `tool "${call.name}" is not permitted while read-only mode (/plan) is on`, isError: true };
+    const gated = composeWithHook(call.name, rawDecision, hookResult, hookInteractive);
+    if (gated.decision === "deny") {
+      return {
+        output: gated.hookTightened
+          ? gated.denyMessage!
+          : `tool "${call.name}" is not permitted while read-only mode (/plan) is on`,
+        isError: true,
+      };
     }
-    if (decision === "auto") {
+    if (gated.decision === "auto") {
       onAutoApproved?.(call.name, call.input, { destructive, credentials });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
@@ -3534,6 +3878,7 @@ async function executeCall(
               ...(publishLease && publishLeaseHolder !== undefined
                 ? { publishLeaseDetail: `held by @${publishLeaseHolder.name} — "${publishLeaseHolder.reason}"` }
                 : {}),
+              ...(gated.hookAsked ? { hookAsk: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
         return { output: `command not approved by the user; not executed`, isError: true };
@@ -3544,7 +3889,7 @@ async function executeCall(
     // never silently invoked (F6). The three MAE containment invariants
     // (read-only child tools, child policy deny, hard-false child approver)
     // still hold, but the gate no longer relies on them to stay safe.
-    const decision = resolveApprovalDecision({
+    const rawDecision = resolveApprovalDecision({
       mode,
       risk,
       destructive: false,
@@ -3552,17 +3897,27 @@ async function executeCall(
       sacReviewConfirmation: false,
       readOnly: isReadOnly,
     });
-    if (decision === "deny") {
-      return { output: `tool "${call.name}" is not permitted while read-only mode (/plan) is on`, isError: true };
+    const gated = composeWithHook(call.name, rawDecision, hookResult, hookInteractive);
+    if (gated.decision === "deny") {
+      return {
+        output: gated.hookTightened
+          ? gated.denyMessage!
+          : `tool "${call.name}" is not permitted while read-only mode (/plan) is on`,
+        isError: true,
+      };
     }
-    if (decision === "auto") {
+    if (gated.decision === "auto") {
       onAutoApproved?.(call.name, call.input, { destructive: false, credentials: false });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
       const response =
         requestApproval === undefined
           ? false
-          : await requestApproval(call.name, call.input, { fingerprint, destructive: false });
+          : await requestApproval(call.name, call.input, {
+              fingerprint,
+              destructive: false,
+              ...(gated.hookAsked ? { hookAsk: true } : {}),
+            });
       if (!isApprovalFor(response, fingerprint)) {
         return { output: `subagent spawn not approved by the user; not executed`, isError: true };
       }
@@ -3595,7 +3950,7 @@ async function executeCall(
       card = confirmation.card;
       confirmationToken = confirmation.token;
     }
-    const decision = resolveApprovalDecision({
+    const rawDecision = resolveApprovalDecision({
       mode,
       risk,
       destructive,
@@ -3603,11 +3958,17 @@ async function executeCall(
       sacReviewConfirmation: false,
       readOnly: isReadOnly,
     });
-    if (decision === "deny" && confirmationToken !== undefined) tool.confirmationDeclined?.(confirmationToken);
-    if (decision === "deny") {
-      return { output: `tool "${call.name}" is not permitted while read-only mode (/plan) is on`, isError: true };
+    const gated = composeWithHook(call.name, rawDecision, hookResult, hookInteractive);
+    if (gated.decision === "deny" && confirmationToken !== undefined) tool.confirmationDeclined?.(confirmationToken);
+    if (gated.decision === "deny") {
+      return {
+        output: gated.hookTightened
+          ? gated.denyMessage!
+          : `tool "${call.name}" is not permitted while read-only mode (/plan) is on`,
+        isError: true,
+      };
     }
-    if (decision === "auto") {
+    if (gated.decision === "auto") {
       onAutoApproved?.(call.name, call.input, { destructive, credentials });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
@@ -3619,6 +3980,7 @@ async function executeCall(
               destructive,
               ...(credentials ? { credentials } : {}),
               ...(card !== undefined ? { alwaysAsk: true, card } : {}),
+              ...(gated.hookAsked ? { hookAsk: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
         if (confirmationToken !== undefined) tool.confirmationDeclined?.(confirmationToken);
@@ -3627,8 +3989,40 @@ async function executeCall(
           isError: true,
         };
       }
+      // Fix round 4, F-001: an interactive operator's approval of a
+      // `keryx.impact-evidence` `ask` IS the acknowledgement W8 strict mode
+      // waits for — without recording it here, every later edit of the same
+      // file re-asks forever (round 4 review). Only recorded for an actual
+      // approval (this line only runs once `isApprovalFor` above has
+      // succeeded) and only when impact-evidence itself was the hook that
+      // asked — `hookAsked` can also be set by an unrelated gate hook's own
+      // `ask`, which has nothing to do with W8's acknowledgement contract.
+      // Unattended runs never reach here (no approver, so `response` above
+      // is `false` and the call already returned) — strict mode + unattended
+      // stays a hard deny by design, not a loosening.
+      if (hookResult?.decisions.some((d) => d.hookId === IMPACT_EVIDENCE_HOOK_ID && d.decision === "ask")) {
+        hooks?.runtime.acknowledgeImpactEvidence?.(extractFilePathsFromToolInput(input));
+      }
     }
-  } else if (risk !== "read") {
+  } else if (risk === "read") {
+    // Flow 306 (W6 T9): `read` never otherwise gates at all — the implicit
+    // baseline is `"auto"`. A `PreToolUse` hook can still tighten it to
+    // `ask` (forcing a real approval, never a saved allowlist) or `deny`.
+    const gated = composeWithHook(call.name, "auto", hookResult, hookInteractive);
+    if (gated.decision === "deny") {
+      return { output: gated.denyMessage ?? `tool "${call.name}" refused by a policy hook`, isError: true };
+    }
+    if (gated.decision === "ask") {
+      const fingerprint = toolCallHash(call.name, call.input);
+      const response =
+        requestApproval === undefined
+          ? false
+          : await requestApproval(call.name, call.input, { fingerprint, destructive: false, hookAsk: true });
+      if (!isApprovalFor(response, fingerprint)) {
+        return { output: `${call.name} not approved by the user; not executed`, isError: true };
+      }
+    }
+  } else {
     return { output: `tool "${call.name}" (risk ${risk}) is not permitted`, isError: true };
   }
 
@@ -3637,10 +4031,47 @@ async function executeCall(
   }
   // The context is passed unconditionally: a tool that ignores it is unaffected,
   // and making the parameter conditional would hide which calls are abortable.
-  return tool.invoke(input, {
+  const result = await tool.invoke(input, {
     ...(signal !== undefined ? { signal } : {}),
     ...(confirmationToken !== undefined ? { confirmationToken } : {}),
   });
+
+  // Flow 306 (W6 T9): PostToolUse/PostToolUseFailure — observe-only, fired
+  // AFTER the tool settles, never altering `result` beyond appending the
+  // PreToolUse hook's own `additionalContext` (below) — and never throwing
+  // into the loop (`fire()` itself is bounded to each observe hook's own
+  // timeout; the try/catch is a defensive floor against a fake runner in
+  // tests, or any future non-conforming implementation).
+  if (hooks !== undefined) {
+    const aliasName = aliasHookToolName(call.name);
+    try {
+      await hooks.runtime.fire(
+        result.isError ? "PostToolUseFailure" : "PostToolUse",
+        {
+          sessionId: hooks.sessionId,
+          runId: hooks.runId,
+          toolCallId: call.id,
+          toolName: aliasName,
+          keryxToolName: call.name,
+          toolInput: input,
+          ...(result.isError
+            ? { error: { message: result.output } }
+            : { toolOutput: result.output }),
+        },
+        { toolName: aliasName },
+      );
+    } catch {
+      // Observe-only: never let a failing hook alter or delay this result.
+    }
+  }
+
+  if (hookResult !== undefined && hookResult.additionalContext.length > 0) {
+    return {
+      ...result,
+      output: `${result.output}\n\n[hook context]\n${hookResult.additionalContext.join("\n")}`,
+    };
+  }
+  return result;
 }
 
 function validateDirectBudget(

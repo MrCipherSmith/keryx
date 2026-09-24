@@ -101,6 +101,15 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx integrations doctor --runtime <id>[,<id>...|all] [--json]\n",
     "  keryx integrations matrix [--check] [--write] [--json] [--file <path>]\n",
     "  integrations Install/uninstall/audit Keryx's hooks and instructions in another coding agent, and the generated capability matrix\n",
+    // Flow 306 (W6, T8): the new `keryx hooks` verb — five USAGE_BODY lines
+    // (one wraps onto a continuation line) plus its Commands: summary row.
+    "  keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)\n",
+    "  keryx hooks validate [--json] [--ci]          Validate .metaproject/hooks.json and ~/.keryx/hooks.json\n",
+    "  keryx hooks test <id> [--event <name>] [--payload-file <path>] [--json] [--profile <id>]\n",
+    "                                               Run one hook once against a synthetic or captured payload\n",
+    "  keryx hooks enable <id> [--user]              Flip a hook's enabled state (project file, or --user for ~/.keryx/hooks.json)\n",
+    "  keryx hooks disable <id> [--user]\n",
+    "  hooks     Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration\n",
   ];
 
   test("the flat --help block is the pre-flow fixture plus exactly those lines, nothing else", async () => {

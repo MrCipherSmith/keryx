@@ -54,4 +54,11 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+- Choke point: `src/harness/run/run.ts:374` `decide()`; run.ts is deterministic/offline (injected clock/idSeq) and replay-hashed, so hooks must be an optional dep.
+- `keryx shell`'s real loop is `runAgentTurn` in `src/commands/agent.ts` (`executeCall` ~3413, approval via `resolveApprovalDecision`, unattended floor `deps.hardDeny`); used by tui-shell, shell.ts, acp/server.ts, trigger-dispatch.ts, trigger-agent-task.ts, spawn-subagent-tool (children), goal-command.
+- `spawnChild()` (src/harness/child/spawn.ts:119) is SYNC; called from `spawnSubagent()` in child/orchestrate.ts:107/143, which spawn-subagent-tool uses; external path `deps.runExternal` at spawn-subagent-tool.ts:645.
+- Sandbox: `ProcessAdapter.spawn` is sync spawnSync with no stdin/stdout → reuse `wrapWithSandbox` + `detectSandboxLauncher` (src/harness/process/sandbox/{wrap,detect,profile}.ts) inside an async hook runner.
+- Session entry types: src/harness/session/types.ts `SessionEntryPayload`; schema docs/requirements/keryx-project-agent-harness/schemas/session-entry.schema.json.
+- Built-in commands used by host installs (src/integrations/surfaces.ts): `keryx ctx hook <id>`, `keryx security check-input --source untrusted-external`, `keryx security check-output`; all read Claude-format stdin and block with exit 2.
+- Compaction: src/session/compact.ts, triggered from tui-shell/shell.ts.
+- W5-a registry (src/integrations) is the host-install side; W6 adds nothing there.

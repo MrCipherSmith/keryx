@@ -31,6 +31,7 @@ import {
   INSTRUCTIONS_GITHUB_COPILOT_AGENT,
   INSTRUCTIONS_KIRO,
   INSTRUCTIONS_ZED,
+  KERYX_SHELL_SURFACES,
   KERYX_SHELL_UNSUPPORTED,
   LAST_VERIFIED_W5B,
 } from "./surfaces-w5b";
@@ -214,16 +215,23 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
   {
     id: "keryx-shell",
     label: "Keryx shell",
-    confidence: "experimental",
-    // W6's own `keryx shell` lifecycle-hook runtime — no surfaces of its own
-    // yet (Non-goals, W5-multi-harness.md); registered as a placeholder so
-    // the matrix and the CLI have a precise "not yet" answer for every one of
-    // the 12 W5 flags, mirroring how `UNSUPPORTED_CTX_GUARD`/`UNSUPPORTED_ORIENT`
-    // give a precise message instead of "unknown runtime" today.
+    // Flow 306 (W6, T20): the runtime (`src/harness/hooks/`) and every
+    // surface below are in-repo code pinned by their own test suite, the same
+    // basis `claude`/`codex`/`cursor`/`windsurf` are rated `verified` on —
+    // not a third-party doc guess, which is what `experimental` means
+    // elsewhere in this file.
+    confidence: "verified",
+    // `policy-travels-with-agent`, the same shape as `zed` above: the eight
+    // surfaces below are satisfied entirely by keryx's own compiled-in hook
+    // runtime — there is no harness-owned settings file to install into (the
+    // runtime is configured only via `.metaproject/hooks.json`/
+    // `~/.keryx/hooks.json`, owned by `keryx hooks`, not `keryx
+    // integrations`). The remaining four flags (`skills`/`agents`/
+    // `instructions`/`mcp`) have no runtime capability yet — see
+    // `KERYX_SHELL_UNSUPPORTED`'s own doc comment in `surfaces-w5b.ts`.
     adapterKind: "policy-travels-with-agent",
-    surfaces: [],
+    surfaces: KERYX_SHELL_SURFACES,
     unsupported: KERYX_SHELL_UNSUPPORTED,
-    riskNotes: ["No surfaces are implemented yet; every flag below is a W6 target, not a shipped capability."],
     sourceDocs: ["docs/requirements/keryx-agent-platform-expansion/workstreams/W6-shell-hooks.md"],
     lastVerified: LAST_VERIFIED_W5B,
     decisionCodec: EXIT_CODE_DECISION_CODEC,

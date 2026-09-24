@@ -98,7 +98,13 @@ export {
   readLogRecords,
   renderEvidenceBlock,
 } from "./impact-evidence";
-export type { ImpactEvidenceLogRecord, ImpactEvidenceProfile, ImpactEvidenceRequest } from "./impact-evidence";
+export type {
+  ImpactEvidenceDecision,
+  ImpactEvidenceLogRecord,
+  ImpactEvidenceProfile,
+  ImpactEvidenceReason,
+  ImpactEvidenceRequest,
+} from "./impact-evidence";
 
 export function validateSerializedOutput(
   content: string,

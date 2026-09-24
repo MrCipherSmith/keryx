@@ -54,6 +54,16 @@ export function harness(overrides: Partial<AcpServerOptions>) {
     providerId: "test",
     modelId: "test-model",
     dataDir: path.join(root, "data"),
+    // Flow 306 (W6, T15): this harness runs `runAcpServer` IN-PROCESS, inside
+    // `bun test` — a built-in command hook's `resolveKeryxArgv` would resolve
+    // to the test runner's own entry script, not `keryx`'s, so a spawned
+    // built-in here would fail for a reason that says nothing about ACP or
+    // about hooks. A REAL subprocess launch of `keryx acp`
+    // (`AcpProcessClient`'s `*.process.test.ts` suites) has no such problem
+    // and is unaffected by this default. A test that wants to exercise the
+    // real hook path overrides this back to `{}` (or a fixed test env) via
+    // `overrides.hooksEnv`.
+    hooksEnv: { KERYX_HOOKS: "off" },
     ...overrides,
   });
   let nextId = 1;

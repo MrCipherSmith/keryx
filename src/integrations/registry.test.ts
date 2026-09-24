@@ -114,12 +114,27 @@ describe("AC1: the SurfaceFlag vocabulary is exactly the 12 W5 flags", () => {
       }
     }
     // Non-vacuous: W5-a wired up block/prompt-gate/inject-context; W5-b
-    // (flow 307) adds the `instructions` surfaces for gemini-cli/kiro/
-    // github-copilot-agent/zed; flow 310 (W2, T7) adds the opt-in `agents`
-    // surfaces for claude/codex/kiro/opencode — still a proper subset of
-    // the 12, never all of them.
+    // (flow 307) adds the `instructions` surfaces for
+    // gemini-cli/kiro/github-copilot-agent/zed; W6 (flow 306, T20) adds
+    // keryx-shell's native `pre-tool-context`/`observe`/`post-tool`/
+    // `session-start`/`stop` surfaces; flow 310 (W2) adds the opt-in
+    // `agents` surfaces for claude/codex/kiro/opencode — still a proper
+    // subset of the 12, never all of them (skills/mcp have no surface yet).
     expect(seen.size).toBeGreaterThan(0);
-    expect([...seen].sort()).toEqual(["agents", "block", "inject-context", "instructions", "prompt-gate"]);
+    expect([...seen].sort()).toEqual(
+      [
+        "agents",
+        "block",
+        "inject-context",
+        "instructions",
+        "observe",
+        "post-tool",
+        "pre-tool-context",
+        "prompt-gate",
+        "session-start",
+        "stop",
+      ].sort(),
+    );
   });
 
   test("every unsupported reason's key is one of the 12 flags", () => {

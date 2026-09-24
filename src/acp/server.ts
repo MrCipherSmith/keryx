@@ -20,6 +20,7 @@ import {
   type AgentDeps,
   type ReasoningEffortLevel,
 } from "../commands/agent";
+import { buildShellHookRuntime, type ShellHookContext } from "../commands/agent-hooks";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
 import { listSessions, persistHistory } from "../session";
@@ -137,6 +138,20 @@ export interface AcpServerOptions {
    * (flow 288, T14). `DEFAULT_MODEL_LIST_TIMEOUT_MS` otherwise.
    */
   readonly modelListTimeoutMs?: number;
+  /**
+   * Environment `buildShellHookRuntime` (flow 306, W6, T15) reads
+   * `KERYX_HOOKS`/config-dir overrides from, for each ACP session's hook
+   * runtime — `process.env` by default, matching every other real entry
+   * point. Exists as its own seam (rather than reusing `mcpEnv`, which is
+   * about a DIFFERENT concern — the parent env client-supplied MCP servers
+   * inherit) so an in-process test harness can force `KERYX_HOOKS: "off"`:
+   * `resolveKeryxArgv`'s `[execPath, scriptPath, ...rest]` fallback resolves
+   * `scriptPath` from `process.argv[1]`, which for `bun test` running
+   * `runAcpServer` in-process is the TEST RUNNER's own entry, not `keryx`'s
+   * — a real subprocess launch of `keryx acp` (`AcpProcessClient`'s
+   * `*.process.test.ts` suites) has no such problem and leaves this unset.
+   */
+  readonly hooksEnv?: NodeJS.ProcessEnv;
   /**
    * Aborted to stop the connection now (SIGTERM/SIGINT in the CLI): input is
    * no longer awaited, running turns are aborted, and every client MCP server
@@ -280,6 +295,65 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const activeTurns = new Map<string, AcpActiveTurn>();
 
   /**
+   * Flow 306 (W6, T15): one `keryx shell` lifecycle hook runtime per ACP
+   * session, bound to the session's `resolvedRoot` and built `interactive:
+   * true` — ACP has a permission-requesting client on the other end of this
+   * connection (`session/request_permission`, `permission.ts`), the same
+   * "an operator is present, just over a different transport" reasoning
+   * `handleSessionPrompt` already gives for leaving `AgentDeps.unattended`
+   * unset. `monitored-trusted-local` mirrors `keryx shell`'s own fixed
+   * construction-time profile (`commands/shell.ts`'s `getShellHooks`) rather
+   * than tracking a live `/plan`-style toggle — ACP has no such toggle today.
+   *
+   * Built once per session (`session/new` or `session/load`), not per turn:
+   * a fresh `HookRuntime` per turn would re-read both config files and reset
+   * `inheritedHookIds()`'s dedup/first-edit-in-session state for no reason,
+   * exactly like the interactive shell's own reasoning. `session/load`
+   * REPLACES the registry entry for its `sessionId` (same hazard as
+   * `AcpSessionState.history`, see `AcpActiveTurn`'s doc above), so it also
+   * replaces this session's hook runtime, keyed by the same id.
+   */
+  const shellHooksBySession = new Map<string, ShellHookContext>();
+
+  /**
+   * Build (or rebuild) THIS session's hook runtime and fire `SessionStart`
+   * — called once from `handleSessionNew` and once from `handleSessionLoad`,
+   * both "session creation" for hook-runtime purposes (a `session/load` binds
+   * a durable session to a brand new in-process `HookRuntime`, just like a
+   * restarted `keryx shell` resuming a session would).
+   *
+   * `KERYX_HOOKS=off` makes `buildShellHookRuntime` return `undefined` —
+   * this session then simply has no entry in `shellHooksBySession`, and
+   * `AgentDeps.hooks` stays unset for its turns (byte-identical to today).
+   */
+  async function ensureShellHooksAndFireStart(sessionId: string, resolvedRoot: string): Promise<void> {
+    const shellHooks = buildShellHookRuntime({
+      projectRoot: resolvedRoot,
+      sessionId,
+      runId: idSeq(),
+      interactive: true,
+      profileId: "monitored-trusted-local",
+      ...(options.hooksEnv !== undefined ? { env: options.hooksEnv } : {}),
+    });
+    if (shellHooks === undefined) {
+      shellHooksBySession.delete(sessionId);
+      return;
+    }
+    shellHooksBySession.set(sessionId, shellHooks);
+    // SessionStart is never gate-capable (`GATE_CAPABLE_EVENTS` excludes it —
+    // `harness/hooks/semantics.ts`'s own comment) — a hook here cannot refuse
+    // the session, so this is fired for its side effects only and never
+    // blocks `session/new`/`session/load` on a slow/failing hook beyond the
+    // hook's own timeout.
+    await shellHooks.runtime.fire("SessionStart", {
+      sessionId: shellHooks.sessionId,
+      runId: shellHooks.runId,
+      projectRoot: resolvedRoot,
+      policyProfile: "monitored-trusted-local",
+    });
+  }
+
+  /**
    * ONE turn per session, at a time (flow 285, T16).
    *
    * A session's `history` array is mutated IN PLACE by `runAgentTurn` for the
@@ -325,6 +399,21 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   /** Shapes, sends and interprets one `session/request_permission`. `undefined` = could not be asked. */
   const askPermissionFor = (sessionId: string, turn: AcpActiveTurn): AcpPermissionAsker => {
     return async (ask): Promise<AcpRequestPermissionResponse | undefined> => {
+      // Flow 306 (W6, T15): wiring a real `HookRuntime` into `AgentDeps.hooks`
+      // (above) puts a genuine process spawn — `firePreToolUseHook`'s built-in
+      // command hooks — between `io.onToolCall`'s `tool_call` announcement and
+      // THIS ask, where before there was none. That gap is exactly what
+      // `session/cancel` racing right after the announcement (as a client
+      // reasonably does: it has been shown the call, so it can act on it) can
+      // now land inside: `handleSessionCancel` already ran and found nothing
+      // in `turn.permissionRequestIds` to settle, because this call had not
+      // registered itself yet. Checked here, before this id is even minted,
+      // so a turn already cancelled by the time its gate resolves asks
+      // nothing — it denies the same way an unanswerable client does, rather
+      // than sending a `session/request_permission` no one will ever answer.
+      if (turn.cancelled) {
+        return undefined;
+      }
       if (!clientAnswersPermissions) {
         options.logError(
           `acp: ${ACP_CLIENT_METHODS.sessionRequestPermission} not asked for ${ask.toolCall.name ?? "a tool call"}: ` +
@@ -821,6 +910,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // reported, not refused for the whole call (see `parseAcpMcpServers`).
     const parsed = parseAcpMcpServers(ACP_AGENT_METHODS.sessionNew, obj["mcpServers"]);
     const state = registry.create(cwd, clientCapabilities);
+    // Flow 306 (W6, T15): this session's own hook runtime, built now and
+    // fired with `SessionStart` — before the response is even returned, so a
+    // `session/prompt` racing in right after `session/new` answers always
+    // finds `shellHooksBySession` already populated.
+    await ensureShellHooksAndFireStart(state.sessionId, state.resolvedRoot);
     // Started in the background: everything up to here is synchronous — the
     // session is registered before the next line is even decoded (see
     // `dispatch` below) — and the session's first prompt waits for the dials
@@ -1007,6 +1101,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const toolNames = tools.map((tool) => tool.definition.name);
     const { provider, providerId, modelId, turnSettings } = model.binding;
     const reasoningEffort = reasoningFor(sessionId, model);
+    const shellHooks = shellHooksBySession.get(sessionId);
     const deps: AgentDeps = {
       ...turnSettings,
       ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
@@ -1020,6 +1115,14 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         toolNames,
       }),
       idSeq,
+      // Flow 306 (W6, T15): this session's own `HookRuntime` (built at
+      // `session/new`/`session/load`, `ensureShellHooksAndFireStart` above),
+      // absent only when `KERYX_HOOKS=off` — every existing PreToolUse/
+      // PostToolUse/UserPromptSubmit/Stop wiring in `agent.ts`'s `runAgentTurn`
+      // already short-circuits to a no-op the moment `deps.hooks` is
+      // undefined, so this is purely additive for every call site that ran
+      // before this task.
+      ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       // Deliberately NOT `unattended: true` (context.md F-4; AC3 groundwork
       // for T9). `keryx shell` never sets it either — an operator is present
       // at a real terminal there, and an ACP client is that same operator
@@ -1291,6 +1394,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
     // Replay BEFORE responding — the spec's own ordering requirement.
     replayHistory(sessionId, state.history);
+    // Flow 306 (W6, T15): the load REPLACES the registry entry, so it also
+    // replaces (or creates, if this connection has never seen this session
+    // id) this session's hook runtime — same hazard, same fix, as the MCP
+    // rebind just below.
+    await ensureShellHooksAndFireStart(sessionId, state.resolvedRoot);
     // The load REPLACES the session's entry, so it replaces its MCP servers
     // too: whatever an earlier `session/new`/`session/load` on this connection
     // started for this id is stopped, and this request's list is started.
@@ -1471,6 +1579,26 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // observable to the client instead of dying with the process.
       while (inflight.size > 0) {
         await Promise.allSettled([...inflight]);
+      }
+    }
+
+    // Flow 306 (W6, T15): ACP advertises no `session/close` (see the
+    // `SharedMcpSet` doc comment above) — the connection itself is the only
+    // boundary every session this process created actually has. Every
+    // session with a hook runtime gets its `SessionEnd` fired here, once,
+    // before the process that started it exits; never awaited past its own
+    // hook timeouts (`fire()`'s own contract), and never allowed to delay
+    // shutdown further than that.
+    const endReason = ended === "shutdown" ? "shutdown" : "connection-closed";
+    for (const shellHooks of shellHooksBySession.values()) {
+      try {
+        await shellHooks.runtime.fire("SessionEnd", {
+          sessionId: shellHooks.sessionId,
+          runId: shellHooks.runId,
+          endReason,
+        });
+      } catch (error) {
+        options.logError(`acp: SessionEnd hook fire failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   } finally {

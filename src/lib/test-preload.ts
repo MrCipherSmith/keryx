@@ -38,6 +38,28 @@ process.env.APPDATA = root;
 // An env var is only present if something actually ran this file first.
 process.env.KERYX_TEST_CONFIG_ROOT = root;
 
+// Default the lifecycle-hook runtime OFF for every test (flow 306, W6, T16).
+//
+// `buildShellHookRuntime`/`buildRemoteHookRuntime`/ACP's hook wiring spawn the
+// built-in gate hooks (ctx-guard, the two security scans) as real `keryx …`
+// commands, resolved from the running process's own entry. Under `bun test`
+// that entry is the test runner, not keryx — so an integration test that
+// builds a real shell/ACP/serve dependency graph without explicitly turning
+// hooks off got a crashing spawn, which the runtime (correctly, on its own
+// terms) treats as fail-closed: every PreToolUse/UserPromptSubmit denied,
+// every prompt and tool call refused.
+//
+// The overwhelming majority of tests inject a fake `HookRuntime` directly (or
+// never touch the hook-wiring seam at all) and have no opinion about
+// `KERYX_HOOKS`; defaulting it to `"off"` here matches what those tests
+// already assume. A test that deliberately exercises the real runtime sets
+// `KERYX_HOOKS` itself (to `"off"` explicitly for its off-path assertions, or
+// deletes/overrides it around the real-runtime path it wants to test) — this
+// only fills in the default when the test leaves the variable untouched.
+if (process.env.KERYX_HOOKS === undefined) {
+  process.env.KERYX_HOOKS = "off";
+}
+
 // Sweep the roots left by earlier runs.
 //
 // Without this every `bun test` left a directory behind — 23 had accumulated on
