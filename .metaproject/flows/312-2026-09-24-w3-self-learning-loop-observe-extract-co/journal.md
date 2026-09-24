@@ -70,3 +70,14 @@
 - 2026-09-24T10:57:19.342Z - task-attempt: T16: started (attempt 1) — orchestrator local checks
 - 2026-09-24T10:58:35.361Z - task-done: T16: Verify: targeted tests, typecheck and eslint on changed files
 - 2026-09-24 - T16: rebased on origin/feat (flow 311 rename, flow 309 close); tsc clean; eslint clean on the 82 changed .ts files; all changed tests plus drift/integrations/agents/import-policy suites pass. src/security/read-source.test.ts fails locally only because this machine's global git hook refuses author t@t, unrelated (service.ts change is additive). CI is authoritative.
+- 2026-09-24T10:59:24.782Z - task-attempt: T4: started (attempt 1) — PR #691 review round 1 (opus)
+- 2026-09-24T11:04:30.640Z - task-attempt: T15: failed (attempt 6) — round 3: O-1 still partial via free-text path regex; 3 minor (O3-1..O3-3) + 1 info
+- 2026-09-24T11:04:30.769Z - task-added: T19: Re-plan path scrubbing (token-based) for O3-1..O3-4; fix mkdocs strict links in learning.md
+- 2026-09-24T11:04:30.898Z - task-attempt: T19: started (attempt 1) — 312-T19
+- 2026-09-24 - T15 round 3: O2-1..O2-6 and O-5 fixed. O-1 is still partial: the free-text absolute-path regex misses username-only paths, flag/host-glued paths, paths with spaces, relative climbs and root boundary chars (O3-1..O3-3 minor, O3-4 info). This is the third review round of the regex-scrub approach, so per the three-attempt bound it is re-planned: T19 replaces per-pattern regex patching with a token-based scrub. Every whitespace/quote-delimited token (and flag/host-glued suffix) that contains a path separator, ~ or a drive letter is classified once: in-root → project-relative, home-shaped → [home], anything else → basename. Path-valued fields share the same classifier. Also CI: mkdocs --strict fails on 3 learning.md links outside docs/.
+- 2026-09-24T11:08:44.883Z - task-attempt: T4: failed (attempt 2) — PR review round 1: 1 blocker, 3 major, 5 minor (R1-F1..F9)
+- 2026-09-24T11:08:45.017Z - task-added: T20: Fix PR review round 1 (R1-F1..F9): store choke point, single learn arg parser
+- 2026-09-24T11:08:45.162Z - task-attempt: T20: started (attempt 1) — 312-T20 sonnet
+- 2026-09-24T11:16:06.790Z - task-done: T19: Re-plan path scrubbing (token-based) for O3-1..O3-4; fix mkdocs strict links in learning.md
+- 2026-09-24T11:33:50.346Z - task-done: T20: Fix PR review round 1 (R1-F1..F9): store choke point, single learn arg parser
+- 2026-09-24 - PR #691 review round 1 ingested (R1-F1 blocker, R1-F2..F4 major, R1-F5..F9 minor). Fix strategy: one store choke point (updatePattern/createPattern under the lock; identity binding; accepted text immutable) and one learn argument parser. T20 DONE with discriminating tests. T19 DONE: token-based path classifier and mkdocs link fix.

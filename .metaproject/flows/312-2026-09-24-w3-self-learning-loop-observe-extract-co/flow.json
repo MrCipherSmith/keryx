@@ -9,7 +9,7 @@
   "title": "W3: self-learning loop — observe, extract, consent-gated learned patterns, reviewer profiles, promote and graduate",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:32.725Z",
-  "updatedAt": "2026-09-24T10:58:35.361Z",
+  "updatedAt": "2026-09-24T11:33:50.346Z",
   "source": {
     "type": "description",
     "ref": null
@@ -81,8 +81,19 @@
         "T16"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T10:59:24.782Z",
+            "outcome": "started",
+            "detail": "PR #691 review round 1 (opus)"
+          },
+          {
+            "at": "2026-09-24T11:08:44.883Z",
+            "outcome": "failed",
+            "detail": "PR review round 1: 1 blocker, 3 major, 5 minor (R1-F1..F9)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -341,7 +352,7 @@
         "T11"
       ],
       "attempts": {
-        "count": 5,
+        "count": 6,
         "log": [
           {
             "at": "2026-09-24T08:30:12.418Z",
@@ -367,6 +378,11 @@
             "at": "2026-09-24T10:55:31.476Z",
             "outcome": "started",
             "detail": "round 3 re-check after T18"
+          },
+          {
+            "at": "2026-09-24T11:04:30.640Z",
+            "outcome": "failed",
+            "detail": "round 3: O-1 still partial via free-text path regex; 3 minor (O3-1..O3-3) + 1 info"
           }
         ]
       },
@@ -438,6 +454,52 @@
             "at": "2026-09-24T10:43:57.059Z",
             "outcome": "started",
             "detail": "312-T18 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Re-plan path scrubbing (token-based) for O3-1..O3-4; fix mkdocs strict links in learning.md",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T18"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:04:30.898Z",
+            "outcome": "started",
+            "detail": "312-T19"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Fix PR review round 1 (R1-F1..F9): store choke point, single learn arg parser",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:08:45.162Z",
+            "outcome": "started",
+            "detail": "312-T20 sonnet"
           }
         ]
       },
@@ -720,6 +782,51 @@
       "at": "2026-09-24T10:58:35.361Z",
       "event": "task-done",
       "detail": "T16: Verify: targeted tests, typecheck and eslint on changed files"
+    },
+    {
+      "at": "2026-09-24T10:59:24.782Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — PR #691 review round 1 (opus)"
+    },
+    {
+      "at": "2026-09-24T11:04:30.640Z",
+      "event": "task-attempt",
+      "detail": "T15: failed (attempt 6) — round 3: O-1 still partial via free-text path regex; 3 minor (O3-1..O3-3) + 1 info"
+    },
+    {
+      "at": "2026-09-24T11:04:30.769Z",
+      "event": "task-added",
+      "detail": "T19: Re-plan path scrubbing (token-based) for O3-1..O3-4; fix mkdocs strict links in learning.md"
+    },
+    {
+      "at": "2026-09-24T11:04:30.898Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 312-T19"
+    },
+    {
+      "at": "2026-09-24T11:08:44.883Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — PR review round 1: 1 blocker, 3 major, 5 minor (R1-F1..F9)"
+    },
+    {
+      "at": "2026-09-24T11:08:45.017Z",
+      "event": "task-added",
+      "detail": "T20: Fix PR review round 1 (R1-F1..F9): store choke point, single learn arg parser"
+    },
+    {
+      "at": "2026-09-24T11:08:45.162Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 312-T20 sonnet"
+    },
+    {
+      "at": "2026-09-24T11:16:06.790Z",
+      "event": "task-done",
+      "detail": "T19: Re-plan path scrubbing (token-based) for O3-1..O3-4; fix mkdocs strict links in learning.md"
+    },
+    {
+      "at": "2026-09-24T11:33:50.346Z",
+      "event": "task-done",
+      "detail": "T20: Fix PR review round 1 (R1-F1..F9): store choke point, single learn arg parser"
     }
   ],
   "owner": {
