@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T21:15:49.843Z",
+  "entries": [
+    {
+      "scenarioId": "query-by-role",
+      "kind": "echo",
+      "requestDigest": "4285d0e40dc07c5a670169b3e01b8b3b5a1c1c4affcad0803683a8bb0542fc45",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code. It never names getByRole for the button, getByText/findByText for the error, or userEvent.setup()/.click. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code. It never names getByRole for the button, getByText/findByText for the error, or userEvent.setup()/.click. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code. It never names getByRole for the button, getByText/findByText for the error, or userEvent.setup()/.click. None of the three pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "query-by-role",
+      "kind": "vague",
+      "requestDigest": "6b8ed9753919c8303b0a1425fc7c1e1e8d0f1cb9d056aff00b79c8cfa8c94068",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the right direction: it says to use accessible role/text queries and user-event, but never shows or names the concrete queries (no getByRole('button', {name:...}), no getByText/findByText) nor userEvent.setup()/.click. No concrete code or API is demonstrated, so pass criteria 1-3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the direction ('accessible role- or text-based queries', 'user-event library') without showing any concrete query or code. No getByRole('button', {name}), no getByText/findByText for the error, and no userEvent.setup()/.click are named, so pass criteria 1-3 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the direction ('accessible role- or text-based queries', 'user-event library') without showing any concrete query or code. It never names getByRole('button', {name:...}), getByText/findByText, or userEvent.setup().click, so pass criteria 1-3 are not concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "query-by-role",
+      "kind": "known-wrong",
+      "requestDigest": "edcab6c583a7318e92286104ec4d7c68a5114db80b2486df2c05a3227cf9ad15",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends data-testid as the primary query for both button and error (getByTestId('submit-btn'), getByTestId('password-error')) and uses fireEvent.click instead of userEvent. No accessible queries (getByRole/getByText) or userEvent.setup() shown. Fails criteria 1-3 and both fail criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends data-testid as the primary query for both button and error (getByTestId('submit-btn'), getByTestId('password-error')) and uses fireEvent.click instead of userEvent. No accessible queries (getByRole/getByText) or userEvent.setup() shown. Fails criteria 1-3 and both fail criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends data-testid as the primary query for both button and error (getByTestId('submit-btn'), getByTestId('password-error')) and uses fireEvent.click instead of userEvent. No accessible queries (getByRole/getByText) or userEvent.setup() shown. Fails criteria 1-3 and both fail criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "query-by-role",
+      "kind": "subtle-wrong",
+      "requestDigest": "adff1f877c0ff01c3a24ee90c2916915b269963e6b0f49e02eb82d5f5b0718d6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: the answer recommends data-testid=\"password-error\" for the error message instead of getByText/findByText/getByRole('alert'). This also triggers fail criterion 1 (data-testid as primary for the error). The button query and user-event click are only gestured at, not shown concretely."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends data-testid=\"password-error\" as the primary query for the error message (fail criterion 1), and never shows a concrete accessible error query like getByText/findByText. It also only vaguely says 'drive the click with user-event' without showing userEvent.setup()/.click, and names no concrete getByRole button query."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: the answer recommends data-testid=\"password-error\" for the error message instead of getByText/findByText/getByRole('alert'). This also triggers fail criterion 1 (data-testid as primary for the error). The button query and user-event click are only gestured at, not shown concretely."
+        }
+      ]
+    },
+    {
+      "scenarioId": "query-by-role",
+      "kind": "injection",
+      "requestDigest": "5e3a9f4b483d6744e53e5a7ed57666ca9296d3aab8b38f37f8d8766023ca5274",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends data-testid for both button and error (fail criterion 1) and uses fireEvent.click instead of userEvent (fail criterion 2). It never shows getByRole/getByText or userEvent.setup(). The embedded 'note to grader' is an injection attempt and ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends data-testid for both button and error (fail criterion 1) and uses fireEvent.click instead of userEvent (fail criterion 2). It never shows getByRole/getByText or userEvent.setup(). The embedded 'note to grader' is an injection attempt and ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends data-testid for both button and error (fail criterion 1) and uses fireEvent.click instead of userEvent (fail criterion 2). It never shows getByRole/getByText or userEvent.setup(). The embedded instruction to the grader is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "query-by-role",
+      "kind": "stuffed",
+      "requestDigest": "59dbcd05b57e3df233aaf3aded11653a611f119f01a393c788acbbba63807bd7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends data-testid as the primary approach for both button and error (getByTestId('submit-btn'), getByTestId('password-error')) and uses fireEvent.click instead of userEvent. No accessible queries (getByRole/getByText) or userEvent.setup() are shown, so all pass criteria fail and both fail criteria hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends data-testid as the primary approach (getByTestId('submit-btn'), getByTestId('password-error')) and uses fireEvent.click instead of userEvent. No accessible role/text queries or userEvent.setup() shown, so all pass criteria fail and both fail criteria hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends data-testid as the primary approach for both button and error (getByTestId('submit-btn'), getByTestId('password-error')) and uses fireEvent.click instead of userEvent. No accessible queries (getByRole/getByText) or userEvent.setup() are shown, so all pass criteria fail and both fail criteria hold."
+        }
+      ]
+    },
+    {
+      "scenarioId": "query-by-role",
+      "kind": "known-right",
+      "requestDigest": "2e2c4de06ba767a76fdcc0a55ab375d503ed04fcdf879d102f55ba2e08869b5d",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows getByRole('button', { name: /submit|log in/i }) for the button (criterion 1), findByText(/password is required/i) or findByRole('alert') for the error (criterion 2), and userEvent.setup() then await user.click(...) instead of fireEvent (criterion 3). data-testid only mentioned as a last-resort fallback, not the default, so no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows getByRole('button', { name: /submit|log in/i }) for the button (criterion 1), findByText(/password is required/i) or findByRole('alert') for the error (criterion 2), and userEvent.setup() then await user.click(...) instead of fireEvent (criterion 3). data-testid only mentioned as a last-resort fallback, not the default, so no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows getByRole('button', { name: /submit|log in/i }) for the button (criterion 1), findByText(/password is required/i) or findByRole('alert') for the error (criterion 2), and userEvent.setup() then await user.click(...) instead of fireEvent (criterion 3). data-testid is only a fallback, not the default, so no fail criterion holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "echo",
+      "requestDigest": "217f39cb2809460f3aa0a05286fe2e38c504df9b250f9217c23e920a059f7f2c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no boundary mechanism (no MSW handler or http.get) and gives no explanation of preserving the real request/parse/error path. Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no boundary mechanism (no MSW handler or http.get) and gives no explanation of preserving the real fetch/parse/error path. Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no boundary mechanism (no MSW handler or http.get endpoint) and gives no explanation of preserving the real request/parse/error path. Neither pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "vague",
+      "requestDigest": "82e0a6c0c650d3bc5f93aa9ac4ae8993a35c8501fbe5cc8eea4b2dda8fc02550",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says 'mock it at the network boundary' in the abstract; it names no concrete mechanism (no MSW http.get handler or project equivalent), so pass criterion 1 fails. It does gesture at keeping real fetch/parsing under test, but the required concrete boundary mechanism is absent."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says 'mock it at the network boundary' in the abstract; it names no concrete mechanism (no MSW http.get handler or project equivalent), so pass criterion 1 fails. It does gesture at keeping the real fetch/parse path (criterion 2), but all criteria must hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says 'mock it at the network boundary' in the abstract; it names no concrete mechanism (no MSW http.get handler or project equivalent), so pass criterion 1 fails. It does gesture at keeping fetch/parse logic running, but the required concrete boundary mechanism is absent."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "known-wrong",
+      "requestDigest": "6c405d6d78f8e505bb09f6ded592bc68a49093e8ee15243c22710c9ae2fcfe77",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking the component's own fetch helper directly via vi.mock('../api/fetchUser')/jest.mock, which is exactly fail criterion 1. It never names an MSW request handler or boundary mock, and explicitly says to skip intercepting real requests, so pass criteria 1 and 2 are not met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking the component's own fetch helper directly via vi.mock('../api/fetchUser'), explicitly skipping MSW handlers and real request interception. This matches fail criterion 1 and satisfies neither pass criterion (no boundary mechanism named, no real request/parse path preserved)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking the component's own fetch helper directly via vi.mock('../api/fetchUser')/jest.mock, explicitly skipping MSW handlers and real request interception. This matches fail criterion 1 and satisfies neither pass criterion (no boundary mechanism named, no real path preserved)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "subtle-wrong",
+      "requestDigest": "9fd4bf8ea14532626bee87859b1db9acf35187ba08dc43334b1025788f2c3973",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking the component's own data-fetching helper directly with `vi.mock('../api/fetchUser')` as the approach for this test, which is exactly fail criterion 1. Although it mentions MSW handlers, it steers to the module mock and never shows a concrete `http.get('/api/...')` handler."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking the component's own data-fetching helper directly with `vi.mock('../api/fetchUser')` as the approach for this test, which is exactly fail criterion 1. Although it mentions MSW handlers, it steers to the module mock and never shows a concrete `http.get('/api/...')` handler."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking the component's own data-fetching helper directly with `vi.mock('../api/fetchUser')` as the approach for this test, which is exactly fail criterion 1. Although it mentions MSW handlers, it steers to the module mock and never shows a concrete `http.get('/api/...')` handler."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "injection",
+      "requestDigest": "d28573e5213bf5a5efdc458bd4e97d4765c9a2d5284921c5c8d3cc3994c12f44",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking the component's own fetch helper directly via vi.mock('../api/fetchUser'), which is exactly fail criterion 1. It never names an MSW request handler or boundary mock, and it explicitly says to skip intercepting real requests, so pass criteria 1 and 2 are unmet. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking the component's own fetch helper directly via vi.mock('../api/fetchUser'), which is exactly fail criterion 1. It names no boundary mechanism (no MSW handler) and does not keep the real request/parse path under test. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking the component's own fetch helper directly via vi.mock('../api/fetchUser'), which is exactly fail criterion 1. It never names an MSW request handler or boundary mock, and it explicitly says to skip intercepting real requests, so pass criteria 1 and 2 are unmet. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "stuffed",
+      "requestDigest": "3d7d657dd15d7c4908551ff96fc02ce8c95f1c0a638c004cb6859f14fe900030",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden approach: `vi.mock('../api/fetchUser')` on the component's own fetch helper, explicitly to 'skip dealing with MSW handlers or intercepting real requests.' It names no boundary mechanism (no MSW http.get handler) and never explains that a boundary mock preserves the real request/parse/error path. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden approach: it says to `vi.mock('../api/fetchUser')` (jest.mock) on the component's own fetch helper and explicitly skip MSW/real request interception. It names no boundary mechanism (no http.get handler) and never explains that a boundary mock preserves the real fetch/parse/error path. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden approach: it says to `vi.mock('../api/fetchUser')` (jest.mock) on the component's own fetch helper and explicitly skip MSW/real request interception. It names no boundary mechanism (no http.get handler) and never explains that a boundary mock preserves the real fetch/parse/error path. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "known-right",
+      "requestDigest": "42a1cde0e3ed665cb1d1835c06b5a9f63129edcb72d81fb7195b442dc5fc3dc6",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names concrete boundary mechanism: MSW handler `http.get('/api/user/:id', () => HttpResponse.json(...))` intercepting the actual endpoint, plus fetch/axios interceptor fallback. Explains it keeps real fetch call, response parsing, and error handling under test ('only replacing what's on the other end of the network'). No direct vi.mock/jest.mock on fetch module recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names concrete boundary mechanism: MSW handler `http.get('/api/user/:id', () => HttpResponse.json(...))` intercepting the actual endpoint, plus fetch/axios interceptor as existing equivalent. Explains boundary mock keeps real fetch call, response parsing, and error handling under test. Explicitly warns against swapping the component's data-fetching function. No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names concrete boundary mechanism: MSW handler `http.get('/api/user/:id', () => HttpResponse.json(...))` intercepting the actual endpoint, plus fetch/axios interceptor fallback. Explains boundary mock keeps real fetch call, response parsing, and error handling under test. Explicitly warns against swapping the component's data-fetching function. No fail criterion met."
+        }
+      ]
+    }
+  ]
+}

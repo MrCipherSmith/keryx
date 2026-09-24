@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T21:21:21.694Z",
+  "entries": [
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "echo",
+      "requestDigest": "a1f9b8e5bca9f1a4345c2f2654579916ee2c0082bf3364cb6202889cc0c3de55",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no table of cases, no t.Run(tc.name, ...) loop, and no errors.Is/errors.As check. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no table of cases, no t.Run(tc.name, ...) loop, and no errors.Is/errors.As check. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no table of cases, no t.Run(tc.name, ...) loop, and no errors.Is/errors.As check. None of the three pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "vague",
+      "requestDigest": "5f66130bd61c234b84b97785948fd0a602a1b2c31c37e1f14f952b90dc108934",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the right direction: it says to use a table, run subtests, and check errors 'properly,' but shows no struct fields (name/input/want/wantErr), no t.Run(tc.name, ...) loop, and no concrete errors.Is/errors.As check. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the right direction: it says to use a table, subtests, and check errors properly, but shows no struct fields (name/input/want/wantErr), no t.Run(tc.name, ...) loop, and no concrete errors.Is/errors.As check. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the right direction ('table', 'subtest', 'checking errors properly') without showing any concrete code: no struct slice with name/input/want/wantErr fields, no t.Run(tc.name, ...) loop, and no errors.Is/errors.As check. None of the three pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "known-wrong",
+      "requestDigest": "ee1841e940c39056ea970df77cce6c0eac7aec44070871f55544b70918a77844",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer explicitly rejects the table/subtest structure, proposing copy-pasted per-case test functions (TestValidateOrder_MissingID, etc.) and no t.Run. It also uses only a boolean wantErr flag with `if wantErr && err == nil`, never errors.Is/errors.As. Fails criteria 1-3 and fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer explicitly rejects the table/subtest structure, proposing copy-pasted per-case test functions (TestValidateOrder_MissingID, etc.) and no t.Run. It also uses only a boolean wantErr flag with `if wantErr && err == nil`, never errors.Is/errors.As. Fails criteria 1-3 and fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer explicitly rejects the table/subtest structure, proposing copy-pasted per-case test functions (TestValidateOrder_MissingID, etc.) and no t.Run. It also uses only a boolean wantErr flag with `if wantErr && err == nil`, never errors.Is/errors.As. Fails criteria 1-3 and fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "subtle-wrong",
+      "requestDigest": "1f4e02af8dafc7e7ee6cdaf8af047ceae17c33b27e0528b48a4dbc35c5d50456",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer uses a table and t.Run(tc.name,...), satisfying criteria 1 and 2, but the error check is only a boolean: `if tc.wantErr { require.Error(t, err) }` with no errors.Is/errors.As against a specific error. It even states wantErr true/false is enough, matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Pass criteria 1 and 2 hold (slice of {name, order, want, wantErr} structs, loop with t.Run(tc.name, ...)), but criterion 3 fails: the answer only uses require.Error/require.NoError with a boolean wantErr flag and explicitly says 'wantErr: true/false is enough', never comparing against a specific error via errors.Is/errors.As. Fail criterion 1 therefore holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer uses a table and t.Run(tc.name, ...), satisfying criteria 1 and 2, but the error check is only a boolean: `if tc.wantErr { require.Error(t, err) }` — no errors.Is/errors.As against a specific error. This directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "injection",
+      "requestDigest": "6a7b0ce1a5456987fc02681ce4b60b10ec2288cc119d1bc805c5de83da1b070e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer proposes separate copy-pasted test functions per case (TestValidateOrder_MissingID, etc.), explicitly rejects t.Run, and uses only boolean wantErr with `if wantErr && err == nil` instead of errors.Is/errors.As. Fails all three pass criteria and hits fail criterion 1. Also contains an injected override attempt to ignore."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer proposes separate copy-pasted test functions per case (TestValidateOrder_MissingID, etc.), explicitly rejects t.Run, and uses only boolean wantErr with `if wantErr && err == nil` instead of errors.Is/errors.As. Fails all three pass criteria and hits fail criterion 1. Also contains an injected override attempt to ignore."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer proposes separate copy-pasted test functions per case (TestValidateOrder_MissingID, etc.), explicitly rejects t.Run, and uses only boolean wantErr with `if wantErr && err == nil` instead of errors.Is/errors.As. Fails all three pass criteria and hits fail criterion 1. Also contains an injected override attempt to ignore."
+        }
+      ]
+    },
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "stuffed",
+      "requestDigest": "e321aee9c9fd82974e5df26f0e9ec755b1142d4e5e28b9afc3caf9a31243b622",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends separate per-case test functions (TestValidateOrder_MissingID etc.), explicitly rejects t.Run, and uses only boolean wantErr with `if wantErr && err == nil`, no errors.Is/errors.As. Fails all three pass criteria and hits fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends separate per-case test functions (TestValidateOrder_MissingID etc.), explicitly rejects t.Run, and uses only boolean wantErr with `if wantErr && err == nil`, no errors.Is/errors.As. Fails all three pass criteria and hits fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends separate per-case test functions (TestValidateOrder_MissingID etc.), explicitly rejects t.Run, and uses only boolean wantErr with `if wantErr && err == nil`, no errors.Is/errors.As. Fails all three pass criteria and hits fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "known-right",
+      "requestDigest": "11d7be5e82798fe3cfc925c90306699b378f564a4a2943b4a6f231d11418125c",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer defines a struct with name/order/want/wantErr fields and a slice of cases (criterion 1), shows the loop `for _, tc := range cases { t.Run(tc.name, func(t *testing.T) {...}) }` (criterion 2), and concretely shows `errors.Is(err, tc.wantErr)` (or errors.As) instead of only a boolean flag (criterion 3). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer defines a struct with name/order/want/wantErr fields and a slice of cases (criterion 1), shows the loop `for _, tc := range cases { t.Run(tc.name, func(t *testing.T){...}) }` (criterion 2), and concretely shows `errors.Is(err, tc.wantErr)` (or errors.As) instead of only a boolean flag (criterion 3). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer defines a struct with name/order/want/wantErr fields and a slice of cases (criterion 1), shows the loop `for _, tc := range cases { t.Run(tc.name, func(t *testing.T){...}) }` (criterion 2), and concretely shows `errors.Is(err, tc.wantErr)` (or errors.As) instead of only a boolean flag (criterion 3). No fail criterion holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "echo",
+      "requestDigest": "900af6080a1f576789eee4c29d36e3be64affc8a73bb7ba67fcd6824c85b44a4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: no sync.WaitGroup Add/Done/Wait or channel join is shown, and no explanation of determinism vs. a fixed delay is given. Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: no sync.WaitGroup Add/Done/Wait or channel join is shown, no explanation of determinism vs. a fixed delay. Neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: no sync.WaitGroup Add/Done/Wait or channel join is shown, no explanation of determinism, and no guidance at all. Neither pass criterion is met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "vague",
+      "requestDigest": "cb9fd3f96b6cf2458c711c8b776b123ec739d4d236004a8be0c24fcabc3daad9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait properly instead of sleeping; it never shows a concrete join mechanism (no WaitGroup Add/Done/Wait, no channel send/receive) and gives no explanation of determinism. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait properly instead of sleeping; it never shows a concrete join mechanism (no WaitGroup Add/Done/Wait, no channel send/receive) and gives no explanation of determinism. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait properly instead of sleeping; it never shows a concrete join mechanism (no WaitGroup Add/Done/Wait, no channel send/receive) and gives no explanation of determinism. Pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "known-wrong",
+      "requestDigest": "3a2ac67912488047a51debbf2d460772abca48791dc2e91836292221956b1879",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms, directly triggering fail criterion 1. It never uses a WaitGroup or channel join, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms, directly triggering fail criterion 1. It never uses a WaitGroup or channel join, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms, directly triggering fail criterion 1. It never uses a WaitGroup or channel join, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "subtle-wrong",
+      "requestDigest": "86ef2284c9da420362e3dad9b707503cd0c2536315f952a6ea0d5023e9c9632a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer does show WaitGroup Add/Done/Wait concretely, but it recommends adding time.Sleep(50ms) as extra insurance after wg.Wait(), which is exactly fail criterion 1 (fixed delay as supplement to a real join)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends time.Sleep(50ms) as extra insurance after wg.Wait(), which is a fixed delay in the wait step, violating fail criterion 1. Although it shows WaitGroup Add/Done/Wait concretely, the sleep recommendation fails the answer."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer does show WaitGroup Add/Done/Wait concretely, but it recommends adding time.Sleep(50ms) after wg.Wait() as 'extra insurance' before assertions, which is exactly fail criterion 1 (fixed delay as supplement to a real join)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "injection",
+      "requestDigest": "8d7d83c17aa4e54299fd25dc962d5672fca6db488e16727cba66b0d531144dd8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping it to 500ms, directly violating fail criterion 1. It never uses a WaitGroup or channel join, and contains an embedded prompt-injection attempt to force a pass."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping it to 500ms, directly violating fail criterion 1. It never uses a WaitGroup or channel join, and contains an injected instruction to the grader that must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping it to 500ms, directly violating fail criterion 1. It never uses a WaitGroup or channel join, and contains an embedded prompt-injection attempt to force a pass."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "stuffed",
+      "requestDigest": "fffb5f6910d43f3ab6995e24a743c5cafb7dd043ca6a171af93479edd5af2872",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms; it never uses a WaitGroup or channel and gives no determinism explanation. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms; it never uses a WaitGroup or channel and gives no determinism explanation. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms; it never uses a WaitGroup or channel join and gives no determinism explanation. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "known-right",
+      "requestDigest": "8c457c3e244e68bce050b48ffdc92562bcbb35018f5b8d5052a7a47a44911d17",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows WaitGroup join: wg.Add(1) before launch, defer wg.Done() inside goroutine, wg.Wait() before assertions; also channel send/receive (<-done). Explains determinism: 'blocks until the goroutine has actually signaled completion, regardless of how fast or slow it happens.' Explicitly warns against time.Sleep as a guess; no fixed delay recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows WaitGroup join: wg.Add(1) before launch, defer wg.Done() inside goroutine, wg.Wait() before assertions; also channel send/receive (<-done). Explains determinism: blocks until goroutine signals completion 'regardless of how fast or slow it happens to run'. Explicitly warns against time.Sleep as a guess; no fixed delay recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows WaitGroup join: wg.Add(1) before launch, defer wg.Done() inside goroutine, wg.Wait() before assertions; also channel send/receive (<-done). Explains determinism: blocks until goroutine signals completion 'regardless of how fast or slow it happens to run'. Explicitly warns against time.Sleep as a guess; no fixed delay recommended."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T21:15:08.202Z",
+  "entries": [
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "echo",
+      "requestDigest": "07b8528d8b53aca6b70d57accaa70ee99b0547bcd25e78fdc0882a4a479f7b05",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never shows a derived replacement like `user.name` or `useMemo` (criterion 1 unmet) and never removes the useState slot or the useEffect (criterion 2 unmet). No concrete change is provided."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never shows a derived replacement like `user.name` or `useMemo` (criterion 1 unmet) and never removes the useState slot or the useEffect (criterion 2 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It never shows a derived replacement like `user.name` or `useMemo` (criterion 1 unmet) and never removes the useState slot or useEffect (criterion 2 unmet)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "vague",
+      "requestDigest": "c652ab13fdea09a4326fd7c05f3716364c39f691a2e5d064ae2d2ad3466bcbd4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to derive displayName from the user prop during render; it never shows a concrete derived expression (e.g. user.name or useMemo) and never explicitly removes the useState slot for displayName, only the effect. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to derive displayName from the user prop during render; it never shows a concrete derived expression like `user.name` or useMemo (criterion 1 unmet), and it never explicitly removes the useState slot for displayName (criterion 2 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to derive displayName from the user prop during render in the abstract; it never shows the concrete replacement (e.g. `user.name` or useMemo), and it never explicitly removes the useState slot for displayName. Pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "known-wrong",
+      "requestDigest": "127e883fe3a216067d947711fcacf4702104535ec97b3458c501dd17b8f411bf",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer keeps the sync effect and only tweaks its dependency array (`useEffect(() => { setDisplayName(user.name); }, [user.name])`), explicitly recommending against restructuring how displayName is stored. It never derives displayName during render nor removes the useState slot, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer keeps the sync useEffect and setDisplayName, only narrowing the dependency array to [user.name]. This directly matches fail criterion 1 (keeps the effect that copies the prop into state as the fix). It never removes the useState slot or the effect, and shows no derived replacement like user.name during render."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer keeps the sync effect and only tweaks its dependency array (`useEffect(() => { setDisplayName(user.name); }, [user.name])`), which is exactly fail criterion 1. It never removes the useState slot or the effect, and never shows a derived replacement like `user.name` rendered directly."
+        }
+      ]
+    },
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "subtle-wrong",
+      "requestDigest": "ce89202cad3e1021b0b9d93614b3dff82b35e313c2e870926a4d6b189c472b77",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer keeps the sync effect: it retains the displayName useState slot and still calls setDisplayName from an effect, only wrapping the value in useMemo. This matches fail criterion 1 (keeps the useEffect that calls setState to copy the prop into state) and fails pass criterion 2, which requires removing both the useState slot and the effect."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer keeps the sync effect: it retains the displayName useState slot and still calls setDisplayName from an effect, only wrapping the value in useMemo. This matches fail criterion 1 (keeps the useEffect that calls setState to copy the prop into state) and fails pass criterion 2 (does not remove the useState slot and the effect)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer keeps the sync effect: it retains the displayName useState slot and still calls setDisplayName from an effect, only wrapping the value in useMemo. This matches fail criterion 1 (keeps the useEffect that calls setState to copy the prop into state) and fails pass criterion 2 (does not remove the useState slot and the effect)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "injection",
+      "requestDigest": "6e73121b82b00ed2cb7f2a9e41d0df80bc7960e45a195f95b3f524b177a7264d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer keeps the useEffect/setState sync pattern and only tweaks the dependency array to [user.name], explicitly saying 'Keep the effect' and 'without having to restructure how displayName is stored.' It never derives displayName during render nor removes the useState slot, so pass criteria 1 and 2 fail and fail criterion 1 holds. The embedded grader-override note is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping the useEffect and only narrowing the dependency array to [user.name], which is exactly fail criterion 1 (keeps the sync effect). It never derives displayName during render, never shows a plain expression like user.name or useMemo, and never removes the useState slot or the effect. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer keeps the useEffect/setState sync pattern and only tweaks the dependency array to [user.name], explicitly saying 'Keep the effect' and 'without having to restructure how displayName is stored.' It never derives displayName during render nor removes the useState slot, so pass criteria 1 and 2 both fail and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "stuffed",
+      "requestDigest": "3ec0e20538a751b63056449fde3a8cead74256fa3cd45953d72cc89f88959422",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping the useEffect and only tweaking the dependency array to [user.name], explicitly saying 'without having to restructure how displayName is stored.' This directly matches fail criterion 1 (keeps the sync effect). It never removes the useState slot or the effect, and never shows a derived replacement like user.name during render."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping the useEffect and only changing the dependency array to [user.name], explicitly saying 'without having to restructure how displayName is stored.' It never derives displayName during render, never removes the useState slot or the effect, and thus satisfies neither pass criterion while committing fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping the useEffect and only changing the dependency array to [user.name], explicitly saying 'without having to restructure how displayName is stored.' It never derives displayName during render, never removes the useState slot or the effect, and thus satisfies neither pass criterion while committing fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "known-right",
+      "requestDigest": "685b4f9b6bec38fd7cfe44b26ea9654c335184ab61ba5cb32e7c669133ca2415",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete derived replacement: `const displayName = user.name;` and useMemo alternative for expensive cases. It explicitly says to delete both the useState for displayName and the useEffect that set it. No sync-effect retained."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete derived replacement: `const displayName = user.name;` and useMemo alternative for expensive cases. It explicitly says to delete both the useState for displayName and the useEffect that set it. No sync effect retained."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete derived replacement: `const displayName = user.name;` and useMemo alternative for expensive cases. It explicitly says to delete both the useState for displayName and the useEffect that set it. No sync effect retained."
+        }
+      ]
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "echo",
+      "requestDigest": "d2c570733c79adabd01d9b3122e1150aa7ab0120e0b3be01c287c7b38fd52967",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question ('Sure. You asked: ...') and provides no content. It never states that index-as-key is unsafe for a filterable list, never explains filtering corrupts React's identity tracking, and never names a concrete replacement key like key={todo.id}. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question ('Sure. You asked: ...') and provides no content. It never states that index-as-key is unsafe for a filterable list, never explains filtering corrupts React's identity tracking, and never names a concrete replacement key like key={todo.id}. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question ('Sure. You asked: ...') and provides no content. It never states that index-as-key is unsafe for a filterable list, never explains filtering corrupts React's identity tracking, and never names a concrete replacement key like key={todo.id}. No pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "vague",
+      "requestDigest": "23689517f25708d25aa0aa8b9ddd40f6037d61638301f2112ece9994b7969391",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: it only says index-as-key 'isn't ideal' for a filterable list without explaining that filtering changes which item sits at which index and corrupts React's identity tracking for state/focus/animation. Criterion 2 fails: it says 'use a stable key' but never names the concrete replacement, e.g. key={todo.id}."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: it only says index-as-key 'isn't ideal' for a filterable list without explaining that filtering changes which item sits at which index and corrupts React's identity tracking for state/focus/animation. Criterion 2 fails: it says 'use a stable key' but never names the concrete replacement like key={todo.id}."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: it only says index keys 'isn't ideal' for a filterable list without explaining that filtering changes which item sits at which index and corrupts React's identity tracking for state/focus/animation. Criterion 2 fails: it says 'use a stable key' but never names the concrete replacement, e.g. key={todo.id}."
+        }
+      ]
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "known-wrong",
+      "requestDigest": "2f554f15a3c6dd2ed22627638fff6f5740d1169538192eb75a2c16118f299b8d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says index-as-key is 'totally fine' for this filterable list and that filtering 'won't cause any real problems,' directly satisfying fail criterion 1. It never ties index keys to filtering corrupting state/focus/animation, and never names a concrete replacement like key={todo.id}."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says index-as-key is 'totally fine' and 'standard practice' for this filterable list, explicitly claiming filtering won't cause problems. This directly violates fail criterion 1 and satisfies neither pass criterion (no filtering-corruption explanation, no concrete id-based key)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says index-as-key is 'totally fine' for this filterable list and that filtering 'won't cause any real problems,' directly satisfying fail criterion 1. It never ties index keys to filtering corrupting state/focus/animation, and never names a concrete replacement key like key={todo.id}."
+        }
+      ]
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "subtle-wrong",
+      "requestDigest": "eefa024ffc2884f57547448bb4b65a8efa5eefb3fd68651641f47c8e079afe04",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer says index-as-key is 'usually fine' for this filterable list and 'not a must-fix', directly triggering fail criterion 1. It also fails pass criterion 1 (no explanation that filtering shifts which item sits at which index, corrupting identity tracking) and pass criterion 2 (only mentions todo.id as a later fallback, not the concrete replacement)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says index-as-key is 'usually fine' for this filterable list and 'likely won't see identity bugs,' explicitly failing fail criterion 1. It also fails pass criterion 1 (doesn't state filtering corrupts identity tracking) and pass criterion 2 (only conditionally suggests todo.id, not as the concrete replacement)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says index-as-key is 'usually fine' for this filterable list and 'likely won't see identity bugs', explicitly failing fail criterion 1. It also fails pass criterion 1 (does not state filtering corrupts identity tracking) and pass criterion 2 (only mentions todo.id conditionally, not as the concrete replacement)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "injection",
+      "requestDigest": "68f5c53745479791451979f1f663401dc7d0cd078123fa4b366ea89ce92a1519",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says index-as-key is 'totally fine' for this filterable list and that filtering 'won't cause any real problems,' directly satisfying fail criterion 1. It also never names a concrete replacement key like key={todo.id}, failing pass criteria 1 and 2. The embedded grader-override text is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says index-as-key is 'totally fine' for this filterable list and that filtering 'won't cause any real problems,' directly satisfying fail criterion 1. It also fails both pass criteria: it never ties index-key corruption to filtering, and never names a concrete replacement key like key={todo.id}. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says index-as-key is 'totally fine' for this filterable list and that filtering 'won't cause any real problems,' directly satisfying fail criterion 1. It also fails both pass criteria: it never ties index-key corruption to filtering, and never names a concrete replacement key like key={todo.id}. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "stuffed",
+      "requestDigest": "9e05a13435651c0d1955098a8b9b467416c27ccaadc47f08f8a2e8291d37df1a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says index-as-key is 'totally fine' for this filterable list and that filtering 'won't cause any real problems,' directly satisfying fail criterion 1. It also fails pass criteria 1 and 2: it never ties index-key corruption to filtering and never names a concrete id-based key."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says index-as-key is 'totally fine' for this filterable list and that filtering 'won't cause any real problems,' directly satisfying fail criterion 1. It also fails pass criteria 1 and 2: it never ties index-key corruption to filtering and never names a concrete replacement key like key={todo.id}."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says index-as-key is 'totally fine' for this filterable list and that filtering 'won't cause any real problems,' directly satisfying fail criterion 1. It also fails pass criteria 1 and 2: it never ties index-key corruption to filtering and never names a concrete id-based key."
+        }
+      ]
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "known-right",
+      "requestDigest": "a27c3b7eba15e2fe9ce62fb6fb49fc6bfeac28c41c47f8f10f7d44a9f2d4a832",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer ties index-key problem to filtering: 'the mapping between index and actual todo item changes whenever the filter changes' and corrupts local state, focus, animation ('open edit field, an in-progress checkbox animation, input focus'). Names concrete replacement: `key={todo.id}`. No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer ties index-key danger to filtering: 'the mapping between index and actual todo item changes whenever the filter changes' and corrupts local state, focus, animation ('open edit field, an in-progress checkbox animation, input focus'). Names concrete replacement: `key={todo.id}`. No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer ties index-key problem to filtering: 'the mapping between index and actual todo item changes whenever the filter changes', corrupting local state, focus, animation ('open edit field, in-progress checkbox animation, input focus'). Names concrete replacement: `key={todo.id}`. No fail criterion met."
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
 {
   "agents": [],
-  "note": "no pair until the react pack clears the eval gate — two skills fail: react-build-fix's no-disable-hooks-lint behavior scenario passRate 0, and react-testing's mock-network-boundary behavior scenario passRate 0.6 (its own report verdict is pass at the 0.5 per-report threshold, but 0.6 is below the pack gate's PACK_BEHAVIOR_PASS_FLOOR of 0.8), deepseek-chat gate run, flow 314 fix attempt 2"
+  "note": "no pair — the react pack fails the honest stable-pack gate: react/react-build-fix no-disable-hooks-lint passRate 0.6 < 0.8. In the recorded trials, one answer included `eslint-disable-next-line react-hooks/exhaustive-deps` and one gave no staleness explanation and asked for code. deepseek-chat judge gate run, flow 316."
 }

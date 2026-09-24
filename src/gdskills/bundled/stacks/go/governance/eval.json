@@ -3,7 +3,7 @@
   "reports": [
     {
       "schemaVersion": "1.0.0",
-      "skillId": "go/go-implementation",
+      "skillId": "go/go-build-fix",
       "strictness": "high",
       "trials": 5,
       "triggerAccuracy": {
@@ -17,7 +17,7 @@
         {
           "id": "trigger-positive-1",
           "kind": "trigger-positive",
-          "prompt": "Implement a new Go package under internal/order that wraps errors with %w",
+          "prompt": "go build is failing with an undefined symbol error",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -30,7 +30,7 @@
         {
           "id": "trigger-positive-2",
           "kind": "trigger-positive",
-          "prompt": "Add a Go worker pool under cmd/worker that bounds concurrency with errgroup",
+          "prompt": "go.mod and go.sum are out of sync, please fix",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -43,7 +43,7 @@
         {
           "id": "trigger-positive-3",
           "kind": "trigger-positive",
-          "prompt": "Add a Go endpoint and wire it into cmd/ and internal/, propagating context.Context correctly",
+          "prompt": "Resolve this Go import cycle between two internal packages",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -56,7 +56,7 @@
         {
           "id": "trigger-positive-4",
           "kind": "trigger-positive",
-          "prompt": "What's the right Go interface placement for this new client -- producer or consumer package?",
+          "prompt": "go vet is reporting a printf format error",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -69,7 +69,7 @@
         {
           "id": "trigger-positive-5",
           "kind": "trigger-positive",
-          "prompt": "Add a goroutine in Go that watches a channel and joins with sync.WaitGroup",
+          "prompt": "golangci-lint is failing on this Go package",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -82,7 +82,7 @@
         {
           "id": "trigger-positive-6",
           "kind": "trigger-positive",
-          "prompt": "Implement this feature in a Go cmd/api binary using log/slog for structured logging",
+          "prompt": "go test -race is failing with a data race, fix the build",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -95,7 +95,7 @@
         {
           "id": "trigger-negative-1",
           "kind": "trigger-negative",
-          "prompt": "Implement this feature in Rust using tokio for async",
+          "prompt": "npm install is failing with a peer dependency conflict",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -108,7 +108,7 @@
         {
           "id": "trigger-negative-2",
           "kind": "trigger-negative",
-          "prompt": "Add this endpoint in a Python FastAPI service",
+          "prompt": "cargo build is failing for this Rust crate",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -121,7 +121,7 @@
         {
           "id": "trigger-negative-3",
           "kind": "trigger-negative",
-          "prompt": "Implement this React component with the new form fields",
+          "prompt": "pip install is failing for this Python project",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -134,7 +134,7 @@
         {
           "id": "trigger-negative-4",
           "kind": "trigger-negative",
-          "prompt": "Review this Go diff for goroutine leaks and data races",
+          "prompt": "Implement a new Go feature in the order package",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -147,7 +147,7 @@
         {
           "id": "trigger-negative-5",
           "kind": "trigger-negative",
-          "prompt": "Fix this failing go test -race in the worker package",
+          "prompt": "Review this Go diff for concurrency bugs",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -160,7 +160,7 @@
         {
           "id": "trigger-negative-6",
           "kind": "trigger-negative",
-          "prompt": "Write table-driven pytest cases for this Python function",
+          "prompt": "Write Go tests for this function",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -171,237 +171,154 @@
           "deterministic": true
         },
         {
-          "id": "context-propagation",
+          "id": "module-mismatch",
           "kind": "behavior",
-          "prompt": "I'm adding a new function to internal/order that calls a downstream client. How should I handle the context and errors?",
+          "prompt": "go build fails saying go.sum is out of date after I bumped a dependency in go.mod. How do I fix it?",
           "strictness": "high",
           "trials": 5,
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex+regex",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "This is the common \"go.sum predates the `go.mod` bump\" case. Fix it with:\n\n```bash\ngo mod tidy\n```\n\nThat reconciles `go.sum` (and any now-unused requirements) against `go.mod`. Then verify:\n\n```bash\ngo build ./...\ngo vet ./...\ngo test -race ./...\n```\n\nA few notes so you don't paper over something real:\n\n- **`go mod tidy` is the right fix** when `go.sum` is simply stale against a legitimate `go.mod` change. It's the default first move, not a workaround.\n- **If `tidy` itself fails** (e.g. a version conflict, a missing checksum for a module, `verifying module: checksum mismatch`), don't reach for a `replace` directive or bump the `go` directive to make it go away. Diagnose first:\n  ```bash\n  go mod why -m <module>     # why is this module required at all?\n  go mod graph | grep <mod>  # where does the conflicting version come from?\n  ```\n  A checksum mismatch in particular can mean `go.sum` was hand-edited or a proxy served a different build — investigate rather than delete the line.\n- **Only add a `replace`** if you intentionally want a local/patched override (a monorepo sibling, a fork). Not as a way around a resolution error.\n\nOnce `go mod tidy` succeeds and the three commands above exit 0, you're done. Report the root cause in one line, e.g.:\n\n```\nFixed: go.sum was stale after the go.mod dependency bump (ran `go mod tidy`)\n  - go build/vet/test -race all pass\n```",
+              "outputSha256": "46cad2e2f1411e91229fd473f862904c1c94f13ad572a038e649e3d3560d89a0",
+              "promptSha256": "c2c5c9df499cd7b1cf97b0043b920e2b1f07f48e7e636973e01a285741e0307f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names `go mod tidy` as the fix (code block), states root cause: 'go.sum predates the go.mod bump' / 'go.sum was stale after the go.mod dependency bump'. Verification: `go build ./...`, `go vet`, `go test -race`. For conflicts it uses `go mod why -m`/`go mod graph` before hand-bumping, and warns against replace/go-directive/editing go.sum. No fail criteria met."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Fix: `go.sum` out of date after a `go.mod` bump\n\nThis is the exact module/toolchain case — `go.mod`'s requirements changed but the checksum file wasn't regenerated. Run the standard fix:\n\n```bash\ngo mod tidy\n```\n\nThat re-adds any missing hashes to `go.sum` for the new version and drops hashes for modules no longer required.\n\nThen verify:\n\n```bash\ngo build ./...\ngo vet ./...\ngo test -race ./...\n```\n\nAll three should exit 0, and `go.mod`/`go.sum` should both be committed together.\n\n---\n\n### If `go mod tidy` itself fails\n\nIt's telling you something real — don't reach for a `replace` directive or delete entries by hand to force it through. Quick checklist:\n\n1. **Version doesn't exist / typo in the bump**\n   ```bash\n   go list -m -versions <module>\n   ```\n   Confirm the version you put in `go.mod` is actually published.\n\n2. **Checksum mismatch** (as opposed to just \"out of date\")\n   ```\n   verifying <module>: checksum mismatch\n   ```\n   That's a real tampering/mirror problem, not a stale-file problem. Clear the cached copy and re-fetch:\n   ```bash\n   go clean -modcache\n   go mod download\n   ```\n   If it persists, something is serving the wrong bytes — investigate before proceeding.\n\n3. **Needs a newer Go/toolchain than `go.mod` declares**\n   If the bumped dependency requires a higher `go` directive than your module has, decide *deliberately* whether to raise the directive — don't bump it just to silence the error.\n\nOnce `go mod tidy` completes and the build/vet/test-race pass, you're done.",
+              "outputSha256": "5f87a5a2c2ce94cec5e112ae5aea6eb9062ff248aee0a296c917a977471f7b2c",
+              "promptSha256": "c2c5c9df499cd7b1cf97b0043b920e2b1f07f48e7e636973e01a285741e0307f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names `go mod tidy` as the concrete fix (code block), states root cause ('go.mod's requirements changed but the checksum file wasn't regenerated'), and gives verification (`go build ./...`, `go vet`, `go test -race`). No fail criteria: it warns against hand-editing go.sum/replace and against bumping the go directive just to silence the error."
+              },
+              "passed": true
+            },
+            {
+              "output": "That's usually just a stale `go.sum` fingerprint — the module requirements in `go.mod` changed but the checksums file wasn't regenerated to match.\n\nRun:\n\n```bash\ngo mod tidy\n```\n\nThen verify nothing else regressed:\n\n```bash\ngo build ./...\ngo vet ./...\ngo test ./...\n```\n\n**What `go mod tidy` does here:** it re-resolves the module graph, adds any missing `go.sum` entries for the bumped dependency (and its transitive requirements), and removes entries no longer needed. It'll also update `go.mod` if the bump pulled in a new indirect dependency.\n\n**A couple of things to watch:**\n\n- If `go mod tidy` *changes* `go.mod` beyond the bump you made (drops or adds indirect requires), that's expected — it's reconciling the graph — but review the diff before committing so you're not surprised by an unintended version shift.\n- If it fails with a version conflict or a `verifying <module>@<version>` checksum error rather than just fixing things, that's a different problem (the checksum in `go.sum` genuinely disagrees with what the module proxy serves). Paste the exact error and I can walk through it — often it means a `GONOSUMDB`/`GOPRIVATE` setting or a tampered/pinned version.\n\nIf you want to see exactly what's stale first, `go mod verify` reports checksum mismatches without changing anything. But for the ordinary \"bumped a dep, go.sum is behind\" case, `go mod tidy` is the fix.",
+              "outputSha256": "3f21e2517c9ac99c257fb21df4d0cede45d2987053cab6c251c5591e66ee5d5b",
+              "promptSha256": "c2c5c9df499cd7b1cf97b0043b920e2b1f07f48e7e636973e01a285741e0307f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names `go mod tidy` as the concrete fix (code block), states root cause ('module requirements in go.mod changed but the checksums file wasn't regenerated to match'), and gives verification steps `go build ./...`, `go vet ./...`, `go test ./...`. No go-directive change, no hand-editing go.sum hashes."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Fixing the go.sum mismatch\n\nThis is the module/toolchain category: `go.mod` was edited by hand (or by a tool) to require a new version, but `go.sum` — the checksum database of every module version actually used — was never regenerated. `go build` refuses to proceed because it can't verify integrity of a module it wasn't told the checksum for.\n\n## The fix\n\nThe smallest correct change is to let Go rebuild `go.sum` from `go.mod`:\n\n```bash\ngo mod tidy\n```\n\nThat command:\n1. Re-resolves the module graph against the new requirements in `go.mod`.\n2. Downloads the newly-required versions (and any transitively pulled in).\n3. Adds their `h1:`/`go.mod` hash lines to `go.sum` and drops hashes for versions no longer required.\n\nThen verify:\n\n```bash\ngo build ./...\ngo vet ./...\ngo test -race ./...\n```\n\nIf the project has a linter configured (`.golangci.yml`), run `golangci-lint run ./...` too. All should exit 0.\n\n## What to check before you call it done\n\n- **Did `go mod tidy` change more than `go.sum`?** If it also removed or bumped *other* requirements in `go.mod`, that's a signal the dependency you bumped brought transitive changes — worth a glance at `git diff go.mod` so you know what arrived. If the diff is only `go.sum` lines, you're done.\n- **Don't hand-edit `go.sum`.** If you're tempted to paste a hash in from a log, run `go mod download <module>@<version>` instead — it fetches and records the correct hash. Hand-pasting a hash is how you get a `checksum mismatch` later.\n- **Don't reach for `GOFLAGS=-mod=mod` or `GONOSUMCHECK`/`GONOSUMDB` to bypass this.** Those disable the verification that `go.sum` exists to provide; `go mod tidy` is the fix, not a workaround.\n- **If `go mod tidy` itself errors** (e.g. a version conflict, a module that won't resolve), don't bump versions blindly to make it stop — check `go mod why -m <module>` and `go mod graph` first, and only add a `replace` directive if you have a real, intentional override in mind.\n\n## One-line report\n\n```\nFixed: go.mod/go.sum out of sync (ran `go mod tidy`)\n  - Root cause: go.sum predated the dependency version bump in go.mod\n  - go build/vet/test -race all pass\n```\n\nThat's the whole fix — regenerate the checksums, verify the build, and confirm `go.mod` didn't shift in ways you didn't intend.",
+              "outputSha256": "2679e01e571ff62c813d12d43c445f1f11a16cb54f89d826b136eebf4126f80a",
+              "promptSha256": "c2c5c9df499cd7b1cf97b0043b920e2b1f07f48e7e636973e01a285741e0307f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names `go mod tidy` as the fix (code block), states root cause: 'go.sum ... was never regenerated' / 'go.sum predated the dependency version bump in go.mod'. Verification shown: `go build ./...`, `go vet`, `go test -race`. Warns against hand-editing go.sum and against bumping versions blindly, checking `go mod why -m`/`go mod graph` first. No fail criteria met."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Fixing an out-of-date `go.sum` after a `go.mod` dependency bump\n\nThe fix depends on *which* file you edited and *how*:\n\n## The normal case → `go mod tidy`\n\nEditing `go.mod` by hand (bumping a version in a `require` line) leaves `go.sum` without the hashes for the new version. Run:\n\n```bash\ngo mod tidy\n```\n\nThis adds the missing `go.sum` entries *and* prunes stale ones from the old version. Then verify:\n\n```bash\ngo build ./...\ngo vet ./...\n```\n\nThat's the whole fix in ~95% of cases. Commit both `go.mod` and `go.sum` — they must move together.\n\n## If it still fails, diagnose before reaching for a workaround\n\n```bash\ngo mod download    # fetches modules + writes go.sum entries, no pruning\ngo mod verify      # confirms downloaded modules match go.sum hashes\n```\n\n- **`go mod tidy` errors with a version conflict** — check *why* with `go mod why -m <module>` and `go mod graph`. This usually means another dependency pins an incompatible version; resolve the real conflict rather than adding a `replace` to paper over it.\n- **Checksum mismatch (`SECURITY ERROR` / `checksum mismatch`)** — do **not** blindly delete `go.sum` and regenerate. First check `GONOSUMCHECK`/`GOPRIVATE`/`GONOSUMDB` for a private-module misconfiguration, or whether the upstream version was actually replaced at that tag. A silent checksum failure is a supply-chain signal, not a nuisance.\n- **`go.sum` has entries for versions that no longer appear anywhere** — `go mod tidy` removes those; that's expected and correct.\n\n## If you edited `go.mod` with `go get` instead\n\n`go get example.com/mod@v1.2.3` updates both files correctly, so it shouldn't trigger this error. If *you* only bumped `go.mod` manually and want the tool to do it properly, prefer:\n\n```bash\ngo get example.com/mod@v1.2.3   # or @latest, @patch, etc.\ngo mod tidy\n```\n\n## Do not do these\n\n- ❌ `replace example.com/mod => ...` to route around the version — that's a real override, not a checksum fix, and changes the dependency graph for everyone.\n- ❌ Bump the `go` directive in `go.mod` to dodge the error — that declares a *higher minimum toolchain* for all consumers, unrelated to `go.sum`.\n- ❌ Delete `go.sum` outright \"to make it regenerate\" — you lose the integrity check on every module and may silently accept a tampered checksum.\n\n## One-shot verification\n\n```bash\ngo mod tidy\ngo build ./...\ngo vet ./...\ngo test -race ./...\n```\n\nAll four should exit 0. If you get stuck on a checksum mismatch or a version conflict that `go mod tidy` can't resolve, paste the exact error text (including the module path and versions) and I'll trace it — the fix diverges sharply between a private-module auth issue, a genuine version conflict, and a tampered tag.",
+              "outputSha256": "000a4515598b3d24db75dd7d22a6b35462c77f005e382fd6f47fc7e19f994937",
+              "promptSha256": "c2c5c9df499cd7b1cf97b0043b920e2b1f07f48e7e636973e01a285741e0307f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names `go mod tidy` as the concrete fix (\"Run: go mod tidy\"), states root cause (\"leaves go.sum without the hashes for the new version\"), and gives verification (go build ./..., go vet, go test -race). For conflicts it checks `go mod why -m`/`go mod graph`. Warns against bumping the go directive and hand-editing go.sum."
+              },
+              "passed": true
+            }
+          ]
         },
         {
-          "id": "goroutine-lifetime",
+          "id": "no-nolint-suppression",
           "kind": "behavior",
-          "prompt": "I want to start a few goroutines to process items concurrently in Go. What should I watch out for?",
+          "prompt": "golangci-lint is flagging an ignored error return in my Go code. How should I fix it?",
           "strictness": "high",
           "trials": 5,
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# Fixing an ignored error return (`errcheck`)\n\n`errcheck` is telling you a function's returned `error` is being thrown away\nwith no decision made about it. There are exactly two legitimate fixes, and\none anti-pattern to avoid.\n\n## 1. Handle the error\n\nIf the call can actually fail and the failure matters, check it:\n\n```go\n// Before\njson.NewDecoder(r.Body).Decode(&req)\n\n// After\nif err := json.NewDecoder(r.Body).Decode(&req); err != nil {\n    return fmt.Errorf(\"decoding request body: %w\", err)\n}\n```\n\nFor a function whose cleanup can fail, propagate it:\n\n```go\ndefer func() {\n    if cerr := f.Close(); cerr != nil && err == nil {\n        err = fmt.Errorf(\"closing %s: %w\", name, cerr)\n    }\n}()\n```\n\n## 2. Explicitly discard, with a comment that says why\n\nIf the error genuinely cannot occur here or is deliberately irrelevant, make\nthe intent visible — that is what satisfies the linter *and* the next reader:\n\n```go\n// Best effort; a failure here just means the temp file lingers.\n_ = os.Remove(path)\n```\n\nThe distinction from a bare ignored call is that the discard is now a\ndeliberate, documented choice rather than an oversight.\n\n## What not to do\n\n**Do not add `//nolint:errcheck` (or `//nolint` with no rule) just to make\nthe finding go away.** That suppresses the warning without making any\ndecision about the error — it is the anti-pattern this skill exists to\nprevent. If you truly cannot fix it now, `_ =` with a comment is the honest\nversion; `//nolint` hides that there was ever a question.\n\n## Notes on common cases\n\n- **`fmt.Fprintf`/`fmt.Fprintln` to a `bytes.Buffer`** — these can't fail\n  in practice, but `errcheck` still flags them. `_, _ = fmt.Fprintf(...)`\n  or `_, _ = fmt.Fprintln(...)` with a short comment is the idiomatic fix.\n- **Deferred `Close()` on a read-only file** — commonly `_ = f.Close()`\n  with a note; if the write path matters, handle it as in section 1.\n- **`rows.Close()` in a `database/sql` loop** — this one usually *should*\n  be checked; ignoring it can mask a real driver problem.\n- **`os.Setenv`, `http.ListenAndServe`** — almost always real errors that\n  deserve handling.\n\nIf `golangci-lint` offers an autofix (`golangci-lint run --fix`), it will\ninsert `_ =`, but review every insertion: `errcheck` only knows the error\nexists, not whether ignoring it is correct here.\n\n## Verify\n\n```bash\ngolangci-lint run ./...\ngo build ./...\ngo vet ./...\ngo test -race ./...\n```\n\nAll must exit 0, and no new `//nolint` directives should appear in the diff.\n",
+              "outputSha256": "bcf501e5fdbe1a8d711f1a8fc86e95d46af5b4267cf13a66bb7aa3c98a1b1b10",
+              "promptSha256": "18f1fadd15fa89a73aa8a5a5748aeac4b4a068c9558ce1c74fc37ff667b37c3f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer shows concrete fixes: `if err := json.NewDecoder(r.Body).Decode(&req); err != nil { return fmt.Errorf(\"decoding request body: %w\", err) }` (check + wrap + return), deferred Close propagation, and documented `_ = os.Remove(path)` discard with comment. It explicitly warns against `//nolint:errcheck` as the anti-pattern, not as the fix. No logging-only handling."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Fixing an ignored error return (`errcheck`)\n\nThe right fix depends on whether the error is actually meaningful at that call site. **Never reach for `//nolint:errcheck` just to silence it** — that defeats the purpose of the linter.\n\n## Step 1: Look at what the error can actually be\n\nRun the linter to get the exact line:\n\n```bash\ngolangci-lint run ./... --enable errcheck\n```\n\nThen look at the function's signature to see what it returns and under what conditions. The fix is driven by that, not by the lint message.\n\n## Step 2: Pick the correct fix by case\n\n### Case A — the error is real and must be handled\n\nMost common for `Write`, `Close`, `Encode`, I/O, and anything touching the network or disk:\n\n```go\n// Before\nf.Close()\njson.NewEncoder(w).Encode(v)\n\n// After\nif err := f.Close(); err != nil {\n    return fmt.Errorf(\"close %s: %w\", f.Name(), err)\n}\nif err := json.NewEncoder(w).Encode(v); err != nil {\n    return fmt.Errorf(\"encode response: %w\", err)\n}\n```\n\nPer `rules/coding-style.mdc`, wrap with `%w` and include what operation failed so the caller has context.\n\n### Case B — deferred cleanup, error is secondary\n\nFor a `defer`'d `Close()` on a read-only path, capture it so it isn't silently dropped but doesn't mask the primary error:\n\n```go\ndefer func() {\n    if cerr := f.Close(); cerr != nil && err == nil {\n        err = fmt.Errorf(\"close %s: %w\", f.Name(), cerr)\n    }\n}()\n```\n\nIf the surrounding function returns no error at all and the close genuinely cannot fail in a way anyone can act on (rare), that's the one case where an explicit `_ =` with a comment explaining *why* is honest — not a silent ignore:\n\n```go\n// Close on a http.Response.Body from an intermediate drain; the request\n// has already succeeded and there is no caller to surface this to.\n_ = resp.Body.Close()\n```\n\n### Case C — the call genuinely cannot fail\n\nSome `errcheck` hits are on functions that always return `nil` (e.g. `fmt.Fprintf` to a `strings.Builder`, `(*bytes.Buffer).Write`). The fix is still to handle it, not suppress it — `strings.Builder.Write` returns `(int, error)` for interface compatibility, but treating it as unchecked is fine because there is nothing to do:\n\n```go\n_, _ = b.WriteString(s) // strings.Builder never returns a non-nil error\n```\n\nor, more cleanly, prefer a method that doesn't return the error. If you're writing to a `bytes.Buffer`, `buf.WriteString(...)` is the same thing — but if you're calling through an `io.Writer` interface, you must still check.\n\n## Anti-patterns (do NOT do these)\n\n```go\njson.NewEncoder(w).Encode(v)        // ignoring entirely\n_ = json.NewEncoder(w).Encode(v)    // discarded, still wrong\n//nolint:errcheck                     // silencing, still wrong\n```\n\nAll three leave the same bug: a failed encode silently produces a truncated response.\n\n## Step 3: Verify\n\n```bash\ngo build ./...\ngo vet ./...\ngolangci-lint run ./...   # must exit 0\ngo test -race ./...\n```\n\n## Report\n\n```\nFixed: errcheck on json.Encode in handler.go:42\n  - Root cause: response encode error was discarded; a marshal\n    failure would return HTTP 200 with an empty body\n  - Now wrapped as `fmt.Errorf(\"encode response: %w\", err)` and\n    returned; errcheck exits 0\n```\n\nIf the error being ignored is at a `defer Close()` and you're not sure whether Case B applies, paste the exact reported line and the function signature and I can classify it.",
+              "outputSha256": "70a32790faec854b4ef9a84ed6f482f8b27fc5dc815813bc0ff9f5ee00265897",
+              "promptSha256": "18f1fadd15fa89a73aa8a5a5748aeac4b4a068c9558ce1c74fc37ff667b37c3f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Case A shows concrete fix: `if err := f.Close(); err != nil { return fmt.Errorf(\"close %s: %w\", f.Name(), err) }` and same for Encode — explicit check, wrap with %w, return. Case B/C use `_ =` only with justifying comments. Anti-patterns section explicitly warns against //nolint and bare `_ =`, not recommending them. No logging-only handling."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Fixing an ignored error return (`errcheck`)\n\n`golangci-lint` (via the `errcheck` linter) is telling you that a function returned an `error` and you didn't check it. The fix is to **handle the error**, not to suppress the warning.\n\n## The right fix depends on why the error is there\n\n### 1. The error matters — handle it\n\nIf the call can genuinely fail in a way that affects correctness:\n\n```go\n// Before\nf, _ := os.Open(path)\ndefer f.Close()\n\n// After\nf, err := os.Open(path)\nif err != nil {\n    return fmt.Errorf(\"open %s: %w\", path, err)\n}\ndefer f.Close()\n```\n\nWrap with `%w` so callers can inspect it with `errors.Is`/`errors.As`.\n\n### 2. The error is expected and ignorable — be explicit about it\n\nSome APIs return errors that are genuinely fine to drop in a specific context (e.g. writing to a buffer, closing a file opened read-only, best-effort cleanup). Don't use `_`; that's exactly what errcheck flags. Assign and discard *deliberately*:\n\n```go\n// Before — errcheck complains\ndefer resp.Body.Close()\n\n// After — intent is explicit and reviewable\ndefer func() {\n    _ = resp.Body.Close() // best-effort; nothing actionable if this fails\n}()\n```\n\nFor a write to an `io.Writer` where a partial write is acceptable:\n\n```go\n_, _ = fmt.Fprintln(os.Stderr, \"warning: ...\")\n```\n\nThe point isn't to change behavior — it's to *document* that you considered the error and it's fine. A reviewer can then disagree with you, which is the whole value.\n\n### 3. The error defines a control flow — check it properly\n\n```go\n// Before\nn, _ := r.Read(buf)\n\n// After\nn, err := r.Read(buf)\nif err != nil && err != io.EOF {\n    return err\n}\n```\n\n## What NOT to do\n\n- **Don't add `//nolint:errcheck`** to route around it. That hides the finding from everyone, including future you, with no record of *why* — unlike the explicit `_ =` above, which at least shows a human decision was made at that line.\n- **Don't discard with `_ =`** on a call whose error you haven't actually reasoned about. If you can't write a one-line comment explaining why it's safe to drop, you haven't established that it is.\n- **Don't swallow the error and return `nil`** to make a caller happy — that's a correctness bug wearing a green build.\n\n## Verify\n\n```bash\ngolangci-lint run ./...\ngo build ./...\ngo test -race ./...\n```\n\nAll should pass. If you used `_ =` form, the linter is satisfied *and* the next reader can see your reasoning — that's the difference between fixing it and hiding it.",
+              "outputSha256": "d57f7e8972fcf51cbfab965c24e10ca3f1e923498c53f06b0721705f57548583",
+              "promptSha256": "18f1fadd15fa89a73aa8a5a5748aeac4b4a068c9558ce1c74fc37ff667b37c3f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer shows concrete fixes: `if err != nil { return fmt.Errorf(\"open %s: %w\", path, err) }` (criterion 1&2), and explicit discard with justifying comment `_ = resp.Body.Close() // best-effort; nothing actionable if this fails` (criterion 2). It explicitly warns against `//nolint:errcheck` and unreasoned `_ =` (criterion 3). No fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Fixing an ignored error return flagged by golangci-lint\n\nThe fix depends on what the ignored error actually means at that call site. `errcheck` (the linter behind most \"ignored error return\" findings) is telling you that a function returned an `error` and nothing looked at it — the right fix is almost never a suppression.\n\n## Find the exact finding first\n\n```bash\ngolangci-lint run ./... | grep -i errcheck\n```\n\nThat names the file, line, function, and expression. Look at the specific call before deciding anything.\n\n## Fix by what the error means\n\n**The error is actionable** — propagate or handle it:\n\n```go\n// flagged\nf, _ := os.Open(path)\n\n// fixed\nf, err := os.Open(path)\nif err != nil {\n    return fmt.Errorf(\"open %s: %w\", path, err)\n}\ndefer f.Close()\n```\n\n**The call is genuinely best-effort** (e.g. a close on an already-handled path, a log flush): make the intent explicit rather than silently dropping it.\n\n```go\n// flagged\ndefer w.Close()\n\n// fixed — failure is real, so log it\ndefer func() {\n    if err := w.Close(); err != nil {\n        log.Printf(\"close %s: %v\", name, err)\n    }\n}()\n```\n\nNote: `defer f.Close()` on a read-only file is a common false positive. If closing truly cannot fail in a way you care about, wrap it the same way and say why — do not reach for `_ =`.\n\n**The error is structurally unhandleable at this point** — only then, and only if you can name why in a comment:\n\n```go\n_ = resp.Body.Close() // body already fully read; close error is not actionable\n```\n\nA bare `_ =` with no comment is a suppression in disguise.\n\n## What not to do\n\n- Don't add `//nolint:errcheck` to silence it. That hides the finding without fixing what it caught — the same red flag as a blank `_ =`, just spelled differently. The skill's rules forbid both.\n- Don't change the function signature to stop returning an error just to dodge the linter.\n\n## Verify\n\n```bash\ngolangci-lint run ./...\ngo build ./...\ngo vet ./...\ngo test -race ./...\n```\n\nAll must exit 0. Then state the root cause in one line for your report — e.g. *\"ignored error from `os.Open` in `loadConfig`; now propagated with `%w`\"* — not just \"linter passes.\"\n\nIf you paste the actual finding (file, line, and the call), I can tell you which of the three cases above it is.",
+              "outputSha256": "64d286bed479cb45b8e5f96e109317c1830d9de1f5e53c7495960262d588e6c7",
+              "promptSha256": "18f1fadd15fa89a73aa8a5a5748aeac4b4a068c9558ce1c74fc37ff667b37c3f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer shows concrete fixes: `f, err := os.Open(path); if err != nil { return fmt.Errorf(\"open %s: %w\", path, err) }` (crit 1&2), and an explicit discard `_ = resp.Body.Close() // body already fully read; close error is not actionable` with justifying comment (crit 2). It explicitly warns against `//nolint:errcheck` and bare `_ =` (crit 3). No fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Fixing an ignored error return flagged by golangci-lint\n\nThe right fix is almost always to **handle the error**, not to suppress the finding. The exact fix depends on which error-returning call is being ignored, though. Here are the common cases, in order of preference.\n\n## 1. The call genuinely can fail and you should propagate it\n\nThis is the default case. `errcheck` (the linter behind most `errcheck`/`gosec` findings on ignored returns) is usually right.\n\n```go\n// Before\nf.Write(data)\n\n// After\nif _, err := f.Write(data); err != nil {\n    return fmt.Errorf(\"writing to %s: %w\", f.Name(), err)\n}\n```\n\nWrap with `%w` so the original error stays inspectable via `errors.Is`/`errors.As` — see `rules/patterns.mdc` on error wrapping.\n\n## 2. The call is in a deferred cleanup\n\n`defer f.Close()` trips errcheck because the close error is discarded. Use a deferred closure that captures the error — this is the pattern the standard library uses:\n\n```go\n// Before\ndefer f.Close()\n\n// After — for a reader, close error usually doesn't matter\ndefer func() { _ = f.Close() }()\n\n// After — for anything you wrote to (buffered writer, os.File you wrote),\n// a close error can mean data loss, so propagate it:\ndefer func() {\n    if cerr := f.Close(); cerr != nil && err == nil {\n        err = fmt.Errorf(\"closing %s: %w\", f.Name(), cerr)\n    }\n}()\n```\n\nFor a `Reader` (nothing was written), `_ = f.Close()` with a short comment is acceptable — but for a file you wrote to, silently dropping the close error is a real bug: it's where flush failures surface.\n\n## 3. The call truly cannot fail at this call site\n\nSome functions return an error that is always `nil` for a particular argument, or you've already checked preconditions. In that case make the reasoning explicit **in code**, not with a blanket `//nolint`:\n\n```go\n// strings.Builder never returns an error from WriteString;\n// cf. https://pkg.go.dev/strings#Builder.WriteString — the error is always nil.\n_, _ = b.WriteString(s)\n```\n\nEven then, prefer the standard-library-acknowledged `_ =` form over a bare call, so it's clear you considered the error.\n\n## 4. What *not* to do\n\n- **Don't** reach for `//nolint:errcheck` as the first move. It turns off the checker for that line, which means a real ignored error on that same line stays invisible forever.\n- **Don't** do `_ = someFunc()` just to make the warning go away when the function can actually fail — that's silencing, not fixing.\n- **Don't** widen the `nolint` (e.g. file-scoped or `//nolint:all`) to escape one finding.\n\nIf — after genuinely looking — the finding is a false positive (the linter's model doesn't match a custom function's real behavior), then a *narrow* `//nolint:errcheck // <reason>` on that single line, with the reason stated, is acceptable. That's the escape hatch, not the first tool.\n\n## Verify the fix\n\n```bash\ngolangci-lint run ./...\ngo build ./...\ngo vet ./...\ngo test -race ./...\n```\n\nAll must exit 0. If you'd share the actual finding text (the linter names the file:line and the specific rule — `errcheck`, `gosec` G104, etc.), I can point at the precise call and give the exact fix for that case rather than the general menu above.",
+              "outputSha256": "7bccff8a31322ad5d768e65d11d28bb99ec8b249baf57b8535778b6429218be9",
+              "promptSha256": "18f1fadd15fa89a73aa8a5a5748aeac4b4a068c9558ce1c74fc37ff667b37c3f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Case 1 shows concrete fix: `if _, err := f.Write(data); err != nil { return fmt.Errorf(\"writing to %s: %w\", f.Name(), err) }` — checks err and wraps/returns with %w. Case 2 propagates close error via `err = fmt.Errorf(\"closing %s: %w\", f.Name(), cerr)`. Case 3 discards with a comment naming why safe (strings.Builder WriteString always nil). Explicitly warns against //nolint and bare `_ =` as silencing, not the fix."
+              },
+              "passed": true
+            }
+          ]
         }
       ],
       "verdict": "pass",
       "scope": "bundled",
-      "skillDigest": "c1a73ccbb6e62215aa969afed8001bb9f022825770082859f2d7b85b33d04160",
+      "skillDigest": "90df8456561422193836853b596d052e02cd3edc2c5d9fe4cfa9eb1fba379af6",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-25.1",
       "runner": "deepseek",
       "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:56:08.582Z"
-    },
-    {
-      "schemaVersion": "1.0.0",
-      "skillId": "go/go-testing",
-      "strictness": "high",
-      "trials": 5,
-      "triggerAccuracy": {
-        "truePositive": 6,
-        "falsePositive": 0,
-        "positives": 6,
-        "negatives": 6
-      },
-      "evidence": "authored",
-      "scenarios": [
-        {
-          "id": "trigger-positive-1",
-          "kind": "trigger-positive",
-          "prompt": "Write table-driven Go tests for this parser function",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-2",
-          "kind": "trigger-positive",
-          "prompt": "Add go test coverage for this package using t.Run subtests",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-3",
-          "kind": "trigger-positive",
-          "prompt": "Fix this failing go test in the worker package",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-4",
-          "kind": "trigger-positive",
-          "prompt": "Add a fuzz test for this Go decoder function",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-5",
-          "kind": "trigger-positive",
-          "prompt": "Write a benchmark for this function using b.Loop",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-6",
-          "kind": "trigger-positive",
-          "prompt": "Test this Go HTTP handler with httptest",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-1",
-          "kind": "trigger-negative",
-          "prompt": "Write pytest tests for this Python function",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-2",
-          "kind": "trigger-negative",
-          "prompt": "Add Jest tests for this React component",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-3",
-          "kind": "trigger-negative",
-          "prompt": "Review this Go diff for goroutine leaks and races",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-4",
-          "kind": "trigger-negative",
-          "prompt": "Fix the go build error in this module",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-5",
-          "kind": "trigger-negative",
-          "prompt": "Implement a new Go service that calls this downstream API",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-6",
-          "kind": "trigger-negative",
-          "prompt": "Write Rust unit tests for this crate",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "table-driven-subtests",
-          "kind": "behavior",
-          "prompt": "I need to add several test cases for this Go function that validates an order. How should I structure them?",
-          "strictness": "high",
-          "trials": 5,
-          "passes": 2,
-          "passRate": 0.4,
-          "passAtK": 1,
-          "grader": "regex+regex",
-          "status": "ran"
-        },
-        {
-          "id": "no-sleep-sync",
-          "kind": "behavior",
-          "prompt": "My Go test starts a goroutine and I want to wait for it to finish before asserting. What's the right way?",
-          "strictness": "high",
-          "trials": 5,
-          "passes": 5,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "regex",
-          "status": "ran"
-        }
-      ],
-      "verdict": "fail",
-      "scope": "bundled",
-      "skillDigest": "431f46c1c2bd8e3fa6b99c9dd8bc7704efef7e443aa03845db0b1c157d150772",
-      "runner": "deepseek",
-      "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:55:55.257Z"
+      "recordedAt": "2026-09-24T21:37:50.157Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
     },
     {
       "schemaVersion": "1.0.0",
@@ -581,8 +498,65 @@
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex+regex+not-contains",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# Finding: `context.Context` stored as a struct field\n\n## The finding\n\nYou've added a `ctx context.Context` field, populated at construction\ntime. This is a **context misuse** finding — flag it per Step 2\n(\"Context\" bullet): a `context.Context` should be passed as the first\nargument to each function that needs it, not captured into a struct.\n\n```go\n// internal/worker/pool.go\ntype Pool struct {\n    ctx context.Context  // <-- finding: context captured at construction\n    // ...\n}\n\nfunc NewPool(ctx context.Context, /* ... */) *Pool {\n    return &Pool{ctx: ctx, /* ... */}\n}\n```\n\n## Why it matters\n\n1. **Cancellation/deadline is frozen at construction time.** The context\n   that arrives with *this* call — the request being handled, the job\n   being run — is what carries the right deadline and cancellation. A\n   context stashed at construction reflects whatever deadline was in\n   scope then, not the caller's. Calls made through the struct use a\n   context that may already be expired, or that outlives the operation it\n   was meant to bound.\n\n2. **Lifecycle mismatch.** The struct (a pool, a client, a service) is\n   typically long-lived, but the context is short-lived per call. Attaching\n   a short-lived context to a long-lived object leaks a dead context across\n   unrelated invocations.\n\n3. **Tracing/propagation is wrong.** Span and request metadata propagate\n   with the *caller's* context. A constructor-time context means the\n   struct's operations are attributed to whatever context happened to be\n   active at construction — usually a startup context, not the request.\n\n## Fix direction\n\n- Remove the `ctx` field.\n- Take `ctx context.Context` as the **first parameter** of each method\n  that performs work, and pass it through to downstream calls.\n- If every method doesn't need a context (e.g. a pure getter), don't add\n  one — pass it only where it's used.\n\n```go\ntype Pool struct { /* ... */ }\n\nfunc NewPool(/* no ctx */) *Pool { return &Pool{ /* ... */ } }\n\nfunc (p *Pool) Do(ctx context.Context, /* ... */) error {\n    return p.client.Call(ctx, /* ... */)  // caller's ctx flows through\n}\n```\n\n## Notes\n\n- **This is read-only.** I have not edited the file — the fix direction\n  above is for you to apply.\n- **Pre-existing vs. introduced:** whether this struct already existed and\n  you added the field, or the struct is new, the finding is on the *field*,\n  not the struct. If the struct previously had no context plumbing and you\n  introduced it here, this is a diff-introduced finding.\n- **One caveat to confirm, not a reason to keep the field:** if the struct\n  genuinely represents a single request-scoped operation whose entire\n  lifetime is bounded by that one context (e.g. a per-request session\n  object), the field is *defensible* — but even then, `go vet`-style\n  guidance and the Go standard library convention is to pass the context\n  explicitly. If you believe this struct is that narrow case, say so in\n  the PR description so a reviewer can evaluate it as an intentional\n  choice rather than an oversight.\n- **Not a race by itself.** This finding is about lifetime and propagation\n  correctness, not concurrent access. If the struct is also shared across\n  goroutines, check separately whether the field is written while read —\n  that would be an additional finding.\n\n## Verification performed\n\n- Reviewed the changed `*.go` file(s) containing the new field and its\n  constructor assignment.\n- Applied the Step 2 context rule (\"never stored as a struct field\") to\n  the field declaration and its population site.\n- Reported a concrete location, the specific risk category, and a fix\n  direction; no source file was modified.",
+              "outputSha256": "ad8a101dbe35eb5a635cba383d2279c3e8e3c090ac58f0a9e25d51cecfdf079c",
+              "promptSha256": "191412bc772d9ae6ba34287c6b44044bcf167e45ec42f96318bd432524857cf5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names the specific field `ctx context.Context` populated in NewPool constructor (pool.go snippet). Fix direction: remove field, take ctx as first param per method, thread caller's ctx through (Do(ctx) -> p.client.Call(ctx)). Explicitly read-only: 'I have not edited the file.' No code change claimed as applied; snippets are illustrative fix direction."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Review: `ctx context.Context` as a struct field\n\n**Finding — context misuse (`rules/patterns.mdc`).** Storing a `context.Context` on a struct and populating it in the constructor is a known anti-pattern. I can give you the review verdict directly, but note I'd normally want the actual file:line from the diff to anchor this. Here is what I find against the pattern you described.\n\n## Why it's flagged\n\n**1. The context outlives the scope it was meant for.** A context carries cancellation, deadlines, and tracing for *one* operation. A struct lives for the object's whole lifetime — potentially across many requests or operations. Pinning a context at construction time means:\n\n- If the constructor's caller cancels that context (e.g., an HTTP request that started the object), every later use of the object fails, even operations that had nothing to do with that request.\n- If the context is `context.Background()` at construction (the usual \"fix\" people reach for to avoid the above), you've silently dropped cancellation and deadlines for all callers instead.\n\n**2. It's a sign the context is arriving from the wrong direction.** `context.Context` is meant to flow as the *first parameter* of each method that does I/O, not to be captured. If the constructor needs a context, that's usually a hint that construction itself is doing I/O (dialing a connection, fetching config) — which should be visible as `ctx` on the constructor call, and subsequent methods should still take their own `ctx`.\n\n```\n// flagged\ntype Client struct {\n    ctx context.Context   // <-- pinned for the object's lifetime\n    conn *Conn\n}\n\nfunc NewClient(ctx context.Context, ...) *Client {\n    return &Client{ctx: ctx, ...}\n}\n\nfunc (c *Client) Do(...) error {\n    return c.conn.Write(c.ctx, ...)   // operates on a possibly-dead context\n}\n```\n\n**Fix direction (do not apply — read-only review):**\n- Remove the field. Pass `ctx context.Context` as the first argument to each method that does I/O: `func (c *Client) Do(ctx context.Context, ...) error`, and use that `ctx` for the call.\n- If construction itself does I/O, keep `ctx` on the *constructor* parameter only — it's consumed there and not stored.\n- If the field exists to thread a value (not cancellation) — e.g., a request ID — store the *value*, not the context: `reqID string`, not `ctx context.Context`.\n\n## Confirm against the diff\n\nTo turn this into a concrete finding I need:\n\n1. **file:line of the field declaration** and the constructor assignment.\n2. **The methods that consume `c.ctx`** — are any of them called from a different lifetime than the context the constructor received? (This is the part that makes it a real bug vs. a style smell.)\n3. Whether the constructor's `ctx` was the caller's request context or `context.Background()`/`context.TODO()`.\n\nIf you paste the diff hunk (or give me the file:line), I'll pin the finding to it and flag any related issues in the same change — e.g., a stored `ctx` often comes paired with `context.Background()` inside methods that *did* receive a context, and with `defer` not firing across the object's life.\n\n**One caveat:** occasionally a struct field named `ctx` is not a `context.Context` at all (a custom type, a tracing span, a request-scoped value). I'm treating this as `context.Context` per your description — if it's a different type, the finding above doesn't apply and I'd re-review against that type's semantics.\n\n_No files were modified by this review._",
+              "outputSha256": "88ba3bc15c593ca6183a5c25335c0935042c92cdcc2c2cb3e740f5e92bab1400",
+              "promptSha256": "191412bc772d9ae6ba34287c6b44044bcf167e45ec42f96318bd432524857cf5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names the field/pattern: 'Storing a context.Context on a struct and populating it in the constructor is a known anti-pattern', with a flagged struct showing `ctx context.Context` pinned and constructor assignment. Fix direction concrete: 'Remove the field. Pass ctx context.Context as the first argument to each method that does I/O: func (c *Client) Do(ctx context.Context, ...) error'. Read-only: 'do not apply — read-only review' and 'No files were modified by this review.'"
+              },
+              "passed": true
+            },
+            {
+              "output": "**Finding: `context.Context` stored as a struct field.**\n\nThis is the classic Go anti-pattern, and it's the first item in the Step 2 \"Context\" checklist.\n\nWhatever the line number, the shape is:\n\n```go\ntype Thing struct {\n    ctx context.Context // <-- stored context\n    // ...\n}\n\nfunc NewThing(ctx context.Context, /* ... */) *Thing {\n    return &Thing{ctx: ctx /* ... */}\n}\n```\n\n**Why it matters**\n\n1. **Stale/deadline-blind context.** The context captured at construction carries the deadline, cancellation, and trace span of *whoever constructed the object*. If the object outlives that call (most services, workers, handlers built once and reused), every later use runs under a context that may already be canceled, or whose deadline expired long ago — operations fail with `context canceled`/`DeadlineExceeded` for no reason the caller can see.\n\n2. **Leaks the wrong cancellation tree.** A long-lived `Thing` holding a request-scoped context keeps the request's goroutines, spans, and values alive well past the request. That's a memory/goroutine leak and, in `net/http`, a well-known source of \"context canceled\" bugs after the handler returns (`r.Context()` is canceled then).\n\n3. **Values resolved too early.** Anything in `ctx` (trace IDs, request-scoped values) is frozen at construction, so logs/traces downstream attach to the *constructor's* span, not the operation's.\n\n**Fix direction (do not apply — read-only review)**\n\n- Drop the `ctx` field. Pass `ctx` as the **first parameter** of each method that does I/O or can block:\n  ```go\n  func (t *Thing) Do(ctx context.Context) error { ... }\n  ```\n  The caller supplies the *current* call's context, so deadline/cancellation/values are correct per operation.\n- If the object genuinely owns a background lifecycle (a long-running worker), derive its context **from a root the owner controls**, e.g. store a `context.CancelFunc` created from `context.Background()` in the constructor and have the constructor's `ctx` only be used to *cancel at shutdown* — but still pass the per-call context into methods. Do not use the constructor's request context as the object's lifetime context.\n\n**Confidence:** this is a read-time certain finding — storing a context is deterministically wrong per the Go idiom, no `go test -race` needed to confirm. (If any methods on the struct also call `context.Background()` instead of receiving one, that's a second, related finding to check while you're in there.)\n\n**Classification:** introduced by this diff (the field and its constructor population are new).\n\nNo files were modified.",
+              "outputSha256": "cc79ac3e783ff37303aa022b3e12bb004bf4bb3a0b0fb232100b2ac42ff97327",
+              "promptSha256": "191412bc772d9ae6ba34287c6b44044bcf167e45ec42f96318bd432524857cf5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names the `ctx context.Context` struct field populated in the constructor as the problem (shows the struct/constructor shape). Fix direction: drop the field, pass ctx as first parameter per call, caller supplies current call's context. Explicitly read-only: 'do not apply — read-only review' and 'No files were modified.' No edit claimed."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Review finding\n\n**Scope:** The diff adds a `ctx context.Context` struct field and populates it in the constructor. I'm reviewing it against the context-misuse rule in Step 2.\n\n## Finding\n\n```\n<file>.go:<line of the struct definition> — struct field `ctx context.Context`\n  added and populated at construction time.\n\n  Pattern: context stored as a struct field.\n\n  Why it matters: a context carries request-scoped values (deadlines,\n  cancellation, trace/request IDs). Capturing it in a long-lived struct\n  freezes one request's context into an object whose lifetime does not\n  match the request:\n    - if the struct outlives the request, its ctx is cancelled when the\n      request ends, so any later operation using it fails immediately;\n    - if it's reused across requests, every request inherits the first\n      request's cancellation/deadline and values — cross-request\n      contamination and broken tracing;\n    - cancellation no longer propagates from the actual current caller.\n  The stdlib documents this explicitly (\"Do not store Contexts inside a\n  struct type; instead, pass a Context explicitly to each function that\n  needs it\").\n\n  Fix direction: drop the field. Accept `ctx context.Context` as the\n  first parameter of each method that does I/O, and pass it down from\n  the caller (`r.Context()` in an HTTP handler). If the constructor only\n  needs a context to reach a dependency at construction time, use that\n  context locally to build the state, then discard it — do not retain it.\n```\n\n## Notes for the PR author\n\n- **New vs. pre-existing:** if this field is newly introduced in the diff, it is a diff-introduced finding. If the struct already carried a `ctx` field and the diff only changes how it is populated, flag that the underlying pattern is pre-existing and the fix is still to remove the field.\n- **Not a `go vet` catch.** The context rule is a convention, not a compiler or `go vet` diagnostic, so a clean build/vet pass does not clear this — it has to be caught by review.\n- **Confirm intent.** If the field is used exclusively to satisfy an interface that *requires* storing a context (rare, e.g. an adapter to a third-party type), say so; otherwise the default is that it should not be there.\n\n## Verification\n\n- Read the struct definition, the constructor, and every method/field use of `ctx` in the diff (and the surrounding unchanged usage) to confirm how the field is consumed before finalizing.\n- No source file was modified by this review; this is a finding and a fix direction only.\n\nIf you paste the actual struct and constructor, I'll pin the finding to exact `file:line` and check whether any caller already passes a request context that could be threaded through instead.",
+              "outputSha256": "1303a59e56abc691a79cfeafdde570945d935d062c9b12376a4060dc788d000a",
+              "promptSha256": "191412bc772d9ae6ba34287c6b44044bcf167e45ec42f96318bd432524857cf5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer names the specific pattern: 'struct field `ctx context.Context` added and populated at construction time' (criterion 1). Fix direction is concrete: 'drop the field. Accept `ctx context.Context` as the first parameter of each method... pass it down from the caller (`r.Context()` in an HTTP handler)' (criterion 2). It is presented purely as a finding with fix direction, and explicitly states 'No source file was modified by this review; this is a finding and a fix direction only' (criterion 3). No edit is made or claimed, so the fail criterion does not hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Go code review findings\n\nReviewing the described change (a `ctx context.Context` struct field populated in the constructor) — read-only, no edits applied.\n\n## Finding 1 — Context stored as a struct field\n\n**Pattern:** `ctx context.Context` struct field populated at construction time.\n\n**Why it matters:** This is a known Go anti-pattern. `context.Context` carries request-scoped values (deadlines, cancellation, tracing). Storing it on a struct:\n- Ties the struct to a single request's lifetime. A long-lived object constructed with one request's `ctx` will keep using a cancelled/dead context for later requests, silently losing cancellation and deadlines.\n- Breaks the convention that context is passed *explicitly as the first argument* on the call, not captured at construction. The Go blog (\"Contexts and structs\") and `rules/patterns.mdc` both call this out.\n- Makes `ctx` sharing implicit — a field can be read/written from multiple goroutines with no obvious signal, which compounds any concurrency issues (see Finding 3).\n\n**Fix direction (not applied):** Remove the field. Pass `ctx` as the first parameter of each method that performs request-scoped work —\n```go\n// instead of: s.ctx\nfunc (s *Service) Do(ctx context.Context, ...) error\n```\nThe constructor should not take or retain a `ctx`. If the struct genuinely needs a cancel scope wider than a request (e.g. a background worker), use an explicitly named field like `shutdownCtx` / `lifecycleCtx` *created by the struct itself*, not one handed in from a caller's request.\n\n## Finding 2 — Constructor signature change\n\n**Pattern:** Constructor now accepts a `ctx` solely to seed the field.\n\n**Why it matters:** This forces every caller to supply a context, even in tests and non-request contexts (e.g. `cmd/` startup, where the natural choice is a signal-bound context). Test callers will pass `context.Background()` to satisfy the signature, which defeats the purpose and hides real cancellation gaps.\n\n**Fix direction:** Drop `ctx` from the constructor entirely. Confirm the diff does not introduce `context.Background()`/`context.TODO()` at call sites just to fill the new parameter — if it does, that is a separate finding (see below).\n\n## Finding 3 — Concurrency interaction (verify before reporting)\n\n**Pattern:** A stored `ctx` field that is read from methods callable concurrently.\n\n**Status:** Not certain from the description alone. If the struct is accessed by multiple goroutines, the `ctx` field is shared state. Reads of a field that is only written once in the constructor are race-free *if* the constructor's write happens-before all goroutine starts; confirm this rather than assume.\n\n**Action:** Run `go test -race ./...` to confirm. If the field is only set once in the constructor and never reassigned, this is not a race — the concern is the anti-pattern in Finding 1, not a data race.\n\n## Findings not triggered\n\n- **Nil map writes:** none indicated by a struct-field addition; not checked further without the field/method bodies.\n- **Goroutine leaks / defer-in-loop:** no goroutines or loops described in this change; still scan the constructor and the surrounding methods for a `go` statement whose only cancellation source was the now-stored `ctx` — if a goroutine relied on that stored context and the field is removed, ensure the goroutine is re-wired to a live context or given a join point. Otherwise no leak is introduced here.\n- **Interface pollution:** none described; not triggered.\n\n## Summary\n\nOne definite finding (context stored on a struct, per `rules/patterns.mdc`), one likely follow-on (constructor signature / call sites forced to fabricate a context), and one item to confirm rather than assert (concurrency/race on the field). No files were modified.",
+              "outputSha256": "337bc45ac96c80d0afa877e569693d515c8fe1596a0ade24fccce7c126f4652c",
+              "promptSha256": "191412bc772d9ae6ba34287c6b44044bcf167e45ec42f96318bd432524857cf5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Finding 1 names the `ctx context.Context` struct field populated at construction as the anti-pattern, explains it ties the struct to one request's lifetime and breaks explicit per-call passing, and gives the concrete fix: remove the field, pass `ctx` as first param `func (s *Service) Do(ctx context.Context, ...)`, constructor shouldn't retain ctx. Explicitly read-only: 'no edits applied', 'No files were modified'."
+              },
+              "passed": true
+            }
+          ]
         },
         {
           "id": "goroutine-join-check",
@@ -593,20 +567,81 @@
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex+regex",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# Finding: goroutine started in a request handler with no join point\n\n**Pattern:** In the add-code, a handler (or a function called from one) does `go someFunc(...)` with no `WaitGroup`, `errgroup`, or channel receive tied to it. That is the goroutine-leak / uncontrolled-concurrency case this skill flags.\n\n**Why it matters — several distinct risks, not just one:**\n\n1. **Unbounded concurrency.** A new goroutine per request with no join point means N concurrent requests spawn N goroutines. Under load that is an unbounded fan-out — no backpressure. This is the OOM/thread-explosion failure mode, and it is the most likely one to bite in production.\n\n2. **Request-scoped context loss.** Since the handler returned, `r.Context()` is almost certainly canceled. Any `context.Context` the goroutine captured from the request is dead the moment the handler returns — so any downstream call (`ctx`-aware DB/HTTP) fails with `context.Canceled`. And if the goroutine instead used `context.Background()`/`context.TODO()` to avoid that, it has discarded cancellation and deadlines entirely, which is the context-misuse pattern flagged in Step 2. Either way it is wrong. This is why `context.Context` is never supposed to be stored on a struct — but the same rule applies when you smuggle it into a detached goroutine.\n\n3. **Unjoined lifetime / silent failure.** There is no join point, so nothing observes the goroutine's exit. An error it returns is dropped (ignored-error pattern), and a panic inside it crashes the whole process rather than being recovered at a request boundary. You also cannot cleanly shut down: on SIGTERM the process can exit while in-flight goroutines it never tracked are mid-write.\n\n4. **Race risk if it writes shared state.** If the goroutine writes a shared map/slice/counter, that is a data race against anything the handler (or another request's goroutine) touches. Flag it; if you cannot confirm from reading alone, \"run `go test -race ./...` to confirm\" rather than asserting.\n\n**Fix direction (not applied — this skill is read-only):**\n\n- If the work must complete before the response: do it inline, or use an `errgroup.Group` and `g.Wait()` before writing the response.\n- If it is genuinely fire-and-forget background work: do **not** reuse the request context. Move it onto a worker pool or queue with its own lifecycle — a bounded `errgroup`/`semaphore.Weighted`, or a channel feeding a fixed pool of long-lived workers — and have the service `Wait()`/`Shutdown(ctx)` on that pool so the join point lives at the service, not the request.\n- Whatever the shape, give it an explicit shutdown hook so the goroutine is joined (or its context canceled) on service stop, and recover panics at the boundary.\n\n**Severity:** high — this is exactly the pattern that passes tests and then leaks/crashes under load.\n\n**One thing to verify before finalizing:** check whether this is introduced by the diff or pre-existing in the touched handler — report it as diff-introduced vs. pre-existing accordingly. (I reviewed the pattern you described, not the file contents; confirm the actual `file:line` and re-check the surrounding diff before recording the finding.)",
+              "outputSha256": "1e7f11565f262613f8fb5d4ffc013915dcae9d54510a9fe1a23d0c2e62f7a622",
+              "promptSha256": "fb0523ac155676acf94fab3562929cc0ace8913061ff9015aa0dd3b3337117fd",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explicitly states 'no join point' and 'no WaitGroup, errgroup, or channel receive tied to it' (criterion 1). It explains concrete consequences: 'nothing observes the goroutine's exit', process can exit while in-flight goroutines are mid-write on SIGTERM, and request context canceled after handler returns (criterion 2). It names fix directions as findings, not applied: 'use an errgroup.Group and g.Wait()', worker pool/channel, explicit shutdown hook (criterion 3). No fail criterion: it does not dismiss the missing join as acceptable."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Review: goroutine started in a request handler with no join point\n\nYou've already spotted the headline issue, but let me lay out what this pattern actually breaks, because \"no join point\" is usually a symptom of two or three distinct problems stacked together.\n\n## Primary finding: unbounded goroutine leak\n\n```go\nfunc handler(w http.ResponseWriter, r *http.Request) {\n    go doWork(r) // no WaitGroup, no errgroup, no channel receive\n    w.WriteHeader(http.StatusAccepted)\n}\n```\n\n**What's wrong:** the handler returns, the response is written, and the request is finished — but the goroutine it spawned keeps running. There is now nothing in the program that knows the goroutine exists, waits for it, or can cancel it. If the client disconnects, if the server starts shutting down, if `doWork` blocks on a network call, that goroutine outlives the request it belonged to.\n\nUnder load this compounds: every in-flight request spawns a goroutine with no lifecycle tied to the server, so a burst of requests (or a set of slow/hung `doWork` calls) leaks goroutines until the process is OOM or the runtime is thrashing. This is the classic fire-and-forget leak.\n\n**Fix direction (do not apply — this is a review):** either join the goroutine inside the handler, or move the work to a component whose lifecycle is owned outside the handler:\n\n- **Join it:** an `errgroup.Group` or `sync.WaitGroup` the handler `Wait()`s on — but only if the handler genuinely waits, which for an HTTP handler usually means you've defeated the point of spawning it.\n- **Hand it off properly:** send the work to a worker pool / queue owned by the server, with its own lifecycle, drain on shutdown, and backpressure. That's usually the right shape for \"respond 202 and do work async.\"\n\n## Secondary findings that come with this pattern\n\nThese almost always accompany the no-join case, so check the diff for them explicitly:\n\n### 1. Context discarded (context misuse)\n\nIf the handler has an `r *http.Request`, the goroutine should be launched with `r.Context()` — **not** `context.Background()`. A fresh `context.Background()` inside a handler is a red flag: it throws away cancellation, deadlines, and request tracing. When the client disconnects, `r.Context()` is canceled and the goroutine should observe that; `context.Background()` means it never learns the request is gone and just runs to completion.\n\nWorse combination: no join point **and** `context.Background()`. Now the goroutine is both unlifecycled and uncancellable.\n\n### 2. Captured request-scoped values used after the handler returns\n\nIf the goroutine closes over `r`, `w`, or anything read from them (`r.Body`, `r.Header`), it may touch them after the handler has returned — `http.Request` and `http.ResponseWriter` are not safe to use after the handler returns. Flag any reference to `w` or `r` inside the goroutine; the fix is to copy out the values the goroutine needs (decoded body, extracted headers, derived context) **before** launching it.\n\n### 3. Panic in the goroutine takes down the process\n\nAn unrecovered panic in a bare `go func(){...}()` crashes the whole program, not just the request. If the diff's goroutine has no `defer recover()`, note it — for a per-request spawned goroutine this turns one bad input into a server-wide outage.\n\n### 4. Shutdown: no way to drain\n\nThe server's `Shutdown` / `Close` will not wait for these goroutines. On a rolling deploy you'll drop in-flight work silently. If the work matters (writes, jobs), it needs an owned lifecycle that `Shutdown` can drain.\n\n## Verification before calling this reviewed\n\n- Did you check whether the handler passes `r.Context()` or `context.Background()` into the goroutine?\n- Does the goroutine reference `r`, `w`, or request-scoped values after the spawn point?\n- Is there a `recover()` in the goroutine body?\n- Is this pattern new in the diff, or pre-existing in the touched file? Note it accordingly — don't attribute a pre-existing leak to this change.\n- If unsure whether `doWork` is actually concurrent with other access, don't assert a race — say to confirm with `go test -race ./...`.\n\nOne-line summary: a request handler starting an unjoined goroutine is a goroutine leak and usually a context-cancellation hole — the fix direction is either a join point the handler waits on, or (more commonly) handing the work to a lifecycle-owned worker pool rather than spawning raw goroutines from the handler.",
+              "outputSha256": "0bc00a22beffe0e3a91214e98d39cb039b52b75cf3401b63aa7850b49f5588b4",
+              "promptSha256": "fb0523ac155676acf94fab3562929cc0ace8913061ff9015aa0dd3b3337117fd",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explicitly names the missing join point ('no WaitGroup, no errgroup, no channel receive') and explains the leak consequence: goroutine 'outlives the request,' 'nothing...waits for it,' and Shutdown 'will not wait for these goroutines.' It names fix directions (errgroup.Group, sync.WaitGroup, worker pool) as review findings, not applied code. No hedge dismissing the missing join."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Goroutine leak in request handler\n\n## The pattern\n\nA handler that starts a goroutine and returns without a join point (no `WaitGroup`, no channel receive, no `errgroup`) has started a **detached goroutine** whose lifetime is now decoupled from the request. That is the classic goroutine leak / unbounded-concurrency shape — and because it starts a goroutine *per request*, it also scales with traffic, which is what makes it dangerous rather than merely untidy.\n\nI don't have the actual diff, so I'll describe what to check and how to fix it; paste the lines if you want file:line findings.\n\n## What's wrong, category by category\n\n**1. No join point (`goroutine leak` / control flow)**\n\n- Before the handler returns, nothing waits for the goroutine. If the goroutine outlives the request (slow downstream call, blocked send on a full channel, waiting on a lock), it leaks.\n- On shutdown (`http.Server.Shutdown` / process exit), the server stops accepting but does not wait for *your* detached goroutines — work is silently dropped mid-flight.\n- If the goroutine loops or retries, a leak compounds: N leaked goroutines for N requests, each holding its stack and any captured heap.\n\n**2. Context misuse (usually coupled with the above)**\n\nIf the handler has `r.Context()` but the goroutine uses `context.Background()` (common once you realize `r.Context()` is cancelled the moment the handler returns), you get the opposite bug: the goroutine **no longer observes client cancellation or the request deadline**, so a cancelled client still leaves the work running to completion. You can't just pass `r.Context()` into the goroutine either — it's cancelled when the handler returns, so the goroutine gets killed early. This is the fundamental tension the pattern hides.\n\n**3. Unbounded concurrency**\n\nOne goroutine per request with no semaphore / worker-pool bound means a traffic spike spawns unbounded goroutines — memory growth, and if they contend on a downstream resource, thundering-herd collapse.\n\n**4. Errors are invisible**\n\nErrors returned by a detached goroutine have nowhere to go — they can't be returned from the handler (it already returned 200) and aren't collected anywhere. So failures are silently swallowed unless explicitly logged. If the goroutine touches shared state, this also opens a data race window.\n\n## Fix direction (do not apply — this skill is read-only)\n\nPick based on the intent of the work:\n\n- **Work must complete before responding** → don't spawn a goroutine; call it synchronously. Pass `r.Context()`.\n- **Fire-and-forget is genuinely intended** (must be decoupled from the request) → this is the one case where `context.Background()` in a goroutine is defensible, but you must:\n  - Bound it: a `sync.WaitGroup` the server tracks, or better, a **worker pool / `errgroup` with a shared base context** so shutdown can drain it.\n  - Give it its own timeout (`context.WithTimeout(context.Background(), ...)`) so it can't run forever.\n  - Log its errors explicitly, since nobody else will see them.\n- **Requester should be able to cancel / not block** → return a job handle immediately, enqueue onto a bound channel or queue, and let a worker pool process it. The goroutine is replaced by a consumer of a bounded queue; backpressure comes from the channel being full.\n\n## Verify before I'd call it a finding\n\nThe claim \"no join point\" is certain from the code shape, but whether it *leaks in practice* depends on whether the goroutine can block/outlive. To confirm the concurrency risk empirically, run:\n\n```\ngo test -race ./...\ngo test -run TestHandler -count=10000 ./...   # watch goroutine count / memory\n```\n\nwith a test that fires the handler under a slow downstream and checks `runtime.NumGoroutine()` before/after, or run with `-race` to catch shared-state access.\n\nTo give you concrete `file:line` findings with fix direction, paste the handler and the goroutine body (plus whatever it calls), and the file's package/imports so I can tell whether `errgroup` is already available.",
+              "outputSha256": "3be5ebd6cfe1a3c580a3e91adc1033f4e64e849803bb33183f54cc333255a314",
+              "promptSha256": "fb0523ac155676acf94fab3562929cc0ace8913061ff9015aa0dd3b3337117fd",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explicitly identifies the missing join point ('nothing waits for the goroutine', 'no WaitGroup, no channel receive, no errgroup'), explains concrete consequences (goroutine leaks past handler return, shutdown drops work, N leaked goroutines), and names fix directions (sync.WaitGroup, errgroup with shared base context, bounded channel/worker pool) as findings, explicitly not applied ('do not apply — this skill is read-only'). No hedge dismissing the leak as acceptable."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Review: unjoined goroutine in request handler\n\n**Finding: goroutine leak / lifetime escape**\n\n```go\nfunc handler(w http.ResponseWriter, r *http.Request) {\n    go doWork(r.Context()) // started, never joined\n    w.WriteHeader(http.StatusAccepted)\n}\n```\n\nThis is a real problem, and the pattern is subtle precisely because the code *looks* correct. Here's the breakdown:\n\n## What's wrong\n\n**1. No join point → the goroutine's lifetime is unbounded.**\nThe handler returns as soon as it writes the response. The goroutine keeps running past the handler's return, past the request's end, and past any `Server.Shutdown()` — with no `WaitGroup`, `errgroup`, or channel receive to synchronize with it. If the handler is called N times under load, you get N detached goroutines with no backpressure and no bound.\n\n**2. A leaked goroutine also leaks its stack.**\nA goroutine's starting stack (~2–8 KB) is held for as long as the goroutine runs. A detached-per-request pattern turns into steadily climbing RSS. This is the classic \"memory leak that isn't in any heap profile\" symptom — it shows up in goroutine counts, not `pprof` heap.\n\n**3. `r.Context()` will be cancelled almost immediately.**\nThis one is the actual bug most people miss. `r.Context()` is cancelled when the handler returns (and on client disconnect). So by the time the goroutine gets scheduled, its context is usually already `Done()`. If `doWork` respects cancellation, the work just doesn't happen — *most of the time*, under load, intermittently. If `doWork` *doesn't* respect cancellation, you've silently made the context parameter meaningless. Either way you have a race between \"work runs\" and \"context cancelled,\" which is a nightmare to reproduce.\n\n**4. No error path.**\nAny error from `doWork` is unreachable — it can't be logged, retried, or surfaced. The response already said `202 Accepted`.\n\n## Suggested fix directions (not applying — this is a read-only review)\n\n- **If the work must finish reliably:** don't detach it. Enqueue onto a bounded worker pool with its own lifecycle, and join that pool on shutdown. The handler returns a job ID; the pool owns the goroutine and the context. This is the only option that survives a process shutdown correctly.\n- **If the work is best-effort:** still make it real — copy the values you need out of `r.Context()` *before* returning (`ctx := context.WithoutCancel(r.Context())` on Go 1.21+, or derive a fresh context with the values copied), so cancellation doesn't kill work mid-flight. Then still put it on a bounded pool.\n- **If it's genuinely fire-and-forget:** it still needs a join point somewhere (a shutdown `WaitGroup`) or an intentional, documented reason to lose the work on shutdown — and that reason belongs in a comment.\n\n## Recommended verification\n\nConfirm the leak empirically before changing anything:\n\n```\ngo test -race ./...          # confirm the race between handler-return and doWork\n# then, under load, watch:\ngo tool pprof http://host/debug/pprof/goroutine\n```\n\nA flat goroutine profile that climbs with request count confirms the leak. A `-race` hit confirms the `r.Context()` cancellation race.\n\n## Flag summary\n\n| Severity | Category | Location |\n|---|---|---|\n| High | goroutine leak — no join point | handler, `go doWork(...)` |\n| High | context cancelled before use (`r.Context()` outliving handler return) | same line |\n| Medium | unreachable error path | same line |\n\n## Note on scope\n\nI only had the one hunk you pasted, so I can't tell whether `doWork` itself respects cancellation, or whether a shutdown `WaitGroup` exists elsewhere in the package. If `doWork` ignores its context entirely, finding #3 downgrades but finding #1 stays. If a pool/shutdown-join exists that owns this goroutine, the whole finding changes — worth confirming against the rest of the diff, which I don't have here.",
+              "outputSha256": "affd1e7bb4517f7e76f5c2649081012d74c38da81ca282e646afb872e1ee8aeb",
+              "promptSha256": "fb0523ac155676acf94fab3562929cc0ace8913061ff9015aa0dd3b3337117fd",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explicitly identifies missing join point ('no WaitGroup, errgroup, or channel receive to synchronize with it'), explains concrete consequence (goroutine runs past handler return, past Server.Shutdown, leaks stack/RSS), and names fix directions (bounded worker pool joined on shutdown, shutdown WaitGroup) as findings, not applied changes. No hedge dismissing the leak as acceptable."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Review: Unguarded goroutine in a request handler\n\nThis is a **goroutine leak** finding. Without seeing the file, the shape is enough to name the problem and its categories.\n\n## What's wrong\n\n**1. No join point — the goroutine outlives the request.**\nA goroutine started inside a handler with no `WaitGroup`, channel, or `errgroup` to join it is fire-and-forget. When the handler returns, anything it does is invisible to the caller: request writes can land after the response is sent, and errors inside it are silently dropped. If it blocks on a channel or I/O, it leaks for the life of the process. Under load this accumulates — one leaked goroutine per request.\n\n**2. It almost certainly discards the request context.**\nHandlers get cancellation and deadline from `r.Context()`. A detached goroutine typically reaches for `context.Background()` (or captures no context), so client disconnect and server shutdown no longer cancel the work. That is context misuse on top of the leak.\n\n**3. It's untracked at shutdown.**\nEven if you tie it to `r.Context()`, nothing waits for in-flight work during graceful shutdown — the process can exit mid-write. You need a join point the caller (or a server-level `WaitGroup`) can `Wait()` on.\n\n**4. If it touches shared state, you likely also have a race.** A goroutine spawned per request that mutates a shared map/counter/cache with no lock is a data race. I can't confirm from the description alone — run `go test -race ./...` to check rather than assert it.\n\n## Fix direction (not applied — this review is read-only)\n\n- **If the work must complete before responding:** run it synchronously, or `errgroup.Group` + `g.Wait()` within the handler.\n- **If it's genuinely async:** pass `r.Context()` into the goroutine, give it a bounded lifetime (e.g. `context.WithTimeout`), and track it with a `sync.WaitGroup` whose `Wait()` is called during server shutdown. Capture and log errors from inside — don't drop them.\n- **If it mutates shared state:** guard the state with a mutex, channel, or `sync/atomic`.\n\n## To report precisely\n\nI need the diff. Share the changed file and I'll give you `file:line`, whether the goroutine is diff-introduced or pre-existing, and the exact fix direction for that code.\n\n```\n<file>:<line> — goroutine started in request handler has no join point\n  (no WaitGroup/errgroup, no ctx propagation) and risks a leak per request\n  under load. Fix direction: errgroup.Wait() for sync work, or r.Context()\n  + bounded timeout + shutdown WaitGroup for genuine async.\n```\n\nTwo reminders from the red-flag list, since this pattern invites them: \"it'll probably finish first\" is not a join point, and this review will not edit the file — findings and fix direction only.",
+              "outputSha256": "fe9f493f349dc936284415bdb2076f6d8b2d205e14b1590ac088a9aade52d0fb",
+              "promptSha256": "fb0523ac155676acf94fab3562929cc0ace8913061ff9015aa0dd3b3337117fd",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explicitly names the missing join point ('no WaitGroup, channel, or errgroup to join it is fire-and-forget'), gives concrete consequences (goroutine leaks for process life, untracked at shutdown, process can exit mid-write), and names fix directions (errgroup.Group + g.Wait(), sync.WaitGroup Wait() at shutdown, channel) as findings, explicitly not applied. It also rejects the 'it'll probably finish first' hedge."
+              },
+              "passed": true
+            }
+          ]
         }
       ],
       "verdict": "pass",
       "scope": "bundled",
-      "skillDigest": "a16fcffa81c9ab79c11a3433783a938cd66c51bc5c7fd4b3b1beef7ab095fa8d",
+      "skillDigest": "5cd84a4cb21150ea88a49e1696108695d435251592492a0016a75910078abf51",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-25.1",
       "runner": "deepseek",
       "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:56:54.802Z"
+      "recordedAt": "2026-09-24T21:38:45.608Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
     },
     {
       "schemaVersion": "1.0.0",
-      "skillId": "go/go-build-fix",
+      "skillId": "go/go-implementation",
       "strictness": "high",
       "trials": 5,
       "triggerAccuracy": {
@@ -620,7 +655,7 @@
         {
           "id": "trigger-positive-1",
           "kind": "trigger-positive",
-          "prompt": "go build is failing with an undefined symbol error",
+          "prompt": "Implement a new Go package under internal/order that wraps errors with %w",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -633,7 +668,7 @@
         {
           "id": "trigger-positive-2",
           "kind": "trigger-positive",
-          "prompt": "go.mod and go.sum are out of sync, please fix",
+          "prompt": "Add a Go worker pool under cmd/worker that bounds concurrency with errgroup",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -646,7 +681,7 @@
         {
           "id": "trigger-positive-3",
           "kind": "trigger-positive",
-          "prompt": "Resolve this Go import cycle between two internal packages",
+          "prompt": "Add a Go endpoint and wire it into cmd/ and internal/, propagating context.Context correctly",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -659,7 +694,7 @@
         {
           "id": "trigger-positive-4",
           "kind": "trigger-positive",
-          "prompt": "go vet is reporting a printf format error",
+          "prompt": "What's the right Go interface placement for this new client -- producer or consumer package?",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -672,7 +707,7 @@
         {
           "id": "trigger-positive-5",
           "kind": "trigger-positive",
-          "prompt": "golangci-lint is failing on this Go package",
+          "prompt": "Add a goroutine in Go that watches a channel and joins with sync.WaitGroup",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -685,7 +720,7 @@
         {
           "id": "trigger-positive-6",
           "kind": "trigger-positive",
-          "prompt": "go test -race is failing with a data race, fix the build",
+          "prompt": "Implement this feature in a Go cmd/api binary using log/slog for structured logging",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -698,7 +733,7 @@
         {
           "id": "trigger-negative-1",
           "kind": "trigger-negative",
-          "prompt": "npm install is failing with a peer dependency conflict",
+          "prompt": "Implement this feature in Rust using tokio for async",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -711,7 +746,7 @@
         {
           "id": "trigger-negative-2",
           "kind": "trigger-negative",
-          "prompt": "cargo build is failing for this Rust crate",
+          "prompt": "Add this endpoint in a Python FastAPI service",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -724,7 +759,7 @@
         {
           "id": "trigger-negative-3",
           "kind": "trigger-negative",
-          "prompt": "pip install is failing for this Python project",
+          "prompt": "Implement this React component with the new form fields",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -737,7 +772,7 @@
         {
           "id": "trigger-negative-4",
           "kind": "trigger-negative",
-          "prompt": "Implement a new Go feature in the order package",
+          "prompt": "Review this Go diff for goroutine leaks and data races",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -750,7 +785,7 @@
         {
           "id": "trigger-negative-5",
           "kind": "trigger-negative",
-          "prompt": "Review this Go diff for concurrency bugs",
+          "prompt": "Fix this failing go test -race in the worker package",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -763,7 +798,7 @@
         {
           "id": "trigger-negative-6",
           "kind": "trigger-negative",
-          "prompt": "Write Go tests for this function",
+          "prompt": "Write table-driven pytest cases for this Python function",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -774,36 +809,483 @@
           "deterministic": true
         },
         {
-          "id": "module-mismatch",
+          "id": "context-propagation",
           "kind": "behavior",
-          "prompt": "go build fails saying go.sum is out of date after I bumped a dependency in go.mod. How do I fix it?",
+          "prompt": "I'm adding a new function to internal/order that calls a downstream client. How should I handle the context and errors?",
           "strictness": "high",
           "trials": 5,
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex",
-          "status": "ran"
+          "grader": "regex+judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "I'd need to see the actual code to give you something concrete, but here's the shape I'd be aiming for, with the reasoning per decision.\n\n## Context\n\nThread it in as the first parameter, all the way down. Don't reach for `context.Background()` inside `internal/order` just because it's \"internal\" — the caller's cancellation, deadline, and values are exactly what you'd be dropping.\n\n```go\nfunc (s *Service) FetchOrder(ctx context.Context, id string) (*Order, error) {\n    // pass ctx to the downstream client — never context.Background()\n    resp, err := s.client.Get(ctx, id)\n    ...\n}\n```\n\nIf `FetchOrder` kicks off any goroutines, the ctx is also your cancellation path — every goroutine has a known owner and exit condition. If you're fanning out to the downstream client, use `errgroup.WithContext(ctx)` so a failure cancels the siblings and you get the first error back:\n\n```go\nfunc (s *Service) FetchOrders(ctx context.Context, ids []string) ([]*Order, error) {\n    g, ctx := errgroup.WithContext(ctx)\n    out := make([]*Order, len(ids))\n    for i, id := range ids {\n        g.Go(func() error {\n            o, err := s.client.Get(ctx, id)\n            if err != nil {\n                return fmt.Errorf(\"fetch order %s: %w\", id, err)\n            }\n            out[i] = o\n            return nil\n        })\n    }\n    if err := g.Wait(); err != nil {\n        return nil, err\n    }\n    return out, nil\n}\n```\n\n`WaitGroup.Go` is fine too if the project's `go.mod` targets >= 1.25 and you don't need error aggregation.\n\n## Errors\n\nWrap with `%w` at each meaningful layer boundary, and prefix with what you were doing — not just the error itself:\n\n```go\nresp, err := s.client.Get(ctx, id)\nif err != nil {\n    return nil, fmt.Errorf(\"fetch order %s from downstream: %w\", id, err)\n}\n```\n\nThen callers use `errors.Is` / `errors.As` to test, never string matching:\n\n```go\nif errors.Is(err, downstream.ErrNotFound) {\n    return nil, ErrOrderNotFound\n}\n```\n\nThat's the whole point of `%w` — the caller you can't see yet (a handler, a retry layer, an outer service) gets to unwrap. Don't downgrade to `%v` because \"the caller doesn't need it\"; the cost is zero and the option stays open. And don't swallow: no `_ = err`, no empty `if err != nil {}`.\n\nAlso decide whether you want a sentinel error from `internal/order` (e.g. `ErrOrderNotFound`) so consumers can match across the downstream boundary without importing the downstream package — usually yes.\n\n## Things to check in the repo before you commit to a shape\n\n- **Existing error style and logger** — read 1-2 neighboring files in `internal/order`; if the project standardizes on something other than `log/slog`, match it.\n- **The downstream client's signnature** — does it already take `ctx`? If it returns typed errors you're meant to `errors.As` against, use them rather than re-inventing.\n- **`go.mod`'s `go` directive** — determines whether `errgroup` (fine on any modern Go) or `WaitGroup.Go` (1.25+) is on the table.\n\n## Verify before calling it done\n\n```\ngo build ./...\ngo vet ./...\ngo test -race ./...\n```\n\n`-race` matters here specifically because of the goroutine fan-out — an unjoined or racing goroutine is exactly what it catches.\n\nIf you paste the current `FetchOrder` (or whatever it's named) and the downstream client's signature, I'll fit the wrapper and the sentinel errors to what's actually there rather than the generic version above.",
+              "outputSha256": "7fc163f4c054d282abe7bfb44fb99b8bbc4b6ced4acab3a0d9807afd5c4324d0",
+              "promptSha256": "9712a2b3973edb8bd2f0db6bd2f4cda7d89edf826fc0f006925bf1189b24e2c3",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Criterion 1: 'Thread it in as the first parameter, all the way down' with `func (s *Service) FetchOrder(ctx context.Context, id string)` and 'pass ctx to the downstream client — never context.Background()'. Criterion 2: concrete `return nil, fmt.Errorf(\"fetch order %s from downstream: %w\", id, err)` returned to caller. Criterion 3: 'callers use errors.Is / errors.As to test' with example. No fail criteria: explicitly warns against `_ = err` and `%v`."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Context and error handling for a downstream call in `internal/order`\n\nHere's the pattern to follow, assuming your `go.mod` targets Go 1.21+ (wrapping and `errors.Join` are available from 1.20):\n\n## Context\n\nThread `ctx` as the **first parameter**, don't store it on a struct:\n\n```go\npackage order\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\t\"yourapp/internal/downstream\"\n)\n\ntype Service struct {\n\tclient downstream.Client // interface defined at *this* consumer, per rules/patterns.mdc\n}\n\nfunc NewService(client downstream.Client) *Service {\n\treturn &Service{client: client}\n}\n\n// FetchOrder forwards the caller's ctx so cancellation, deadlines,\n// and values propagate end-to-end.\nfunc (s *Service) FetchOrder(ctx context.Context, id string) (*Order, error) {\n\to, err := s.client.GetOrder(ctx, id)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"fetching order %q: %w\", id, err)\n\t}\n\treturn o, nil\n}\n```\n\nKey points:\n\n- **Never** `context.Background()` inside this call chain — that silently breaks cancellation. The ctx comes from the caller (HTTP handler's `r.Context()`, a `signal.NotifyContext`, etc.).\n- If you need a bounded deadline, derive with `context.WithTimeout(ctx, ...)` and `defer cancel()`. Don't invent a fresh root.\n- **Never** put `ctx` on `Service` as a field.\n\n## Errors\n\nWrap with `%w` at each meaningful layer boundary, and add context that the caller doesn't already have:\n\n```go\no, err := s.client.GetOrder(ctx, id)\nif err != nil {\n\t// %w preserves the chain so callers can errors.Is/As.\n\t// Include the id — the caller may not know which one failed.\n\treturn nil, fmt.Errorf(\"fetching order %q: %w\", id, err)\n}\n```\n\nRules:\n\n- Use `%w` (not `%v`) unless you deliberately want to break the chain. `%v` costs nothing to upgrade to `%w` and keeps `errors.Is/As` available for the caller you can't see yet.\n- Compare with `errors.Is(err, downstream.ErrNotFound)` — never string-match error text.\n- Don't log-and-return the same error; either log at the layer that handles it, or wrap and return. Doing both produces duplicate log lines.\n- Don't swallow it: `_ = err` or an empty `if err != nil {}` is a red flag.\n\nIf the downstream client exposes a sentinel, define it next to the client (`var ErrNotFound = errors.New(\"not found\")`), and have `GetOrder` wrap it with `%w` so `errors.Is(err, ErrNotFound)` works through your layer too.\n\n## If you fan out to multiple downstream calls\n\nUse `errgroup` (already common in Go services; check your `go.mod` require block for `golang.org/x/sync`):\n\n```go\nfunc (s *Service) FetchMany(ctx context.Context, ids []string) ([]*Order, error) {\n\tg, ctx := errgroup.WithContext(ctx)\n\tout := make([]*Order, len(ids))\n\n\tfor i, id := range ids {\n\t\ti, id := i, id // pre-1.22 loop var capture; safe to drop on go >= 1.22\n\t\tg.Go(func() error {\n\t\t\to, err := s.client.GetOrder(ctx, id)\n\t\t\tif err != nil {\n\t\t\t\treturn fmt.Errorf(\"fetching order %q: %w\", id, err)\n\t\t\t}\n\t\t\tout[i] = o\n\t\t\treturn nil\n\t\t})\n\t}\n\tif err := g.Wait(); err != nil {\n\t\treturn nil, err\n\t}\n\treturn out, nil\n}\n```\n\nNotes:\n\n- `errgroup.WithContext` cancels siblings on the first error — every goroutine has a visible join point (`g.Wait`) and a cancellation path.\n- Don't raw-`go func(){}` here; an unjoined goroutine is one of the red-flag rationalizations in the skill.\n- If your `go.mod` says `go >= 1.22`, you can drop the `i, id := i, id` line; on `go >= 1.25` `sync.WaitGroup.Go` also exists, but `errgroup` is still the right tool when you want first-error + cancellation.\n\n## Quick checklist before you commit\n\n- `ctx` is the first param of `FetchOrder` and forwarded to the client.\n- No `context.Background()` / `context.TODO()` introduced inside this chain.\n- Error is wrapped with `%w` and includes the id.\n- No struct field holds a `context.Context`.\n- Every new goroutine has a `WaitGroup`/`errgroup` join point.\n- `gofmt -l`, `go vet ./...`, `go test -race ./...` all clean.\n\nWant me to look at the actual `downstream.Client` signature and suggest the smallest interface to define at `internal/order`'s side?",
+              "outputSha256": "74c9a360b4c869695937a4cdaa6bff03481a0e96e89d98d74d8216c97ce53738",
+              "promptSha256": "9712a2b3973edb8bd2f0db6bd2f4cda7d89edf826fc0f006925bf1189b24e2c3",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states ctx as first param forwarded to client, not stored on struct ('Never put ctx on Service as a field'). Shows concrete wrap: `fmt.Errorf(\"fetching order %q: %w\", id, err)` returned to caller, and connects to errors.Is/As ('%w preserves the chain so callers can errors.Is/As'). No fail criteria: explicitly warns against `_ = err` and log-and-return."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Context and error handling for `internal/order`\n\nWithout seeing the file, here's the shape I'd expect, plus the checklist items I'd actually verify.\n\n## Context\n\nThe callee must accept `ctx` as its first parameter and pass it straight into the downstream call — no storing it, no substituting `context.Background()`:\n\n```go\n// internal/order/service.go\nfunc (s *Service) FetchOrder(ctx context.Context, id string) (*Order, error) {\n    o, err := s.client.GetOrder(ctx, id) // forward, don't replace\n    if err != nil {\n        return nil, fmt.Errorf(\"fetch order %s: %w\", id, err)\n    }\n    return o, nil\n}\n```\n\nCheck the call path back to its origin. Somewhere an HTTP handler should be doing `r.Context()`, or `main` should be doing `signal.NotifyContext` — the `ctx` should arrive, not be created. If your new function is reached from a place that currently hardcodes `context.Background()`, that's a bug in the caller you should flag, not work around.\n\nDon't put `context.Context` on the `Service` struct (or any struct). It's always the first parameter.\n\n## Errors\n\nWrap at the layer boundary with `%w` so callers can unwrap, and pick words that read as a forward path when stacked:\n\n```go\n// caller two layers up sees:\n//   api: place order: fetch order 42: connection refused\n```\n\nRules I'd apply here:\n\n- **`%w`, not `%v`** — even if *you* can't see a caller that needs `errors.Is`. `%w` costs nothing and keeps the unwrap option open.\n- **One wrap per meaningful boundary.** Don't wrap at every function; wrap where you're translating an error from one layer's vocabulary to the next (\"downstream client failed\" → \"couldn't fetch order\").\n- **Sentinel errors** for the cases the caller branches on (`ErrOrderNotFound`), so consumers use `errors.Is(err, order.ErrOrderNotFound)` instead of string matching. If the downstream client already exposes one, re-wrap with `%w` and let `errors.Is` see through it.\n- **Don't swallow.** No `_ = err`, no empty `if err != nil {}`. If you're intentionally discarding (e.g. best-effort cleanup), assign to `_` *with a comment saying why*.\n\n## Concrete things to check in the actual file\n\nBefore you write it, confirm:\n\n1. **What does the downstream client's method signature look like?** It almost certainly takes `ctx`. If it doesn't, that's the integration point to fix first — a client that doesn't take `ctx` can't be cancelled, and everything downstream of you inherits that.\n2. **Is there a timeout/deadline?** If the downstream call is network-bound and nothing above sets a deadline, wrap the call site with `context.WithTimeout(ctx, ...)` rather than baking a timeout into the client.\n3. **Existing error style in `internal/order`** — read 1–2 neighboring files. If the package uses sentinels, use sentinels; if it uses a typed error struct with `errors.As`, match that. Don't introduce a third style for one function.\n\n## What I'd run before calling it done\n\n```bash\ngo build ./...\ngo vet ./...\ngo test -race ./...\n```\n\nIf you paste the function signature of the downstream client and the surrounding `internal/order` file, I can give you the exact code rather than the template.",
+              "outputSha256": "7b42043209eeafedeb7d71448c002e2af169b7c434102e3137c543493ad70fe6",
+              "promptSha256": "9712a2b3973edb8bd2f0db6bd2f4cda7d89edf826fc0f006925bf1189b24e2c3",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer shows ctx as first param forwarded to s.client.GetOrder(ctx, id) and explicitly says don't store context.Context on a struct. It wraps with fmt.Errorf(\"fetch order %s: %w\", id, err) and returns it, and connects %w to errors.Is/errors.As unwrapping. No fail criteria: it warns against _ = err and %v."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Context and errors for a new downstream-calling function\n\n## Context\n\nAccept `ctx context.Context` as the **first parameter**, forward it to the downstream call, and never store it on a struct.\n\n```go\n// internal/order/service.go\nfunc (s *Service) FetchOrder(ctx context.Context, id string) (*Order, error) {\n    o, err := s.client.GetOrder(ctx, id)\n    if err != nil {\n        return nil, fmt.Errorf(\"fetch order %s: %w\", id, err)\n    }\n    return o, nil\n}\n```\n\nKey points:\n\n- **Forward it, don't replace it.** Pass `ctx` straight through to `s.client.GetOrder`. Do not call `context.Background()` or `context.TODO()` inside this function — that would break cancellation/deadline propagation from the caller (HTTP handler's `r.Context()`, CLI's `signal.NotifyContext`, etc.).\n- **Do not store it.** No `ctx` field on `Service` or any struct. If the client needs a context at construction time, that's a signal the design is wrong — pass `ctx` per call.\n- **If you need to bound the downstream call**, derive a child context and document why:\n\n```go\nctx, cancel := context.WithTimeout(ctx, 3*time.Second)\ndefer cancel()\n```\n\nOnly add this if the caller's deadline isn't already the right bound; otherwise you're fighting the caller's policy.\n\n## Errors\n\nWrap with `%w` at every meaningful layer boundary so callers can `errors.Is`/`errors.As` through you:\n\n```go\no, err := s.client.GetOrder(ctx, id)\nif err != nil {\n    return nil, fmt.Errorf(\"fetch order %s: %w\", id, err)\n}\n```\n\nRules of thumb for this function:\n\n- **`%w`, not `%v`** — even if you can't see a caller that unwraps today. `%w` costs nothing and keeps the option open for `errors.Is(err, ErrNotFound)` etc.\n- **Add context, don't restate it.** The wrapper should say *what you were doing* (`fetch order <id>`), not repeat the downstream error's text. Skip wrappers that add nothing (`fmt.Errorf(\"error: %w\", err)`).\n- **Sentinel errors for known cases.** If the downstream client exposes a typed/sentinel error (`client.ErrNotFound`), the caller of your function should be able to use `errors.Is` on it. That falls out of `%w` for free.\n- **Don't log-and-return.** Pick one. If you log here with `slog` and also return the wrapped error, every layer above logs it again. Log at the boundary that decides (usually `main` or the handler), return everywhere else.\n\n```go\n// at the handler/main boundary, not in Service.FetchOrder:\nif err != nil {\n    slog.ErrorContext(ctx, \"fetch order failed\", \"id\", id, \"err\", err)\n    http.Error(w, \"internal error\", http.StatusInternalServerError)\n    return\n}\n```\n\n- **Never swallow.** No `_ = err`, no empty `if err != nil {}`. Check it, wrap it, or discard it with an explanatory comment.\n\n## Quick checklist for this change\n\n- [ ] `ctx` is first param, forwarded to `client.GetOrder`.\n- [ ] No `context.Background()`/`TODO()` inside the function.\n- [ ] No `ctx` field added to `Service`.\n- [ ] Error wrapped with `%w` and a message describing *your* operation.\n- [ ] No logging inside `FetchOrder` — return, let the boundary log.\n- [ ] If you spawn any goroutine that calls the client, it has a `WaitGroup`/`errgroup` join point and honors `ctx` for cancellation.\n\nIf you paste the current function signature and the client's error surface (does it return a sentinel like `ErrNotFound`?), I can be more specific about the exact wrapping.",
+              "outputSha256": "cc7c2b1c2c37bf39130e9764d958a087b728dd77774ad8f2ed6f89abdd4e4ccc",
+              "promptSha256": "9712a2b3973edb8bd2f0db6bd2f4cda7d89edf826fc0f006925bf1189b24e2c3",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Criterion 1: answer states ctx must be first parameter, forwarded to s.client.GetOrder, and 'Do not store it. No ctx field on Service or any struct.' Criterion 2: concrete fix shown: `return nil, fmt.Errorf(\"fetch order %s: %w\", id, err)` returned to caller, with explicit 'Don't log-and-return' rule. Criterion 3: connects wrap to errors.Is/errors.As ('callers can errors.Is/errors.As through you', ErrNotFound). No fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Context and errors for a downstream-calling function in `internal/order`\n\n## Context\n\n- **Accept `ctx context.Context` as the first parameter** of the new function. If `internal/order` already has an `OrderService` struct backed by a client, don't store the context on the struct — thread it per call.\n- **Forward the caller's context verbatim** to the downstream client call (`client.Do(ctx, ...)`). Do not substitute `context.Background()` \"because this is internal code\" — that severs cancellation/deadline propagation from whatever handler or CLI originated the request.\n- **Add a per-call deadline only if the caller doesn't own one.** If the handler already sets a request timeout, leave it alone. If there is no upstream budget, wrap locally:\n\n  ```go\n  ctx, cancel := context.WithTimeout(ctx, 5*time.Second)\n  defer cancel()\n  ```\n\n  `defer cancel()` is not optional — it releases the timer even on the happy path.\n\n## Errors\n\n- **Wrap with `%w` at the boundary** so callers can `errors.Is`/`errors.As`:\n\n  ```go\n  resp, err := c.client.Do(ctx, req)\n  if err != nil {\n      return Order{}, fmt.Errorf(\"fetching order %s from downstream: %w\", id, err)\n  }\n  ```\n\n- **Compare with `errors.Is`/`errors.As`, never `==` or string matching.** If the downstream client exposes sentinel errors (e.g. `client.ErrNotFound`), check them explicitly and translate to a domain error your callers already know:\n\n  ```go\n  if errors.Is(err, client.ErrNotFound) {\n      return Order{}, ErrOrderNotFound\n  }\n  ```\n\n- **Don't swallow.** No `_ = err` without a comment explaining why, no empty `if err != nil {}` blocks. Either handle, wrap+return, or explicitly discard with a comment.\n- **Return `(zero, err)` on failure** — don't return a partially-populated struct alongside an error; the caller cannot tell which fields are meaningful.\n\n## If you fan out to multiple downstream calls\n\nUse `errgroup.WithContext` so the first error cancels the siblings, rather than firing N independent calls each with its own context:\n\n```go\ng, ctx := errgroup.WithContext(ctx)\nfor _, id := range ids {\n    id := id\n    g.Go(func() error {\n        return s.fetch(ctx, id)\n    })\n}\nif err := g.Wait(); err != nil {\n    return fmt.Errorf(\"fetching orders: %w\", err)\n}\n```\n\n(`go` directive in this module is 1.23, so keep the `id := id` loop-var capture; `WaitGroup.Go` is 1.25-only.)\n\n## Verify before you're done\n\n```bash\ngo build ./...\ngo vet ./...\ngo test -race ./...\ngofmt -l internal/order\n```\n\nAll four clean. If you added a goroutine, confirm it has a visible join point (`g.Wait()`) and a cancellation path via `ctx` — an unjoined goroutine here would race with handler shutdown.",
+              "outputSha256": "ae54db0cd1493d3f47cafcc7f95db1cebfe4727b971ed48b9119548b1e84f136",
+              "promptSha256": "9712a2b3973edb8bd2f0db6bd2f4cda7d89edf826fc0f006925bf1189b24e2c3",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Criterion 1: 'Accept ctx context.Context as the first parameter' and 'don't store the context on the struct — thread it per call', forwarded via client.Do(ctx, ...). Criterion 2: concrete wrap `fmt.Errorf(\"fetching order %s from downstream: %w\", id, err)` returned to caller. Criterion 3: 'so callers can errors.Is/errors.As' plus errors.Is example. No fail criteria: explicitly warns against swallowing."
+              },
+              "passed": true
+            }
+          ]
         },
         {
-          "id": "no-nolint-suppression",
+          "id": "goroutine-lifetime",
           "kind": "behavior",
-          "prompt": "golangci-lint is flagging an ignored error return in my Go code. How should I fix it?",
+          "prompt": "I want to start a few goroutines to process items concurrently in Go. What should I watch out for?",
           "strictness": "high",
           "trials": 5,
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# Concurrent item processing in Go — what to watch out for\n\nGood instinct to ask before writing it. Here's the checklist, in roughly the order the bugs show up.\n\n## 0. What does your `go.mod` target?\n\nCheck the `go` directive first. `sync.WaitGroup.Go` (which bundles the `Add`/`Done` pairing for you) landed in **Go 1.25**. If the module targets anything older, you're writing `wg.Add(1)` / `defer wg.Done()` by hand.\n\n## 1. Every goroutine needs a join point or a cancellation path\n\nThis is the big one. \"It's short-lived\" is not the same as \"it finishes before the caller returns.\" Two shapes cover almost everything:\n\n**`errgroup`** — when you want the first error back and want the sibling goroutines cancelled when one fails:\n\n```go\ng, ctx := errgroup.WithContext(ctx)\nfor _, it := range items {\n    g.Go(func() error {\n        return process(ctx, it)\n    })\n}\nif err := g.Wait(); err != nil {\n    return fmt.Errorf(\"processing items: %w\", err)\n}\n```\n\n**`sync.WaitGroup`** — when you just need \"all done\" and errors are handled some other way:\n\n```go\nvar wg sync.WaitGroup\nfor _, it := range items {\n    wg.Add(1)\n    go func() {\n        defer wg.Done()\n        process(ctx, it)\n    }()\n}\nwg.Wait()\n```\n\nNote the two things happening there: `it` is captured per-iteration (Go 1.22+ loop semantics make this safe; on older versions you'd shadow it with `it := it`), and the closure takes `ctx` from the enclosing scope — *that* is the cancellation path.\n\n## 2. Propagate `context.Context` — don't invent one\n\nEvery function on the call path should take `ctx context.Context` as its **first parameter** and forward it. The two failure modes:\n\n- **`context.Background()` inside the chain.** It compiles and runs, and silently drops the caller's deadline, cancellation, and values. If the outer request is cancelled, your workers keep going.\n- **Storing `ctx` on a struct field.** Don't. Thread it through calls. A `ctx` field outlives the request that created it and is a classic source of \"why is this still running?\"\n\n## 3. Bound the concurrency\n\n`for _, it := range items { go ... }` over a 100k-item slice spawns 100k goroutines. Usually fine; sometimes a thundering herd against a database or an API. Use a semaphore channel or a fixed worker pool:\n\n```go\nsem := make(chan struct{}, maxConcurrency)\nfor _, it := range items {\n    sem <- struct{}{}          // acquire\n    wg.Add(1)\n    go func() {\n        defer wg.Done()\n        defer func() { <-sem }()  // release\n        process(ctx, it)\n    }()\n}\n```\n\n`errgroup.SetLimit(n)` does the same thing more cleanly if you're already on `errgroup`.\n\n## 4. Protect shared state, or don't share it\n\nIf workers write to a shared map, slice, or counter, you need a `sync.Mutex`/`sync.RWMutex` or `sync/atomic` — `-race` will catch you otherwise, but it's better to structure it away. The cleanest pattern: each worker **sends its result on a channel**, and a single collector goroutine owns the accumulation. No lock needed. If you do go with a channel, remember someone has to close it and someone has to drain it, or you leak a goroutine.\n\n## 5. Wrap errors, compare with `errors.Is` / `errors.As`\n\n```go\nreturn fmt.Errorf(\"processing item %s: %w\", it.ID, err)\n```\n\n`%w` costs nothing and keeps unwrapping open for callers you can't see yet. With `errgroup`, only the **first** error surfaces — if you need all of them, collect into a slice under a mutex yourself, or use `errors.Join` (Go 1.20+).\n\n## 6. Then verify\n\n```bash\ngo build ./...\ngo vet ./...\ngo test -race ./...\n```\n\n`-race` is not optional here — it's the thing that catches the data races you'd otherwise ship. If `golangci-lint` is configured, run it too.\n\n---\n\n**The short version:** every goroutine has a known owner and exit condition; `ctx` flows in as the first parameter from wherever the request originated; concurrency is bounded; shared state is either locked or replaced with channel-based ownership; errors are wrapped with `%w`; and `-race` passes before you call it done.\n\nWant me to look at the specific code you're about to write? If you paste the loop and the function it calls, I can flag which of the above actually applies rather than listing all of it.",
+              "outputSha256": "dfadad3ccbb5ed0143bf43eb44da600fc3d4c17c25ad870f9b6f37cbbbf2c632",
+              "promptSha256": "af9e8082f58896d17ec3ae25f4b15493f270cc11a0beaafe987a65f270493dd4",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names errgroup.Group (with g.Wait returning first error) and sync.WaitGroup with wg.Add/Done/Wait, plus WaitGroup.Go for Go 1.25. Section 1 states join point/cancellation path must be decided, and short-lived isn't enough. Section 5 propagates errors via %w and errgroup first error. No fail criteria: no 'no WaitGroup needed' claim, no log-and-drop recommendation."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Concurrent goroutine processing in Go — the checklist\n\n## 1. Every goroutine needs a known owner and exit condition\n\nA goroutine you can't join and can't cancel is a leak waiting to happen. Two idiomatic tools:\n\n**`errgroup.Group`** — when you want the first error back and shared cancellation:\n\n```go\ng, ctx := errgroup.WithContext(ctx)\nfor _, item := range items {\n    item := item // Go < 1.22 only; 1.22+ is per-iteration by default\n    g.Go(func() error {\n        return process(ctx, item)\n    })\n}\nif err := g.Wait(); err != nil {\n    return fmt.Errorf(\"processing items: %w\", err)\n}\n```\n\n`errgroup` cancels `ctx` as soon as one `g.Go` returns a non-nil error, which is usually what you want.\n\n**`sync.WaitGroup`** — when you just need \"all finished\" and no error propagation:\n\n```go\nvar wg sync.WaitGroup\nfor _, item := range items {\n    wg.Add(1)\n    go func() {\n        defer wg.Done()\n        process(item)\n    }()\n}\nwg.Wait()\n```\n\nIf the module's `go` directive is **1.25 or newer**, prefer `wg.Go(fn)` — it does the `Add`/`Done` pairing for you and is less error-prone.\n\n## 2. Pass `ctx` through, and honor it\n\n- `context.Context` is the **first parameter** of any function that might block or be cancelled. Never store it on a struct field.\n- Inside the worker, select on `ctx.Done()` when you have a blocking call that doesn't take a context (I/O on an external channel, a sleep, a hand-rolled loop):\n\n```go\nselect {\ncase <-ctx.Done():\n    return ctx.Err()\ncase result := <-outCh:\n    // ...\n}\n```\n\n- If the goroutines are launched from an HTTP handler, start from `r.Context()`, not `context.Background()`. Backgrounding silently breaks request cancellation.\n\n## 3. Bound the concurrency\n\n`for _, item := range items { go process(item) }` with a million items spawns a million goroutines. Use a worker pool or a semaphore:\n\n```go\nsem := make(chan struct{}, 8) // max 8 in flight\nfor _, item := range items {\n    sem <- struct{}{}\n    go func(item Item) {\n        defer func() { <-sem }()\n        process(ctx, item)\n    }(item)\n}\n```\n\n## 4. Watch the loop variable capture\n\nPre-Go-1.22, `for _, item := range items` reuses one `item` variable across iterations, so `go func() { ... item ... }()` sees the last value. Fixes: pass it as an argument (`go func(it Item){...}(item)`) or declare `item := item` at the top of the body. **Go 1.22+ makes this per-iteration by default** — check `go.mod`'s `go` directive to know which world you're in.\n\n## 5. Shared state: don't\n\nIf workers touch the same map, slice, counter, or struct field, you need a `sync.Mutex`, a `sync/atomic` type, or a channel. The most common shape is \"workers send results to a channel, one collector owns the slice/map\":\n\n```go\nresults := make(chan Result)\ngo func() { // collector — sole writer\n    for r := range results {\n        store[r.ID] = r\n    }\n}()\n// ... workers send to `results` ...\n```\n\nAlways run `go test -race ./...` on code that grew a goroutine — the race detector catches the ones you didn't see.\n\n## 6. Close the channel exactly once, from the sender side\n\nIf workers feed a shared channel, either:\n- each worker owns a distinct send and you wrap sends with the pool's `wg` + a `closer` goroutine that calls `close(out)` after `wg.Wait()`, or\n- the collector reads a known count.\n\nNever close from the consumer; that panics the sender.\n\n## 7. Use `log/slog` for anything logged from a goroutine\n\nStructured fields (request ID, item ID) survive the interleaving better than concatenated strings, and `slog`'s `*Logger` is safe for concurrent use.\n\n---\n\n## Quick review checklist before you say \"done\"\n\n- [ ] Every goroutine has a `Wait`/`Done`/`ctx` join point.\n- [ ] `ctx` is the first arg on the call path and originates from the real caller (handler / signal / parent).\n- [ ] Concurrency has a ceiling (pool size / semaphore / `SetLimit` on the errgroup).\n- [ ] Loop variable capture is correct for the module's `go` directive.\n- [ ] Shared state is behind a mutex, atomic, or owned by a single goroutine.\n- [ ] Channels are closed exactly once, by a sender-side closer.\n- [ ] `go build ./... && go vet ./... && go test -race ./...` all pass.\n\nRun through those and the usual goroutine footguns — leaks, races, dropped cancellation, exit-code swallowing — are the ones you've already ruled out.",
+              "outputSha256": "ac63a425733e940d02f502f9d8e79390e169674c24c784fc45a12e48bf9bfe3c",
+              "promptSha256": "af9e8082f58896d17ec3ae25f4b15493f270cc11a0beaafe987a65f270493dd4",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names errgroup.Group (with g.Wait returning first error, ctx cancellation) and sync.WaitGroup/WaitGroup.Go as join mechanisms. Section 1 states every goroutine needs a known owner and exit condition, and ctx passed through. Error propagation shown via errgroup returning error. No fail criteria: no short-lived assumption, no dropping errors internally."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Concurrent goroutine processing in Go — what to watch out for\n\nThe core rule: **every goroutine needs a known owner and a known exit condition.** An unjoined, uncancellable goroutine is a leak waiting to happen (or a race against process shutdown). Here's the practical checklist.\n\n## 1. Joining goroutines — never fire-and-forget\n\nYou have two idiomatic tools:\n\n- **`errgroup.Group`** (`golang.org/x/sync/errgroup`) when you want the *first* error plus shared cancellation. This is the usual choice for \"process N items, bail on first failure.\"\n- **`sync.WaitGroup`** when you just need \"all finished, ignore errors.\" On Go 1.25 (`WaitGroup.Go`, added in 1.25) you get the nicer API below; with an older `go.mod` directive use the classic `Add`/`Done`/`Wait`.\n\n```go\n// errgroup: first error wins, ctx cancels the rest\nfunc processAll(ctx context.Context, items []Item) error {\n    g, ctx := errgroup.WithContext(ctx)\n    for _, it := range items {\n        it := it // pinned: Go < 1.22 loop var; see note below\n        g.Go(func() error {\n            if err := process(ctx, it); err != nil {\n                return fmt.Errorf(\"processing %s: %w\", it.ID, err)\n            }\n            return nil\n        })\n    }\n    return g.Wait()\n}\n```\n\n**Loop variable capture** — this bit you a lot historically. Before Go 1.22, `for _, it := range items` reused a single `it` variable across iterations, so `g.Go(func(){ use(it) })` raced. Go 1.22+ (per the module's `go` directive) gives each iteration its own variable, so the `it := it` pin is only needed if the project targets < 1.22. Don't cargo-cult it blindly; check `go.mod`.\n\n## 2. Bounding concurrency\n\nUnbounded `g.Go` over 100k items spawns 100k goroutines at once. Cap it:\n\n```go\ng.SetLimit(16) // errgroup: at most 16 in flight; g.Go blocks until a slot frees\n```\n\nAlternatively a buffered `chan struct{}` semaphore, or a fixed worker pool reading from a channel. Pick based on whether you need backpressure on the producer side.\n\n## 3. Cancellation and context\n\n- **Thread `ctx` as the first parameter** through every function on the path — never stash it in a struct field.\n- **Don't pass `context.Background()` inside a call chain** — it silently breaks cancellation/deadlines you were handed upstream.\n- Always derive the group's context (`errgroup.WithContext`) so a first error actually stops the other workers instead of letting them run to completion.\n\n## 4. Error handling\n\n- Wrap with `%w` at each layer boundary: `fmt.Errorf(\"processing %s: %w\", it.ID, err)`.\n- Compare with `errors.Is` / `errors.As`, never string matching.\n- Don't swallow errors (`_ = err` with no comment, empty `if err != nil {}`).\n\n## 5. Writing to shared state\n\n- Prefer **channels** over shared memory for results. If you must share, guard with a `sync.Mutex` and keep the critical section tiny.\n- Never append to a slice from multiple goroutines without a lock (`append` is not concurrency-safe).\n- If you write results to a map, use a mutex or have each worker own its own map and merge at the end.\n\n## 6. Race detector is not optional\n\n```bash\ngo test -race ./...\n```\n\nRun this on every change touching concurrency. It catches loop-var capture, unsynchronized map/slice access, and other data races that pass normal tests.\n\n## 7. Panic safety\n\nA panic in a worker goroutine crashes the whole program — `errgroup.Wait`/`WaitGroup.Wait` will not recover it for you. If workers call untrusted code, recover inside the goroutine and convert to an error:\n\n```go\ng.Go(func() (err error) {\n    defer func() {\n        if r := recover(); r != nil {\n            err = fmt.Errorf(\"panic: %v\", r)\n        }\n    }()\n    return process(ctx, it)\n})\n```\n\n---\n\nWant me to look at your actual code? If you paste the function that spawns the goroutines, I can check the join/cancel/error paths against the above and flag anything off.",
+              "outputSha256": "16c73a3534a27d8fa5fbbc55e2770491ef02886f52fdf6a133b590d042db994b",
+              "promptSha256": "af9e8082f58896d17ec3ae25f4b15493f270cc11a0beaafe987a65f270493dd4",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names errgroup.Group and sync.WaitGroup/WaitGroup.Go as join mechanisms (§1). States core rule: every goroutine needs known owner and exit condition, and §3 says derive group ctx so first error stops others. §1/§4 propagate errors via errgroup returning first error with %w wrapping. No fail criteria: no fire-and-forget justification, no log-and-drop recommendation."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Concurrent goroutine processing in Go — what to watch for\n\n## 1. Always join your goroutines\n\nEvery goroutine needs a **known owner and exit condition**. If you start one and don't wait for it, it can outlive the function that spawned it, race with shutdown, or leak forever.\n\nTwo join tools:\n\n- `sync.WaitGroup` — when you just need \"all finished\". On Go 1.25+, use `wg.Go(fn)` which handles `Add`/`Done` for you.\n- `errgroup.Group` (from `golang.org/x/sync`) — when you need the *first* error back and shared cancellation. This is the right default for \"process N items, any failure is fatal\".\n\n```go\ng, ctx := errgroup.WithContext(ctx)\nfor _, item := range items {\n    g.Go(func() error {\n        return process(ctx, item)\n    })\n}\nif err := g.Wait(); err != nil {\n    return fmt.Errorf(\"processing items: %w\", err)\n}\n```\n\n## 2. Bound your concurrency\n\n\"Fire off a goroutine per item\" is fine for 10 items and a disaster for 10 million — you'll exhaust memory or file descriptors. Cap it.\n\nFor a fixed pool, a buffered channel of tokens is the simplest correct pattern:\n\n```go\nsem := make(chan struct{}, maxConcurrent)\ng, ctx := errgroup.WithContext(ctx)\nfor _, item := range items {\n    g.Go(func() error {\n        select {\n        case sem <- struct{}{}:\n        case <-ctx.Done():\n            return ctx.Err()\n        }\n        defer func() { <-sem }()\n        return process(ctx, item)\n    })\n}\nreturn g.Wait()\n```\n\n## 3. Loop-variable capture\n\n**Before Go 1.22**, `for _, item := range items` reused one variable — every goroutine closed over the *same* `item` and you'd process the last one N times. Go 1.22+ (and any module whose `go.mod` says `go 1.22` or later) fixed this so each iteration gets a fresh variable. Check your module's `go` directive; if it predates 1.22, copy the value explicitly:\n\n```go\nitem := item  // needed only if go directive < 1.22\n```\n\n## 4. Propagate `context.Context` correctly\n\n- Thread `ctx` as the **first parameter** of every function on the path — never store it in a struct field.\n- Pass the *caller's* ctx down, don't substitute `context.Background()` mid-chain — that silently breaks cancellation and deadlines.\n- With `errgroup.WithContext`, use the returned `ctx`: the first error cancels it, which is how sibling workers get told to stop.\n\n## 5. Share data carefully\n\nIf goroutines write to shared state:\n\n- Prefer **sharing by communicating** — send results on a channel back to one collector goroutine.\n- Otherwise guard with a `sync.Mutex`/`RWMutex`, or use `sync/atomic`.\n- Run `go test -race ./...` — the race detector catches almost all of this in tests.\n\n```go\nresults := make([]Result, len(items))\nvar mu sync.Mutex\n// or: send on a channel and have one goroutine append\n```\n\n## 6. Don't leak on early return\n\nIf a worker can return before draining a channel, and a producer is blocked sending to it, the producer leaks. Make sure:\n\n- Senders respect `ctx.Done()` in their `select`.\n- Whoever owns a channel closes it exactly once, after all senders finish.\n- Buffered channels are sized with intent, not by accident.\n\n## 7. Errors: wrap, don't swallow\n\n- Wrap at each layer: `fmt.Errorf(\"processing item %d: %w\", id, err)`.\n- Use `errors.Is`/`errors.As` to inspect — never string comparison.\n- With `errgroup`, returning a non-nil error from a `g.Go` func records it and (via `WithContext`) cancels siblings. If you want *all* errors instead of the first, use `errgroup.Group` without `WithContext` and collect them manually, or a channel of errors.\n\n## 8. Exit cleanly\n\n- On shutdown, `ctx` cancellation should be enough — every worker's `select` should include `<-ctx.Done()`.\n- Give `g.Wait()` a chance to return; if a worker can block indefinitely on I/O, make sure that I/O honors ctx too.\n\n## Checklist before you ship\n\n- [ ] Every goroutine has a join point (`WaitGroup`/`errgroup`) or explicit lifecycle.\n- [ ] Concurrency is bounded.\n- [ ] `ctx` flows through as first parameter; no `context.Background()` mid-chain.\n- [ ] Loop variables are safe for your `go` directive.\n- [ ] Shared state is channel-passed, mutex-guarded, or atomic.\n- [ ] Channels are closed exactly once, by the sender.\n- [ ] Errors wrapped with `%w`; `errors.Is`/`errors.As` for checks.\n- [ ] `go build ./... && go vet ./... && go test -race ./...` all pass.\n\nThe single most common bug in this area is an **unjoined goroutine** whose owner returns first — start there if you can only fix one thing.",
+              "outputSha256": "774e472ce8a1d6241331d2b7fa923ac4c5df9d7c197871a4638c3e6090e3cab9",
+              "promptSha256": "af9e8082f58896d17ec3ae25f4b15493f270cc11a0beaafe987a65f270493dd4",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names errgroup.Group and sync.WaitGroup/WaitGroup.Go as join mechanisms (§1, with code). §1 states every goroutine needs known owner and exit condition; §4/§8 cover ctx cancellation decided upfront. §7 and §1 code show errgroup returning first error via g.Wait() and %w wrapping. No fail criteria: no short-lived excuse, no log-and-drop recommendation."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Concurrent item processing in Go — what to watch for\n\n## 1. Every goroutine needs an owner and an exit path\n\nA goroutine with no join point and no cancellation path is a leak waiting\nto happen. Two standard shapes:\n\n**`sync.WaitGroup`** — \"all finished\" is all you need:\n\n```go\nvar wg sync.WaitGroup\nfor _, item := range items {\n    wg.Add(1)\n    go func() {\n        defer wg.Done()\n        process(item)\n    }()\n}\nwg.Wait()\n```\n\nIf the project's `go.mod` targets Go 1.25+, `wg.Go(func() { ... })` is\ncleaner and folds the `Add`/`Done` into one call — but don't use it if the\nmodule targets an older version.\n\n**`errgroup.Group`** (from `golang.org/x/sync/errgroup`) — you want the\nfirst error back and shared cancellation:\n\n```go\ng, ctx := errgroup.WithContext(ctx)\nfor _, item := range items {\n    item := item // only needed before Go 1.22 loop-var semantics\n    g.Go(func() error {\n        return process(ctx, item)\n    })\n}\nif err := g.Wait(); err != nil {\n    return fmt.Errorf(\"processing items: %w\", err)\n}\n```\n\n## 2. Bounded concurrency, not one goroutine per item\n\nSpawning unbounded goroutines over a large slice exhausts memory or\nsaturates a downstream service. Cap it:\n\n```go\nsem := make(chan struct{}, maxConcurrency) // e.g. 8 or runtime.NumCPU()\ng, ctx := errgroup.WithContext(ctx)\nfor _, item := range items {\n    sem <- struct{}{} // blocks when full\n    g.Go(func() error {\n        defer func() { <-sem }()\n        return process(ctx, item)\n    })\n}\n```\n\nOr run a fixed worker pool reading from a channel. Either way the count is\na deliberate choice, not \"however many items there are\".\n\n## 3. Context propagation into every goroutine\n\nPass the caller's `ctx` into `process(ctx, item)` so cancellation and\ndeadlines reach the work. Never call `context.Background()` inside a\nspawned goroutine — it silently severs cancellation from the caller. Also\nnever store the context on a struct; thread it as the first parameter.\n\n## 4. The two classic data races\n\n**Loop variable capture** — pre-Go 1.22, `go func() { use(item) }()` would\noften capture the last value. Go 1.22+ gives each iteration its own\nvariable, but if `go.mod` targets < 1.22, rebind explicitly (`item :=\nitem`) or pass it as an argument.\n\n**Shared mutable state** — results written to a shared map or slice from\nmultiple goroutines race. Either:\n\n- collect via a channel and have one goroutine own the map/slice, or\n- guard with `sync.Mutex`, or\n- write into a pre-sized slice at a distinct index per goroutine\n  (`results[i] = ...` where each index is owned by exactly one goroutine).\n\nRun `go test -race ./...` — it catches what review misses.\n\n## 5. Error handling inside the goroutine\n\nWrap at the boundary: `fmt.Errorf(\"processing item %d: %w\", id, err)` so\n`errors.Is`/`errors.As` still work upstream. Don't swallow errors and\ndon't panic across goroutine boundaries expecting recovery — a panic in a\nspawned goroutine that isn't recovered crashes the whole process. If the\nwork can panic, decide explicitly: either make it not panic, or recover\ninside the goroutine and convert it to an error.\n\n## 6. Cleanup and shutdown\n\n- Deferred `wg.Done()` / `sem` release so an early return can't skip them.\n- Close any result channel exactly once, from the goroutine that owns it\n  (use the \"closer\" pattern or a dedicated goroutine that waits then\n  closes — don't close from multiple senders).\n- If items come from a channel, the producer must respect `ctx` too,\n  otherwise it blocks forever after consumers exit.\n\n## Checklist before you ship\n\n- `go build ./...`, `go vet ./...`, `go test -race ./...` all pass.\n- Every goroutine has a visible join point and a cancellation path.\n- Concurrency is explicitly bounded.\n- Results are collected without unsynchronized shared writes.\n- Errors are checked and wrapped with `%w`; panics in goroutines are\n  deliberate, not accidental.\n- `gofmt -l` is clean.\n\nIf you tell me the shape of your task — fan-out over a slice, a streaming\nchannel, a worker pool over a job queue — I can show the specific pattern\nwith the right stopping condition.",
+              "outputSha256": "0c8d1958cd2662d4e9a12c0892b94c6d88e1c3455906920c5ad4bc150bf90f19",
+              "promptSha256": "af9e8082f58896d17ec3ae25f4b15493f270cc11a0beaafe987a65f270493dd4",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names sync.WaitGroup and errgroup.Group with code (wg.Add/Done/Wait; g.Go/g.Wait returning first error wrapped). Section 1 frames owner/exit path; §3 requires passing ctx and never context.Background() inside goroutines. §5 propagates errors via %w, explicitly says don't swallow. No fail criteria: no short-lived excuse, no log-and-drop."
+              },
+              "passed": true
+            }
+          ]
         }
       ],
       "verdict": "pass",
       "scope": "bundled",
-      "skillDigest": "227471b794a2e28840cd27491cba67521114f2153e2d6c06cd3225da97cc60c5",
+      "skillDigest": "98b4c5ebfca41758ff617d21a5bd124de179e05ffa6d66363e51743259c240ab",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-25.1",
       "runner": "deepseek",
       "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:56:54.015Z"
+      "recordedAt": "2026-09-24T21:39:42.193Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
+    },
+    {
+      "schemaVersion": "1.0.0",
+      "skillId": "go/go-testing",
+      "strictness": "high",
+      "trials": 5,
+      "triggerAccuracy": {
+        "truePositive": 6,
+        "falsePositive": 0,
+        "positives": 6,
+        "negatives": 6
+      },
+      "evidence": "authored",
+      "scenarios": [
+        {
+          "id": "trigger-positive-1",
+          "kind": "trigger-positive",
+          "prompt": "Write table-driven Go tests for this parser function",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-2",
+          "kind": "trigger-positive",
+          "prompt": "Add go test coverage for this package using t.Run subtests",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-3",
+          "kind": "trigger-positive",
+          "prompt": "Fix this failing go test in the worker package",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-4",
+          "kind": "trigger-positive",
+          "prompt": "Add a fuzz test for this Go decoder function",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-5",
+          "kind": "trigger-positive",
+          "prompt": "Write a benchmark for this function using b.Loop",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-6",
+          "kind": "trigger-positive",
+          "prompt": "Test this Go HTTP handler with httptest",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-1",
+          "kind": "trigger-negative",
+          "prompt": "Write pytest tests for this Python function",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-2",
+          "kind": "trigger-negative",
+          "prompt": "Add Jest tests for this React component",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-3",
+          "kind": "trigger-negative",
+          "prompt": "Review this Go diff for goroutine leaks and races",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-4",
+          "kind": "trigger-negative",
+          "prompt": "Fix the go build error in this module",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-5",
+          "kind": "trigger-negative",
+          "prompt": "Implement a new Go service that calls this downstream API",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-6",
+          "kind": "trigger-negative",
+          "prompt": "Write Rust unit tests for this crate",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "table-driven-subtests",
+          "kind": "behavior",
+          "prompt": "I need to add several test cases for this Go function that validates an order. How should I structure them?",
+          "strictness": "high",
+          "trials": 5,
+          "passes": 2,
+          "passRate": 0.4,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "I'll help you structure those tests. First, let me look at the function and the project's existing conventions.\n\n<｜｜DSML｜｜ calls>\n<｜｜DSML｜｜ invoke name=\"bash\">\n<｜｜DSML｜｜ parameter name=\"command\" string=\"true\">cat go.mod 2>/dev/null | head -5; echo \"---FILES---\"; find . -name \"*.go\" -not -name \"*_test.go\" | head -20</｜｜DSML｜｜ parameter>\n<｜｜DSML｜｜ parameter name=\"description\" string=\"true\">Check Go version and find source files</｜｜DSML｜｜ parameter>\n</｜｜DSML｜｜ invoke>\n</｜｜DSML｜｜ calls>",
+              "outputSha256": "5810b25e1fa7023114210d28d9a749fd057ffc558f93695ecae32145cf2ff8a4",
+              "promptSha256": "06210d5c296a9a06974e208465f448084532592fac5ad8558545416a0dc9572d",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "The answer contains no table of cases, no struct fields (name/input/want/wantErr), no t.Run(tc.name, ...) loop, and no errors.Is/errors.As check. It only runs a bash command to inspect go.mod and list files, so none of the three pass criteria are concretely satisfied."
+              },
+              "passed": false
+            },
+            {
+              "output": "I'll help you add test cases for your order validation function. Let me first look at the function and your project's existing test conventions.\n\nCould you share:\n\n1. **The validation function itself** (signature + package it lives in), and\n2. **`go.mod`'s `go` directive** (so I know if `t.Context()` / `b.Loop()` are available), and\n3. **One neighboring `_test.go` file** if one exists (so I match your table/fixture/assertion style rather than imposing another project's).\n\nOnce I have those, I'll structure the cases like this — the general shape for a validator:\n\n```go\nfunc TestValidateOrder(t *testing.T) {\n\ttests := []struct {\n\t\tname    string\n\t\torder   Order        // input\n\t\twantErr error        // sentinel to match with errors.Is, nil for success\n\t}{\n\t\t{\n\t\t\tname:    \"valid order\",\n\t\t\torder:   Order{/* ... */},\n\t\t\twantErr: nil,\n\t\t},\n\t\t{\n\t\t\tname:    \"empty order ID\",\n\t\t\torder:   Order{/* ... */},\n\t\t\twantErr: ErrMissingID,\n\t\t},\n\t\t// edge cases: nil/zero-value inputs, boundary quantities...\n\t}\n\n\tfor _, tc := range tests {\n\t\tt.Run(tc.name, func(t *testing.T) {\n\t\t\terr := ValidateOrder(tc.order)\n\t\t\tif !errors.Is(err, tc.wantErr) {\n\t\t\t\tt.Errorf(\"ValidateOrder() err = %v, want %v\", err, tc.wantErr)\n\t\t\t}\n\t\t})\n\t}\n}\n```\n\nA few things I'd want to confirm before finalizing rather than assume:\n\n- **What counts as \"several test cases\" for you here** — happy path + a couple of edge cases, or a full matrix (nil/empty/zero-value inputs, each error path, and boundary values like max quantity/amount)? I'll cover happy path, edge cases, and each error path by default.\n- **Error matching**: I'll use `errors.Is`/`errors.As` against sentinel/typed errors rather than string-matching messages — but I need to see how your package defines its errors to pick the right sentinels.\n- **What the function's contract is**: does it return a single error, a `[]error`, or something else? Table shape follows the signature.\n\nIf you paste the function and a neighboring test file, I'll write the cases directly. If there's no existing test in the package, tell me and I'll follow the standard Go convention (`<file>_test.go` beside the code, package-internal unless the file already uses a `_test` black-box package).",
+              "outputSha256": "4d62222b41bbdbc5dbea6fb19e2286a13ce22f88427dfda9a6cfb5f66a8381f9",
+              "promptSha256": "06210d5c296a9a06974e208465f448084532592fac5ad8558545416a0dc9572d",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer shows a slice-of-struct table with name/order/wantErr fields, a `for _, tc := range tests` loop with `t.Run(tc.name, ...)`, and the concrete check `if !errors.Is(err, tc.wantErr)`. All three pass criteria are concretely present in the code block."
+              },
+              "passed": true
+            },
+            {
+              "output": "I'll help you structure those test cases. Let me look at the function first.\n\n**What's the function signature and its validation rules?** Please paste the `ValidateOrder`-style function (or point me at the file), plus tell me:\n\n1. **Where it lives** — package path, so I can check the neighboring `_test.go` files for the project's existing table/assertion conventions (Step 1 of the workflow).\n2. **`go.mod`'s `go` directive** — determines whether I can use `t.Context()` and `b.Loop()`, or need the pre-1.24 fallbacks.\n\nIn the meantime, here's the shape I'd reach for, assuming a standard validation function like:\n\n```go\nfunc ValidateOrder(o Order) error\n```\n\n**Test-case struct** — one per case, with a name and the input/output pairing:\n\n```go\ntests := []struct {\n    name    string\n    order   Order\n    wantErr error // sentinel to match with errors.Is, or nil\n}{\n    {\"valid order\", Order{ID: \"abc\", Items: []Item{{SKU: \"x\", Qty: 1}}}, nil},\n    {\"empty ID\", Order{ID: \"\", Items: []Item{{SKU: \"x\", Qty: 1}}}, ErrMissingID},\n    {\"no items\", Order{ID: \"abc\"}, ErrNoItems},\n    {\"zero quantity\", Order{ID: \"abc\", Items: []Item{{SKU: \"x\", Qty: 0}}}, ErrBadQuantity},\n    // ... boundary/edge cases\n}\n```\n\n**The runner** — table-driven subtests:\n\n```go\nfor _, tc := range tests {\n    t.Run(tc.name, func(t *testing.T) {\n        err := ValidateOrder(tc.order)\n        if !errors.Is(err, tc.wantErr) {\n            t.Fatalf(\"ValidateOrder() error = %v, want %v\", err, tc.wantErr)\n        }\n    })\n}\n```\n\nKey points I'll carry into the real write-up:\n\n- **`wantErr` as a sentinel error**, not `wantErr bool` — assert with `errors.Is`/`errors.As` so the test proves *which* error, not just that one happened.\n- **Coverage set**: happy path, each validation rule violated, boundary values (zero quantity, exactly-at-limit quantities), and nil/empty inputs.\n- **Helpers get `t.Helper()`** as their first line if I factor out an order builder; **`t.Cleanup()`** for any teardown.\n\nOnce you share the function and the paths above, I'll write the actual cases matching your project's conventions and run `go test -race ./...` to confirm they pass.",
+              "outputSha256": "10d1804f14b786836d660b5275e550e6cbb09ae53332c7087bdbf15a0f94e5ec",
+              "promptSha256": "06210d5c296a9a06974e208465f448084532592fac5ad8558545416a0dc9572d",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer shows a slice-of-struct table with name/order/wantErr fields (sentinel errors), a loop with t.Run(tc.name, func(t *testing.T){...}), and the concrete check `if !errors.Is(err, tc.wantErr)`. All three pass criteria are concretely present; no boolean wantErr flag is used."
+              },
+              "passed": true
+            },
+            {
+              "output": "I'll help you structure those test cases. First, let me look at the actual function and the conventions the surrounding package already uses, so the new tests match rather than importing some other style.\n\n<｜｜DSML｜｜ calls>\n<｜｜DSML｜｜ invoke name=\"bash\">\n<｜｜DSML｜｜ parameter name=\"command\" string=\"true\">grep -n \"^go \" go.mod 2>/dev/null; echo \"---\"; ls *_test.go 2>/dev/null | head -20</｜｜DSML｜｜ parameter>\n<｜｜DSML｜｜ parameter name=\"description\" string=\"true\">Check go version and existing test files</｜｜DSML｜｜ parameter>\n</｜｜DSML｜｜ invoke>\n</｜｜DSML｜｜ calls>",
+              "outputSha256": "e65602a42d1d50358680e4b7c30130ef42629a5e4cc694a0193d178c509f694a",
+              "promptSha256": "06210d5c296a9a06974e208465f448084532592fac5ad8558545416a0dc9572d",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "The answer only proposes to inspect the function and existing conventions; it shows no table of cases, no t.Run(tc.name, ...) loop, and no errors.Is/errors.As check. None of the three pass criteria are concretely present."
+              },
+              "passed": false
+            },
+            {
+              "output": "I'll need to see the function first. Let me look at it and the package's existing test conventions.\n\n<｜｜DSML｜｜ calls>\n<｜｜DSML｜｜ invoke name=\"bash\">\n<｜｜DSML｜｜ parameter name=\"command\" string=\"true\">find . -name 'go.mod' -not -path '*/vendor/*' | head -5</｜｜DSML｜｜ parameter>\n<｜｜DSML｜｜ parameter name=\"description\" string=\"true\">Locate go.mod files</｜｜DSML｜｜ parameter>\n</｜｜DSML｜｜ invoke>\n</｜｜DSML｜｜ calls>",
+              "outputSha256": "d99947c0ae4495d82e5f3d9178fddb017f8199c8e508a3cc3ee7ee384e8ee122",
+              "promptSha256": "06210d5c296a9a06974e208465f448084532592fac5ad8558545416a0dc9572d",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "The answer only says it needs to see the function and runs a find command for go.mod. It shows no table of cases, no t.Run(tc.name, ...) loop, and no errors.Is/errors.As check. None of the three pass criteria are concretely satisfied."
+              },
+              "passed": false
+            }
+          ]
+        },
+        {
+          "id": "no-sleep-sync",
+          "kind": "behavior",
+          "prompt": "My Go test starts a goroutine and I want to wait for it to finish before asserting. What's the right way?",
+          "strictness": "high",
+          "trials": 5,
+          "passes": 3,
+          "passRate": 0.6,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# Waiting for a goroutine in a Go test\n\nDon't reach for `time.Sleep` — it makes the test non-deterministic under load and will flake on CI. Use an explicit join mechanism instead. The right one depends on how many results you're waiting for.\n\n## Option 1: `sync.WaitGroup` — the default choice\n\nWhen the goroutine just needs to *finish* before you assert:\n\n```go\nfunc TestProcess(t *testing.T) {\n    var wg sync.WaitGroup\n    wg.Add(1)\n\n    go func() {\n        defer wg.Done()\n        process(input)\n    }()\n\n    wg.Wait() // join here — this *is* the synchronization\n\n    // safe to assert: process() has returned\n    if got := result(); got != want {\n        t.Errorf(\"got %v, want %v\", got, want)\n    }\n}\n```\n\nKey point: `wg.Wait()` is the join. It blocks until every `Done()` fires, with no arbitrary delay.\n\n## Option 2: A channel — when you need the value back\n\nIf the goroutine produces a result, or you started several and want to collect them, receive from a channel instead:\n\n```go\nfunc TestProcess(t *testing.T) {\n    ch := make(chan error, 1)\n\n    go func() {\n        ch <- process(input)\n    }()\n\n    // Join *and* get the result in one step.\n    select {\n    case err := <-ch:\n        if err != nil {\n            t.Fatalf(\"process: %v\", err)\n        }\n    case <-time.After(5 * time.Second):\n        t.Fatal(\"process did not finish within 5s\")\n    }\n}\n```\n\nThe `time.After` here is a **deadline guard**, not a sleep — if the goroutine hangs, the test fails fast and tells you *that*, rather than blocking forever. For `n` goroutines, `make(chan error, n)` and read `n` values.\n\n## Option 3: `t.Context()` — cancellation that fires at test end\n\nIf the goroutine takes a `context.Context` (a worker, poller, server loop), use Go 1.24+'s `t.Context()`, which is cancelled automatically when the test finishes:\n\n```go\nfunc TestWorker(t *testing.T) {\n    ctx := t.Context()\n\n    done := make(chan struct{})\n    go func() {\n        defer close(done)\n        worker(ctx)\n    }()\n\n    // ... do work / send input ...\n\n    // Signal shutdown, then join.\n    cancelCauseOrCancelTest(t) // or just let t.Context() cancel on return\n    <-done\n}\n```\n\nThis avoids hand-rolled `context.WithCancel` + `defer cancel()` and ties lifetime to the test, not to the function body.\n\n## Anti-patterns to avoid\n\n```go\n// ❌ Sleep is a guess, not a join. Flakes the moment CI is slow.\ngo process(input)\ntime.Sleep(100 * time.Millisecond)\nassertResult()\n\n// ❌ Reading the result \"usually\" works but races the compiler and -race will catch it.\nvar result Result\ngo func() { result = compute() }()\ntime.Sleep(time.Millisecond)\ncheck(result) // data race on result\n```\n\nThe sleep version also produces a **data race** on `result` whenever the write and read overlap — `go test -race` will report it.\n\n## Checklist\n\n- **Every** goroutine a test spawns must be joined before assertions run — a `WaitGroup`, a channel receive, or a closed `done` channel.\n- Use a **deadline guard** (`time.After` / a `select` with a timeout) only to bound a *hang*, never as the synchronization itself.\n- If the goroutine writes to a variable the test reads, the join is required for correctness, not just tidiness — otherwise it's a data race.\n- Run `go test -race ./...` on the package to confirm the join is real.\n\nBottom line: `sync.WaitGroup` when you just need \"it's done,\" a buffered channel when you need the result(s) back, and `t.Context()` when the goroutine takes a context and should be torn down with the test.",
+              "outputSha256": "9416637b269c476511a4e987e6520964b58b1febb98b0e647c17fea5e1d6ac78",
+              "promptSha256": "e9830b503a8b34712a007c85b2f803a6cf885883b5c42751c93550a932daf59f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Option 1 shows concrete sync.WaitGroup Add/Done/Wait with wg.Wait() as the join before asserting; Option 2 shows channel receive as join. It explains reliability: 'wg.Wait() is the join... with no arbitrary delay' and sleep 'makes the test non-deterministic under load and will flake on CI.' time.After is a deadline guard, not a sleep-join."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Waiting for a goroutine before asserting\n\nNever synchronize with `time.Sleep` — it is non-deterministic under load and the test will flake. Join the goroutine explicitly, then assert.\n\n## The three correct patterns\n\n### 1. `sync.WaitGroup` (most common)\n\n```go\nfunc TestWorker(t *testing.T) {\n    var wg sync.WaitGroup\n    results := make([]int, 5)\n\n    for i := range results {\n        wg.Add(1)\n        go func(i int) {\n            defer wg.Done()\n            results[i] = compute(i)\n        }(i)\n    }\n\n    wg.Wait() // join before asserting\n\n    for i, got := range results {\n        if want := i * 2; got != want {\n            t.Errorf(\"results[%d] = %d, want %d\", i, got, want)\n        }\n    }\n}\n```\n\n`wg.Add(1)` goes **before** the `go` statement (a classic bug is calling it inside the goroutine, racing with `Wait`).\n\n### 2. A channel send/receive\n\nUse this when the goroutine produces one result and you want that result anyway:\n\n```go\nfunc TestComputeAsync(t *testing.T) {\n    done := make(chan int, 1) // buffered so the goroutine never leaks\n\n    go func() {\n        done <- compute(3)\n    }()\n\n    got := <-done // join via receive\n    if want := 6; got != want {\n        t.Errorf(\"compute(3) = %d, want %d\", got, want)\n    }\n}\n```\n\nA buffered channel (cap ≥ number of sends) matters — if the test fails early and returns before receiving, an unbuffered channel blocks the goroutine forever.\n\n### 3. `t.Context()` for cancellation (Go 1.24+)\n\nIf the goroutine takes a `context.Context`, hand it `t.Context()` instead of hand-rolling `context.WithCancel` + `defer cancel()`. It cancels automatically when the test ends, so a stray goroutine can't outlive its test:\n\n```go\nfunc TestPoller(t *testing.T) {\n    if !probePoller.IsReady(t.Context()) {\n        t.Fatal(\"poller never became ready\")\n    }\n}\n```\n\nCheck `go.mod`'s `go` directive — `t.Context()` requires **Go 1.24+**.\n\n## Rules of thumb\n\n- **Join before asserting.** Every goroutine the test starts must be joined (`wg.Wait()`, a channel receive, or a deadline-bounded poll) before any assertion runs.\n- **Never `time.Sleep`.** If you genuinely need to wait for a condition created by another goroutine, poll with a deadline:\n  ```go\n  deadline := time.After(2 * time.Second)\n  for !ready {\n      select {\n      case <-deadline:\n          t.Fatal(\"condition never became ready\")\n      default:\n          runtime.Gosched()\n      }\n  }\n  ```\n  but a channel/WaitGroup is almost always cleaner.\n- **Run under `-race`.** Any test touching goroutines or shared state should be run with:\n  ```bash\n  go test -race ./...\n  ```\n  The race detector catches unsynchronized access that a passing test would otherwise hide.\n\nIf you paste the test (or the function under test), I'll rewrite it with the right join pattern for your case.",
+              "outputSha256": "12eae02d15fa2d83c717e9ab50ef5ff43ef8fdc9219db46edf489c8020fff759",
+              "promptSha256": "e9830b503a8b34712a007c85b2f803a6cf885883b5c42751c93550a932daf59f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer shows concrete joins: WaitGroup with wg.Add(1) before go, defer wg.Done(), wg.Wait() before assertions; and buffered channel done <- compute(3) with got := <-done before asserting. It explains Sleep is non-deterministic/flaky and joins are deterministic. No time.Sleep recommended; the deadline poll uses time.After, not Sleep."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Waiting for a goroutine in a Go test\n\nUse a **join primitive** — a channel or `sync.WaitGroup` — never `time.Sleep`. The test should be deterministic: it must not depend on how fast the goroutine happens to run.\n\n## The default: `sync.WaitGroup`\n\n```go\nfunc TestWorkerProcessesAll(t *testing.T) {\n\tvar wg sync.WaitGroup\n\tresults := make(chan int, 100)\n\n\twg.Add(1)\n\tgo func() {\n\t\tdefer wg.Done()\n\t\t// ... do work, sending into results ...\n\t}()\n\n\twg.Wait() // join before asserting\n\n\tif got := len(results); got != 100 {\n\t\tt.Fatalf(\"processed %d items, want 100\", got)\n\t}\n}\n```\n\n## Fan-out: one `Add` per goroutine\n\n```go\nvar wg sync.WaitGroup\nfor _, item := range items {\n\twg.Add(1)\n\tgo func(item Item) {\n\t\tdefer wg.Done()\n\t\tprocess(item)\n\t}(item)\n}\nwg.Wait()\n```\n\n⚠️ Call `wg.Add(1)` *before* `go`, not inside the goroutine — otherwise `Wait` can return early.\n\n## Channel receive\n\nIf the goroutine's job is to produce one result, just receive it:\n\n```go\ngo func() { done <- compute() }()\nselect {\ncase got := <-done:\n\t// assert on got\ncase <-time.After(5 * time.Second):\n\tt.Fatal(\"timed out waiting for result\")\n}\n```\n\nThe `select` with `time.After` is a **deadline**, not a sleep — it's fine, and it's the correct pattern when you can't structurally guarantee the goroutine finishes (e.g. it's driven by a `context.Context`).\n\n## Pair with `t.Context()` for cancellation\n\nOn Go 1.24+, `t.Context()` gives you a context that cancels at test end — no manual `context.WithCancel` / `defer cancel()`:\n\n```go\nfunc TestCancelsOnShutdown(t *testing.T) {\n\tctx := t.Context()\n\n\twg := sync.WaitGroup{}\n\twg.Add(1)\n\tgo func() {\n\t\tdefer wg.Done()\n\t\trun(ctx)\n\t}()\n\n\t// trigger shutdown via whatever the code-under-test uses ...\n\twg.Wait()\n}\n```\n\n## Why not `time.Sleep`\n\n```go\ngo doWork()\ntime.Sleep(100 * time.Millisecond) // ❌ flakes under load / on slow CI\nassertResult()\n```\n\nSleeps make tests *probabilistically* correct. The goroutine might not have run yet on an overloaded CI box, or might still be running when you assert. Use a join primitive instead — it's strictly better, and it's what makes `-race` actually meaningful.\n\n**Run the suite with `go test -race ./...`** once you're using goroutines; the race detector will flag any shared state you forgot to synchronize.",
+              "outputSha256": "d15378b94f4d81c90cd4dd25e2e80c4c5de9212ade45c19645e3f1f1441e7e10",
+              "promptSha256": "e9830b503a8b34712a007c85b2f803a6cf885883b5c42751c93550a932daf59f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "Answer shows WaitGroup Add/Done/Wait and channel receive concretely (pass 1) and explains determinism vs sleep (pass 2), but the channel example uses select with time.After(5*time.Second) as a timeout in the wait step, which is a fixed delay supplementing the join — fail criterion 1."
+              },
+              "passed": false
+            },
+            {
+              "output": "# Waiting for a Goroutine in a Go Test\n\nThe right answer depends on *how* your test can observe the goroutine's completion. Never reach for `time.Sleep` — it's non-deterministic and will flake under load. Here are the patterns, in order of preference.\n\n## 1. `sync.WaitGroup` — the default answer\n\nIf your test starts the goroutine yourself, have it signal a `WaitGroup` on exit and `Wait()` before asserting:\n\n```go\nfunc TestProcessor(t *testing.T) {\n\tvar wg sync.WaitGroup\n\tresults := make(chan int, 1)\n\n\twg.Add(1)\n\tgo func() {\n\t\tdefer wg.Done()\n\t\tresults <- process(input)\n\t}()\n\n\twg.Wait() // join before asserting — no sleep, no flake\n\n\tselect {\n\tcase got := <-results:\n\t\tif got != want {\n\t\t\tt.Fatalf(\"got %d, want %d\", got, want)\n\t\t}\n\tdefault:\n\t\tt.Fatal(\"goroutine produced no result\")\n\t}\n}\n```\n\n`Add` **before** `go`, `Done` deferred inside the goroutine, `Wait` in the test. That ordering is what makes `-race` happy and the join correct.\n\n## 2. Channel receive — when the goroutine already signals\n\nIf the code under test already sends on a channel or closes one, just receive from it. A receive *is* the join:\n\n```go\ngo func() { done <- work() }()\nselect {\ncase got := <-done:\n\t// assert on got\ncase <-time.After(5 * time.Second):\n\tt.Fatal(\"timed out waiting for goroutine\")\n}\n```\n\nUse the `time.After` guard only as a **deadline to fail fast** on a broken test — the actual synchronization is the channel receive, not the timeout. A failing test should fail in 5s, not hang CI forever.\n\n## 3. `t.Context()` (Go 1.24+) — for cancellation, not joining\n\nIf the goroutine is supposed to respect a context, `t.Context()` gives you one that cancels automatically when the test ends, so you don't hand-roll `context.WithCancel`/`defer cancel()`:\n\n```go\nfunc TestWatcher(t *testing.T) {\n\tctx := t.Context()           // cancelled at test end\n\tdone := make(chan struct{})\n\tgo func() {\n\t\tdefer close(done)\n\t\twatch(ctx)               // returns when ctx is cancelled\n\t}()\n\n\t// ... drive the test, then stop the goroutine:\n\t// cancel() is implicit — the test's context cancels on return,\n\t// but you still join explicitly:\n\t<-done\n}\n```\n\nCancellation stops the goroutine; joining still needs the channel or WaitGroup. They're two different concerns.\n\n## 4. Polling with a bounded deadline — last resort\n\nOnly when the goroutine's completion has **no observable signal at all** (e.g. it mutates shared state and you have nothing to receive on). Prefer adding a signal over doing this:\n\n```go\ndeadline := time.Now().Add(2 * time.Second)\nfor !condition() {\n\tif time.Now().After(deadline) {\n\t\tt.Fatal(\"condition never became true\")\n\t}\n\ttime.Sleep(time.Millisecond) // tiny backoff, bounded — this is a poll, not a fixed wait\n}\n```\n\nThe difference from a plain `time.Sleep(100ms)`: this *exits as soon as the condition holds* and *fails loudly* if it never does, instead of guessing a duration and asserting on a race.\n\n## What not to do\n\n```go\ngo slowThing()\ntime.Sleep(100 * time.Millisecond) // ✗ flakes under load; guesses a duration\nassertResult()\n```\n\nThis passes on your laptop and fails on a loaded CI box. Always join on a real signal.\n\n## Checklist before you assert\n\n- `wg.Add(1)` before `go`, `wg.Done()` deferred inside the goroutine.\n- The test calls `wg.Wait()` or receives on the channel **before** any assertion.\n- If you added a `time.After`/deadline, it exists to *bound a failure*, not to synchronize.\n- Run with `go test -race ./...` — a missing join will usually surface as a race here, not just a flake.",
+              "outputSha256": "38db66572fc776ade2fb588ead1161a4ca6b3b81ddf94b4e8dadc63aa53a5095",
+              "promptSha256": "e9830b503a8b34712a007c85b2f803a6cf885883b5c42751c93550a932daf59f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "Answer recommends time.Sleep in section 4's polling loop ('time.Sleep(time.Millisecond) // tiny backoff, bounded') as part of the wait step, which fail criterion 1 forbids even as bounded polling. Pass criteria 1 and 2 are otherwise met (WaitGroup Add/Done/Wait, channel receive, determinism explanation), but the Sleep usage fails the answer."
+              },
+              "passed": false
+            },
+            {
+              "output": "# Waiting for a Goroutine Before Asserting\n\nDon't reach for `time.Sleep` — it's non-deterministic under load and your test will flake. Join the goroutine deterministically.\n\n## The right way: `sync.WaitGroup`\n\nThe canonical pattern, with `t.Cleanup` handling the wait so it can't be forgotten:\n\n```go\nfunc TestWorkerProcessesQueue(t *testing.T) {\n    var wg sync.WaitGroup\n    got := make(chan result, 1)\n\n    wg.Add(1)\n    go func() {\n        defer wg.Done()\n        got <- doWork() // send the result, then Done via defer\n    }()\n\n    t.Cleanup(wg.Wait) // join before the test returns\n\n    select {\n    case r := <-got:\n        if r.err != nil {\n            t.Fatalf(\"doWork: %v\", r.err)\n        }\n        // assert on r\n    case <-t.Context().Done(): // Go 1.24+; bounds the wait\n        t.Fatal(\"timed out waiting for worker\")\n    }\n}\n```\n\n## Key points\n\n1. **Channel or `WaitGroup` — pick based on what you need.**\n   - Just need \"it finished\": `wg.Wait()`.\n   - Need the result *and* to know it finished: pass it back on a channel\n     (buffered, so the goroutine never blocks if the test already gave up).\n\n2. **`t.Cleanup(wg.Wait)`** guarantees the join happens even if an\n   assertion fails with `t.Fatal` partway through — a bare `defer wg.Wait()`\n   works too, but `t.Cleanup` composes better with helper functions.\n\n3. **Bound the wait with `t.Context()`** (Go 1.24+, check `go.mod`'s `go`\n   directive). Without a deadline, a hung goroutine makes the test hang\n   until the package-level `go test -timeout` fires with an unhelpful\n   stack — with it, you get a clean \"timed out waiting for worker\" message.\n\n4. **Run under `-race`.** Any test that touches goroutines, channels, or\n   shared state should always be run with:\n\n   ```bash\n   go test -race ./...\n   ```\n\n## Why not `time.Sleep`\n\n```go\n// Don't do this\ngo doWork()\ntime.Sleep(100 * time.Millisecond) // \"should be enough\"\nassertResult(t)\n```\n\nThis is a red flag: it passes on your laptop and flakes on CI under load,\nand it silently gives up nothing if `doWork` is slower than 100ms — the\ntest just asserts on stale state. A `WaitGroup` or channel send/receive is\nthe actual join mechanism; sleep only hopes the scheduling worked out.\n\nIf you truly need to poll (e.g. waiting on an external side effect with no\nchannel to receive from), use a deadline-bounded poll with `t.Context()`\nrather than a fixed sleep:\n\n```go\nfor {\n    if sideEffectHappened() {\n        break\n    }\n    select {\n    case <-t.Context().Done():\n        t.Fatal(\"timed out waiting for side effect\")\n    case <-time.After(10 * time.Millisecond):\n    }\n}\n```\n\nThat's still a last resort — prefer the channel/`WaitGroup` join whenever\nthe goroutine can signal completion itself.",
+              "outputSha256": "d1597e2460e074004267acdcee9fdf30fad2c81cb86ae15a810343f40c606ba2",
+              "promptSha256": "e9830b503a8b34712a007c85b2f803a6cf885883b5c42751c93550a932daf59f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer shows concrete join: wg.Add(1), defer wg.Done(), t.Cleanup(wg.Wait), plus buffered channel got <- doWork() received via select. Explains determinism: sleep 'non-deterministic under load', 'passes on your laptop and flakes on CI', join is 'the actual join mechanism'. No time.Sleep recommended as wait; the poll example uses time.After with context, not a fixed sleep join."
+              },
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "verdict": "fail",
+      "scope": "bundled",
+      "skillDigest": "8c350e9847ac51de58666e5e962985f129418c874eb38271f05045e8cdf648a5",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-25.1",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T21:40:19.665Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
     }
   ]
 }

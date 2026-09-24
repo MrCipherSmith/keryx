@@ -11,6 +11,7 @@
 // `python` pack is never the only thing standing between a broken rule and a
 // green suite — the check itself is proven to fire.
 
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -21,8 +22,9 @@ import installManifestSchemaJson from "../../docs/requirements/keryx-agent-platf
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { lintSkill, lintStackRule, STACK_EXTENSIONS } from "./governance/authoring-lint";
 import { readScoutRecord } from "./governance/scout";
-import type { EvalReport, EvalScenarioResult, EvalSpecFile, PackEvalDocument } from "./governance/eval";
-import { checkStablePackGate, computeSkillEvalDigest, PACK_BEHAVIOR_PASS_FLOOR, validateEvalReport } from "./governance/eval";
+import type { EvalReport, EvalScenarioResult, EvalSpecFile, PackEvalDocument, TrialRecord } from "./governance/eval";
+import { checkStablePackGate, PACK_BEHAVIOR_PASS_FLOOR, validateEvalReport } from "./governance/eval";
+import { buildGateReadyReport } from "./governance/__fixtures__/gate-ready-report";
 import { exportProjectSkill } from "./export";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 import { defaultBundledRoot } from "./bundled-eval";
@@ -148,12 +150,13 @@ describe("stack pack layout (real bundled tree)", () => {
 
     // Flow 314, W4 Wave 4: every skill under stacks/*/skills/* ships an
     // `evals.json` beside SKILL.md that (a) parses, (b) carries >=10 trigger
-    // prompts total with >=4 negatives, (c) carries >=1 behavior scenario,
-    // and (d) never names a "model" grader in any behavior scenario's
-    // `expected_behavior` — every grader is deterministic
-    // (contains|regex|not-contains) so a scenario is machine-checkable
-    // without a human-in-the-loop judge.
-    test(`${packId}: every skills/*/evals.json exists, parses, and meets the trigger-bank/behavior/grader floors (flow 314 W4)`, () => {
+    // prompts total with >=4 negatives, (c) carries >=1 behavior scenario.
+    //
+    // Flow 316: behavior is graded by an LLM judge against a rubric, not by a
+    // string match — every behavior scenario carries exactly one "judge"
+    // expectation (I9 in stack-pack-eval-integrity.test.ts enforces this same
+    // rule scenario-by-scenario; this floor is the pack-wide summary of it).
+    test(`${packId}: every skills/*/evals.json exists, parses, and meets the trigger-bank/behavior/grader floors (flow 314 W4, flow 316)`, () => {
       for (const name of skillDirNames(packDir)) {
         const evalsPath = path.join(packDir, "skills", name, "evals.json");
         expect(existsSync(evalsPath)).toBe(true);
@@ -172,10 +175,8 @@ describe("stack pack layout (real bundled tree)", () => {
         expect(scenarios.length).toBeGreaterThanOrEqual(1);
 
         for (const scenario of scenarios) {
-          for (const expected of scenario.expected_behavior) {
-            expect(expected.grader).not.toBe("model");
-            expect(["contains", "regex", "not-contains"]).toContain(expected.grader);
-          }
+          const judgeExpectations = scenario.expected_behavior.filter((expected) => expected.grader === "judge");
+          expect(judgeExpectations.length).toBe(1);
         }
       }
     });
@@ -317,11 +318,27 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
   // key, a dangling "extends", and an agent-refs.json entry that does not
   // resolve/does not carry the right origin).
 
+  // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios live
+  // against the skill's own CURRENT SKILL.md frontmatter — single-letter/
+  // numbered placeholders ("p1".."p6"/"n1".."n4") tokenize to nothing and
+  // never honestly route anywhere, so these are real (short but
+  // multi-token) phrases, and `writeFixtureSkillFiles` seeds the positives
+  // into the skill's own `triggers:` frontmatter so honest scoring selects
+  // it for its own authored positives (no leave-one-out needed — see
+  // `eval.ts`'s `selectsSkillFull` doc comment for why that is fine for
+  // authored, human-written prompts).
   function validEvalSpec(overrides: Partial<EvalSpecFile> = {}): EvalSpecFile {
     return {
       triggers: {
-        positive: ["p1", "p2", "p3", "p4", "p5", "p6"],
-        negative: ["n1", "n2", "n3", "n4"],
+        positive: [
+          "run the fixture guard task one",
+          "run the fixture guard task two",
+          "run the fixture guard task three",
+          "run the fixture guard task four",
+          "run the fixture guard task five",
+          "run the fixture guard task six",
+        ],
+        negative: ["something entirely unrelated one", "something entirely unrelated two", "something entirely unrelated three", "something entirely unrelated four"],
       },
       scenarios: [
         { id: "s1", prompt: "do the thing", strictness: "low", expected_behavior: [{ grader: "contains", value: "ok" }] },
@@ -626,9 +643,10 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
   function writeFixtureSkillFiles(packDir: string, name: string, evalSpec: EvalSpecFile): void {
     const skillDir = path.join(packDir, "skills", name);
     mkdirSync(skillDir, { recursive: true });
+    const triggersYaml = (evalSpec.triggers?.positive ?? []).map((trigger) => `  - ${trigger}`).join("\n");
     writeFileSync(
       path.join(skillDir, "SKILL.md"),
-      `---\nname: ${name}\ndescription: Use when testing the guard.\n---\n\nBody.\n`,
+      `---\nname: ${name}\ndescription: Use when testing the guard.\ntriggers:\n${triggersYaml.length > 0 ? triggersYaml : "  - testing the guard"}\n---\n\nBody.\n`,
       "utf8",
     );
     writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec, null, 2), "utf8");
@@ -645,75 +663,47 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
    * evals.json) — so the gate's digest and content-agreement checks are
    * satisfied by construction rather than by coincidence.
    */
+  /**
+   * Flow 316: builds on `buildGateReadyReport` (an allowlisted runner,
+   * `trialRecords`, and a `catalogDigest` matching the real bundled catalog
+   * — everything `checkSkillReportForPackGate` now requires) and, when
+   * `behaviorPassRate` is below 1, replaces the one behavior scenario's
+   * trial records with a genuine mix of passing/failing trials (a failing
+   * trial's output deliberately does not satisfy the scenario's own
+   * deterministic expectation) so `regradeRecordedReport` still finds the
+   * report internally consistent at a partial pass rate — this is what lets
+   * the `PACK_BEHAVIOR_PASS_FLOOR` fixture below prove the floor check
+   * fires on a report that is otherwise entirely honest.
+   */
   function passingSkillReport(packDir: string, name: string, packId: string, evalSpec: EvalSpecFile, behaviorPassRate: number): EvalReport {
-    const skillId = `${packId}/${name}`;
-    const skillDigest = computeSkillEvalDigest(path.join(packDir, "skills", name));
-    const positives = evalSpec.triggers?.positive ?? [];
-    const negatives = evalSpec.triggers?.negative ?? [];
-    const behavior = evalSpec.scenarios?.[0];
-    const behaviorScenarios: EvalScenarioResult[] = behavior
-      ? [
-          {
-            id: behavior.id,
-            kind: "behavior",
-            prompt: behavior.prompt,
-            strictness: "high",
-            trials: 5,
-            passes: Math.round(behaviorPassRate * 5),
-            passRate: behaviorPassRate,
-            passAtK: behaviorPassRate > 0 ? 1 : 0,
-            grader: behavior.expected_behavior.map((expected) => expected.grader).join("+") || "none",
-            status: "ran",
-          },
-        ]
-      : [];
-    return {
-      schemaVersion: "1.0.0",
-      skillId,
-      strictness: "high",
-      trials: 5,
-      triggerAccuracy: { truePositive: positives.length, falsePositive: 0, positives: positives.length, negatives: negatives.length },
-      evidence: "authored",
-      scope: "bundled",
-      skillDigest,
-      runner: "ollama",
-      model: "llama3.1:latest",
-      recordedAt: new Date().toISOString(),
-      scenarios: [
-        ...positives.map(
-          (prompt, index): EvalScenarioResult => ({
-            id: `trigger-positive-${index + 1}`,
-            kind: "trigger-positive",
-            prompt,
-            strictness: "high",
-            trials: 1,
-            passes: 1,
-            passRate: 1,
-            passAtK: 1,
-            grader: "trigger-rank-fork-family",
-            status: "ran",
-            deterministic: true,
-          }),
-        ),
-        ...negatives.map(
-          (prompt, index): EvalScenarioResult => ({
-            id: `trigger-negative-${index + 1}`,
-            kind: "trigger-negative",
-            prompt,
-            strictness: "high",
-            trials: 1,
-            passes: 1,
-            passRate: 1,
-            passAtK: 1,
-            grader: "trigger-rank-fork-family",
-            status: "ran",
-            deterministic: true,
-          }),
-        ),
-        ...behaviorScenarios,
-      ],
-      verdict: positives.length > 0 && negatives.length > 0 && behaviorPassRate >= 0.5 ? "pass" : "fail",
+    const base = buildGateReadyReport({ packId, skillName: name, skillDir: path.join(packDir, "skills", name), evalSpec });
+    if (behaviorPassRate >= 1) return base;
+
+    const behaviorScenario = base.scenarios.find((scenario) => scenario.kind === "behavior");
+    if (behaviorScenario === undefined || behaviorScenario.trialRecords === undefined || behaviorScenario.trialRecords.length === 0) {
+      return base;
+    }
+    const trials = behaviorScenario.trials;
+    const passes = Math.round(behaviorPassRate * trials);
+    const passingRecord = behaviorScenario.trialRecords[0]!;
+    const failingOutput = "not-a-match";
+    const failingRecord: TrialRecord = {
+      output: failingOutput,
+      outputSha256: createHash("sha256").update(failingOutput).digest("hex"),
+      promptSha256: passingRecord.promptSha256,
+      deterministic: passingRecord.deterministic.map(() => false),
+      passed: false,
     };
+    const trialRecords: TrialRecord[] = Array.from({ length: trials }, (_, index) => (index < passes ? passingRecord : failingRecord));
+    const updatedBehavior: EvalScenarioResult = {
+      ...behaviorScenario,
+      passes,
+      passRate: passes / trials,
+      passAtK: passes > 0 ? 1 : 0,
+      trialRecords,
+    };
+    const scenarios = base.scenarios.map((scenario) => (scenario.id === updatedBehavior.id ? updatedBehavior : scenario));
+    return { ...base, scenarios, verdict: passes / trials >= 0.5 ? "pass" : "fail" };
   }
 
   test("checkStablePackGate (pack-level doc): every listed skill passing, every behavior scenario >= floor -> pass", () => {

@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T21:16:26.287Z",
+  "entries": [
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "echo",
+      "requestDigest": "8926636edf5229d4a706391aaa66d0faa4a2e67fef50e84e236b54ad5ed04097",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it does not name reading the official React 19 upgrade guide/release notes as the first step, nor any mechanism like inventorying removed/changed APIs or running official codemods. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it does not name reading the official React 19 upgrade guide/release notes as the first step, nor any mechanism like inventorying removed/changed APIs or running official codemods. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it does not name reading the official React 19 upgrade guide/release notes as the first step, nor any mechanism like inventorying removed/changed APIs or running official codemods. No pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "vague",
+      "requestDigest": "794874b202ec2c2056a60ff61227ee6463acc1b139147891cd428daeb458af2b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: answer only says 'reading up on what's changed in React 19' — no mention of the official React 19 upgrade guide/release notes as the concrete first step. Criterion 2 fails: no inventorying of removed/changed APIs and no official codemods; just 'fixing what needs fixing'."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the answer only says 'reading up on what's changed in React 19' generically, never naming the official React 19 upgrade guide/release notes as the concrete first step. Criterion 2 fails: no concrete mechanism (API inventory or official codemods) is named — only 'fixing what needs fixing'."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'read up on what's changed in React 19' — it never names the official React 19 upgrade guide/release notes as the concrete first step (criterion 1 fails), and it names no mechanism such as inventorying removed/changed APIs or running official codemods (criterion 2 fails). It is generic 'research first' advice."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "known-wrong",
+      "requestDigest": "63a284e0e3fe822ced7f477117c103bf1c3f818a7979223f6b6f9a89aeca3f24",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends bumping react/react-dom to 19 and fixing whatever breaks without reading the guide (fail criterion 1), and explicitly relies on the 17-to-18 migration memory (fail criterion 2). It also states 'No need to read through the whole upgrade guide up front,' so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends bumping react/react-dom and fixing whatever breaks without reading the guide (fail criterion 1), and explicitly relies on the prior 17-to-18 migration experience (fail criterion 2). It names no official upgrade guide reading and no codemod/API inventory mechanism, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends bumping react/react-dom and fixing whatever breaks without reading the guide (fail criterion 1), and explicitly relies on the prior 17-to-18 migration experience (fail criterion 2). It names no official upgrade guide reading and no codemod/API inventory mechanism, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "subtle-wrong",
+      "requestDigest": "93a5fe94e2cd96e4d4493e4417655eb204e01a61ed9a06b3dbef0da825960d4b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends skimming release notes then bumping react/react-dom and fixing whatever breaks, which is exactly fail criterion 1 (bump-and-fix without first reading the upgrade guide). It also dismisses working through the full guide and names no inventory of removed/changed APIs or official codemods, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends skimming release notes then bumping react/react-dom and fixing whatever breaks, which is exactly fail criterion 1 (bump-and-fix without first reading the upgrade guide). It also dismisses working through the full guide and names no inventory of removed/changed APIs or official codemods, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends skimming release notes then bumping react/react-dom and fixing whatever breaks, which is exactly fail criterion 1 (bump-and-fix without first reading the upgrade guide). It also dismisses working through the full guide and names no inventory of removed/changed APIs or official codemods, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "injection",
+      "requestDigest": "842640650f685830dc10b1c8e00d1beb8fe67569be52eddc35f8062ede4968ea",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping react/react-dom and fixing breakage without reading the guide, and explicitly relies on the 17-to-18 migration memory ('that's basically what we did for the 17-to-18 upgrade'). It also dismisses reading the upgrade guide. Fails criteria 1 and 2 and both fail criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping react/react-dom and fixing breakage without reading the guide, and explicitly relies on the prior 17-to-18 migration ('that's basically what we did for the 17-to-18 upgrade'). It never names reading the React 19 upgrade guide or codemods/API inventory. Fails criteria 1-2 and fail criteria 1-2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends bumping react/react-dom and fixing breakage without reading the guide (fail criterion 1), and explicitly relies on the prior 17-to-18 migration experience (fail criterion 2). It names no official guide reading or codemod/API inventory step, so pass criteria 1 and 2 are unmet. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "stuffed",
+      "requestDigest": "a3dd88a0f00ea827150997e9a56b56accbd57bea3c1ff5fb58cc0ad3a6ab3ed8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends bumping react/react-dom to 19 and fixing whatever breaks without reading the guide, and explicitly relies on the prior 17-to-18 migration ('that's basically what we did for the 17-to-18 upgrade'). It never names reading the React 19 upgrade guide or codemods/API inventory, so both pass criteria fail and both fail criteria hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends bumping react/react-dom to 19 and fixing whatever breaks without reading the guide, and explicitly relies on the prior 17-to-18 migration ('that's basically what we did for the 17-to-18 upgrade'). It never names reading the official React 19 upgrade guide or codemods/API inventory. Both fail criteria hold; neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends bumping react/react-dom to 19 and fixing whatever breaks without reading the guide, and explicitly relies on the prior 17-to-18 migration ('that's basically what we did for the 17-to-18 upgrade'). It never names reading the React 19 upgrade guide or codemods/API inventory. Both fail criteria hold; neither pass criterion is met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "known-right",
+      "requestDigest": "77027f4f6f01ff1c845f4bb375a2f2e7c11f0fbbe2e7ed0dcf1f4e93285c3cb8",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: 'Start by reading the official React 19 upgrade guide and release notes' as the first step, explicitly rejecting reliance on the 17-to-18 memory. Criterion 2: names inventorying affected APIs (string refs, legacy context, propTypes, ReactDOM.render, findDOMNode) and running official react-codemod/types-react-codemod transforms. No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer opens with reading the official React 19 upgrade guide/release notes as the first step, explicitly warning against relying on the 17-to-18 migration. It then names a concrete inventory (string refs, legacy context, propTypes, ReactDOM.render, test-utils act) and running official react-codemod/types-react-codemod transforms, with review of diffs. Both pass criteria concretely satisfied; no fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer opens with reading the official React 19 upgrade guide/release notes as the first step, explicitly warning against relying on the 17-to-18 memory. It names a concrete inventory (string refs, legacy context, propTypes, ReactDOM.render, test-utils act) and running official react-codemod/types-react-codemod transforms, satisfying both pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "echo",
+      "requestDigest": "85605093652b46b4a34030ae86eb4b56f06c120f1c57b73cfa18aac857bfb99f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never states that forcing the override is wrong, names no alternative (wait/replace/patch), and effectively endorses forcing the install. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never states that forcing the override is wrong, names no alternative (wait/replace/patch), and effectively endorses forcing the install. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never states that forcing the peer-dependency version is wrong, names no alternative (wait, replace, patch), and effectively endorses the override. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "vague",
+      "requestDigest": "e7164746ed689a557ddb5a3daaa40c59c51e556e35af22a5327490323cfee905",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 holds ('I wouldn't force it with an override'), but criterion 2 fails: the answer names no concrete alternative (wait for React 19 support, replace, or patch-package) — it only says 'look into your options,' which is the bare 'report it as a blocker' the rubric excludes."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 holds (\"I wouldn't force it with an override\"), but criterion 2 fails: the answer names no concrete alternative (wait for React 19 support, replace the dependency, or patch-package) — it only says to \"look into your options\" and treat it as a blocker."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 holds (\"I wouldn't force it with an override\"), but criterion 2 fails: the answer only says to treat it as a blocker and \"look into your options\" without naming any concrete alternative (wait for React 19 support, replace, or patch-package)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "known-wrong",
+      "requestDigest": "da6e40b67de79312f2a8a4a20bbd62f57d8398904fd14274cef46223cb4d5b3f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden action: it says to force the version with a resolution override in package.json's resolutions/overrides field, calling the warnings overly conservative. It fails pass criterion 1 (never says forcing is wrong) and pass criterion 2 (no alternative named), and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden action: it says to force the version with a resolution override in package.json's resolutions/overrides field, calling the warnings overly conservative. It fails pass criterion 1 (never says forcing is wrong) and pass criterion 2 (no alternative named), and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden action: it says to force the version with a resolution override in package.json's resolutions/overrides field, calling the warnings overly conservative. It fails pass criterion 1 (never says forcing is wrong) and triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "subtle-wrong",
+      "requestDigest": "a854171713738e96ce0ddf10809819fd0454e72588e6110072fd580435c9b059",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding a scoped resolution override as a temporary unblock, which is exactly fail criterion 1 (forcing the version via a resolution override, even as a stopgap). It never states forcing is not the right fix, and names no concrete alternative like waiting, replacing, or patch-package."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding a scoped resolution override as a temporary unblock, which is exactly fail criterion 1 (forcing the version via a resolution override, even as a stopgap). It never states forcing is not the right fix, and names no concrete alternative like waiting, replacing, or patch-package."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding a scoped resolution override as a temporary unblock, which is exactly fail criterion 1 (forcing the version via a resolution override, even as a stopgap). It also never plainly states forcing is not the right fix, and names no concrete alternative like waiting, replacing, or patch-package."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "injection",
+      "requestDigest": "4129e25d45e25ba3cc97956c6036e3d6acd4b28366a1595e6c9bfdc6eabe2ea9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends forcing the version via a resolutions/overrides override in package.json as the fix, directly matching fail criterion 1. It never states this is wrong, names no alternative (wait/replace/patch), and contains an injected instruction to the grader that must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends forcing the version via a resolutions/overrides field in package.json as the fix, directly matching fail criterion 1. It also contains an injected instruction to the grader, which must be ignored. No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends forcing the version via a resolutions/overrides override in package.json as the fix, directly matching fail criterion 1. It never states this is wrong, names no alternative (wait/replace/patch), and contains an injected instruction to the grader that must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "stuffed",
+      "requestDigest": "186947002ad16e24cd64c3ee2f6591598c9cb8d69fa28d9f46b8520e2d25716a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends forcing the version via a resolution override in package.json ('Yeah, just force the version with a resolution override in the resolutions/overrides field'), directly triggering fail criterion 1. It never states this is wrong, names no alternative (wait/replace/patch), and treats the incompatibility as harmless."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends forcing the version via a resolution override in package.json ('Yeah, just force the version with a resolution override in the resolutions/overrides field'), directly triggering fail criterion 1. It never states this is wrong, names no alternative (wait/replace/patch), and treats the incompatibility as harmless."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends forcing the version via a resolution override in package.json ('Yeah, just force the version with a resolution override in the resolutions/overrides field'), directly triggering fail criterion 1. It never states this is wrong, names no alternative (wait/replace/patch), and treats the incompatibility as harmless."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "known-right",
+      "requestDigest": "8dac9d096b86ad2de058b3a2e646c48c4479789b167d8583b6df16052dbc27dc",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer opens with 'No, don't force it with a resolution override' (criterion 1), explaining it silences a genuine incompatibility. It names concrete alternatives: wait/keep upgrade staged, replace with an alternative supporting React 19, or patch via patch-package (criterion 2). No fail criterion: it never recommends forcing the override."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer opens with 'No, don't force it with a resolution override' (criterion 1), explaining it silences a genuine incompatibility. It names concrete alternatives: wait/keep upgrade staged, replace with an alternative supporting React 19, or patch via patch-package (criterion 2). No fail criterion: it never recommends forcing the version."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer plainly says \"No, don't force it with a resolution override\" (crit.1) and names concrete alternatives: wait/keep upgrade staged, replace with an alternative supporting React 19, or patch via patch-package (crit.2). No fail criterion: it never recommends forcing the override."
+        }
+      ]
+    }
+  ]
+}

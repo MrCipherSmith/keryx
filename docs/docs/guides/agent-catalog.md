@@ -62,10 +62,22 @@ Per-stack generated pairs (a `<stack>-code-auditor` and a `<stack>-build-fixer`
 per stack pack) are not part of this hand-authored initial catalogue — each
 pair is generated only from a stack pack that has already cleared its own
 governance gates, via `keryx agents generate --stack <id> [--check] [--json]`.
-As of flow 314 Wave 4 batch 1 (fix attempt 1, honest gate re-run), no pair
-exists yet: `ts-js-node`, `python`, `go`, and `react` all failed the gate
-(DeepSeek `deepseek-chat`, `--strictness high` / `--trials 5`) and stay
-`stability: experimental`, so none has a generated pair to list.
+As of flow 316's fix-attempt-1 re-run of the honest gate under judge prompt
+v2 (DeepSeek `deepseek-chat` for both the runner and the judge,
+`--strictness high` / `--trials 5`), only `ts-js-node` clears it and ships a
+generated pair: `ts-js-node-code-auditor` / `ts-js-node-build-fixer`.
+`react` cleared an earlier, less strict run of the same gate, but the
+hardened judge (fixed for leniency on vague answers, see R1-4 in review round
+1 of PR #698) scored its `no-disable-hooks-lint` scenario 3/5 — below the
+pack floor — so `react` is back to `stability: experimental` and its
+generated pair was removed. `python` and `go` still fail the gate: `python`
+only on a trigger-selection gap (every one of its behavior scenarios now
+clears the floor), and `go` on a runner/skill interaction limitation plus one
+newly-observed scenario — reasons recorded as working hypotheses, not proven
+grader defects, until each is validated by its own honest re-run (see
+`docs/requirements/keryx-agent-platform-expansion/workstreams/
+W1-stack-catalog.md`, "Implementation notes: fix attempt 1 (flow 316, review
+round 1)"). Neither `python` nor `go` has a generated pair.
 
 A project can drop its own files under `.metaproject/agents/<name>.md`. A
 project definition with the same `name` as a bundled one **overrides** it;

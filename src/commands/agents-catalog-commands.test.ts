@@ -3,7 +3,8 @@ import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, sy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { computeSkillEvalDigest, PACK_MIN_TRIALS } from "../gdskills/governance/eval";
+import type { EvalSpecFile } from "../gdskills/governance/eval";
+import { buildGateReadyReport } from "../gdskills/governance/__fixtures__/gate-ready-report";
 import { agentsCatalogCommand } from "./agents-catalog";
 
 function collect(): { lines: string[]; errors: string[]; log: (l: string) => void; error: (l: string) => void } {
@@ -177,15 +178,13 @@ describe("keryx agents export", () => {
 });
 
 describe("keryx agents verify", () => {
-  // Flow 314 fix attempt 1: the honest DeepSeek gate run failed all four
-  // batch-1 packs (go, python, react, ts-js-node all stay `experimental`),
-  // so none of them ships a generated agent pair right now. This assertion
-  // stays true generically, independent of which packs happen to be
-  // gate-cleared on any given day: the real, un-stubbed CLI path reports
-  // zero problems across the whole catalog, and no bundled agent name uses
-  // the `<id>-code-auditor` / `<id>-build-fixer` generated-pair naming
-  // convention because none is currently generated.
-  test("the real bundled catalog verifies ok with zero problems (no batch-1 pack is gate-cleared yet)", async () => {
+  // Flow 316: the honest DeepSeek judge gate run cleared only `ts-js-node`
+  // (now `stability: "stable"`), so it ships a generated
+  // `<id>-code-auditor` / `<id>-build-fixer` pair; `react`, `go`, and
+  // `python` stay `experimental` and ship none. The real, un-stubbed CLI
+  // path reports zero problems across the whole catalog, and exactly those
+  // two generated agent names are present.
+  test("the real bundled catalog verifies ok with zero problems (only ts-js-node is gate-cleared)", async () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("verify", ["--json"], { cwd: REPO_ROOT, log, error });
     const report = JSON.parse(lines.join("\n")) as {
@@ -196,9 +195,11 @@ describe("keryx agents verify", () => {
     const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
     expect(withProblems).toEqual([]);
     expect(report.ok).toBe(true);
-    expect(
-      report.agents.some((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer")),
-    ).toBe(false);
+    const generatedNames = report.agents
+      .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
+      .map((agent) => agent.name)
+      .sort();
+    expect(generatedNames).toEqual(["ts-js-node-build-fixer", "ts-js-node-code-auditor"]);
   });
 
   test("narrows to one agent by name", async () => {
@@ -261,12 +262,11 @@ describe("keryx agents generate", () => {
   // `bundledRoot` seam on `AgentsCatalogDeps` (flow 314 T13a), which exists
   // specifically so a test can point `generate` at an isolated fixture tree.
   //
-  // Flow 314 fix attempt 1: the honest DeepSeek gate run failed all four
-  // real batch-1 packs (go/python/react/ts-js-node all stay `experimental`),
-  // so `generate --stack go` now refuses with `stack-pack-not-gate-cleared`
-  // on the real tree — there is no longer a real, already-generated pack to
-  // exercise `--check`/write against. The three tests below build their own
-  // isolated, gate-cleared fixture pack (the same pack-level
+  // Flow 316: the honest DeepSeek judge gate run cleared `react` and
+  // `ts-js-node`; `go` and `python` still fail it, so `generate --stack go`
+  // refuses with `stack-pack-not-gate-cleared` on the real tree. The three
+  // tests below build their own isolated, gate-cleared fixture pack (the
+  // same pack-level
   // `{ schemaVersion, reports: [...] }` eval-document shape
   // `checkStackPackGateCleared`/`checkStablePackGate` require — see
   // `verify.test.ts`'s "R1-4" fixture) so this behavior is verified
@@ -310,90 +310,35 @@ describe("keryx agents generate", () => {
       }),
       "utf8",
     );
+    // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios live
+    // against the skill's own CURRENT SKILL.md frontmatter — its
+    // `triggers:` list is seeded from the same authored positive prompt so
+    // honest routing selects it (single-letter placeholders never route
+    // anywhere).
     writeFileSync(
       path.join(skillDir, "SKILL.md"),
-      "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n",
+      "---\nname: fixture-skill\ndescription: fixture skill\ntriggers:\n  - do the fixture task\n---\n\nBody.\n",
       "utf8",
     );
-    writeFileSync(
-      path.join(skillDir, "evals.json"),
-      JSON.stringify({
-        triggers: { positive: ["p"], negative: ["n"] },
-        scenarios: [
-          {
-            id: "behavior-1",
-            prompt: "Do the thing",
-            strictness: "high",
-            expected_behavior: [{ grader: "contains", value: "thing" }],
-          },
-        ],
-      }),
-      "utf8",
-    );
-    const skillDigest = computeSkillEvalDigest(skillDir);
-    writeFileSync(
-      path.join(packDir, "governance", "eval.json"),
-      JSON.stringify({
-        schemaVersion: "1.0.0",
-        reports: [
-          {
-            schemaVersion: "1.0.0",
-            skillId: `${FIXTURE_STACK_ID}/fixture-skill`,
-            strictness: "high",
-            trials: PACK_MIN_TRIALS,
-            triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
-            evidence: "authored",
-            scope: "bundled",
-            skillDigest,
-            runner: "ollama",
-            model: "llama3.1:latest",
-            recordedAt: "2026-01-01T00:00:00.000Z",
-            scenarios: [
-              {
-                id: "trigger-positive-1",
-                kind: "trigger-positive",
-                prompt: "p",
-                strictness: "high",
-                trials: 1,
-                passes: 1,
-                passRate: 1,
-                passAtK: 1,
-                grader: "trigger-rank-fork-family",
-                status: "ran",
-                deterministic: true,
-              },
-              {
-                id: "trigger-negative-1",
-                kind: "trigger-negative",
-                prompt: "n",
-                strictness: "high",
-                trials: 1,
-                passes: 1,
-                passRate: 1,
-                passAtK: 1,
-                grader: "trigger-rank-fork-family",
-                status: "ran",
-                deterministic: true,
-              },
-              {
-                id: "behavior-1",
-                kind: "behavior",
-                prompt: "Do the thing",
-                strictness: "high",
-                trials: PACK_MIN_TRIALS,
-                passes: PACK_MIN_TRIALS,
-                passRate: 1,
-                passAtK: 1,
-                grader: "contains",
-                status: "ran",
-              },
-            ],
-            verdict: "pass",
-          },
-        ],
-      }),
-      "utf8",
-    );
+    const evalSpec: EvalSpecFile = {
+      triggers: { positive: ["do the fixture task"], negative: ["something entirely unrelated"] },
+      scenarios: [
+        { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
+      ],
+    };
+    writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+    // Flow 316: an allowlisted runner, per-trial `trialRecords`, and a
+    // `catalogDigest` matching the real bundled catalog — everything the
+    // hardened gate now requires, on top of the provenance this fixture
+    // already carried.
+    const report = buildGateReadyReport({
+      packId: FIXTURE_STACK_ID,
+      skillName: "fixture-skill",
+      skillDir,
+      evalSpec,
+      recordedAt: "2026-01-01T00:00:00.000Z",
+    });
+    writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [report] }), "utf8");
   });
 
   afterEach(() => {
@@ -533,16 +478,32 @@ describe("keryx agents generate", () => {
     expect(errors.join("\n")).toContain("Unknown flag");
   });
 
-  test("a real, on-disk experimental pack (react) is refused with stack-pack-not-gate-cleared, and no generated files exist", async () => {
-    // react's generated pair was deleted from the bundled tree by flow 314
-    // T13a (its pack stays `experimental`); this proves `generate` itself
-    // now refuses to recreate it rather than merely "nobody ran it since".
+  test("a real, on-disk experimental pack (go) is refused with stack-pack-not-gate-cleared, and no generated files exist", async () => {
+    // Flow 316: go stays `experimental` (its honest DeepSeek judge gate run
+    // still fails go-testing's table-driven-subtests scenario — see
+    // go/agent-refs.json's note); this proves `generate` itself refuses to
+    // create a pair for it.
     const { errors, log, error } = collect();
-    await agentsCatalogCommand("generate", ["--stack", "react"], { cwd: REPO_ROOT, log, error });
+    await agentsCatalogCommand("generate", ["--stack", "go"], { cwd: REPO_ROOT, log, error });
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("stack-pack-not-gate-cleared");
-    expect(existsSync(path.join(REAL_BUNDLED_AGENTS_DIR, "react-code-auditor.md"))).toBe(false);
-    expect(existsSync(path.join(REAL_BUNDLED_AGENTS_DIR, "react-build-fixer.md"))).toBe(false);
+    expect(existsSync(path.join(REAL_BUNDLED_AGENTS_DIR, "go-code-auditor.md"))).toBe(false);
+    expect(existsSync(path.join(REAL_BUNDLED_AGENTS_DIR, "go-build-fixer.md"))).toBe(false);
+  });
+
+  test("a real, on-disk stable/gate-cleared pack (ts-js-node) regenerates byte-identically with --check", async () => {
+    // Flow 316: ts-js-node cleared the honest DeepSeek judge gate and now
+    // ships its generated pair (written by `bun ./src/cli.ts agents
+    // generate --stack ts-js-node`) — `--check` against the real tree must
+    // report no drift.
+    const { lines, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "ts-js-node", "--check", "--json"], { cwd: REPO_ROOT, log, error });
+    const doc = JSON.parse(lines.join("\n")) as { files: Array<{ fileName: string; changed: boolean; existed: boolean }> };
+    expect(process.exitCode).not.toBe(1);
+    for (const file of doc.files) {
+      expect(file.existed).toBe(true);
+      expect(file.changed).toBe(false);
+    }
   });
 });
 
@@ -595,42 +556,27 @@ describe("keryx agents generate — gate enforcement on fixture packs (flow 314 
   function writePassingEval(packDir: string, packId = "fixture-lang"): void {
     const skillDir = path.join(packDir, "skills", "fixture-skill");
     mkdirSync(skillDir, { recursive: true });
-    writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n", "utf8");
+    // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios live
+    // against the skill's own CURRENT SKILL.md frontmatter — its
+    // `triggers:` list is seeded from the same authored positive prompt so
+    // honest routing selects it (single-letter placeholders never route
+    // anywhere).
     writeFileSync(
-      path.join(skillDir, "evals.json"),
-      JSON.stringify({
-        triggers: { positive: ["p"], negative: ["n"] },
-        scenarios: [
-          { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
-        ],
-      }),
+      path.join(skillDir, "SKILL.md"),
+      "---\nname: fixture-skill\ndescription: fixture skill\ntriggers:\n  - do the fixture task\n---\n\nBody.\n",
       "utf8",
     );
-    const skillDigest = computeSkillEvalDigest(skillDir);
-    const doc = {
-      schemaVersion: "1.0.0",
-      reports: [
-        {
-          schemaVersion: "1.0.0",
-          skillId: `${packId}/fixture-skill`,
-          strictness: "high",
-          trials: PACK_MIN_TRIALS,
-          triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
-          evidence: "authored",
-          scope: "bundled",
-          skillDigest,
-          runner: "ollama",
-          model: "llama3.1:latest",
-          recordedAt: "2026-01-01T00:00:00.000Z",
-          scenarios: [
-            { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-            { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-            { id: "behavior-1", kind: "behavior", prompt: "Do the thing", strictness: "high", trials: PACK_MIN_TRIALS, passes: PACK_MIN_TRIALS, passRate: 1, passAtK: 1, grader: "contains", status: "ran" },
-          ],
-          verdict: "pass",
-        },
+    const evalSpec: EvalSpecFile = {
+      triggers: { positive: ["do the fixture task"], negative: ["something entirely unrelated"] },
+      scenarios: [
+        { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
       ],
     };
+    writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+    // Flow 316: an allowlisted runner, per-trial `trialRecords`, and a
+    // `catalogDigest` matching the real bundled catalog.
+    const report = buildGateReadyReport({ packId, skillName: "fixture-skill", skillDir, evalSpec, recordedAt: "2026-01-01T00:00:00.000Z" });
+    const doc = { schemaVersion: "1.0.0", reports: [report] };
     writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
   }
 

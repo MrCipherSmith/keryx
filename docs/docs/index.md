@@ -45,6 +45,7 @@ the one that describes shipped behaviour.
 - [Keep the wiki current](guides/keep-the-wiki-current.md)
 - [Run keryx in CI](guides/run-in-ci.md)
 - [Move skills, rules, agents, and memory between projects and machines](guides/portability.md)
+- [Write a rubric (judge) eval scenario](guides/write-a-rubric-scenario.md)
 
 **Start here:** new to the project? Begin with [onboarding.md](./onboarding.md),
 then pick the guide that matches your task.

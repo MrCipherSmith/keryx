@@ -1,5 +1,27 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.6
+Version: 0.1.8
+
+**Changelog (0.1.8, flow 316 fix attempt 1 / T25):** review round 1 (R1-4)
+found the live judge lenient on vague one-line answers; fix 1 hardened the
+judge (prompt v2, temperature 0, two new anti-gaming kinds) and content, then
+re-ran the honest gate. `react`'s `no-disable-hooks-lint` scored 3/5 (0.6)
+under the hardened judge — below the pack floor — so `react` is back to
+`stability: experimental` and its generated
+`react-code-auditor`/`react-build-fixer` pair is **removed**. `ts-js-node`
+still clears the gate and keeps its pair. Only the `ts-js-node` pair ships as
+of this flow; see `W1-stack-catalog.md`, "Implementation notes: fix attempt 1
+(flow 316, review round 1)" for the full honest re-run outcome. This
+supersedes the 0.1.7 changelog line below, which recorded the pre-fix-1
+(since-reverted) state of the same gate run.
+
+**Changelog (0.1.7, flow 316 T16):** flow 316 replaced the batch-1 stack-pack
+graders (string matching) with a rubric LLM judge and re-ran the honest
+DeepSeek gate (see `W1-stack-catalog.md`, "Implementation notes: grader
+reliability (flow 316)"). `ts-js-node` and `react` cleared the gate and now
+ship generated `<stack>-code-auditor`/`<stack>-build-fixer` pairs; `python`
+and `go` stayed `stability: experimental` and still have no generated pair.
+This corrects the 0.1.6 changelog line below, which recorded the pre-316
+(inaccurate) state of that same gate run.
 
 **Changelog (0.1.5, flow 314 T14):** renamed the generated per-stack pair
 from `<stack>-reviewer`/`<stack>-build-error-resolver` to
@@ -265,23 +287,65 @@ and `stack-pack-not-gate-cleared` for any pair whose source pack has since
 lost its gate-cleared status.
 
 **Batch 1 status (flow 314, fix attempt 1 — honest gate re-run):** no
-generated pair ships for any of the four batch-1 packs (`ts-js-node`,
-`python`, `go`, `react`) — the honest DeepSeek `deepseek-chat` gate run
-failed all four, so every one stays `stability: experimental` and each
-pack's `agent-refs.json` lists `"agents": []` with a note (see
-"Implementation notes: Wave 4 batch 1 (flow 314)" in
-`W1-stack-catalog.md` for the per-pack, per-skill breakdown). The
-deliverable this batch actually landed is the generator's safety, exercised
-end-to-end against real and fixture packs: `id` must equal the pack's own
-directory name, every frontmatter scalar and list item is emitted
-double-quoted (no unquoted pack-supplied string can forge a new YAML key),
-every write is contained under `src/gdskills/bundled/agents/` with no
-traversal and no symlink target, generation refuses a pack that is not
-gate-cleared (`stack-pack-not-gate-cleared`, checked before `--check` is
-even considered), and `agents verify` reports `generated-source-mismatch`/
+generated pair shipped for any of the four batch-1 packs (`ts-js-node`,
+`python`, `go`, `react`) at this point — the honest DeepSeek `deepseek-chat`
+gate run failed all four, so every one stayed `stability: experimental` and
+each pack's `agent-refs.json` listed `"agents": []` with a note (see
+"Implementation notes: Wave 4 batch 1 (flow 314)" in `W1-stack-catalog.md`
+for the per-pack, per-skill breakdown). The deliverable this batch actually
+landed was the generator's safety, exercised end-to-end against real and
+fixture packs: `id` must equal the pack's own directory name, every
+frontmatter scalar and list item is emitted double-quoted (no unquoted
+pack-supplied string can forge a new YAML key), every write is contained
+under `src/gdskills/bundled/agents/` with no traversal and no symlink
+target, generation refuses a pack that is not gate-cleared
+(`stack-pack-not-gate-cleared`, checked before `--check` is even
+considered), and `agents verify` reports `generated-source-mismatch`/
 `generated-drift` for a hand-edited or now-mismatched generated file. That
-safety is what the next batch (or a re-gated batch 1, after the grader
-audit below) generates through.
+safety is what the grader-audit follow-up below generates through.
+
+**Batch 1 status, revised (flow 316):** the grader audit found the batch-1
+graders themselves mis-specified — string matching had penalized correct
+answers for merely mentioning an anti-pattern while warning against it (see
+`W1-stack-catalog.md`, "Implementation notes: grader reliability
+(flow 316)"). Flow 316 replaced string graders with a rubric LLM judge,
+hardened the gate, and re-ran it honestly (DeepSeek `deepseek-chat` for both
+the runner and the judge, `--strictness high --trials 5 --scope bundled`).
+`ts-js-node` and `react` cleared that first honest run, and each got a
+generated `<stack>-code-auditor`/`<stack>-build-fixer` pair under
+`src/gdskills/bundled/agents/`. `python` and `go` failed for reasons recorded
+as working hypotheses in `W1-stack-catalog.md` — a scenario/rubric
+under-specification and a runner/skill interaction limitation, not proven
+grader defects at that point — and stayed `stability: experimental` with no
+generated pair.
+
+**Batch 1 status, fix attempt 1 (flow 316, review round 1 / T25):**
+adversarial review found the live judge lenient on vague one-line answers
+(R1-4). Fix 1 hardened the judge (prompt v2, temperature 0, `vague` and
+`subtle-wrong` anti-gaming kinds) and made the content corrections the
+recorded evidence justified (R1-5), then re-ran the honest gate a second
+time. The outcome changed:
+- **`ts-js-node`** still clears the gate under the hardened judge and keeps
+  its generated pair.
+- **`react`** no longer clears it: `no-disable-hooks-lint` scored 3/5 (0.6)
+  under judge prompt v2, below the pack floor. `react` is back to
+  `stability: experimental` and its generated pair (`react-code-auditor`,
+  `react-build-fixer`) is **removed** from `src/gdskills/bundled/agents/`.
+- **`python`** now clears every behavior scenario (the content corrections
+  fixed `mypy-error-no-blanket-suppress` and `resource-with-block`), but the
+  pack still fails on `python-implementation`'s trigger-positive-6 prompt not
+  being selected — an unrelated, pre-existing trigger/description gap, not a
+  behavior-scenario problem.
+- **`go`** still fails: `table-driven-subtests` (the model emits a tool call
+  instead of answering) and, newly observed under the hardened judge,
+  `no-sleep-sync` at 3/5.
+
+Only `ts-js-node` ships a generated pair as of this fix. `python` and `go`
+stay `stability: experimental` with no generated pair; `react`'s pair was
+generated once and is now withdrawn. Each affected pack's `agent-refs.json`
+lists `"agents": []` with a note naming why. See `W1-stack-catalog.md`,
+"Implementation notes: fix attempt 1 (flow 316, review round 1)" for the full
+per-scenario breakdown and the follow-up list (FU1-FU7).
 
 This covers 22 of W1's 23 stack packs; `mobx` (a capability that extends
 `react` rather than a standalone language/framework) gets no generated agent

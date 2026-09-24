@@ -6,7 +6,8 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { computeSkillEvalDigest, PACK_MIN_TRIALS } from "../gdskills/governance/eval";
+import type { EvalSpecFile } from "../gdskills/governance/eval";
+import { buildGateReadyReport } from "../gdskills/governance/__fixtures__/gate-ready-report";
 import { generateStackAgentPair } from "./generate";
 import { checkStackPackGateCleared, verifyAgents } from "./verify";
 
@@ -250,44 +251,30 @@ describe("verifyAgents", () => {
       }),
       "utf8",
     );
-    writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n", "utf8");
+    // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios live
+    // against the skill's own CURRENT SKILL.md frontmatter — its `triggers:`
+    // list is seeded from the same authored positive prompt so honest
+    // routing selects it (single-letter placeholders never route anywhere).
     writeFileSync(
-      path.join(skillDir, "evals.json"),
-      JSON.stringify({
-        triggers: { positive: ["p"], negative: ["n"] },
-        scenarios: [
-          { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
-        ],
-      }),
+      path.join(skillDir, "SKILL.md"),
+      "---\nname: fixture-skill\ndescription: fixture skill\ntriggers:\n  - do the fixture task\n---\n\nBody.\n",
       "utf8",
     );
-    const skillDigest = computeSkillEvalDigest(skillDir);
+    const evalSpec: EvalSpecFile = {
+      triggers: { positive: ["do the fixture task"], negative: ["something entirely unrelated"] },
+      scenarios: [
+        { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
+      ],
+    };
+    writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+    // Flow 316: an allowlisted runner, per-trial `trialRecords`, and a
+    // `catalogDigest` matching the real bundled catalog — everything the
+    // hardened gate now requires, on top of the provenance this fixture
+    // already carried.
+    const report0 = buildGateReadyReport({ packId: "fixture-stable", skillName: "fixture-skill", skillDir, evalSpec, recordedAt: "2026-01-01T00:00:00.000Z" });
     writeFileSync(
       path.join(packDir, "governance", "eval.json"),
-      JSON.stringify({
-        schemaVersion: "1.0.0",
-        reports: [
-          {
-            schemaVersion: "1.0.0",
-            skillId: "fixture-stable/fixture-skill",
-            strictness: "high",
-            trials: PACK_MIN_TRIALS,
-            triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
-            evidence: "authored",
-            scope: "bundled",
-            skillDigest,
-            runner: "ollama",
-            model: "llama3.1:latest",
-            recordedAt: "2026-01-01T00:00:00.000Z",
-            scenarios: [
-              { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-              { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-              { id: "behavior-1", kind: "behavior", prompt: "Do the thing", strictness: "high", trials: PACK_MIN_TRIALS, passes: PACK_MIN_TRIALS, passRate: 1, passAtK: 1, grader: "contains", status: "ran" },
-            ],
-            verdict: "pass",
-          },
-        ],
-      }),
+      JSON.stringify({ schemaVersion: "1.0.0", reports: [report0] }),
       "utf8",
     );
     const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
@@ -459,18 +446,14 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
   });
 
   test("every bundled shipped agent verifies ok against the real skill/bundled trees, with the per-stack packs' gate stubbed cleared", () => {
-    // Flow 314 fix attempt 1: the honest DeepSeek gate run failed all four
-    // batch-1 packs (go, python, react, ts-js-node all stay `experimental`),
-    // so none of them ship a generated agent pair right now — this asserts
-    // the SHAPE of the invariant generically, independent of which packs
-    // happen to be gate-cleared on any given day: no bundled agent name uses
-    // the `<id>-code-auditor` / `<id>-build-fixer` generated-pair convention
-    // (see `generate.ts`), because none is currently generated.
-    // `stackPackGateCleared` is stubbed cleared anyway so this guard still
-    // proves everything OTHER than pack gate status (schema, tools, skills,
-    // drift) is clean, independent of gate state — see the R1-4 fixture
-    // tests above for the positive case of a gate-cleared pack's generated
-    // pair verifying clean.
+    // Flow 316: the honest DeepSeek judge gate run cleared only
+    // `ts-js-node` (`stability: "stable"` now), so it ships a generated
+    // `<id>-code-auditor` / `<id>-build-fixer` pair; `react`, `go`, and
+    // `python` stay `experimental` and ship none. `stackPackGateCleared` is
+    // stubbed cleared anyway so this guard still proves everything OTHER
+    // than pack gate status (schema, tools, skills, drift) is clean,
+    // independent of gate state — see the R1-4 fixture tests above for the
+    // positive case of a gate-cleared pack's generated pair verifying clean.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {
       stackPackGateCleared: () => ({ cleared: true }),
     });
@@ -480,28 +463,30 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
     }
     expect(report.agents.length).toBeGreaterThanOrEqual(9);
     expect(report.ok).toBe(true);
-    expect(report.agents.some((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))).toBe(
-      false,
-    );
+    const generatedNames = report.agents
+      .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
+      .map((agent) => agent.name)
+      .sort();
+    expect(generatedNames).toEqual(["ts-js-node-build-fixer", "ts-js-node-code-auditor"]);
   });
 
-  test("every bundled shipped agent against the real trees with NO stub: zero problems (no batch-1 pack is gate-cleared yet)", () => {
-    // Flow 314 fix attempt 1: go, python, react, and ts-js-node are all real,
-    // on-disk "experimental" packs after the honest DeepSeek gate run, so
-    // none has a generated agent on disk to check gate status for — the
-    // catalog verifies clean because it currently contains only
-    // hand-authored, non-generated agents. This stays true generically
-    // whichever packs are or are not gate-cleared, since a pack that never
-    // produced a generated pair contributes nothing for `verifyAgents` to
-    // flag either way.
+  test("every bundled shipped agent against the real trees with NO stub: zero problems (only ts-js-node is gate-cleared)", () => {
+    // Flow 316: ts-js-node is the only real, on-disk "stable" pack after the
+    // honest DeepSeek judge gate run, with a generated agent pair on disk
+    // whose gate status the default (non-stubbed) resolver checks for
+    // real — the catalog verifies clean because the pack is genuinely
+    // gate-cleared. react, go, and python stay "experimental" and ship no
+    // generated agent, so they contribute nothing here either way.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {});
     expect(report.catalogErrors).toEqual([]);
     const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
     expect(withProblems).toEqual([]);
     expect(report.ok).toBe(true);
-    expect(report.agents.some((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))).toBe(
-      false,
-    );
+    const generatedNames = report.agents
+      .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
+      .map((agent) => agent.name)
+      .sort();
+    expect(generatedNames).toEqual(["ts-js-node-build-fixer", "ts-js-node-code-auditor"]);
   });
 
   // Flow 314 W4 T10 (W2 §"Initial catalogue": "a hand edit to a generated
@@ -635,42 +620,26 @@ describe("checkStackPackGateCleared", () => {
   function writePassingEval(packDir: string): void {
     const skillDir = path.join(packDir, "skills", "fixture-skill");
     mkdirSync(skillDir, { recursive: true });
-    writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n", "utf8");
+    // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios live
+    // against the skill's own CURRENT SKILL.md frontmatter — its `triggers:`
+    // list is seeded from the same authored positive prompt so honest
+    // routing selects it (single-letter placeholders never route anywhere).
     writeFileSync(
-      path.join(skillDir, "evals.json"),
-      JSON.stringify({
-        triggers: { positive: ["p"], negative: ["n"] },
-        scenarios: [
-          { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
-        ],
-      }),
+      path.join(skillDir, "SKILL.md"),
+      "---\nname: fixture-skill\ndescription: fixture skill\ntriggers:\n  - do the fixture task\n---\n\nBody.\n",
       "utf8",
     );
-    const skillDigest = computeSkillEvalDigest(skillDir);
-    const doc = {
-      schemaVersion: "1.0.0",
-      reports: [
-        {
-          schemaVersion: "1.0.0",
-          skillId: "fixture-lang/fixture-skill",
-          strictness: "high",
-          trials: PACK_MIN_TRIALS,
-          triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
-          evidence: "authored",
-          scope: "bundled",
-          skillDigest,
-          runner: "ollama",
-          model: "llama3.1:latest",
-          recordedAt: "2026-01-01T00:00:00.000Z",
-          scenarios: [
-            { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-            { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-            { id: "behavior-1", kind: "behavior", prompt: "Do the thing", strictness: "high", trials: PACK_MIN_TRIALS, passes: PACK_MIN_TRIALS, passRate: 1, passAtK: 1, grader: "contains", status: "ran" },
-          ],
-          verdict: "pass",
-        },
+    const evalSpec: EvalSpecFile = {
+      triggers: { positive: ["do the fixture task"], negative: ["something entirely unrelated"] },
+      scenarios: [
+        { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
       ],
     };
+    writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+    // Flow 316: an allowlisted runner, per-trial `trialRecords`, and a
+    // `catalogDigest` matching the real bundled catalog.
+    const report = buildGateReadyReport({ packId: "fixture-lang", skillName: "fixture-skill", skillDir, evalSpec, recordedAt: "2026-01-01T00:00:00.000Z" });
+    const doc = { schemaVersion: "1.0.0", reports: [report] };
     writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
   }
 

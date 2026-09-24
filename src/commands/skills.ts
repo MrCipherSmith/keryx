@@ -202,7 +202,7 @@ export async function skillsCommand(args: string[]): Promise<void> {
   // (src/commands/skills-governance.ts) so this file's install/doctor/
   // uninstall branches (Lane B) and these three subcommands never touch the
   // same lines.
-  if (command === "scout" || command === "eval" || command === "stocktake") {
+  if (command === "scout" || command === "eval" || command === "judge-check" || command === "stocktake") {
     await skillsGovernanceCommand(args);
     return;
   }
@@ -1750,7 +1750,9 @@ Usage:
   keryx skills contracts validate <file> --schema <name>
   keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all]
               [--origin learned --source-ref <id>] [--json]
-  keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>] [--model-grader] [--json]
+  keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>]
+              [--judge <provider>[:<model>]] [--model-grader] [--json]
+  keryx skills judge-check <skill-id> --judge <provider>[:<model>] [--scope bundled|all] [--record] [--json]
   keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 
 Commands:
@@ -1790,7 +1792,11 @@ Commands:
   sync      Sync exported runtime skills to an explicit target directory
   contracts List and validate gdskills JSON contracts
   scout     Pre-creation dedupe gate: does an existing skill already cover this?
-  eval      Behavioral compliance eval: trigger accuracy + scenario pass rate
+  eval      Behavioral compliance eval: trigger accuracy + scenario pass rate. --judge
+            <provider>[:<model>] grades judge-graded behavior scenarios with a live LLM judge.
+  judge-check Proves a skill's judge-graded scenarios are hard to game: runs the canned
+              empty/echo/known-wrong/injection/stuffed/known-right answers through the live
+              judge and exits 1 on any mismatch. --record saves the verdicts for offline replay.
   stocktake Periodic catalog health check: keep|improve|update|retire|merge
 `);
 }

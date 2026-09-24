@@ -227,17 +227,17 @@ describe("generateStackAgentPair", () => {
   //
   // R2-4 (review round 2, PR #692): as originally rewritten, both loops here
   // derive their expectation from `checkStackPackGateCleared` and iterate
-  // over whatever it returns — on the shipped tree (flow 314 fix attempt 2)
-  // all four batch-1 packs stay `experimental`, so `gateCleared` is `[]` and
-  // neither loop ever runs an `expect`. The test passed while asserting
-  // nothing. It now pins the shipped state explicitly (`gateCleared` must
-  // equal `[]`, and no bundled generated agent file may exist while it is
-  // empty), and a separate test below exercises the byte-identical
-  // regeneration path at least once, against a forged gate-cleared fixture
-  // pack, so that path is not left completely untested. A pack that later
-  // clears the real gate must update the `toEqual([])` assertion
-  // consciously, not silently pass an empty-loop test.
-  test("shipped state: no batch-1 pack is gate-cleared, and no bundled generated agent file exists", () => {
+  // over whatever it returns. It pins the shipped state explicitly, so a
+  // pack that changes gate status must update this assertion consciously,
+  // not silently pass or fail a loop whose bound moved under it.
+  //
+  // Flow 316: the honest DeepSeek judge gate run cleared only `ts-js-node`
+  // (`stability: "stable"` in pack.json and in install-manifest.json);
+  // `react`, `go`, and `python` stay `experimental` — see their
+  // `agent-refs.json` notes for the specific failing scenarios. Only
+  // `ts-js-node` ships its generated `<id>-code-auditor.md` /
+  // `<id>-build-fixer.md` pair, for 2 generated files total.
+  test("shipped state: exactly ts-js-node is gate-cleared, and its generated agent files are on disk", () => {
     // Guards the drift check in verify.ts from the other direction: proves
     // the generator's real-pack output is what actually shipped, not just
     // what a fixture produces.
@@ -251,17 +251,15 @@ describe("generateStackAgentPair", () => {
       .readdirSync(stacksRoot, { withFileTypes: true })
       .filter((entry: { isDirectory(): boolean }) => entry.isDirectory())
       .map((entry: { name: string }) => entry.name);
-    const gateCleared = stackIds.filter((id: string) => checkStackPackGateCleared(path.join(stacksRoot, id)).cleared);
+    const gateCleared = stackIds.filter((id: string) => checkStackPackGateCleared(path.join(stacksRoot, id)).cleared).sort();
 
-    // Pin the shipped, honest-gate outcome explicitly: every real stack pack
-    // (go, python, react, ts-js-node) still fails the gate.
-    expect(gateCleared).toEqual([]);
+    // Pin the shipped, honest-gate outcome explicitly: only ts-js-node
+    // clears the gate; react, go, and python still fail it.
+    expect(gateCleared).toEqual(["ts-js-node"]);
 
     // Direction 1: every gate-cleared pack that carries an `agentProfile`
-    // regenerates to exactly what is on disk. With `gateCleared` pinned to
-    // `[]` above this loop runs 0 times right now, by construction — it
-    // stays here so a future gate-cleared pack is caught without editing
-    // this test.
+    // regenerates to exactly what is on disk — the byte-identical
+    // regeneration loop now really executes for the real tree.
     for (const id of gateCleared) {
       const pack = JSON.parse(fs.readFileSync(path.join(stacksRoot, id, "pack.json"), "utf8")) as StackPackForAgentGeneration & {
         agentProfile?: unknown;
@@ -290,11 +288,10 @@ describe("generateStackAgentPair", () => {
       expect(gateCleared).toContain(origin.sourceRef);
     }
 
-    // Explicit, not implied by an empty loop: while `gateCleared` is empty,
-    // no `*-code-auditor.md`/`*-build-fixer.md` file exists at all under the
-    // bundled agents directory.
-    expect(gateCleared).toEqual([]);
-    expect(generatedFileCount).toBe(0);
+    // Explicit, not implied by the loop above: exactly 2 generated files
+    // ship — the ts-js-node code-auditor/build-fixer pair.
+    expect(gateCleared).toEqual(["ts-js-node"]);
+    expect(generatedFileCount).toBe(2);
   });
 
   // R2-4: the byte-identical regeneration path (Direction 1 above) has
@@ -308,7 +305,7 @@ describe("generateStackAgentPair", () => {
     const fs = require("node:fs") as typeof import("node:fs");
     const os = require("node:os") as typeof import("node:os");
     const { checkStackPackGateCleared } = require("./verify") as typeof import("./verify");
-    const { computeSkillEvalDigest, PACK_MIN_TRIALS } = require("../gdskills/governance/eval") as typeof import("../gdskills/governance/eval");
+    const { buildGateReadyReport } = require("../gdskills/governance/__fixtures__/gate-ready-report") as typeof import("../gdskills/governance/__fixtures__/gate-ready-report");
 
     const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "keryx-generate-r2-4-"));
     try {
@@ -335,42 +332,34 @@ describe("generateStackAgentPair", () => {
 
       const skillDir = path.join(packDir, "skills", "forged-skill");
       fs.mkdirSync(skillDir, { recursive: true });
-      fs.writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: forged-skill\ndescription: forged skill\n---\n\nBody.\n", "utf8");
+      // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios
+      // live against the skill's own CURRENT SKILL.md frontmatter — its
+      // `triggers:` list is seeded from the same authored positive prompt so
+      // honest routing selects it (single-letter placeholders never route
+      // anywhere).
       fs.writeFileSync(
-        path.join(skillDir, "evals.json"),
-        JSON.stringify({
-          triggers: { positive: ["p"], negative: ["n"] },
-          scenarios: [
-            { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
-          ],
-        }),
+        path.join(skillDir, "SKILL.md"),
+        "---\nname: forged-skill\ndescription: forged skill\ntriggers:\n  - do the forged fixture task\n---\n\nBody.\n",
         "utf8",
       );
-      const skillDigest = computeSkillEvalDigest(skillDir);
-      const evalDoc = {
-        schemaVersion: "1.0.0",
-        reports: [
-          {
-            schemaVersion: "1.0.0",
-            skillId: `${packId}/forged-skill`,
-            strictness: "high",
-            trials: PACK_MIN_TRIALS,
-            triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
-            evidence: "authored",
-            scope: "bundled",
-            skillDigest,
-            runner: "ollama",
-            model: "llama3.1:latest",
-            recordedAt: "2026-01-01T00:00:00.000Z",
-            scenarios: [
-              { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-              { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-              { id: "behavior-1", kind: "behavior", prompt: "Do the thing", strictness: "high", trials: PACK_MIN_TRIALS, passes: PACK_MIN_TRIALS, passRate: 1, passAtK: 1, grader: "contains", status: "ran" },
-            ],
-            verdict: "pass",
-          },
+      const evalSpec = {
+        triggers: { positive: ["do the forged fixture task"], negative: ["something entirely unrelated"] },
+        scenarios: [
+          { id: "behavior-1", prompt: "Do the thing", strictness: "high" as const, expected_behavior: [{ grader: "contains" as const, value: "thing" }] },
         ],
       };
+      fs.writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+      // Flow 316: an allowlisted runner, per-trial `trialRecords`, and a
+      // `catalogDigest` matching the real bundled catalog — everything the
+      // hardened gate now requires.
+      const report = buildGateReadyReport({
+        packId,
+        skillName: "forged-skill",
+        skillDir,
+        evalSpec,
+        recordedAt: "2026-01-01T00:00:00.000Z",
+      });
+      const evalDoc = { schemaVersion: "1.0.0", reports: [report] };
       fs.writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(evalDoc, null, 2), "utf8");
 
       const gate = checkStackPackGateCleared(packDir);
