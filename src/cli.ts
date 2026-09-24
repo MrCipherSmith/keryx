@@ -25,6 +25,7 @@ import { sandboxCommand } from "./commands/sandbox";
 import { mcpCommand } from "./commands/mcp";
 import { printServeMcpHelp, serveMcpCommand } from "./commands/serve-mcp";
 import { integrateCommand } from "./commands/integrate";
+import { integrationsCommand } from "./commands/integrations";
 import { statusCommand } from "./commands/status";
 import { harnessCommand } from "./commands/harness";
 import { ShellFlagError, shellCommand } from "./commands/shell";
@@ -105,6 +106,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   sandbox: sandboxCommand,
   "serve-mcp": serveMcpCommand,
   integrate: integrateCommand,
+  integrations: integrationsCommand,
   // Retired spelling of the two verbs above; kept working, kept thin.
   mcp: mcpCommand,
   harness: harnessCommand,
@@ -306,6 +308,10 @@ export const USAGE_BODY = `Usage:
   keryx security eval [--corpus <name|all>] [--with-model]
   keryx serve-mcp [--http] [--read-only] [--cwd <project-root>]
   keryx integrate [--remove] <cursor|claude|opencode|vscode|generic|all> [--dry-run]
+  keryx integrations install --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]
+  keryx integrations uninstall --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]
+  keryx integrations doctor --runtime <id>[,<id>...|all] [--json]
+  keryx integrations matrix [--check] [--write] [--json] [--file <path>]
   keryx mcp serve [--http] ...                  # retired: use keryx serve-mcp
   keryx workspace create --title <title> [--component <workspace-relative-ref>]
   keryx workspace list|show|add-resource
@@ -368,6 +374,7 @@ Commands:
   sandbox   Report OS sandbox launcher availability and the per-capability containment matrix
   serve-mcp Expose Metaproject services over the Model Context Protocol (opt-in)
   integrate Wire this project into an editor or agent as an MCP server
+  integrations Install/uninstall/audit Keryx's hooks and instructions in another coding agent, and the generated capability matrix
   mcp       Retired spelling of serve-mcp / integrate; still works, names its replacement
   metrics   Provenance-aware execution observability: run records, baselines, benchmarks
   workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)

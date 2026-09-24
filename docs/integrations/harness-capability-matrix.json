@@ -214,7 +214,7 @@
       ],
       "install_command": "keryx integrations install --runtime zed",
       "verification_command": "keryx integrations doctor --runtime zed",
-      "risk_notes": "Zed uses the first matching rules file among .rules, .cursorrules, .windsurfrules, .clinerules, .github/copilot-instructions.md, AGENT.md, AGENT.md, AGENTS.md, CLAUDE.md, GEMINI.md, ... — an earlier file in that list shadows AGENTS.md even when AGENTS.md itself carries Keryx's block.",
+      "risk_notes": "Zed uses the first matching rules file among .rules, .cursorrules, .windsurfrules, .clinerules, .github/copilot-instructions.md, AGENT.md, AGENTS.md, CLAUDE.md, GEMINI.md, ... — an earlier file in that list shadows AGENTS.md even when AGENTS.md itself carries Keryx's block.",
       "last_verified": "2026-09-23",
       "source_docs": [
         "https://github.com/zed-industries/zed/blob/main/docs/src/ai/rules.md",

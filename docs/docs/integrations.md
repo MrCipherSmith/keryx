@@ -197,14 +197,22 @@ integrations` yet; every cell is a target for that later workstream.
 `keryx ctx install-hook`/`uninstall-hook`, `keryx orient install-hook`, and
 `keryx security hooks install|uninstall` continue to work exactly as before —
 they are kept as aliases that internally delegate to `keryx integrations
-install`/`uninstall --runtime <id> --surface <flag>`, with the surface(s)
-implied by which alias was called:
+install`/`uninstall --runtime <id> --surface <selector>`, with the
+surface(s) implied by which alias was called:
 
 | Legacy command | Delegates to |
 |---|---|
-| `keryx ctx install-hook`/`uninstall-hook --runtime <id>` | `keryx integrations install`/`uninstall --runtime <id> --surface block` |
-| `keryx orient install-hook --runtime <id>` | `keryx integrations install --runtime <id> --surface inject-context` |
-| `keryx security hooks install --runtime <id>` | `keryx integrations install --runtime <id> --surface prompt-gate --surface block` |
+| `keryx ctx install-hook`/`uninstall-hook --runtime <id>` | `keryx integrations install`/`uninstall --runtime <id> --surface ctx-guard` |
+| `keryx orient install-hook --runtime <id>` | `keryx integrations install --runtime <id> --surface orient` |
+| `keryx security hooks install --runtime <id>` | `keryx integrations install --runtime <id> --surface security-check-input --surface security-check-output` |
+
+Each `--surface` selector above is a surface **id**, not a `SurfaceFlag`: a
+flag such as `block` can match more than one surface on the same runtime
+(Claude's `ctx-guard` and `security-check-output` both carry the `block`
+flag), so a flag selects every surface that carries it while an id selects
+exactly one — which is why these aliases, each of which must install (or
+remove) precisely one subsystem's surface and no other, are spelled with
+ids rather than the flag their alias name might suggest.
 
 No existing script or CI job that calls the old commands needs to change.
 

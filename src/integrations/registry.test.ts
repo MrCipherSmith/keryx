@@ -72,21 +72,25 @@ describe("AC1: HARNESS_ADAPTERS names the 8 W5-a harnesses plus the W5-b (flow 3
     ]);
   });
 
-  test("no `keryx integrations` CLI command exists yet", () => {
+  test("the `keryx integrations` CLI command is registered (flow 307, T8)", () => {
     // `CLI_ROUTES` (src/cli.ts) is the dispatch table's own source of truth —
     // see its doc comment: "the only honest source for what commands this CLI
     // actually has". Asserting against it, rather than a hand-written list of
     // verbs, means this test cannot itself drift from the dispatcher.
-    expect(Object.keys(CLI_ROUTES)).not.toContain("integrations");
-    // And no command MODULE for it exists either, so a future `integrations`
-    // route wired up without registering it in CLI_ROUTES still fails this.
+    //
+    // This test used to pin the OPPOSITE fact ("no such command exists yet"),
+    // as a marker that T6 (installer core) and T7 (capability matrix) landed
+    // before the CLI surface did. T8 is that CLI surface — flipped here to a
+    // positive pin rather than deleted, so the command module and its
+    // registration in `CLI_ROUTES` stay proven present together.
+    expect(Object.keys(CLI_ROUTES)).toContain("integrations");
     let integrationsCommandExists = true;
     try {
       readFileSync(path.join(__dirname, "..", "commands", "integrations.ts"), "utf8");
     } catch {
       integrationsCommandExists = false;
     }
-    expect(integrationsCommandExists).toBe(false);
+    expect(integrationsCommandExists).toBe(true);
   });
 });
 

@@ -318,7 +318,6 @@ const ZED_SHADOWING_RULES_FILES = [
   ".windsurfrules",
   ".clinerules",
   ".github/copilot-instructions.md",
-  "AGENT.md",
 ];
 
 async function agentsMdHasKeryxBlock(root: string): Promise<boolean> {

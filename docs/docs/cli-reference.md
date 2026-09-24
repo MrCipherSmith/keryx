@@ -4093,6 +4093,41 @@ the managed `keryx` entry and leaves other servers in the file untouched.
 These were `keryx mcp install --runtime <editor>` and `keryx mcp uninstall
 --runtime <editor>`. Both still work and print a deprecation line.
 
+## integrations
+
+Install, remove, and audit Keryx's own hooks and standing-instructions files
+in ANOTHER coding agent/IDE's config (the harness adapter registry —
+`src/integrations/`), and print or check the generated capability matrix.
+This is a distinct namespace from `keryx integrate` (MCP client
+configuration, above) and from `keryx harness` (Keryx's own agent runtime,
+below). Full details, per-harness notes, and the legacy-alias table are in
+[integrations.md](./integrations.md).
+
+```
+keryx integrations install --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]
+keryx integrations uninstall --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]
+keryx integrations doctor --runtime <id>[,<id>...|all] [--json]
+keryx integrations matrix [--check] [--write] [--json] [--file <path>]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `install` | `--runtime <id>`, `--surface <flag\|id>...`, `--dry-run`, `--json` | Resolve every surface for `<id>` (or only the named ones), apply each surface's merge in deterministic order, and record what it wrote to install-state. `all` targets every adapter with at least one surface; `keryx-shell` (no surfaces yet) is reported as unsupported rather than silently skipped. `--dry-run` reports what it would write and changes nothing; `--json` prints the structured result objects only. |
+| `uninstall` | `--runtime <id>`, `--surface <flag\|id>...`, `--dry-run`, `--json` | Remove only the sentinel-tagged entries Keryx itself installed, leaving every other entry (including the operator's own) untouched. Same `--runtime`/`--surface`/`--dry-run`/`--json` shape as `install`. |
+| `doctor` | `--runtime <id>`, `--json` | Re-validate every surface recorded in install-state against the live settings file and report drift. Exits 1 when any requested runtime's doctor result is not ok. |
+| `matrix` | `--check`, `--write`, `--json`, `--file <path>` | With no flags, prints the generated capability matrix as a table (id, state, confidence, supported flags); `--json` prints the full document. `--check` regenerates and diffs against the checked-in artifact, exiting 1 on drift, writing nothing — this is what CI runs. `--write` regenerates and overwrites the artifact. `--file` overrides the artifact path (default `docs/integrations/harness-capability-matrix.json`). |
+
+`--runtime` accepts a comma-separated list or `all`; `--surface` is
+repeatable and also accepts a comma-separated value, matching either a
+`SurfaceFlag` (`block`, `prompt-gate`, `inject-context`, `instructions`, …)
+or a surface id (`ctx-guard`, `orient`, `security-check-input`,
+`security-check-output`, …) — a flag can match more than one surface on the
+same runtime, an id matches exactly one.
+
+`keryx ctx install-hook`, `keryx orient install-hook`, and `keryx security
+hooks install` are legacy aliases that already delegate to this same
+installer core (see [integrations.md](./integrations.md#legacy-command-aliases)).
+
 ## mcp
 
 Expose read-only Metaproject services (code graph, gdctx, security, flow status,
