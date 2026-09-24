@@ -186,11 +186,16 @@ export interface RunDeps {
    *    interactive approver inside `runOffline`) never opens the stream: the
    *    run ends `blocked` with a typed blocker
    *    `blocker:hook-denied:UserPromptSubmit`.
-   *  - `PreToolUse` fires per resolved tool call BEFORE `decide()` runs (so
-   *    `ctx.decideOutcome` is not yet known to the hook at that point — a
-   *    known asymmetry vs. the gate malformed-output failure table, which is
-   *    outside this task's owned acceptance criteria); its decisions are
-   *    composed with the policy decision (and the MP-6 escalation) via
+   *  - `PreToolUse` fires per resolved tool call AFTER `decide()` (and the
+   *    MP-6 escalation) have run, with `ctx.decideOutcome` set to that
+   *    decision's outcome — required for the gate malformed-output failure
+   *    table (malformed stdout on exit 0 silent-approves UNLESS `decide()`
+   *    would have said `ask`, in which case it denies). This is
+   *    observationally equivalent to the spec's "hooks before decide()"
+   *    ordering: `decide()` is pure and a hook cannot influence its inputs, so
+   *    the hook sees the same payload either way and the only point the two
+   *    actually meet is `composeDecision`, which still runs after both are
+   *    known. Its decisions are composed with the policy decision via
    *    `composeDecision` afterwards, and the composed decision is what is
    *    pushed/persisted/gates execution. `additionalContext` from a
    *    `PreToolUse` hook has no mid-stream injection point in this offline
@@ -521,30 +526,20 @@ export async function runOffline(
       actionFingerprint,
     };
 
-    // --- PreToolUse: fires BEFORE `decide()` (per the W6 spec's event-list
-    // entry for this event). Composition against the real `PolicyDecision`
-    // happens AFTER `decide()` + the MP-6 escalation below, via
-    // `composeDecision` — so `ctx.decideOutcome` is not yet known to the hook
-    // at fire time (a documented asymmetry vs. the gate malformed-output
-    // failure table; outside this task's owned ACs). `additionalContext` from
-    // this event has no mid-stream injection point in this offline loop and is
-    // dropped after being recorded (see `RunDeps.hooks` doc comment). ---
-    let preToolUseFire: HookFireResult | undefined;
-    if (deps.hooks !== undefined) {
-      preToolUseFire = await deps.hooks.fire(
-        "PreToolUse",
-        {
-          toolCallId,
-          toolName,
-          toolInput: parsedInput,
-          risk,
-          policyProfile: deps.policyProfile.profileId,
-        },
-        { toolName },
-      );
-      recordHookFire(preToolUseFire, { toolCallId });
-    }
-
+    // --- decide() (+ MP-6 escalation) runs FIRST, then `PreToolUse` fires with
+    // `ctx.decideOutcome` set to that decision's outcome, then `composeDecision`
+    // folds the hook decisions in. This is observationally equivalent to the
+    // W6 spec's "hooks before decide()" ordering: `decide()` is pure and hooks
+    // cannot influence its inputs (the hook payload carries the same
+    // toolCallId/toolName/toolInput/risk/policyProfile either way), so the only
+    // place a hook's decision and the policy decision actually meet is
+    // `composeDecision` — and that still runs after both are known, exactly as
+    // it would if the hook had fired first and its output were composed
+    // afterwards. Running decide() first additionally lets the hook see
+    // `ctx.decideOutcome`, which the gate malformed-output failure table
+    // requires (malformed stdout on exit 0 silent-approves UNLESS decide()
+    // would have said `ask`, in which case it denies) — a rule that cannot be
+    // implemented at all if the hook fires before `decide()` runs.
     let decision = decide({ toolCallId, risk }, policyContext, {
       clock: deps.clock,
       idSeq: deps.idSeq,
@@ -564,6 +559,22 @@ export async function runOffline(
         const blastRadius = await metaprojectBlastRadius(deps.metaprojectPort, targetPath);
         decision = escalateForBlastRadius(decision, { blastRadius }, blastRadiusThreshold);
       }
+    }
+
+    let preToolUseFire: HookFireResult | undefined;
+    if (deps.hooks !== undefined) {
+      preToolUseFire = await deps.hooks.fire(
+        "PreToolUse",
+        {
+          toolCallId,
+          toolName,
+          toolInput: parsedInput,
+          risk,
+          policyProfile: deps.policyProfile.profileId,
+        },
+        { toolName, decideOutcome: decision.decision },
+      );
+      recordHookFire(preToolUseFire, { toolCallId });
     }
 
     // The composed decision (hooks can only tighten) is what is
