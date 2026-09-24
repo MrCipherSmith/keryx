@@ -12,6 +12,7 @@ import {
   refusalAction,
   surfacesOf,
   type Confidence as IntegrationConfidence,
+  type DecisionCodec,
   type HarnessAdapter,
   type HookAction,
   type Settings as IntegrationSettings,
@@ -23,10 +24,11 @@ import {
 // mapping over `HARNESS_ADAPTERS` + `surfacesOf(adapter, {subsystem:
 // "ctx-guard"})` (flow 305 review fix, F4) rather than a second hand-written
 // per-runtime literal list — every per-harness fact (confidence, label,
-// paths, group shape/key/container, native search tools, payload codec,
-// decision codec) lives on the `SurfaceAdapter` in
-// `src/integrations/surfaces.ts`, and every merge/strip/validate function
-// below is the SAME function object registered there. There is exactly one
+// paths, group shape/key/container, native search tools, payload codec) lives
+// on the `SurfaceAdapter` in `src/integrations/surfaces.ts` (the decision
+// codec lives one level up, on the `HarnessAdapter` itself — R3-F1), and
+// every merge/strip/validate function below is the SAME function object
+// registered there. There is exactly one
 // copy of the walker logic (`src/integrations/settings-json.ts`) and exactly
 // one copy of the per-runtime facts; this file only re-shapes them into the
 // `CtxRuntime` interface every existing caller and test already imports.
@@ -125,9 +127,11 @@ export { parseToolName, refusalAction, allowAction };
 // One `CtxRuntime` per (adapter, ctx-guard surface) pair. A surface's `id` is
 // only unique WITHIN its own adapter (every JSON ctx-guard surface uses the
 // shared id `"ctx-guard"`), so the runtime's own `id` — the harness id every
-// caller keys off — comes from the adapter, never the surface.
-function runtimeFromSurface(adapterId: string, surface: SurfaceAdapter): CtxRuntime {
-  const decisionCodec = surface.decisionCodec;
+// caller keys off — comes from the adapter, never the surface. The decision
+// codec (R3-F1) comes from the adapter too — `HarnessAdapter.decisionCodec` is
+// now the ONLY decision codec in the registry, so there is nothing on the
+// surface itself to read or fall back to.
+function runtimeFromSurface(adapterId: string, surface: SurfaceAdapter, decisionCodec: DecisionCodec): CtxRuntime {
   return {
     id: adapterId,
     label: surface.label ?? adapterId,
@@ -140,7 +144,7 @@ function runtimeFromSurface(adapterId: string, surface: SurfaceAdapter): CtxRunt
     parseCommand: surface.payloadCodec ?? (() => null),
     block: (command, c) => {
       const message = buildBlockMessage(command, c);
-      return decisionCodec ? decisionCodec.refuse(adapterId, message) : refusalAction(adapterId, message);
+      return decisionCodec.refuse(adapterId, message);
     },
     // The escape-reason stderr note only applies to the exit-code signalling
     // style (claude/codex/windsurf/opencode): cursor/antigravity answer via
@@ -148,7 +152,7 @@ function runtimeFromSurface(adapterId: string, surface: SurfaceAdapter): CtxRunt
     // the note appended — matching the pre-refactor `cursorAllow`/
     // `antigravityAllow`, which ignored `escapeReason` outright.
     allow: (c) => {
-      const base = decisionCodec ? decisionCodec.allow(adapterId) : allowAction(adapterId);
+      const base = decisionCodec.allow(adapterId);
       if (c.escapeReason !== undefined && base.stdout === undefined) {
         const reason = c.escapeReason || "(no reason given)";
         return { ...base, stderr: `[keryx ctx] raw command allowed via escape marker — reason: ${reason}\n` };
@@ -164,12 +168,17 @@ function runtimeFromSurface(adapterId: string, surface: SurfaceAdapter): CtxRunt
   };
 }
 
-const CTX_GUARD_SURFACES: ReadonlyArray<{ adapterId: string; surface: SurfaceAdapter }> = HARNESS_ADAPTERS.flatMap(
-  (adapter) => surfacesOf(adapter, { subsystem: "ctx-guard" }).map((surface) => ({ adapterId: adapter.id, surface })),
-);
+const CTX_GUARD_SURFACES: ReadonlyArray<{ adapterId: string; surface: SurfaceAdapter; decisionCodec: DecisionCodec }> =
+  HARNESS_ADAPTERS.flatMap((adapter) =>
+    surfacesOf(adapter, { subsystem: "ctx-guard" }).map((surface) => ({
+      adapterId: adapter.id,
+      surface,
+      decisionCodec: adapter.decisionCodec,
+    })),
+  );
 
-export const CTX_RUNTIMES: CtxRuntime[] = CTX_GUARD_SURFACES.map(({ adapterId, surface }) =>
-  runtimeFromSurface(adapterId, surface),
+export const CTX_RUNTIMES: CtxRuntime[] = CTX_GUARD_SURFACES.map(({ adapterId, surface, decisionCodec }) =>
+  runtimeFromSurface(adapterId, surface, decisionCodec),
 );
 
 function runtimeFor(id: string): CtxRuntime {

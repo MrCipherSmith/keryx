@@ -1,5 +1,5 @@
 import { pathExists } from "../lib/fs";
-import { installSurfaces, settingsFileOwnerFor, uninstallSurfaces } from "../integrations";
+import { installSurfaces, settingsFileOwnerFor, uninstallSurfaces, type SettingsFileOwner } from "../integrations";
 // Deep import, deliberately (F10 — see the note on `src/integrations/index.ts`):
 // this is the one place outside `src/integrations` that reads the pre-merge
 // settings directly, to report what an install would upgrade
@@ -26,6 +26,7 @@ const CTX_GUARD_SURFACE_ID = "ctx-guard";
 export async function installRuntimeHook(
   projectRoot: string,
   runtime: CtxRuntime,
+  ownerOverride?: SettingsFileOwner,
 ): Promise<{ path: string; errors: string[]; upgraded?: string }> {
   const file = runtime.locate(projectRoot);
   if (runtime.customInstall) {
@@ -35,7 +36,7 @@ export async function installRuntimeHook(
   if (!runtime.merge || !runtime.validate || !runtime.relativePath) {
     return { path: file, errors: [`${runtime.id}: no installer defined`] };
   }
-  const owner = settingsFileOwnerFor(runtime.relativePath);
+  const owner = ownerOverride ?? settingsFileOwnerFor(runtime.relativePath);
   if (!owner) {
     return { path: file, errors: [`${runtime.id}: no settings-file owner registered for ${runtime.relativePath}`] };
   }
@@ -55,6 +56,7 @@ export async function installRuntimeHook(
 export async function uninstallRuntimeHook(
   projectRoot: string,
   runtime: CtxRuntime,
+  ownerOverride?: SettingsFileOwner,
 ): Promise<boolean> {
   if (runtime.customUninstall) {
     return runtime.customUninstall(projectRoot);
@@ -66,7 +68,7 @@ export async function uninstallRuntimeHook(
   if (!runtime.strip || !runtime.relativePath) {
     return false;
   }
-  const owner = settingsFileOwnerFor(runtime.relativePath);
+  const owner = ownerOverride ?? settingsFileOwnerFor(runtime.relativePath);
   if (!owner) {
     return false;
   }

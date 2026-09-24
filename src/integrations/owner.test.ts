@@ -11,10 +11,13 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, test } from "bun:test";
 
-import { installRuntimeHook } from "../ctx/hook-install";
-import { ANTIGRAVITY_RUNTIME, CLAUDE_RUNTIME } from "../ctx/runtimes";
+import { installRuntimeHook, uninstallRuntimeHook } from "../ctx/hook-install";
+import { ANTIGRAVITY_RUNTIME, CLAUDE_RUNTIME, CURSOR_RUNTIME } from "../ctx/runtimes";
+import { installOrientRuntime, uninstallOrientRuntime } from "../ctx/orient-runtimes";
+import { installRuntimeHooks, uninstallRuntimeHooks } from "../security/agent-hooks";
+import { CLAUDE_RUNTIME as SECURITY_CLAUDE_RUNTIME } from "../security/agent-hooks/runtimes";
 import { getHarnessAdapter, surfacesOf } from "./registry";
-import { createSettingsFileOwner, installSurfaces, uninstallSurfaces } from "./settings-file";
+import { createSettingsFileOwner, installSurfaces } from "./settings-file";
 import { settingsFileOwnerFor } from "./index";
 import type { Settings, SurfaceAdapter } from "./types";
 
@@ -75,89 +78,168 @@ describe("R2-F4(c): shuffled install id order yields byte-identical output", () 
   });
 });
 
-describe("R2-F4(d): install/uninstall propagate the owner's refusal exactly as installRuntimeHook/uninstallRuntimeHook/uninstallOrientRuntime promise", () => {
-  // `installRuntimeHooks` (security), `uninstallRuntimeHook` (ctx) and
-  // `uninstallOrientRuntime` (orient) accept no injectable owner — each
-  // resolves `settingsFileOwnerFor(runtime.relativePath)` internally (see
-  // `src/ctx/hook-install.ts`, `src/security/agent-hooks.ts`,
-  // `src/ctx/orient-runtimes.ts`), so there is no seam in the public API to
-  // hand them a deliberately-clobbering surface. The lowest seam that DOES
-  // exist is exactly what each of those functions is a thin wrapper over:
-  // `installSurfaces`/`uninstallSurfaces` plus a `SettingsFileOwner` built by
-  // `createSettingsFileOwner` — the same construction `coexistence.test.ts`
-  // already uses for the install-side clobber (F1). This proves the identical
-  // contract those three functions document for themselves: install returns
-  // the owner's errors ([] = ok), and uninstall throws when the owner
-  // refuses (a previously-valid sibling surface would end up invalid).
+describe("R3-F2: installRuntimeHooks/uninstallRuntimeHooks/installRuntimeHook/uninstallRuntimeHook/installOrientRuntime/uninstallOrientRuntime propagate a refusing owner", () => {
+  // Each of the six wrappers now takes an OPTIONAL trailing `owner` (default:
+  // the registry's own `settingsFileOwnerFor(runtime.relativePath)`, exactly
+  // as before) — see `src/security/agent-hooks.ts`, `src/ctx/hook-install.ts`,
+  // `src/ctx/orient-runtimes.ts`. That seam is what lets this test drive the
+  // REAL wrapper functions directly with a deliberately-clobbering fake
+  // sibling, rather than reproducing their install/uninstall-then-throw
+  // contract a second time at the lower `installSurfaces`/`uninstallSurfaces`
+  // seam (the R2-F4(d) version of this test, which never actually called any
+  // of the six functions it was named after).
 
-  function buildCtxGuardWithFakeSibling(): { owner: ReturnType<typeof createSettingsFileOwner>; ctxId: string; siblingId: string } {
-    const cursor = getHarnessAdapter("cursor")!;
-    const ctxSurface = surfacesOf(cursor, { subsystem: "ctx-guard" })[0]!;
-    // A plausible future sibling (W5-b/W8: another surface sharing this
-    // file) that is only ever valid while the ctx guard's own `hooks` object
-    // is present — modelling a surface that reads/depends on state the ctx
-    // guard owns, without touching it itself.
-    const fakeSibling: SurfaceAdapter = {
-      id: "fake-cursor-sibling",
+  // A fake sibling that is valid ONLY while `hooks` is absent — so a real
+  // surface's merge (which always introduces a `hooks` object) breaks it,
+  // making an INSTALL refuse.
+  function siblingRequiringHooksAbsent(relativePath: string, id: string): SurfaceAdapter {
+    return {
+      id,
       flag: "block",
       subsystem: "security",
-      sentinel: "fake-sibling-sentinel",
+      sentinel: `fake-sentinel-${id}`,
       confidence: "experimental",
       sourceDocs: ["test"],
-      relativePath: ".cursor/hooks.json",
+      relativePath,
+      slots: [],
+      merge: (s) => s,
+      strip: (s) => s,
+      validate: (s: Settings) => (s.hooks === undefined ? [] : [`${id}: hooks must stay absent`]),
+    };
+  }
+
+  // A fake sibling that is valid ONLY while `hooks` is a (non-array) object —
+  // so a real surface's strip, which removes `hooks` entirely once nothing
+  // managed remains under it, breaks it, making an UNINSTALL refuse. This is
+  // the same shape `buildCtxGuardWithFakeSibling` used above (R2-F4(d)).
+  function siblingRequiringHooksObject(relativePath: string, id: string): SurfaceAdapter {
+    return {
+      id,
+      flag: "block",
+      subsystem: "security",
+      sentinel: `fake-sentinel-${id}`,
+      confidence: "experimental",
+      sourceDocs: ["test"],
+      relativePath,
       slots: [],
       merge: (s) => s,
       strip: (s) => s,
       validate: (s: Settings) =>
-        typeof s.hooks === "object" && s.hooks !== null && !Array.isArray(s.hooks)
-          ? []
-          : ["fake-cursor-sibling: hooks object missing"],
+        typeof s.hooks === "object" && s.hooks !== null && !Array.isArray(s.hooks) ? [] : [`${id}: hooks object missing`],
     };
-    const owner = createSettingsFileOwner(".cursor/hooks.json", [ctxSurface, fakeSibling]);
-    return { owner, ctxId: ctxSurface.id, siblingId: fakeSibling.id };
   }
 
-  test("installSurfaces (installRuntimeHooks' own seam) returns the owner's errors, empty on a clean install", async () => {
+  test("installRuntimeHooks (security) returns {ok:false, errors:[...]} and leaves the file unchanged", async () => {
     await withTempDir(async (root) => {
-      const { owner, ctxId } = buildCtxGuardWithFakeSibling();
-      const { errors } = await installSurfaces(root, ".cursor/hooks.json", [ctxId], owner);
-      // The sibling is not installed, and starts absent (not previously
-      // valid), so its own invalidity is not a refusal reason here — only a
-      // surface that WAS valid and is neither installed nor uninstalled can
-      // trigger that. This pins the non-refusal half of the same contract.
-      expect(errors).toEqual([]);
+      const claude = getHarnessAdapter("claude")!;
+      const securitySurfaces = surfacesOf(claude, { subsystem: "security" });
+      const sibling = siblingRequiringHooksAbsent(".claude/settings.json", "fake-sibling-install-security");
+      const owner = createSettingsFileOwner(".claude/settings.json", [...securitySurfaces, sibling]);
+
+      const result = await installRuntimeHooks(root, SECURITY_CLAUDE_RUNTIME, owner);
+
+      expect(result.ok).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+      // Refused before any write: no file, not even the parent directory.
+      expect(existsSync(path.join(root, ".claude"))).toBe(false);
     });
   });
 
-  test("uninstallSurfaces refuses (non-empty errors) when uninstalling would leave a previously-valid sibling invalid, and the file is unchanged", async () => {
+  test("uninstallRuntimeHooks (security) returns {ok:false, errors:[...]} and leaves the file unchanged", async () => {
     await withTempDir(async (root) => {
-      const { owner, ctxId, siblingId } = buildCtxGuardWithFakeSibling();
+      const file = path.join(root, ".claude", "settings.json");
+      // Install for real first (no override — the registry's own owner), so
+      // there is real, previously-valid content on disk.
+      const installed = await installRuntimeHooks(root, SECURITY_CLAUDE_RUNTIME);
+      expect(installed.ok).toBe(true);
+      const before = readFileSync(file, "utf8");
+
+      const claude = getHarnessAdapter("claude")!;
+      const securitySurfaces = surfacesOf(claude, { subsystem: "security" });
+      const sibling = siblingRequiringHooksObject(".claude/settings.json", "fake-sibling-uninstall-security");
+      const owner = createSettingsFileOwner(".claude/settings.json", [...securitySurfaces, sibling]);
+
+      const result = await uninstallRuntimeHooks(root, SECURITY_CLAUDE_RUNTIME, owner);
+
+      expect(result.ok).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(readFileSync(file, "utf8")).toBe(before);
+    });
+  });
+
+  test("installRuntimeHook (ctx) returns non-empty errors and leaves the file unchanged", async () => {
+    await withTempDir(async (root) => {
+      const cursor = getHarnessAdapter("cursor")!;
+      const ctxSurface = surfacesOf(cursor, { subsystem: "ctx-guard" })[0]!;
+      const sibling = siblingRequiringHooksAbsent(".cursor/hooks.json", "fake-sibling-install-ctx");
+      const owner = createSettingsFileOwner(".cursor/hooks.json", [ctxSurface, sibling]);
+
+      const { errors } = await installRuntimeHook(root, CURSOR_RUNTIME, owner);
+
+      expect(errors.length).toBeGreaterThan(0);
+      expect(existsSync(path.join(root, ".cursor"))).toBe(false);
+    });
+  });
+
+  test("uninstallRuntimeHook (ctx) throws with the owner's message and leaves the file unchanged", async () => {
+    await withTempDir(async (root) => {
       const file = path.join(root, ".cursor", "hooks.json");
-
-      // Install the ctx guard first — this is what makes the fake sibling
-      // (which depends only on `hooks` being an object) become validly true.
-      const installed = await installSurfaces(root, ".cursor/hooks.json", [ctxId], owner);
+      const installed = await installRuntimeHook(root, CURSOR_RUNTIME);
       expect(installed.errors).toEqual([]);
-      const beforeUninstall = readFileSync(file, "utf8");
+      const before = readFileSync(file, "utf8");
 
-      // Now uninstall ONLY the ctx guard. Its strip removes the `hooks`
-      // object entirely once nothing managed remains under it, which would
-      // silently take the previously-valid fake sibling down with it — the
-      // owner must refuse rather than write that.
-      const uninstalled = await uninstallSurfaces(root, ".cursor/hooks.json", [ctxId], owner);
-      expect(uninstalled.errors.length).toBeGreaterThan(0);
-      expect(uninstalled.errors.some((e) => e.includes(siblingId))).toBe(true);
+      const cursor = getHarnessAdapter("cursor")!;
+      const ctxSurface = surfacesOf(cursor, { subsystem: "ctx-guard" })[0]!;
+      const sibling = siblingRequiringHooksObject(".cursor/hooks.json", "fake-sibling-uninstall-ctx");
+      const owner = createSettingsFileOwner(".cursor/hooks.json", [ctxSurface, sibling]);
 
-      // Refused: the file on disk is untouched.
-      const afterUninstall = readFileSync(file, "utf8");
-      expect(afterUninstall).toBe(beforeUninstall);
+      let thrown: unknown;
+      try {
+        await uninstallRuntimeHook(root, CURSOR_RUNTIME, owner);
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).toContain("fake-sibling-uninstall-ctx");
+      expect(readFileSync(file, "utf8")).toBe(before);
+    });
+  });
 
-      // `uninstallRuntimeHook`/`uninstallOrientRuntime` re-throw exactly this
-      // errors array (see their module comments) — reproduced here at the
-      // seam that actually exists, since neither accepts this owner directly.
-      expect(() => {
-        if (uninstalled.errors.length > 0) throw new Error(uninstalled.errors.join("; "));
-      }).toThrow();
+  test("installOrientRuntime returns non-empty errors and leaves the file unchanged", async () => {
+    await withTempDir(async (root) => {
+      const claude = getHarnessAdapter("claude")!;
+      const orientSurface = surfacesOf(claude, { subsystem: "orient" })[0]!;
+      const sibling = siblingRequiringHooksAbsent(".claude/settings.json", "fake-sibling-install-orient");
+      const owner = createSettingsFileOwner(".claude/settings.json", [orientSurface, sibling]);
+
+      const errors = await installOrientRuntime(root, "claude", owner);
+
+      expect(errors.length).toBeGreaterThan(0);
+      expect(existsSync(path.join(root, ".claude"))).toBe(false);
+    });
+  });
+
+  test("uninstallOrientRuntime throws with the owner's message and leaves the file unchanged", async () => {
+    await withTempDir(async (root) => {
+      const file = path.join(root, ".claude", "settings.json");
+      const installErrors = await installOrientRuntime(root, "claude");
+      expect(installErrors).toEqual([]);
+      const before = readFileSync(file, "utf8");
+
+      const claude = getHarnessAdapter("claude")!;
+      const orientSurface = surfacesOf(claude, { subsystem: "orient" })[0]!;
+      const sibling = siblingRequiringHooksObject(".claude/settings.json", "fake-sibling-uninstall-orient");
+      const owner = createSettingsFileOwner(".claude/settings.json", [orientSurface, sibling]);
+
+      let thrown: unknown;
+      try {
+        await uninstallOrientRuntime(root, "claude", owner);
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).toContain("fake-sibling-uninstall-orient");
+      expect(readFileSync(file, "utf8")).toBe(before);
     });
   });
 });

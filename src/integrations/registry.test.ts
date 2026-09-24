@@ -23,13 +23,12 @@ import {
   SETTINGS_FILE_OWNERS,
   allowAction,
   assertRegistryCoherent,
-  decisionCodecFor,
   getHarnessAdapter,
   refusalAction,
   surfacesOf,
 } from "./registry";
-import type { HarnessAdapter, SurfaceAdapter, SurfaceFlag } from "./types";
-import { CTX_RUNTIMES, UNSUPPORTED_RUNTIMES } from "../ctx/runtimes";
+import type { HarnessAdapter, HookAction, SurfaceAdapter, SurfaceFlag } from "./types";
+import { CTX_RUNTIMES, UNSUPPORTED_RUNTIMES, buildBlockMessage, type HookClassification } from "../ctx/runtimes";
 import { ORIENT_RUNTIMES, UNSUPPORTED_ORIENT } from "../ctx/orient-runtimes";
 import { RUNTIME_HOOKS } from "../security/agent-hooks/runtimes";
 import { CLI_ROUTES } from "../cli";
@@ -532,21 +531,47 @@ describe("surfacesOf query helper", () => {
   });
 });
 
-describe("R2-F1: refusalAction/allowAction resolve through the registry's own HarnessAdapter.decisionCodec", () => {
-  test("every adapter id: refusalAction/allowAction equal that adapter's decisionCodec output", () => {
+describe("R3-F1: refusalAction/allowAction/CTX_RUNTIMES agree with the pre-refactor hard-coded shape per adapter id", () => {
+  // Literals copied from the pre-refactor `refusalAction`/`allowAction` in
+  // `src/ctx/runtimes.ts` (`git show 90e90931:src/ctx/runtimes.ts`), NOT
+  // derived from `HarnessAdapter.decisionCodec` or anything else the registry
+  // computes. The R2-F1 version of this test compared `refusalAction` against
+  // `adapter.decisionCodec` — exactly the value `decisionCodecFor` reads — so
+  // a bug shared by both sides (e.g. cursor's `HarnessAdapter.decisionCodec`
+  // silently set to the exit-code codec) would still pass. Hard-coding the
+  // expected shape here means a real behaviour change is what this test
+  // actually watches for.
+  function expectedRefuse(id: string, message: string): HookAction {
+    switch (id) {
+      case "cursor":
+        return { exitCode: 0, stdout: `${JSON.stringify({ permission: "deny", agent_message: message })}\n` };
+      case "antigravity":
+        return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: false, deny_reason: message })}\n` };
+      default:
+        return { exitCode: 2, stderr: `${message}\n` };
+    }
+  }
+  function expectedAllow(id: string): HookAction {
+    switch (id) {
+      case "cursor":
+        return { exitCode: 0, stdout: `${JSON.stringify({ permission: "allow" })}\n` };
+      case "antigravity":
+        return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: true })}\n` };
+      default:
+        return { exitCode: 0 };
+    }
+  }
+
+  test("every adapter id: refusalAction/allowAction equal the hard-coded pre-refactor shape", () => {
     for (const adapter of HARNESS_ADAPTERS) {
       const message = `refusal message for ${adapter.id}`;
       expect({ id: adapter.id, refusal: refusalAction(adapter.id, message) }).toEqual({
         id: adapter.id,
-        refusal: adapter.decisionCodec.refuse(adapter.id, message),
+        refusal: expectedRefuse(adapter.id, message),
       });
       expect({ id: adapter.id, allow: allowAction(adapter.id) }).toEqual({
         id: adapter.id,
-        allow: adapter.decisionCodec.allow(adapter.id),
-      });
-      expect({ id: adapter.id, codec: decisionCodecFor(adapter.id) }).toEqual({
-        id: adapter.id,
-        codec: adapter.decisionCodec,
+        allow: expectedAllow(adapter.id),
       });
     }
   });
@@ -555,6 +580,23 @@ describe("R2-F1: refusalAction/allowAction resolve through the registry's own Ha
     const message = "unknown-runtime message";
     expect(refusalAction("some-future-runtime", message)).toEqual({ exitCode: 2, stderr: `${message}\n` });
     expect(allowAction("some-future-runtime")).toEqual({ exitCode: 0 });
+  });
+
+  test("CTX_RUNTIMES[i].block/.allow actually emit the hard-coded shape (behavioural, not just decisionCodecFor)", () => {
+    const classification: HookClassification = { block: true, matched: "rg", suggestion: "keryx ctx rg" };
+    for (const runtime of CTX_RUNTIMES) {
+      const command = "rg foo";
+      const message = buildBlockMessage(command, classification);
+      expect({ id: runtime.id, action: runtime.block(command, classification) }).toEqual({
+        id: runtime.id,
+        action: expectedRefuse(runtime.id, message),
+      });
+      const allowed = runtime.allow({ block: false });
+      const expectedAllowed = expectedAllow(runtime.id);
+      // `allow` with no `escapeReason` never adds the stderr note (see
+      // `runtimeFromSurface`'s comment) — so it matches `expectedAllow` as-is.
+      expect({ id: runtime.id, action: allowed }).toEqual({ id: runtime.id, action: expectedAllowed });
+    }
   });
 });
 

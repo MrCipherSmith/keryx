@@ -22,9 +22,6 @@ import {
   stripManagedBy,
 } from "./settings-json";
 import {
-  ANTIGRAVITY_DECISION_CODEC,
-  CURSOR_DECISION_CODEC,
-  EXIT_CODE_DECISION_CODEC,
   parseAntigravityCommand,
   parseCursorCommand,
   parseToolInputCommand,
@@ -115,7 +112,6 @@ function nestedCtxSurface(opts: {
     ...(container !== undefined ? { groupContainer: container } : {}),
     ...(nativeSearchTools !== undefined ? { nativeSearchTools } : {}),
     payloadCodec: parseToolInputCommand,
-    decisionCodec: EXIT_CODE_DECISION_CODEC,
   };
 }
 
@@ -179,7 +175,6 @@ export const CTX_GUARD_CURSOR: SurfaceAdapter = {
   groupShape: "flat",
   groupKey: "beforeShellExecution",
   payloadCodec: parseCursorCommand,
-  decisionCodec: CURSOR_DECISION_CODEC,
 };
 
 export const CTX_GUARD_WINDSURF: SurfaceAdapter = {
@@ -209,7 +204,6 @@ export const CTX_GUARD_WINDSURF: SurfaceAdapter = {
   groupShape: "flat",
   groupKey: "pre_run_command",
   payloadCodec: parseWindsurfCommand,
-  decisionCodec: EXIT_CODE_DECISION_CODEC,
 };
 
 const ANTIGRAVITY_CONTAINER = "keryx-ctx-guard";
@@ -274,7 +268,6 @@ export const CTX_GUARD_ANTIGRAVITY: SurfaceAdapter = {
   groupKey: "PreToolUse",
   groupContainer: ANTIGRAVITY_CONTAINER,
   payloadCodec: parseAntigravityCommand,
-  decisionCodec: ANTIGRAVITY_DECISION_CODEC,
 };
 
 // OpenCode has no JSON hook config — it loads JS/TS plugins. The bridge plugin
@@ -316,7 +309,6 @@ export const CTX_GUARD_OPENCODE: SurfaceAdapter = {
   slots: [],
   label: ".opencode/plugin/keryx-ctx-guard.js",
   payloadCodec: parseToolInputCommand,
-  decisionCodec: EXIT_CODE_DECISION_CODEC,
   customInstall: async (root) => {
     const { mkdir, writeFile } = await import("node:fs/promises");
     const file = CTX_GUARD_OPENCODE.settingsFile!(root);

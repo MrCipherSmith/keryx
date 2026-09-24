@@ -8,6 +8,7 @@ import {
   uninstallSurfaces,
   type Confidence as IntegrationConfidence,
   type Settings as IntegrationSettings,
+  type SettingsFileOwner,
   type SurfaceAdapter,
 } from "../integrations";
 
@@ -125,10 +126,14 @@ export function getOrientRuntime(id: string): OrientRuntime | undefined {
  * ctx-guard/security surface sharing the same file invalid without saying so.
  * Returns the rendered file's validation errors ([] = ok).
  */
-export async function installOrientRuntime(projectRoot: string, runtimeId: string): Promise<string[]> {
+export async function installOrientRuntime(
+  projectRoot: string,
+  runtimeId: string,
+  ownerOverride?: SettingsFileOwner,
+): Promise<string[]> {
   const runtime = getOrientRuntime(runtimeId);
   if (!runtime) return [`${runtimeId}: unknown orient runtime`];
-  const owner = settingsFileOwnerFor(runtime.relativePath);
+  const owner = ownerOverride ?? settingsFileOwnerFor(runtime.relativePath);
   if (!owner) return [`${runtimeId}: no settings-file owner registered for ${runtime.relativePath}`];
   const { errors } = await installSurfaces(projectRoot, runtime.relativePath, [ORIENT_SURFACE_ID], owner);
   return errors;
@@ -139,10 +144,14 @@ export async function installOrientRuntime(projectRoot: string, runtimeId: strin
  * refuses (it would leave a sibling surface on the same settings file
  * invalid) — see `commands/orient.ts::handleUninstall`, which reports it.
  */
-export async function uninstallOrientRuntime(projectRoot: string, runtimeId: string): Promise<void> {
+export async function uninstallOrientRuntime(
+  projectRoot: string,
+  runtimeId: string,
+  ownerOverride?: SettingsFileOwner,
+): Promise<void> {
   const runtime = getOrientRuntime(runtimeId);
   if (!runtime) return;
-  const owner = settingsFileOwnerFor(runtime.relativePath);
+  const owner = ownerOverride ?? settingsFileOwnerFor(runtime.relativePath);
   if (!owner) return;
   const { errors } = await uninstallSurfaces(projectRoot, runtime.relativePath, [ORIENT_SURFACE_ID], owner);
   if (errors.length > 0) {

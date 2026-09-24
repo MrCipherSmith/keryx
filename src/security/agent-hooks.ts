@@ -1,5 +1,5 @@
 import { pathExists } from "../lib/fs";
-import { installSurfaces, settingsFileOwnerFor, uninstallSurfaces } from "../integrations";
+import { installSurfaces, settingsFileOwnerFor, uninstallSurfaces, type SettingsFileOwner } from "../integrations";
 import {
   CLAUDE_RUNTIME,
   MANAGED_KEY,
@@ -61,8 +61,8 @@ export function securityAgentHookEntries(): {
 export async function installRuntimeHooks(
   projectRoot: string,
   runtime: RuntimeHook,
+  owner: SettingsFileOwner | undefined = settingsFileOwnerFor(runtime.relativePath),
 ): Promise<{ ok: boolean; errors: string[] }> {
-  const owner = settingsFileOwnerFor(runtime.relativePath);
   if (!owner) {
     // Every registered runtime's file has an owner (derived from the same
     // registry these surfaces come from) — unreachable in practice.
@@ -77,12 +77,12 @@ export async function installRuntimeHooks(
 export async function uninstallRuntimeHooks(
   projectRoot: string,
   runtime: RuntimeHook,
+  owner: SettingsFileOwner | undefined = settingsFileOwnerFor(runtime.relativePath),
 ): Promise<{ ok: boolean; errors: string[] }> {
   const file = runtime.settingsPath(projectRoot);
   if (!(await pathExists(file))) {
     return { ok: false, errors: [] };
   }
-  const owner = settingsFileOwnerFor(runtime.relativePath);
   if (!owner) {
     return { ok: false, errors: [] };
   }
