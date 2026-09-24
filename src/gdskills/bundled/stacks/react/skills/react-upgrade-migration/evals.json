@@ -23,8 +23,8 @@
       "prompt": "We're upgrading from React 18 to React 19. Where should I start?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "upgrade guide|release notes" },
-        { "grader": "regex", "value": "codemod" }
+        { "grader": "regex", "value": "[Uu]pgrade [Gg]uide|[Rr]elease [Nn]otes|[Mm]igration [Gg]uide|official[\\s\\S]{0,20}(documentation|docs)" },
+        { "grader": "regex", "value": "[Cc]odemod" }
       ]
     },
     {

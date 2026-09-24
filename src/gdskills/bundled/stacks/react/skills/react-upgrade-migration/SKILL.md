@@ -34,7 +34,12 @@ it is out of scope unless the failure is caused by a React API removal.
 2. Read the official React upgrade guide for that version range (the
    project's own `CHANGELOG`/release notes if vendored, otherwise the
    canonical upgrade guide) before touching code — do not rely on memory
-   of a prior major's migration for a different jump.
+   of a prior major's migration for a different jump. When asked where to
+   start a version upgrade, your first sentence names this step
+   explicitly: start with the official React upgrade guide for that
+   version, then run the codemods it points to -- state both the
+   "upgrade guide" and "codemod" steps up front, before any API-removal
+   checklist.
 3. Inventory usage of the APIs the target major removes or changes (grep
    the codebase; see Step 2 per-API list) so the scope of the change is
    known before starting, not discovered file-by-file.

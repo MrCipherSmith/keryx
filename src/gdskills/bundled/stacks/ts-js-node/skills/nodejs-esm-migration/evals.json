@@ -23,7 +23,7 @@
       "prompt": "I want to migrate this Node.js package to ESM. Should I add \"type\": \"module\" to package.json first, before converting the require() calls in each file?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "[Cc]onvert (the )?files (first|before)|after (the )?conversion|last" }
+        { "grader": "regex", "value": "[Cc]onvert[\\s\\S]{0,150}(then|once|before)[\\s\\S]{0,100}(add|flip|set|chang|upgrad)[\\s\\S]{0,30}(\"?type|module)|(once|after)[\\s\\S]{0,60}(every|all|each)[\\s\\S]{0,30}(file|code)[\\s\\S]{0,300}(then|add|flip|set|upgrad)[\\s\\S]{0,30}(\"?type|module)|\\blast\\b|[Cc]onvert (the )?files (first|before)" }
       ]
     },
     {

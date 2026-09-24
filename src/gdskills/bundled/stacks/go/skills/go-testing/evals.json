@@ -32,7 +32,7 @@
       "prompt": "My Go test starts a goroutine and I want to wait for it to finish before asserting. What's the right way?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "not-contains", "value": "time.Sleep" }
+        { "grader": "regex", "value": "WaitGroup|<-\\s*\\w+|chan\\s" }
       ]
     }
   ]

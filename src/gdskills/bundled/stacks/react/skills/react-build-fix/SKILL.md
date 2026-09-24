@@ -64,8 +64,8 @@ hydration.
 
 - `rules-of-hooks` violation: restructure so the hook call is
   unconditional and top-level — move the condition inside the hook's own
-  logic, or split into two components/hooks. Never add an
-  `eslint-disable-next-line react-hooks/rules-of-hooks` comment.
+  logic, or split into two components/hooks. Never add a lint-disable
+  comment for this rule.
 - `exhaustive-deps` violation: add the missing reactive dependency, or, if
   the value is intentionally stable (a ref, a dispatch function, a value
   the author has confirmed never needs to trigger the effect), use the
@@ -121,7 +121,7 @@ Fixed: src/components/UserCard.tsx:18 — onSave typed as
 
 | Rationalization | Why it is wrong |
 |---|---|
-| "I'll add eslint-disable-next-line to get lint green" | Silences a rule designed to catch a real class of runtime bug (stale closures, hook-order crashes); fix the dependency or hook placement instead |
+| "I'll add a lint-disable comment to get lint green" | Silences a rule designed to catch a real class of runtime bug (stale closures, hook-order crashes); fix the dependency or hook placement instead |
 | "This type error is annoying, I'll cast to any" | Removes the type check entirely at that point, including for the next person's edit; fix the actual type mismatch |
 | "The hydration warning is harmless, I'll wrap everything in a client-only check" | Over-broad client-only guards flash empty/loading content for content that could have rendered on the server; find the actual server/client divergence first |
 | "Test's failing after my fix, I'll just skip it" | Skipping hides a real regression the build-fix may have introduced; investigate before moving on |
@@ -133,7 +133,7 @@ Do not report the work done until all of the following hold:
 - The exact command that failed in Step 1 now exits 0.
 - The full chain (type-check, lint, test, build) still passes after the
   fix — a fix to one step did not regress an earlier one.
-- No `eslint-disable` comment was added for a hooks rule, and no `as any`/
+- No lint-disable comment was added for a hooks rule, and no `as any`/
   `: any` was added to route around a type error.
 - `git status` shows only the files whose failure was being fixed (plus
   their types, if the fix was a type definition change).

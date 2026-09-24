@@ -23,7 +23,7 @@
       "prompt": "Our Python project fails with `ModuleNotFoundError: No module named 'mypkg.util'` when running pytest. How do you diagnose and fix this?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "root cause" },
+        { "grader": "regex", "value": "[Rr]oot [Cc]ause" },
         { "grader": "not-contains", "value": "type: ignore" }
       ]
     },

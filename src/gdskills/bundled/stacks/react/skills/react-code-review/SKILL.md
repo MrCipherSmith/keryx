@@ -52,7 +52,27 @@ merged reviewer.
 
 - Rules of Hooks: any hook called conditionally, in a loop, after an early
   return, or inside a plain (non-hook, non-component) function — flag as a
-  correctness bug, not a style note.
+  correctness bug, not a style note. Check this FIRST, before looking at
+  dependency arrays or closures: scan every component/hook body top to
+  bottom for a `return`/`if (...) return` sitting above a `useState`/
+  `useEffect`/`useMemo`/`useCallback`/other hook call, since a hook that
+  runs conditionally on some renders and not others breaks React's
+  per-render hook ordering. For example:
+  ```jsx
+  function UserPanel({ id }) {
+    if (!id) return null;              // <- runs before the hooks below
+    const [user, setUser] = useState(null);   // <- Rules of Hooks violation
+    useEffect(() => { fetchUser(id).then(setUser); }, [id]);
+    return <div>{user?.name}</div>;
+  }
+  ```
+  is a Rules of Hooks violation: on a render where `id` is falsy, `useState`
+  and `useEffect` are skipped entirely, and on the next render where `id`
+  is truthy they run — a different hook count/order between renders. The
+  fix is to move the early return below all hook calls (call every hook
+  unconditionally, then branch in the returned JSX or inside the hook's own
+  callback). Flag this before ever discussing the effect's dependency
+  array — a dependency-array note here would bury the actual bug.
 - Effect dependency arrays: every reactive value read inside the effect
   body appears in the dependency array, or the omission is deliberate and
   safe (a ref, a setState function) — a missing dependency that reads a

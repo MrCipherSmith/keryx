@@ -24,7 +24,7 @@
       "strictness": "high",
       "expected_behavior": [
         { "grader": "regex", "value": "[Rr]ules of [Hh]ooks|conditional" },
-        { "grader": "regex", "value": "early return|before" }
+        { "grader": "regex", "value": "early return|before|above (any|every|all)|ahead of" }
       ]
     },
     {

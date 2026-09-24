@@ -55,11 +55,24 @@ fork rationale.
 
 ### Step 3: Write
 
-1. Query by role/label/text (`getByRole`, `getByLabelText`, `getByText`);
-   use `data-testid` only when no accessible query exists.
+1. Query by role/label/text -- literally `getByRole(...)` (not
+   `getAllByRole` for a single element you expect exactly one of),
+   `getByLabelText`, `getByText`; use `data-testid` only when no
+   accessible query exists.
 2. Drive interaction with `@testing-library/user-event`
    (`userEvent.setup()` then `.click`/`.type`/`.tab`), not `fireEvent`,
-   unless the project's pinned `user-event` major cannot express it.
+   unless the project's pinned `user-event` major cannot express it. Every
+   click/type/submit interaction in a generated test goes through
+   `userEvent`, never `fireEvent.click`/`fireEvent.change` as the
+   click/type mechanism.
+
+   A submit-and-see-an-error test looks like this:
+   ```tsx
+   const user = userEvent.setup();
+   render(<LoginForm />);
+   await user.click(screen.getByRole("button", { name: /submit/i }));
+   expect(await screen.findByText(/password is required/i)).toBeInTheDocument();
+   ```
 3. Wait for async UI with `findBy*` or `waitFor` — never a manual
    `setTimeout`.
 4. Mock network calls at the request boundary (an MSW handler, or the

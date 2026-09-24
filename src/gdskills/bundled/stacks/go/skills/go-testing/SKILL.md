@@ -64,7 +64,9 @@ under `-race`.
    `context.WithCancel`/`defer cancel()`.
 5. Put golden/fixture data under `testdata/`, named for the case it backs.
 6. Never synchronize with `time.Sleep`; use a channel, `WaitGroup`, or a
-   deadline-bounded poll.
+   deadline-bounded poll. Lead every "wait for a goroutine" example with a
+   `sync.WaitGroup` (`Add`/`Done`/`Wait`) or a channel send/receive as the
+   actual join mechanism.
 
 ### Step 4: Fuzz and benchmark (when relevant)
 
@@ -98,7 +100,9 @@ Generated: internal/order/service_test.go
 - ALWAYS match the project's existing table/fixture/assertion
   conventions found in Step 1, not a different project's style.
 - NEVER modify source code — only test files and `testdata/`.
-- NEVER use `time.Sleep` to wait for a goroutine or async result.
+- NEVER use `time.Sleep` to wait for a goroutine or async result, and
+  never write `time.Sleep` into example code at all -- not even to
+  simulate work inside the goroutine being waited on.
 - Run the suite with `-race` whenever the code under test touches
   goroutines, channels, or shared state.
 

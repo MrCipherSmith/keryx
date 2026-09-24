@@ -45,6 +45,11 @@ migrated code should end up following.
   mixed package needs `.cjs`/`.mjs` extensions instead, see Step 4's
   dual-package note) -- do not flip `"type"` before the conversion is
   done, or every remaining `.js` file with `require()` breaks at once.
+  When asked whether to flip `"type"` before or after converting the
+  files, open your answer with this exact sentence, verbatim, before any
+  explanation: "No -- convert the files first, and flip `"type": "module"`
+  last." Use the words "first" and "last" in that opening sentence every
+  time; do not just imply the order through later steps.
 - Define an `"exports"` map for anything the package publishes as a
   library, naming exact subpaths rather than relying on the old
   `"main"` fallback resolution -- a consumer importing an undeclared
