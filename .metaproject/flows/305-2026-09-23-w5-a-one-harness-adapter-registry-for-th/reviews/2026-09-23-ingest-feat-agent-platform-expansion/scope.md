@@ -4,7 +4,7 @@ target: branch
 ref: feat/agent-platform-expansion
 mode: ingest
 flow: 305 (explicit-flow-id)
-created_at: 2026-09-23T22:31:51.819Z
+created_at: 2026-09-24T03:56:12.960Z
 context_mode: light
 
 ## Stage counts
@@ -21,20 +21,22 @@ This is NOT `dropped 0`: nothing ran, so nothing is known.
 ### Refuted by the verifier
 
 verification_mode: annotate
-claims_received: 0
-claims_applied: 0
+claims_received: 10
+claims_applied: 10
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
 confirmed: 0
-refuted: 0
+refuted: 10
 unverifiable: 0
-unverified: 11
+unverified: 1
 
 ### Retained
 
 findings_in: 11
 findings_removed_by_verifier: 0
 findings_retained: 11
+
+`annotate` records verdicts and removes nothing: 10 finding(s) are marked refuted and still reported.
 
 ### Verification claims discarded
 

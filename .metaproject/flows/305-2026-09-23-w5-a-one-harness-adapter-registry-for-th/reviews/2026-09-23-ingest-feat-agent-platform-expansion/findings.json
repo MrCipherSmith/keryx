@@ -22,7 +22,17 @@
       ],
       "enumeration_method": "every caller of installSurfaces/uninstallSurfaces found by keryx ctx rg"
     },
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F1"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a91be480 (the fixing commit) by round-2 reviewer: probe P9 shows installer/uninstaller errors are inspected; ctx/orient/security CLIs exit 1 on refusal. Wrapper propagation later pinned by owner.test.ts at 667fc74f (mutations G5-G10 killed).",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit a91be480 (squashed into c61784d3, PR #675), re-checked closed by review round 2"
+    }
   },
   {
     "id": "F2",
@@ -41,7 +51,17 @@
       ],
       "enumeration_method": "the single validation site in the owner"
     },
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F2"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a91be480: probe P1 (antigravity {\"keryx-ctx-guard\":[]}) now returns errors and leaves the file unchanged; round-2 variants (__proto__, 1e400, refused op creates no file) behave correctly.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit a91be480 (squashed into c61784d3, PR #675), re-checked closed by review round 2"
+    }
   },
   {
     "id": "F3",
@@ -61,7 +81,17 @@
       ],
       "enumeration_method": "every surface merge run on {} and legacy fixtures, touched keys vs declared slots"
     },
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F3"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a91be480: probe P4 reports no undeclared keys; a surface owning hooks as array next to ctx's object makes assertRegistryCoherent throw (round-2 variant Q1 extended at f7c885bc).",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit a91be480 (squashed into c61784d3, PR #675), re-checked closed by review round 2"
+    }
   },
   {
     "id": "F4",
@@ -82,7 +112,17 @@
       ],
       "enumeration_method": "the three exported runtime lists named by AC2"
     },
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F4"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a91be480: CTX_RUNTIMES/ORIENT_RUNTIMES/RUNTIME_HOOKS are mapped from HARNESS_ADAPTERS; round-2 reviewer confirmed derived views share the registry's function objects.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit a91be480 (squashed into c61784d3, PR #675), re-checked closed by review round 2"
+    }
   },
   {
     "id": "F5",
@@ -102,7 +142,17 @@
       ],
       "enumeration_method": "both flat security surface operations (input, output) across cursor/windsurf/generic-mcp"
     },
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F5"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a91be480: probe P8 orphaned managed {on:'legacy'} entry is swept and the file returns to {}; unmanaged and ctx-sentinel entries untouched (round-2 variants).",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit a91be480 (squashed into c61784d3, PR #675), re-checked closed by review round 2"
+    }
   },
   {
     "id": "F6",
@@ -115,7 +165,17 @@
     "confidence": "high",
     "file": "src/integrations/settings-json.ts",
     "line": 69,
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F6"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a91be480: both behaviour changes documented at their sites and pinned by registry.test.ts; probes P6/P7 show the pinned new behaviour.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "kept as deliberate improvements, documented in JSDoc and pinned by registry.test.ts (commit a91be480, PR #675)"
+    }
   },
   {
     "id": "F7",
@@ -128,7 +188,17 @@
     "confidence": "high",
     "file": "src/integrations/settings-file.ts",
     "line": 31,
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F7"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a91be480: probe P2 unknown id refused, P3 canonical order, P5 caller input not mutated; regression tests added at f7c885bc (owner.test.ts) kill the corresponding mutations.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit a91be480 (squashed into c61784d3, PR #675), re-checked closed by review round 2"
+    }
   },
   {
     "id": "F8",
@@ -141,7 +211,17 @@
     "confidence": "high",
     "file": "src/ctx/orient-runtimes.ts",
     "line": 133,
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F8"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a91be480: OrientRuntime carries relativePath from the surface; the switch and locate('') fallback are gone.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit a91be480 (squashed into c61784d3, PR #675), re-checked closed by review round 2"
+    }
   },
   {
     "id": "F9",
@@ -154,7 +234,17 @@
     "confidence": "high",
     "file": "src/integrations/coexistence.test.ts",
     "line": 504,
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F9"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a91be480: orient uninstall asserts on-disk invalidity; both sides uninstalled in turn; multiTarget filter is >= 2; permutation test seeded with legacy fixtures.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit a91be480 (squashed into c61784d3, PR #675), re-checked closed by review round 2"
+    }
   },
   {
     "id": "F10",
@@ -167,6 +257,16 @@
     "confidence": "high",
     "file": "src/integrations/types.ts",
     "line": 57,
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F10"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion#F10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a91be480 and f7c885bc: opencode surface id is ctx-guard; subsystem is an open string with named constants; index.ts no longer exports raw mutation primitives; decision codec resolves through the registry (667fc74f single source).",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit a91be480 (squashed into c61784d3, PR #675), re-checked closed by review round 2"
+    }
   }
 ]
