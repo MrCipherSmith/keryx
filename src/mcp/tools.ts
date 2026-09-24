@@ -10,14 +10,16 @@
 
 import { getAffected, getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 import type { GraphData } from "../gdgraph/types";
-import { createSecurityService, runScan } from "../security/service";
+import { createSecurityService, runScan, sourceForFileRead } from "../security/service";
 import { scanMcpManifest } from "../security/detect/mcp";
+import { resolveContainedPath, resolveProjectRoot } from "../lib/contained-path";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { createCodeHealthService } from "../health/service";
 import { createGdWikiService } from "../wiki/service";
 import { createFlowService } from "../flow/service";
 import { runValidate } from "../standard/service";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, realpath, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
 import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, requireWorkspaceReference, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
@@ -648,7 +650,22 @@ export function buildToolRegistry(): ToolEntry[] {
       mutating: false,
       async invoke(cwd, params) {
         const content = stringParam(params, "content") ?? "";
-        const source = (stringParam(params, "source") ?? "untrusted-external") as SecuritySource;
+        // F3 (review round 1): `source` is model-supplied over MCP, and
+        // `trusted-project` means "already in the repository the OPERATOR
+        // chose to work in — vetted by committing it" (`types.ts`). A caller
+        // on the other side of this tool call can claim anything in that
+        // string field; letting it claim `trusted-project` would let it grant
+        // its own content the shipped egress source-override allowance
+        // (`resolve.ts#egressSourceOverrideAction`) that exists for a
+        // committed README badge, not for a model's own say-so. Every other
+        // recognized value is passed through unchanged — this clamps the one
+        // value a caller must never be able to self-assign, it does not
+        // restrict which sources this tool may otherwise report.
+        const requestedSource = stringParam(params, "source") ?? "untrusted-external";
+        const source: SecuritySource =
+          requestedSource === "trusted-project"
+            ? "untrusted-external"
+            : (requestedSource as SecuritySource);
         return createSecurityService(cwd).check({ content, source });
       },
     },
@@ -665,11 +682,67 @@ export function buildToolRegistry(): ToolEntry[] {
       async invoke(cwd, params) {
         const filePath = stringParam(params, "path");
         const inline = stringParam(params, "content");
-        const content = inline ?? (filePath ? await readFile(filePath, "utf8") : "");
+        // R2-4 (flow 304, fix round 2): this hard-coded `trusted-project` for
+        // BOTH inline `content` and a `path` read, unconditionally. That is
+        // the same mistake `read-source.ts` documents at length for `ctx
+        // read` — `trusted-project` grants the shipped egress source-override
+        // allowance (`resolve.ts#egressSourceOverrideAction`), meant for a
+        // committed file the operator vetted by committing it, never for
+        // caller-supplied bytes with no such provenance.
+        //
+        // Inline `content` has no provenance at all — it is bytes the MCP
+        // caller typed into this call, exactly the shape `security.check`
+        // already clamps below — so it is always `untrusted-external`.
+        //
+        // A `path` is contained to the project root with the same helper
+        // `read-source.ts` uses (never a module internal — `lib/contained-path`
+        // is a shared lib), and its actual trust is derived from
+        // `sourceForFileRead`: tracked-by-git inside the root is
+        // `trusted-project`, everything else untracked or ignored is
+        // `untrusted-external`. A path that resolves outside the root is
+        // refused outright rather than silently scanned as untrusted, so a
+        // traversal attempt is surfaced instead of quietly downgraded. A
+        // directory never reaches `sourceForFileRead` at all — the
+        // `readFile` call just above it throws EISDIR first, so this tool
+        // rejects a directory path outright rather than classifying it as
+        // any particular source.
+        let content: string;
+        let source: SecuritySource;
+        // R3-2 (flow 304, fix round 3): reported RELATIVE to the project
+        // root, exactly like `commands/security.ts`'s `handleScan` does — the
+        // absolute realpath `resolveContainedPath` returns is machine-specific
+        // (home directory, worktree location, …) and this report is committed
+        // to `.metaproject/data/security/artifacts/latest.json`.
+        let reportPath: string | undefined;
+        if (inline !== undefined) {
+          content = inline;
+          source = "untrusted-external";
+        } else if (filePath) {
+          const projectRoot = resolveProjectRoot(cwd);
+          const contained = await resolveContainedPath(projectRoot, filePath);
+          if (!contained.ok) {
+            throw new Error(`security.scan: ${contained.message}`);
+          }
+          content = await readFile(contained.path, "utf8");
+          source = await sourceForFileRead(cwd, contained.path);
+          // `contained.path` is realpath'd (`lib/contained-path.ts`), but
+          // `projectRoot` is not — on a host where the project root itself
+          // sits behind a symlink (e.g. macOS's tmpdir, `/var` -> `/private/
+          // var`), relativizing against the non-realpath'd root produces a
+          // path that walks back OUT through the symlink and in again
+          // (`../../../private/var/...`) instead of a short in-project
+          // relative path. Realpath `projectRoot` too so both sides of the
+          // comparison agree.
+          const projectRootReal = await realpath(projectRoot).catch(() => projectRoot);
+          reportPath = path.relative(projectRootReal, contained.path) || ".";
+        } else {
+          content = "";
+          source = "untrusted-external";
+        }
         const result = await runScan(cwd, {
           content,
-          source: "trusted-project",
-          ...(filePath ? { path: filePath } : {}),
+          source,
+          ...(reportPath ? { path: reportPath } : {}),
         });
         return { decision: result.decision, report: result.report };
       },

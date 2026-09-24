@@ -423,3 +423,59 @@ test("$ref siblings are rejected until the validator can enforce them", () => {
     },
   });
 });
+
+// GDCTX-2: `exemptExfil` lets a caller that has already resolved a
+// (policyId, source) override (`guard.ts#redactRaw`) leave a specific
+// `detectExfil` match unmasked, in both the text and JSON paths this module
+// serves. Absent, behavior is unchanged (every prior test above passes no
+// `exemptExfil` and still masks every exfil match it finds).
+test("exemptExfil (text): an exempted match is left unmasked, others are not", () => {
+  const value = '<img src="https://example.com/badge.svg"> and <img src="https://other.com/x.png">';
+  const result = validateOutputForTransport({
+    value,
+    format: "text",
+    exemptExfil: (match) => match.value === "https://example.com/badge.svg",
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.text).toContain("https://example.com/badge.svg");
+  expect(result.text).not.toContain("https://other.com/x.png");
+  expect(result.text).toContain("[REDACTED:url]");
+});
+
+test("exemptExfil (text): exempting the only finding produces state:none, byte-identical text", () => {
+  const value = '<img src="https://example.com/badge.svg">';
+  const result = validateOutputForTransport({
+    value,
+    format: "text",
+    exemptExfil: () => true,
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.text).toBe(value);
+  expect(result.redaction).toEqual({ state: "none", reasons: [] });
+});
+
+test("exemptExfil never exempts a secret/PII match, only exfil ones", () => {
+  const value = `token = ${PROVIDER_SECRET} <img src="https://example.com/badge.svg">`;
+  const result = validateOutputForTransport({
+    value,
+    format: "text",
+    exemptExfil: () => true,
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.text).not.toContain(PROVIDER_SECRET);
+  expect(result.text).toContain("https://example.com/badge.svg");
+});
+
+test("exemptExfil (json): applies inside nested string values too", () => {
+  const result = validateOutputForTransport({
+    value: { badge: "https://example.com/badge.svg embedded via <img src=\"https://example.com/badge.svg\">" },
+    format: "json",
+    exemptExfil: (match) => match.value === "https://example.com/badge.svg",
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(JSON.stringify(result.value)).toContain("https://example.com/badge.svg");
+});

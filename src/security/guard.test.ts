@@ -232,6 +232,91 @@ test("redactRaw: secret is masked and the raw value is gone", async () => {
   }
 });
 
+// GDCTX-2 end-to-end: this is the actual mechanism `ctx read` calls
+// (`src/commands/ctx.ts` -> `redactRaw({..., source: "trusted-project"})`).
+// Fixing `resolve.ts` alone is not enough here — `redactRaw` computes its
+// returned `content` from the mandatory output-validation floor
+// (`validateSerializedOutput`), not from `resolveDecision`'s `decision.redacted`,
+// so the floor itself has to learn the same (policyId, source) override,
+// gated the same way, or a trusted-project badge URL stays masked regardless
+// of what `resolve.ts` decides. These cover the README regression fixture
+// directly: a CI/npm/license-style badge URL, HTML and markdown, survives
+// `ctx read` unmasked, while the same shape with a credential-looking query
+// string — or a non-trusted source — still redacts.
+const HTML_BADGE = `<img src="https://github.com/o/r/actions/workflows/ci.yml/badge.svg">`;
+const MARKDOWN_BADGE = `![npm](https://img.shields.io/npm/v/x.svg?style=flat)`;
+
+test("redactRaw: trusted-project badge URL (HTML and markdown) is left unredacted", async () => {
+  const root = await makeWorkspace({ security: true, mode: "advisory" });
+  try {
+    const htmlOut = await redactRaw({ cwd: root, content: HTML_BADGE, source: "trusted-project" });
+    expect(htmlOut.content).toBe(HTML_BADGE);
+    expect(htmlOut.content).not.toContain("[REDACTED:url]");
+
+    const mdOut = await redactRaw({ cwd: root, content: MARKDOWN_BADGE, source: "trusted-project" });
+    expect(mdOut.content).toBe(MARKDOWN_BADGE);
+    expect(mdOut.content).not.toContain("[REDACTED:url]");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("redactRaw: the same badge URL from tool-output is still redacted", async () => {
+  const root = await makeWorkspace({ security: true, mode: "advisory" });
+  try {
+    const out = await redactRaw({ cwd: root, content: HTML_BADGE, source: "tool-output" });
+    expect(out.content).toContain("[REDACTED:url]");
+    expect(out.content).not.toContain("badge.svg");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("redactRaw: a trusted-project badge URL with a credential-shaped query string still redacts", async () => {
+  const root = await makeWorkspace({ security: true, mode: "advisory" });
+  try {
+    const content = `<img src="https://img.shields.io/npm/v/x.svg?token=${AWS_KEY}">`;
+    const out = await redactRaw({ cwd: root, content, source: "trusted-project" });
+    expect(out.content).not.toContain(AWS_KEY);
+    expect(out.content).toContain("[REDACTED:url]");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("redactRaw: a project can disable the trusted-project override via its own config", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-guard-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({ modules: { security: { enabled: true } } }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, ".metaproject", "security.config.json"),
+      JSON.stringify({
+        mode: "advisory",
+        policies: {
+          egress: {
+            enabled: true,
+            action: "block",
+            sourceOverrides: {
+              "egress.html-image-exfil": { "trusted-project": "redact" },
+            },
+          },
+        },
+      }),
+      "utf8",
+    );
+    const out = await redactRaw({ cwd: root, content: HTML_BADGE, source: "trusted-project" });
+    expect(out.content).toContain("[REDACTED:url]");
+    expect(out.content).not.toContain("badge.svg");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("securityFlowGate: disabled -> null (gate omitted)", async () => {
   const root = await makeWorkspace({ security: false });
   try {

@@ -4,6 +4,7 @@ import { pathExists } from "../lib/fs";
 import { offersIndexTools } from "../lib/metaproject-state";
 import { readFile } from "node:fs/promises";
 import { omissionNote } from "./lines";
+import { checkGraphStaleness, STALE_NOTE, UNKNOWN_NOTE } from "../gdgraph/staleness";
 
 // Orientation context for the Metaproject bootstrap + graph/wiki enforcement
 // layer. Where the gdctx
@@ -199,6 +200,31 @@ function freshnessNote(changes: WorkingTreeCodeChanges): string {
     : "freshness: working tree clean";
 }
 
+// F8 (fix round 1): `freshnessNote` above only ever asked "does the working
+// tree have uncommitted code changes" — a question `uncommittedCodeCount`
+// cannot answer "yes" to after a commit or a pull that landed cleanly. A
+// build made at commit A, then a later commit B (a merged PR, a pulled
+// teammate's change) with nothing left uncommitted, read as
+// "freshness: working tree clean" — true of the working tree, false of the
+// graph, and the printed stats were presented as current regardless. This
+// module ALSO never called `checkGraphStaleness` (`../gdgraph/staleness`),
+// the tri-state check every other freshness consumer in this codebase
+// (`commands/gdgraph.ts`'s `printStaleNote`, `wiki/staleness.ts`,
+// `commands/sync.ts`) already routes through — the one signal that actually
+// compares recorded build provenance against HEAD. `stalenessNote` below adds
+// that signal alongside the existing per-file `freshnessNote`, using the same
+// `STALE_NOTE`/`UNKNOWN_NOTE` wording those other consumers already print, so
+// a moved-HEAD or a git failure the working-tree-only check cannot see is
+// still surfaced here. Returns `null` when `checkGraphStaleness` itself says
+// `"fresh"` — nothing extra to add over the existing note in that case.
+function stalenessNote(staleness: Awaited<ReturnType<typeof checkGraphStaleness>>): string | null {
+  if (staleness.status === "fresh") {
+    return null;
+  }
+  const label = staleness.status === "unknown" ? UNKNOWN_NOTE : STALE_NOTE;
+  return [label, ...staleness.reasons.map((reason) => `  - ${reason}`)].join("\n");
+}
+
 // Compact code-graph orientation: the Stats headline + Top Modules table from
 // the gdgraph summary, plus a freshness note. Empty string if not built.
 export async function graphContext(cwd: string): Promise<string> {
@@ -224,7 +250,8 @@ export async function graphContext(cwd: string): Promise<string> {
   const table = section.slice(0, MAX_MODULE_ROWS + 2); // header + separator + rows
   const tableNote = omissionNote(table.length, section.length, "module rows");
 
-  const changes = await uncommittedCodeCount(cwd);
+  const [changes, staleness] = await Promise.all([uncommittedCodeCount(cwd), checkGraphStaleness(cwd)]);
+  const stale = stalenessNote(staleness);
   return [
     "## Code graph (map)",
     "",
@@ -235,6 +262,7 @@ export async function graphContext(cwd: string): Promise<string> {
     ...(tableNote ? [tableNote] : []),
     "",
     freshnessNote(changes),
+    ...(stale ? [stale] : []),
     "Use `keryx gdgraph affected <file>` / `keryx gdgraph query` for impact & relationships before broad search.",
   ]
     .filter((l) => l !== null)

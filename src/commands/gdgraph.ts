@@ -17,7 +17,7 @@ import {
   retrievalStatus,
 } from "../lib/retrieval-codes";
 import { findPath, labelNode } from "../gdgraph/path";
-import { checkGraphStaleness, STALE_NOTE, UNKNOWN_NOTE } from "../gdgraph/staleness";
+import { checkGraphStaleness, STALE_NOTE, UNKNOWN_NOTE, type StalenessCheck } from "../gdgraph/staleness";
 import { isCapabilityEnabled } from "../capability/seam";
 import { loadGdgraphConfig } from "../gdgraph/config";
 import { writeRepomap } from "../gdgraph/repomap";
@@ -116,33 +116,43 @@ async function gdgraphCommandUnlocked(args: string[]): Promise<void> {
 
     if (query === "cycles") {
       const cycles = getCycles(graph);
+      // W7 AC4: `query cycles`/`query orphans` present the loaded graph's
+      // content as current fact and had NO freshness check at all before
+      // this fix (neither the printed note nor a JSON field) — the one
+      // confirmed call site the spec referenced was elsewhere in this file.
+      const freshness = await graphFreshness();
       if (asJson) {
-        console.log(JSON.stringify({ query: "cycles", cycles }, null, 2));
+        console.log(JSON.stringify({ query: "cycles", cycles, freshness }, null, 2));
         return;
       }
       if (cycles.length === 0) {
         console.log("No cycles found.");
+        await printStaleNote(freshness);
         return;
       }
       for (const cycle of cycles) {
         console.log(cycle.join(" -> "));
       }
+      await printStaleNote(freshness);
       return;
     }
 
     if (query === "orphans") {
       const orphans = getOrphans(graph);
+      const freshness = await graphFreshness();
       if (asJson) {
-        console.log(JSON.stringify({ query: "orphans", orphans }, null, 2));
+        console.log(JSON.stringify({ query: "orphans", orphans, freshness }, null, 2));
         return;
       }
       if (orphans.length === 0) {
         console.log("No orphan modules found.");
+        await printStaleNote(freshness);
         return;
       }
       for (const orphan of orphans) {
         console.log(orphan);
       }
+      await printStaleNote(freshness);
       return;
     }
 
@@ -227,10 +237,15 @@ async function runPath(rest: string[]): Promise<void> {
   console.log("");
   if (result.fromResolved.length === 0) {
     console.log(`Could not resolve "${from}" to a file or symbol. Try \`keryx gdgraph find\`.`);
+    // W7 AC4: every outcome of a query command reports freshness, not only a
+    // hit — an unresolved endpoint most needs to know whether the index
+    // simply predates the file it could not find.
+    await printStaleNote();
     return;
   }
   if (result.toResolved.length === 0) {
     console.log(`Could not resolve "${to}" to a file or symbol. Try \`keryx gdgraph find\`.`);
+    await printStaleNote();
     return;
   }
   if (result.nodes.length === 0) {
@@ -238,6 +253,7 @@ async function runPath(rest: string[]): Promise<void> {
     if (!graph.symbols || graph.symbols.length === 0) {
       console.log("Note: symbol layer inactive — only file imports are linked. `keryx gdgraph symbols enable`.");
     }
+    await printStaleNote();
     return;
   }
 
@@ -290,6 +306,9 @@ async function runSymbolsCapability(rest: string[]): Promise<void> {
     console.log("");
     console.log("Enabled but no symbols — run `keryx gdgraph build` (and pull grammars if missing).");
   }
+  // W7 AC4: `symbols status` reports the built graph's own symbol/call
+  // counts as current fact.
+  await printStaleNote();
 }
 
 // T19 finding 4 (flow 234 review): a per-language capability probe for
@@ -580,8 +599,8 @@ async function printDocumentedIn(files: string[]): Promise<void> {
 // and discarded the reasons entirely. "unknown" (a git failure — staleness
 // could not be determined) must never read as the confident "repo moved"
 // claim that `STALE_NOTE` makes.
-async function printStaleNote(): Promise<void> {
-  const check = await checkGraphStaleness(process.cwd());
+async function printStaleNote(precomputed?: StalenessCheck): Promise<void> {
+  const check = precomputed ?? (await checkGraphStaleness(process.cwd()));
   if (check.status === "fresh") {
     return;
   }
@@ -590,6 +609,17 @@ async function printStaleNote(): Promise<void> {
   for (const reason of check.reasons) {
     console.log(`  - ${reason}`);
   }
+}
+
+// W7 AC4: the `--json` counterpart of `printStaleNote` — every JSON payload
+// that presents graph output as current fact carries the SAME tri-state
+// result as a `freshness` field, rather than nothing at all (a printed note
+// has no JSON equivalent, so a `--json` caller previously had no way to know
+// the graph might predate the working tree). `fresh` still reports as a
+// field (`{status:"fresh",reasons:[]}`), not an omitted key — consistent and
+// parseable rather than "absent means fresh".
+async function graphFreshness(): Promise<StalenessCheck> {
+  return checkGraphStaleness(process.cwd());
 }
 
 function printRefs(refs: Array<{ label: string; resolved: boolean }>): void {
@@ -628,6 +658,11 @@ async function runFind(rest: string[]): Promise<void> {
   process.exitCode = retrievalStatus(outcome.code) === "error" ? 1 : 0;
 
   if (asJson) {
+    // W7 AC4: the non-JSON branch below already calls `printStaleNote` on
+    // every outcome; the `--json` branch returned before ever computing
+    // freshness, so a JSON caller of `find` had no way to know the graph
+    // might predate the working tree. Carried as a field, matching `query`.
+    const freshness = await graphFreshness();
     console.log(
       JSON.stringify(
         {
@@ -644,6 +679,7 @@ async function runFind(rest: string[]): Promise<void> {
           scoreKind: RANKING_SCORE_LABEL,
           symbols: outcome.symbols,
           files: outcome.files,
+          freshness,
         },
         null,
         2,
@@ -763,6 +799,12 @@ async function runAffected(rest: string[]): Promise<void> {
       "the graph index holds no file nodes — it was never built here, or its storage is unreadable. " +
         "No claim is being made about whether this target exists.",
     );
+    // W7 AC4: `runAffected` had NO freshness check anywhere in the function —
+    // not on this early refusal, not on the target-not-indexed refusal below,
+    // and not on the success path — despite `affected` being one of the two
+    // subcommands the spec explicitly names as presenting graph output as
+    // current fact. Added to every exit point below.
+    const freshness = await graphFreshness();
     if (asJson) {
       console.log(
         JSON.stringify(
@@ -775,6 +817,7 @@ async function runAffected(rest: string[]): Promise<void> {
             target,
             dependencies: [],
             dependents: [],
+            freshness,
           },
           null,
           2,
@@ -784,6 +827,7 @@ async function runAffected(rest: string[]): Promise<void> {
       for (const line of formatRetrievalOutcome(outcome)) {
         console.error(line);
       }
+      await printStaleNote(freshness);
     }
     process.exitCode = 1;
     return;
@@ -829,6 +873,7 @@ async function runAffected(rest: string[]): Promise<void> {
     // vocabulary. `code` is now that vocabulary's `target-not-indexed`;
     // `error` keeps carrying a value for existing consumers, and carries the
     // same one so the two can never disagree.
+    const freshness = await graphFreshness();
     if (asJson) {
       console.log(
         JSON.stringify(
@@ -847,6 +892,7 @@ async function runAffected(rest: string[]): Promise<void> {
               referencedBy: absence.referencedBy,
               trailPath: absence.removal.path,
             },
+            freshness,
           },
           null,
           2,
@@ -856,6 +902,7 @@ async function runAffected(rest: string[]): Promise<void> {
       console.error("code: target-not-indexed");
       console.error(message);
       console.error(`removal: [${absence.verdict}] ${absence.reason}`);
+      await printStaleNote(freshness);
     }
     process.exitCode = 1;
     return;
@@ -867,7 +914,7 @@ async function runAffected(rest: string[]): Promise<void> {
   }
 
   if (asJson) {
-    console.log(JSON.stringify(affected, null, 2));
+    console.log(JSON.stringify({ ...affected, freshness: await graphFreshness() }, null, 2));
     return;
   }
 
@@ -893,6 +940,7 @@ async function runAffected(rest: string[]): Promise<void> {
       }
     }
   }
+  await printStaleNote();
 }
 
 async function runRepomap(rest: string[]): Promise<void> {
@@ -951,6 +999,10 @@ async function runRepomap(rest: string[]): Promise<void> {
     );
   }
   console.log(`repomap: ${result.path}`);
+  // W7 AC4: `repomap` ranks and writes real graph content (a seeded file map)
+  // as current fact, the same class of output `affected`/`query`/`find`
+  // present — it had no freshness check at all.
+  await printStaleNote();
 }
 
 // Collect free positional arguments, skipping flags + their consumed values.

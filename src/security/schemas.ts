@@ -246,6 +246,18 @@ const EGRESS_POLICY_SCHEMA: JsonSchema = {
     },
     minConfidence: { type: "number", minimum: 0, maximum: 1 },
     allowlist: { type: "array", items: { type: "string" } },
+    // GDCTX-2: per-(policyId, source) action override, e.g.
+    // `{ "egress.html-image-exfil": { "trusted-project": "allow" } }`.
+    sourceOverrides: {
+      type: "object",
+      additionalProperties: {
+        type: "object",
+        additionalProperties: {
+          type: "string",
+          enum: ["allow", "redact", "block", "require-approval", "warn"],
+        },
+      },
+    },
   },
 };
 

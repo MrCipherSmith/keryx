@@ -1,7 +1,7 @@
 {
   "catalogVersion": 1,
-  "sourceFingerprint": "eee73efca808eb5d2a82db418d48c755ede8d07cec013f5f8b99b84755924625",
-  "entryCount": 11,
+  "sourceFingerprint": "1ef6d5b9e16e1b49f76f621f7df92943a3d5bb0062eeb5f513031d11958c5813",
+  "entryCount": 18,
   "entries": [
     {
       "path": "constraints/code-blanks-string-literals.md",
@@ -44,6 +44,81 @@
       "scopes": {
         "module": "review, memory",
         "entity": "managed-review-package",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md",
+      "type": "known-mistake",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "gdctx-flag-allowlist-no-bundle-expansion",
+      "updated": "2026-09-24",
+      "tags": [],
+      "scopes": {
+        "module": "ctx, ripgrep, flag-parsing",
+        "entity": "buildRgCommand, RG_SAFE_FLAGS, RG_SAFE_VALUE_FLAGS",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "known-mistakes/gdctx-redaction-ignores-trust-tag.md",
+      "type": "known-mistake",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "gdctx-redaction-ignores-trust-tag",
+      "updated": "2026-09-24",
+      "tags": [],
+      "scopes": {
+        "module": "security, redaction, policy-resolution",
+        "entity": "resolveDecision, buildFinding, SecuritySource, policyFor, image-url policy",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "known-mistakes/gdctx-stem-classifier-misreads-stdout.md",
+      "type": "known-mistake",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "gdctx-stem-classifier-misreads-stdout",
+      "updated": "2026-09-24",
+      "tags": [],
+      "scopes": {
+        "module": "ctx, classification, output-analysis",
+        "entity": "classifyLine, importantLines, compactLines, FAILURE_STEMS",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md",
+      "type": "known-mistake",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping",
+      "updated": "2026-09-24",
+      "tags": [],
+      "scopes": {
+        "module": "context, orchestration, keryx-cli, subagent-dispatch",
+        "entity": "hard-gate rule, transcript re-sending, subagent-context-assembly, orient-runtime",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "known-mistakes/review-ingest-discards-verdicts.md",
+      "type": "known-mistake",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "Findings reach a review round through the report's keryx:findings block, and a round without one silently records none",
+      "updated": "2026-09-09",
+      "tags": [],
+      "scopes": {
+        "module": "review, flow",
+        "entity": "parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate",
         "files": [],
         "skills": []
       }
@@ -134,6 +209,43 @@
       "scopes": {
         "module": "tui",
         "entity": "transcript-blocks, shell-chrome",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "review-notes/2026-09-22-ingest-acp-live__F-006.md",
+      "type": "review-note",
+      "status": "draft",
+      "confidence": "medium",
+      "title": "Review finding 2026-09-22-ingest-acp-live#F-006 was dismissed as incorrect",
+      "updated": "2026-09-22",
+      "tags": [
+        "review-note",
+        "false-positive",
+        "round:2026-09-22-ingest-acp-live",
+        "commit:a559059d84ae10c20d92bc3f1366cfa0a530ff6e"
+      ],
+      "scopes": {
+        "module": null,
+        "entity": null,
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "task-notes/sac-proposal-7854a304859a4170.md",
+      "type": "task-note",
+      "status": "accepted",
+      "confidence": "medium",
+      "title": "SAC: найди все не завершенные flow",
+      "updated": "2026-08-22",
+      "tags": [
+        "sac-wrap-up"
+      ],
+      "scopes": {
+        "module": null,
+        "entity": null,
         "files": [],
         "skills": []
       }

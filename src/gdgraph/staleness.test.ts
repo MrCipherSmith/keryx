@@ -159,6 +159,55 @@ test("AFC-10 / T19 finding 3 — at the git root, the .metaproject exclusion beh
   expect(result.status).toBe("fresh");
 });
 
+// ---------------------------------------------------------------------------
+// F9 (fix round 1) — with `core.quotePath` at its default (on), `git status
+// --porcelain` octal-escapes and double-quotes a non-ASCII path
+// (`"src/caf\303\251.ts"` for `src/café.ts`), so the previous line-oriented,
+// quote-stripping parser read the ESCAPED text as the path and every
+// `stat()` against it missed — the edit went unreported ("fresh" instead of
+// "stale"). `-z` output is never quoted/escaped, sidestepping this entirely.
+// ---------------------------------------------------------------------------
+
+test("F9 — editing a non-ASCII-named tracked file invalidates the snapshot (core.quotePath escaping)", async () => {
+  // A dedicated fixture (not the shared `root`, which never has a non-ASCII
+  // file in it): `café.ts` must be TRACKED (committed) before the build, so
+  // the only thing that trips afterward is a pure content edit — the
+  // `modified` bucket the octal-escaping bug lived in. `core.quotePath`
+  // defaults to on (nothing here disables it), which is exactly the
+  // condition F9 names.
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-staleness-nonascii-"));
+  try {
+    git(dir, ["init", "-q"]);
+    git(dir, ["config", "user.email", "test@test.com"]);
+    git(dir, ["config", "user.name", "test"]);
+    await mkdir(path.join(dir, "src"), { recursive: true });
+    await mkdir(path.join(dir, ".metaproject", "data", "gdgraph", "storage"), { recursive: true });
+    await writeFile(path.join(dir, "src", "café.ts"), "export const original = 1;\n");
+    await writeFile(
+      path.join(dir, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"),
+      '{"id":"src/café.ts","kind":"file","path":"src/café.ts","language":"typescript"}\n',
+    );
+    git(dir, ["add", "-A"]);
+    git(dir, ["commit", "-q", "-m", "initial build fixture with a non-ascii filename"]);
+    await recordProvenance(dir, "gdgraph", new Date().toISOString());
+    const past = new Date(Date.now() - 5000);
+    await utimes(path.join(dir, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"), past, past);
+
+    // Right after the "build": a clean tree, same commit as provenance.
+    expect((await checkGraphStaleness(dir)).status).toBe("fresh");
+
+    // A pure content edit to the non-ASCII-named file — HEAD does not move,
+    // only the working tree does.
+    await writeFile(path.join(dir, "src", "café.ts"), "export const original = 2;\n");
+
+    const result = await checkGraphStaleness(dir);
+    expect(result.status).toBe("stale");
+    expect(result.reasons.some((reason) => reason.includes("café.ts"))).toBe(true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("T19 finding 3 — a project root below the git root still excludes its own .metaproject build residue", async () => {
   const gitRoot = await mkdtemp(path.join(tmpdir(), "keryx-staleness-monorepo-"));
   try {

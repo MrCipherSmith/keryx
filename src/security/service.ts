@@ -1,6 +1,7 @@
 import path from "node:path";
 import {
   validateSerializedContentForTransport,
+  type ExfilExemption,
   type OutputValidationResult,
 } from "./output-validation";
 import { readFile } from "node:fs/promises";
@@ -37,6 +38,7 @@ import type {
   SecuritySource,
 } from "./types";
 import { scanContainedPath, type SecurityScanOptions } from "./path-scan";
+import { sourceForFileRead as sourceForFileReadInternal } from "./read-source";
 
 /**
  * Validate serialized JSON structurally, or ordinary text without changing its format.
@@ -54,8 +56,21 @@ import { scanContainedPath, type SecurityScanOptions } from "./path-scan";
  */
 export { redactSensitiveText } from "./redact";
 
-export function validateSerializedOutput(content: string): OutputValidationResult {
-  return validateSerializedContentForTransport(content);
+/**
+ * Re-exported here for the same reason as `redactSensitiveText` above: this is
+ * the facade, and a caller that needs to know whether a file read is
+ * `trusted-project` or `untrusted-external` (`ctx.ts`'s `redactRaw` call,
+ * `mcp/tools.ts`'s `security.scan` path handling) must go through it
+ * instead of reaching past it into `./read-source` directly, which the import
+ * policy counts as a bypass.
+ */
+export const sourceForFileRead = sourceForFileReadInternal;
+
+export function validateSerializedOutput(
+  content: string,
+  exemptExfil?: ExfilExemption,
+): OutputValidationResult {
+  return validateSerializedContentForTransport(content, exemptExfil);
 }
 
 // Result of a full analysis: the decision plus the surfaced self-protection

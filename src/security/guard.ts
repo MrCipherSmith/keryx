@@ -30,7 +30,11 @@ import { pathExists } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { loadSecurityConfig, securityProjectRoot } from "./config";
 import { createSecurityService, validateSerializedOutput } from "./service";
+import { egressSourceHasOverride, egressSourceOverrideAction } from "./resolve";
+import type { ExfilExemption } from "./output-validation";
 import type {
+  DetectorMatch,
+  PolicyConfig,
   SecurityDecision,
   SecurityFinding,
   SecuritySource,
@@ -359,20 +363,52 @@ export async function guardOutput(input: GuardInput): Promise<GuardResult> {
   return base;
 }
 
+// GDCTX-2: builds the predicate that lets the mandatory floor (below) leave an
+// egress/exfil match unmasked when a `sourceOverrides` entry says so for this
+// (policyId, source) pair and the match's own URL clears the credential-query
+// gate (`resolve.ts#egressSourceOverrideAction`). Called only once the caller
+// already knows security is enabled and has loaded the config — the floor
+// itself stays config-independent (see `ExfilExemption` in
+// `output-validation.ts`); this closure is the one place config and floor
+// meet, and only egress ever exempts anything through it.
+function egressExemption(policy: PolicyConfig, source: SecuritySource): ExfilExemption {
+  return (match: DetectorMatch) =>
+    egressSourceOverrideAction(policy, match, source) === "allow";
+}
+
 // Mandatory deterministic redaction applies independently of advisory module
 // enablement. Diagnostics may be unavailable; that cannot restore raw secrets.
 export async function redactRaw(input: RedactRawInput): Promise<RedactRawResult> {
   const { cwd, content } = input;
+  const source: SecuritySource = input.source ?? "tool-output";
   const safe = validateSerializedOutput(content);
   if (!safe.ok) return { content: safe.text, findings: [] };
   try {
     if (content.length === 0 || !(await isSecurityEnabled(cwd))) {
       return { content: safe.text, findings: [] };
     }
-    const { findings } = await createSecurityService(cwd).redact(content, {
-      source: input.source ?? "tool-output",
-    });
-    return { content: safe.text, findings };
+    // A config-aware second pass over the SAME content, now allowed to leave
+    // an exempted egress match unmasked (GDCTX-2). Falls back to the
+    // unconditional `safe.text` above whenever this pass is somehow not `ok`
+    // (in practice it mirrors `safe.ok`, which is already confirmed true here
+    // — this is defense in depth, not an expected branch).
+    //
+    // F10 (review round 1): that second pass reruns the SAME exfil detection
+    // the first (`safe`) pass just ran, over the same content, even when no
+    // override in this config could possibly apply to THIS `source` — the
+    // ordinary case, since `sourceOverrides` today only ever exists for
+    // `trusted-project`. `egressSourceHasOverride` answers that cheaply from
+    // the config alone (no detection run), so the costly second pass is
+    // skipped and `safe.text` — already the right answer when nothing can be
+    // exempted — is reused instead.
+    const config = await loadSecurityConfig(cwd);
+    if (!egressSourceHasOverride(config.policies.egress, source)) {
+      const { findings } = await createSecurityService(cwd).redact(content, { source });
+      return { content: safe.text, findings };
+    }
+    const exempted = validateSerializedOutput(content, egressExemption(config.policies.egress, source));
+    const { findings } = await createSecurityService(cwd).redact(content, { source });
+    return { content: exempted.ok ? exempted.text : safe.text, findings };
   } catch {
     return { content: safe.text, findings: [] };
   }

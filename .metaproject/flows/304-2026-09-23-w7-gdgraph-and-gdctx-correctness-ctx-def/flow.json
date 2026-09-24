@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "304",
   "slug": "w7-gdgraph-and-gdctx-correctness-ctx-def",
   "title": "W7: gdgraph and gdctx correctness — ctx defects, read-only git allowlist, correctness benchmark, slim index",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-23T21:26:28.813Z",
-  "updatedAt": "2026-09-23T21:26:28.813Z",
+  "updatedAt": "2026-09-23T23:16:18.740Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,454 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7 (per-defect implementation lanes)"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T8-T10 (test lanes) and T12 (verification)"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 6,
+        "log": [
+          {
+            "at": "2026-09-23T22:06:51.086Z",
+            "outcome": "started",
+            "detail": "review round 1 (opus) on PR #674"
+          },
+          {
+            "at": "2026-09-23T22:22:31.037Z",
+            "outcome": "failed",
+            "detail": "round 1: opus review 1 blocker/5 major/3 minor/1 info + CI typecheck-and-tests fail (ctx.rg-argv inline-form message); fix lanes security/ctx/gdgraph dispatched"
+          },
+          {
+            "at": "2026-09-23T22:43:06.596Z",
+            "outcome": "started",
+            "detail": "review round 2 (opus) on 7f33512b"
+          },
+          {
+            "at": "2026-09-23T22:58:07.477Z",
+            "outcome": "failed",
+            "detail": "round 2: opus review 1 blocker (CI import-policy ratchet 151>150 from commands/ctx.ts->security/read-source) + 3 major (tsconfig paths vs effective baseUrl regression, ls-files pathspec magic, MCP security.scan self-labels trusted-project) + 1 minor (camelCase credential names). No repeated finding; fix lanes security + gdgraph dispatched"
+          },
+          {
+            "at": "2026-09-23T23:11:23.927Z",
+            "outcome": "started",
+            "detail": "review round 3 (opus) on f10ca87e"
+          },
+          {
+            "at": "2026-09-23T23:16:18.740Z",
+            "outcome": "failed",
+            "detail": "round 3: 2 minor (R3-1 credential names still enumerable: authorization/privatekey/accesskey_id; R3-2 MCP security.scan absolute path in report) + 1 info (stale comments). CI green on f10ca87e. Budget reached: re-planned R3-1 to a safe-parameter allowlist instead of a credential-name denylist"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "GDCTX-1: stream- and exit-code-aware error classification in ctx run",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T21:31:47.296Z",
+            "outcome": "started",
+            "detail": "304-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "GDCTX-2: trust-aware image-URL redaction for trusted-project sources",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T21:31:47.426Z",
+            "outcome": "started",
+            "detail": "304-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "GDCTX-3 bundled rg short flags + GIT_READONLY_ALLOW in the ctx hook",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T21:31:47.546Z",
+            "outcome": "started",
+            "detail": "304-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "gdgraph: freshness note on every query path + golden edge and staleness fixtures",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T21:31:47.682Z",
+            "outcome": "started",
+            "detail": "304-T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Correctness benchmark goldens in gdctx-fact-preservation.json, run by bun test",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Index gate: enforce 400-token budget on template and live index.md",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-23T21:31:47.798Z",
+            "outcome": "started",
+            "detail": "304-T10"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Memory: four known-mistake entries for the closed defects",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Verify: targeted tests, typecheck and eslint on changed files",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Verify: end-to-end CLI repro of GDCTX-1/2/3 and hook allowlist with the local build",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-23T21:26:28.813Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-23T21:31:19.374Z",
+      "event": "task-added",
+      "detail": "T5: GDCTX-1: stream- and exit-code-aware error classification in ctx run"
+    },
+    {
+      "at": "2026-09-23T21:31:19.487Z",
+      "event": "task-added",
+      "detail": "T6: GDCTX-2: trust-aware image-URL redaction for trusted-project sources"
+    },
+    {
+      "at": "2026-09-23T21:31:19.608Z",
+      "event": "task-added",
+      "detail": "T7: GDCTX-3 bundled rg short flags + GIT_READONLY_ALLOW in the ctx hook"
+    },
+    {
+      "at": "2026-09-23T21:31:19.728Z",
+      "event": "task-added",
+      "detail": "T8: gdgraph: freshness note on every query path + golden edge and staleness fixtures"
+    },
+    {
+      "at": "2026-09-23T21:31:19.846Z",
+      "event": "task-added",
+      "detail": "T9: Correctness benchmark goldens in gdctx-fact-preservation.json, run by bun test"
+    },
+    {
+      "at": "2026-09-23T21:31:19.961Z",
+      "event": "task-added",
+      "detail": "T10: Index gate: enforce 400-token budget on template and live index.md"
+    },
+    {
+      "at": "2026-09-23T21:31:20.077Z",
+      "event": "task-added",
+      "detail": "T11: Memory: four known-mistake entries for the closed defects"
+    },
+    {
+      "at": "2026-09-23T21:31:20.191Z",
+      "event": "task-added",
+      "detail": "T12: Verify: targeted tests, typecheck and eslint on changed files"
+    },
+    {
+      "at": "2026-09-23T21:31:20.305Z",
+      "event": "task-added",
+      "detail": "T13: Verify: end-to-end CLI repro of GDCTX-1/2/3 and hook allowlist with the local build"
+    },
+    {
+      "at": "2026-09-23T21:31:25.520Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T21:31:25.643Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T21:31:25.758Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T21:31:25.874Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T21:31:25.986Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T21:31:47.296Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 304-T5"
+    },
+    {
+      "at": "2026-09-23T21:31:47.426Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 304-T6"
+    },
+    {
+      "at": "2026-09-23T21:31:47.546Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 304-T7"
+    },
+    {
+      "at": "2026-09-23T21:31:47.682Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 304-T8"
+    },
+    {
+      "at": "2026-09-23T21:31:47.799Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 304-T10"
+    },
+    {
+      "at": "2026-09-23T21:48:40.201Z",
+      "event": "task-done",
+      "detail": "T5: GDCTX-1: stream- and exit-code-aware error classification in ctx run"
+    },
+    {
+      "at": "2026-09-23T21:48:40.348Z",
+      "event": "task-done",
+      "detail": "T7: GDCTX-3 bundled rg short flags + GIT_READONLY_ALLOW in the ctx hook"
+    },
+    {
+      "at": "2026-09-23T21:48:40.469Z",
+      "event": "task-done",
+      "detail": "T10: Index gate: enforce 400-token budget on template and live index.md"
+    },
+    {
+      "at": "2026-09-23T21:55:37.337Z",
+      "event": "task-done",
+      "detail": "T6: GDCTX-2: trust-aware image-URL redaction for trusted-project sources"
+    },
+    {
+      "at": "2026-09-23T21:56:44.108Z",
+      "event": "task-done",
+      "detail": "T13: Verify: end-to-end CLI repro of GDCTX-1/2/3 and hook allowlist with the local build"
+    },
+    {
+      "at": "2026-09-23T21:56:55.155Z",
+      "event": "task-done",
+      "detail": "T8: gdgraph: freshness note on every query path + golden edge and staleness fixtures"
+    },
+    {
+      "at": "2026-09-23T22:04:48.042Z",
+      "event": "task-done",
+      "detail": "T9: Correctness benchmark goldens in gdctx-fact-preservation.json, run by bun test"
+    },
+    {
+      "at": "2026-09-23T22:04:48.169Z",
+      "event": "task-done",
+      "detail": "T11: Memory: four known-mistake entries for the closed defects"
+    },
+    {
+      "at": "2026-09-23T22:06:03.383Z",
+      "event": "task-done",
+      "detail": "T12: Verify: targeted tests, typecheck and eslint on changed files"
+    },
+    {
+      "at": "2026-09-23T22:06:51.086Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1 (opus) on PR #674"
+    },
+    {
+      "at": "2026-09-23T22:22:31.037Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: opus review 1 blocker/5 major/3 minor/1 info + CI typecheck-and-tests fail (ctx.rg-argv inline-form message); fix lanes security/ctx/gdgraph dispatched"
+    },
+    {
+      "at": "2026-09-23T22:43:06.596Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — review round 2 (opus) on 7f33512b"
+    },
+    {
+      "at": "2026-09-23T22:58:07.477Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — round 2: opus review 1 blocker (CI import-policy ratchet 151>150 from commands/ctx.ts->security/read-source) + 3 major (tsconfig paths vs effective baseUrl regression, ls-files pathspec magic, MCP security.scan self-labels trusted-project) + 1 minor (camelCase credential names). No repeated finding; fix lanes security + gdgraph dispatched"
+    },
+    {
+      "at": "2026-09-23T23:11:23.927Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 5) — review round 3 (opus) on f10ca87e"
+    },
+    {
+      "at": "2026-09-23T23:16:18.740Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 6) — round 3: 2 minor (R3-1 credential names still enumerable: authorization/privatekey/accesskey_id; R3-2 MCP security.scan absolute path in report) + 1 info (stale comments). CI green on f10ca87e. Budget reached: re-planned R3-1 to a safe-parameter allowlist instead of a credential-name denylist"
     }
   ]
 }

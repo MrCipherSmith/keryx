@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
@@ -9,6 +9,7 @@ import {
   uncommittedCodeCount,
   wikiContext,
 } from "./orient";
+import { recordProvenance } from "../sync/provenance";
 
 async function withProject(
   files: Record<string, string>,
@@ -160,11 +161,25 @@ async function gitProject(run: (root: string) => Promise<void>): Promise<void> {
   try {
     await mkdir(path.join(root, ".metaproject", "data", "gdgraph", "artifacts"), { recursive: true });
     await writeFile(path.join(root, ".metaproject", "data", "gdgraph", "artifacts", "summary.md"), SUMMARY, "utf8");
+    // A real `checkGraphStaleness` basis (flow 304 T4 F8 fix): `nodes.jsonl`
+    // plus recorded build provenance, mirroring `gdgraph/staleness.test.ts`'s
+    // `makeBuiltFixture` — without these, `checkGraphStaleness` always reads
+    // "stale — graph has not been built yet (no nodes.jsonl)", which would
+    // mask every scenario below rather than exercising the tri-state fix.
+    await mkdir(path.join(root, ".metaproject", "data", "gdgraph", "storage"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"),
+      '{"id":"src/a.ts","kind":"file","path":"src/a.ts","language":"typescript"}\n',
+      "utf8",
+    );
     await mkdir(path.join(root, "src"), { recursive: true });
     await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n", "utf8");
     expect(await git(root, ["init", "-q", "."])).toBe(0);
     expect(await git(root, ["add", "-A"])).toBe(0);
     expect(await git(root, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"])).toBe(0);
+    await recordProvenance(root, "gdgraph", new Date().toISOString());
+    const past = new Date(Date.now() - 5000);
+    await utimes(path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"), past, past);
     await run(root);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -214,6 +229,33 @@ test("graphContext reports unknown — never clean — when git could not be ask
     // a sticky state.
     await rename(path.join(root, ".git-off"), path.join(root, ".git"));
     expect(await graphContext(root)).toContain("freshness: working tree clean");
+  });
+}, 30_000);
+
+// F8 (fix round 1): before this fix, `graphContext` never called
+// `checkGraphStaleness` at all — only `uncommittedCodeCount`, a pure
+// working-tree check. A commit landing since the build (a merged PR, a
+// pulled teammate's change) with nothing left uncommitted read as
+// "freshness: working tree clean" while the graph actually predated HEAD.
+test("graphContext calls out a stale graph after a commit since the build, even on a clean tree", async () => {
+  await gitProject(async (root) => {
+    // Sanity: right after the "build", both signals agree it is fresh.
+    expect(await graphContext(root)).toContain("freshness: working tree clean");
+
+    await writeFile(path.join(root, "src", "a.ts"), "export const a = 2;\n", "utf8");
+    expect(await git(root, ["add", "-A"])).toBe(0);
+    expect(
+      await git(root, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "a change after the build"]),
+    ).toBe(0);
+
+    // The working tree is clean again (the change is committed) — the
+    // pre-fix defect: `uncommittedCodeCount` alone would call this clean.
+    expect(await uncommittedCodeCount(root)).toEqual({ status: "counted", count: 0 });
+
+    const out = await graphContext(root);
+    expect(out).toContain("HEAD moved since the graph was built");
+    expect(out).toContain("src/a.ts");
+    expect(out).toContain("keryx gdgraph build");
   });
 }, 30_000);
 

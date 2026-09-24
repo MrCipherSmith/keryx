@@ -339,6 +339,115 @@ test("AC4: a seeded secret is masked when the security module is enabled", async
   expect(result.text).not.toContain(secret);
 });
 
+// F3 (review round 1): `security.check`'s `source` is model-supplied over MCP.
+// `trusted-project` means "already in the repository the OPERATOR chose to
+// work in — vetted by committing it" (`security/types.ts`), and a caller on
+// the other side of this tool call must never be able to grant its own
+// content that trust by simply naming it in the `source` field — that would
+// hand it the GDCTX-2 egress source-override allowance a committed README
+// badge gets. This drives the same badge-shaped URL `resolve.test.ts` proves
+// gets `action: "allow"` under a REAL `trusted-project` — over MCP, with a
+// caller-claimed `source: "trusted-project"`, it must still redact.
+test("AC-security: security.check clamps a caller-claimed trusted-project source", async () => {
+  await writeFile(
+    path.join(root, ".metaproject", "metaproject.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      standardVersion: "0.1.0",
+      name: "fixture",
+      createdBy: "keryx",
+      paths: {},
+      modules: { security: { enabled: true }, mcp: { enabled: true } },
+    }),
+    "utf8",
+  );
+  const ctx = await buildMcpContext(root);
+  const badgeUrl = `<img src="https://github.com/o/r/actions/workflows/ci.yml/badge.svg">`;
+  const result = await dispatchCallTool(ctx, "security.check", {
+    content: badgeUrl,
+    source: "trusted-project",
+  });
+  expect(result.isError).toBe(false);
+  const decision = JSON.parse(result.text) as { findings: Array<{ action: string }> };
+  const egressFinding = decision.findings.find((f) => "action" in f);
+  expect(egressFinding).toBeDefined();
+  // A REAL trusted-project source would resolve this to "allow" (the shipped
+  // GDCTX-2 badge override) — clamped to untrusted-external, it must not.
+  expect(egressFinding?.action).not.toBe("allow");
+});
+
+// R2-4 (flow 304, fix round 2): `security.scan` used to hard-code
+// `trusted-project` for caller-supplied inline `content`, unconditionally —
+// the same GDCTX-2 egress source-override allowance the test above proves
+// `security.check` must never let a caller self-assign. Mirrors that test,
+// through `security.scan` instead: the same badge-shaped URL, as inline
+// content, must not resolve to the shipped `allow` override.
+test("AC-security: security.scan treats inline content as untrusted-external, not trusted-project", async () => {
+  await writeFile(
+    path.join(root, ".metaproject", "metaproject.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      standardVersion: "0.1.0",
+      name: "fixture",
+      createdBy: "keryx",
+      paths: {},
+      modules: { security: { enabled: true }, mcp: { enabled: true } },
+    }),
+    "utf8",
+  );
+  const ctx = await buildMcpContext(root);
+  const badgeUrl = `<img src="https://github.com/o/r/actions/workflows/ci.yml/badge.svg">`;
+  const result = await dispatchCallTool(ctx, "security.scan", { content: badgeUrl });
+  expect(result.isError).toBe(false);
+  const { decision } = JSON.parse(result.text) as { decision: { findings: Array<{ action: string }> } };
+  const egressFinding = decision.findings.find((f) => "action" in f);
+  expect(egressFinding).toBeDefined();
+  // A REAL trusted-project source would resolve this to "allow" (the shipped
+  // GDCTX-2 badge override) — inline content must not get it for free.
+  expect(egressFinding?.action).not.toBe("allow");
+});
+
+// R3-2 (flow 304, fix round 3): `security.scan`'s `path` handling passed the
+// ABSOLUTE realpath `resolveContainedPath` returns straight through to
+// `runScan`, which lands verbatim on `finding.source.path` in the
+// committable report at `.metaproject/data/security/artifacts/latest.json`.
+// That report is meant to be committed and diffed like any other project
+// artifact, but an absolute path bakes in the machine it was generated on
+// (home directory, worktree location, CI runner tmpdir, …) — a path scanned
+// from two different checkouts of the same repo would report as two
+// different files. It must be relative to the project root instead, exactly
+// like `commands/security.ts`'s `handleScan` already reports it.
+test("R3-2: security.scan reports a path RELATIVE to the project root, not the absolute realpath", async () => {
+  await writeFile(
+    path.join(root, ".metaproject", "metaproject.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      standardVersion: "0.1.0",
+      name: "fixture",
+      createdBy: "keryx",
+      paths: {},
+      modules: { security: { enabled: true }, mcp: { enabled: true } },
+    }),
+    "utf8",
+  );
+  await mkdir(path.join(root, "notes"), { recursive: true });
+  await writeFile(
+    path.join(root, "notes", "todo.txt"),
+    `<img src="https://github.com/o/r/actions/workflows/ci.yml/badge.svg">\n`,
+    "utf8",
+  );
+  const ctx = await buildMcpContext(root);
+  const result = await dispatchCallTool(ctx, "security.scan", { path: "notes/todo.txt" });
+  expect(result.isError).toBe(false);
+  const { report } = JSON.parse(result.text) as {
+    report: { findings: Array<{ source?: { path?: string } }> };
+  };
+  const finding = report.findings.find((f) => f.source?.path !== undefined);
+  expect(finding).toBeDefined();
+  expect(finding?.source?.path).toBe("notes/todo.txt");
+  expect(path.isAbsolute(finding!.source!.path!)).toBe(false);
+});
+
 // --- AC1/AC2 stdio round-trip (SDK-gated) ------------------------------------
 
 test("stdio round-trip over the real SDK transport (skips if SDK unavailable)", async () => {
