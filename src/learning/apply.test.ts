@@ -254,11 +254,19 @@ describe("applyLearnedPattern", () => {
     });
   });
 
-  // R3-F4 (review round 3, PR #691, minor): the login gate itself (R2-F6
-  // defense-in-depth, independent of `domain: "review-conventions"`'s own
-  // refusal above) had no test exercising a REAL configured login present
-  // in a non-review-conventions record's trigger/action text.
-  test("refuses learning-text-refused when the record's trigger/action names a configured reviewer login", async () => {
+  // R3-F4 (review round 3, PR #691, minor) originally added this test to show
+  // the login gate refused a NON-review-conventions record whose trigger/
+  // action happened to contain a configured login. R6-F4 (review round 6,
+  // PR #691, minor) found that was itself the bug: `makeAccepted()`'s
+  // default record is `provenance.extractor: "repeated-correction"`, a
+  // signal that never reads review comment text, so its `action` naming
+  // "octocat" is coincidence, not attribution — gating it refused an
+  // unrelated lesson for any project that happened to configure a login
+  // equal to a word appearing in that lesson's text. `applyLearnedPattern`'s
+  // login gate now runs only for `provenance.extractor === "reviewer-comment"`
+  // records; this test documents the new behavior: applied cleanly, login and
+  // all.
+  test("a non-reviewer-comment record's trigger/action naming a configured reviewer login by coincidence is applied cleanly, not refused (R6-F4)", async () => {
     await withProject(async (root) => {
       await seedRegistry(root, [{ module: "alpha", name: "module" }]);
       await seedSkill(root, "alpha", "module");
@@ -271,9 +279,39 @@ describe("applyLearnedPattern", () => {
         "utf8",
       );
 
-      await expect(applyLearnedPattern(root, record.id, { skill: "alpha/module" })).rejects.toMatchObject({
-        reason: "learning-text-refused",
+      const result = await applyLearnedPattern(root, record.id, { skill: "alpha/module" });
+      expect(result.applied.skillPath).toBe(".metaproject/project-skills/alpha/module");
+      const skillMd = await readFile(path.join(root, ".metaproject", "project-skills", "alpha", "module", "SKILL.md"), "utf8");
+      expect(skillMd).toContain("octocat said to check the first edit's assumptions");
+    });
+  });
+
+  // R6-F4: the exact scenario the finding names — a `reverted-edit` record
+  // (whose fixed trigger template contains the word "edit" twice over) with
+  // a configured login of `edit`. Under the old, too-broad gate this refused
+  // unconditionally; the record is not `reviewer-comment`-derived, so it is
+  // never subject to the login gate at all.
+  test("a reverted-edit record applies cleanly when the configured login equals a word in its own fixed trigger template ('edit')", async () => {
+    await withProject(async (root) => {
+      await seedRegistry(root, [{ module: "alpha", name: "module" }]);
+      await seedSkill(root, "alpha", "module");
+      const record = makeAccepted({
+        id: "workflow.reverted-edit-ab12cd34",
+        domain: "workflow",
+        trigger: "When an edit to foo.ts is immediately reverted in this project",
+        action: "Treat the revert as a signal the edit was wrong: reconsider the approach before editing foo.ts again.",
+        provenance: { extractor: "reverted-edit", extractorKind: "deterministic" },
       });
+      await writePattern(root, record, { capability: createAcceptCapability() });
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      await writeFile(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["edit"] }),
+        "utf8",
+      );
+
+      const result = await applyLearnedPattern(root, record.id, { skill: "alpha/module" });
+      expect(result.applied.skillPath).toBe(".metaproject/project-skills/alpha/module");
     });
   });
 

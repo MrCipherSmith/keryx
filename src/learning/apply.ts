@@ -182,11 +182,18 @@ export async function applyLearnedPattern(
     throw new LearningApplyError("learning-text-refused", `record "${id}" refused by the security scan: ${scan.findings.join(", ")}`);
   }
 
-  // R2-F6: same defense-in-depth as `graduate.ts`'s agent-candidate render
-  // and extract's upsert — `domain: "review-conventions"` records (where a
-  // login is most likely) are already refused above, but a login named in
-  // free text on another domain's `trigger`/`action` (e.g. someone quoted in
-  // a `code-style` lesson) must not reach the rendered skill proposal either.
+  // R2-F6/R6-F4: same defense-in-depth as `graduate.ts`'s agent-candidate
+  // render and extract's upsert, but scoped to the ONE domain that can
+  // actually carry a reviewer login: a record whose
+  // `provenance.extractor === "reviewer-comment"` is the only shape whose
+  // `trigger`/`action` text was ever derived from review comment text (the
+  // generalized lesson in `action`, the trigger hint after
+  // `REVIEWER_COMMENT_TRIGGER_PREFIX`). Every other extractor's
+  // trigger/action comes from fixed templates plus non-review observation
+  // data, so it never carries an attribution fragment in the first place —
+  // gating it too would refuse a `code-style`/`testing`/etc. record whose
+  // text happens to equal a configured login for reasons unrelated to any
+  // reviewer (R6-F4).
   //
   // R3-F3: the config is loaded through the guarded loader — a malformed
   // `review-learning.config.json` refuses THIS gate with a named reason
@@ -204,20 +211,20 @@ export async function applyLearnedPattern(
   }
   const configuredLogins =
     configResult.config === null ? [] : [...new Set([...configResult.config.authors, ...(configResult.config.reviewerProfiles ?? [])])];
-  // R4-F1: a record produced by the `reviewer-comment` extractor carries
-  // that signal's own FIXED trigger wording (`REVIEWER_COMMENT_TRIGGER_
-  // PREFIX`) around the variable keyword hint — strip it before the login
-  // gate inspects `record.trigger`, the same fix `extract.ts`'s upsert
-  // applies, so a configured login that happens to be a substring of that
-  // constant prose (e.g. `chang` inside "change") does not refuse a clean
-  // record. Every other extractor's trigger is unaffected.
-  const triggerForLoginCheck =
-    record.provenance.extractor === "reviewer-comment" ? stripReviewerCommentTriggerPrefix(record.trigger) : record.trigger;
-  if (
-    configuredLogins.length > 0 &&
-    (containsConfiguredLogin(triggerForLoginCheck, configuredLogins) || containsConfiguredLogin(record.action, configuredLogins))
-  ) {
-    throw new LearningApplyError("learning-text-refused", `record "${id}" refused: contains a configured reviewer login`);
+  if (record.provenance.extractor === "reviewer-comment") {
+    // R4-F1: a record produced by the `reviewer-comment` extractor carries
+    // that signal's own FIXED trigger wording (`REVIEWER_COMMENT_TRIGGER_
+    // PREFIX`) around the variable keyword hint — strip it before the login
+    // gate inspects `record.trigger`, the same fix `extract.ts`'s upsert
+    // applies, so a boundary-matched configured login is checked only
+    // against the comment's own variable content.
+    const triggerForLoginCheck = stripReviewerCommentTriggerPrefix(record.trigger);
+    if (
+      configuredLogins.length > 0 &&
+      (containsConfiguredLogin(triggerForLoginCheck, configuredLogins) || containsConfiguredLogin(record.action, configuredLogins))
+    ) {
+      throw new LearningApplyError("learning-text-refused", `record "${id}" refused: contains a configured reviewer login`);
+    }
   }
 
   let skillEntry: { module: string; name: string; path: string; target: string };

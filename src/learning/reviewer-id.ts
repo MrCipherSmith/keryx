@@ -49,9 +49,12 @@ function escapeForRegExp(value: string): string {
  * Boundary-matched ONLY, for every login length, regardless of how long the
  * login is (never preceded/followed by `[A-Za-z0-9-]`; `_` counts as a
  * boundary, not a word character, per R2-F6). A real occurrence (`@login`,
- * `login[bot]`, `login-reviewer`, `Login's`) is still caught, since the
+ * `login[bot]`, `login_reviewer`, `Login's`) is still caught, since the
  * character right after a bare login mention is essentially never itself
- * `[A-Za-z0-9-]`.
+ * `[A-Za-z0-9-]`. Note `-` is itself a login-class character, not a
+ * boundary: `login-reviewer` is NOT caught by this function (see R4-F1/R5-F1
+ * /R5-F2's fallback removal below) — a login glued to more text with a
+ * hyphen is the same accepted, documented gap as `alicedev`.
  *
  * R3-F2: a short configured login (`ed`, `al`, `rob`, `max`, `dev`) used to
  * match inside ordinary English words (`named`, `already`, `problem`,

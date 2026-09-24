@@ -180,10 +180,51 @@ const STOPWORDS: ReadonlySet<string> = new Set([
   "each",
 ]);
 
-/** Lowercase word tokens >= 4 chars, minus a small stopword list, starting with a letter (never a bare number). */
-function keywordsOf(text: string): ReadonlySet<string> {
+/**
+ * R6-F1: a configured login, plus each hyphen/underscore-split piece of it,
+ * lowercased — every standalone keyword token a login could split into once
+ * `keywordsOf`'s `[a-z][a-z0-9]*` tokenizer runs over member text. A login
+ * `alice` sitting in member text as `alice-style` passes
+ * `containsConfiguredLogin`'s boundary check clean (`-` is a login-class
+ * character, not a boundary — see `reviewer-id.ts`), but `keywordsOf` still
+ * splits it into standalone tokens `alice` and `style`, and the bare token
+ * `alice` is itself equal to the login. A login that itself contains a
+ * hyphen/underscore (`alice-reviewer`) is split the same way, so both
+ * `alice` and `reviewer` are forbidden too.
+ */
+function loginKeywordSet(logins: readonly string[]): ReadonlySet<string> {
+  const forbidden = new Set<string>();
+  for (const login of logins) {
+    const trimmed = login.trim().toLowerCase();
+    if (trimmed.length === 0) continue;
+    forbidden.add(trimmed);
+    for (const part of trimmed.split(/[-_]+/)) {
+      if (part.length > 0) forbidden.add(part);
+    }
+  }
+  return forbidden;
+}
+
+/** Lowercase word tokens >= 4 chars, minus a small stopword list, starting with a letter (never a bare number) — and, when `logins` is given, minus every token equal (case-insensitive) to a configured login or a hyphen/underscore-split piece of one (R6-F1). Token-equality only: never a substring test, so this cannot re-open the fixed-wording false-refusal `containsConfiguredLogin`'s own substring fallback used to cause (R4-F1/R5-F1/R5-F2). */
+function keywordsOf(text: string, logins: readonly string[] = []): ReadonlySet<string> {
   const words = text.toLowerCase().match(/[a-z][a-z0-9]*/g) ?? [];
-  return new Set(words.filter((word) => word.length >= 4 && !STOPWORDS.has(word)));
+  const forbidden = loginKeywordSet(logins);
+  return new Set(words.filter((word) => word.length >= 4 && !STOPWORDS.has(word) && !forbidden.has(word)));
+}
+
+/**
+ * R6-F1/R6-F2 defense in depth: true when any whole word token in `text`
+ * (no length floor, unlike `keywordsOf` — a short login must still be
+ * caught) equals a configured login or one of its hyphen/underscore-split
+ * pieces. Token-equality only, never a substring test — used as a final
+ * gate on already-assembled text (`proposal.suggestedName`,
+ * `proposal.summary`) that `keywordsOf`'s filtering does not itself touch.
+ */
+function containsLoginToken(text: string, logins: readonly string[]): boolean {
+  const forbidden = loginKeywordSet(logins);
+  if (forbidden.size === 0) return false;
+  const words = text.toLowerCase().match(/[a-z][a-z0-9]*/g) ?? [];
+  return words.some((word) => forbidden.has(word));
 }
 
 function jaccard(a: ReadonlySet<string>, b: ReadonlySet<string>): { score: number; shared: number } {
@@ -291,10 +332,11 @@ function keywordSourceFor(record: LearnedPattern): string {
   return `${trigger} ${record.action}`;
 }
 
-function topKeywords(cluster: readonly LearnedPattern[], limit: number): string[] {
+/** `logins` (R6-F1): forwarded to `keywordsOf` so a configured login (or a hyphen/underscore piece of one) can never surface as a top keyword — and therefore never in `suggestedNameFor`'s name or `runGraduate`'s summary. */
+function topKeywords(cluster: readonly LearnedPattern[], limit: number, logins: readonly string[] = []): string[] {
   const frequency = new Map<string, number>();
   for (const record of cluster) {
-    for (const word of keywordsOf(keywordSourceFor(record))) {
+    for (const word of keywordsOf(keywordSourceFor(record), logins)) {
       frequency.set(word, (frequency.get(word) ?? 0) + 1);
     }
   }
@@ -304,9 +346,9 @@ function topKeywords(cluster: readonly LearnedPattern[], limit: number): string[
     .map(([word]) => word);
 }
 
-/** Kebab-case suggested name from the cluster's top keywords — always matches `^[a-z][a-z0-9-]*$` by construction (`keywordsOf` only yields lowercase `[a-z][a-z0-9]*` tokens). */
-function suggestedNameFor(cluster: readonly LearnedPattern[]): string {
-  const words = topKeywords(cluster, 3);
+/** Kebab-case suggested name from the cluster's top keywords — always matches `^[a-z][a-z0-9-]*$` by construction (`keywordsOf` only yields lowercase `[a-z][a-z0-9]*` tokens). `logins`: see `topKeywords`. */
+function suggestedNameFor(cluster: readonly LearnedPattern[], logins: readonly string[] = []): string {
+  const words = topKeywords(cluster, 3, logins);
   if (words.length > 0) return words.join("-");
   return `learned-${(cluster[0] as LearnedPattern).domain}`;
 }
@@ -380,6 +422,19 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
   const now = opts.now ?? new Date();
   const nowIso = now.toISOString();
 
+  // R6-F2: loaded through the SAFE loader (never throws) — unlike
+  // `applyGraduation`'s `configuredReviewLogins`, a malformed
+  // `review-learning.config.json` here degrades to "no configured logins"
+  // rather than aborting the whole clustering/proposal pass, the same
+  // degrade-not-abort choice `extract.ts`'s `runExtract` makes for every
+  // other domain's login gate.
+  const configResult = await loadReviewLearningConfigSafe(root);
+  const configuredLogins = configResult.ok
+    ? configResult.config === null
+      ? []
+      : [...new Set([...configResult.config.authors, ...(configResult.config.reviewerProfiles ?? [])])]
+    : [];
+
   const accepted = await listPatterns(root, { status: "accepted", ...(opts.domain !== undefined ? { domain: opts.domain } : {}) }, storeOptions);
 
   const clusters = clusterRecords(dedupeByIdPreferProject(accepted));
@@ -410,9 +465,27 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
       continue;
     }
 
+    // R6-F2: refuse, before any proposal file is written, a cluster whose
+    // reviewer-comment member variable text contains a configured login at
+    // an identifier boundary — the same login-may-have-been-configured-
+    // after-records-were-stored risk `applyGraduation`'s member-text gate
+    // already covers at apply time, now also covered at proposal time so
+    // the login never even reaches a `grad-*.json`/`.md` proposal artifact.
+    // Scoped to `provenance.extractor === "reviewer-comment"` members only
+    // (R6-F4): every other signal's trigger/action never read review text,
+    // so it cannot carry an attribution fragment.
+    const reviewerCommentMemberTexts = cluster.flatMap((record) => {
+      if (record.provenance.extractor !== "reviewer-comment") return [];
+      return [stripReviewerCommentTriggerPrefix(record.trigger), record.action];
+    });
+    if (configuredLogins.length > 0 && reviewerCommentMemberTexts.some((text) => containsConfiguredLogin(text, configuredLogins))) {
+      refused.push({ memberIds, categories: ["attribution"] });
+      continue;
+    }
+
     const domain = (cluster[0] as LearnedPattern).domain;
-    const suggestedName = suggestedNameFor(cluster);
-    const keywords = topKeywords(cluster, 5);
+    const suggestedName = suggestedNameFor(cluster, configuredLogins);
+    const keywords = topKeywords(cluster, 5, configuredLogins);
     const query = keywords.length > 0 ? keywords.join(" ") : domain;
     const summary = `${cluster.length} accepted "${domain}" pattern(s) sharing: ${keywords.join(", ") || "(no shared keywords — singleton cluster)"}.`;
     const nextSteps = nextStepsFor(target, proposalId, suggestedName, query);
@@ -644,6 +717,25 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
     throw new LearningGraduateError(
       "learning-text-refused",
       `agent candidate for proposal "${proposalId}" refused: contains a configured reviewer login`,
+    );
+  }
+
+  // R6-F1/R6-F2 defense in depth: `runGraduate` now keeps a configured login
+  // (or a hyphen/underscore piece of one) out of `suggestedName`/`summary`
+  // by construction (`keywordsOf`'s login filtering), but a proposal file
+  // already on disk from before that fix — or a login configured after the
+  // proposal was written, same risk the member-text gate above exists for —
+  // could still carry one. Token-equality only (`containsLoginToken`), never
+  // `containsConfiguredLogin`'s substring-adjacent boundary regex over free
+  // prose: `suggestedName`/`summary` mix fixed template wording with
+  // keyword-derived content, and a substring test over that fixed wording is
+  // exactly the false-refusal `containsConfiguredLogin`'s own removed
+  // fallback used to cause (R4-F1/R5-F1/R5-F2) — not fixed wording, just an
+  // exact token.
+  if (configuredLogins.length > 0 && (containsLoginToken(proposal.suggestedName, configuredLogins) || containsLoginToken(proposal.summary, configuredLogins))) {
+    throw new LearningGraduateError(
+      "learning-text-refused",
+      `agent candidate for proposal "${proposalId}" refused: suggested name or summary contains a configured reviewer login token`,
     );
   }
 

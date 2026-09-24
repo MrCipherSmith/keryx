@@ -196,15 +196,26 @@ describe("runExtract — AC12 refusal", () => {
   });
 });
 
-// R3-F4 (review round 3, PR #691, minor): the finding lists this among the
-// missing regression tests — `upsertDraft`'s own configured-login refusal
-// (R2-F6's defense-in-depth check, independent of the reviewer-comment
-// signal's own stripping) had no test exercising it through a NON-
-// review-conventions signal, whose trigger/action text can carry a
-// configured login by coincidence (e.g. a test file whose name happens to
-// match a configured reviewer's login).
-describe("runExtract — a draft whose trigger/action names a configured login is refused (R3-F4, R2-F6)", () => {
-  test("a failing-to-passing-test draft naming a configured login in its test-file trigger is refused with category attribution, and stores nothing", async () => {
+// R3-F4 (review round 3, PR #691, minor) established that a NON-
+// review-conventions signal's trigger/action text can carry a configured
+// login by coincidence (e.g. a test file whose name happens to match a
+// configured reviewer's login), and gated it the same way as a
+// `reviewer-comment` draft. R6-F4 (review round 6, PR #691, minor) found
+// that gate was wrong for those signals: `failing-to-passing-test`,
+// `reverted-edit`, `repeated-correction`, and `health-regression` never read
+// review comment text at all, so nothing in their trigger/action could ever
+// BE a reviewer's login carried over from a comment — it is always either
+// Keryx's own fixed template wording or non-review observation data (a test
+// file name, a commit message fragment). Gating them anyway meant a project
+// that configured a login equal to a template word (`edit`, `check`,
+// `project`, `when`, ...) had EVERY draft of that signal refused outright,
+// regardless of what the underlying observation actually was. `upsertDraft`
+// now runs the login gate only for `draft.extractor === "reviewer-comment"`
+// — the one signal whose trigger/action is actually derived from review
+// text (the generalized lesson in `action`, the keyword hint after the
+// stripped fixed prefix in `trigger`).
+describe("runExtract — the login gate applies only to reviewer-comment drafts, never to the other deterministic signals (R6-F4)", () => {
+  test("a failing-to-passing-test draft whose test-file name happens to equal a configured login is created, not refused", async () => {
     await withProjectRoot(async (root) => {
       mkdirSync(path.join(root, ".metaproject"), { recursive: true });
       writeFileSync(
@@ -226,9 +237,51 @@ describe("runExtract — a draft whose trigger/action names a configured login i
       });
 
       const report = await runExtract(root, { now: NOW, domain: "testing" });
-      expect(report.created.length).toBe(0);
-      expect(report.refused.some((entry) => entry.categories.includes("attribution"))).toBe(true);
-      expect(await listPatterns(root, { domain: "testing" })).toEqual([]);
+      expect(report.refused.some((entry) => entry.categories.includes("attribution"))).toBe(false);
+      expect(report.created.length).toBe(1);
+      const records = await listPatterns(root, { domain: "testing" });
+      expect(records.length).toBe(1);
+      expect(records[0]?.provenance.extractor).toBe("failing-to-passing-test");
+    });
+  });
+
+  // The exact regression R6-F4 reports: `reverted-edit`'s own FIXED trigger
+  // template ("When an edit to <file> is immediately reverted in this
+  // project") literally contains the word "edit" twice over ("an edit",
+  // "editing ... again" in `action`) — a login of `edit` (or `project`)
+  // used to refuse every reverted-edit draft in the project, unconditionally.
+  test("a reverted-edit draft is created and applies cleanly even when the configured login equals a word in the signal's own fixed template ('edit')", async () => {
+    await withProjectRoot(async (root) => {
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["edit"] }),
+      );
+      const pathDigest = "3".repeat(64);
+      const hashA = "1".repeat(64);
+      const hashB = "2".repeat(64);
+      appendObservation(root, "2026-09-24", {
+        tool: "Edit",
+        inputPreview: '{"file_path":"/repo/src/foo.ts","old_string":"a","new_string":"b"}',
+        toolUseId: "tu-1",
+        observedAt: "2026-09-24T00:00:00.000Z",
+        edit: { pathDigest, removedDigest: hashA, addedDigest: hashB },
+      });
+      appendObservation(root, "2026-09-24", {
+        tool: "Edit",
+        inputPreview: '{"file_path":"/repo/src/foo.ts","old_string":"a","new_string":"b"}',
+        toolUseId: "tu-2",
+        observedAt: "2026-09-24T00:01:00.000Z",
+        edit: { pathDigest, removedDigest: hashB, addedDigest: hashA },
+      });
+
+      const report = await runExtract(root, { now: NOW, domain: "workflow" });
+      expect(report.refused.some((entry) => entry.categories.includes("attribution"))).toBe(false);
+      expect(report.created.length).toBe(1);
+      const records = await listPatterns(root, { domain: "workflow" });
+      expect(records.length).toBe(1);
+      expect(records[0]?.provenance.extractor).toBe("reverted-edit");
+      expect(records[0]?.trigger).toContain("edit");
     });
   });
 });

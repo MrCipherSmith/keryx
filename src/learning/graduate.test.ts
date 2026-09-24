@@ -478,7 +478,14 @@ describe("applyGraduation/runGraduate: a configured login that is a substring of
     },
   );
 
-  test("a member action that genuinely names the login '@chang' is still refused", async () => {
+  // R6-F2 (review round 6, PR #691, minor): `runGraduate` now carries its own
+  // reviewer-comment member-text login gate (see the dedicated R6-F2 describe
+  // block below), so a genuine `@chang` mention already configured at
+  // graduation time is refused at `runGraduate` itself — no proposal is ever
+  // written, and `applyGraduation`'s own member-text gate (still exercised
+  // above, and by the R6-F2 "configured after the fact" scenario) never gets
+  // a proposal to apply in this case.
+  test("a member action that genuinely names the login '@chang' is refused at runGraduate, before any proposal is written", async () => {
     await withProjectRoot(async (root, env) => {
       const capability = createAcceptCapability();
       for (const [id, hint, action] of REVIEWER_COMMENT_CLUSTER) {
@@ -493,14 +500,11 @@ describe("applyGraduation/runGraduate: a configured login that is a substring of
       );
 
       const report = await runGraduate(root, { now: NOW, env });
-      const agentProposal = report.proposals.find((p) => p.target === "agent");
-      expect(agentProposal).toBeDefined();
+      expect(report.proposals.find((p) => p.target === "agent")).toBeUndefined();
+      expect(report.refused.some((r) => r.categories.includes("attribution"))).toBe(true);
 
-      await expect(
-        applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW }),
-      ).rejects.toMatchObject({ reason: "learning-text-refused" });
-
-      expect(existsSync(path.join(root, ".metaproject", "agents", `${agentProposal!.suggestedName}.md`))).toBe(false);
+      const proposalDir = path.join(root, ".metaproject", "data", "learning", "graduation");
+      expect(existsSync(proposalDir) ? readdirSync(proposalDir) : []).toEqual([]);
     });
   });
 
@@ -514,6 +518,102 @@ describe("applyGraduation/runGraduate: a configured login that is a substring of
       expect(agentProposal!.suggestedName).not.toContain("change");
       expect(agentProposal!.summary).not.toContain("preparing");
       expect(agentProposal!.summary).not.toContain("change");
+    });
+  });
+});
+
+// R6-F1 (review round 6, PR #691, minor): `keywordsOf` splits on any
+// non-`[a-z0-9]` character, including `-`, so member text `alice-style`
+// (which passes `containsConfiguredLogin`'s boundary check clean — `-` is a
+// login-class character, not a boundary) still splits into standalone
+// keyword tokens `alice` and `style`. The bare token `alice` is then a
+// top keyword like any other, and `suggestedNameFor`/the summary template
+// happily wrote it into `.metaproject/agents/<name>.md`'s own name and
+// description. `keywordsOf`/`topKeywords` now drop any keyword token equal
+// (case-insensitively) to a configured login or a hyphen/underscore-split
+// piece of one.
+describe("runGraduate/applyGraduation: a login glued to member text via a hyphen never surfaces as a standalone keyword token (R6-F1)", () => {
+  test("authors ['alice'] with member text 'alice-style': 'alice' never appears in the suggested name, summary, proposal files, or the applied agent's name/description", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const rows: readonly [string, string, string][] = [
+        ["review-conventions.early-returns-aaaaaaaa", "prefer early returns alice-style", "Prefer early returns alice-style over nested conditionals"],
+        ["review-conventions.early-returns-bbbbbbbb", "prefer early returns alice-style always", "Prefer early returns alice-style to reduce nesting"],
+        ["review-conventions.early-returns-cccccccc", "use early returns alice-style", "Use early returns alice-style instead of nested if blocks"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+      expect(agentProposal!.suggestedName.toLowerCase()).not.toContain("alice");
+      expect(agentProposal!.summary.toLowerCase()).not.toContain("alice");
+
+      const proposalJson = readFileSync(
+        path.join(root, ".metaproject", "data", "learning", "graduation", `${agentProposal!.proposalId}.json`),
+        "utf8",
+      );
+      const proposalMd = readFileSync(
+        path.join(root, ".metaproject", "data", "learning", "graduation", `${agentProposal!.proposalId}.md`),
+        "utf8",
+      );
+      expect(proposalJson.toLowerCase()).not.toContain("alice");
+      expect(proposalMd.toLowerCase()).not.toContain("alice");
+
+      const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+      const agentMd = readFileSync(result.path, "utf8");
+      const nameLine = agentMd.split("\n").find((line) => line.startsWith("name:"));
+      const descriptionLine = agentMd.split("\n").find((line) => line.startsWith("description:"));
+      expect(nameLine?.toLowerCase()).not.toContain("alice");
+      expect(descriptionLine?.toLowerCase()).not.toContain("alice");
+    });
+  });
+});
+
+// R6-F2 (review round 6, PR #691, minor): `runGraduate` wrote a proposal
+// file (and set `graduation` on every member) with no login gate at all —
+// only `applyGraduation` (a later, separate, human-confirmed step) checked
+// member text for a configured login. A login configured AFTER the source
+// records were already stored — the same "configured after the fact" risk
+// the member-text gate exists for elsewhere — still reached
+// `grad-*.json`/`.md` on disk. `runGraduate` now loads configured logins
+// (via the safe, non-throwing loader) and refuses (`refused`, category
+// `attribution`) any cluster whose reviewer-comment member variable text
+// contains a boundary login, before writing anything.
+describe("runGraduate: a login configured after records were stored refuses the cluster before any proposal file is written (R6-F2)", () => {
+  test("a reviewer-comment member's genuine @mention of a later-configured login refuses the whole cluster; no proposal file is written", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const rows: readonly [string, string, string][] = [
+        ["review-conventions.early-returns-aaaaaaaa", "prefer early returns", "@alice prefers early returns over nesting"],
+        ["review-conventions.early-returns-bbbbbbbb", "prefer early returns always", "Prefer early returns to reduce nesting"],
+        ["review-conventions.early-returns-cccccccc", "use early returns", "Use early returns instead of nested if blocks"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+      // The login is configured only AFTER the records above were stored.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      const report = await runGraduate(root, { now: NOW, env });
+      expect(report.proposals.find((p) => p.target === "agent")).toBeUndefined();
+      expect(report.refused.some((r) => r.categories.includes("attribution"))).toBe(true);
+
+      const proposalDir = path.join(root, ".metaproject", "data", "learning", "graduation");
+      expect(existsSync(proposalDir) ? readdirSync(proposalDir) : []).toEqual([]);
     });
   });
 });

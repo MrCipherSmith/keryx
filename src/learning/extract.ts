@@ -262,27 +262,36 @@ async function upsertDraft(
     return;
   }
 
-  // R2-F6: a draft's trigger/action never reaches the store carrying any
-  // configured reviewer login as a case-insensitive substring — this is the
-  // same check `generalizeLesson` already applies to its own output, run
-  // again here as extract's own choke point, since a draft can originate
-  // from a signal other than `reviewer-comment` (or, in principle, an
-  // out-of-tree model-backed extractor) that never called it at all.
+  // R2-F6/R6-F4: a `reviewer-comment` draft's trigger/action never reaches
+  // the store carrying any configured reviewer login at an identifier
+  // boundary (`containsConfiguredLogin` — boundary-matched only, see
+  // `reviewer-id.ts`) — this is the same check `generalizeLesson` already
+  // applies to its own output, run again here as extract's own choke point
+  // for the one signal that actually reads review text.
+  //
+  // R6-F4: the gate runs ONLY for `draft.extractor === "reviewer-comment"`.
+  // The other deterministic signals (reverted-edit, repeated-correction,
+  // failing-to-passing-test, health-regression) never read review comment
+  // text at all — their trigger/action come from fixed templates plus
+  // observation data (file paths, test names, commit messages), so a
+  // configured login that happens to equal one of those template words
+  // (`edit`, `check`, `project`, `when`, ...) would otherwise refuse every
+  // draft of a signal that could never have carried that login in the first
+  // place. A model-backed draft is treated the same as a non-reviewer-comment
+  // signal here: nothing else in this pipeline asserts it read review text.
   //
   // R4-F1: a `reviewer-comment` draft's `trigger` carries the signal's own
   // FIXED wording (`REVIEWER_COMMENT_TRIGGER_PREFIX`, "When preparing a
   // change for review in this project (...)") around the variable keyword
-  // hint. `containsConfiguredLogin`'s 5+-char substring fallback is a
-  // plain substring test, so it does not distinguish that constant prose
-  // from the comment's actual content — a configured login like `chang`
-  // (a substring of "change") would refuse every reviewer-comment draft
-  // outright. Strip the known fixed prefix before checking a
-  // reviewer-comment draft's trigger, leaving only the keyword hint a login
-  // could actually appear in; every other signal's trigger is unaffected.
-  const triggerForLoginCheck = draft.extractor === "reviewer-comment" ? stripReviewerCommentTriggerPrefix(draft.trigger) : draft.trigger;
-  if (containsConfiguredLogin(triggerForLoginCheck, configuredLogins) || containsConfiguredLogin(draft.action, configuredLogins)) {
-    report.refused.push({ signal: draft.extractor, categories: ["attribution"] });
-    return;
+  // hint. Strip the known fixed prefix before checking a reviewer-comment
+  // draft's trigger, leaving only the keyword hint a login could actually
+  // appear in.
+  if (draft.extractor === "reviewer-comment") {
+    const triggerForLoginCheck = stripReviewerCommentTriggerPrefix(draft.trigger);
+    if (containsConfiguredLogin(triggerForLoginCheck, configuredLogins) || containsConfiguredLogin(draft.action, configuredLogins)) {
+      report.refused.push({ signal: draft.extractor, categories: ["attribution"] });
+      return;
+    }
   }
 
   if (!existing) {
