@@ -32,6 +32,7 @@
       "prompt": "mypy reports a type error on a function I touched. Fix it.",
       "strictness": "high",
       "expected_behavior": [
+        { "grader": "regex", "value": "(signature|annotation|the actual (type|mismatch))" },
         { "grader": "not-contains", "value": "# type: ignore" }
       ]
     }

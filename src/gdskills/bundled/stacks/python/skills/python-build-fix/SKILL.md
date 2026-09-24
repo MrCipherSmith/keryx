@@ -102,8 +102,8 @@ a fix can introduce a runtime regression the linter/type-checker won't see.
 ### Step 5: Report
 
 ```
-Fixed: ModuleNotFoundError: No module named 'mypkg.util'
-  Root cause: src/mypkg/util.py existed but pyproject.toml's package-find
+Fixed: ModuleNotFoundError: No module named 'mypkg.parsers'
+  Root cause: src/mypkg/parsers.py existed but pyproject.toml's package-find
     config excluded src/mypkg/, so the editable install never linked it.
   Fix: added "mypkg*" to [tool.setuptools.packages.find].include
   Verified: ruff check, mypy, pytest -x -q all green

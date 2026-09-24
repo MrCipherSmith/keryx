@@ -40,9 +40,11 @@ not enough.
 
 ### Step 2: Plan fixtures before test cases
 
-- A fixture belongs in the narrowest `conftest.py` that covers every test
-  needing it — the test file's own directory, not the suite root, unless
-  siblings already need it too.
+- A fixture needed by just one test module belongs in that module — define
+  it directly in the test file. Promote it to a `conftest.py` only once a
+  second test file needs the same fixture, and then place it in the
+  narrowest `conftest.py` that covers every file needing it (the shared
+  directory, not the suite root).
 - Prefer a fixture's natural scope (`function` is the pytest default) over
   widening to `module`/`session` for convenience; a wider-scoped fixture
   that mutates state leaks between tests that assumed isolation.
@@ -110,7 +112,7 @@ Generated: tests/test_helper.py
 
 | Rationalization | Why it is wrong |
 |---|---|
-| "This fixture is only used once but I'll put it in the root `conftest.py` anyway" | Widens its visible scope and discoverability for no reason; a fixture used by one test file belongs in that directory's own `conftest.py` |
+| "This fixture is only used once but I'll put it in the root `conftest.py` anyway" | Widens its visible scope and discoverability for no reason; a fixture needed by just one test file belongs directly in that file, not in any `conftest.py`, until a second file needs it |
 | "The assertion keeps failing; I'll patch the source under test to make it pass" | This skill writes test files only. A source change buried in a test-authoring run is an unreviewed fix that also hides the real bug |
 | "I'll mock the internal helper so the test is simpler" | Mock external dependencies, not internal ones — a test whose internal collaborators are all mocked only checks that the mocks agree with each other |
 | "Still failing after three iterations; I'll loosen the assertion" | A test that asserts nothing covers nothing while reporting coverage. After 3 iterations, stop and report the failing case instead |

@@ -31,7 +31,8 @@
       "prompt": "Review this Python code:\n\ntry:\n    process(data)\nexcept Exception:\n    pass",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "except" }
+        { "grader": "regex", "value": "swallow" },
+        { "grader": "not-contains", "value": "looks fine" }
       ]
     }
   ]

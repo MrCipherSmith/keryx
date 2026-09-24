@@ -51,8 +51,13 @@ the catalog's `review-*` skills, for a language-agnostic security sweep use
 - Bare `except:` or `except Exception:` that swallows an error the caller
   needed to see, especially one that also catches
   `asyncio.CancelledError`/`KeyboardInterrupt`/`SystemExit`.
-- A re-raise that drops the original traceback (`raise NewError(...)`
-  inside an `except` block with no `from exc`).
+- A re-raise inside an `except` block written as bare `raise NewError(...)`
+  with no `from exc`/`from None`. Python keeps the original exception either
+  way through implicit chaining (`__context__`, printed as "During handling
+  of the above exception..."), so this is not a lost traceback — it's a
+  missing statement of intent: `from exc` says the new exception was caused
+  by the original, `from None` says the original is deliberately suppressed
+  and shouldn't be shown.
 - An `except` block that logs and continues where the correct behavior was
   to propagate.
 

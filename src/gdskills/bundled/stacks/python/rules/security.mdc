@@ -31,10 +31,13 @@ Applies only to `*.py`/`*.pyi` files (W1-AC8).
   equivalent to `exec`. Use `json` or a schema-validated format instead.
 - Use `yaml.safe_load`, never `yaml.load`, for any YAML that did not
   originate from your own trusted config in the repo.
-- Parse XML with `defusedxml` (or `ET.parse` with entity resolution
-  disabled) instead of raw `xml.etree.ElementTree`/`xml.dom.minidom` on
-  untrusted input — the stdlib parsers resolve external entities (XXE) by
-  default.
+- Parse XML with `defusedxml` instead of raw
+  `xml.etree.ElementTree`/`xml.dom.minidom` on untrusted input. Current
+  `xml.etree`/expat no longer fetch external entities by default, so classic
+  XXE is not the risk; the remaining risk is entity-expansion ("billion
+  laughs") and similar resource-exhaustion DoS attacks, which the stdlib
+  parsers do not guard against and `ET.parse` has no option to disable —
+  `defusedxml` is still the safe choice for untrusted input.
 
 ## Data access
 

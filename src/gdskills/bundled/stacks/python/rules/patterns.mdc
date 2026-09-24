@@ -48,9 +48,11 @@ Python 3.12/3.13 patterns and the anti-patterns they replace. Applies only to
   (3.11+) instead of manually tracking a list of tasks and awaiting them
   with `asyncio.gather` — a `TaskGroup` cancels its siblings automatically
   when one fails.
-- Treat `asyncio.CancelledError` as a signal to clean up and re-raise, not an
-  error to swallow with a broad `except Exception` that would also catch
-  cancellation.
+- Treat `asyncio.CancelledError` as a signal to clean up and re-raise. Since
+  Python 3.8 it subclasses `BaseException`, not `Exception`, so a broad
+  `except Exception` does *not* catch it; only a bare `except:` or an
+  explicit `except BaseException` does, and either one must re-raise it
+  rather than swallow it.
 - Never call a blocking function (`requests.get`, `time.sleep`, synchronous
   file I/O, a CPU-bound loop) directly inside an `async def` — use the async
   client, `asyncio.sleep`, or `asyncio.to_thread`/an executor instead.
