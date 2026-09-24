@@ -330,24 +330,32 @@ describe("applyGraduation: malformed review-learning config (R3-F3)", () => {
   // defense-in-depth) had no test exercising a REAL configured login
   // present in a member record's trigger/action text, which the built
   // agent candidate body concatenates verbatim.
-  test("refuses learning-text-refused when a member record's trigger names a configured reviewer login, writing no agent candidate", async () => {
+  //
+  // R7-F2/R7-F3: this must use a `mayCarryReviewerText`-scoped member
+  // (reviewer-comment here) — a plain `repeated-correction` member naming a
+  // login is coincidence, not attribution (see the R6-F4 test in
+  // `apply.test.ts`), and is no longer gated at all. The login is configured
+  // only AFTER `runGraduate` (so the proposal-time gate — itself also scoped
+  // to `mayCarryReviewerText` — does not refuse the cluster before this test
+  // gets to exercise `applyGraduation`'s own defense-in-depth gate).
+  test("refuses learning-text-refused when a reviewer-comment member's action names a configured reviewer login, writing no agent candidate", async () => {
     await withProjectRoot(async (root, env) => {
       const capability = createAcceptCapability();
-      for (const [id, trigger, action] of AGENT_CLUSTER) {
-        const withLogin =
-          id === AGENT_CLUSTER[0]?.[0] ? `octocat says: ${trigger}` : trigger;
-        await writePattern(root, makeAccepted(id, withLogin, action, "code-style", 0.8), { env, capability });
+      for (const [id, hint, action] of REVIEWER_COMMENT_CLUSTER) {
+        const withLogin = id === REVIEWER_COMMENT_CLUSTER[0]?.[0] ? `octocat says: ${action}` : action;
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, withLogin, "review-conventions", 0.8), { env, capability });
       }
+
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
       const { mkdirSync, writeFileSync } = await import("node:fs");
       mkdirSync(path.join(root, ".metaproject"), { recursive: true });
       writeFileSync(
         path.join(root, ".metaproject", "review-learning.config.json"),
         JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["octocat"] }),
       );
-
-      const report = await runGraduate(root, { now: NOW, env });
-      const agentProposal = report.proposals.find((p) => p.target === "agent");
-      expect(agentProposal).toBeDefined();
 
       await expect(
         applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW }),
@@ -409,23 +417,32 @@ describe("applyGraduation: a configured login that is a substring of the fixed a
     });
   });
 
-  test("a member record that genuinely names the login 'chang' is still refused", async () => {
+  // R7-F2/R7-F3: same conversion as the R3-F4 test above — a plain
+  // `repeated-correction` member (this test's original `AGENT_CLUSTER`) is
+  // no longer gated at all, so a genuine occurrence there is no longer
+  // refused (correctly: that signal never reads review text, so its member
+  // naming "chang" is coincidence, not attribution — R6-F4). Use a
+  // reviewer-comment cluster instead, and configure the login only AFTER
+  // `runGraduate` so its own proposal-time gate does not refuse the cluster
+  // before `applyGraduation`'s defense-in-depth gate gets exercised.
+  test("a reviewer-comment member record that genuinely names the login 'chang' is still refused", async () => {
     await withProjectRoot(async (root, env) => {
       const capability = createAcceptCapability();
-      for (const [id, trigger, action] of AGENT_CLUSTER) {
-        const withLogin = id === AGENT_CLUSTER[0]?.[0] ? `chang says: ${trigger}` : trigger;
-        await writePattern(root, makeAccepted(id, withLogin, action, "code-style", 0.8), { env, capability });
+      for (const [id, hint, action] of REVIEWER_COMMENT_CLUSTER) {
+        const withAction = id === REVIEWER_COMMENT_CLUSTER[0]?.[0] ? `chang says: ${action}` : action;
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, withAction, "review-conventions", 0.8), { env, capability });
       }
+
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
       const { mkdirSync, writeFileSync } = await import("node:fs");
       mkdirSync(path.join(root, ".metaproject"), { recursive: true });
       writeFileSync(
         path.join(root, ".metaproject", "review-learning.config.json"),
         JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["chang"] }),
       );
-
-      const report = await runGraduate(root, { now: NOW, env });
-      const agentProposal = report.proposals.find((p) => p.target === "agent");
-      expect(agentProposal).toBeDefined();
 
       await expect(
         applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW }),
@@ -706,6 +723,113 @@ describe("runGraduate: a pattern accepted at both project and user scope does no
       const byTarget = Object.fromEntries(report.proposals.map((p) => [p.target, p]));
       expect(Object.keys(byTarget)).toEqual(["skill"]);
       expect([...(byTarget.skill?.members ?? [])].sort()).toEqual([idA, idB].sort());
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R7-F1 (review round 7, PR #691, minor): `applyGraduation` used to run a
+// SECOND, separate token gate over the already-keyword-filtered
+// `proposal.suggestedName`/`proposal.summary` (`containsLoginToken`). Those
+// two strings still mix `runGraduate`'s own fixed template prose ("N
+// accepted", "pattern(s)", "sharing", the fallback "learned-<domain>" name,
+// the literal domain string) with keyword-derived content, so a configured
+// login equal to one of THOSE fixed words (`tom-s` -> "s" is too short to
+// matter, but a login like the domain name itself, or one that happens to
+// equal a template word) refused every graduation for that project outright.
+// The fix removes that second gate entirely: `runGraduate`'s own
+// `keywordsOf`/`topKeywords` filtering already keeps a configured login out
+// of `suggestedName`/`summary` by construction, and `memberTexts` already
+// gates every member's actual variable content.
+// ---------------------------------------------------------------------------
+
+describe("applyGraduation: R7-F1 removed final summary/suggestedName token gate", () => {
+  test.each(["tom-s", "alice-review", "carol-accepted", "dan-sharing"])(
+    "login '%s' does not false-refuse a clean reviewer-comment graduation (no member names it)",
+    async (login) => {
+      await withProjectRoot(async (root, env) => {
+        await seedReviewerCommentCluster(root, env);
+        const report = await runGraduate(root, { now: NOW, env });
+        const agentProposal = report.proposals.find((p) => p.target === "agent");
+        expect(agentProposal).toBeDefined();
+
+        const { mkdirSync, writeFileSync } = await import("node:fs");
+        mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+        writeFileSync(
+          path.join(root, ".metaproject", "review-learning.config.json"),
+          JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: [login] }),
+        );
+
+        const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+        expect(existsSync(result.path)).toBe(true);
+      });
+    },
+  );
+
+  test("login 'code-bot' does not false-refuse a clean, non-reviewer-comment (repeated-correction) code-style graduation", async () => {
+    await withProjectRoot(async (root, env) => {
+      await seedClusters(root, env);
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["code-bot"] }),
+      );
+
+      const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+      expect(existsSync(result.path)).toBe(true);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R7-F2 (review round 7, PR #691, minor): `buildAgentCandidate` used to push
+// EVERY found member's `trigger`/`action` into `memberTexts` regardless of
+// `provenance.extractor` — disagreeing with `runGraduate`'s own cluster gate,
+// which was already scoped to `mayCarryReviewerText`. A `reverted-edit`
+// cluster (whose fixed trigger template contains the word "edit" twice over)
+// with a configured login of `edit` was proposed by `runGraduate` (correctly
+// unscoped) but then unconditionally refused at `applyGraduation` (the
+// unscoped `memberTexts` gate), even though a `reverted-edit` record never
+// reads review text and cannot carry an attribution fragment. Both sides of
+// the pipeline now use the same `mayCarryReviewerText` predicate.
+// ---------------------------------------------------------------------------
+
+describe("runGraduate/applyGraduation: a reverted-edit member is never login-gated, at either stage (R7-F2)", () => {
+  test("login 'edit' does not refuse proposing OR applying a reverted-edit cluster", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const rows: readonly [string, string, string][] = [
+        ["code-style.revert-aaaaaaaa", "When an edit to foo.ts is immediately reverted in this project", "Avoid nested ternaries in foo helpers"],
+        ["code-style.revert-bbbbbbbb", "When an edit to bar.ts is immediately reverted in this project", "Avoid nested ternaries in bar helpers"],
+        ["code-style.revert-cccccccc", "When an edit to baz.ts is immediately reverted in this project", "Avoid nested ternaries in baz helpers"],
+      ];
+      for (const [id, trigger, action] of rows) {
+        const record = makeAccepted(id, trigger, action, "code-style", 0.8);
+        await writePattern(
+          root,
+          { ...record, provenance: { extractor: "reverted-edit", extractorKind: "deterministic" } },
+          { env, capability },
+        );
+      }
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["edit"] }),
+      );
+
+      const report = await runGraduate(root, { now: NOW, env });
+      expect(report.refused).toEqual([]);
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
+      const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+      expect(existsSync(result.path)).toBe(true);
     });
   });
 });

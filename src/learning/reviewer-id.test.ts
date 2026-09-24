@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import {
   containsConfiguredLogin,
   generalizeLesson,
+  mayCarryReviewerText,
   REVIEWER_COMMENT_TRIGGER_PREFIX,
   reviewerIdFor,
   stripReviewerCommentTriggerPrefix,
@@ -210,5 +213,84 @@ describe("stripReviewerCommentTriggerPrefix", () => {
   test("a real login occurrence in the stripped keyword hint is still caught", () => {
     const trigger = `${REVIEWER_COMMENT_TRIGGER_PREFIX}@chang flagged this)`;
     expect(containsConfiguredLogin(stripReviewerCommentTriggerPrefix(trigger), ["chang"])).toBe(true);
+  });
+});
+
+// R7-F3 (review round 7, PR #691, minor): `mayCarryReviewerText` is the ONE
+// scoping rule every attribution gate in `src/learning` must use to decide
+// whether a record's/draft's text needs a configured-login check at all.
+describe("mayCarryReviewerText", () => {
+  test("true for the deterministic reviewer-comment signal", () => {
+    expect(mayCarryReviewerText({ extractor: "reviewer-comment", extractorKind: "deterministic" })).toBe(true);
+  });
+
+  test("true for any model-backed extractor, regardless of its self-declared label", () => {
+    expect(mayCarryReviewerText({ extractor: "model-summarizer", extractorKind: "model-backed" })).toBe(true);
+    expect(mayCarryReviewerText({ extractor: "fake", extractorKind: "model-backed" })).toBe(true);
+  });
+
+  test("false for every other deterministic signal", () => {
+    expect(mayCarryReviewerText({ extractor: "reverted-edit", extractorKind: "deterministic" })).toBe(false);
+    expect(mayCarryReviewerText({ extractor: "repeated-correction", extractorKind: "deterministic" })).toBe(false);
+    expect(mayCarryReviewerText({ extractor: "failing-to-passing-test", extractorKind: "deterministic" })).toBe(false);
+    expect(mayCarryReviewerText({ extractor: "health-regression", extractorKind: "deterministic" })).toBe(false);
+  });
+
+  test("false when extractorKind is omitted and the label is not 'reviewer-comment'", () => {
+    expect(mayCarryReviewerText({ extractor: "reverted-edit" })).toBe(false);
+  });
+});
+
+// R7-F3: a source-scan guard so a future attribution gate cannot reintroduce
+// the R7-F2/R7-F3 drift — a `containsConfiguredLogin` call site outside this
+// file that is NOT scoped by `mayCarryReviewerText` (i.e. an unconditional
+// gate, or one scoped only by a hand-rolled `extractor === "reviewer-comment"`
+// check that silently drops the model-backed case again). `reviewer-profile.ts`
+// is explicitly allowlisted: it operates only over `domain:
+// "review-conventions"` records, which today only the `reviewer-comment`
+// signal ever produces, so it has no `Provenance` in scope to gate with.
+describe("guard: every containsConfiguredLogin call site outside reviewer-id.ts is scoped by mayCarryReviewerText", () => {
+  const ALLOWLISTED_FILES = new Set(["reviewer-profile.ts"]);
+
+  const CALL_MARKER = "containsConfiguredLogin(";
+  // How far back from a call site to look for a `mayCarryReviewerText(`
+  // reference gating it. Wide enough to span the longest doc comment +
+  // enclosing `if` in this codebase today (measured: the farthest real gate
+  // is ~2000 chars from its call site, in `applyGraduation`'s member-text
+  // gate), but local enough that it cannot reach into a wholly unrelated
+  // function elsewhere in the same file (e.g. `graduate.ts`'s
+  // `keywordSourceFor`, which also compares
+  // `record.provenance.extractor === "reviewer-comment"` for an unrelated
+  // reason — keyword-source selection, not an attribution gate — but never
+  // itself references `mayCarryReviewerText(`, so it cannot satisfy this
+  // guard for any call site even if it fell inside the window).
+  const WINDOW = 2500;
+
+  test("source scan", () => {
+    const dir = path.join(import.meta.dir);
+    const files = readdirSync(dir).filter(
+      (name) => name.endsWith(".ts") && !name.endsWith(".test.ts") && name !== "reviewer-id.ts",
+    );
+    expect(files.length).toBeGreaterThan(0); // sanity: the scan actually looked at something
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = readFileSync(path.join(dir, file), "utf8");
+      if (!source.includes(CALL_MARKER)) continue;
+      if (ALLOWLISTED_FILES.has(file)) continue;
+
+      let searchFrom = 0;
+      for (;;) {
+        const callIndex = source.indexOf(CALL_MARKER, searchFrom);
+        if (callIndex < 0) break;
+        searchFrom = callIndex + CALL_MARKER.length;
+        const windowStart = Math.max(0, callIndex - WINDOW);
+        const before = source.slice(windowStart, callIndex);
+        if (!before.includes("mayCarryReviewerText(")) {
+          offenders.push(`${file}@${callIndex}: containsConfiguredLogin call is not preceded by a mayCarryReviewerText guard within ${WINDOW} chars`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

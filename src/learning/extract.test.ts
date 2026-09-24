@@ -480,6 +480,48 @@ describe("runExtract — model extractor capability gate", () => {
       expect(records[0]?.provenance.extractorKind).toBe("model-backed");
     });
   });
+
+  // R7-F3 (review round 7, PR #691, minor): the upsert login gate used to
+  // scope strictly by `draft.extractor === "reviewer-comment"`, so a
+  // model-backed draft — which picks its own `extractor` label and reads the
+  // whole observation window — sailed through unchecked as long as its label
+  // was not literally `"reviewer-comment"`. `mayCarryReviewerText` now also
+  // gates any draft with `extractorKind === "model-backed"`, regardless of
+  // its self-declared `extractor` label.
+  test("R7-F3: a model-backed draft naming '@alice' is refused (attribution) even under a self-declared label other than 'reviewer-comment'", async () => {
+    await withProjectRoot(async (root) => {
+      writeReviewLearningConfig(root, ["alice"]);
+      const dir = path.join(root, ".metaproject");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "learning.config.json"), JSON.stringify({ schemaVersion: 1, capabilities: { modelExtractor: true } }));
+
+      const loginExtractor: ModelExtractor = {
+        id: "fake",
+        extract: async () => [
+          {
+            domain: "code-style",
+            trigger: "When writing a function in this project",
+            action: "@alice prefers early returns over nesting",
+            evidence: [
+              {
+                kind: "reinforcement",
+                sourceType: "observation",
+                sourceRef: ".metaproject/data/learning/observations/2026-09-24.jsonl#L1",
+                observedAt: NOW.toISOString(),
+              },
+            ],
+            extractor: "model-summarizer",
+          },
+        ],
+      };
+
+      const report = await runExtract(root, { now: NOW, modelExtractor: loginExtractor });
+      expect(report.created).toEqual([]);
+      expect(report.refused.some((r) => r.categories.includes("attribution"))).toBe(true);
+      const records = await listPatterns(root, { domain: "code-style" });
+      expect(records).toEqual([]);
+    });
+  });
 });
 
 describe("runExtract — never produces status accepted", () => {

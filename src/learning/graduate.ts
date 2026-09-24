@@ -22,7 +22,7 @@ import { isPathInside, pathExists, withFileLock, writeFileAtomic } from "../lib/
 import { loadReviewLearningConfigSafe, type ReviewLearningConfig } from "../review/review-learning";
 import { appendDecision } from "./decisions";
 import { assertInsideLearningRoot, graduationDir, learningDataDir, projectLockPath } from "./paths";
-import { containsConfiguredLogin, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
+import { containsConfiguredLogin, mayCarryReviewerText, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { listPatterns, readPattern, updatePattern, type StoreEnvOptions } from "./store";
 import type { GraduationTarget, LearnedPattern, LearningDomain, LearningScope } from "./types";
@@ -210,21 +210,6 @@ function keywordsOf(text: string, logins: readonly string[] = []): ReadonlySet<s
   const words = text.toLowerCase().match(/[a-z][a-z0-9]*/g) ?? [];
   const forbidden = loginKeywordSet(logins);
   return new Set(words.filter((word) => word.length >= 4 && !STOPWORDS.has(word) && !forbidden.has(word)));
-}
-
-/**
- * R6-F1/R6-F2 defense in depth: true when any whole word token in `text`
- * (no length floor, unlike `keywordsOf` — a short login must still be
- * caught) equals a configured login or one of its hyphen/underscore-split
- * pieces. Token-equality only, never a substring test — used as a final
- * gate on already-assembled text (`proposal.suggestedName`,
- * `proposal.summary`) that `keywordsOf`'s filtering does not itself touch.
- */
-function containsLoginToken(text: string, logins: readonly string[]): boolean {
-  const forbidden = loginKeywordSet(logins);
-  if (forbidden.size === 0) return false;
-  const words = text.toLowerCase().match(/[a-z][a-z0-9]*/g) ?? [];
-  return words.some((word) => forbidden.has(word));
 }
 
 function jaccard(a: ReadonlySet<string>, b: ReadonlySet<string>): { score: number; shared: number } {
@@ -465,20 +450,20 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
       continue;
     }
 
-    // R6-F2: refuse, before any proposal file is written, a cluster whose
-    // reviewer-comment member variable text contains a configured login at
-    // an identifier boundary — the same login-may-have-been-configured-
+    // R6-F2/R7-F3: refuse, before any proposal file is written, a cluster
+    // whose gated member variable text contains a configured login at an
+    // identifier boundary — the same login-may-have-been-configured-
     // after-records-were-stored risk `applyGraduation`'s member-text gate
     // already covers at apply time, now also covered at proposal time so
     // the login never even reaches a `grad-*.json`/`.md` proposal artifact.
-    // Scoped to `provenance.extractor === "reviewer-comment"` members only
-    // (R6-F4): every other signal's trigger/action never read review text,
-    // so it cannot carry an attribution fragment.
-    const reviewerCommentMemberTexts = cluster.flatMap((record) => {
-      if (record.provenance.extractor !== "reviewer-comment") return [];
+    // Scoped by `mayCarryReviewerText` (R6-F4/R7-F3): every other signal's
+    // trigger/action never read review text, so it cannot carry an
+    // attribution fragment.
+    const attributionCheckedMemberTexts = cluster.flatMap((record) => {
+      if (!mayCarryReviewerText(record.provenance)) return [];
       return [stripReviewerCommentTriggerPrefix(record.trigger), record.action];
     });
-    if (configuredLogins.length > 0 && reviewerCommentMemberTexts.some((text) => containsConfiguredLogin(text, configuredLogins))) {
+    if (configuredLogins.length > 0 && attributionCheckedMemberTexts.some((text) => containsConfiguredLogin(text, configuredLogins))) {
       refused.push({ memberIds, categories: ["attribution"] });
       continue;
     }
@@ -579,12 +564,20 @@ function renderAgentMarkdown(definition: AgentDefinition): string {
 interface AgentCandidateBuild {
   readonly definition: AgentDefinition;
   /**
-   * Every member record's `trigger`/`action` (variable, comment-derived
-   * text) — `trigger` stripped of `REVIEWER_COMMENT_TRIGGER_PREFIX` first
-   * when the member's `provenance.extractor === "reviewer-comment"` — what a
-   * login gate should inspect. Never the proposal's own `description`
-   * (`proposal.summary`) or `suggestedName`, and never the assembled
-   * `role`/`body`: all of those also carry this function's own or
+   * Only the member records for which `mayCarryReviewerText(record.provenance)`
+   * holds (R7-F2/R7-F3): each such member's `trigger`/`action` (variable,
+   * comment-derived text) — `trigger` stripped of
+   * `REVIEWER_COMMENT_TRIGGER_PREFIX` first (a no-op unless the member is the
+   * `reviewer-comment` signal itself) — what a login gate should inspect. A
+   * member for which the predicate does NOT hold (reverted-edit,
+   * repeated-correction, etc.) never contributes text here at all: those
+   * signals' trigger/action come from fixed templates plus non-review
+   * observation data and cannot carry an attribution fragment, so gating them
+   * too would refuse a graduation whose member text merely happens to equal a
+   * configured login for unrelated reasons (R7-F2, the residual `R6-F4` left
+   * open in `applyGraduation`'s member-text gate). Never the proposal's own
+   * `description` (`proposal.summary`) or `suggestedName`, and never the
+   * assembled `role`/`body`: all of those also carry this function's own or
    * `runGraduate`'s fixed template wording (R4-F1/R5-F1/R5-F2, see
    * `applyGraduation`).
    */
@@ -598,9 +591,10 @@ async function buildAgentCandidate(root: string, proposal: GraduationProposalFil
     const record = await readMember(root, id, storeOptions);
     if (record !== undefined) {
       members.push(`- ${record.trigger} -> ${record.action} (source: ${id})`);
-      const triggerForLoginCheck =
-        record.provenance.extractor === "reviewer-comment" ? stripReviewerCommentTriggerPrefix(record.trigger) : record.trigger;
-      memberTexts.push(triggerForLoginCheck, record.action);
+      if (mayCarryReviewerText(record.provenance)) {
+        const triggerForLoginCheck = stripReviewerCommentTriggerPrefix(record.trigger);
+        memberTexts.push(triggerForLoginCheck, record.action);
+      }
     } else {
       members.push(`- (source record "${id}" not found)`);
     }
@@ -678,11 +672,12 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
   // via a differently configured login list at graduation time) is still
   // refused before it reaches `.metaproject/agents/<name>.md`.
   //
-  // R4-F1/R5-F1/R5-F2: this login gate checks ONLY `memberTexts` — each
-  // member's own `action`, and its `trigger` with
-  // `REVIEWER_COMMENT_TRIGGER_PREFIX` already stripped when
-  // `provenance.extractor === "reviewer-comment"` (`buildAgentCandidate`).
-  // It never checks `candidate.description` (== `proposal.summary`) or
+  // R4-F1/R5-F1/R5-F2/R7-F2/R7-F3: this login gate checks ONLY `memberTexts`
+  // — each member for which `mayCarryReviewerText(record.provenance)` holds,
+  // its own `action` and its `trigger` with `REVIEWER_COMMENT_TRIGGER_PREFIX`
+  // already stripped (`buildAgentCandidate`); a member for which the
+  // predicate does not hold contributes no text here at all. It never checks
+  // `candidate.description` (== `proposal.summary`) or
   // `proposal.suggestedName`: both are built by `runGraduate` (this
   // proposal's `summary`/`topKeywords`/`suggestedNameFor`) out of a mix of
   // member content AND fixed wording — the summary's own template prose
@@ -720,25 +715,19 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
     );
   }
 
-  // R6-F1/R6-F2 defense in depth: `runGraduate` now keeps a configured login
-  // (or a hyphen/underscore piece of one) out of `suggestedName`/`summary`
-  // by construction (`keywordsOf`'s login filtering), but a proposal file
-  // already on disk from before that fix — or a login configured after the
-  // proposal was written, same risk the member-text gate above exists for —
-  // could still carry one. Token-equality only (`containsLoginToken`), never
-  // `containsConfiguredLogin`'s substring-adjacent boundary regex over free
-  // prose: `suggestedName`/`summary` mix fixed template wording with
-  // keyword-derived content, and a substring test over that fixed wording is
-  // exactly the false-refusal `containsConfiguredLogin`'s own removed
-  // fallback used to cause (R4-F1/R5-F1/R5-F2) — not fixed wording, just an
-  // exact token.
-  if (configuredLogins.length > 0 && (containsLoginToken(proposal.suggestedName, configuredLogins) || containsLoginToken(proposal.summary, configuredLogins))) {
-    throw new LearningGraduateError(
-      "learning-text-refused",
-      `agent candidate for proposal "${proposalId}" refused: suggested name or summary contains a configured reviewer login token`,
-    );
-  }
-
+  // R7-F1: no final token gate over `proposal.suggestedName`/`proposal.summary`
+  // here. `runGraduate` already keeps a configured login (or a
+  // hyphen/underscore piece of one) out of both by construction
+  // (`keywordsOf`'s login filtering feeding `topKeywords`/`suggestedNameFor`
+  // — see `graduate.ts`'s clustering section), and `memberTexts` above gates
+  // every member's actual variable content. A SEPARATE token check re-testing
+  // the already-filtered `suggestedName`/`summary` only reopened the
+  // fixed-wording false-refusal class: those strings still mix
+  // `runGraduate`'s own fixed template prose ("accepted", "pattern(s)",
+  // "sharing", the literal domain name) with keyword-derived content, and a
+  // login that happened to equal one of those fixed words (`tom-s`,
+  // `alice-review`, `code-bot`, ...) refused every graduation for that
+  // project regardless of what any member actually said.
   const validation = validateAgentDefinition(candidate);
   if (!validation.ok) {
     throw new LearningGraduateError(

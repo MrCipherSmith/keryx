@@ -376,6 +376,36 @@ describe("applyLearnedPattern", () => {
     });
   });
 
+  // R7-F3 (review round 7, PR #691, minor): the login gate used to scope
+  // strictly by `provenance.extractor === "reviewer-comment"`, but a
+  // model-backed extractor picks its own `extractor` label (never
+  // necessarily the literal string `"reviewer-comment"`) and reads the whole
+  // observation window, so it could carry an unchecked login under any
+  // label. `mayCarryReviewerText` now also gates any
+  // `provenance.extractorKind === "model-backed"` record regardless of its
+  // `extractor` label.
+  test("R7-F3: a model-backed record naming '@alice' is refused even though its extractor label is not literally 'reviewer-comment'", async () => {
+    await withProject(async (root) => {
+      await seedRegistry(root, [{ module: "alpha", name: "module" }]);
+      await seedSkill(root, "alpha", "module");
+      const record = makeAccepted({
+        action: "@alice prefers early returns over nesting",
+        provenance: { extractor: "model-summarizer", extractorKind: "model-backed" },
+      });
+      await writePattern(root, record, { capability: createAcceptCapability() });
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      await writeFile(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+        "utf8",
+      );
+
+      await expect(applyLearnedPattern(root, record.id, { skill: "alpha/module" })).rejects.toMatchObject({
+        reason: "learning-text-refused",
+      });
+    });
+  });
+
   // R3-F3 (review round 3, PR #691, minor): a malformed
   // `.metaproject/review-learning.config.json` used to make the login gate
   // throw an un-reasoned error straight out of `loadReviewLearningConfig`.

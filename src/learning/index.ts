@@ -133,7 +133,7 @@ export {
 
 export { learningConfigPath, loadLearningConfig, type LearningConfig } from "./config";
 
-export { containsConfiguredLogin, generalizeLesson, reviewerIdFor } from "./reviewer-id";
+export { containsConfiguredLogin, generalizeLesson, mayCarryReviewerText, reviewerIdFor } from "./reviewer-id";
 
 // CI/import-policy: `src/commands/learn.ts` and `src/commands/review.ts`
 // (both "commands" zone, `client-imports-core-internal`-tracked) used to

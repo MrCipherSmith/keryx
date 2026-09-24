@@ -14,7 +14,7 @@ import { renderProposalMarkdown, resolveRegisteredSkillTarget, suggestedSections
 import type { ApplyLearningProposalResult, LearningProposal, LearningSourceType } from "../gdskills/learn";
 import { applyLearningProposal } from "../gdskills/learn";
 import { loadReviewLearningConfigSafe } from "../review/review-learning";
-import { containsConfiguredLogin, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
+import { containsConfiguredLogin, mayCarryReviewerText, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { readPattern, type StoreEnvOptions } from "./store";
 import type { EvidenceSourceType, LearnedPattern, LearningDomain } from "./types";
@@ -182,18 +182,22 @@ export async function applyLearnedPattern(
     throw new LearningApplyError("learning-text-refused", `record "${id}" refused by the security scan: ${scan.findings.join(", ")}`);
   }
 
-  // R2-F6/R6-F4: same defense-in-depth as `graduate.ts`'s agent-candidate
-  // render and extract's upsert, but scoped to the ONE domain that can
-  // actually carry a reviewer login: a record whose
-  // `provenance.extractor === "reviewer-comment"` is the only shape whose
-  // `trigger`/`action` text was ever derived from review comment text (the
-  // generalized lesson in `action`, the trigger hint after
-  // `REVIEWER_COMMENT_TRIGGER_PREFIX`). Every other extractor's
-  // trigger/action comes from fixed templates plus non-review observation
-  // data, so it never carries an attribution fragment in the first place —
-  // gating it too would refuse a `code-style`/`testing`/etc. record whose
-  // text happens to equal a configured login for reasons unrelated to any
-  // reviewer (R6-F4).
+  // R2-F6/R6-F4/R7-F3: same defense-in-depth as `graduate.ts`'s agent-candidate
+  // render and extract's upsert, scoped by `mayCarryReviewerText` to the
+  // records whose `trigger`/`action` text could actually carry a reviewer
+  // login: the deterministic `reviewer-comment` signal (the generalized
+  // lesson in `action`, the trigger hint after
+  // `REVIEWER_COMMENT_TRIGGER_PREFIX`), and any model-backed record
+  // (`provenance.extractorKind === "model-backed"`) regardless of its
+  // self-declared `extractor` label (R7-F3) — a model-backed extractor sees
+  // the whole observation window and picks its own label, so it is gated
+  // unconditionally rather than only when that label happens to equal the
+  // literal string `"reviewer-comment"`. Every other deterministic
+  // extractor's trigger/action comes from fixed templates plus non-review
+  // observation data, so it never carries an attribution fragment in the
+  // first place — gating it too would refuse a `code-style`/`testing`/etc.
+  // record whose text happens to equal a configured login for reasons
+  // unrelated to any reviewer (R6-F4).
   //
   // R3-F3: the config is loaded through the guarded loader — a malformed
   // `review-learning.config.json` refuses THIS gate with a named reason
@@ -211,13 +215,15 @@ export async function applyLearnedPattern(
   }
   const configuredLogins =
     configResult.config === null ? [] : [...new Set([...configResult.config.authors, ...(configResult.config.reviewerProfiles ?? [])])];
-  if (record.provenance.extractor === "reviewer-comment") {
+  if (mayCarryReviewerText(record.provenance)) {
     // R4-F1: a record produced by the `reviewer-comment` extractor carries
     // that signal's own FIXED trigger wording (`REVIEWER_COMMENT_TRIGGER_
     // PREFIX`) around the variable keyword hint — strip it before the login
-    // gate inspects `record.trigger`, the same fix `extract.ts`'s upsert
-    // applies, so a boundary-matched configured login is checked only
-    // against the comment's own variable content.
+    // gate inspects `record.trigger` (a no-op for any other gated record,
+    // i.e. a model-backed one, whose trigger never had that prefix), the
+    // same fix `extract.ts`'s upsert applies, so a boundary-matched
+    // configured login is checked only against the comment's own variable
+    // content.
     const triggerForLoginCheck = stripReviewerCommentTriggerPrefix(record.trigger);
     if (
       configuredLogins.length > 0 &&

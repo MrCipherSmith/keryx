@@ -88,6 +88,32 @@ function escapeForRegExp(value: string): string {
  * self-learning loop silently refusing every lesson), while a login glued
  * with zero boundary characters on either side is a narrow, unlikely shape.
  */
+/**
+ * R7-F3: the ONE scoping rule every attribution gate in `src/learning` uses
+ * to decide whether a record's/draft's `trigger`/`action` text needs a
+ * configured-login check at all. True for the deterministic
+ * `reviewer-comment` signal (the only deterministic signal that reads actual
+ * PR review text) and for ANY model-backed extractor
+ * (`extractorKind === "model-backed"`) — a model-backed extractor chooses its
+ * own `extractor` label (never necessarily `"reviewer-comment"`) and sees the
+ * whole observation window, so it could reference a login under any signal
+ * name. Every other deterministic signal's trigger/action comes from fixed
+ * templates plus non-review observation data (file paths, test names, commit
+ * messages) and never carries an attribution fragment, so gating those too
+ * would only reopen the fixed-wording/template false-refusal class
+ * (R4-F1/R5-F1/R5-F2/R6-F1/R7-F2) for text that could never have carried a
+ * login in the first place.
+ *
+ * Every call site of `containsConfiguredLogin` outside this file must sit
+ * behind this predicate (see `reviewer-id.test.ts`'s guard test), except
+ * `reviewer-profile.ts`, which is explicitly allowlisted: it works only over
+ * `domain: "review-conventions"` records, which today only the
+ * `reviewer-comment` signal ever produces.
+ */
+export function mayCarryReviewerText(p: { extractor: string; extractorKind?: string | undefined }): boolean {
+  return p.extractor === "reviewer-comment" || p.extractorKind === "model-backed";
+}
+
 export function containsConfiguredLogin(text: string, logins: readonly string[]): boolean {
   return logins.some((login) => {
     const trimmed = login.trim();
