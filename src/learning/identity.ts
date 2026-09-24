@@ -15,29 +15,54 @@ function sha256Hex(value: string): string {
 
 /**
  * Normalize a git remote URL so the same conceptual remote hashes the same
- * way regardless of protocol decoration: trim, lowercase, strip embedded
- * credentials (`user:pass@`/`user@`, including the scp-style
- * `git@host:owner/repo` form, deterministically rewritten to `host:owner/repo`
- * so it hashes the same as its `ssh://` equivalent would), strip the query
- * string and fragment, strip trailing slashes, strip a trailing `.git`.
+ * way regardless of protocol decoration: trim, lowercase, strip the scheme
+ * (`https://`, `ssh://`, ...) entirely, strip embedded credentials
+ * (`user:pass@`/`user@`), rewrite the scp-style `user@host:owner/repo` form's
+ * `:` separator to `/` (so it lands on the same `host/owner/repo` shape as
+ * its `ssh://` equivalent), strip a `:22` (the ssh default port, and the one
+ * `ssh://` spells out where scp-style never does) immediately after the
+ * host, strip the query string and fragment, strip trailing slashes, strip a
+ * trailing `.git`.
  *
- * This is intentionally lossy (case, scp-vs-ssh form) — the goal is a stable
- * hash for "the same remote", not a byte-preserving canonical URL.
+ * R1-F6: an earlier version of this function kept the scheme (so
+ * `https://host/owner/repo` and `ssh://host/owner/repo` normalized to two
+ * different strings) and kept the scp-style `:` separator (so
+ * `git@host:owner/repo` differed from both). Three spellings of the exact
+ * same remote then hashed to three different `project.identity` values —
+ * each one only a single git remote away from the promotion rule's ">= 2
+ * distinct project identities" threshold, since a project that happens to
+ * carry two different remote spellings (e.g. `origin` over `https`,
+ * `upstream` over `ssh`) would silently look like two different projects.
+ * Every one of `https://host/owner/repo(.git)?`, `git@host:owner/repo(.git)?`,
+ * `ssh://git@host/owner/repo(.git)?` and `ssh://git@host:22/owner/repo` now
+ * normalizes to the identical `host/owner/repo`.
+ *
+ * This is intentionally lossy (case, scheme, scp-vs-ssh form, the ssh default
+ * port) — the goal is a stable hash for "the same remote", not a
+ * byte-preserving canonical URL. A non-default port is kept: it genuinely
+ * reaches a different endpoint, not just a different spelling of the same one.
  */
 export function normalizeRemoteUrl(url: string): string {
   let value = url.trim().toLowerCase();
 
   const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//.test(value);
-  if (!hasScheme) {
-    // scp-style: user@host:owner/repo(.git)? -> host:owner/repo
-    const scpMatch = /^[^@/:]+@([^:/]+):(.+)$/.exec(value);
-    if (scpMatch) {
-      value = `${scpMatch[1]}:${scpMatch[2]}`;
-    }
+  if (hasScheme) {
+    // Strip the scheme entirely — https/ssh/git are decoration, not identity.
+    value = value.replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
+    // user:pass@host/... or user@host/... -> host/...
+    value = value.replace(/^[^@/]+@/, "");
   } else {
-    // scheme://user:pass@host/... or scheme://user@host/... -> scheme://host/...
-    value = value.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^@/]+@/, "$1");
+    // scp-style: user@host:owner/repo(.git)? -> host/owner/repo(.git)?
+    // (also accepts a bare host:owner/repo with no user@, for symmetry).
+    const scpMatch = /^(?:[^@/:]+@)?([^:/]+):(.+)$/.exec(value);
+    if (scpMatch) {
+      value = `${scpMatch[1]}/${scpMatch[2]}`;
+    }
   }
+
+  // The ssh default port, spelled out only by the `ssh://` form — strip it so
+  // it agrees with the scp-style/https forms, which never carry a port here.
+  value = value.replace(/^([^/:]+):22(?=\/|$)/, "$1");
 
   // Strip fragment and query string.
   value = value.split("#")[0]!.split("?")[0]!;

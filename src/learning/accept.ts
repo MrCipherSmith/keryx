@@ -8,8 +8,8 @@ import { spawnSync } from "node:child_process";
 import { createAcceptCapability } from "./accept-capability";
 import { appendDecision } from "./decisions";
 import { scanLearnedText } from "./scan";
-import { LearningStoreError, readIndex, readPattern, writeIndex, writePattern, type StoreEnvOptions } from "./store";
-import type { IndexEntry, LearnedPattern, LearningIndex, LearningScope } from "./types";
+import { LearningStoreError, readPattern, updateIndex, updatePattern, type StoreEnvOptions } from "./store";
+import type { IndexEntry, LearnedPattern, LearningScope } from "./types";
 
 export class LearningAcceptError extends Error {
   constructor(
@@ -130,14 +130,14 @@ function indexEntryFor(record: LearnedPattern, acceptedAtIso: string): IndexEntr
   };
 }
 
-/** Appends, or (if this identity already has an entry under `id`) replaces, the project's index entry. Returns true — always writes something for a project-scope accept. */
+/** Appends, or (if this identity already has an entry under `id`) replaces, the project's index entry — read-modify-write under the user lock in one pass (R1-F7: two concurrent accepts must not drop one another's entry). */
 async function upsertIndexEntry(id: string, entry: IndexEntry, storeOptions: StoreEnvOptions): Promise<void> {
-  const index = await readIndex(storeOptions);
-  const entries = index[id] ?? [];
-  const existingIdx = entries.findIndex((e) => e.projectIdentity === entry.projectIdentity);
-  const nextEntries = existingIdx >= 0 ? entries.map((e, i) => (i === existingIdx ? entry : e)) : [...entries, entry];
-  const nextIndex: LearningIndex = { ...index, [id]: nextEntries };
-  await writeIndex(nextIndex, storeOptions);
+  await updateIndex((index) => {
+    const entries = index[id] ?? [];
+    const existingIdx = entries.findIndex((e) => e.projectIdentity === entry.projectIdentity);
+    const nextEntries = existingIdx >= 0 ? entries.map((e, i) => (i === existingIdx ? entry : e)) : [...entries, entry];
+    return { ...index, [id]: nextEntries };
+  }, storeOptions);
 }
 
 async function doRefresh(
@@ -154,18 +154,29 @@ async function doRefresh(
       `record "${id}" (project) is status "${record.status}", not "accepted"; only an accepted record can be refreshed`,
     );
   }
-  const index = await readIndex(storeOptions);
-  const entries = index[id];
-  const existingIdx = entries?.findIndex((e) => e.projectIdentity === record.project.identity) ?? -1;
-  if (entries === undefined || existingIdx < 0) {
+  const refreshedEntry = indexEntryFor(record, nowIso);
+  // R1-F7: the "is this id actually indexed under this project's identity?"
+  // check and the write that updates it now happen inside the SAME `updateIndex`
+  // lock acquisition (checked again against a freshly-read index, not the one
+  // read before the lock), so a concurrent accept/refresh can no longer race
+  // this read-then-write.
+  let wasIndexed = true;
+  await updateIndex((index) => {
+    const entries = index[id];
+    const existingIdx = entries?.findIndex((e) => e.projectIdentity === record.project.identity) ?? -1;
+    if (entries === undefined || existingIdx < 0) {
+      wasIndexed = false;
+      return index;
+    }
+    const nextEntries = entries.map((e, i) => (i === existingIdx ? refreshedEntry : e));
+    return { ...index, [id]: nextEntries };
+  }, storeOptions);
+  if (!wasIndexed) {
     throw new LearningAcceptError(
       "learning-refresh-not-indexed",
       `no index entry for "${id}" under the current project's identity; run \`keryx learn accept ${id}\` first`,
     );
   }
-  const refreshed = indexEntryFor(record, nowIso);
-  const nextEntries = entries.map((e, i) => (i === existingIdx ? refreshed : e));
-  await writeIndex({ ...index, [id]: nextEntries }, storeOptions);
   await appendDecision(root, { action: "refresh", id, actor, tty: true, at: nowIso }, { ...storeOptions, scope: "project" });
   return { id, scope: "project", status: "accepted", indexUpdated: true };
 }
@@ -214,8 +225,25 @@ export async function acceptPattern(root: string, id: string, opts: AcceptOption
     throw new LearningAcceptError("learning-text-refused", `record "${id}" refused by the security scan: ${scan.findings.join(", ")}`);
   }
 
-  const updated: LearnedPattern = { ...withoutTtl(record), status: "accepted", updatedAt: nowIso };
-  await writePattern(root, updated, { ...storeOptions, capability: createAcceptCapability() });
+  const updated = await updatePattern(
+    root,
+    id,
+    scope,
+    (current) => {
+      // Defense in depth: `record` was read before the lock; re-check the
+      // status of the copy `updatePattern` reads UNDER the lock too, so a
+      // status change racing this call (another accept, a reject, extract's
+      // expiry pass) is refused rather than silently overwritten.
+      if (current.status !== "candidate") {
+        throw new LearningAcceptError(
+          "learning-not-a-candidate",
+          `record "${id}" (${scope}) is status "${current.status}", not "candidate"; only a candidate can be accepted`,
+        );
+      }
+      return { ...withoutTtl(current), status: "accepted", updatedAt: nowIso };
+    },
+    { ...storeOptions, capability: createAcceptCapability() },
+  );
   await appendDecision(root, { action: "accept", id, actor, tty: true, at: nowIso }, { ...storeOptions, scope });
 
   let indexUpdated = false;
@@ -244,8 +272,21 @@ export async function rejectPattern(root: string, id: string, opts: RejectOption
     );
   }
 
-  const updated: LearnedPattern = { ...withoutTtl(record), status: "rejected", updatedAt: nowIso };
-  await writePattern(root, updated, storeOptions);
+  await updatePattern(
+    root,
+    id,
+    scope,
+    (current) => {
+      if (current.status !== "candidate") {
+        throw new LearningAcceptError(
+          "learning-not-a-candidate",
+          `record "${id}" (${scope}) is status "${current.status}", not "candidate"; only a candidate can be rejected`,
+        );
+      }
+      return { ...withoutTtl(current), status: "rejected", updatedAt: nowIso };
+    },
+    storeOptions,
+  );
   await appendDecision(root, { action: "reject", id, actor, tty: false, at: nowIso }, { ...storeOptions, scope });
 
   return { id, scope, status: "rejected" };

@@ -23,8 +23,8 @@ import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import path from "node:path";
 import { readStdinBounded, LEARN_OBSERVE_MAX_STDIN_BYTES } from "../lib/bounded-stdin";
-import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
+import { parseLearnArgs } from "../learning/cli-args";
 import {
   acceptPattern,
   applyGraduation,
@@ -134,15 +134,6 @@ function resolveNow(deps: LearnCommandDeps): Date {
   return (deps.now ?? ((): Date => new Date()))();
 }
 
-/** Refuse an unknown flag rather than silently ignoring it (matches `agents-catalog.ts`/`review.ts`). */
-function unknownFlags(args: readonly string[], allowed: readonly string[]): string[] {
-  return args.filter((arg) => arg.startsWith("--") && !allowed.includes(arg.split("=")[0] as string));
-}
-
-function positional(args: readonly string[]): string | undefined {
-  return args.find((arg) => !arg.startsWith("-"));
-}
-
 function fail(message: string): void {
   console.error(`keryx learn: ${message}`);
   process.exitCode = 1;
@@ -178,8 +169,7 @@ function makeTypedIdConfirm(id: string, label: string, deps: LearnCommandDeps): 
   };
 }
 
-function parseEnumFlag<T extends string>(args: readonly string[], flag: string, allowed: readonly T[]): T | undefined {
-  const value = optionValue([...args], flag);
+function parseEnumFlag<T extends string>(value: string | undefined, flag: string, allowed: readonly T[]): T | undefined {
   if (value === undefined) return undefined;
   if (!allowed.includes(value as T)) {
     throw new Error(`${flag} must be one of ${allowed.join(", ")}, not "${value}"`);
@@ -245,9 +235,9 @@ async function runObserveManual(deps: LearnCommandDeps): Promise<void> {
 }
 
 async function runObserve(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
-  const bad = unknownFlags(args, ["--hook"]);
-  if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")}`);
-  const hook = optionValue([...args], "--hook");
+  const parsed = parseLearnArgs(args, { value: ["--hook"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const hook = parsed.values.get("--hook");
   if (hook !== undefined && hook !== "claude") return fail(`--hook must be "claude", not "${hook}"`);
   if (hook === "claude") {
     await runObserveHook(deps);
@@ -261,11 +251,11 @@ async function runObserve(args: readonly string[], deps: LearnCommandDeps): Prom
 // ---------------------------------------------------------------------------
 
 async function runExtractCommand(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
-  const bad = unknownFlags(args, ["--domain", "--since", "--json"]);
-  if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")}`);
+  const parsed = parseLearnArgs(args, { boolean: ["--json"], value: ["--domain", "--since"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
   try {
-    const domain = parseEnumFlag(args, "--domain", DOMAINS);
-    const since = optionValue([...args], "--since");
+    const domain = parseEnumFlag(parsed.values.get("--domain"), "--domain", DOMAINS);
+    const since = parsed.values.get("--since");
     const root = resolveRoot(deps);
     const report = await runExtract(root, {
       ...(domain !== undefined ? { domain } : {}),
@@ -273,7 +263,7 @@ async function runExtractCommand(args: readonly string[], deps: LearnCommandDeps
       now: resolveNow(deps),
       ...storeOptionsOf(deps),
     });
-    if (args.includes("--json")) {
+    if (parsed.flags.has("--json")) {
       console.log(JSON.stringify(report, null, 2));
       return;
     }
@@ -301,12 +291,12 @@ function formatRecordRow(record: LearnedPattern): string {
 }
 
 async function runList(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
-  const bad = unknownFlags(args, ["--status", "--domain", "--scope", "--json"]);
-  if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")}`);
+  const parsed = parseLearnArgs(args, { boolean: ["--json"], value: ["--status", "--domain", "--scope"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
   try {
-    const status = parseEnumFlag(args, "--status", STATUSES);
-    const domain = parseEnumFlag(args, "--domain", DOMAINS);
-    const scope = parseEnumFlag(args, "--scope", SCOPES);
+    const status = parseEnumFlag(parsed.values.get("--status"), "--status", STATUSES);
+    const domain = parseEnumFlag(parsed.values.get("--domain"), "--domain", DOMAINS);
+    const scope = parseEnumFlag(parsed.values.get("--scope"), "--scope", SCOPES);
     const root = resolveRoot(deps);
     const storeOptions = storeOptionsOf(deps);
     const records = await listPatterns(
@@ -319,7 +309,7 @@ async function runList(args: readonly string[], deps: LearnCommandDeps): Promise
       storeOptions,
     );
 
-    if (args.includes("--json")) {
+    if (parsed.flags.has("--json")) {
       console.log(JSON.stringify(records, null, 2));
     } else if (records.length === 0) {
       console.log("keryx learn list: no records match.");
@@ -367,13 +357,13 @@ async function findById(
 }
 
 async function runReview(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
-  const bad = unknownFlags(args, ["--scope"]);
-  if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")}`);
+  const parsed = parseLearnArgs(args, { value: ["--scope"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
   try {
-    const scope = parseEnumFlag(args, "--scope", SCOPES);
+    const scope = parseEnumFlag(parsed.values.get("--scope"), "--scope", SCOPES);
     const root = resolveRoot(deps);
     const storeOptions = storeOptionsOf(deps);
-    const id = positional(args);
+    const id = parsed.positionals[0];
 
     if (id !== undefined) {
       const record = await findById(root, id, scope, storeOptions);
@@ -401,16 +391,16 @@ async function runReview(args: readonly string[], deps: LearnCommandDeps): Promi
 // ---------------------------------------------------------------------------
 
 async function runAccept(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
-  const bad = unknownFlags(args, ["--scope", "--refresh"]);
-  if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")}`);
-  const id = positional(args);
+  const parsed = parseLearnArgs(args, { boolean: ["--refresh"], value: ["--scope"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const id = parsed.positionals[0];
   if (id === undefined) return fail("usage: keryx learn accept <id> [--scope user] [--refresh]");
   try {
-    const scope = parseEnumFlag(args, "--scope", SCOPES);
+    const scope = parseEnumFlag(parsed.values.get("--scope"), "--scope", SCOPES);
     const root = resolveRoot(deps);
     const result = await acceptPattern(root, id, {
       ...(scope !== undefined ? { scope } : {}),
-      refresh: args.includes("--refresh"),
+      refresh: parsed.flags.has("--refresh"),
       isTerminal: resolveTerminal(deps),
       now: () => resolveNow(deps),
       ...storeOptionsOf(deps),
@@ -424,12 +414,12 @@ async function runAccept(args: readonly string[], deps: LearnCommandDeps): Promi
 }
 
 async function runReject(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
-  const bad = unknownFlags(args, ["--scope"]);
-  if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")}`);
-  const id = positional(args);
+  const parsed = parseLearnArgs(args, { value: ["--scope"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const id = parsed.positionals[0];
   if (id === undefined) return fail("usage: keryx learn reject <id> [--scope user]");
   try {
-    const scope = parseEnumFlag(args, "--scope", SCOPES);
+    const scope = parseEnumFlag(parsed.values.get("--scope"), "--scope", SCOPES);
     const root = resolveRoot(deps);
     const result = await rejectPattern(root, id, {
       ...(scope !== undefined ? { scope } : {}),
@@ -447,15 +437,15 @@ async function runReject(args: readonly string[], deps: LearnCommandDeps): Promi
 // ---------------------------------------------------------------------------
 
 async function runApply(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
-  const bad = unknownFlags(args, ["--skill", "--dry-run"]);
-  if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")}`);
-  const id = positional(args);
+  const parsed = parseLearnArgs(args, { boolean: ["--dry-run"], value: ["--skill"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const id = parsed.positionals[0];
   if (id === undefined) return fail("usage: keryx learn apply <id> --skill <module/name> [--dry-run]");
-  const skill = optionValue([...args], "--skill");
+  const skill = parsed.values.get("--skill");
   if (skill === undefined) return fail("--skill <module/name> is required");
   try {
     const root = resolveRoot(deps);
-    const dryRun = args.includes("--dry-run");
+    const dryRun = parsed.flags.has("--dry-run");
     const result = await applyLearnedPattern(root, id, { skill, dryRun, ...storeOptionsOf(deps) });
     if (dryRun) {
       console.log(`keryx learn apply: dry run — "${id}" would update skill "${skill}" (${result.applied.previousVersion} -> ${result.applied.nextVersion}). Nothing written.`);
@@ -477,9 +467,9 @@ async function runApply(args: readonly string[], deps: LearnCommandDeps): Promis
 async function runPromote(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
   // No flags at all — in particular, no --yes/--force/--non-interactive (W3
   // spec "Promotion rule" #2). Any flag here is refused, not just an unknown one.
-  const bad = unknownFlags(args, []);
-  if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")} — promote takes no flags (no bypass exists)`);
-  const id = positional(args);
+  const parsed = parseLearnArgs(args, {});
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")} — promote takes no flags (no bypass exists)`);
+  const id = parsed.positionals[0];
   if (id === undefined) return fail("usage: keryx learn promote <id>");
   const terminal = resolveTerminal(deps);
   if (!terminal) {
@@ -508,13 +498,13 @@ async function runPromote(args: readonly string[], deps: LearnCommandDeps): Prom
 // ---------------------------------------------------------------------------
 
 async function runGraduateRun(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
-  const bad = unknownFlags(args, ["--domain", "--json"]);
-  if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")}`);
+  const parsed = parseLearnArgs(args, { boolean: ["--json"], value: ["--domain"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
   try {
-    const domain = parseEnumFlag(args, "--domain", DOMAINS);
+    const domain = parseEnumFlag(parsed.values.get("--domain"), "--domain", DOMAINS);
     const root = resolveRoot(deps);
     const report = await runGraduate(root, { ...(domain !== undefined ? { domain } : {}), now: resolveNow(deps), ...storeOptionsOf(deps) });
-    if (args.includes("--json")) {
+    if (parsed.flags.has("--json")) {
       console.log(JSON.stringify(report, null, 2));
       return;
     }
@@ -537,9 +527,9 @@ async function runGraduateRun(args: readonly string[], deps: LearnCommandDeps): 
 
 async function runGraduateApply(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
   // Same "no flags at all" rule as promote — no bypass exists for graduate apply either.
-  const bad = unknownFlags(args, []);
-  if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")} — graduate apply takes no flags (no bypass exists)`);
-  const proposalId = positional(args);
+  const parsed = parseLearnArgs(args, {});
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")} — graduate apply takes no flags (no bypass exists)`);
+  const proposalId = parsed.positionals[0];
   if (proposalId === undefined) return fail("usage: keryx learn graduate apply <proposal-id>");
   const terminal = resolveTerminal(deps);
   if (!terminal) {
@@ -576,12 +566,12 @@ async function runGraduateCommand(args: readonly string[], deps: LearnCommandDep
 // ---------------------------------------------------------------------------
 
 async function runPrune(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
-  const bad = unknownFlags(args, ["--dry-run", "--json"]);
-  if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")}`);
+  const parsed = parseLearnArgs(args, { boolean: ["--dry-run", "--json"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
   try {
     const root = resolveRoot(deps);
-    const report = await pruneLearning(root, { now: resolveNow(deps), dryRun: args.includes("--dry-run"), ...storeOptionsOf(deps) });
-    if (args.includes("--json")) {
+    const report = await pruneLearning(root, { now: resolveNow(deps), dryRun: parsed.flags.has("--dry-run"), ...storeOptionsOf(deps) });
+    if (parsed.flags.has("--json")) {
       console.log(JSON.stringify(report, null, 2));
       return;
     }

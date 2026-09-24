@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { learnCommand, type LearnCommandDeps } from "./learn";
@@ -201,6 +201,78 @@ describe("keryx learn observe --hook claude", () => {
       expect(run.exitCode).toBe(0);
       expect(run.stdout).toContain("0 line(s)");
       expect(run.stdout).toContain("writer is unbuffered; nothing to flush");
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R1-F3 / R1-F5 (review round 1, PR #691): a shared flag parser
+// (`src/learning/cli-args.ts`'s `parseLearnArgs`) replaces per-command
+// `args.includes("--flag")` (blind to `--flag=value`) and
+// `args.find((a) => !a.startsWith("-"))` (blind to a value-flag's own value
+// looking like a positional).
+// ---------------------------------------------------------------------------
+
+describe("keryx learn: --flag=value on a boolean flag is refused, not silently read as absent (R1-F3)", () => {
+  test("prune --dry-run=true is refused, and nothing is deleted", async () => {
+    await withTempHome(async (root, env) => {
+      const observationsDir = path.join(root, ".metaproject", "data", "learning", "observations");
+      mkdirSync(observationsDir, { recursive: true });
+      const staleFile = path.join(observationsDir, "2020-01-01.jsonl");
+      writeFileSync(staleFile, `${JSON.stringify({ line: 1 })}\n`);
+
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["prune", "--dry-run=true"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("unknown flag");
+      expect(run.stderr).toContain("--dry-run=true");
+      // Refused before `pruneLearning` ever ran — the stale file (30+ days
+      // past its TTL, so a real prune pass would delete it) is untouched.
+      expect(readFileSync(staleFile, "utf8")).toContain('"line":1');
+    });
+  });
+
+  test("apply --dry-run=1 is refused, not silently treated as a real (non-dry-run) apply", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["apply", "testing.whatever-00000000", "--skill", "module/name", "--dry-run=1"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("unknown flag");
+      expect(run.stderr).toContain("--dry-run=1");
+    });
+  });
+
+  test("accept --refresh=1 is refused, not silently treated as a full (non-refresh) accept", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env, isTerminal: true };
+      const run = await capture(() => learnCommand(["accept", "testing.whatever-00000000", "--refresh=1"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("unknown flag");
+      expect(run.stderr).toContain("--refresh=1");
+    });
+  });
+});
+
+describe("keryx learn: a value flag's own value is never read as the positional id (R1-F5)", () => {
+  test("reject --scope user foo reads id \"foo\", not \"user\"", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["reject", "--scope", "user", "foo"], deps));
+      // No such record — refused by rejectPattern, not by a malformed-flag
+      // check — but the error names the id that was actually looked up.
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain('"foo"');
+      expect(run.stderr).not.toContain('"user"');
+    });
+  });
+
+  test("apply --skill m/n <id> reads id, not the --skill value", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["apply", "--skill", "m/n", "testing.some-id-00000000"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("testing.some-id-00000000");
+      expect(run.stderr).not.toContain('"m/n"');
     });
   });
 });

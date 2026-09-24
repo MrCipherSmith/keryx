@@ -12,24 +12,37 @@ function sha256Hex(value: string): string {
 
 describe("normalizeRemoteUrl", () => {
   test.each([
-    ["https://github.com/Org/Repo.git", "https://github.com/org/repo"],
-    ["https://github.com/org/repo", "https://github.com/org/repo"],
-    ["https://github.com/org/repo/", "https://github.com/org/repo"],
-    ["https://user:pass@github.com/org/repo.git", "https://github.com/org/repo"],
-    ["https://user@github.com/org/repo.git", "https://github.com/org/repo"],
-    ["https://github.com/org/repo.git?ref=main", "https://github.com/org/repo"],
-    ["https://github.com/org/repo#readme", "https://github.com/org/repo"],
-    ["git@github.com:org/repo.git", "github.com:org/repo"],
-    ["GIT@GITHUB.COM:ORG/REPO.GIT", "github.com:org/repo"],
-    ["  https://github.com/org/repo.git  ", "https://github.com/org/repo"],
+    ["https://github.com/Org/Repo.git", "github.com/org/repo"],
+    ["https://github.com/org/repo", "github.com/org/repo"],
+    ["https://github.com/org/repo/", "github.com/org/repo"],
+    ["https://user:pass@github.com/org/repo.git", "github.com/org/repo"],
+    ["https://user@github.com/org/repo.git", "github.com/org/repo"],
+    ["https://github.com/org/repo.git?ref=main", "github.com/org/repo"],
+    ["https://github.com/org/repo#readme", "github.com/org/repo"],
+    ["git@github.com:org/repo.git", "github.com/org/repo"],
+    ["GIT@GITHUB.COM:ORG/REPO.GIT", "github.com/org/repo"],
+    ["  https://github.com/org/repo.git  ", "github.com/org/repo"],
+    ["ssh://git@github.com/org/repo.git", "github.com/org/repo"],
+    ["ssh://git@github.com:22/org/repo", "github.com/org/repo"],
   ])("normalizes %s -> %s", (input, expected) => {
     expect(normalizeRemoteUrl(input)).toBe(expected);
   });
 
-  test("scp-style and https equivalents converge on distinct-but-deterministic forms", () => {
-    const a = normalizeRemoteUrl("git@github.com:org/repo.git");
-    const b = normalizeRemoteUrl("git@github.com:org/repo.git");
-    expect(a).toBe(b);
+  // R1-F6: the whole point of normalization is that the SAME remote hashes
+  // the same way regardless of which spelling a remote happens to be
+  // configured with — a project with `origin` over `https` and `upstream`
+  // over `ssh` must not look like two different projects to
+  // `resolveProjectIdentity`/the promotion rule's ">= 2 distinct identities"
+  // count.
+  test("https, scp-style, ssh://, and ssh://host:22 spellings of the same remote all converge on one form", () => {
+    const forms = [
+      normalizeRemoteUrl("https://github.com/Owner/Repo.git"),
+      normalizeRemoteUrl("git@github.com:owner/repo.git"),
+      normalizeRemoteUrl("ssh://git@github.com/owner/repo.git"),
+      normalizeRemoteUrl("ssh://git@github.com:22/owner/repo"),
+    ];
+    expect(new Set(forms).size).toBe(1);
+    expect(forms[0]).toBe("github.com/owner/repo");
   });
 });
 
@@ -39,7 +52,7 @@ describe("resolveProjectIdentity", () => {
       gitRemoteUrl: () => "https://user:pass@github.com/Org/Repo.git",
     });
     expect(result.identityKind).toBe("remote-hash");
-    expect(result.identity).toBe(sha256Hex("https://github.com/org/repo"));
+    expect(result.identity).toBe(sha256Hex("github.com/org/repo"));
     expect(result.identity).toMatch(/^[a-f0-9]{64}$/);
     expect(result.displayName).toBe("repo");
   });
@@ -63,7 +76,7 @@ describe("resolveProjectIdentity", () => {
       spawnSync("git", ["-C", dir, "remote", "add", "origin", "https://github.com/org/repo.git"]);
       const result = resolveProjectIdentity(dir);
       expect(result.identityKind).toBe("remote-hash");
-      expect(result.identity).toBe(sha256Hex("https://github.com/org/repo"));
+      expect(result.identity).toBe(sha256Hex("github.com/org/repo"));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

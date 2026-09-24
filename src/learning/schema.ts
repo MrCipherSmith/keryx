@@ -342,12 +342,18 @@ export function validateLearnedPattern(value: unknown): ValidationResult {
   if (!isIsoDateTime(value.createdAt)) errors.push("createdAt: must be an ISO 8601 date-time string");
   if (!isIsoDateTime(value.updatedAt)) errors.push("updatedAt: must be an ISO 8601 date-time string");
 
-  // allOf #1: status === "superseded" <=> supersededBy is a non-empty string; else it must be null.
+  // allOf #1: status === "superseded" <=> supersededBy is a non-empty string;
+  // else it must be null OR ABSENT — R1-F9: `supersededBy` is not in
+  // `LEARNED_PATTERN_REQUIRED` (the schema does not require the property to
+  // be present at all), but this branch used to treat "not null" as an error
+  // regardless of "not present", so an otherwise-valid record with no
+  // `supersededBy` key failed validation. `undefined` (the property is
+  // simply absent) is treated exactly like an explicit `null`.
   if (value.status === "superseded") {
     if (typeof value.supersededBy !== "string" || value.supersededBy.length < 1) {
       errors.push('supersededBy: required (non-empty string) when status is "superseded"');
     }
-  } else if (value.supersededBy !== null) {
+  } else if (value.supersededBy !== null && value.supersededBy !== undefined) {
     errors.push('supersededBy: must be null when status is not "superseded"');
   }
 

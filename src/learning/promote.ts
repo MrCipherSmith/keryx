@@ -12,7 +12,7 @@
 import { spawnSync } from "node:child_process";
 import { appendDecision } from "./decisions";
 import { scanLearnedText } from "./scan";
-import { readIndex, readPattern, writePattern, type StoreEnvOptions } from "./store";
+import { createPattern, readIndex, readPattern, type StoreEnvOptions } from "./store";
 import type { LearnedPattern } from "./types";
 
 export class LearningPromoteError extends Error {
@@ -165,9 +165,14 @@ export async function promotePattern(root: string, id: string, opts: PromotePatt
   };
 
   // `status: "candidate"` — never "accepted" — so this write needs no accept
-  // capability; `writePattern` itself asserts the target lies inside the
-  // user-scope learning root.
-  await writePattern(root, promoted, storeOptions);
+  // capability. R1-F1/R1-F7: through the choke point (`createPattern`, under
+  // the user-scope lock) — it re-checks, under the lock, that nothing
+  // ACTIVE has landed at this id+scope since the `existingUser` read above
+  // (the `already-promoted` check), refusing rather than silently
+  // overwriting a candidate/accepted record a concurrent promote/accept
+  // wrote in between; it still asserts the target lies inside the
+  // user-scope learning root, same as the old direct write did.
+  await createPattern(root, promoted, storeOptions);
 
   const actor = resolveActor(root, env);
   await appendDecision(root, { action: "promote", id, actor, tty: true, at: nowIso }, { ...storeOptions, scope: "project" });

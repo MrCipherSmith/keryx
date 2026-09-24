@@ -2,9 +2,21 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { mkdirSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { createAcceptCapability } from "./accept-capability";
-import { LearningPathError, userLearningDir, userPatternsDir } from "./paths";
-import { LearningStoreError, listPatterns, readIndex, readPattern, writeIndex, writePattern } from "./store";
+import { candidatesDir, LearningPathError, userLearningDir, userPatternsDir } from "./paths";
+import {
+  createPattern,
+  LearningStoreError,
+  listPatterns,
+  readIndex,
+  readPattern,
+  updateIndex,
+  updatePattern,
+  writeIndex,
+  writePattern,
+} from "./store";
 import type { IndexEntry, LearnedPattern } from "./types";
 
 const SHA_A = "a".repeat(64);
@@ -262,6 +274,174 @@ describe("index", () => {
     await withUserHome(async (env) => {
       await writeIndex({}, { env });
       expect(userLearningDir(env)).toContain(env.KERYX_HOME as string);
+    });
+  });
+
+  test("updateIndex: read-modify-write under one lock acquisition, never dropping a prior write", async () => {
+    await withUserHome(async (env) => {
+      const entryA: IndexEntry = { projectIdentity: SHA_A, identityKind: "remote-hash", confidence: 0.82, acceptedAt: NOW };
+      const entryB: IndexEntry = { projectIdentity: SHA_B, identityKind: "remote-hash", confidence: 0.9, acceptedAt: NOW };
+      await updateIndex((index) => ({ ...index, "testing.foo-ab12cd34": [entryA] }), { env });
+      await updateIndex((index) => ({ ...index, "testing.foo-ab12cd34": [...(index["testing.foo-ab12cd34"] ?? []), entryB] }), { env });
+      const read = await readIndex({ env });
+      expect(read["testing.foo-ab12cd34"]).toEqual([entryA, entryB]);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R1-F1 / R1-F7 (review round 1, PR #691): readPattern/listPatterns must bind
+// a stored file's own `id`/`scope` to the ones requested, and every writer
+// besides this module's own `writePattern` must go through `updatePattern`/
+// `createPattern` — the choke point that adds that identity check plus
+// immutable-field and accepted-text protection under one lock acquisition.
+// ---------------------------------------------------------------------------
+
+describe("readPattern / listPatterns: stored identity must match the requested identity (R1-F1)", () => {
+  test("readPattern refuses a file whose own id does not match the filename it was read from", async () => {
+    await withProjectRoot(async (root) => {
+      // p1.ts's P1b: a project-store file named `p2.json` whose CONTENT claims
+      // a different id (`p2other`) — reproduces "accept p2 accepts whatever id
+      // the file's content claims, not p2".
+      const planted = makeRecord({ id: "testing.p2other-11111111" });
+      mkdirSync(candidatesDir(root), { recursive: true });
+      await writeFile(path.join(candidatesDir(root), "testing.p2-22222222.json"), `${JSON.stringify(planted, null, 2)}\n`);
+      await expect(readPattern(root, "testing.p2-22222222", "project")).rejects.toMatchObject({
+        reason: "learning-record-identity-mismatch",
+      });
+    });
+  });
+
+  test("readPattern refuses a file planted directly inside the project store whose content claims scope:user", async () => {
+    await withProjectRoot(async (root) => {
+      // p1.ts's P1a: a project-dir file whose body says scope:"user" — this is
+      // exactly what would let `isStoredAsAccepted`'s "already accepted"
+      // read (inside `writePattern`) believe a USER-scope record is accepted
+      // because a PROJECT-store plant claims to be one.
+      const planted = makeRecord({ id: "testing.p1-11111111", scope: "user" });
+      mkdirSync(candidatesDir(root), { recursive: true });
+      await writeFile(path.join(candidatesDir(root), "testing.p1-11111111.json"), `${JSON.stringify(planted, null, 2)}\n`);
+      await expect(readPattern(root, "testing.p1-11111111", "project")).rejects.toMatchObject({
+        reason: "learning-record-identity-mismatch",
+      });
+    });
+  });
+
+  test("listPatterns skips an identity-mismatched file rather than returning it under the filename's id/scope", async () => {
+    await withProjectRoot(async (root) => {
+      const good = makeRecord({ id: "testing.good-33333333" });
+      await writePattern(root, good);
+      const planted = makeRecord({ id: "testing.p2other-11111111" });
+      await writeFile(path.join(candidatesDir(root), "testing.p2-22222222.json"), `${JSON.stringify(planted, null, 2)}\n`);
+
+      const all = await listPatterns(root, {}, {});
+      expect(all.map((r) => r.id)).toEqual([good.id]);
+      // Never returned under the requested (filename) id/scope either.
+      expect(all.some((r) => r.id === "testing.p2-22222222")).toBe(false);
+    });
+  });
+});
+
+describe("updatePattern (R1-F1/R1-F7 choke point)", () => {
+  test("refuses learning-record-not-found when nothing is stored at id+scope", async () => {
+    await withProjectRoot(async (root) => {
+      await expect(updatePattern(root, "testing.missing-00000000", "project", (r) => r)).rejects.toMatchObject({
+        reason: "learning-record-not-found",
+      });
+    });
+  });
+
+  test("applies a mutator's evidence/confidence change under one lock acquisition", async () => {
+    await withProjectRoot(async (root) => {
+      const record = makeRecord({ id: "testing.reinforce-44444444" });
+      await writePattern(root, record);
+      const updated = await updatePattern(root, record.id, "project", (current) => ({
+        ...current,
+        confidence: 0.75,
+        confidenceLevel: "medium",
+        updatedAt: "2026-09-25T00:00:00.000Z",
+      }));
+      expect(updated.confidence).toBe(0.75);
+      const read = await readPattern(root, record.id, "project");
+      expect(read?.confidence).toBe(0.75);
+    });
+  });
+
+  test("refuses a mutator that changes id or scope (learning-record-identity-mismatch)", async () => {
+    await withProjectRoot(async (root) => {
+      const record = makeRecord({ id: "testing.stable-55555555" });
+      await writePattern(root, record);
+      await expect(
+        updatePattern(root, record.id, "project", (current) => ({ ...current, scope: "user" })),
+      ).rejects.toMatchObject({ reason: "learning-record-identity-mismatch" });
+    });
+  });
+
+  test("refuses a mutator that changes project.identity or createdAt (learning-record-immutable-field-changed)", async () => {
+    await withProjectRoot(async (root) => {
+      const record = makeRecord({ id: "testing.stable-66666666" });
+      await writePattern(root, record);
+      await expect(
+        updatePattern(root, record.id, "project", (current) => ({ ...current, project: { ...current.project, identity: SHA_B } })),
+      ).rejects.toMatchObject({ reason: "learning-record-immutable-field-changed" });
+      await expect(
+        updatePattern(root, record.id, "project", (current) => ({ ...current, createdAt: "2000-01-01T00:00:00.000Z" })),
+      ).rejects.toMatchObject({ reason: "learning-record-immutable-field-changed" });
+    });
+  });
+
+  test("refuses a mutator that changes trigger/action on an already-accepted record (learning-accepted-text-immutable)", async () => {
+    await withProjectRoot(async (root) => {
+      const accepted = makeRecord({ id: "testing.accepted-77777777", status: "accepted", confidence: 0.61, confidenceLevel: "medium" });
+      delete (accepted as { ttl?: unknown }).ttl;
+      await writePattern(root, accepted, { capability: createAcceptCapability() });
+      await expect(
+        updatePattern(root, accepted.id, "project", (current) => ({ ...current, action: "a completely different action text here" })),
+      ).rejects.toMatchObject({ reason: "learning-accepted-text-immutable" });
+    });
+  });
+
+  test("does NOT require the accept capability for a candidate->candidate evidence update", async () => {
+    await withProjectRoot(async (root) => {
+      const record = makeRecord({ id: "testing.plain-88888888" });
+      await writePattern(root, record);
+      // No capability passed at all.
+      await updatePattern(root, record.id, "project", (current) => ({ ...current, confidence: 0.5, confidenceLevel: "medium" }));
+      const read = await readPattern(root, record.id, "project");
+      expect(read?.confidence).toBe(0.5);
+    });
+  });
+});
+
+describe("createPattern (R1-F1/R1-F7 choke point)", () => {
+  test("creates a brand-new record when nothing is stored at id+scope", async () => {
+    await withProjectRoot(async (root) => {
+      const record = makeRecord({ id: "testing.new-99999999" });
+      await createPattern(root, record);
+      const read = await readPattern(root, record.id, "project");
+      expect(read).toEqual(record);
+    });
+  });
+
+  test("refuses to overwrite an ACTIVE (candidate/accepted) record (learning-record-already-exists)", async () => {
+    await withProjectRoot(async (root) => {
+      const record = makeRecord({ id: "testing.active-10101010" });
+      await writePattern(root, record);
+      await expect(createPattern(root, makeRecord({ id: record.id, trigger: "a completely different trigger phrase" }))).rejects.toMatchObject({
+        reason: "learning-record-already-exists",
+      });
+    });
+  });
+
+  test("allows replacing a TERMINAL (rejected/expired/superseded) record", async () => {
+    await withProjectRoot(async (root) => {
+      const rejected = makeRecord({ id: "testing.rejected-11221122", status: "rejected" });
+      delete (rejected as { ttl?: unknown }).ttl;
+      await writePattern(root, rejected);
+      const fresh = makeRecord({ id: rejected.id });
+      await createPattern(root, fresh);
+      const read = await readPattern(root, rejected.id, "project");
+      expect(read?.status).toBe("candidate");
     });
   });
 });

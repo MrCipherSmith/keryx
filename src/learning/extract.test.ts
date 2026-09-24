@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { LearningExtractError, loadObservationWindow, runExtract, type ModelExtractor } from "./extract";
 import { validateLearnedPattern } from "./schema";
-import { listPatterns } from "./store";
-import type { ObservationEvent } from "./types";
+import { listPatterns, readPattern, writePattern } from "./store";
+import type { LearnedPattern, ObservationEvent } from "./types";
 
 const PROJECT = { identity: "a".repeat(64), identityKind: "remote-hash" as const };
 const NOW = new Date("2026-09-24T12:00:00.000Z");
@@ -295,5 +295,83 @@ describe("runExtract — O-7: prunes stale observation files as its first step",
 
       expect(readdirSync(dir).sort()).toEqual(["2026-09-24.jsonl"]);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R1-F8 (review round 1, PR #691, minor): decay used to floor whole days AND
+// reset `updatedAt` to `now` on every run, discarding whatever fraction of a
+// day was left over each time. Two runs 36h apart (1 whole day counted each
+// time, `now` reset each time) under-decayed relative to one run 72h later
+// (3 whole days counted once) — even though both cover the same 72 elapsed
+// hours. Anchoring the next `updatedAt` on `current.updatedAt + wholeDaysJust
+// Applied` instead of on `now` carries the leftover hours forward, so the two
+// cadences must now agree.
+// ---------------------------------------------------------------------------
+
+describe("runExtract — decay is idempotent under cadence (R1-F8)", () => {
+  function decayFixture(overrides: Partial<LearnedPattern> = {}): LearnedPattern {
+    return {
+      schemaVersion: 1,
+      id: "testing.decay-fixture-00000000",
+      trigger: "the same file region is edited twice in one turn window",
+      action: "check the first edit's assumptions before writing a second one",
+      domain: "testing",
+      scope: "project",
+      project: PROJECT,
+      confidence: 0.4,
+      confidenceLevel: "low",
+      status: "candidate",
+      supersededBy: null,
+      evidence: [
+        {
+          kind: "reinforcement",
+          sourceType: "observation",
+          sourceRef: ".metaproject/data/learning/observations/2026-09-20.jsonl",
+          observedAt: "2026-09-20T00:00:00.000Z",
+          weight: 1,
+        },
+      ],
+      reviewerProfile: null,
+      redaction: { scanned: true, findings: [] },
+      graduation: null,
+      provenance: { extractor: "repeated-correction", extractorKind: "deterministic" },
+      ttl: { expiresAt: "2026-10-20T00:00:00.000Z" },
+      createdAt: "2026-09-20T00:00:00.000Z",
+      updatedAt: "2026-09-20T00:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  test("two runs 36h apart decay by the same total as one run 72h later", async () => {
+    const start = new Date("2026-09-20T00:00:00.000Z");
+
+    // Run A: two passes, 36h apart each.
+    const rootA = await (async () => {
+      const dir = mkdtempSync(path.join(tmpdir(), "keryx-learning-extract-decay-a-"));
+      await writePattern(dir, decayFixture({ updatedAt: start.toISOString() }));
+      await runExtract(dir, { now: new Date(start.getTime() + 36 * 60 * 60 * 1000) });
+      await runExtract(dir, { now: new Date(start.getTime() + 72 * 60 * 60 * 1000) });
+      return dir;
+    })();
+
+    // Run B: one pass, 72h later.
+    const rootB = await (async () => {
+      const dir = mkdtempSync(path.join(tmpdir(), "keryx-learning-extract-decay-b-"));
+      await writePattern(dir, decayFixture({ updatedAt: start.toISOString() }));
+      await runExtract(dir, { now: new Date(start.getTime() + 72 * 60 * 60 * 1000) });
+      return dir;
+    })();
+
+    try {
+      const afterA = await readPattern(rootA, "testing.decay-fixture-00000000", "project");
+      const afterB = await readPattern(rootB, "testing.decay-fixture-00000000", "project");
+      expect(afterA?.confidence).toBe(afterB?.confidence);
+      // Sanity: decay actually happened (not a no-op comparison).
+      expect(afterA?.confidence).toBeLessThan(0.4);
+    } finally {
+      rmSync(rootA, { recursive: true, force: true });
+      rmSync(rootB, { recursive: true, force: true });
+    }
   });
 });

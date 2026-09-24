@@ -22,7 +22,7 @@ import { isPathInside, pathExists, withFileLock, writeFileAtomic } from "../lib/
 import { appendDecision } from "./decisions";
 import { assertInsideLearningRoot, graduationDir, learningDataDir, projectLockPath } from "./paths";
 import { scanLearnedText } from "./scan";
-import { listPatterns, readPattern, writePattern, type StoreEnvOptions } from "./store";
+import { listPatterns, readPattern, updatePattern, type StoreEnvOptions } from "./store";
 import type { GraduationTarget, LearnedPattern, LearningDomain, LearningScope } from "./types";
 
 export class LearningGraduateError extends Error {
@@ -210,6 +210,31 @@ function clusterRecords(records: readonly LearnedPattern[]): LearnedPattern[][] 
   return [...groups.values()].sort((a, b) => (a[0] as LearnedPattern).id.localeCompare((b[0] as LearnedPattern).id));
 }
 
+/**
+ * R1-F2: `clusterRecords` keys strictly by `id`, but `listPatterns({ status:
+ * "accepted" })` returns BOTH scopes — the same pattern accepted at project
+ * scope AND (after `promote`, then a second human accept) at user scope is
+ * one conceptual pattern with two on-disk copies, not two independent
+ * accepted patterns. Left alone, that pair forms its own 2-member cluster
+ * (`[id, id]`) and can trigger a graduation proposal off a SINGLE accepted
+ * pattern — exactly the "at least N independently accepted patterns" rule
+ * graduation exists to enforce. Deduping by id before clustering (preferring
+ * the project-scope copy, so `readMember`'s own project-then-user lookup
+ * order and the proposal's members line up with which copy is "the" member)
+ * makes every cluster member a distinct id, as the clustering/cluster-size
+ * rule already assumes.
+ */
+function dedupeByIdPreferProject(records: readonly LearnedPattern[]): LearnedPattern[] {
+  const byId = new Map<string, LearnedPattern>();
+  for (const record of records) {
+    const existing = byId.get(record.id);
+    if (existing === undefined || (existing.scope !== "project" && record.scope === "project")) {
+      byId.set(record.id, record);
+    }
+  }
+  return [...byId.values()];
+}
+
 function averageConfidence(cluster: readonly LearnedPattern[]): number {
   return cluster.reduce((sum, record) => sum + record.confidence, 0) / cluster.length;
 }
@@ -314,7 +339,7 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
 
   const accepted = await listPatterns(root, { status: "accepted", ...(opts.domain !== undefined ? { domain: opts.domain } : {}) }, storeOptions);
 
-  const clusters = clusterRecords(accepted);
+  const clusters = clusterRecords(dedupeByIdPreferProject(accepted));
   const proposals: GraduationProposalFile[] = [];
   const alreadyProposed: string[] = [];
   const refused: GraduateRefusal[] = [];
@@ -370,10 +395,12 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
 
     const graduationRef = { target, proposalPath: projectRelativeProposalPath(proposalId) };
     for (const member of cluster) {
-      const updated: LearnedPattern = { ...member, graduation: graduationRef, updatedAt: nowIso };
-      // `member` is already stored at `status: "accepted"` — no capability
-      // needed (`store.writePattern`'s "already accepted" exception).
-      await writePattern(root, updated, storeOptions);
+      // R1-F1/R1-F7: through the choke point, under the member's own scope
+      // lock. `member` is already stored at `status: "accepted"` — no
+      // capability needed (`writeRecordUnlocked`'s "already accepted"
+      // exception; `updatePattern`'s accepted-text-immutable check does not
+      // apply either, since only `graduation`/`updatedAt` change here).
+      await updatePattern(root, member.id, member.scope, (current) => ({ ...current, graduation: graduationRef, updatedAt: nowIso }), storeOptions);
     }
 
     proposals.push(proposal);

@@ -8,7 +8,7 @@
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { observationsDir } from "./paths";
-import { listPatterns, writePattern, type StoreEnvOptions } from "./store";
+import { listPatterns, updatePattern, type StoreEnvOptions } from "./store";
 import type { LearnedPattern, LearningScope } from "./types";
 
 const OBSERVATION_FILE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})\.jsonl$/;
@@ -98,8 +98,21 @@ async function expireCandidates(
     if (new Date(record.ttl.expiresAt).getTime() >= now.getTime()) continue;
     if (!dryRun) {
       try {
-        const updated: LearnedPattern = { ...withoutTtl(record), status: "expired", updatedAt: now.toISOString() };
-        await writePattern(root, updated, storeOptions);
+        // R1-F1/R1-F7: through the choke point, under the record's own scope
+        // lock — re-checks `current.status`/`current.ttl` against what is
+        // actually on disk rather than the `record` snapshot listed above.
+        await updatePattern(
+          root,
+          record.id,
+          record.scope,
+          (current) => {
+            if (current.status !== "candidate" || current.ttl === undefined || new Date(current.ttl.expiresAt).getTime() >= now.getTime()) {
+              return current;
+            }
+            return { ...withoutTtl(current), status: "expired", updatedAt: now.toISOString() };
+          },
+          storeOptions,
+        );
       } catch (error) {
         // One record failing to write must not skip the rest of the list.
         errors.push(`failed to expire "${record.id}" (${record.scope}): ${error instanceof Error ? error.message : String(error)}`);

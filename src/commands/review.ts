@@ -4,6 +4,7 @@ import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
 import { learnProjectSkill } from "../gdskills/learn";
 import { applyReviewerProfile } from "../learning/service";
+import { parseLearnArgs } from "../learning/cli-args";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import {
   learningRecordPath,
@@ -1434,10 +1435,20 @@ async function runLearn(args: string[]): Promise<void> {
  * in this mode: the source is `keryx learn accept`, not a pull request.
  */
 async function runLearnReviewer(args: string[], reviewerId: string): Promise<void> {
-  const dryRun = args.includes("--dry-run");
+  // R1-F3: `args.includes("--dry-run")` read `--dry-run=1` as absent — a
+  // preview request silently became the real write. `parseLearnArgs` (shared
+  // with `keryx learn`'s own flag parsing, `src/learning/cli-args.ts`) refuses
+  // that spelling instead of misreading it. `LEARN_FLAGS` above this function
+  // already validated the flag NAMES (`rejectUnknownFlags`); this pass adds
+  // the "=value on a boolean" check that one does not make.
+  const parsed = parseLearnArgs(args, { boolean: ["--dry-run", "--json"], value: ["--pr", "--reviewer"] });
+  if (parsed.bad.length > 0) {
+    throw new Error(`Unknown option(s) for \`keryx review learn --reviewer\`: ${parsed.bad.join(", ")}.`);
+  }
+  const dryRun = parsed.flags.has("--dry-run");
   const result = await applyReviewerProfile(process.cwd(), reviewerId, { dryRun });
 
-  if (args.includes("--json")) {
+  if (parsed.flags.has("--json")) {
     console.log(JSON.stringify({ reviewer: reviewerId, dryRun, ...result }, null, 2));
     return;
   }

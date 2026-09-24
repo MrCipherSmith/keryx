@@ -76,6 +76,18 @@ describe("validateLearnedPattern: valid fixtures", () => {
     expect(validateLearnedPattern(record)).toEqual({ ok: true, errors: [] });
   });
 
+  // R1-F9: `supersededBy` is not in `LEARNED_PATTERN_REQUIRED` — the schema
+  // does not require the property at all — but the validator's allOf #1
+  // branch used to treat "not null" as an error without also checking "not
+  // present", so a well-formed record that simply omitted the key (rather
+  // than spelling out `supersededBy: null`) failed validation for a status
+  // that has nothing to do with superseding.
+  test("record with supersededBy entirely absent (not just null) passes", () => {
+    const record = baseCandidate();
+    delete (record as { supersededBy?: unknown }).supersededBy;
+    expect(validateLearnedPattern(record)).toEqual({ ok: true, errors: [] });
+  });
+
   test("superseded record", () => {
     const record = baseCandidate({
       status: "superseded",

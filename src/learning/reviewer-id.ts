@@ -5,7 +5,11 @@
 // quoted human voice rather than a generalized rule.
 import { createHash } from "node:crypto";
 
-const MENTION_PATTERN = /@[\w-]+/g;
+// R1-F4: a bot login's `@mention` carries a bracketed suffix (`@copilot-
+// reviewer[bot]`) that plain `[\w-]+` does not consume — `@copilot-reviewer`
+// would be stripped and `[bot]` left dangling behind it. The optional
+// `(?:\[[\w-]+\])?` tail consumes that suffix too.
+const MENTION_PATTERN = /@[\w-]+(?:\[[\w-]+\])?/g;
 
 /** Prefixes stripped (or rewritten to an imperative) after logins/mentions are removed. Order matters — later rules see the earlier ones' output. */
 const COURTESY_REWRITES: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
@@ -42,7 +46,19 @@ export function generalizeLesson(text: string, logins: readonly string[]): strin
   for (const login of logins) {
     const trimmed = login.trim();
     if (trimmed.length === 0) continue;
-    value = value.replace(new RegExp(`\\b${escapeForRegExp(trimmed)}\\b`, "gi"), "");
+    // R1-F4: `\b...\b` never matched a login ending (or starting) in a
+    // non-word character adjacent to another non-word character — e.g. a bot
+    // login `copilot-reviewer[bot]` followed by a space: `]` and ` ` are
+    // both non-word, so `\b` finds no transition there and the whole match
+    // fails, leaving the literal login (a bracket, a dot, a leading hyphen —
+    // anything not `[A-Za-z0-9_]`) sitting in the generalized text. Explicit
+    // lookarounds on "is this a login/word character" (`[\w-]`, word chars
+    // plus hyphen so a login is not treated as "bounded" by its own internal
+    // hyphens) replace `\b` and only refuse to match when the login is
+    // actually glued to more of the same class on either side (e.g. `alice`
+    // must still not match inside `alicedev`).
+    const escaped = escapeForRegExp(trimmed);
+    value = value.replace(new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`, "gi"), "");
   }
   for (const rule of COURTESY_REWRITES) {
     value = value.replace(rule.pattern, rule.replacement);

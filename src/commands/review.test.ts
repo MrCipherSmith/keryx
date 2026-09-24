@@ -956,3 +956,19 @@ test("a --blast-radius record missing its arrays is refused, not defaulted to an
   expect(process.exitCode).toBe(1);
   expect(errors.join("\n")).toContain("--blast-radius");
 });
+
+// R1-F3 (review round 1, PR #691, major): `review learn --reviewer <id>
+// --dry-run=1` used to read as `args.includes("--dry-run")` — false for the
+// `=value` spelling — so a request for a DRY RUN silently wrote the real
+// `.mdc` file. `parseLearnArgs` (shared with `keryx learn`'s own flag
+// parsing) refuses the malformed spelling instead of misreading it; nothing
+// is written either way, dry run or not.
+test("`review learn --reviewer <id> --dry-run=1` is refused, not silently treated as a real (non-dry-run) write", async () => {
+  await reviewCommand(["learn", "--reviewer", "rv-0123456789abcdef", "--dry-run=1"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--dry-run=1");
+  // Never reached `applyReviewerProfile` — no `.mdc` file exists anywhere
+  // under `.metaproject/rules/reviewers/` (the directory itself is never
+  // created either, since the write path is never entered).
+  await expect(readFile(path.join(ROOT, ".metaproject", "rules", "reviewers", "rv-0123456789abcdef.mdc"), "utf8")).rejects.toBeTruthy();
+});

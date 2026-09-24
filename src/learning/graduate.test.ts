@@ -307,3 +307,58 @@ describe("applyGraduation: skill/rule targets refuse", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// R1-F2 (review round 1, PR #691, major): a pattern accepted at BOTH project
+// and user scope is one conceptual pattern with two on-disk copies, not two
+// independently accepted patterns. `clusterRecords` used to key strictly by
+// `id`, so this pair formed its own `[id, id]` cluster and could trigger a
+// skill/agent proposal off a SINGLE accepted pattern — probe p1.ts's P2.
+// ---------------------------------------------------------------------------
+
+describe("runGraduate: a pattern accepted at both project and user scope does not form a 2-member cluster from itself (R1-F2)", () => {
+  test("the dup id alone (nothing else to cluster with) yields NO proposal, not a 2-member skill proposal", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const trigger = "when editing generated protobuf bindings manually here";
+      const action = "regenerate bindings from the proto sources instead";
+      await writePattern(root, makeAccepted("code-style.dup-11111111", trigger, action, "code-style", 0.6, "project"), {
+        env,
+        capability,
+      });
+      await writePattern(root, makeAccepted("code-style.dup-11111111", trigger, action, "code-style", 0.6, "user"), {
+        env,
+        capability,
+      });
+
+      const report = await runGraduate(root, { now: NOW, env, domain: "code-style" });
+
+      expect(report.proposals).toEqual([]);
+      expect(report.refused).toEqual([]);
+    });
+  });
+
+  test("the dup id counts once toward a real cluster with a genuinely different pattern (agent cluster still needs 3 DISTINCT ids)", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      // Same id at both scopes (the "one member, two copies" case) plus two
+      // more DISTINCT ids that would otherwise cluster with it: 3 total
+      // distinct ids required for an agent proposal (cluster.length >= 3),
+      // and the dup pair must not let 2 distinct ids masquerade as 3.
+      const [idA, triggerA, actionA] = AGENT_CLUSTER[0]!;
+      const [idB, triggerB, actionB] = AGENT_CLUSTER[1]!;
+      await writePattern(root, makeAccepted(idA, triggerA, actionA, "code-style", 0.8, "project"), { env, capability });
+      await writePattern(root, makeAccepted(idA, triggerA, actionA, "code-style", 0.8, "user"), { env, capability });
+      await writePattern(root, makeAccepted(idB, triggerB, actionB, "code-style", 0.8, "project"), { env, capability });
+
+      const report = await runGraduate(root, { now: NOW, env, domain: "code-style" });
+
+      // 2 distinct ids (idA once, deduped, + idB) is a skill-sized cluster
+      // (>= 2), never an agent-sized one (>= 3) — the dup copy of idA must
+      // not count twice.
+      const byTarget = Object.fromEntries(report.proposals.map((p) => [p.target, p]));
+      expect(Object.keys(byTarget)).toEqual(["skill"]);
+      expect([...(byTarget.skill?.members ?? [])].sort()).toEqual([idA, idB].sort());
+    });
+  });
+});

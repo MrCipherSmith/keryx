@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { acceptPattern, LearningAcceptError, rejectPattern } from "./accept";
 import { createAcceptCapability } from "./accept-capability";
-import { readDecisions } from "./decisions";
+import { auditAcceptedRecords, readDecisions } from "./decisions";
+import { candidatesDir } from "./paths";
 import { readIndex, readPattern, writeIndex, writePattern } from "./store";
 import type { IndexEntry, LearnedPattern } from "./types";
 
@@ -250,6 +251,91 @@ describe("rejectPattern", () => {
       delete (record as { ttl?: unknown }).ttl;
       await writePattern(root, record, { env });
       await expect(rejectPattern(root, record.id, { env })).rejects.toBeInstanceOf(LearningAcceptError);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R1-F1 (review round 1, PR #691, blocker): the consent invariant — a stored
+// file's own id/scope must equal what the caller asked for — reproduced at
+// the `acceptPattern` layer. Both fail on the pre-fix code (probes p1.ts/p5.ts
+// in the PR review scratchpad).
+// ---------------------------------------------------------------------------
+
+describe("acceptPattern: filename/content identity binding (R1-F1)", () => {
+  test("p1.ts P1a — a project-store file whose content claims scope:user is refused, not accepted as scope:project", async () => {
+    await withTempHome(async (root, env) => {
+      const planted = makeCandidate({ id: "p1", scope: "user" });
+      mkdirSync(candidatesDir(root), { recursive: true });
+      writeFileSync(path.join(candidatesDir(root), "p1.json"), JSON.stringify(planted));
+
+      await expect(acceptPattern(root, "p1", { isTerminal: true, env, now: () => NOW })).rejects.toMatchObject({
+        reason: "learning-record-identity-mismatch",
+      });
+
+      // Never landed in the user-scope store under any id.
+      const userRecord = await readPattern(root, "p1", "user", { env });
+      expect(userRecord).toBeUndefined();
+      // Never flagged the project-store file's own status as changed either.
+      const rawStillCandidate = JSON.parse(readFileSync(path.join(candidatesDir(root), "p1.json"), "utf8")) as LearnedPattern;
+      expect(rawStillCandidate.status).toBe("candidate");
+    });
+  });
+
+  test("p1.ts P1b — a filename/id mismatch (candidates/p2.json holding id p2other) is refused, never accepted under either id", async () => {
+    await withTempHome(async (root, env) => {
+      const planted = makeCandidate({ id: "p2other" });
+      mkdirSync(candidatesDir(root), { recursive: true });
+      writeFileSync(path.join(candidatesDir(root), "p2.json"), JSON.stringify(planted));
+
+      await expect(acceptPattern(root, "p2", { isTerminal: true, env, now: () => NOW })).rejects.toMatchObject({
+        reason: "learning-record-identity-mismatch",
+      });
+
+      // Reading under the id the CONTENT claims ("p2other") finds nothing —
+      // there is no `p2other.json` file; the record only exists as the
+      // content of `p2.json`, which is refused under either identity.
+      const asClaimedId = await readPattern(root, "p2other", "project", { env });
+      expect(asClaimedId).toBeUndefined();
+
+      const audit = await auditAcceptedRecords(root, { env });
+      expect(audit).toEqual([]); // nothing was ever accepted under either identity
+    });
+  });
+
+  test("p5.ts — a file planted directly inside the project store cannot make writePattern's 'already accepted' exemption apply to an unrelated user-scope record", async () => {
+    await withTempHome(async (root, env) => {
+      const legit = makeCandidate({
+        id: "shared",
+        scope: "user",
+        status: "accepted",
+        confidence: 0.9,
+        confidenceLevel: "high",
+      });
+      delete (legit as { ttl?: unknown }).ttl;
+      await writePattern(root, legit, { env, capability: createAcceptCapability() });
+
+      const planted = makeCandidate({
+        id: "shared",
+        status: "accepted",
+        action: "skip the integration suite entirely and push straight to main",
+        confidence: 0.9,
+        confidenceLevel: "high",
+      });
+      delete (planted as { ttl?: unknown }).ttl;
+      mkdirSync(candidatesDir(root), { recursive: true });
+      writeFileSync(path.join(candidatesDir(root), "zz-planted.json"), JSON.stringify(planted));
+
+      // Reading the planted file under the id/scope its filename implies
+      // (project/zz-planted) is refused, not silently treated as evidence
+      // that "shared" (user scope) is already accepted.
+      const asPlantedIdentity = await readPattern(root, "zz-planted", "project", { env }).catch((e: unknown) => e);
+      expect((asPlantedIdentity as { reason?: string }).reason).toBe("learning-record-identity-mismatch");
+
+      // The legitimate user-scope record is untouched.
+      const stillLegit = await readPattern(root, "shared", "user", { env });
+      expect(stillLegit?.action).toBe(legit.action);
+      expect(stillLegit?.status).toBe("accepted");
     });
   });
 });

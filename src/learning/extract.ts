@@ -21,7 +21,7 @@ import { REPEATED_CORRECTION_SIGNAL } from "./signals/repeated-correction";
 import { REVERTED_EDIT_SIGNAL } from "./signals/reverted-edit";
 import { REVIEWER_COMMENT_SIGNAL } from "./signals/reviewer-comment";
 import type { ObservationLine, SignalDraft, SignalRunner } from "./signals/types";
-import { listPatterns, readPattern, writePattern, type StoreEnvOptions } from "./store";
+import { createPattern, listPatterns, readPattern, updatePattern, type StoreEnvOptions } from "./store";
 import type { EvidenceItem, LearnedPattern, LearningDomain, ObservationEvent } from "./types";
 
 export class LearningExtractError extends Error {
@@ -173,14 +173,43 @@ async function decayExistingRecords(
       continue;
     }
 
-    const updated: LearnedPattern = {
-      ...record,
-      confidence: nextConfidence,
-      confidenceLevel: confidenceLevelFor(nextConfidence),
-      updatedAt: now.toISOString(),
-    };
-    await writePattern(root, updated, storeOptions);
-    report.decayed.push(updated.id);
+    // R1-F1/R1-F7: read-modify-write through the store's choke point, under
+    // the project lock, so a concurrent accept/reject/extract cannot land
+    // between this pass's read and write — and re-derive the decay from the
+    // record `updatePattern` actually reads under the lock, not the `record`
+    // snapshot read before it.
+    let changed = false;
+    await updatePattern(
+      root,
+      record.id,
+      record.scope,
+      (current) => {
+        if (current.status !== "candidate" && current.status !== "accepted") return current;
+        const currentDays = wholeUtcDaysSince(current.updatedAt, now);
+        if (currentDays < 1) return current;
+        const decayedConfidence = applyDecay(current.confidence, currentDays);
+        if (decayedConfidence === current.confidence) return current;
+        changed = true;
+        return {
+          ...current,
+          confidence: decayedConfidence,
+          confidenceLevel: confidenceLevelFor(decayedConfidence),
+          // R1-F8: advance the anchor by exactly the whole days just applied
+          // to `current.updatedAt` — never reset it to `now`. Resetting to
+          // `now` discards whatever fraction of a day was left over each
+          // run, so two runs 36h apart (1 whole day counted each time) would
+          // under-decay compared to one run 72h later (3 whole days counted
+          // once): 0.4 -> two 36h runs would previously land at
+          // `0.4 * 0.98^1 * 0.98^1`, not the `0.4 * 0.98^3` one 72h run
+          // produces, even though both cover the same 72 elapsed hours.
+          // Anchoring on `current.updatedAt + currentDays` instead carries
+          // the leftover 12h forward each time, so the two cadences agree.
+          updatedAt: addDaysIso(new Date(current.updatedAt), currentDays),
+        };
+      },
+      storeOptions,
+    );
+    if (changed) report.decayed.push(record.id);
   }
 }
 
@@ -243,24 +272,57 @@ async function upsertDraft(
       createdAt: nowIso,
       updatedAt: nowIso,
     };
-    await writePattern(root, record, storeOptions);
-    report.created.push(id);
+    try {
+      // R1-F1/R1-F7: `createPattern` re-checks, under the lock, that nothing
+      // active has landed at this id since the `readPattern` above — a
+      // concurrent extract pass (or a human accept racing the same
+      // deterministic id) is refused rather than silently overwritten.
+      await createPattern(root, record, storeOptions);
+      report.created.push(id);
+    } catch {
+      report.skippedDecided.push(id);
+    }
     return;
   }
 
-  let confidence = existing.confidence;
-  for (const item of newEvidence) {
-    confidence = applyEvidence(confidence, item.kind, item.weight ?? 1);
+  // R1-F1/R1-F7: reinforce through the choke point, under the project lock —
+  // re-derive the evidence dedup and the confidence delta from the record
+  // `updatePattern` reads UNDER the lock (`current`), not the `existing`
+  // snapshot read before it, so a concurrent writer that already added one
+  // of `draft.evidence`'s sourceRefs (or changed status to something terminal)
+  // is not double-applied or overwritten.
+  let reinforced = false;
+  try {
+    await updatePattern(
+      root,
+      id,
+      "project",
+      (current) => {
+        if (current.status !== "candidate" && current.status !== "accepted") return current;
+        const freshNewEvidence = draft.evidence.filter(
+          (item) => !current.evidence.some((existingItem) => existingItem.sourceRef === item.sourceRef),
+        );
+        if (freshNewEvidence.length === 0) return current;
+        let confidence = current.confidence;
+        for (const item of freshNewEvidence) {
+          confidence = applyEvidence(confidence, item.kind, item.weight ?? 1);
+        }
+        reinforced = true;
+        return {
+          ...current,
+          evidence: [...current.evidence, ...freshNewEvidence],
+          confidence,
+          confidenceLevel: confidenceLevelFor(confidence),
+          updatedAt: now.toISOString(),
+        };
+      },
+      storeOptions,
+    );
+  } catch {
+    report.skippedDecided.push(id);
+    return;
   }
-  const updated: LearnedPattern = {
-    ...existing,
-    evidence: [...existing.evidence, ...newEvidence],
-    confidence,
-    confidenceLevel: confidenceLevelFor(confidence),
-    updatedAt: now.toISOString(),
-  };
-  await writePattern(root, updated, storeOptions);
-  report.reinforced.push(id);
+  if (reinforced) report.reinforced.push(id);
 }
 
 /**
