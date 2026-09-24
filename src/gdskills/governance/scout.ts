@@ -290,6 +290,80 @@ export function checkSkillSelected(query: string, skillId: string, catalog: read
   };
 }
 
+// ---------------------------------------------------------------------------
+// Leave-one-out trigger selection (R2-5, flow 309 review round 2): the
+// `"description-only"` field above threw the baby out with the bathwater —
+// it stopped a synthesized positive from trivially matching because it is
+// VERBATIM present in what it's scored against, but it did so by deleting
+// `triggers` from the haystack ENTIRELY, for every caller, authored prompts
+// included. That means a skill's `triggers` list stopped affecting its own
+// trigger-eval or stocktake-trigger outcome at all: editing, fixing, or
+// removing a trigger could never change the result, and the real router
+// (`scoutSkill`, `field: "full"`) never made that trade — it always scores
+// triggers too. 56 of 73 bundled skills came out non-perfect under
+// `"description-only"`, and a skill whose triggers legitimately route but
+// whose description is thin (`python/python-testing`) picked up a false
+// positive because a NEIGHBOUR's description happened to share more of the
+// (triggers-excluded) vocabulary than python-testing's own did.
+//
+// The fix scores `field: "full"` (triggers included, matching the real
+// router) but excludes ONLY the one trigger phrase a synthesized positive
+// was built from — the skill's OTHER triggers, its name and its description
+// all stay in its indexed text. A prompt built from trigger `t` must still
+// be found by the REST of the skill's own definition, not merely because
+// `t` sits verbatim inside the haystack it's being scored against.
+//
+// That alone reopens the door F5 closed: a bogus skill that borrows an
+// entire `triggers` LIST from a real skill (not just one phrase) still has
+// every OTHER borrowed trigger left in its haystack after leaving one out,
+// so it can still "find itself" through a different borrowed phrase even
+// though its description has nothing to do with any of them. Closing that
+// requires an independent signal leave-one-out alone can't provide:
+// `DESCRIPTION_SUPPORT_THRESHOLD` requires the skill's OWN name+description
+// (no triggers at all, `field: "description-only"`, scored against the
+// UNMODIFIED catalog) to cover at least a small fraction of the prompt's
+// intent — cheap to satisfy for a real skill (whose description is, by
+// definition, about what its triggers claim) and unreachable for a skill
+// whose description talks about something else entirely.
+// ---------------------------------------------------------------------------
+
+/** Overlap score (field `"description-only"`, i.e. no triggers at all, from either side) at or above which a skill's OWN name+description is considered to genuinely support a trigger prompt — see the module section comment above for why leave-one-out alone is not enough to close F5/R2-5's bogus-borrowed-triggers case. */
+export const DESCRIPTION_SUPPORT_THRESHOLD = 0.12;
+
+export interface LeaveOneOutSelectionCheck extends SkillSelectionCheck {
+  /** `skillId`'s `field: "description-only"` coverage score for `query`, scored against the UNMODIFIED catalog — see `DESCRIPTION_SUPPORT_THRESHOLD`. */
+  readonly descriptionScore: number;
+}
+
+/** `catalog` with `excludeTrigger` removed from `skillId`'s OWN triggers list only (every other entry, and every other trigger of `skillId` itself, is untouched). */
+function catalogExcludingOwnTrigger(catalog: readonly CatalogEntry[], skillId: string, excludeTrigger: string): CatalogEntry[] {
+  return catalog.map((entry) => (entry.id === skillId ? { ...entry, triggers: entry.triggers.filter((trigger) => trigger !== excludeTrigger) } : entry));
+}
+
+/**
+ * Whether `query` (a prompt synthesized from `skillId`'s own trigger
+ * `excludeTrigger`, when given) selects `skillId` — leave-one-out over
+ * `field: "full"` (R2-5, flow 309 review round 2), plus the
+ * `DESCRIPTION_SUPPORT_THRESHOLD` gate described in the section comment
+ * above. Pass `excludeTrigger` as `undefined` for a prompt that was not
+ * built from a discrete trigger phrase (e.g. a "Use when" clause pulled from
+ * the description itself) — nothing is excluded, but the description-support
+ * gate still applies.
+ */
+export function checkSkillSelectedLeaveOneOut(
+  query: string,
+  skillId: string,
+  catalog: readonly CatalogEntry[],
+  excludeTrigger?: string,
+  options: ScoutOptions = {},
+): LeaveOneOutSelectionCheck {
+  const reduced = excludeTrigger !== undefined ? catalogExcludingOwnTrigger(catalog, skillId, excludeTrigger) : catalog;
+  const full = checkSkillSelected(query, skillId, reduced, { ...options, field: "full" });
+  const descriptionOnly = checkSkillSelected(query, skillId, catalog, { ...options, field: "description-only" });
+  const selected = full.selected && descriptionOnly.score >= DESCRIPTION_SUPPORT_THRESHOLD;
+  return { ...full, selected, descriptionScore: descriptionOnly.score };
+}
+
 /**
  * The `limit` catalog entries (excluding `skillId` itself) whose FULL text
  * scores closest to `skillId`'s own description — deterministic (ties break

@@ -31,7 +31,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import path from "node:path";
 import { lintSkill } from "./authoring-lint";
 import { loadSkillCatalog, type CatalogEntry, type CatalogScope } from "./catalog-index";
-import { checkSkillSelected, SCOUT_USE_THRESHOLD, scoutSkill } from "./scout";
+import { checkSkillSelectedLeaveOneOut, SCOUT_USE_THRESHOLD, scoutSkill } from "./scout";
 
 export type StocktakeVerdict = "keep" | "improve" | "update" | "retire" | "merge";
 
@@ -71,8 +71,14 @@ export interface StocktakeOptions {
  * Bumped to "3" (F6, flow 309 review round 1) alongside the cache-key
  * widening below: `description-only` trigger scoring (F5) is also a scoring
  * change no entry cached under "2" reflects.
+ *
+ * Bumped to "4" (R2-5, flow 309 review round 2): the own-trigger-routes-back
+ * check now scores via `checkSkillSelectedLeaveOneOut` (`field: "full"` plus
+ * leave-one-out and a description-support gate) instead of
+ * `field: "description-only"` — a different verdict than "3" could produce
+ * for the same skill, since `triggers` are visible to the scorer again.
  */
-const ALGORITHM_VERSION = "3";
+const ALGORITHM_VERSION = "4";
 
 /**
  * F6 (flow 309 review round 1): the cache used to be keyed on ONLY the
@@ -265,21 +271,31 @@ function evaluateEntry(root: string, entry: CatalogEntry, catalog: readonly Cata
     // `SCOUT_FORK_THRESHOLD` and no entry from a DIFFERENT category
     // outscores this skill.
     //
-    // F5 (flow 309 review round 1): `field: "description-only"` — this
-    // check's positives are drawn FROM `entry.triggers` itself, so scoring
-    // them against an index that ALSO contains that same triggers list is
-    // circular (a trigger phrase always "finds" the entry that lists it
-    // verbatim). `eval.ts`'s trigger-accuracy check shares this exact
-    // grader/flaw and the exact same fix — see that module's header for the
-    // full rationale. This check's result is still a SYNTHESIZED signal
-    // (drawn from the skill's own frontmatter, never human-authored test
-    // cases), so it is used only as a demotion trigger ("improve" on low
-    // accuracy) below — never treated as proof a skill's triggers are
+    // R2-5 (flow 309 review round 2): this check's positives are drawn FROM
+    // `entry.triggers` itself, so scoring a trigger phrase against an index
+    // that ALSO contains that same triggers list verbatim is circular (it
+    // always "finds" the entry that lists it verbatim). The prior fix
+    // (`field: "description-only"`) closed that by dropping `triggers` from
+    // the haystack for EVERY caller, which made this check (and `eval.ts`'s
+    // trigger-accuracy check) blind to `triggers` entirely — a skill's own
+    // trigger list stopped affecting its own trigger-accuracy verdict.
+    // `checkSkillSelectedLeaveOneOut` (`scout.ts`) fixes this: `field: "full"`
+    // (triggers included, matching the real router) with ONLY the one
+    // trigger phrase under test excluded from THIS entry's own indexed text,
+    // plus a description-support gate — see that function's doc comment and
+    // `eval.ts`'s module header for the full rationale, shared verbatim
+    // between the two gates. This check's result is still a SYNTHESIZED
+    // signal (drawn from the skill's own frontmatter, never human-authored
+    // test cases), so it is used only as a demotion trigger ("improve" on
+    // low accuracy) below — never treated as proof a skill's triggers are
     // correct; a "keep" verdict never cites this check as its justification,
     // only lint + overlap + freshness + retirement, each independently
     // checked above.
     const positives = entry.triggers.length > 0 ? entry.triggers.slice(0, 3) : [entry.description];
-    const failing = positives.filter((prompt) => !checkSkillSelected(prompt, entry.id, catalog, { field: "description-only" }).selected);
+    const failing = positives.filter((prompt) => {
+      const sourceTrigger = entry.triggers.includes(prompt) ? prompt : undefined;
+      return !checkSkillSelectedLeaveOneOut(prompt, entry.id, catalog, sourceTrigger).selected;
+    });
     const hits = positives.length - failing.length;
     const accuracy = positives.length > 0 ? hits / positives.length : 1;
     if (accuracy < 0.5) {
@@ -325,13 +341,45 @@ function evaluateEntry(root: string, entry: CatalogEntry, catalog: readonly Cata
  * `${category}/${name}` split) from its reason before comparing — what
  * remains must still differ across two DIFFERENT skills, or the reason is
  * not actually skill-specific evidence, just a decorated id.
+ *
+ * R2-3 (flow 309 review round 2): the bare name was stripped with a
+ * substring `split`/`join`, which over-strips a short name that also occurs
+ * as a substring of an unrelated word in the reason (e.g. name `"pr"`
+ * deleting the `"pr"` inside `"improve"`). Word-boundary (`\b`) matching
+ * fixes that — a short name is only stripped where it appears as its own
+ * word, not wherever its letters happen to occur.
  */
-function stripSkillIdentity(reason: string, skillId: string): string {
-  const name = skillId.split("/").at(-1) ?? skillId;
-  return reason.split(skillId).join("<skill>").split(name).join("<skill>");
+function escapeRegExpLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Throws when two DIFFERENT skills' reasons carry the same evidence once each one's own id/name is stripped out — a stocktake report must never ship a generic, reused verdict (W1-AC11). */
+function stripSkillIdentity(reason: string, skillId: string): string {
+  const name = skillId.split("/").at(-1) ?? skillId;
+  const idPattern = new RegExp(`\\b${escapeRegExpLiteral(skillId)}\\b`, "g");
+  const namePattern = new RegExp(`\\b${escapeRegExpLiteral(name)}\\b`, "g");
+  return reason.replace(idPattern, "<skill>").replace(namePattern, "<skill>");
+}
+
+/**
+ * Throws when two DIFFERENT skills' reasons carry the same evidence once
+ * each one's own id/name is stripped out — a stocktake report must never
+ * ship a generic, reused verdict (W1-AC11). Kept as a GUARD, exercised as a
+ * test-level assertion against the bundled catalog's own report shape
+ * (`stocktake.test.ts`), and directly with hand-built fixtures — not called
+ * from `runStocktake` itself.
+ *
+ * R2-3 (flow 309 review round 2): the F23 fix called this from
+ * `runStocktake` at RUNTIME, so three near-duplicate skills (identical
+ * description, identical lint/overlap evidence once each one's own id is
+ * stripped — a real, legitimate shape: it's exactly the situation the
+ * `merge` verdict exists to report) crashed the whole run with no report at
+ * all, on exactly the catalogs stocktake most needs to finish reporting on.
+ * `runStocktake` now calls `tagDuplicateReasons` below instead, which
+ * records the collision on the entry (`duplicateReasonOf`) rather than
+ * throwing, so a real report is always produced (exit 0). This function
+ * stays available, and stays throwing, for tests that want the guard
+ * itself — e.g. asserting the real bundled catalog has zero such collisions.
+ */
 export function assertReasonsSpecific(report: StocktakeReport): void {
   const seen = new Map<string, string>();
   for (const entry of report.entries) {
@@ -344,6 +392,26 @@ export function assertReasonsSpecific(report: StocktakeReport): void {
     }
     seen.set(stripped, entry.skillId);
   }
+}
+
+/**
+ * Runtime companion to `assertReasonsSpecific` (R2-3): tags an entry whose
+ * reason collides with an earlier entry's, once each one's own id is
+ * stripped, with `evidence.duplicateReasonOf` — the id of the entry it
+ * collided with — instead of throwing. `entries` should already be in the
+ * report's final (sorted) order, so "earlier" is deterministic across runs.
+ */
+function tagDuplicateReasons(entries: readonly StocktakeEntry[]): StocktakeEntry[] {
+  const seen = new Map<string, string>();
+  return entries.map((entry) => {
+    const stripped = stripSkillIdentity(entry.reason, entry.skillId);
+    const owner = seen.get(stripped);
+    if (owner !== undefined && owner !== entry.skillId) {
+      return { ...entry, evidence: { ...entry.evidence, duplicateReasonOf: owner } };
+    }
+    seen.set(stripped, entry.skillId);
+    return entry;
+  });
 }
 
 /**
@@ -383,14 +451,15 @@ export function runStocktake(root: string, options: StocktakeOptions = {}): Stoc
   }
 
   const generatedAt = now().toISOString();
+  const sortedEntries = [...entries].sort((a, b) => a.skillId.localeCompare(b.skillId));
+  // R2-3: tag (never throw on) reason collisions — see `tagDuplicateReasons`.
   const report: StocktakeReport = {
     schemaVersion: "1.0.0",
     generatedAt,
     scope,
-    entries: [...entries].sort((a, b) => a.skillId.localeCompare(b.skillId)),
+    entries: tagDuplicateReasons(sortedEntries),
     cache: { hits, misses },
   };
-  assertReasonsSpecific(report);
 
   saveCache(cachePath, cache);
   const dateStamp = generatedAt.slice(0, 10);

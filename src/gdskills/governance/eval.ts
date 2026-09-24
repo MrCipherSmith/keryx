@@ -34,25 +34,39 @@
 // round 1) — `validateEvalReport` enforces the high-strictness trial floor
 // per behavior scenario, not against trigger scenarios.
 //
-// EVIDENCE (F5, flow 309 review round 1): when a skill ships no
-// `evals.json`, its trigger positives/negatives are SYNTHESIZED from its
-// own triggers/description and from nearby catalog entries — useful as a
-// smoke check, but not proof a human verified. Trigger scoring for these
-// scenarios uses `field: "description-only"` (see `scout.ts`'s
-// `LexicalField`) specifically so a synthesized prompt (built FROM the
-// skill's own `triggers` list) is not trivially matched against an index
-// that ALSO contains that same triggers list — otherwise a bogus skill that
-// simply copies another skill's trigger phrases "passes" by construction. A
-// report is `evidence: "synthesized"` unless BOTH the positive and negative
-// trigger sets came from an authored `evals.json`; a synthesized-only report
-// can never carry verdict `"pass"` (only `"fail"` or `"incomplete"` —
-// enforced by `validateEvalReport`), and `stocktake.ts`'s own trigger check
-// shares `selectsSkill`'s `description-only` scoring for the same reason.
+// EVIDENCE (F5, flow 309 review round 1; scoring fixed R2-5, flow 309 review
+// round 2): when a skill ships no `evals.json`, its trigger
+// positives/negatives are SYNTHESIZED from its own triggers/description and
+// from nearby catalog entries — useful as a smoke check, but not proof a
+// human verified. A report is `evidence: "synthesized"` unless BOTH the
+// positive and negative trigger sets came from an authored `evals.json`
+// (with at least one prompt each — an authored-but-empty list falls back to
+// synthesized rather than silently checking nothing, R2-4); a
+// synthesized-only report can never carry verdict `"pass"` (only `"fail"` or
+// `"incomplete"` — enforced by `validateEvalReport`).
+//
+// R2-5 (flow 309 review round 2): synthesized positives are scored with
+// `checkSkillSelectedLeaveOneOut` (`scout.ts`) — `field: "full"` (the same
+// scoring the real router uses, triggers included) but with the ONE trigger
+// phrase a given positive was built from removed from the skill's OWN
+// indexed text first, plus a `DESCRIPTION_SUPPORT_THRESHOLD` gate requiring
+// the skill's description to independently support the prompt. The earlier
+// fix (`field: "description-only"`, dropping `triggers` from the haystack
+// entirely) stopped a synthesized prompt from trivially matching because it
+// sits verbatim in what it's scored against, but at the cost of making
+// `triggers` invisible to trigger scoring altogether, for authored prompts
+// too — see `scout.ts`'s section comment above `checkSkillSelectedLeaveOneOut`
+// for the full rationale and why leave-one-out alone still needs the
+// description-support gate to reject a skill that borrows an entire trigger
+// list. Authored prompts and synthesized NEGATIVES are scored with
+// `field: "full"` directly (no exclusion needed — they are not built from
+// the skill-under-test's own text). `stocktake.ts`'s own-trigger-routes-back
+// check shares this exact grader for the same reason.
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { CatalogEntry } from "./catalog-index";
-import { checkSkillSelected, nearestSkills } from "./scout";
+import { checkSkillSelected, checkSkillSelectedLeaveOneOut, nearestSkills } from "./scout";
 
 export type Strictness = "low" | "medium" | "high";
 export type Grader = "contains" | "regex" | "not-contains" | "model";
@@ -164,12 +178,20 @@ function extractUseWhenClause(description: string): string | undefined {
   return match !== null ? match[0].trim() : undefined;
 }
 
+/** A synthesized (not human-authored) trigger prompt. */
+interface SynthesizedPositive {
+  readonly prompt: string;
+  /** The exact `skill.triggers` entry this prompt was built from, verbatim — leave-one-out (R2-5) excludes ONLY this phrase from the skill's own indexed text when scoring it. `undefined` for a prompt not built from a discrete trigger (the "Use when" clause, or the description/name fallback). */
+  readonly sourceTrigger?: string;
+}
+
 /** Positives synthesized from the skill's own triggers plus its description's "Use when" clause — no `evals.json` required. */
-function synthesizePositives(skill: CatalogEntry): string[] {
-  const prompts = [...skill.triggers];
+function synthesizePositives(skill: CatalogEntry): SynthesizedPositive[] {
+  const prompts: SynthesizedPositive[] = skill.triggers.map((trigger) => ({ prompt: trigger, sourceTrigger: trigger }));
   const useWhen = extractUseWhenClause(skill.description);
-  if (useWhen !== undefined) prompts.push(useWhen);
-  return prompts.length > 0 ? prompts.slice(0, 5) : [skill.description.length > 0 ? skill.description : skill.name];
+  if (useWhen !== undefined) prompts.push({ prompt: useWhen });
+  if (prompts.length > 0) return prompts.slice(0, 5);
+  return [{ prompt: skill.description.length > 0 ? skill.description : skill.name }];
 }
 
 /**
@@ -193,20 +215,27 @@ function synthesizeNegatives(skill: CatalogEntry, catalog: readonly CatalogEntry
 }
 
 /**
- * Whether routing `prompt` against `catalog` selects `skill` — via the
- * shared grader `checkSkillSelected`'s doc comment for the exact rule.
- *
- * F5 (flow 309 review round 1): trigger scenarios use
- * `field: "description-only"` — see `LexicalField`'s doc comment in
- * `scout.ts` — so a synthesized positive prompt (built FROM `skill.triggers`
- * itself) is not trivially matched against an index that also contains
- * those same triggers verbatim. Without this, a bogus skill that simply
- * copy-pasted another skill's trigger phrases into its own `triggers` list
- * always "passed": the prompt and the haystack it was scored against were,
- * by construction, near-identical.
+ * Whether routing `prompt` against `catalog` selects `skill` — `field: "full"`
+ * (R2-5, flow 309 review round 2), the same scoring the real router uses.
+ * For an AUTHORED prompt (human-written, or a synthesized negative drawn
+ * from a DIFFERENT skill's triggers) there is no circularity to guard
+ * against, so no exclusion is needed.
  */
-function selectsSkill(prompt: string, skill: CatalogEntry, catalog: readonly CatalogEntry[]): boolean {
-  return checkSkillSelected(prompt, skill.id, catalog, { field: "description-only" }).selected;
+function selectsSkillFull(prompt: string, skill: CatalogEntry, catalog: readonly CatalogEntry[]): boolean {
+  return checkSkillSelected(prompt, skill.id, catalog, { field: "full" }).selected;
+}
+
+/**
+ * Whether a SYNTHESIZED positive prompt selects `skill` — leave-one-out over
+ * `field: "full"`, excluding `sourceTrigger` (when the prompt was built from
+ * one of `skill.triggers` verbatim) from `skill`'s own indexed text before
+ * scoring, plus the `DESCRIPTION_SUPPORT_THRESHOLD` gate. See `scout.ts`'s
+ * section comment above `checkSkillSelectedLeaveOneOut` for the full R2-5
+ * rationale (this replaces the old `field: "description-only"` scoring,
+ * which made `triggers` invisible to trigger scoring entirely).
+ */
+function selectsSkillSynthesized(prompt: string, skill: CatalogEntry, catalog: readonly CatalogEntry[], sourceTrigger?: string): boolean {
+  return checkSkillSelectedLeaveOneOut(prompt, skill.id, catalog, sourceTrigger).selected;
 }
 
 function gradeDeterministic(output: string, expected: ExpectedBehavior): boolean | undefined {
@@ -279,9 +308,19 @@ export async function evalSkill(
   }
 
   const spec = readEvalSpec(skill.path);
-  const positivesAuthored = spec?.triggers?.positive !== undefined;
-  const negativesAuthored = spec?.triggers?.negative !== undefined;
-  const positives = positivesAuthored ? [...(spec?.triggers?.positive ?? [])] : synthesizePositives(skill);
+  // R2-4 (flow 309 review round 2): an authored `evals.json` with an EMPTY
+  // `triggers.positive`/`negative` array used to still count as "authored"
+  // (only `!== undefined` was checked) and then vacuously satisfy the
+  // trigger-accuracy check below (0 prompts checked, 0 false positives) — a
+  // report that checked NOTHING could still claim `evidence: "authored"`
+  // and `verdict: "pass"`. Authorship now requires at least one prompt on
+  // that side; an empty authored list falls back to synthesized rather than
+  // silently checking nothing.
+  const positivesAuthored = (spec?.triggers?.positive?.length ?? 0) > 0;
+  const negativesAuthored = (spec?.triggers?.negative?.length ?? 0) > 0;
+  const positives: SynthesizedPositive[] = positivesAuthored
+    ? (spec?.triggers?.positive ?? []).map((prompt) => ({ prompt }))
+    : synthesizePositives(skill);
   const negatives = negativesAuthored ? [...(spec?.triggers?.negative ?? [])] : synthesizeNegatives(skill, catalog);
   // F5: a report built ONLY from synthesized (not authored) trigger prompts
   // is advisory, not proof — see `validateEvalReport` for the rule this
@@ -290,15 +329,17 @@ export async function evalSkill(
 
   const scenarios: EvalScenarioResult[] = [];
   let truePositive = 0;
-  positives.forEach((prompt, index) => {
-    const selected = selectsSkill(prompt, skill, catalog);
+  positives.forEach((positive, index) => {
+    const selected = positivesAuthored
+      ? selectsSkillFull(positive.prompt, skill, catalog)
+      : selectsSkillSynthesized(positive.prompt, skill, catalog, positive.sourceTrigger);
     if (selected) truePositive += 1;
-    scenarios.push(triggerScenario(`trigger-positive-${index + 1}`, "trigger-positive", prompt, strictness, selected, true));
+    scenarios.push(triggerScenario(`trigger-positive-${index + 1}`, "trigger-positive", positive.prompt, strictness, selected, true));
   });
 
   let falsePositive = 0;
   negatives.forEach((prompt, index) => {
-    const selected = selectsSkill(prompt, skill, catalog);
+    const selected = selectsSkillFull(prompt, skill, catalog);
     if (selected) falsePositive += 1;
     scenarios.push(triggerScenario(`trigger-negative-${index + 1}`, "trigger-negative", prompt, strictness, selected, false));
   });
@@ -383,8 +424,20 @@ export async function evalSkill(
     negatives: negatives.length,
   };
 
-  const hasNotRun = scenarios.some((scenario) => scenario.status === "not-run");
-  const triggersOk = positives.length === 0 || (truePositive === positives.length && falsePositive === 0);
+  // R2-4: a `"skipped"` scenario (a model-graded expectation with no model
+  // grader capability) used to count as "ran" for verdict purposes — nothing
+  // was actually checked, yet `behaviorOk` only ever looked at `"ran"`
+  // scenarios, so a behavior scenario whose ENTIRE expectation set was
+  // model-graded and unchecked left `behaviorOk` vacuously true and the
+  // verdict could still be `"pass"`. `hasNotRun` now covers both "not
+  // actually evaluated" statuses.
+  const hasNotRun = scenarios.some((scenario) => scenario.status === "not-run" || scenario.status === "skipped");
+  // R2-4: `positives.length === 0` (and, symmetrically, `negatives.length ===
+  // 0`) used to make `triggersOk` vacuously true — a report that checked ZERO
+  // trigger prompts could still satisfy "every positive selected, no false
+  // positives" by construction. Both sides must actually carry at least one
+  // checked prompt.
+  const triggersOk = positives.length > 0 && negatives.length > 0 && truePositive === positives.length && falsePositive === 0;
   const behaviorOk = scenarios
     .filter((scenario) => scenario.kind === "behavior" && scenario.status === "ran")
     .every((scenario) => scenario.passRate >= 0.5);
@@ -428,9 +481,6 @@ export function validateEvalReport(report: EvalReport): string[] {
   if (report.strictness === "high" && report.trials < 3) {
     errors.push("strictness high requires trials >= 3");
   }
-  if (report.triggerAccuracy === undefined) {
-    errors.push("triggerAccuracy is required");
-  }
   if (report.evidence !== "authored" && report.evidence !== "synthesized") {
     errors.push("evidence must be 'authored' or 'synthesized'");
   }
@@ -439,19 +489,58 @@ export function validateEvalReport(report: EvalReport): string[] {
   if (report.evidence === "synthesized" && report.verdict === "pass") {
     errors.push("a synthesized-only report must not report verdict 'pass' (use 'incomplete')");
   }
+
+  // R2-6 (flow 309 review round 2): a hand-edited or otherwise malformed
+  // `eval.json` missing `triggerAccuracy` or carrying a non-array
+  // `scenarios` used to log "triggerAccuracy is required" and then
+  // DEREFERENCE `report.triggerAccuracy.positives` two lines later anyway,
+  // throwing a TypeError instead of returning the error list —
+  // `checkStablePackGate` then threw instead of reporting `"fail"`. Both
+  // shapes are checked and, when either is missing, the rest of this
+  // function (which assumes both exist) is skipped rather than crashing.
+  if (report.triggerAccuracy === undefined) {
+    errors.push("triggerAccuracy is required");
+  }
+  if (!Array.isArray(report.scenarios)) {
+    errors.push("scenarios must be an array");
+  }
+  if (report.triggerAccuracy === undefined || !Array.isArray(report.scenarios)) {
+    return errors;
+  }
+
   // F19 (flow 309 review round 1): `triggerAccuracy.positives`/`negatives`
   // claim N prompts were checked; nothing previously required N matching
   // `scenarios` entries to actually be present — a report with
   // `scenarios: []` but `triggerAccuracy: {positives: 1, negatives: 1, ...}`
   // validated clean, which is exactly the "empty scenarios must not pass"
   // shape a vacuous guard test let through. The two must agree.
-  const triggerScenarioCount = report.scenarios.filter((scenario) => scenario.kind === "trigger-positive" || scenario.kind === "trigger-negative").length;
+  const triggerPositiveScenarios = report.scenarios.filter((scenario) => scenario.kind === "trigger-positive");
+  const triggerNegativeScenarios = report.scenarios.filter((scenario) => scenario.kind === "trigger-negative");
+  const triggerScenarioCount = triggerPositiveScenarios.length + triggerNegativeScenarios.length;
   const claimedTriggerCount = report.triggerAccuracy.positives + report.triggerAccuracy.negatives;
   if (triggerScenarioCount !== claimedTriggerCount) {
     errors.push(
       `triggerAccuracy claims ${claimedTriggerCount} trigger prompt(s) (${report.triggerAccuracy.positives} positive + ${report.triggerAccuracy.negatives} negative) but the report carries ${triggerScenarioCount} trigger scenario(s)`,
     );
   }
+
+  // R2-4 (flow 309 review round 2): `checkStablePackGate`/consumers trusted
+  // a self-declared `verdict: "pass"` at face value — a report with
+  // `scenarios: []` (nothing ran) or every scenario `"skipped"`/`"not-run"`
+  // could still hand-declare `"pass"`. A `"pass"` verdict must be backed by
+  // at least one ACTUALLY RAN trigger-positive and one ran trigger-negative
+  // scenario, and no scenario left `"skipped"` or `"not-run"`.
+  if (report.verdict === "pass") {
+    const hasRanTriggerPositive = triggerPositiveScenarios.some((scenario) => scenario.status === "ran");
+    const hasRanTriggerNegative = triggerNegativeScenarios.some((scenario) => scenario.status === "ran");
+    if (!hasRanTriggerPositive || !hasRanTriggerNegative) {
+      errors.push("verdict 'pass' requires at least one ran trigger-positive and one ran trigger-negative scenario");
+    }
+    if (report.scenarios.some((scenario) => scenario.status === "skipped" || scenario.status === "not-run")) {
+      errors.push("verdict 'pass' is not allowed while a scenario is 'skipped' or 'not-run'");
+    }
+  }
+
   for (const scenario of report.scenarios) {
     if (!(scenario.passRate >= 0 && scenario.passRate <= 1)) {
       errors.push(`scenario ${scenario.id}: passRate ${scenario.passRate} is out of [0, 1]`);
@@ -501,12 +590,40 @@ export function checkStablePackGate(packDir: string, stability: string): StableP
   } catch (error) {
     return { status: "fail", reason: `governance/eval.json could not be parsed: ${error instanceof Error ? error.message : String(error)}` };
   }
-  const errors = validateEvalReport(report);
+  // R2-6 (flow 309 review round 2): `validateEvalReport` itself is now
+  // defensive against a missing `triggerAccuracy`/`scenarios` (it returns
+  // errors instead of throwing), but this call is wrapped regardless — a
+  // gate that is supposed to answer "fail" for a broken report must never
+  // let an unexpected exception propagate to the caller instead.
+  let errors: string[];
+  try {
+    errors = validateEvalReport(report);
+  } catch (error) {
+    return { status: "fail", reason: `governance/eval.json could not be validated: ${error instanceof Error ? error.message : String(error)}` };
+  }
   if (errors.length > 0) {
     return { status: "fail", reason: `governance/eval.json fails its own contract: ${errors.join("; ")}` };
   }
   if (report.verdict !== "pass") {
     return { status: "fail", reason: `governance/eval.json verdict is "${report.verdict}", not "pass"` };
+  }
+  // R2-4: the gate must not simply trust a self-declared `verdict`/`evidence`
+  // — recompute the two load-bearing facts directly from the report's own
+  // data. `validateEvalReport`'s "pass requires a ran trigger-positive and
+  // ran trigger-negative, no skipped/not-run" rule already guards the
+  // "nothing checked" shape; this adds the two checks this workstream's
+  // dispatch calls out explicitly for the stable-pack gate: evidence must be
+  // `"authored"` (a stable pack's shipped eval.json is meant to be
+  // human-verified, not merely synthesized-and-happened-to-pass — though
+  // `validateEvalReport` already forbids synthesized+pass, this is belt and
+  // suspenders against a hand-edited report that skips validation some other
+  // way in the future), and at least one scenario must have actually `ran`.
+  if (report.evidence !== "authored") {
+    return { status: "fail", reason: `governance/eval.json evidence is "${report.evidence}", not "authored"` };
+  }
+  const ranScenarios = report.scenarios.filter((scenario) => scenario.status === "ran").length;
+  if (ranScenarios === 0) {
+    return { status: "fail", reason: "governance/eval.json has zero ran scenarios" };
   }
   return { status: "pass" };
 }

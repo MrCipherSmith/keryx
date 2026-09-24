@@ -151,4 +151,58 @@ describe("assertReasonsSpecific", () => {
     };
     expect(() => assertReasonsSpecific(report)).not.toThrow();
   });
+
+  // R2-3 (flow 309 review round 2): the bare-name strip used a substring
+  // `split`/`join`, which over-stripped a short name wherever its letters
+  // occurred inside an unrelated word — name `"pr"` deleted the `"pr"` inside
+  // `"improve"`, corrupting the comparison. Word-boundary matching fixes it.
+  test("a short skill name is stripped only as its own word, not wherever its letters occur inside another word", () => {
+    const report: StocktakeReport = {
+      schemaVersion: "1.0.0",
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      scope: "bundled",
+      entries: [
+        { skillId: "quality/pr", verdict: "keep", reason: "quality/pr: lint clean; needs to improve nothing", evidence: {} },
+        { skillId: "quality/other", verdict: "keep", reason: "quality/other: lint clean; needs to improve nothing", evidence: {} },
+      ],
+      cache: { hits: 0, misses: 2 },
+    };
+    // Genuinely identical evidence ("needs to improve nothing") once each
+    // skill's own id is stripped — MUST still be flagged. The over-stripping
+    // bug would additionally eat "pr" out of "improve" for the first entry
+    // only, which could mask or alter this collision unpredictably.
+    expect(() => assertReasonsSpecific(report)).toThrow();
+  });
+});
+
+describe("R2-3 (flow 309 review round 2): runtime duplicate reasons are tagged, never thrown", () => {
+  test("three near-duplicate project skills do not crash runStocktake — they are tagged, and the run completes (exit-equivalent: no throw)", () => {
+    withTempRoot((root) => {
+      const base = "Use when you need to review code style. Trigger words: code, review, style, when, you, need.";
+      for (const name of ["alpha", "beta", "gamma"]) {
+        const skillDir = path.join(root, ".metaproject", "project-skills", "project", name);
+        mkdirSync(skillDir, { recursive: true });
+        writeFileSync(path.join(skillDir, "SKILL.md"), `---\nname: ${name}\ndescription: ${base}\n---\nBody.\n`, "utf8");
+      }
+
+      let report: StocktakeReport | undefined;
+      expect(() => {
+        report = runStocktake(root, { scope: "all", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
+      }).not.toThrow();
+      expect(report).toBeDefined();
+      if (report === undefined) return;
+
+      const near = report.entries.filter((entry) => entry.skillId.startsWith("project/"));
+      expect(near.length).toBe(3);
+      // Every entry is still present with a non-empty reason (a full report
+      // was produced, not an abort) — and at least one of the collided
+      // entries carries `duplicateReasonOf` recording WHICH entry it
+      // collided with, instead of the whole run throwing.
+      for (const entry of near) {
+        expect(entry.reason.length).toBeGreaterThan(0);
+      }
+      const tagged = near.filter((entry) => "duplicateReasonOf" in entry.evidence);
+      expect(tagged.length).toBeGreaterThan(0);
+    });
+  }, 20_000);
 });

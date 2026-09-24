@@ -11,24 +11,54 @@ import { recordScout, scoutImports, scoutSkill, scoutVetCandidate } from "../gds
 import { runStocktake } from "../gdskills/governance/stocktake";
 import { optionValue } from "../lib/args";
 
-function parseScope(args: readonly string[]): CatalogScope {
-  return optionValue([...args], "--scope") === "all" ? "all" : "bundled";
+/** Whether `name` was given at all, in either `--name value` or `--name=value` spelling — distinct from `optionValue`'s `undefined`, which also means "given with no usable value" (R2-8, flow 309 review round 2). */
+function flagGiven(args: readonly string[], name: string): boolean {
+  return args.includes(name) || args.some((arg) => arg.startsWith(`${name}=`));
 }
 
 /**
- * F9 (flow 309 review round 1): a positive integer flag value, in either
- * `--flag value` or `--flag=value` spelling (both handled by the shared
- * `optionValue`, which the local hand-rolled `args.indexOf` reimplementation
- * this replaced did NOT — `--trials=3` read as absent and silently fell back
- * to the default). `undefined` means the flag was not given at all;
- * `"invalid"` means it WAS given but is not a positive integer (`--trials
- * abc` used to parse as `NaN`, which flowed all the way into the eval report
- * as a trial count no downstream check ever rejected).
+ * `optionValue`, but tells "not given" apart from "given with no usable
+ * value" (R2-8, flow 309 review round 2 — same class as F3/F9/F13: a
+ * malformed flag must be refused, not silently treated as absent and fallen
+ * back to a default). A trailing `--flag`, `--flag --other-flag`, or
+ * `--flag=` (empty) all answer `"missing-value"`; a flag not present at all
+ * answers `undefined`, same as before.
+ */
+function stringFlag(args: readonly string[], name: string): string | undefined | "missing-value" {
+  if (!flagGiven(args, name)) return undefined;
+  const raw = optionValue([...args], name);
+  return raw !== undefined && raw.length > 0 ? raw : "missing-value";
+}
+
+type ScopeResult = { readonly ok: true; readonly scope: CatalogScope } | { readonly ok: false; readonly error: string };
+
+/** R2-8: `--scope` with no value, or a value that is neither `bundled` nor `all`, is refused rather than silently defaulting to `bundled`. */
+function parseScope(args: readonly string[]): ScopeResult {
+  const raw = stringFlag(args, "--scope");
+  if (raw === "missing-value") return { ok: false, error: "--scope requires a value" };
+  if (raw === undefined) return { ok: true, scope: "bundled" };
+  if (raw === "all" || raw === "bundled") return { ok: true, scope: raw };
+  return { ok: false, error: `--scope must be 'bundled' or 'all' (got ${JSON.stringify(raw)})` };
+}
+
+/**
+ * F9 (flow 309 review round 1; hardened R2-8, flow 309 review round 2): a
+ * positive integer flag value, in either `--flag value` or `--flag=value`
+ * spelling (both handled by the shared `optionValue`, which the local
+ * hand-rolled `args.indexOf` reimplementation this replaced did NOT —
+ * `--trials=3` read as absent and silently fell back to the default).
+ * `undefined` means the flag was not given at all; `"invalid"` means it WAS
+ * given but is not usable — not a positive integer (`--trials abc` used to
+ * parse as `NaN`, which flowed all the way into the eval report as a trial
+ * count no downstream check ever rejected), OR given with no value at all
+ * (`--trials` trailing, `--trials --json`, `--trials=`) — R2-8: this last
+ * shape used to read as `undefined` (same as "not given") and silently fall
+ * back to the default trial count instead of being refused.
  */
 function positiveIntegerFlag(args: readonly string[], flag: string): number | undefined | "invalid" {
-  const raw = optionValue([...args], flag);
+  const raw = stringFlag(args, flag);
   if (raw === undefined) return undefined;
-  if (!/^\d+$/.test(raw)) return "invalid";
+  if (raw === "missing-value" || !/^\d+$/.test(raw)) return "invalid";
   const value = Number(raw);
   return value >= 1 ? value : "invalid";
 }
@@ -57,6 +87,25 @@ export async function skillsGovernanceCommand(args: readonly string[]): Promise<
 // ---------------------------------------------------------------------------
 
 async function scoutCommand(args: readonly string[]): Promise<void> {
+  // R2-8: a value-taking flag given with no usable value (trailing, or
+  // immediately followed by another flag) is refused up front, rather than
+  // the loop below silently swallowing the NEXT flag as this one's value
+  // (`--record --json` used to set `record = "--json"`) or silently leaving
+  // the field `undefined` and proceeding as if the flag were never given.
+  for (const flag of ["--record", "--justification", "--skill-name", "--candidate"] as const) {
+    if (stringFlag(args, flag) === "missing-value") {
+      console.error(`${flag} requires a value`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+  const scopeResult = parseScope(args);
+  if (!scopeResult.ok) {
+    console.error(scopeResult.error);
+    process.exitCode = 1;
+    return;
+  }
+
   const queryWords: string[] = [];
   let record: string | undefined;
   let candidate: string | undefined;
@@ -64,7 +113,7 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
   let skillNameOverride: string | undefined;
   let includeImports = false;
   const json = args.includes("--json");
-  const scope = parseScope(args);
+  const scope = scopeResult.scope;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] as string;
@@ -184,16 +233,25 @@ async function evalCommand(args: readonly string[]): Promise<void> {
     return;
   }
 
-  const strictnessArg = optionValue([...args], "--strictness");
-  // F9: an unknown `--strictness` value used to silently fall back to "low"
-  // — the weakest gate — instead of being refused. `--strictness hihg` (a
-  // typo) would quietly run the least strict eval and nobody would notice.
-  if (strictnessArg !== undefined && !isStrictness(strictnessArg)) {
-    console.error(`--strictness must be one of low, medium, high (got ${JSON.stringify(strictnessArg)})`);
+  const strictnessRaw = stringFlag(args, "--strictness");
+  // F9 (hardened R2-8, flow 309 review round 2): an unknown `--strictness`
+  // value used to silently fall back to "low" — the weakest gate — instead
+  // of being refused (`--strictness hihg`, a typo, quietly ran the least
+  // strict eval and nobody would notice); R2-8: `--strictness` given with NO
+  // value at all (trailing, or followed by another flag) used to read as
+  // `undefined` — indistinguishable from "not given" — and fall back to
+  // "low" the same silent way.
+  if (strictnessRaw === "missing-value") {
+    console.error("--strictness requires a value");
     process.exitCode = 1;
     return;
   }
-  const strictness = strictnessArg ?? "low";
+  if (strictnessRaw !== undefined && !isStrictness(strictnessRaw)) {
+    console.error(`--strictness must be one of low, medium, high (got ${JSON.stringify(strictnessRaw)})`);
+    process.exitCode = 1;
+    return;
+  }
+  const strictness = strictnessRaw ?? "low";
 
   const trialsArg = positiveIntegerFlag(args, "--trials");
   // F9: `--trials abc` used to parse as `NaN` and flow straight into the
@@ -208,7 +266,16 @@ async function evalCommand(args: readonly string[]): Promise<void> {
   const trials = trialsArg ?? 3;
   const modelGrader = args.includes("--model-grader");
   const json = args.includes("--json");
-  const runnerName = optionValue([...args], "--runner");
+  const runnerFlag = stringFlag(args, "--runner");
+  // R2-8: `--runner` given with no value silently read as `undefined`
+  // (indistinguishable from omitted) and skipped straight past the warning
+  // below, as if no runner had been requested at all.
+  if (runnerFlag === "missing-value") {
+    console.error("--runner requires a value");
+    process.exitCode = 1;
+    return;
+  }
+  const runnerName = runnerFlag;
 
   if (runnerName !== undefined) {
     console.error(
@@ -245,7 +312,13 @@ async function evalCommand(args: readonly string[]): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function stocktakeCommand(args: readonly string[]): Promise<void> {
-  const scope = parseScope(args);
+  const scopeResult = parseScope(args);
+  if (!scopeResult.ok) {
+    console.error(scopeResult.error);
+    process.exitCode = 1;
+    return;
+  }
+  const scope = scopeResult.scope;
   const quick = args.includes("--quick");
   const json = args.includes("--json");
   const root = process.cwd();
