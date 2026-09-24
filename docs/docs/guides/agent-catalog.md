@@ -33,7 +33,7 @@ of the inputs those already consume, not a new execution path.
 | `stacks` | string[] | no | `stack_requires`-style tags; empty/absent means stack-agnostic |
 | `output_contract` | string | yes | which canonical result contract the reply must satisfy (`subagent-result` today) |
 | `isolation` | enum `none\|worktree` | no | whether the compiled dispatch requests worktree isolation where the target supports it |
-| `origin` | object | no | provenance — `kind` (`authored\|generated\|imported\|learned`), `sourceRef`, `generatedAt` |
+| `origin` | object | no | provenance — `kind` (`authored\|generated\|imported\|learned`), `sourceRef`, `generatedAt` — an agent that arrived via `keryx bundle import` carries `origin.kind: imported` with `sourceRef` set to the exporting bundle's `bundleId`; see [Portability](portability.md#agents-imported-from-a-bundle) |
 
 The body is free-form Markdown task framing — the persona's operating
 instructions — under the same 500-line, one-level-deep-reference discipline

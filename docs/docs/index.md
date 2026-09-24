@@ -43,6 +43,7 @@ the one that describes shipped behaviour.
 - [Slate for external agents](guides/slate.md)
 - [Keep the wiki current](guides/keep-the-wiki-current.md)
 - [Run keryx in CI](guides/run-in-ci.md)
+- [Move skills, rules, agents, and memory between projects and machines](guides/portability.md)
 
 **Start here:** new to the project? Begin with [onboarding.md](./onboarding.md),
 then pick the guide that matches your task.
