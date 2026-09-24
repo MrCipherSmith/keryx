@@ -57,6 +57,9 @@ import type {
   SecuritySource,
   SecurityTarget,
 } from "../security/types";
+import { handleAuditHarness } from "./security-audit-harness";
+import { handleImpactEvidence } from "./security-impact-evidence";
+import { isPassGate } from "./security-gate";
 
 const SOURCES: SecuritySource[] = [
   "trusted-project",
@@ -97,6 +100,12 @@ export async function securityCommand(
       return;
     case "scan-mcp":
       await handleScanMcp(cwd, rest);
+      return;
+    case "audit-harness":
+      await handleAuditHarness(cwd, rest);
+      return;
+    case "impact-evidence":
+      await handleImpactEvidence(cwd, rest);
       return;
     case "check-input":
       await handleCheck(cwd, rest, "input");
@@ -686,30 +695,6 @@ export function reportExitCode(gate: string, mode: string): number {
   return 0;
 }
 
-/**
- * Whether a `SecurityGate` value is the one a strict mode accepts.
- * Exhaustive, with the default arm on the blocking side: a future
- * `SecurityGate` member — or, defensively, a runtime value the type checker
- * would never let a caller construct directly — is refused rather than
- * falling through to a pass. Mirrors `runGate`'s switch
- * (`src/security/service.ts:311-330`) and `securityFlowGate`'s
- * (`src/security/guard.ts:362-371`), which already treat `enforced` and `ci`
- * as the same blocking pair (`isBlockingMode`); this file's two folds
- * (`exitCodeFor`, `reportExitCode`) had not, until T35 F-002.
- */
-function isPassGate(gate: string): boolean {
-  switch (gate) {
-    case "pass":
-      return true;
-    case "fail":
-    case "needs-approval":
-    case "incomplete":
-      return false;
-    default:
-      return false;
-  }
-}
-
 async function handlePolicy(cwd: string, args: string[]): Promise<void> {
   const action = args[0];
   if (action !== "validate") {
@@ -1160,6 +1145,12 @@ export function printSecurityHelp(): void {
     "keryx security status",
     "keryx security scan <path> [--json] [--source <kind>] [--recursive|--no-recursive] [--exclude <path>] [--max-files <n>] [--max-bytes <n>]",
     "keryx security scan-mcp <manifest.json | dir> [--json] [--pin <manifest>] [--strict]",
+    "keryx security audit-harness [path] [--json] [--ci] [--fix-proposals] [--baseline <file>] [--severity-floor <level>]",
+    "keryx security audit-harness apply --proposal <id>",
+    "keryx security audit-harness baseline add --finding <id> --justification <text> [--expires YYYY-MM-DD] [--author <name>]",
+    "keryx security impact-evidence status [--json]",
+    "keryx security impact-evidence test <file...> [--json]",
+    "keryx security impact-evidence hook [--runtime claude] [--profile <name>]",
     "keryx security check-input [--source <kind>] [--file <path>] [--runtime <id>]",
     "keryx security check-output [--target <kind>] [--file <path>] [--runtime <id>]",
     "keryx security redact <path> [--out <path>]",
@@ -1185,12 +1176,17 @@ export function printSecurityHelp(): void {
     { flag: "--exclude <path>", desc: "Exclude a contained path; may be repeated." },
     { flag: "--max-files <n>", desc: "Required positive file-count limit for a scan." },
     { flag: "--max-bytes <n>", desc: "Required positive aggregate byte limit for a scan." },
+    { flag: "--ci", desc: "Set the process exit code from the pass/fail gate." },
+    { flag: "--fix-proposals", desc: "Include fixProposal records in findings (never writes anything)." },
+    { flag: "--baseline <file>", desc: "Use a baseline/suppression file other than the project default." },
+    { flag: "--severity-floor <level>", desc: "Filter displayed/scored findings below this severity." },
+    { flag: "--proposal <id>", desc: "Audit proposal to apply." },
+    { flag: "--profile <name>", desc: "Impact evidence profile for the hook." },
     { flag: "--target <kind>", desc: "Write/publish target for check-output." },
     { flag: "--file <path>", desc: "Read content from a file instead of stdin." },
     { flag: "--out <path>", desc: "Write redacted output to a file." },
     { flag: "--since <ref>", desc: "Restrict report to findings since a ref/date." },
     { flag: "--limit <n>", desc: "Limit the number of incidents listed." },
-    { flag: "--runtime <id>", desc: "Agent runtime(s) for hook install/uninstall (comma list or 'all')." },
     { flag: "--corpus <name>", desc: "Eval corpus to run ('all' for every corpus)." },
     { flag: "--with-model", desc: "Include opt-in model backends in the eval run." },
   ]);

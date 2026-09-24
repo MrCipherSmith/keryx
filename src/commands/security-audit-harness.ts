@@ -16,24 +16,7 @@ import {
   runHarnessAudit,
 } from "../security/audit-harness";
 import type { AuditFinding, AuditReport, AuditSeverity } from "../security/audit-harness";
-
-/**
- * Allowlist over the one acceptable gate value, exhaustive, mirroring
- * `security.ts`'s `isPassGate`. T7 replaces this with the export from
- * `./security` once it lands (see `plan.md` Lane A design) — kept as an
- * identical local copy until then so this file has no import-order
- * dependency on that unmerged change.
- */
-function isPassGate(gate: "pass" | "fail"): boolean {
-  switch (gate) {
-    case "pass":
-      return true;
-    case "fail":
-      return false;
-    default:
-      return false;
-  }
-}
+import { isPassGate } from "./security-gate";
 
 const SEVERITIES: readonly AuditSeverity[] = ["critical", "high", "medium", "low"];
 
