@@ -3,7 +3,14 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { aliasHookToolName, buildShellHookRuntime, derivePolicyProfileId, HOOK_TOOL_NAME_ALIASES } from "./agent-hooks";
+import {
+  aliasHookToolName,
+  buildShellHookRuntime,
+  derivePolicyProfileId,
+  HOOK_TOOL_NAME_ALIASES,
+  resolveHooksHomeDir,
+  resolveHooksProjectRoot,
+} from "./agent-hooks";
 
 test("derivePolicyProfileId: unattended wins over everything else", () => {
   expect(derivePolicyProfileId(false, false)).toBe("unattended-untrusted");
@@ -101,6 +108,53 @@ test("an invalid project hooks.json builds a runtime that denies every PreToolUs
       toolOutput: "ok",
     });
     expect(postFire.decisions.length).toBe(0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// Review finding 11: `keryx hooks` and `buildShellHookRuntime` used to
+// resolve `~/.keryx/hooks.json` to two DIFFERENT paths — the CLI honored
+// `KERYX_HOME`, the runtime always read `os.homedir()`. Both now share
+// `resolveHooksHomeDir`/`resolveHooksProjectRoot`.
+test("resolveHooksHomeDir: an explicit homeDir wins, then KERYX_HOME, then the real homedir", () => {
+  expect(resolveHooksHomeDir({}, "/explicit")).toBe("/explicit");
+  expect(resolveHooksHomeDir({ KERYX_HOME: "/from-env" })).toBe("/from-env");
+  expect(resolveHooksHomeDir({ KERYX_HOME: "/from-env" }, "/explicit")).toBe("/explicit");
+  expect(resolveHooksHomeDir({ KERYX_HOME: "" })).not.toBe("");
+});
+
+test("buildShellHookRuntime honors KERYX_HOME exactly like `keryx hooks` does, with a subdirectory projectRoot", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-kh-"));
+  try {
+    // A subdirectory `cwd`, resolved to the project root the same way
+    // `commands/shell.ts` resolves it (`resolveHooksProjectRoot`), mirrors
+    // `keryx hooks` being invoked from a subdirectory (AC/finding 11). Fake a
+    // `.git` marker at `dir` so `resolveProjectRoot`'s walk-up stops there
+    // instead of falling back to `sub` itself (no real ancestor of a tmp dir
+    // is guaranteed to hold one).
+    await mkdir(path.join(dir, ".git"), { recursive: true });
+    const sub = path.join(dir, "src", "nested");
+    await mkdir(sub, { recursive: true });
+    expect(resolveHooksProjectRoot(sub)).toBe(dir);
+
+    const fakeHome = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-kh-home-"));
+    try {
+      const result = buildShellHookRuntime({
+        projectRoot: resolveHooksProjectRoot(sub),
+        sessionId: "s",
+        runId: "r",
+        interactive: true,
+        profileId: "monitored-trusted-local",
+        // No explicit `homeDir` — must fall back to KERYX_HOME, same as
+        // `keryx hooks` (`resolveHomeDir` in `./hooks.ts`).
+        env: { KERYX_HOME: fakeHome },
+      });
+      expect(result).toBeDefined();
+      expect(result?.runtime.registrations().length).toBeGreaterThan(0);
+    } finally {
+      await rm(fakeHome, { recursive: true, force: true });
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

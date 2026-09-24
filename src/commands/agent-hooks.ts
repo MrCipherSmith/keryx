@@ -8,9 +8,13 @@
 //
 // Off-limits per the flow 306 dispatch: `src/harness/hooks/*` itself, and the
 // other worker's files (`src/harness/run/run.ts`, `src/harness/child/*`,
-// `spawn-subagent-tool.ts`, `src/harness/session/types.ts`, `src/commands/
-// hooks.ts`, `src/cli.ts`). This file only CONSUMES the T5 runtime's public
-// surface (`src/harness/hooks/index.ts`).
+// `spawn-subagent-tool.ts`, `src/harness/session/types.ts`, `src/cli.ts`).
+// This file only CONSUMES the T5 runtime's public surface (`src/harness/
+// hooks/index.ts`) — `src/commands/hooks.ts` (the `keryx hooks` CLI) is a
+// DIFFERENT owner's file that shares two resolvers with this one
+// (`resolveHooksHomeDir`/`resolveHooksProjectRoot`, review finding 11), so
+// the two agree on which `hooks.json`/project root a session and the CLI
+// each resolve.
 import os from "node:os";
 import {
   createHookRuntime,
@@ -19,7 +23,39 @@ import {
   type HookRegistration,
   type HookRuntime,
 } from "../harness/hooks";
+import { resolveProjectRoot as resolveProjectRootFromCwd } from "../lib/contained-path";
 import type { PolicyProfileId } from "../harness/policy/types";
+
+/**
+ * Shared home-dir resolver for `~/.keryx/hooks.json` — `KERYX_HOME` first
+ * (an explicit `homeDir` override, e.g. from a test, wins over even that),
+ * then the real `os.homedir()`. Review finding 11: `keryx hooks` (`./hooks.ts`)
+ * and this module's own {@link buildShellHookRuntime} used to resolve two
+ * DIFFERENT home directories (the CLI honored `KERYX_HOME`; the runtime only
+ * ever read `os.homedir()`) — a `KERYX_HOME` operator/test override could
+ * make `keryx hooks list` show registrations a live session would never
+ * actually load. Both now call this one function.
+ */
+export function resolveHooksHomeDir(env: NodeJS.ProcessEnv, homeDir?: string): string {
+  if (homeDir !== undefined) return homeDir;
+  const fromEnv = env.KERYX_HOME;
+  return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : os.homedir();
+}
+
+/**
+ * Shared project-root resolver — review finding 11's second half: `keryx
+ * hooks` resolved `.metaproject/hooks.json` against the raw `cwd` it was
+ * invoked from, while every real session (`buildShellHookRuntime`'s own
+ * callers, e.g. `commands/shell.ts`) resolves the PROJECT ROOT first
+ * (`resolveProjectRoot`, walking up from `cwd` to the nearest project
+ * boundary) before ever touching `.metaproject/`. Run `keryx hooks` from a
+ * subdirectory and the two used to disagree about which `hooks.json` is even
+ * in play. Re-exported (not just used internally) so `./hooks.ts` calls the
+ * EXACT SAME function rather than a parallel implementation that could drift.
+ */
+export function resolveHooksProjectRoot(cwd: string): string {
+  return resolveProjectRootFromCwd(cwd);
+}
 
 /**
  * `executeCall`'s Keryx tool names, mapped to the Claude-Code-shaped name a
@@ -155,7 +191,10 @@ export function buildShellHookRuntime(opts: BuildShellHookRuntimeOptions): Shell
     return undefined;
   }
   const clock = opts.clock ?? (() => new Date().toISOString());
-  const homeDir = opts.homeDir ?? os.homedir();
+  // Review finding 11: share the resolver with `keryx hooks` (`./hooks.ts`)
+  // instead of reading `os.homedir()` unconditionally — see
+  // `resolveHooksHomeDir`'s own doc comment.
+  const homeDir = resolveHooksHomeDir(env, opts.homeDir);
   const loaded = loadHookConfig({ projectRoot: opts.projectRoot, homeDir });
   let registrations: readonly HookRegistration[] | undefined;
   let runtime: HookRuntime;

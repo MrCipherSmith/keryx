@@ -105,6 +105,27 @@ describe("keryx hooks validate", () => {
     expect(result.ok).toBe(true);
     expect(result.hookCount).toBeGreaterThanOrEqual(5);
   });
+
+  test("finding 11: resolves .metaproject/hooks.json from a SUBDIRECTORY cwd, same as a live session", async () => {
+    // Review finding 11: `keryx hooks` used to resolve `.metaproject/` against
+    // the raw `cwd`, unlike a real session (`buildShellHookRuntime`'s
+    // callers), which always resolve the PROJECT ROOT first. Invoked from a
+    // subdirectory, the CLI must find the SAME project-defined hook a live
+    // session would.
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: {
+        PreToolUse: [{ id: "sub-cwd-hook", matcher: "*", class: "observe", command: { argv: ["true"] } }],
+      },
+    });
+    const sub = path.join(project, "src", "nested");
+    await mkdir(sub, { recursive: true });
+
+    await hooksCommand(["list", "--json"], { cwd: sub, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    const result = jsonOutput() as { hooks: Array<{ id: string }> };
+    expect(result.hooks.map((h) => h.id)).toContain("sub-cwd-hook");
+  });
 });
 
 describe("keryx hooks enable/disable", () => {
@@ -170,6 +191,53 @@ describe("keryx hooks enable/disable", () => {
     expect(enabledEntry.command.argv).toEqual(["true"]);
   });
 
+  test("AC12: a hand-authored hook registered on several events is flipped on EVERY event, not just the first", async () => {
+    // Review finding 12: `setProjectOrUserHookEnabled` used to stop at the
+    // FIRST full registration it found for an id and never touch the rest —
+    // an id repeated on several events (one full registration entry per
+    // event, same shape a real project can hand-author) silently kept its
+    // other events at the old `enabled` value.
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: {
+        PreToolUse: [{ id: "multi-event-hook", matcher: "*", class: "observe", command: { argv: ["true"] } }],
+        PostToolUse: [{ id: "multi-event-hook", matcher: "*", class: "observe", command: { argv: ["true"] } }],
+        Stop: [
+          { id: "other-hook", matcher: "*", class: "observe", command: { argv: ["true"] } },
+          { id: "multi-event-hook", matcher: "*", class: "observe", command: { argv: ["true"] } },
+        ],
+      },
+    });
+    await hooksCommand(["disable", "multi-event-hook"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    const afterDisable = JSON.parse(await readFile(projectHooksPath(), "utf8"));
+    for (const event of ["PreToolUse", "PostToolUse"] as const) {
+      const entry = afterDisable.hooks[event].find((h: { id: string }) => h.id === "multi-event-hook");
+      expect(entry.enabled).toBe(false);
+    }
+    const stopEntries = afterDisable.hooks.Stop as Array<{
+      id: string;
+      enabled?: boolean;
+      matcher?: string;
+      class?: string;
+      command?: { argv: string[] };
+    }>;
+    expect(stopEntries.find((h) => h.id === "multi-event-hook")?.enabled).toBe(false);
+    // A hand-authored entry under a DIFFERENT id, in the same event array, is
+    // never removed, reordered, or edited.
+    expect(stopEntries).toContainEqual({ id: "other-hook", matcher: "*", class: "observe", command: { argv: ["true"] } });
+    expect(stopEntries.map((h) => h.id)).toEqual(["other-hook", "multi-event-hook"]);
+    expect(afterDisable._keryxManaged.managedHookIds).toContain("multi-event-hook");
+
+    await hooksCommand(["enable", "multi-event-hook"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    const afterEnable = JSON.parse(await readFile(projectHooksPath(), "utf8"));
+    for (const event of ["PreToolUse", "PostToolUse", "Stop"] as const) {
+      const entry = afterEnable.hooks[event].find((h: { id: string }) => h.id === "multi-event-hook");
+      expect(entry.enabled).toBe(true);
+    }
+  });
+
   test("--user targets ~/.keryx/hooks.json instead of the project file", async () => {
     await hooksCommand(["disable", "keryx.ctx-guard", "--user"], { cwd: project, homeDir: home });
     expect(process.exitCode).toBe(0);
@@ -183,6 +251,24 @@ describe("keryx hooks enable/disable", () => {
     await hooksCommand(["disable", "nonexistent-hook-id"], { cwd: project, homeDir: home });
     expect(process.exitCode).toBe(1);
     expect(existsSync(projectHooksPath())).toBe(false);
+  });
+
+  test("finding 18: readDoc on a malformed project hooks.json reports exactly one 'not valid JSON' error", async () => {
+    await mkdir(path.join(project, ".metaproject"), { recursive: true });
+    await writeFile(projectHooksPath(), "{ not json", "utf8");
+    await hooksCommand(["disable", "keryx.ctx-guard"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    expect(errors.filter((e) => e.includes("is not valid JSON")).length).toBe(1);
+    expect(errors.some((e) => e.includes("must contain a JSON object"))).toBe(false);
+  });
+
+  test("finding 18: readDoc on a JSON-array project hooks.json reports 'must contain a JSON object', not a bogus 'not valid JSON' error", async () => {
+    await mkdir(path.join(project, ".metaproject"), { recursive: true });
+    await writeFile(projectHooksPath(), "[1,2,3]", "utf8");
+    await hooksCommand(["disable", "keryx.ctx-guard"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    expect(errors.some((e) => e.includes("must contain a JSON object"))).toBe(true);
+    expect(errors.some((e) => e.includes("is not valid JSON"))).toBe(false);
   });
 });
 
@@ -240,5 +326,33 @@ describe("keryx hooks test", () => {
     const report = jsonOutput() as { hookId: string; event: string };
     expect(report.hookId).toBe("keryx.learning-observer");
     expect(report.event).toBe("Stop");
+  });
+
+  test("finding 18: a --payload-file that is a JSON ARRAY reports 'must contain a JSON object', not a bogus second 'not valid JSON' error", async () => {
+    // Review finding 18: the shape check used to live inside the JSON.parse
+    // try/catch, so its own `fail()` (which throws) was re-caught and
+    // re-reported as "is not valid JSON" — the array IS valid JSON, so that
+    // second message was actively wrong, not just redundant.
+    const payloadPath = path.join(project, "payload.json");
+    await writeFile(payloadPath, "[1,2,3]", "utf8");
+    await hooksCommand(["test", "keryx.ctx-guard", "--payload-file", payloadPath], {
+      cwd: project,
+      homeDir: home,
+    });
+    expect(process.exitCode).toBe(1);
+    expect(errors.some((e) => e.includes("must contain a JSON object"))).toBe(true);
+    expect(errors.some((e) => e.includes("is not valid JSON"))).toBe(false);
+  });
+
+  test("finding 18: a --payload-file with malformed JSON reports exactly one 'not valid JSON' error", async () => {
+    const payloadPath = path.join(project, "payload.json");
+    await writeFile(payloadPath, "{ not json", "utf8");
+    await hooksCommand(["test", "keryx.ctx-guard", "--payload-file", payloadPath], {
+      cwd: project,
+      homeDir: home,
+    });
+    expect(process.exitCode).toBe(1);
+    expect(errors.filter((e) => e.includes("is not valid JSON")).length).toBe(1);
+    expect(errors.some((e) => e.includes("must contain a JSON object"))).toBe(false);
   });
 });

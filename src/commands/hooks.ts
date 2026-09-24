@@ -10,9 +10,9 @@
 // read-only (`test` spawns the hook's own command, which may itself write —
 // that is the hook's business, not this command's).
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
 import { optionValue } from "../lib/args";
+import { resolveHooksHomeDir, resolveHooksProjectRoot } from "./agent-hooks";
 import {
   BUILTIN_HOOK_IDS,
   BUILTIN_HOOK_REGISTRATIONS,
@@ -59,10 +59,20 @@ export interface HooksCommandDeps {
   impactEvidence?: ImpactEvidenceProvider;
 }
 
+// Review finding 11: shared with `buildShellHookRuntime` (`./agent-hooks.ts`)
+// so a real session and `keryx hooks` resolve `~/.keryx/hooks.json` to the
+// SAME path — this used to be its own KERYX_HOME-aware copy while the
+// runtime read `os.homedir()` unconditionally.
 function resolveHomeDir(deps: HooksCommandDeps): string {
-  if (deps.homeDir !== undefined) return deps.homeDir;
-  const fromEnv = process.env.KERYX_HOME;
-  return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : homedir();
+  return resolveHooksHomeDir(process.env, deps.homeDir);
+}
+
+// Review finding 11: shared with `buildShellHookRuntime`'s callers (e.g.
+// `commands/shell.ts`) so `keryx hooks` invoked from a subdirectory resolves
+// `.metaproject/hooks.json` against the same PROJECT ROOT a live session
+// would — this used to use the raw `cwd` directly.
+function resolveCwdProjectRoot(deps: HooksCommandDeps): string {
+  return resolveHooksProjectRoot(deps.cwd ?? process.cwd());
 }
 
 function userHooksPath(homeDir: string): string {
@@ -163,7 +173,7 @@ function renderListText(rows: readonly HooksListRow[], profileId: PolicyProfileI
 }
 
 async function runList(args: readonly string[], deps: HooksCommandDeps): Promise<void> {
-  const cwd = deps.cwd ?? process.cwd();
+  const cwd = resolveCwdProjectRoot(deps);
   const homeDir = resolveHomeDir(deps);
   const asJson = args.includes("--json");
   const profileArg = optionValue([...args], "--profile");
@@ -243,7 +253,7 @@ function printDiagnostics(diagnostics: readonly { code: string; message: string;
  * the design doc.
  */
 async function runValidate(args: readonly string[], deps: HooksCommandDeps): Promise<void> {
-  const cwd = deps.cwd ?? process.cwd();
+  const cwd = resolveCwdProjectRoot(deps);
   const homeDir = resolveHomeDir(deps);
   const asJson = args.includes("--json");
   args.includes("--ci"); // accepted, documented above; no behavioral effect beyond what --json already gives.
@@ -510,7 +520,7 @@ async function runOneBuiltinHook(
 }
 
 async function runTest(args: readonly string[], deps: HooksCommandDeps): Promise<void> {
-  const cwd = deps.cwd ?? process.cwd();
+  const cwd = resolveCwdProjectRoot(deps);
   const homeDir = resolveHomeDir(deps);
   const id = args[0];
   if (id === undefined || id.startsWith("--")) {
@@ -565,15 +575,20 @@ async function runTest(args: readonly string[], deps: HooksCommandDeps): Promise
     } catch (err) {
       fail(`Could not read --payload-file "${payloadFileArg}": ${err instanceof Error ? err.message : String(err)}`);
     }
+    // Review finding 18: same double-error bug as `readDoc` — the shape
+    // check's own `fail()` must not be caught by the JSON.parse `catch`
+    // below, or a "must contain a JSON object" failure gets misreported as
+    // "is not valid JSON" on top of it.
+    let parsed: unknown;
     try {
-      const parsed: unknown = JSON.parse(raw);
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-        fail(`--payload-file "${payloadFileArg}" must contain a JSON object.`);
-      }
-      payload = parsed as Record<string, unknown>;
+      parsed = JSON.parse(raw);
     } catch (err) {
       fail(`--payload-file "${payloadFileArg}" is not valid JSON: ${err instanceof Error ? err.message : String(err)}`);
     }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      fail(`--payload-file "${payloadFileArg}" must contain a JSON object.`);
+    }
+    payload = parsed as Record<string, unknown>;
   } else {
     payload = synthesizePayload(reg.event, profileId, cwd);
   }
@@ -633,15 +648,21 @@ function readDoc(filePath: string): HooksDoc {
     }
     fail(`Could not read "${filePath}": ${err instanceof Error ? err.message : String(err)}`);
   }
+  // Review finding 18: the shape check (`must contain a JSON object`) used to
+  // live INSIDE this try, so its own `fail()` (which throws, never returns)
+  // was caught by the very same `catch` and re-reported as "is not valid
+  // JSON" — a second, WRONG error on top of the real one. Only the actual
+  // `JSON.parse` failure is caught here now; the shape check runs after.
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      fail(`"${filePath}" must contain a JSON object.`);
-    }
-    return parsed as HooksDoc;
+    parsed = JSON.parse(raw);
   } catch (err) {
     fail(`"${filePath}" is not valid JSON: ${err instanceof Error ? err.message : String(err)}`);
   }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    fail(`"${filePath}" must contain a JSON object.`);
+  }
+  return parsed as HooksDoc;
 }
 
 /** Atomic temp+rename write, creating the parent directory when absent. */
@@ -728,20 +749,36 @@ function enableBuiltin(doc: HooksDoc, id: string, filePath: string, scope: HookS
   console.log(`Enabled built-in hook "${id}" in ${filePath} (removed the Keryx-managed disable override).`);
 }
 
-/** Locate a full (non-override) registration entry for `id` anywhere in `doc.hooks`, mutably. */
-function findFullRegistration(doc: HooksDoc, id: string): { event: string; index: number; entry: Record<string, unknown> } | undefined {
+/**
+ * Locate EVERY full (non-override) registration entry for `id` anywhere in
+ * `doc.hooks`, mutably — a hand-authored hook can be registered on several
+ * events under the same `id` (review finding 12 / AC12: enable/disable must
+ * change the `enabled` field "on every event it is registered on"), so this
+ * returns one entry per event it appears on, not just the first.
+ */
+function findFullRegistrations(doc: HooksDoc, id: string): Array<{ event: string; index: number; entry: Record<string, unknown> }> {
+  const found: Array<{ event: string; index: number; entry: Record<string, unknown> }> = [];
   for (const [event, list] of Object.entries(doc.hooks)) {
     for (let index = 0; index < list.length; index += 1) {
       const raw = list[index];
       if (isDisableOverride(raw)) continue;
       if (typeof raw === "object" && raw !== null && (raw as Record<string, unknown>).id === id) {
-        return { event, index, entry: raw as Record<string, unknown> };
+        found.push({ event, index, entry: raw as Record<string, unknown> });
       }
     }
   }
-  return undefined;
+  return found;
 }
 
+/**
+ * Review finding 12 (AC12, updated wording): toggle ONLY the `enabled` field
+ * of the named hand-authored hook, on EVERY event it is registered on — not
+ * just the first one found (the bug: an id registered on several events used
+ * to have only its first-encountered entry edited, silently leaving the
+ * others at their old `enabled` value). Every other field of every matched
+ * entry is preserved by spreading `entry` first; no entry is removed,
+ * reordered, or otherwise edited; entries under OTHER ids are untouched.
+ */
 function setProjectOrUserHookEnabled(
   doc: HooksDoc,
   id: string,
@@ -749,21 +786,24 @@ function setProjectOrUserHookEnabled(
   filePath: string,
   scope: HookScope,
 ): void {
-  const found = findFullRegistration(doc, id);
-  if (found === undefined) {
+  const found = findFullRegistrations(doc, id);
+  if (found.length === 0) {
     fail(`Unknown hook id "${id}": not a built-in and not defined in ${filePath}.`);
   }
-  const list = doc.hooks[found.event] as unknown[];
-  const updatedEntry = { ...found.entry, enabled };
-  list[found.index] = updatedEntry;
+  for (const { event, index, entry } of found) {
+    const list = doc.hooks[event] as unknown[];
+    list[index] = { ...entry, enabled };
+  }
   addManagedId(doc, id);
   validateBeforeWrite(doc, scope, filePath);
   writeDocAtomic(filePath, doc);
-  console.log(`${enabled ? "Enabled" : "Disabled"} hook "${id}" in ${filePath}.`);
+  console.log(
+    `${enabled ? "Enabled" : "Disabled"} hook "${id}" in ${filePath} (${found.length} event${found.length === 1 ? "" : "s"}).`,
+  );
 }
 
 async function runEnableDisable(action: "enable" | "disable", args: readonly string[], deps: HooksCommandDeps): Promise<void> {
-  const cwd = deps.cwd ?? process.cwd();
+  const cwd = resolveCwdProjectRoot(deps);
   const homeDir = resolveHomeDir(deps);
   const useUser = args.includes("--user");
   const id = args.find((a) => !a.startsWith("--"));

@@ -1249,6 +1249,19 @@ export function isShellApproved(answer: string): boolean {
   return /^y(es)?$/i.test(answer.trim());
 }
 
+/**
+ * Flow 306 fix (review finding 5): whether the TUI's `spawn_subagent`
+ * approver may auto-approve a `read_only` spawn WITHOUT prompting the
+ * operator. Extracted as a pure predicate so the fix (a `PreToolUse` hook
+ * tightening this one call to `ask`, via `ApprovalMeta.hookAsk`, must never
+ * be waved through by the read_only fast path — the same hard floor
+ * `publishLease`/`credentials` already get) is unit-testable without
+ * mounting the whole TUI shell.
+ */
+export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | undefined): boolean {
+  return mode === "read_only" && hookAsk !== true;
+}
+
 /** Outcomes of the interactive shell_exec approval picker (OpenCode-style). */
 export type ShellApprovalChoice = "once" | "always-exact" | "always-prefix" | "deny";
 
@@ -4538,7 +4551,13 @@ export async function launchTuiAgentShell(opts: {
         } catch {
           // raw
         }
-        if (mode === "read_only") {
+        // Flow 306 fix (review finding 5): `meta.hookAsk` is the same hard
+        // floor `ApprovalMeta`'s own doc comment already commits `apply_patch`/
+        // shell to — never satisfied from a saved allowlist or an auto-approve
+        // shortcut. A `PreToolUse` hook that tightened THIS read_only spawn to
+        // `ask` must actually reach the operator, exactly like the `general`
+        // branch below, not be waved through by the read_only fast path.
+        if (shouldAutoApproveReadOnlySpawn(mode, meta?.hookAsk)) {
           // Auto-approved without a prompt, so the transcript line is the ONLY
           // record that a child was started and at what privilege. It is not
           // dimmed: an auto-approval the user cannot notice is an auto-approval
@@ -4555,7 +4574,8 @@ export async function launchTuiAgentShell(opts: {
         setMainAgent("blocked", "approval");
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
-            title: "Spawn general subagent?",
+            title:
+              mode === "read_only" ? "Spawn read-only subagent? (policy hook asked)" : "Spawn general subagent?",
             subtitle: taskPreview,
             cancelId: "deny",
             onOpen: () => chrome.blurComposer(),

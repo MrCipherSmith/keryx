@@ -20,9 +20,9 @@ Claude Code-shaped host runs unmodified under `keryx shell` too.
 Source: `src/harness/hooks/` (the runtime), `src/commands/hooks.ts` (the
 CLI), `src/commands/agent-hooks.ts` (production wiring into `keryx shell`).
 Design doc:
-[W6-shell-hooks.md](../requirements/keryx-agent-platform-expansion/workstreams/W6-shell-hooks.md).
+[W6-shell-hooks.md](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-agent-platform-expansion/workstreams/W6-shell-hooks.md).
 Schema:
-[hook-config.schema.json](../requirements/keryx-agent-platform-expansion/schemas/hook-config.schema.json).
+[hook-config.schema.json](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-agent-platform-expansion/schemas/hook-config.schema.json).
 
 ## The ten events
 
@@ -111,7 +111,7 @@ reports `ok: false`. **Nothing is silently dropped or partially applied.**
 ## Schema
 
 Both files validate against
-[hook-config.schema.json](../requirements/keryx-agent-platform-expansion/schemas/hook-config.schema.json)
+[hook-config.schema.json](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-agent-platform-expansion/schemas/hook-config.schema.json)
 (the runtime keeps a byte-identical copy at `src/harness/hooks/hook-config.schema.json`,
 checked for equality by test). Top level: `{"schemaVersion": "1.0.0", "hooks": {<event>: [...]}}`,
 plus an optional `_keryxManaged` sentinel block Keryx itself writes (see

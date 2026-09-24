@@ -2048,13 +2048,69 @@ async function runAgentTurnCore(
           );
           return {};
         }
+        // Flow 306 fix (review finding 4): an `ask` tightening on this
+        // gate-capable event is NOT the same as `allow` — unlike the old
+        // deny-only check, a hook that only asks must actually reach an
+        // operator. `resolveApprovalDecision`/permission mode has no say
+        // here (same posture as the untrusted-content gate above): a
+        // standing `trust`/`auto` mode answers for the OPERATOR's own
+        // commands, never for a hook's verdict on what they typed. Fail
+        // CLOSED wherever nobody can answer — no approver wired (which is
+        // always true for an unattended run) denies without asking.
+        if (fire.tightened === "ask") {
+          const approver = io.requestApproval;
+          if (deps.unattended === true || approver === undefined) {
+            io.onSystem?.(
+              `\n[blocked] your message was refused by a policy hook${
+                fire.denyReason !== undefined ? ` (${fire.denyReason})` : ""
+              } (no operator available to ask).\n`,
+            );
+            return {};
+          }
+          const promptInput = JSON.stringify({ prompt: userLine });
+          const fingerprint = toolCallHash("user_prompt", promptInput);
+          let approved: boolean;
+          try {
+            const response = await approver("user_prompt", promptInput, {
+              fingerprint,
+              destructive: false,
+              hookAsk: true,
+              alwaysAsk: true,
+              card: [
+                `A policy hook wants to ask before this message reaches the model${
+                  fire.denyReason !== undefined ? ` (${fire.denyReason})` : ""
+                }:`,
+                userLine,
+              ],
+            });
+            approved = isApprovalFor(response, fingerprint);
+          } catch (err) {
+            io.onSystem?.(
+              `\n[blocked] your message was refused: the approval prompt failed (${
+                err instanceof Error ? err.message : String(err)
+              }).\n`,
+            );
+            return {};
+          }
+          if (!approved) {
+            io.onSystem?.(`\n[blocked] your message was not approved by the operator.\n`);
+            return {};
+          }
+        }
         if (fire.additionalContext.length > 0) {
           effectivePrompt = `${userLine}\n\n[hook context]\n${fire.additionalContext.join("\n")}`;
         }
       } catch (err) {
+        // Flow 306 fix (review finding 3): a hook CRASH on a gate-capable
+        // event (UserPromptSubmit) must fail CLOSED, never "ignored" — a
+        // thrown spawn/parse error must never silently let the prompt
+        // through unguarded.
         io.onSystem?.(
-          `UserPromptSubmit hook failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`,
+          `\n[blocked] your message was refused: UserPromptSubmit hook crashed (${
+            err instanceof Error ? err.message : String(err)
+          }).\n`,
         );
+        return {};
       }
     }
     history.push({ role: "user", content: effectivePrompt, provenance: "project", ts: now() });
@@ -3551,6 +3607,7 @@ async function firePreToolUseHook(
   input: Record<string, unknown>,
   risk: string | undefined,
   isReadOnly: boolean,
+  mode: PermissionMode,
 ): Promise<HookFireResult> {
   const aliasName = aliasHookToolName(call.name);
   const profileId = derivePolicyProfileId(hooks.runtime.interactive, isReadOnly);
@@ -3570,8 +3627,44 @@ async function firePreToolUseHook(
     // constructed once for the whole session and cannot otherwise see a
     // later `/plan` read-only toggle) — the same `profileId` this call
     // already computed for the payload's own `policyProfile` field above.
-    { toolName: aliasName, profileId },
+    //
+    // Flow 306 fix (review finding 6): also hand the runtime a PROVISIONAL
+    // `decideOutcome`, mirroring `run.ts`'s real `decide()` → `PreToolUse` →
+    // `composeDecision` ordering, so the SAME malformed-output failure-table
+    // asymmetry applies here (`buildFailureOutcome` denies a malformed/crash/
+    // timeout gate hook outcome whenever the underlying decision would have
+    // asked, instead of silently allowing). This is provisional because the
+    // per-command escalation (`destructive`/`credentials`, command text) is
+    // only known inside each risk branch below, AFTER this fire — computed
+    // here with the conservative (non-escalated) inputs, so it can only be
+    // as permissive as `read`, never more permissive than the real decision
+    // that follows.
+    { toolName: aliasName, profileId, decideOutcome: provisionalDecideOutcome(risk, mode, isReadOnly) },
   );
+}
+
+/**
+ * Flow 306 fix (review finding 6): a conservative, provisional analogue of
+ * `resolveApprovalDecision` for the ONE `PreToolUse` fire that precedes
+ * `executeCall`'s per-branch escalation (see `firePreToolUseHook`'s doc
+ * comment). `network`/`credential` risk is never routed through
+ * `resolveApprovalDecision` (outside {@link GatedToolRisk}) — `executeCall`'s
+ * final `else` branch always refuses those, so they provisionally decide
+ * `deny` here too.
+ */
+function provisionalDecideOutcome(risk: string | undefined, mode: PermissionMode, isReadOnly: boolean): PolicyOutcome {
+  if (risk !== "read" && risk !== "shell" && risk !== "destructive" && risk !== "delegate" && risk !== "write") {
+    return "deny";
+  }
+  const rawDecision = resolveApprovalDecision({
+    mode,
+    risk,
+    destructive: false,
+    credentials: false,
+    sacReviewConfirmation: false,
+    readOnly: isReadOnly,
+  });
+  return rawDecision === "deny" ? "deny" : rawDecision === "auto" ? "allow" : "ask";
 }
 
 /** The three states this module gates a call to, mirroring `ApprovalGateDecision` plus the hook's own `PolicyOutcome`. */
@@ -3698,8 +3791,23 @@ async function executeCall(
   // re-fired per branch. Every branch (including the `read` one, which
   // otherwise never gates at all) composes its own decision with the SAME
   // `hookResult` via `composeWithHook`.
-  const hookResult: HookFireResult | undefined =
-    hooks === undefined ? undefined : await firePreToolUseHook(hooks, call, input, risk, isReadOnly);
+  let hookResult: HookFireResult | undefined;
+  if (hooks !== undefined) {
+    try {
+      hookResult = await firePreToolUseHook(hooks, call, input, risk, isReadOnly, mode);
+    } catch (err) {
+      // Flow 306 fix (review finding 3): a hook CRASH on PreToolUse — a
+      // gate-capable event — must fail CLOSED, never let the call run
+      // ungated. Only observe-only events (PostToolUse/PostToolUseFailure
+      // below) stay swallowed.
+      return {
+        output: `${call.name} refused: PreToolUse hook crashed (${
+          err instanceof Error ? err.message : String(err)
+        })`,
+        isError: true,
+      };
+    }
+  }
   const hookInteractive = hooks?.runtime.interactive ?? true;
   // Flow 295 (F8): set only in the write branch below, after the operator's yes.
   let confirmationToken: string | undefined;
