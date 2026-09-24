@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "314",
   "slug": "wave-4-batch-1-stack-packs-and-agent-pai",
   "title": "Wave 4 batch 1: stack packs and agent pairs for ts-js-node, react, python, go",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T11:38:46.681Z",
-  "updatedAt": "2026-09-24T11:38:46.681Z",
+  "updatedAt": "2026-09-24T11:44:58.779Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:4df79d661266383a81333d0caa50088b88b6f1183f16067eac2f82e46e36ddf2",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,285 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by specific tasks T5-T11"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by verification tasks T12-T13 and per-task tests"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Gate plumbing: eval --runner wiring, multi-skill pack eval gate, pack guards, agents verify resolvers",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Pack ts-js-node: rules, skills (implement/test/review/build-fix/migrate), evals, scout records",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Pack react (extends ts-js-node): rules, skills (implement/test/review/build-fix/migrate), evals, scout records",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Pack python: complete rules and skills, evals incl. python-testing, scout records",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Pack go: rules, skills (implement/test/review/build-fix), evals, scout records",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Agent pair generator + 8 generated agents + agent-refs.json",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Install manifest: rule/skill modules, components, profiles for the four packs",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Gate run: eval every pack skill with ollama runner (high, 5 trials), record governance/eval.json, mark stable",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Gate check: agents verify, stocktake vs baseline, guard tests, audit-harness on temp install+export, install dry-runs",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Docs: W1/W2 spec updates, coverage count in journal after gate",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-24T11:38:46.681Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T11:44:26.135Z",
+      "event": "task-added",
+      "detail": "T5: Gate plumbing: eval --runner wiring, multi-skill pack eval gate, pack guards, agents verify resolvers"
+    },
+    {
+      "at": "2026-09-24T11:44:32.789Z",
+      "event": "task-added",
+      "detail": "T6: Pack ts-js-node: rules, skills (implement/test/review/build-fix/migrate), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T11:44:32.882Z",
+      "event": "task-added",
+      "detail": "T7: Pack react (extends ts-js-node): rules, skills (implement/test/review/build-fix/migrate), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T11:44:32.964Z",
+      "event": "task-added",
+      "detail": "T8: Pack python: complete rules and skills, evals incl. python-testing, scout records"
+    },
+    {
+      "at": "2026-09-24T11:44:33.042Z",
+      "event": "task-added",
+      "detail": "T9: Pack go: rules, skills (implement/test/review/build-fix), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T11:44:33.124Z",
+      "event": "task-added",
+      "detail": "T10: Agent pair generator + 8 generated agents + agent-refs.json"
+    },
+    {
+      "at": "2026-09-24T11:44:33.202Z",
+      "event": "task-added",
+      "detail": "T11: Install manifest: rule/skill modules, components, profiles for the four packs"
+    },
+    {
+      "at": "2026-09-24T11:44:33.283Z",
+      "event": "task-added",
+      "detail": "T12: Gate run: eval every pack skill with ollama runner (high, 5 trials), record governance/eval.json, mark stable"
+    },
+    {
+      "at": "2026-09-24T11:44:33.367Z",
+      "event": "task-added",
+      "detail": "T13: Gate check: agents verify, stocktake vs baseline, guard tests, audit-harness on temp install+export, install dry-runs"
+    },
+    {
+      "at": "2026-09-24T11:44:33.451Z",
+      "event": "task-added",
+      "detail": "T14: Docs: W1/W2 spec updates, coverage count in journal after gate"
+    },
+    {
+      "at": "2026-09-24T11:44:58.435Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T11:44:58.517Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T11:44:58.599Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T11:44:58.691Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T11:44:58.779Z",
+      "event": "started"
     }
   ]
 }
