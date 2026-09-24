@@ -3,21 +3,21 @@
     "query": "Use when resolving `tsc` type errors, module resolution failures (ESM/CJS, moduleResolution nodenext/bundler, `type: module`, exports maps), or lint/test failures blocking a Node.js TypeScript/JavaScript build. Applies the smallest root-cause fix and never silences the checker with @ts-ignore, any, or eslint-disable. Not for Go/Rust/Python build failures, and not for implementing new features (use nodejs-implementation).",
     "decision": "create",
     "topMatch": "ts-js-node/nodejs-implementation",
-    "recordedAt": "2026-09-24T12:08:21.778Z",
+    "recordedAt": "2026-09-24T15:57:58.995Z",
     "skillName": "nodejs-build-fix"
   },
   {
     "query": "Use when migrating a Node.js package or app from CommonJS to ES modules -- package.json type/exports map changes, adding file extensions to relative imports, replacing __dirname/__filename with import.meta.dirname/filename, fixing require() of an ESM-only dependency, dual-package hazards, and the resulting Jest/tsconfig adjustments. Not for a greenfield ESM project (use nodejs-implementation) or a general dependency upgrade (use dependency-update).",
     "decision": "create",
     "topMatch": "ts-js-node/nodejs-build-fix",
-    "recordedAt": "2026-09-24T12:08:23.706Z",
+    "recordedAt": "2026-09-24T15:58:09.568Z",
     "skillName": "nodejs-esm-migration"
   },
   {
     "query": "Use when implementing or extending a feature in a Node.js service, library, or CLI written in TypeScript or JavaScript -- covers tsconfig strictness, ESM/node: protocol imports, async/await with AbortSignal, error handling with cause, and input validation at process boundaries. Not for UI markup/rendering code (use the matching UI framework pack) or writing/fixing tests (use nodejs-testing).",
     "decision": "fork",
     "topMatch": "ts-js-node/nodejs-testing",
-    "recordedAt": "2026-09-24T12:08:31.085Z",
+    "recordedAt": "2026-09-24T15:58:09.708Z",
     "skillName": "nodejs-implementation",
     "justification": "Nearest matches: ts-js-node/nodejs-testing (0.40) writes/fixes the test suite for Node code, a different lifecycle stage than implementing the feature itself. ts-js-node/nodejs-build-fix (0.28) fixes tsc/module-resolution errors on an existing build, not new feature implementation. ts-js-node/nodejs-code-review (0.24) is read-only review that never edits code. None perform implementation work (writing feature code with tsconfig/ESM/AbortSignal/cause-chain/input-validation concerns), so this is a genuine fork by lifecycle stage, not a substitute."
   },
@@ -25,16 +25,16 @@
     "query": "Use when a Node.js project's test suite (node:test, Vitest, Jest, or bun test) needs writing, extending, or fixing for TypeScript or JavaScript server/library/CLI code -- covers discovering the project's actual runner, mocking at process boundaries, fake timers, and deterministic async assertions. Not for pytest/Python tests, and not for auditing test conventions without changing test files (that is review-testing-practices).",
     "decision": "fork",
     "topMatch": "react/react-testing",
-    "recordedAt": "2026-09-24T12:08:34.919Z",
+    "recordedAt": "2026-09-24T15:58:09.847Z",
     "skillName": "nodejs-testing",
     "justification": "Nearest matches: react/react-testing (0.36) covers React Testing Library/JSX component tests, a different framework and rendering surface than Node server/library/CLI tests. ts-js-node/nodejs-implementation (0.35) implements feature code, not writing/fixing tests -- a different lifecycle stage. python/python-testing (0.32) is pytest-specific for Python, wrong language and runner ecosystem (node:test/Vitest/Jest/bun test). None substitute for discovering and using the Node project's actual test runner, so this is a genuine fork, not a substitute."
   },
   {
-    "query": "Use when reviewing a TypeScript or JavaScript Node.js change (a service, library, or CLI diff) for floating promises, unhandled rejections, `any` leaks, event-loop-blocking sync calls, resource cleanup gaps, and dependency risk. Read-only -- reports findings, never edits code. Not for React component review, general architecture review, or security-only audits (use review-security-code for a broader OWASP pass).",
+    "query": "Use when reviewing a TypeScript or JavaScript Node.js change (a diff on a server, library, or CLI) for floating promises, unhandled rejections, `any` leaks, event-loop-blocking sync calls, resource cleanup gaps, and dependency risk. Read-only -- judges the diff and reports findings, never edits or authors source. Not for React component review, general architecture review, or security-only audits (use review-security-code for a broader OWASP pass).",
     "decision": "fork",
     "topMatch": "python/python-code-review",
-    "recordedAt": "2026-09-24T12:08:38.575Z",
+    "recordedAt": "2026-09-24T15:58:16.450Z",
     "skillName": "nodejs-code-review",
-    "justification": "Nearest matches: python/python-code-review (0.35) reviews Python-specific mutation/safety issues, wrong language -- no coverage of Node's event loop, floating promises, or dependency risk vocabulary. go/go-code-review (0.23) reviews Go concurrency/idiom risks (goroutines, context misuse), unrelated to Node's promise/event-loop concerns. ts-js-node/nodejs-testing (0.22) writes/fixes test files, not a read-only review of a diff. None cover Node/TS-specific floating-promise, unhandled-rejection, event-loop-blocking, or resource-cleanup review, so this is a genuine fork by language/runtime, not a substitute."
+    "justification": "Nearest matches: python/python-code-review (0.32) reviews Python-specific mutation/safety issues, wrong language -- no coverage of Node's event loop, floating promises, or dependency risk vocabulary. go/go-code-review (0.21) reviews Go concurrency/idiom risks (goroutines, context misuse), unrelated to Node's promise/event-loop concerns. ts-js-node/nodejs-testing (0.20) writes/fixes test files, not a read-only review of a diff. None cover Node/TS-specific floating-promise, unhandled-rejection, event-loop-blocking, or resource-cleanup review, so this is a genuine fork by language/runtime, not a substitute."
   }
 ]

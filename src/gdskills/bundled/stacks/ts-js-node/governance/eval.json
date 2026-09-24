@@ -372,8 +372,8 @@
           "prompt": "This Node.js TypeScript repo has vitest in its devDependencies and a vitest.config.ts. Write a test for a function `sumOrderTotals(orders)`. What should you check before writing the test file?",
           "strictness": "high",
           "trials": 5,
-          "passes": 5,
-          "passRate": 1,
+          "passes": 4,
+          "passRate": 0.8,
           "passAtK": 1,
           "grader": "regex",
           "status": "ran"
@@ -400,7 +400,7 @@
       "trials": 5,
       "triggerAccuracy": {
         "truePositive": 6,
-        "falsePositive": 1,
+        "falsePositive": 0,
         "positives": 6,
         "negatives": 6
       },
@@ -516,9 +516,9 @@
           "prompt": "Write tests for this Node.js service's new endpoint",
           "strictness": "high",
           "trials": 1,
-          "passes": 0,
-          "passRate": 0,
-          "passAtK": 0,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
           "grader": "trigger-rank-fork-family",
           "status": "ran",
           "deterministic": true
@@ -587,7 +587,7 @@
           "status": "ran"
         }
       ],
-      "verdict": "fail"
+      "verdict": "pass"
     },
     {
       "schemaVersion": "1.0.0",

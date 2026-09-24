@@ -1,11 +1,11 @@
 ---
 name: nodejs-code-review
-description: "Use when reviewing a TypeScript or JavaScript Node.js change (a service, library, or CLI diff) for floating promises, unhandled rejections, `any` leaks, event-loop-blocking sync calls, resource cleanup gaps, and dependency risk. Read-only -- reports findings, never edits code. Not for React component review, general architecture review, or security-only audits (use review-security-code for a broader OWASP pass)."
+description: "Use when reviewing a TypeScript or JavaScript Node.js change (a diff on a server, library, or CLI) for floating promises, unhandled rejections, `any` leaks, event-loop-blocking sync calls, resource cleanup gaps, and dependency risk. Read-only -- judges the diff and reports findings, never edits or authors source. Not for React component review, general architecture review, or security-only audits (use review-security-code for a broader OWASP pass)."
 triggers:
   - "review this Node.js diff before merging"
   - "check this TypeScript diff for floating promises"
   - "review this Node.js route handler change for resource cleanup"
-  - "audit this Node service for blocking calls"
+  - "audit this Node server for blocking calls"
   - "review this npm package change for dependency risk"
   - "check this async function for unhandled rejections"
 metadata:

@@ -361,7 +361,7 @@
       "dependencies": [],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "experimental"
+      "stability": "stable"
     },
     "ts-js-node-skills": {
       "kind": "skill",
@@ -376,7 +376,7 @@
       "dependencies": [],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "experimental"
+      "stability": "stable"
     },
     "react-rules": {
       "kind": "rule",
