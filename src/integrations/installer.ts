@@ -26,6 +26,8 @@ import {
   recordSurfaceInstalled,
   recordSurfaceUninstalled,
   readInstallState,
+  installStatePath,
+  installStateIsUnreadable,
   sha256OfFile,
   type InstalledModuleRecord,
 } from "./install-state";
@@ -70,6 +72,33 @@ export function resolveSurfaceSelection(
   return resolved;
 }
 
+/**
+ * Lenient counterpart to `resolveSurfaceSelection` for a multi-runtime
+ * selection (`--runtime all`/a comma list, combined with `--surface`) (F3):
+ * a selector that matches nothing on THIS adapter is silently dropped
+ * instead of throwing — a runtime legitimately does not carry every surface
+ * every other selected runtime does. Returns `[]` when NONE of `selectors`
+ * match anything on this adapter; the caller (`installIntegration`/
+ * `uninstallIntegration` with `lenientSelectors: true`) turns that into a
+ * `noMatchingSurface` result instead of an error, so a multi-runtime run
+ * only fails outright when not a single selected runtime matched. A single
+ * explicit runtime still goes through `resolveSurfaceSelection` above and
+ * throws on an unknown selector, unchanged.
+ */
+export function resolveSurfaceSelectionLenient(
+  adapter: HarnessAdapter,
+  selectors: readonly string[] = [],
+): SurfaceAdapter[] {
+  if (selectors.length === 0) return [...adapter.surfaces];
+  const resolved: SurfaceAdapter[] = [];
+  for (const selector of selectors) {
+    for (const match of adapter.surfaces.filter((s) => s.flag === selector || s.id === selector)) {
+      if (!resolved.includes(match)) resolved.push(match);
+    }
+  }
+  return resolved;
+}
+
 // ---------------------------------------------------------------------------
 // Shared result shapes
 // ---------------------------------------------------------------------------
@@ -93,12 +122,16 @@ export interface InstallIntegrationResult {
   readonly runtimeId: string;
   readonly results: readonly SurfaceResult<InstallSurfaceStatus>[];
   readonly errors: string[];
+  /** F3: set (with empty `results`/`errors`) when `lenientSelectors` found no surface on this runtime matching any requested selector. */
+  readonly noMatchingSurface?: boolean;
 }
 
 export interface UninstallIntegrationResult {
   readonly runtimeId: string;
   readonly results: readonly SurfaceResult<UninstallSurfaceStatus>[];
   readonly errors: string[];
+  /** F3: set (with empty `results`/`errors`) when `lenientSelectors` found no surface on this runtime matching any requested selector. */
+  readonly noMatchingSurface?: boolean;
 }
 
 export interface DoctorSurfaceResult {
@@ -113,6 +146,8 @@ export interface DoctorSurfaceResult {
 export interface DoctorIntegrationResult {
   readonly runtimeId: string;
   readonly surfaces: readonly DoctorSurfaceResult[];
+  /** F7: top-level problems not tied to any one surface — e.g. an unreadable install-state file. */
+  readonly problems: readonly string[];
   readonly ok: boolean;
 }
 
@@ -120,6 +155,8 @@ export interface InstallOptions {
   readonly surfaces?: readonly string[];
   readonly dryRun?: boolean;
   readonly ownerOverride?: SettingsFileOwner;
+  /** F3: resolve `surfaces` leniently (see `resolveSurfaceSelectionLenient`) — for a multi-runtime `--runtime all`/comma-list selection, not a single explicit runtime. */
+  readonly lenientSelectors?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +212,27 @@ function wasSurfaceInstalled(settings: Settings, surface: SurfaceAdapter): boole
   return Array.isArray(managed) && managed.includes(surface.sentinel);
 }
 
+/**
+ * Dry-run presence check for a custom (non-JSON) surface's UNINSTALL (F4):
+ * mirrors what the real `customUninstall` would find, so dry-run and the
+ * real run never disagree. Plain file existence is right for a surface that
+ * owns its whole file outright (the OpenCode plugin: any content present
+ * means there is something to remove) but wrong for a managed-markdown-block
+ * surface (gemini-cli/kiro/github-copilot-agent's `instructions` surfaces),
+ * whose file can exist with the managed block already removed by hand —
+ * `probeMarkdownBlock`'s literal "missing the keryx:instructions block"
+ * message (`markdown-block.ts`) is the one signal that distinguishes that
+ * one case, where the real uninstall finds nothing to strip, from every
+ * other custom surface's "file present" meaning "there is something to
+ * remove".
+ */
+async function customSurfaceWouldRemove(root: string, surface: SurfaceAdapter, file: string): Promise<boolean> {
+  if (!(await pathExists(file))) return false;
+  if (!surface.probe) return true;
+  const problems = await surface.probe(root);
+  return !problems.some((p) => p.includes("missing the keryx:instructions block"));
+}
+
 /** Partition a resolved surface list into JSON-owned (grouped by file), custom-install, and satisfied-by-runtime. */
 function partitionSurfaces(surfaces: readonly SurfaceAdapter[]): {
   jsonByPath: Map<string, SurfaceAdapter[]>;
@@ -198,6 +256,40 @@ function partitionSurfaces(surfaces: readonly SurfaceAdapter[]): {
   return { jsonByPath, custom, satisfied };
 }
 
+/**
+ * F14: the preamble `installIntegration`/`uninstallIntegration` both ran
+ * verbatim — resolve the adapter, resolve (strictly or leniently, per
+ * `opts.lenientSelectors`) which of its surfaces are in scope, then
+ * partition them — collapsed into one place so the two entry points differ
+ * only in what they DO with a resolved surface, not in how they get there.
+ */
+type ResolvedSurfaces =
+  | ({ readonly kind: "ok" } & ReturnType<typeof partitionSurfaces>)
+  | { readonly kind: "adapter-error"; readonly errors: string[] }
+  | { readonly kind: "no-match" };
+
+function resolveAndPartitionSurfaces(runtimeId: string, opts: InstallOptions): ResolvedSurfaces {
+  const resolvedAdapter = resolveAdapterOrError(runtimeId);
+  if ("errors" in resolvedAdapter) return { kind: "adapter-error", errors: resolvedAdapter.errors };
+  const { adapter } = resolvedAdapter;
+
+  let surfaces: SurfaceAdapter[];
+  if (opts.lenientSelectors) {
+    surfaces = resolveSurfaceSelectionLenient(adapter, opts.surfaces ?? []);
+    if (surfaces.length === 0 && (opts.surfaces?.length ?? 0) > 0) {
+      return { kind: "no-match" };
+    }
+  } else {
+    try {
+      surfaces = resolveSurfaceSelection(adapter, opts.surfaces ?? []);
+    } catch (error) {
+      return { kind: "adapter-error", errors: [(error as Error).message] };
+    }
+  }
+
+  return { kind: "ok", ...partitionSurfaces(surfaces) };
+}
+
 // ---------------------------------------------------------------------------
 // Install
 // ---------------------------------------------------------------------------
@@ -207,28 +299,24 @@ export async function installIntegration(
   runtimeId: string,
   opts: InstallOptions = {},
 ): Promise<InstallIntegrationResult> {
-  const resolvedAdapter = resolveAdapterOrError(runtimeId);
-  if ("errors" in resolvedAdapter) return { runtimeId, results: [], errors: resolvedAdapter.errors };
-  const { adapter } = resolvedAdapter;
+  const resolved = resolveAndPartitionSurfaces(runtimeId, opts);
+  if (resolved.kind === "adapter-error") return { runtimeId, results: [], errors: resolved.errors };
+  if (resolved.kind === "no-match") return { runtimeId, results: [], errors: [], noMatchingSurface: true };
 
-  let surfaces: SurfaceAdapter[];
-  try {
-    surfaces = resolveSurfaceSelection(adapter, opts.surfaces ?? []);
-  } catch (error) {
-    return { runtimeId, results: [], errors: [(error as Error).message] };
-  }
-
-  const { jsonByPath, custom, satisfied } = partitionSurfaces(surfaces);
+  const { jsonByPath, custom, satisfied } = resolved;
   const results: SurfaceResult<InstallSurfaceStatus>[] = [];
+  const errors: string[] = [];
 
   for (const [relativePath, groupSurfaces] of jsonByPath) {
     const owner = opts.ownerOverride ?? settingsFileOwnerFor(relativePath);
     if (!owner) {
+      const message = `no settings-file owner registered for ${relativePath}`;
+      errors.push(message);
       for (const surface of groupSurfaces) {
         results.push({
           ...baseResult(surface, relativePath),
           status: "failed",
-          errors: [`no settings-file owner registered for ${relativePath}`],
+          errors: [message],
           warnings: warningsFor(surface),
         });
       }
@@ -238,24 +326,30 @@ export async function installIntegration(
     const ids = groupSurfaces.map((s) => s.id);
     if (opts.dryRun) {
       const existing = await readSettingsFile(fileFor(root, relativePath));
-      const { errors } = owner.apply(existing, { install: ids });
+      const { errors: applyErrors } = owner.apply(existing, { install: ids });
+      if (applyErrors.length > 0) errors.push(...applyErrors);
       for (const surface of groupSurfaces) {
         results.push(
-          errors.length > 0
-            ? { ...baseResult(surface, relativePath), status: "failed", errors, warnings: warningsFor(surface) }
+          applyErrors.length > 0
+            ? { ...baseResult(surface, relativePath), status: "failed", errors: applyErrors, warnings: warningsFor(surface) }
             : { ...baseResult(surface, relativePath), status: "would-install", errors: [], warnings: warningsFor(surface) },
         );
       }
       continue;
     }
 
-    const { errors } = await installSurfaces(root, relativePath, ids, owner);
-    if (errors.length > 0) {
+    const { errors: writeErrors } = await installSurfaces(root, relativePath, ids, owner);
+    if (writeErrors.length > 0) {
+      errors.push(...writeErrors);
       for (const surface of groupSurfaces) {
-        results.push({ ...baseResult(surface, relativePath), status: "failed", errors, warnings: warningsFor(surface) });
+        results.push({ ...baseResult(surface, relativePath), status: "failed", errors: writeErrors, warnings: warningsFor(surface) });
       }
       continue;
     }
+    // F5: only a file owned by exactly one surface gets its sha256 recorded
+    // — a file several surfaces share would otherwise flag "changed since
+    // install" the moment a SIBLING surface, not this one, next touches it.
+    const hashPaths = owner.surfaces().length > 1 ? [] : [relativePath];
     for (const surface of groupSurfaces) {
       results.push({ ...baseResult(surface, relativePath), status: "installed", errors: [], warnings: warningsFor(surface) });
       await recordSurfaceInstalled(root, runtimeId, {
@@ -263,6 +357,7 @@ export async function installIntegration(
         surface: surface.flag,
         writtenPaths: [relativePath],
         managedSentinel: true,
+        hashPaths,
       });
     }
   }
@@ -272,9 +367,10 @@ export async function installIntegration(
       results.push({ ...baseResult(surface, surface.relativePath), status: "would-install", errors: [], warnings: warningsFor(surface) });
       continue;
     }
-    const errors = surface.customInstall ? await surface.customInstall(root) : [];
-    if (errors.length > 0) {
-      results.push({ ...baseResult(surface, surface.relativePath), status: "failed", errors, warnings: warningsFor(surface) });
+    const customErrors = surface.customInstall ? await surface.customInstall(root) : [];
+    if (customErrors.length > 0) {
+      errors.push(...customErrors);
+      results.push({ ...baseResult(surface, surface.relativePath), status: "failed", errors: customErrors, warnings: warningsFor(surface) });
       continue;
     }
     results.push({ ...baseResult(surface, surface.relativePath), status: "installed", errors: [], warnings: warningsFor(surface) });
@@ -288,6 +384,14 @@ export async function installIntegration(
     }
   }
 
+  // F2: a surface with neither merge/strip nor customInstall/customUninstall
+  // is satisfied entirely by keryx's own runtime behaviour — there is
+  // nothing to write and it is never a failure. `probe`'s problems (if any)
+  // are reported as warnings, never errors. It is also never recorded in
+  // install-state; when `!opts.dryRun`, clear any STALE record left behind
+  // by a build that used to install this surface a different way (e.g. zed's
+  // `instructions` surface before this fix), so `doctor` never carries a
+  // drift note for something that no longer writes anything.
   for (const surface of satisfied) {
     const info = surface.probe ? await surface.probe(root) : [];
     results.push({
@@ -296,9 +400,9 @@ export async function installIntegration(
       errors: [],
       warnings: [...warningsFor(surface), ...info],
     });
+    if (!opts.dryRun) await recordSurfaceUninstalled(root, runtimeId, surface.id);
   }
 
-  const errors = results.flatMap((r) => r.errors.map((e) => `${r.surfaceId}: ${e}`));
   return { runtimeId, results, errors };
 }
 
@@ -311,28 +415,24 @@ export async function uninstallIntegration(
   runtimeId: string,
   opts: InstallOptions = {},
 ): Promise<UninstallIntegrationResult> {
-  const resolvedAdapter = resolveAdapterOrError(runtimeId);
-  if ("errors" in resolvedAdapter) return { runtimeId, results: [], errors: resolvedAdapter.errors };
-  const { adapter } = resolvedAdapter;
+  const resolved = resolveAndPartitionSurfaces(runtimeId, opts);
+  if (resolved.kind === "adapter-error") return { runtimeId, results: [], errors: resolved.errors };
+  if (resolved.kind === "no-match") return { runtimeId, results: [], errors: [], noMatchingSurface: true };
 
-  let surfaces: SurfaceAdapter[];
-  try {
-    surfaces = resolveSurfaceSelection(adapter, opts.surfaces ?? []);
-  } catch (error) {
-    return { runtimeId, results: [], errors: [(error as Error).message] };
-  }
-
-  const { jsonByPath, custom, satisfied } = partitionSurfaces(surfaces);
+  const { jsonByPath, custom, satisfied } = resolved;
   const results: SurfaceResult<UninstallSurfaceStatus>[] = [];
+  const errors: string[] = [];
 
   for (const [relativePath, groupSurfaces] of jsonByPath) {
     const owner = opts.ownerOverride ?? settingsFileOwnerFor(relativePath);
     if (!owner) {
+      const message = `no settings-file owner registered for ${relativePath}`;
+      errors.push(message);
       for (const surface of groupSurfaces) {
         results.push({
           ...baseResult(surface, relativePath),
           status: "failed",
-          errors: [`no settings-file owner registered for ${relativePath}`],
+          errors: [message],
           warnings: warningsFor(surface),
         });
       }
@@ -353,11 +453,12 @@ export async function uninstallIntegration(
     }
 
     if (opts.dryRun) {
-      const { errors } = owner.apply(existing, { uninstall: ids });
+      const { errors: applyErrors } = owner.apply(existing, { uninstall: ids });
+      if (applyErrors.length > 0) errors.push(...applyErrors);
       for (const surface of groupSurfaces) {
         results.push(
-          errors.length > 0
-            ? { ...baseResult(surface, relativePath), status: "failed", errors, warnings: warningsFor(surface) }
+          applyErrors.length > 0
+            ? { ...baseResult(surface, relativePath), status: "failed", errors: applyErrors, warnings: warningsFor(surface) }
             : {
                 ...baseResult(surface, relativePath),
                 status: wasPresent.get(surface.id) ? "would-remove" : "nothing-to-remove",
@@ -369,10 +470,11 @@ export async function uninstallIntegration(
       continue;
     }
 
-    const { errors } = await uninstallSurfaces(root, relativePath, ids, owner);
-    if (errors.length > 0) {
+    const { errors: writeErrors } = await uninstallSurfaces(root, relativePath, ids, owner);
+    if (writeErrors.length > 0) {
+      errors.push(...writeErrors);
       for (const surface of groupSurfaces) {
-        results.push({ ...baseResult(surface, relativePath), status: "failed", errors, warnings: warningsFor(surface) });
+        results.push({ ...baseResult(surface, relativePath), status: "failed", errors: writeErrors, warnings: warningsFor(surface) });
       }
       continue;
     }
@@ -391,10 +493,13 @@ export async function uninstallIntegration(
   for (const surface of custom) {
     const file = surface.relativePath ? fileFor(root, surface.relativePath) : undefined;
     if (opts.dryRun) {
-      const present = file ? await pathExists(file) : false;
+      // F4: dry-run parity — use the surface's own presence check (probe-
+      // backed for a markdown-block surface) instead of a bare file-exists
+      // check, so dry-run and the real uninstall never disagree.
+      const wouldRemove = file ? await customSurfaceWouldRemove(root, surface, file) : false;
       results.push({
         ...baseResult(surface, surface.relativePath),
-        status: present ? "would-remove" : "nothing-to-remove",
+        status: wouldRemove ? "would-remove" : "nothing-to-remove",
         errors: [],
         warnings: warningsFor(surface),
       });
@@ -410,6 +515,12 @@ export async function uninstallIntegration(
     if (removed) await recordSurfaceUninstalled(root, runtimeId, surface.id);
   }
 
+  // F2: satisfied-by-runtime surfaces are always "satisfied-by-runtime" on
+  // uninstall too (there is nothing to remove), and this ALSO clears any
+  // stale install-state record left behind by a build that used to install
+  // this surface a different way, whether or not this call is a dry run's
+  // read-only sibling — a dry run must write nothing, so the clear is
+  // skipped there, matching every other branch above.
   for (const surface of satisfied) {
     results.push({
       ...baseResult(surface, surface.relativePath),
@@ -417,9 +528,9 @@ export async function uninstallIntegration(
       errors: [],
       warnings: warningsFor(surface),
     });
+    if (!opts.dryRun) await recordSurfaceUninstalled(root, runtimeId, surface.id);
   }
 
-  const errors = results.flatMap((r) => r.errors.map((e) => `${r.surfaceId}: ${e}`));
   return { runtimeId, results, errors };
 }
 
@@ -472,22 +583,32 @@ export async function doctorIntegration(root: string, runtimeId: string): Promis
     throw new Error(`"${runtimeId}" has no installable surfaces — ${reasons.join(" ")}`);
   }
 
+  // F7: a state file that exists but fails to parse/validate is reported as
+  // a top-level problem, not thrown — `readInstallState` already treats it
+  // the same as "nothing recorded" for every surface below, so doctor still
+  // runs a full live check; this just makes the malformed file itself
+  // visible instead of silently vanishing into "not recorded".
+  const problems: string[] = [];
+  if (await installStateIsUnreadable(root, runtimeId)) {
+    problems.push(`install-state unreadable: ${installStatePath(root, runtimeId)}`);
+  }
+
   const state = await readInstallState(root, runtimeId);
   const surfaces: DoctorSurfaceResult[] = [];
   for (const surface of adapter.surfaces) {
     const recorded = state?.installedModules.find((r) => r.moduleId === surface.id);
-    const { live, problems } = await liveStatusOf(root, surface);
+    const { live, problems: surfaceProblems } = await liveStatusOf(root, surface);
 
     let drift: string | undefined;
     if (recorded && live !== "valid") {
-      drift = driftMessage(surface, recorded, live, problems);
+      drift = driftMessage(surface, recorded, live, surfaceProblems);
     } else if (recorded && live === "valid" && (await shaDriftedSinceInstall(root, recorded))) {
       drift = "file changed since install (still valid)";
     }
 
-    surfaces.push({ surfaceId: surface.id, flag: surface.flag, recorded, live, problems, drift });
+    surfaces.push({ surfaceId: surface.id, flag: surface.flag, recorded, live, problems: surfaceProblems, drift });
   }
 
-  const ok = !surfaces.some((s) => s.recorded && s.live !== "valid");
-  return { runtimeId, surfaces, ok };
+  const ok = problems.length === 0 && !surfaces.some((s) => s.recorded && s.live !== "valid");
+  return { runtimeId, surfaces, problems, ok };
 }

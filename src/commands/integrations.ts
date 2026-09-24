@@ -21,9 +21,7 @@ import {
   uninstallIntegration,
   type DoctorIntegrationResult,
   type HarnessAdapter,
-  type InstallIntegrationResult,
   type SurfaceResult,
-  type UninstallIntegrationResult,
 } from "../integrations";
 import {
   DEFAULT_MATRIX_ARTIFACT,
@@ -136,6 +134,23 @@ function isFlag(args: readonly string[], flag: string): boolean {
   return args.includes(flag);
 }
 
+/**
+ * F3: `--runtime all` or a comma list of more than one runtime is a
+ * multi-runtime selection — combined with `--surface`, a runtime that
+ * declares none of the requested selectors is skipped ("no matching
+ * surface") rather than erroring, since a runtime legitimately does not
+ * carry every surface every other selected runtime does. A single explicit
+ * runtime keeps today's behavior: an unknown selector for that ONE runtime
+ * is still an error.
+ */
+function isMultiRuntimeRequest(value: string): boolean {
+  const requested = value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return requested.includes("all") || requested.length > 1;
+}
+
 // ---------------------------------------------------------------------------
 // install / uninstall
 // ---------------------------------------------------------------------------
@@ -162,6 +177,11 @@ function printUnsupported(report: UnsupportedRuntimeReport): void {
   console.log(`  ${style.gray(symbols.off)} ${report.runtimeId} — unsupported: ${report.reasons.join(" ")}`);
 }
 
+/** F3: the "· <id> — no matching surface" line for a runtime `resolveSurfaceSelectionLenient` matched nothing on. */
+function printNoMatchingSurface(runtimeId: string): void {
+  console.log(`  ${style.gray(symbols.off)} ${runtimeId} — no matching surface`);
+}
+
 interface ParsedRuntimeOpts {
   readonly runtimeArg: string;
   readonly surfaces: string[];
@@ -185,6 +205,75 @@ function parseRuntimeOpts(args: readonly string[], usage: string): ParsedRuntime
   };
 }
 
+interface RuntimeOpResult {
+  readonly runtimeId: string;
+  readonly results: readonly SurfaceResult[];
+  readonly errors: string[];
+  readonly noMatchingSurface?: boolean;
+}
+
+/**
+ * F14: the install/uninstall CLI handlers differ only in which installer-core
+ * function they call and the heading they print — this runs `op` across
+ * `supported`, setting `process.exitCode = 1` on any per-runtime error
+ * (catching a throw as its own error result, same as before), then reports
+ * the aggregate the same way for both: the F3 "no runtime matched at all"
+ * error, the `--json` short-circuit, and the `--surface`/unsupported human
+ * listing.
+ */
+async function runAndReportRuntimeOps<R extends RuntimeOpResult>(
+  cwd: string,
+  supported: readonly HarnessAdapter[],
+  unsupported: readonly UnsupportedRuntimeReport[],
+  surfaces: readonly string[],
+  lenientSelectors: boolean,
+  json: boolean,
+  headingText: string,
+  op: (cwd: string, runtimeId: string) => Promise<R>,
+): Promise<void> {
+  const results: R[] = [];
+  for (const adapter of supported) {
+    let result: R;
+    try {
+      result = await op(cwd, adapter.id);
+    } catch (error) {
+      result = {
+        runtimeId: adapter.id,
+        results: [],
+        errors: [error instanceof Error ? error.message : String(error)],
+      } as unknown as R;
+    }
+    results.push(result);
+    if (result.errors.length > 0) process.exitCode = 1;
+  }
+  // F3: error only if a multi-runtime + --surface selection matched nothing
+  // on ANY selected runtime — a partial match (some skipped, some installed)
+  // is success.
+  if (lenientSelectors && results.length > 0 && results.every((r) => r.noMatchingSurface)) {
+    console.error(`No selected runtime declares surface(s): ${surfaces.join(", ")}`);
+    process.exitCode = 1;
+  }
+
+  if (json) {
+    console.log(JSON.stringify({ results, unsupported }, null, 2));
+    return;
+  }
+
+  heading(headingText);
+  for (const result of results) {
+    console.log(`  ${style.bold(result.runtimeId)}`);
+    if (result.noMatchingSurface) {
+      printNoMatchingSurface(result.runtimeId);
+      continue;
+    }
+    for (const surfaceResult of result.results) printSurfaceResult(cwd, surfaceResult);
+    if (result.results.length === 0 && result.errors.length > 0) {
+      for (const error of result.errors) console.error(`  ${style.red(symbols.cross)} ${error}`);
+    }
+  }
+  for (const report of unsupported) printUnsupported(report);
+}
+
 async function handleInstall(args: string[], cwd: string): Promise<void> {
   const parsed = parseRuntimeOpts(
     args,
@@ -201,32 +290,17 @@ async function handleInstall(args: string[], cwd: string): Promise<void> {
     return;
   }
 
-  const results: InstallIntegrationResult[] = [];
-  for (const adapter of supported) {
-    let result: InstallIntegrationResult;
-    try {
-      result = await installIntegration(cwd, adapter.id, { surfaces, dryRun });
-    } catch (error) {
-      result = { runtimeId: adapter.id, results: [], errors: [error instanceof Error ? error.message : String(error)] };
-    }
-    results.push(result);
-    if (result.errors.length > 0) process.exitCode = 1;
-  }
-
-  if (json) {
-    console.log(JSON.stringify({ results, unsupported }, null, 2));
-    return;
-  }
-
-  heading(`keryx integrations install${dryRun ? " (dry run)" : ""}`);
-  for (const result of results) {
-    console.log(`  ${style.bold(result.runtimeId)}`);
-    for (const surfaceResult of result.results) printSurfaceResult(cwd, surfaceResult);
-    if (result.results.length === 0 && result.errors.length > 0) {
-      for (const error of result.errors) console.error(`  ${style.red(symbols.cross)} ${error}`);
-    }
-  }
-  for (const report of unsupported) printUnsupported(report);
+  const lenientSelectors = surfaces.length > 0 && isMultiRuntimeRequest(runtimeArg);
+  await runAndReportRuntimeOps(
+    cwd,
+    supported,
+    unsupported,
+    surfaces,
+    lenientSelectors,
+    json,
+    `keryx integrations install${dryRun ? " (dry run)" : ""}`,
+    (root, runtimeId) => installIntegration(root, runtimeId, { surfaces, dryRun, lenientSelectors }),
+  );
 }
 
 async function handleUninstall(args: string[], cwd: string): Promise<void> {
@@ -245,32 +319,17 @@ async function handleUninstall(args: string[], cwd: string): Promise<void> {
     return;
   }
 
-  const results: UninstallIntegrationResult[] = [];
-  for (const adapter of supported) {
-    let result: UninstallIntegrationResult;
-    try {
-      result = await uninstallIntegration(cwd, adapter.id, { surfaces, dryRun });
-    } catch (error) {
-      result = { runtimeId: adapter.id, results: [], errors: [error instanceof Error ? error.message : String(error)] };
-    }
-    results.push(result);
-    if (result.errors.length > 0) process.exitCode = 1;
-  }
-
-  if (json) {
-    console.log(JSON.stringify({ results, unsupported }, null, 2));
-    return;
-  }
-
-  heading(`keryx integrations uninstall${dryRun ? " (dry run)" : ""}`);
-  for (const result of results) {
-    console.log(`  ${style.bold(result.runtimeId)}`);
-    for (const surfaceResult of result.results) printSurfaceResult(cwd, surfaceResult);
-    if (result.results.length === 0 && result.errors.length > 0) {
-      for (const error of result.errors) console.error(`  ${style.red(symbols.cross)} ${error}`);
-    }
-  }
-  for (const report of unsupported) printUnsupported(report);
+  const lenientSelectors = surfaces.length > 0 && isMultiRuntimeRequest(runtimeArg);
+  await runAndReportRuntimeOps(
+    cwd,
+    supported,
+    unsupported,
+    surfaces,
+    lenientSelectors,
+    json,
+    `keryx integrations uninstall${dryRun ? " (dry run)" : ""}`,
+    (root, runtimeId) => uninstallIntegration(root, runtimeId, { surfaces, dryRun, lenientSelectors }),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -310,6 +369,9 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
   heading("keryx integrations doctor");
   for (const result of results) {
     console.log(`  ${style.bold(result.runtimeId)} ${result.ok ? style.green("ok") : style.red("problems found")}`);
+    for (const problem of result.problems) {
+      console.log(`  ${style.red(symbols.cross)} ${problem}`);
+    }
     for (const surface of result.surfaces) {
       const marker = surface.drift ? style.yellow(symbols.bullet) : surface.live === "valid" ? style.green(symbols.ok) : style.gray(symbols.off);
       console.log(`  ${marker} ${surface.surfaceId} (${surface.flag}) — ${surface.live}${surface.recorded ? "" : " (not recorded)"}`);

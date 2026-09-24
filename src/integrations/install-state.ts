@@ -59,15 +59,50 @@ export async function sha256OfFile(root: string, relativePath: string): Promise<
   return createHash("sha256").update(content).digest("hex");
 }
 
-/** Reads `<runtimeId>.json`, or `undefined` when absent/unreadable/not valid JSON. */
-export async function readInstallState(root: string, runtimeId: string): Promise<InstallState | undefined> {
+/**
+ * F7: a parsed value only counts as install-state when it carries THIS
+ * module's `schemaVersion` and an array `installedModules` — the two facts
+ * every reader below actually depends on. Anything else (a bare `{}`, an
+ * array, a record shaped for a future/older schema version) is treated the
+ * same as unparsable JSON: `readInstallState` reports it as absent rather
+ * than handing a caller a value it will crash trying to read, and
+ * `installStateIsUnreadable` reports it as a problem `doctor` can surface
+ * instead of throwing.
+ */
+function isValidInstallState(value: unknown): value is InstallState {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return record.schemaVersion === INSTALL_STATE_SCHEMA_VERSION && Array.isArray(record.installedModules);
+}
+
+async function parseInstallStateFile(
+  root: string,
+  runtimeId: string,
+): Promise<{ state: InstallState | undefined; unreadable: boolean }> {
   const file = installStatePath(root, runtimeId);
-  if (!(await pathExists(file))) return undefined;
+  if (!(await pathExists(file))) return { state: undefined, unreadable: false };
   try {
-    return JSON.parse(await readFile(file, "utf8")) as InstallState;
+    const parsed = JSON.parse(await readFile(file, "utf8")) as unknown;
+    if (isValidInstallState(parsed)) return { state: parsed, unreadable: false };
+    return { state: undefined, unreadable: true };
   } catch {
-    return undefined;
+    return { state: undefined, unreadable: true };
   }
+}
+
+/** Reads `<runtimeId>.json`, or `undefined` when absent/unreadable/not valid install-state JSON (F7). */
+export async function readInstallState(root: string, runtimeId: string): Promise<InstallState | undefined> {
+  return (await parseInstallStateFile(root, runtimeId)).state;
+}
+
+/**
+ * True when `<runtimeId>.json` EXISTS but is not usable install-state (bad
+ * JSON, or valid JSON missing `schemaVersion`/`installedModules`) — the case
+ * `doctor` should report as a problem, distinct from "nothing recorded yet"
+ * (no file at all), which is normal and silent (F7).
+ */
+export async function installStateIsUnreadable(root: string, runtimeId: string): Promise<boolean> {
+  return (await parseInstallStateFile(root, runtimeId)).unreadable;
 }
 
 function sortedRecords(records: readonly InstalledModuleRecord[]): InstalledModuleRecord[] {
@@ -98,12 +133,23 @@ export async function recordSurfaceInstalled(
     surface?: SurfaceFlag;
     writtenPaths: readonly string[];
     managedSentinel: boolean;
+    /**
+     * Paths to sha256-hash for doctor's "changed since install" note (F5).
+     * Defaults to `writtenPaths`. Pass `[]` for a JSON surface whose settings
+     * file is shared with another surface: a whole-file hash there would
+     * flag drift the moment a SIBLING surface (not this one) next
+     * installs/uninstalls into the same file — that is not a change to THIS
+     * surface's own managed entries, so rather than mis-attribute someone
+     * else's edit, this record simply carries no sha256 and never raises a
+     * drift note from file content changes it does not own.
+     */
+    hashPaths?: readonly string[];
   },
 ): Promise<void> {
   if (!(await pathExists(metaprojectDir(root)))) return;
 
   const sha256: Record<string, string> = {};
-  for (const relativePath of entry.writtenPaths) {
+  for (const relativePath of entry.hashPaths ?? entry.writtenPaths) {
     const hash = await sha256OfFile(root, relativePath);
     if (hash) sha256[relativePath] = hash;
   }

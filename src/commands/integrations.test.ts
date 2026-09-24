@@ -156,6 +156,59 @@ describe("--runtime all", () => {
   });
 });
 
+describe("F3: --runtime all + --surface skips runtimes that declare no matching surface", () => {
+  test("install --runtime all --surface instructions succeeds; matched runtimes install, unmatched ones are skipped", async () => {
+    await withMetaproject(async (root) => {
+      await integrationsCommand(["install", "--runtime", "all", "--surface", "instructions", "--json"], root);
+      expect(process.exitCode).toBe(0);
+      const parsed = JSON.parse(captured.join("\n")) as {
+        results: { runtimeId: string; results: unknown[]; errors: string[]; noMatchingSurface?: boolean }[];
+      };
+      const matched = parsed.results.filter((r) => !r.noMatchingSurface);
+      const skipped = parsed.results.filter((r) => r.noMatchingSurface);
+      expect(matched.length).toBeGreaterThan(0);
+      expect(skipped.length).toBeGreaterThan(0);
+      for (const r of matched) {
+        expect(r.errors).toEqual([]);
+        expect(r.results.length).toBeGreaterThan(0);
+      }
+      for (const r of skipped) {
+        expect(r.results).toEqual([]);
+        expect(r.errors).toEqual([]);
+      }
+    });
+  });
+
+  test("uninstall --runtime all --surface instructions succeeds the same way", async () => {
+    await withMetaproject(async (root) => {
+      await integrationsCommand(["install", "--runtime", "all", "--surface", "instructions"], root);
+      captured = [];
+      await integrationsCommand(["uninstall", "--runtime", "all", "--surface", "instructions", "--json"], root);
+      expect(process.exitCode).toBe(0);
+      const parsed = JSON.parse(captured.join("\n")) as {
+        results: { runtimeId: string; noMatchingSurface?: boolean }[];
+      };
+      expect(parsed.results.some((r) => !r.noMatchingSurface)).toBe(true);
+      expect(parsed.results.some((r) => r.noMatchingSurface)).toBe(true);
+    });
+  });
+
+  test("a single explicit runtime with an unknown selector still errors (unchanged)", async () => {
+    await withMetaproject(async (root) => {
+      await integrationsCommand(["install", "--runtime", "claude", "--surface", "bogus-selector"], root);
+      expect(process.exitCode).toBe(1);
+    });
+  });
+
+  test("--runtime all with a selector that matches nothing anywhere errors exactly once", async () => {
+    await withMetaproject(async (root) => {
+      await integrationsCommand(["install", "--runtime", "all", "--surface", "totally-bogus-selector"], root);
+      expect(process.exitCode).toBe(1);
+      expect(capturedErr.join("\n")).toContain("No selected runtime declares surface(s): totally-bogus-selector");
+    });
+  });
+});
+
 describe("missing/unknown --runtime", () => {
   test("missing --runtime errors and exits 1", async () => {
     await withMetaproject(async (root) => {

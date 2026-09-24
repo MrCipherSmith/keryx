@@ -18,7 +18,8 @@ import {
   resolveSurfaceSelection,
   uninstallIntegration,
 } from "./installer";
-import { installStatePath, readInstallState } from "./install-state";
+import { installStatePath, readInstallState, recordSurfaceInstalled } from "./install-state";
+import type { SettingsFileOwner } from "./types";
 
 const SCHEMA_PATH = path.join(
   __dirname,
@@ -242,15 +243,20 @@ describe("doctor: drift reporting for a recorded surface that is now missing or 
     });
   });
 
-  test("recorded, valid, sha differs from install -> non-failing note, ok stays true", async () => {
+  // kiro's ctx-guard file (.kiro/hooks/keryx-ctx-guard.json) is owned by
+  // exactly one surface — F5 keeps the sha256 "changed since install" note
+  // for a single-surface file; see the F5 describe block below for the
+  // shared-file counterpart (.claude/settings.json, ctx-guard + orient +
+  // both security surfaces), where the same edit must NOT produce this note.
+  test("recorded, valid, sha differs from install -> non-failing note, ok stays true (single-surface file)", async () => {
     await withMetaproject(async (root) => {
-      await installIntegration(root, "claude", { surfaces: ["ctx-guard"] });
-      const file = path.join(root, ".claude", "settings.json");
+      await installIntegration(root, "kiro", { surfaces: ["ctx-guard"] });
+      const file = path.join(root, ".kiro", "hooks", "keryx-ctx-guard.json");
       const settings = JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
       settings.unrelatedKey = "added-after-install";
       await writeFile(file, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
 
-      const doctor = await doctorIntegration(root, "claude");
+      const doctor = await doctorIntegration(root, "kiro");
       const ctxGuard = doctor.surfaces.find((s) => s.surfaceId === "ctx-guard")!;
       expect(ctxGuard.live).toBe("valid");
       expect(ctxGuard.drift).toBe("file changed since install (still valid)");
@@ -338,6 +344,195 @@ describe("zed: block (acp-permission) is satisfied-by-runtime, never a file", ()
       expect(uninstall.errors).toEqual([]);
       expect(uninstall.results[0]!.status).toBe("satisfied-by-runtime");
       expect(await readInstallState(root, "zed")).toBeUndefined();
+    });
+  });
+});
+
+describe("zed: instructions is probe-only (F2) — no AGENTS.md at all", () => {
+  test("install without AGENTS.md succeeds: satisfied-by-runtime with the probe problem as a warning, never recorded", async () => {
+    await withTempDir(async (root) => {
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      const install = await installIntegration(root, "zed", { surfaces: ["instructions"] });
+      expect(install.errors).toEqual([]);
+      expect(install.results).toHaveLength(1);
+      expect(install.results[0]!.status).toBe("satisfied-by-runtime");
+      expect(install.results[0]!.warnings.some((w) => w.includes("AGENTS.md"))).toBe(true);
+      expect(await readInstallState(root, "zed")).toBeUndefined();
+    });
+  });
+
+  test("uninstall without AGENTS.md succeeds as satisfied-by-runtime and clears a stale pre-fix install-state record", async () => {
+    await withTempDir(async (root) => {
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      // Simulate a record written by the pre-fix behaviour, when zed's
+      // `instructions` surface still had a `customInstall`.
+      await recordSurfaceInstalled(root, "zed", {
+        moduleId: "instructions",
+        surface: "instructions",
+        writtenPaths: ["AGENTS.md"],
+        managedSentinel: true,
+      });
+      expect(await readInstallState(root, "zed")).toBeDefined();
+
+      const uninstall = await uninstallIntegration(root, "zed", { surfaces: ["instructions"] });
+      expect(uninstall.errors).toEqual([]);
+      expect(uninstall.results[0]!.status).toBe("satisfied-by-runtime");
+      expect(await readInstallState(root, "zed")).toBeUndefined();
+    });
+  });
+
+  test("doctor without AGENTS.md reports the surface invalid via the probe, without throwing", async () => {
+    await withTempDir(async (root) => {
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      const doctor = await doctorIntegration(root, "zed");
+      const instructions = doctor.surfaces.find((s) => s.surfaceId === "instructions")!;
+      expect(instructions.live).toBe("invalid");
+      expect(instructions.problems.some((p) => p.includes("AGENTS.md"))).toBe(true);
+    });
+  });
+
+  test("install --runtime <every adapter with surfaces> succeeds without AGENTS.md (zed no longer requires it)", async () => {
+    await withTempDir(async (root) => {
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      for (const adapter of ADAPTERS_WITH_SURFACES) {
+        const result = await installIntegration(root, adapter.id);
+        expect(result.errors, `${adapter.id}: ${JSON.stringify(result)}`).toEqual([]);
+      }
+    });
+  });
+});
+
+describe("F4: custom (markdown-block) uninstall dry-run agrees with the real run", () => {
+  test("gemini-cli: GEMINI.md present without the managed block -> dry-run says nothing-to-remove, matching the real uninstall", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "gemini-cli", { surfaces: ["instructions"] });
+      // Hand-edit the file to drop the managed block but keep the file itself.
+      await writeFile(path.join(root, "GEMINI.md"), "# unrelated content, no keryx block\n", "utf8");
+
+      const dryRun = await uninstallIntegration(root, "gemini-cli", { surfaces: ["instructions"], dryRun: true });
+      expect(dryRun.errors).toEqual([]);
+      expect(dryRun.results[0]!.status).toBe("nothing-to-remove");
+
+      const real = await uninstallIntegration(root, "gemini-cli", { surfaces: ["instructions"] });
+      expect(real.errors).toEqual([]);
+      expect(real.results[0]!.status).toBe("nothing-to-remove");
+      // The hand-edited content must survive untouched.
+      expect(await readFile(path.join(root, "GEMINI.md"), "utf8")).toBe("# unrelated content, no keryx block\n");
+    });
+  });
+
+  test("gemini-cli: GEMINI.md present WITH the managed block -> dry-run says would-remove, matching the real uninstall", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "gemini-cli", { surfaces: ["instructions"] });
+
+      const dryRun = await uninstallIntegration(root, "gemini-cli", { surfaces: ["instructions"], dryRun: true });
+      expect(dryRun.results[0]!.status).toBe("would-remove");
+
+      const real = await uninstallIntegration(root, "gemini-cli", { surfaces: ["instructions"] });
+      expect(real.results[0]!.status).toBe("removed");
+    });
+  });
+});
+
+describe("F5: a JSON surface sharing its settings file with another surface carries no sha256 drift note", () => {
+  test("claude: installing orient after ctx-guard on the same file produces no drift note for ctx-guard", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["ctx-guard"] });
+      const state = await readInstallState(root, "claude");
+      const ctxGuardRecord = state!.installedModules.find((r) => r.moduleId === "ctx-guard")!;
+      expect(Object.keys(ctxGuardRecord.sha256)).toEqual([]);
+
+      // Installing a sibling surface on the same file changes its bytes —
+      // this must not retroactively read as ctx-guard's own drift.
+      await installIntegration(root, "claude", { surfaces: ["orient"] });
+
+      const doctor = await doctorIntegration(root, "claude");
+      const ctxGuard = doctor.surfaces.find((s) => s.surfaceId === "ctx-guard")!;
+      expect(ctxGuard.live).toBe("valid");
+      expect(ctxGuard.drift).toBeUndefined();
+    });
+  });
+
+  test("opencode: a single-surface plugin file still gets its sha256 recorded and still flags drift", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "opencode");
+      const state = await readInstallState(root, "opencode");
+      const record = state!.installedModules.find((r) => r.moduleId === "ctx-guard")!;
+      expect(Object.keys(record.sha256).length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe("F7: a malformed install-state file never crashes doctor/install/uninstall", () => {
+  async function writeMalformedState(root: string, runtimeId: string, content: string): Promise<void> {
+    const file = installStatePath(root, runtimeId);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, content, "utf8");
+  }
+
+  test("invalid JSON: readInstallState returns undefined, doctor reports a problem instead of throwing", async () => {
+    await withMetaproject(async (root) => {
+      await writeMalformedState(root, "claude", "{ not json");
+      expect(await readInstallState(root, "claude")).toBeUndefined();
+
+      const doctor = await doctorIntegration(root, "claude");
+      expect(doctor.problems.some((p) => p.includes("install-state unreadable"))).toBe(true);
+      expect(doctor.ok).toBe(false);
+    });
+  });
+
+  test("valid JSON but wrong shape (missing schemaVersion/installedModules): same treatment", async () => {
+    await withMetaproject(async (root) => {
+      await writeMalformedState(root, "claude", JSON.stringify({ foo: "bar" }));
+      expect(await readInstallState(root, "claude")).toBeUndefined();
+
+      const doctor = await doctorIntegration(root, "claude");
+      expect(doctor.problems.some((p) => p.includes("install-state unreadable"))).toBe(true);
+      expect(doctor.ok).toBe(false);
+    });
+  });
+
+  test("a valid well-formed state file never reports the unreadable problem", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["ctx-guard"] });
+      const doctor = await doctorIntegration(root, "claude");
+      expect(doctor.problems).toEqual([]);
+    });
+  });
+
+  test("install/uninstall never throw when install-state is malformed", async () => {
+    await withMetaproject(async (root) => {
+      await writeMalformedState(root, "claude", "{ not json");
+      const install = await installIntegration(root, "claude", { surfaces: ["ctx-guard"] });
+      expect(install.errors).toEqual([]);
+      const uninstall = await uninstallIntegration(root, "claude", { surfaces: ["ctx-guard"] });
+      expect(uninstall.errors).toEqual([]);
+    });
+  });
+});
+
+describe("F10: a shared-file group failure is reported once, not duplicated/re-prefixed per surface", () => {
+  test("a two-surface JSON group whose owner refuses to write reports the owner's error exactly once, verbatim", async () => {
+    await withMetaproject(async (root) => {
+      const claude = getHarnessAdapter("claude")!;
+      const ONE_MESSAGE =
+        "security-check-output: this operation left a previously-valid surface invalid on .claude/settings.json — refusing to write";
+      const fakeOwner: SettingsFileOwner = {
+        relativePath: ".claude/settings.json",
+        surfaces: () =>
+          claude.surfaces.filter((s) => s.id === "security-check-input" || s.id === "security-check-output"),
+        apply: () => ({ settings: {}, errors: [ONE_MESSAGE] }),
+      };
+
+      const result = await installIntegration(root, "claude", {
+        surfaces: ["security-check-input", "security-check-output"],
+        ownerOverride: fakeOwner,
+      });
+
+      // Exactly one copy of the message — not one per surface in the group,
+      // and not re-prefixed with a surface id on top of its own wording.
+      expect(result.errors).toEqual([ONE_MESSAGE]);
+      expect(result.results.every((r) => r.status === "failed")).toBe(true);
     });
   });
 });

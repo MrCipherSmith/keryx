@@ -86,7 +86,7 @@ against the live settings file. When something has gone missing, it reports
 drift naming the version and date Keryx installed it — for example:
 
 ```
-gemini-cli: block surface was installed by Keryx 0.2.140 on 2026-08-03 and is now missing
+gemini-cli (block) was installed by Keryx 0.2.140 on 2026-08-03 and is now missing: .gemini/settings.json: file is missing
 ```
 
 — rather than the less useful "surface is missing," because knowing *when*
@@ -195,10 +195,15 @@ integrations` yet; every cell is a target for that later workstream.
 ## Legacy command aliases
 
 `keryx ctx install-hook`/`uninstall-hook`, `keryx orient install-hook`, and
-`keryx security hooks install|uninstall` continue to work exactly as before —
-they are kept as aliases that internally delegate to `keryx integrations
-install`/`uninstall --runtime <id> --surface <selector>`, with the
-surface(s) implied by which alias was called:
+`keryx security hooks install|uninstall` keep their existing commands, flags,
+and output shape — they are kept as aliases that internally delegate to
+`keryx integrations install`/`uninstall --runtime <id> --surface <selector>`,
+with the surface(s) implied by which alias was called. One outward behavior
+is now more precise rather than "exactly as before": an uninstall alias
+whose target file exists but does not actually carry Keryx's managed entry
+now reports "nothing to remove" (it previously reported success
+unconditionally whenever the file existed, whether or not the entry was
+there to strip):
 
 | Legacy command | Delegates to |
 |---|---|
