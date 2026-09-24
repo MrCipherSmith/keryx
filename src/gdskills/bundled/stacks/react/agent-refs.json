@@ -1,4 +1,3 @@
 {
-  "agents": [],
-  "note": "no pair until the react pack clears the eval gate — two skills fail: react-build-fix's no-disable-hooks-lint behavior scenario passRate 0, and react-testing's mock-network-boundary behavior scenario passRate 0.6 (its own report verdict is pass at the 0.5 per-report threshold, but 0.6 is below the pack gate's PACK_BEHAVIOR_PASS_FLOOR of 0.8), deepseek-chat gate run, flow 314 fix attempt 2"
+  "agents": ["react-code-auditor", "react-build-fixer"]
 }

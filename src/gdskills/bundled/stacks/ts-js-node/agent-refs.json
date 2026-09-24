@@ -1,4 +1,3 @@
 {
-  "agents": [],
-  "note": "no pair until the ts-js-node pack clears the eval gate (nodejs-build-fix's no-ts-ignore-suppression behavior scenario passRate 0, below the 0.8 floor; nodejs-esm-migration's convert-before-flip-type at 0.2 and nodejs-testing's mock-boundary-not-internal at 0 also fail, deepseek-chat gate run, flow 314 fix attempt 1)"
+  "agents": ["ts-js-node-code-auditor", "ts-js-node-build-fixer"]
 }

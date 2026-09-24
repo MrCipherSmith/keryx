@@ -1,4 +1,4 @@
 {
   "agents": [],
-  "note": "no pair until the go pack clears the eval gate (go-testing's table-driven-subtests behavior scenario passRate 0.4, below the 0.8 floor, deepseek-chat gate run, flow 314 fix attempt 1)"
+  "note": "no pair — the go pack fails the honest stable-pack gate: go-testing table-driven-subtests 2/5 (in 3 of 5 trials the model emitted a tool/shell call instead of answering directly — the single-turn runner has no tools to call). deepseek-chat judge gate run, flow 316."
 }
