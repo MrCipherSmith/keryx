@@ -1,0 +1,63 @@
+[
+  {
+    "id": "R10-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Stale skill/rule graduation proposals are never re-checked against later-configured logins; graduate apply echoes their nextSteps",
+    "impact": "A later-configured login survives in proposal files and the suggested scout command.",
+    "suggested_fix": "Re-gate and recompute already-proposed proposals on rerun; recompute nextSteps from members at apply.",
+    "evidence": "scratchpad/r691/r16/b.ts SINK 4 (round r08)",
+    "confidence": "high",
+    "file": "src/learning/graduate.ts",
+    "line": 439,
+    "class_scope": {
+      "sites": [
+        "graduate.ts:437-441",
+        "graduate.ts:676-681"
+      ],
+      "enumeration_method": "carried from round r08 (R10); code unchanged since c4aa5867"
+    },
+    "global_id": "2026-09-24-ingest-691-r09#R10-F1",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "scratchpad/r691/r16/b.ts SINK 4: after a later login config, the proposal files still match the login; the apply error prints --skill-name alice-code. The code is unchanged at 3953e040.",
+      "verifier": "round-r08-opus"
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat, 2026-09-24): owner-approved exception, merged with this deferred to a follow-up flow (stale graduation proposals after a login config change + printed next-step command)"
+    }
+  },
+  {
+    "id": "R10-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Model-backed draft metadata (extractor label, evidence sourceRef) persisted without a login gate",
+    "impact": "A model-backed extractor could write a login into stored metadata (no in-tree implementation ships).",
+    "suggested_fix": "Fixed label for model-backed drafts; gate or shape-check sourceRef.",
+    "evidence": "scratchpad/r691/r16/c.ts (round r08)",
+    "confidence": "medium",
+    "file": "src/learning/extract.ts",
+    "line": 353,
+    "class_scope": {
+      "sites": [
+        "extract.ts:329",
+        "extract.ts:349",
+        "extract.ts:353"
+      ],
+      "enumeration_method": "carried from round r08 (R10); code unchanged since c4aa5867"
+    },
+    "global_id": "2026-09-24-ingest-691-r09#R10-F2",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "scratchpad/r691/r16/c.ts: extractor '@alice' and sourceRef 'notes/alice[bot].md' were stored. The code is unchanged at 3953e040.",
+      "verifier": "round-r08-opus"
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat, 2026-09-24): owner-approved exception, merged with this deferred to a follow-up flow (model-backed draft extractor label and sourceRef login gate)"
+    }
+  }
+]

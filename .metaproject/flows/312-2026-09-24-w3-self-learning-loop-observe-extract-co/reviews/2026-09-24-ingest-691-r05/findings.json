@@ -18,7 +18,17 @@
       ],
       "enumeration_method": "tokenized the summary template, domain names and fallback name against login pieces (r10/q.ts T1)"
     },
-    "global_id": "2026-09-24-ingest-691-r05#R7-F1"
+    "global_id": "2026-09-24-ingest-691-r05#R7-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a77e6d23 (after fixing commit 96a539ee) by the round-r06 opus verification: q.ts T1/T1b/T1c: tom-s, alice-review, code-bot graduate",
+      "verifier": "round-r06"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 96a539ee; re-checked by round-r06 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R7-F2",
@@ -38,7 +48,17 @@
       ],
       "enumeration_method": "every containsConfiguredLogin call checked for scoping (q.ts T2)"
     },
-    "global_id": "2026-09-24-ingest-691-r05#R7-F2"
+    "global_id": "2026-09-24-ingest-691-r05#R7-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a77e6d23 (after fixing commit 96a539ee) by the round-r06 opus verification: q.ts T2 reverted-edit cluster applies",
+      "verifier": "round-r06"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 96a539ee; re-checked by round-r06 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R7-F3",
@@ -59,6 +79,16 @@
       ],
       "enumeration_method": "traced every provenance.extractor assignment; checked deterministic signal templates"
     },
-    "global_id": "2026-09-24-ingest-691-r05#R7-F3"
+    "global_id": "2026-09-24-ingest-691-r05#R7-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a77e6d23 (after fixing commit 96a539ee) by the round-r06 opus verification: q.ts M1 model-backed @alice draft refused",
+      "verifier": "round-r06"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 96a539ee; re-checked by round-r06 (refuted = no longer reproduces)"
+    }
   }
 ]

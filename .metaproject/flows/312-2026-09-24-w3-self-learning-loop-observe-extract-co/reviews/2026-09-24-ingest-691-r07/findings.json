@@ -18,7 +18,17 @@
       ],
       "enumeration_method": "every extraTokens source traced; r14/p.ts RC_NOKW"
     },
-    "global_id": "2026-09-24-ingest-691-r07#R9-F1"
+    "global_id": "2026-09-24-ingest-691-r07#R9-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 08dc37d0 (after fixing commit 1c689645) by the round-r08 opus verification: r14/p.ts RC_NOKW learned-review-conventions applies for every login",
+      "verifier": "round-r08"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 1c689645; re-checked by round-r08 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R9-F2",
@@ -38,7 +48,17 @@
       ],
       "enumeration_method": "r14/p.ts + q.ts login × cluster matrix"
     },
-    "global_id": "2026-09-24-ingest-691-r07#R9-F2"
+    "global_id": "2026-09-24-ingest-691-r07#R9-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 08dc37d0 (after fixing commit 1c689645) by the round-r08 opus verification: review/code/edit clusters apply for alice-review, code-bot, edit before and after",
+      "verifier": "round-r08"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 1c689645; re-checked by round-r08 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R9-F3",

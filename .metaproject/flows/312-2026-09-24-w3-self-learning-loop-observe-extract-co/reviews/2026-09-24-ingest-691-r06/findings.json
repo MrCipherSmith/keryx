@@ -18,7 +18,17 @@
       ],
       "enumeration_method": "traced proposal.suggestedName/summary into the written agent (r12/s.ts S3)"
     },
-    "global_id": "2026-09-24-ingest-691-r06#R8-F1"
+    "global_id": "2026-09-24-ingest-691-r06#R8-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 50644f34 (after fixing commit 92e51e6f) by the round-r07 opus verification: s.ts S3 refused",
+      "verifier": "round-r07"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 92e51e6f; re-checked by round-r07 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R8-F2",
@@ -37,7 +47,17 @@
       ],
       "enumeration_method": "every non-test createPattern/updatePattern caller checked (r12/s.ts S4)"
     },
-    "global_id": "2026-09-24-ingest-691-r06#R8-F2"
+    "global_id": "2026-09-24-ingest-691-r06#R8-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 50644f34 (after fixing commit 92e51e6f) by the round-r07 opus verification: s.ts S4 promote refused",
+      "verifier": "round-r07"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 92e51e6f; re-checked by round-r07 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R8-F3",
@@ -56,7 +76,17 @@
       ],
       "enumeration_method": "five injected mutations (r12/g/a..e); 4 of 5 pass the guard"
     },
-    "global_id": "2026-09-24-ingest-691-r06#R8-F3"
+    "global_id": "2026-09-24-ingest-691-r06#R8-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 50644f34 (after fixing commit 92e51e6f) by the round-r07 opus verification: guard mutations a-e caught",
+      "verifier": "round-r07"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 92e51e6f; re-checked by round-r07 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R8-F4",
