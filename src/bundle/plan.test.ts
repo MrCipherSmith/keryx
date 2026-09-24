@@ -159,6 +159,80 @@ describe("planBundleImport buckets", () => {
     expect(plan.entries[0]?.previousOwnerBundleId).toBe("bundle-a");
   });
 
+  // R3-F2 follow-up: same scenario as above, but the on-disk file exists
+  // ONLY under the ledger's recorded case — never at the incoming entry's
+  // exact case at all. On a case-INSENSITIVE filesystem this is identical
+  // to the test above (the OS resolves either spelling to the one file); on
+  // a case-SENSITIVE one, `readFile` at the incoming case would ENOENT.
+  // Simulated here (rather than relying on the host FS actually being
+  // case-sensitive) by asserting the ledger-ownership outcome does not
+  // depend on whether the file is reachable at the incoming case at all —
+  // this must conflict either way, never bucket `new`.
+  test("R3-F2: a case-variant path from a different bundle conflicts even though the incoming exact case never resolves on disk", async () => {
+    const bytesA = Buffer.from("# owner, only reachable under the recorded case\n");
+    const bytesB = Buffer.from("# other bundle, different case, never lands on disk at all\n");
+    const dir = path.join(projectRoot, ".metaproject");
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(path.join(dir, "rules"), { recursive: true });
+    writeFileSync(path.join(dir, "rules", "owned.md"), bytesA); // ONLY this exact case exists on disk
+    await writeAppliedState(appliedStatePath("project", { projectRoot, homeDir, env: {} }), {
+      schemaVersion: 2,
+      entries: { "rules/owned.md": { bundleId: "bundle-a", sha256: sha256Hex(bytesA), kind: "rule", appliedAt: "2026-01-01T00:00:00.000Z", path: "rules/owned.md" } },
+    });
+
+    // Bundle B ships a case-variant path that shares the SAME canonical key
+    // but, unlike the test above, is spelled so it cannot plausibly exist on
+    // disk under that exact case (the recorded file is "owned.md"; this one
+    // asks for "OWNED.md") — the fix must not depend on a lucky case-fold.
+    // (The extension itself stays lower-case: the kind-shape check for
+    // "rule" paths matches `\.(md|mdc)$` case-sensitively, unrelated to the
+    // canonical-key ownership fix under test here.)
+    const entryB = entryFor("rules/OWNED.md", "rule", "project", bytesB);
+    const manifestB: BundleManifest = { ...manifestOf([entryB]), bundleId: "bundle-b" };
+    const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([["rules/OWNED.md", bytesB]]) };
+    const plan = await planBundleImport({ source, manifest: manifestB, projectRoot, homeDir, env: {} });
+
+    expect(plan.ok).toBe(false);
+    expect(plan.entries[0]?.bucket).toBe("conflict");
+    expect(plan.entries[0]?.conflictReason).toBe("owned-by-other-bundle");
+    expect(plan.entries[0]?.previousOwnerBundleId).toBe("bundle-a");
+  });
+
+  // Follow-up to R3-F2's ownership check: when the SAME bundle (not a
+  // different one) ships a different case of a path it already owns, that
+  // must be treated as the SAME logical target, not a fresh `new` entry
+  // that would create a second, case-variant file alongside the one the
+  // ledger already tracks. Required behaviour, chosen and documented here:
+  // the plan retargets to the ledger's own recorded path (`targetRelative`/
+  // `targetPath`/`displayId` all reflect the RECORDED case, not the
+  // incoming one) so apply writes, and uninstall removes, exactly one file
+  // — never two — regardless of host filesystem case sensitivity.
+  test("R3-F2 follow-up: the SAME bundle shipping a case-variant of a path it already owns retargets to the recorded path, not a fresh `new`", async () => {
+    const oldBytes = Buffer.from("# team policy, recorded lower-case\n");
+    const newBytes = Buffer.from("# team policy, updated content\n");
+    const dir = path.join(projectRoot, ".metaproject");
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(path.join(dir, "rules"), { recursive: true });
+    writeFileSync(path.join(dir, "rules", "team.md"), oldBytes); // ONLY this exact case exists on disk
+    await writeAppliedState(appliedStatePath("project", { projectRoot, homeDir, env: {} }), {
+      schemaVersion: 2,
+      entries: { "rules/team.md": { bundleId: "keryx-project-test", sha256: sha256Hex(oldBytes), kind: "rule", appliedAt: "2026-01-01T00:00:00.000Z", path: "rules/team.md" } },
+    });
+
+    // manifestOf() fixes bundleId to "keryx-project-test" — same bundle,
+    // re-exported with a different case for this one path.
+    const entry = entryFor("rules/Team.md", "rule", "project", newBytes);
+    const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([["rules/Team.md", newBytes]]) };
+    const plan = await planBundleImport({ source, manifest: manifestOf([entry]), projectRoot, homeDir, env: {} });
+
+    expect(plan.ok).toBe(true);
+    expect(plan.entries[0]?.bucket).toBe("update");
+    // Retargeted: the recorded on-disk case wins, not the incoming one.
+    expect(plan.entries[0]?.targetRelative).toBe("rules/team.md");
+    expect(plan.entries[0]?.displayId).toBe("project:rules/team.md");
+    expect(plan.entries[0]?.targetPath).toBe(path.join(dir, "rules", "team.md"));
+  });
+
   // R3-F18: a bundle DECLARING the same bundleId as a previously-applied
   // bundle is not proof it is the same producer — a hand-crafted bundle can
   // trivially spoof any bundleId string. When the ledger record carries a

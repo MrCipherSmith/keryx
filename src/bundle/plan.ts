@@ -410,40 +410,20 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     }
 
     const targetRelative = contentEntry.path;
-    const displayId = `${targetScope}:${targetRelative}`;
 
-    // R2-F20: distinguish "target does not exist" from "target exists but
-    // could not be read" (permissions, an I/O error). Swallowing every error
-    // the same way planned an unreadable-but-present user file as `new`,
-    // which apply then clobbered and uninstall's rollback later deleted.
-    const currentFile = await readTargetFile(target.absolutePath);
-    if (!currentFile.ok) {
-      refusals.push({ ...currentFile.refusal, path: contentEntry.path });
-      continue;
-    }
-    const currentBytes = currentFile.bytes;
-
-    // R2-F19 (side effect of the TTL fix above): if this is the exact same
-    // learned-pattern content already on disk and it differs only in the
-    // now day-granular `ttl.expiresAt`, treat the file already there as the
-    // content to compare/apply — so re-planning the same import on a later
-    // UTC day still reports `identical`, not a spurious `update` (R1-F11).
-    if (contentEntry.kind === "learned-pattern" && currentBytes !== undefined && learnedPatternEqualModuloTtl(currentBytes, effectiveBytes)) {
-      effectiveBytes = currentBytes;
-    }
-
-    const incomingSha256 = sha256Hex(effectiveBytes);
-    const currentSha256 = currentBytes === undefined ? undefined : sha256Hex(currentBytes);
-
+    // Choke point b (R3-F2), consulted BEFORE any on-disk read: the ledger is
+    // keyed by the CANONICAL form of the path (`canonicalBundleKey`), not
+    // the entry's own casing, so ownership is resolved from the ledger
+    // record FIRST and is therefore filesystem-independent — on a
+    // case-sensitive filesystem where no file exists at the exact incoming
+    // case (only under the ledger's recorded case), the ownership record is
+    // still found, exactly as a case-insensitive filesystem's own on-disk
+    // fold would have found it by ordinary path lookup.
     const ledgerState = await ledgerFor(targetScope);
     if (!ledgerState.ok) {
       refusals.push({ reason: BUNDLE_REFUSAL.corruptLedger, path: contentEntry.path, message: ledgerState.message });
       continue;
     }
-    // Choke point b (R3-F2): the ledger is keyed by the CANONICAL form of
-    // the path, not the entry's own casing — a case-variant path from a
-    // different bundle export still finds (and conflicts against) the same
-    // record a prior bundle wrote for the same on-disk file.
     const canonicalKey = canonicalBundleKey(targetRelative);
     const ledgerRecord = ledgerState.state.entries[canonicalKey];
     const ledgerSha256 = ledgerRecord?.sha256;
@@ -464,11 +444,73 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
       (ledgerRecord.bundleId !== opts.manifest.bundleId ||
         (ledgerRecord.sourceProject !== undefined && opts.manifest.provenance.sourceProject !== undefined && ledgerRecord.sourceProject !== opts.manifest.provenance.sourceProject));
 
+    // Same-bundle case-variant of an already-owned path: the ledger record
+    // exists, is owned by THIS bundle, but was recorded under a DIFFERENT
+    // case than this entry's incoming path. Treated as the SAME logical
+    // target: resolved to the ledger's own recorded path rather than the
+    // incoming one, so a case-sensitive filesystem can never end up with a
+    // second, case-variant file for what the ledger already considers one
+    // target — apply then writes (and uninstall then removes) at that one
+    // recorded path either way. A case-variant owned by a DIFFERENT bundle
+    // is deliberately left pointed at the incoming path below; that is an
+    // ownership conflict, not a retarget, and needs --force like any other
+    // conflict.
+    let effectiveTargetPath = target.absolutePath;
+    let effectiveTargetRelative = targetRelative;
+    if (ledgerRecord !== undefined && !ledgerOwnedByOther && ledgerRecord.path !== targetRelative) {
+      const recordedTarget = await targetFor({ path: ledgerRecord.path, kind: contentEntry.kind, scope: contentEntry.scope }, targetScope, ctx);
+      if (!recordedTarget.ok) {
+        refusals.push(recordedTarget.refusal);
+        continue;
+      }
+      effectiveTargetPath = recordedTarget.absolutePath;
+      effectiveTargetRelative = ledgerRecord.path;
+    }
+
+    const displayId = `${targetScope}:${effectiveTargetRelative}`;
+
+    // R2-F20: distinguish "target does not exist" from "target exists but
+    // could not be read" (permissions, an I/O error). Swallowing every error
+    // the same way planned an unreadable-but-present user file as `new`,
+    // which apply then clobbered and uninstall's rollback later deleted.
+    const currentFile = await readTargetFile(effectiveTargetPath);
+    if (!currentFile.ok) {
+      refusals.push({ ...currentFile.refusal, path: contentEntry.path });
+      continue;
+    }
+    const currentBytes = currentFile.bytes;
+
+    // R2-F19 (side effect of the TTL fix above): if this is the exact same
+    // learned-pattern content already on disk and it differs only in the
+    // now day-granular `ttl.expiresAt`, treat the file already there as the
+    // content to compare/apply — so re-planning the same import on a later
+    // UTC day still reports `identical`, not a spurious `update` (R1-F11).
+    if (contentEntry.kind === "learned-pattern" && currentBytes !== undefined && learnedPatternEqualModuloTtl(currentBytes, effectiveBytes)) {
+      effectiveBytes = currentBytes;
+    }
+
+    const incomingSha256 = sha256Hex(effectiveBytes);
+    const currentSha256 = currentBytes === undefined ? undefined : sha256Hex(currentBytes);
+
     let bucket: PlanBucket;
     let conflictReason: PlanConflictReason | undefined;
 
     if (currentSha256 === undefined) {
-      bucket = "new";
+      // R3-F2 follow-up: this branch used to always bucket `new` — but the
+      // ledger's ownership record (looked up above by canonical key, BEFORE
+      // any on-disk read) is filesystem-independent, so a case-variant path
+      // from a DIFFERENT bundle must conflict here too, not only when
+      // on-disk case-folding happens to resolve `currentSha256` to a match.
+      // Without this branch, the exact same bundle-B-ships-`rules/X.md`
+      // scenario the ledger-owned check below already handles bucketed
+      // `new` on a case-sensitive filesystem (Linux CI) while correctly
+      // bucketing `conflict` on a case-insensitive one (macOS).
+      if (ledgerOwnedByOther) {
+        bucket = "conflict";
+        conflictReason = "owned-by-other-bundle";
+      } else {
+        bucket = "new";
+      }
     } else if (currentSha256 === incomingSha256) {
       // Identical bytes: safe regardless of ownership — apply never writes
       // an `identical` entry, and only claims the ledger record when it
@@ -496,7 +538,7 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
       conflictReason = "unmanaged-differs";
     }
 
-    const forced = (opts.force ?? []).includes(targetRelative) || (opts.force ?? []).includes(displayId);
+    const forced = (opts.force ?? []).includes(effectiveTargetRelative) || (opts.force ?? []).includes(displayId);
     if (bucket === "conflict" && !forced) {
       refusals.push({ reason: BUNDLE_REFUSAL.unresolvedConflict, path: contentEntry.path, message: `${displayId} conflicts and was not passed to --force` });
     }
@@ -506,9 +548,9 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
       kind: contentEntry.kind,
       entryScope: contentEntry.scope,
       targetScope,
-      targetRelative,
+      targetRelative: effectiveTargetRelative,
       displayId,
-      targetPath: target.absolutePath,
+      targetPath: effectiveTargetPath,
       bucket,
       ...(conflictReason !== undefined ? { conflictReason } : {}),
       forced,
