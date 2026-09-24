@@ -125,36 +125,43 @@ function generalizedActionsFor(records: readonly LearnedPattern[], authors: read
 }
 
 /**
- * Refuses (via `gateReviewerText`, identifier-boundary match) if the
- * reviewer id or any generalized action still carries a configured author's
- * login — the final gate independent of `generalizeLesson`'s own stripping
- * (AC7).
+ * Refuses (via `gateReviewerText`, identifier-boundary match) if any
+ * generalized action still carries a configured author's login — the final
+ * gate independent of `generalizeLesson`'s own stripping (AC7).
  *
  * Checked ONLY over this variable content — each record's own `provenance`
  * (these are all `domain: "review-conventions"` records, which today only
  * the `reviewer-comment` signal ever produces) with its already-generalized
- * `action`, and `reviewerId` (an opaque `rv-` hash; checked anyway as cheap
- * defense-in-depth) passed as an `extraTokens` entry — never the surrounding
- * rendered document. This used to run a plain, whole-rendered-document
- * `String.includes` scan, which matched a configured login sitting inside
- * `renderReviewerProfile`'s OWN fixed template prose rather than anything a
- * reviewer said: `revie`/`conve`/`learn`/`profi` are substrings of
- * "review-conventions"/"Learned conventions"/"reviewer profile" — literal
- * words in the frontmatter description, the `# Reviewer Profile` heading,
- * and the "conventions this project has **learn**ed" sentence — so a project
- * that configured any of those logins had EVERY reviewer-profile write
- * refused, no matter what any lesson said. Restricting the check to the
- * variable text (and using the same identifier-boundary rule
- * `gateReviewerText`/`containsConfiguredLogin` use everywhere else, rather
- * than a separate raw substring test) fixes that without reopening the
- * attribution leak this gate exists to catch.
+ * `action` — never the surrounding rendered document. This used to run a
+ * plain, whole-rendered-document `String.includes` scan, which matched a
+ * configured login sitting inside `renderReviewerProfile`'s OWN fixed
+ * template prose rather than anything a reviewer said: `revie`/`conve`/
+ * `learn`/`profi` are substrings of "review-conventions"/"Learned
+ * conventions"/"reviewer profile" — literal words in the frontmatter
+ * description, the `# Reviewer Profile` heading, and the "conventions this
+ * project has **learn**ed" sentence — so a project that configured any of
+ * those logins had EVERY reviewer-profile write refused, no matter what any
+ * lesson said. Restricting the check to the variable text (and using the
+ * same identifier-boundary rule `gateReviewerText`/`containsConfiguredLogin`
+ * use everywhere else, rather than a separate raw substring test) fixes that
+ * without reopening the attribution leak this gate exists to catch.
+ *
+ * R9-F1/R9-F2 (review round 9, PR #691): this used to also pass `reviewerId`
+ * as a `gateReviewerText` `extraTokens` entry, as cheap defense-in-depth.
+ * `reviewerId` is always `reviewerIdFor`'s opaque `rv-<16 hex chars>` output
+ * (`REVIEWER_ID_PATTERN` validates that shape before this is ever called) —
+ * it can never equal a human-configured login or a hyphen/underscore piece
+ * of one, so the check could never fire. `extraTokens` itself is removed
+ * from `gateReviewerText` (see that file) now that its one other caller,
+ * `applyGraduation`'s stored-token re-check, is gone too — so `reviewerId`
+ * is simply never checked here any more.
  */
-function refuseIfAttributed(records: readonly LearnedPattern[], authors: readonly string[], reviewerId: string): void {
+function refuseIfAttributed(records: readonly LearnedPattern[], authors: readonly string[]): void {
   if (authors.length === 0) return;
   const refused = records.some((record) => {
     const generalized = generalizeLesson(record.action, authors);
     if (generalized === null) return false; // dropped by generalizeLesson itself; contributes nothing to render either.
-    return gateReviewerText({ provenance: record.provenance, trigger: "", action: generalized, extraTokens: [reviewerId] }, authors).refused;
+    return gateReviewerText({ provenance: record.provenance, trigger: "", action: generalized }, authors).refused;
   });
   if (refused) {
     throw new LearningReviewerProfileError(
@@ -233,7 +240,7 @@ export async function applyReviewerProfile(
 
   const authors = await configuredAuthors(root);
   const actions = generalizedActionsFor(records, authors);
-  refuseIfAttributed(records, authors, reviewerId);
+  refuseIfAttributed(records, authors);
   const now = (opts.now ?? ((): Date => new Date()))();
   const dateStamp = now.toISOString().slice(0, 10);
 

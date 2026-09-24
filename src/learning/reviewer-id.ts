@@ -203,9 +203,11 @@ export function generalizeLesson(text: string, logins: readonly string[]): strin
 }
 
 /**
- * R6-F1 (moved from `graduate.ts` for R8-F1/R8-F2/R8-F3: `gateReviewerText`
- * below needs the same set for its `extraTokens` check): a configured login,
- * plus each hyphen/underscore-split piece of it, lowercased — every
+ * R6-F1 (moved from `graduate.ts` so it can be shared; R9-F1/R9-F2:
+ * `graduate.ts`'s `keywordsOf` is the current caller, filtering a member's
+ * keyword tokens against this set directly rather than through
+ * `gateReviewerText`): a configured login, plus each hyphen/underscore-split
+ * piece of it, lowercased — every
  * standalone keyword token a login could split into once a caller's own
  * word tokenizer runs over derived text (a kebab-case suggested name split
  * on `-`, a comma-separated keyword list). A login `alice` sitting glued to
@@ -234,54 +236,46 @@ export interface GateReviewerTextInput {
   readonly provenance: { readonly extractor: string; readonly extractorKind?: string | undefined };
   readonly trigger: string;
   readonly action: string;
-  /**
-   * Derived tokens ONLY — e.g. a kebab-case suggested name split on `-`, or a
-   * comma-separated keyword list already parsed out of fixed template prose
-   * (`runGraduate`'s `sharing: ...` summary). Never a fixed template word
-   * itself: checked by token EQUALITY against `loginKeywordSet(logins)`, not
-   * a substring test, so handing this a whole sentence (rather than
-   * pre-split tokens) would silently never match anything, and handing it
-   * Keryx's own constant wording would reopen the fixed-wording
-   * false-refusal class (R4-F1/R5-F1/R5-F2/R6-F1) this file's other checks
-   * exist to avoid.
-   */
-  readonly extraTokens?: readonly string[];
 }
 
 /**
  * R8-F1/R8-F2/R8-F3: the ONE attribution gate every learned-text sink in
  * `src/learning` calls — `extract.ts`'s upsert, `apply.ts`'s apply gate,
  * `graduate.ts`'s cluster gate and `applyGraduation`'s member-text gate,
- * `promote.ts`'s promote gate, and `reviewer-profile.ts`. Combines, in one
- * place, the two checks that used to be hand-assembled at each call site:
+ * `promote.ts`'s promote gate, and `reviewer-profile.ts`. `containsConfiguredLogin`
+ * itself is no longer imported anywhere outside this file (see
+ * `reviewer-id.test.ts`'s import-ban guard) — every caller goes through this
+ * function instead, which applies `mayCarryReviewerText(input.provenance)` to
+ * scope whether `trigger` (with `REVIEWER_COMMENT_TRIGGER_PREFIX` stripped
+ * first) and `action` are checked with `containsConfiguredLogin` at all — see
+ * that predicate's own doc for why un-scoped gating reopens the fixed-wording
+ * false-refusal class.
  *
- *  1. `mayCarryReviewerText(input.provenance)` scopes whether `trigger`
- *     (with `REVIEWER_COMMENT_TRIGGER_PREFIX` stripped first) and `action`
- *     are checked with `containsConfiguredLogin` at all — see that
- *     predicate's own doc for why un-scoped gating reopens the
- *     fixed-wording false-refusal class.
- *  2. `extraTokens`, when given, are checked by token equality against
- *     `loginKeywordSet(logins)` — R8-F1: a login configured AFTER a
- *     graduation proposal was written is still caught at apply time by
- *     re-checking the proposal's own `suggestedName`/summary-keyword tokens
- *     against the CURRENT configured-login list, the same token-equality
- *     rule `graduate.ts`'s clustering already applies at proposal time.
- *
- * `containsConfiguredLogin` itself is no longer imported anywhere outside
- * this file (see `reviewer-id.test.ts`'s import-ban guard) — every caller
- * goes through this function instead.
+ * R9-F1/R9-F2 (review round 9, PR #691): this used to also take an
+ * `extraTokens` list, checked by token equality against `loginKeywordSet`,
+ * so `applyGraduation` could re-check a proposal's persisted
+ * `suggestedName`/summary-keyword tokens against logins configured after the
+ * proposal was written. That re-check inspected STORED, already-derived
+ * tokens rather than the member records themselves, so it could not tell "a
+ * login-derived token that legitimately survived filtering because
+ * `mayCarryReviewerText` did not apply to the member it came from" (e.g. the
+ * fixed `learned-<domain>` fallback name, or an ordinary keyword like
+ * `review`/`code`/`edit` from a non-`reviewer-comment` member) from "a login
+ * that actually leaked through" — refusing both alike. `applyGraduation` no
+ * longer re-checks stored tokens at all: it recomputes the candidate's
+ * name/summary from the member records and the CURRENT configured logins
+ * (`graduate.ts`'s `topKeywords`/`suggestedNameFor`, applied per member via
+ * `mayCarryReviewerText`), so there is nothing stale left to re-check.
+ * `extraTokens` had exactly one other caller (`reviewer-profile.ts`'s
+ * `reviewerId`, an opaque `rv-<16 hex>` hash that can never equal a
+ * human-configured login), so the parameter is removed rather than kept for
+ * one caller that never needed it.
  */
 export function gateReviewerText(input: GateReviewerTextInput, logins: readonly string[]): { refused: boolean } {
   if (mayCarryReviewerText(input.provenance)) {
     const triggerForLoginCheck = stripReviewerCommentTriggerPrefix(input.trigger);
     if (containsConfiguredLogin(triggerForLoginCheck, logins) || containsConfiguredLogin(input.action, logins)) {
       return { refused: true };
-    }
-  }
-  if (input.extraTokens !== undefined && input.extraTokens.length > 0) {
-    const forbidden = loginKeywordSet(logins);
-    for (const token of input.extraTokens) {
-      if (forbidden.has(token.trim().toLowerCase())) return { refused: true };
     }
   }
   return { refused: false };

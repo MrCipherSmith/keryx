@@ -347,31 +347,20 @@ describe("gateReviewerText", () => {
     expect(result.refused).toBe(false); // "review" only appears in the stripped fixed prefix, not the variable hint
   });
 
-  // R8-F1: extraTokens are checked by TOKEN EQUALITY against
-  // `loginKeywordSet`, independent of provenance — this is what lets
-  // `applyGraduation` re-check a proposal's persisted `suggestedName`/summary
-  // keywords against logins configured after the proposal was written.
-  test("extraTokens are refused by token equality, regardless of provenance", () => {
-    const result = gateReviewerText(
-      { provenance: { extractor: "graduate-proposal" }, trigger: "", action: "", extraTokens: ["alice", "style"] },
-      LOGINS,
-    );
-    expect(result.refused).toBe(true);
-  });
-
-  test("extraTokens use token equality, not substring — a fixed-prose word containing a login substring is not refused", () => {
-    const result = gateReviewerText(
-      { provenance: { extractor: "graduate-proposal" }, trigger: "", action: "", extraTokens: ["accepted", "sharing"] },
-      ["ed"], // "accepted" contains "ed" as a substring, never as a standalone token
-    );
-    expect(result.refused).toBe(false);
-  });
-
+  // R9-F1/R9-F2 (review round 9, PR #691): `gateReviewerText` used to also
+  // take an `extraTokens` list, checked by token equality against
+  // `loginKeywordSet`, so `applyGraduation` could re-check a proposal's
+  // persisted `suggestedName`/summary tokens against logins configured after
+  // the proposal was written — but that re-check inspected STORED tokens,
+  // not the member records, so it could not distinguish a token that
+  // legitimately survived per-member filtering from one that leaked. Removed:
+  // `applyGraduation` now recomputes the candidate's name/summary from the
+  // member records at apply time instead (`graduate.ts`), so there is
+  // nothing stale left to re-check, and `extraTokens` had no other caller
+  // that actually needed it (`reviewer-profile.ts`'s `reviewerId` is an
+  // opaque hash that can never equal a login).
   test("empty logins never refuse", () => {
-    const result = gateReviewerText(
-      { provenance: { extractor: "reviewer-comment" }, trigger: "", action: "@alice said so", extraTokens: ["alice"] },
-      [],
-    );
+    const result = gateReviewerText({ provenance: { extractor: "reviewer-comment" }, trigger: "", action: "@alice said so" }, []);
     expect(result.refused).toBe(false);
   });
 });

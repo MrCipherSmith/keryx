@@ -13,7 +13,7 @@ import { loadLearningConfig } from "./config";
 import { resolveProjectIdentity } from "./identity";
 import { observationsDir } from "./paths";
 import { pruneObservationFilesPass } from "./prune";
-import { gateReviewerText } from "./reviewer-id";
+import { gateReviewerText, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { validateObservationEvent } from "./schema";
 import { FAILING_TO_PASSING_TEST_SIGNAL } from "./signals/failing-to-passing-test";
@@ -99,21 +99,58 @@ function normalizeText(text: string): string {
   return text.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+const SLUG_MAX_LEN = 60;
+
+/**
+ * R9-F3 (review round 9, PR #691, info): a slug longer than `maxLen` used to
+ * be cut with a plain `.slice(0, maxLen)`, which can land mid-word — e.g.
+ * cutting `...-alicestyle` to `...-alice`, turning a glued login fragment
+ * (`alicestyle`) into a standalone id segment that reads exactly like a bare
+ * login. Cuts at the last `-` boundary inside the slice instead, dropping
+ * the partial trailing word entirely, so a truncation can never fabricate a
+ * new standalone word/token that was not already complete in the source
+ * text. When the character right after the cut is itself a boundary (`-`,
+ * or the slug ends there), the cut was already word-aligned and nothing is
+ * dropped. When no `-` boundary exists inside the slice at all (one giant
+ * word >= maxLen), there is nothing safe to trim back to, so the slice is
+ * kept as-is — the same behavior as before for that edge case.
+ */
+function truncateSlugAtWordBoundary(slug: string, maxLen: number): string {
+  if (slug.length <= maxLen) return slug;
+  const cut = slug.slice(0, maxLen);
+  const nextChar = slug[maxLen];
+  if (nextChar === "-" || nextChar === undefined) return cut.replace(/-+$/, "");
+  const lastDash = cut.lastIndexOf("-");
+  if (lastDash <= 0) return cut;
+  return cut.slice(0, lastDash);
+}
+
 function slugify(text: string): string {
-  const slug = text
+  const raw = text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60)
-    .replace(/-+$/, "");
+    .replace(/^-+|-+$/g, "");
+  const slug = truncateSlugAtWordBoundary(raw, SLUG_MAX_LEN).replace(/-+$/, "");
   return slug.length > 0 ? slug : "pattern";
 }
 
-/** `<domain>.<slug>-<sha8>` — deterministic, never random (W3 spec + plan). */
+/**
+ * `<domain>.<slug>-<sha8>` — deterministic, never random (W3 spec + plan).
+ *
+ * R9-F3: the slug is built from `trigger` with `reviewer-comment`'s fixed
+ * `REVIEWER_COMMENT_TRIGGER_PREFIX` wording stripped first (a no-op for
+ * every other trigger, which never carries that prefix) — the same
+ * prefix-stripping `graduate.ts`'s `keywordSourceFor` applies before
+ * deriving keywords/names, so the id's readable slug is built from a
+ * reviewer-comment draft's actual keyword hint, not Keryx's own template
+ * prose ahead of it. The hash still covers the FULL, un-stripped, normalized
+ * `trigger` — the slug is only ever a human-readable hint, never what makes
+ * the id unique or stable, so stripping it does not change identity/dedup.
+ */
 export function deterministicPatternId(domain: LearningDomain, trigger: string): string {
   const normalized = normalizeText(trigger);
   const hash = createHash("sha256").update(`${domain}\n${normalized}`).digest("hex").slice(0, 8);
-  return `${domain}.${slugify(trigger)}-${hash}`;
+  return `${domain}.${slugify(stripReviewerCommentTriggerPrefix(trigger))}-${hash}`;
 }
 
 /** Reads every `.metaproject/data/learning/observations/<date>.jsonl` file with `date >= since`, parsing valid lines only (a malformed line is skipped, not thrown). */

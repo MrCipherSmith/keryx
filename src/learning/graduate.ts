@@ -22,7 +22,7 @@ import { isPathInside, pathExists, withFileLock, writeFileAtomic } from "../lib/
 import { loadReviewLearningConfigSafe, type ReviewLearningConfig } from "../review/review-learning";
 import { appendDecision } from "./decisions";
 import { assertInsideLearningRoot, graduationDir, learningDataDir, projectLockPath } from "./paths";
-import { gateReviewerText, loginKeywordSet, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
+import { gateReviewerText, loginKeywordSet, mayCarryReviewerText, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { listPatterns, readPattern, updatePattern, type StoreEnvOptions } from "./store";
 import type { GraduationTarget, LearnedPattern, LearningDomain, LearningScope } from "./types";
@@ -277,8 +277,15 @@ function classify(cluster: readonly LearnedPattern[]): GraduationTarget | undefi
   return undefined;
 }
 
+/** The `provenance`/`trigger`/`action` shape `keywordSourceFor`/`topKeywords`/`suggestedNameFor` need — every `LearnedPattern` satisfies this, and so does `applyGraduation`'s lighter-weight `MemberAttributionEntry` (built from member records read at apply time, without the rest of `LearnedPattern`). */
+interface KeywordEntry {
+  readonly provenance: { readonly extractor: string; readonly extractorKind?: string | undefined };
+  readonly trigger: string;
+  readonly action: string;
+}
+
 /**
- * A record's `trigger`, with `reviewer-comment`'s fixed
+ * An entry's `trigger`, with `reviewer-comment`'s fixed
  * `REVIEWER_COMMENT_TRIGGER_PREFIX` wording stripped first (R5-F1/R5-F2):
  * that prefix's own constant words ("preparing", "change", "review",
  * "project") are not the member's actual content, and letting them into
@@ -287,16 +294,33 @@ function classify(cluster: readonly LearnedPattern[]): GraduationTarget | undefi
  * comment said — the same fixed-wording contamination `containsConfiguredLogin`'s
  * removed substring fallback used to false-refuse on (see `reviewer-id.ts`).
  */
-function keywordSourceFor(record: LearnedPattern): string {
-  const trigger = record.provenance.extractor === "reviewer-comment" ? stripReviewerCommentTriggerPrefix(record.trigger) : record.trigger;
-  return `${trigger} ${record.action}`;
+function keywordSourceFor(entry: KeywordEntry): string {
+  const trigger = entry.provenance.extractor === "reviewer-comment" ? stripReviewerCommentTriggerPrefix(entry.trigger) : entry.trigger;
+  return `${trigger} ${entry.action}`;
 }
 
-/** `logins` (R6-F1): forwarded to `keywordsOf` so a configured login (or a hyphen/underscore piece of one) can never surface as a top keyword — and therefore never in `suggestedNameFor`'s name or `runGraduate`'s summary. */
-function topKeywords(cluster: readonly LearnedPattern[], limit: number, logins: readonly string[] = []): string[] {
+/**
+ * `logins` (R6-F1): forwarded to `keywordsOf` so a configured login (or a
+ * hyphen/underscore piece of one) can never surface as a top keyword — and
+ * therefore never in `suggestedNameFor`'s name or `runGraduate`'s summary.
+ *
+ * R9-F1/R9-F2 (review round 9, PR #691): `logins` is applied PER ENTRY, only
+ * when `mayCarryReviewerText(entry.provenance)` holds — the same scoping
+ * `gateReviewerText`'s member-text gate already applies. An entry whose
+ * signal never reads review text (reverted-edit, repeated-correction, a
+ * plain `code-style`/`code-bot` cluster, ...) keeps its keywords unfiltered:
+ * an ordinary word that happens to equal a configured login (`code`, `edit`,
+ * `review`) is that entry's genuine content, not an attribution leak, and
+ * filtering it out regardless of provenance both mis-named clean
+ * graduations AND (when it emptied the whole keyword set) fell back to
+ * `learned-<domain>` — the same fixed fallback name `applyGraduation` used
+ * to then wrongly refuse for containing no login at all.
+ */
+function topKeywords(entries: readonly KeywordEntry[], limit: number, logins: readonly string[] = []): string[] {
   const frequency = new Map<string, number>();
-  for (const record of cluster) {
-    for (const word of keywordsOf(keywordSourceFor(record), logins)) {
+  for (const entry of entries) {
+    const loginsForEntry = mayCarryReviewerText(entry.provenance) ? logins : [];
+    for (const word of keywordsOf(keywordSourceFor(entry), loginsForEntry)) {
       frequency.set(word, (frequency.get(word) ?? 0) + 1);
     }
   }
@@ -306,32 +330,11 @@ function topKeywords(cluster: readonly LearnedPattern[], limit: number, logins: 
     .map(([word]) => word);
 }
 
-/** Kebab-case suggested name from the cluster's top keywords — always matches `^[a-z][a-z0-9-]*$` by construction (`keywordsOf` only yields lowercase `[a-z][a-z0-9]*` tokens). `logins`: see `topKeywords`. */
-function suggestedNameFor(cluster: readonly LearnedPattern[], logins: readonly string[] = []): string {
-  const words = topKeywords(cluster, 3, logins);
+/** Kebab-case suggested name from the entries' top keywords — always matches `^[a-z][a-z0-9-]*$` by construction (`keywordsOf` only yields lowercase `[a-z][a-z0-9]*` tokens). `domain` feeds only the fallback name (no shared keywords survive filtering — a singleton cluster, or every keyword happened to be login-equal for a `mayCarryReviewerText` entry). `logins`: see `topKeywords`. */
+function suggestedNameFor(entries: readonly KeywordEntry[], domain: LearningDomain, logins: readonly string[] = []): string {
+  const words = topKeywords(entries, 3, logins);
   if (words.length > 0) return words.join("-");
-  return `learned-${(cluster[0] as LearnedPattern).domain}`;
-}
-
-/**
- * R8-F1: parses the comma-separated keyword list out of a proposal's `summary`
- * (`` `${n} accepted "${domain}" pattern(s) sharing: ${keywords}.` `` — see
- * `runGraduate`) — `[]` for a singleton cluster's `"(no shared keywords —
- * singleton cluster)"` placeholder, or when the fixed `"sharing:"` marker is
- * absent. Feeds `applyGraduation`'s `extraTokens` re-check of the proposal's
- * own persisted keyword list against logins configured after `runGraduate`
- * ran.
- */
-function summaryKeywordTokens(summary: string): string[] {
-  const marker = "sharing:";
-  const index = summary.indexOf(marker);
-  if (index < 0) return [];
-  const rest = summary.slice(index + marker.length).replace(/\.$/, "").trim();
-  if (rest.length === 0 || rest.startsWith("(")) return [];
-  return rest
-    .split(",")
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0);
+  return `learned-${domain}`;
 }
 
 function proposalIdFor(target: GraduationTarget, memberIds: readonly string[]): string {
@@ -464,7 +467,7 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
     }
 
     const domain = (cluster[0] as LearnedPattern).domain;
-    const suggestedName = suggestedNameFor(cluster, configuredLogins);
+    const suggestedName = suggestedNameFor(cluster, domain, configuredLogins);
     const keywords = topKeywords(cluster, 5, configuredLogins);
     const query = keywords.length > 0 ? keywords.join(" ") : domain;
     const summary = `${cluster.length} accepted "${domain}" pattern(s) sharing: ${keywords.join(", ") || "(no shared keywords — singleton cluster)"}.`;
@@ -572,16 +575,37 @@ interface AgentCandidateBuild {
    * signal never reads review text (reverted-edit, repeated-correction, etc.)
    * is passed through unchanged and `gateReviewerText` is a no-op for it,
    * rather than being pre-filtered out here (R7-F2, the residual `R6-F4` left
-   * open in `applyGraduation`'s old member-text gate). Never the proposal's
-   * own `description` (`proposal.summary`) or `suggestedName`, and never the
-   * assembled `role`/`body`: all of those also carry this function's own or
-   * `runGraduate`'s fixed template wording (R4-F1/R5-F1/R5-F2, see
-   * `applyGraduation`'s separate `extraTokens` re-check of those, R8-F1).
+   * open in `applyGraduation`'s old member-text gate).
    */
   readonly memberEntries: readonly MemberAttributionEntry[];
 }
 
-async function buildAgentCandidate(root: string, proposal: GraduationProposalFile, storeOptions: StoreEnvOptions): Promise<AgentCandidateBuild> {
+/**
+ * R9-F1/R9-F2 (review round 9, PR #691): the candidate's `name`/`description`
+ * are RECOMPUTED here from `memberEntries` and `configuredLogins` — the
+ * logins configured NOW, at apply time — rather than trusted from
+ * `proposal.suggestedName`/`proposal.summary`, which were filtered against
+ * whichever logins were configured when `runGraduate` ran. A login
+ * configured afterward (before this apply) would otherwise leave a stale,
+ * unfiltered token sitting in those persisted strings with no way to catch
+ * it short of re-checking already-derived text (which is what the removed
+ * `extraTokens` re-check did, and which could not tell a stale login token
+ * apart from an ordinary keyword or the fixed `learned-<domain>` fallback
+ * that only coincidentally shared a substring with a login — R9-F1/R9-F2).
+ * Recomputing with the exact same `topKeywords`/`suggestedNameFor` rule
+ * `runGraduate` uses (scoped to `mayCarryReviewerText` per member) keeps
+ * proposal-time and apply-time in agreement by construction, with nothing
+ * stale left to re-check. When the recomputed name differs from
+ * `proposal.suggestedName` (the login-derived token that changed it was
+ * configured after `runGraduate` ran), the agent is written under the
+ * recomputed name, not the stale one.
+ */
+async function buildAgentCandidate(
+  root: string,
+  proposal: GraduationProposalFile,
+  storeOptions: StoreEnvOptions,
+  configuredLogins: readonly string[],
+): Promise<AgentCandidateBuild> {
   const members: string[] = [];
   const memberEntries: MemberAttributionEntry[] = [];
   for (const id of proposal.members) {
@@ -594,14 +618,18 @@ async function buildAgentCandidate(root: string, proposal: GraduationProposalFil
     }
   }
 
-  const description = proposal.summary.length > 0 && proposal.summary.length <= 1024 ? proposal.summary : proposal.summary.slice(0, 1024);
+  const recomputedKeywords = topKeywords(memberEntries, 5, configuredLogins);
+  const recomputedName = suggestedNameFor(memberEntries, proposal.domain, configuredLogins);
+  const summary = `${proposal.members.length} accepted "${proposal.domain}" pattern(s) sharing: ${recomputedKeywords.join(", ") || "(no shared keywords — singleton cluster)"}.`;
+
+  const description = summary.length > 0 && summary.length <= 1024 ? summary : summary.slice(0, 1024);
   const role =
     `Applies guidance graduated from ${proposal.members.length} learned pattern(s) in the "${proposal.domain}" domain. ` +
     "Read-only: report findings and suggested guidance rather than making changes yourself.";
 
   return {
     definition: {
-      name: proposal.suggestedName,
+      name: recomputedName,
       description,
       role,
       tools: GRADUATED_AGENT_TOOLS,
@@ -653,7 +681,27 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
     );
   }
 
-  const { definition: candidate, memberEntries } = await buildAgentCandidate(root, proposal, storeOptions);
+  // R3-F3: a malformed config surfaces as `LearningGraduateConfigError` from
+  // `configuredReviewLogins` — converted here into the named
+  // `review-learning-config-invalid` reason rather than an un-reasoned
+  // throw escaping `applyGraduation`. Loaded BEFORE `buildAgentCandidate`
+  // (R9-F1/R9-F2): the candidate's name/summary are recomputed from these
+  // CURRENT logins, not trusted from the proposal's own stored values — see
+  // `buildAgentCandidate`'s doc comment.
+  let configuredLogins: string[];
+  try {
+    configuredLogins = await configuredReviewLogins(root);
+  } catch (error) {
+    if (error instanceof LearningGraduateConfigError) {
+      throw new LearningGraduateError(
+        "review-learning-config-invalid",
+        `proposal "${proposalId}" cannot be applied: .metaproject/review-learning.config.json is invalid: ${error.message}`,
+      );
+    }
+    throw error;
+  }
+
+  const { definition: candidate, memberEntries } = await buildAgentCandidate(root, proposal, storeOptions, configuredLogins);
 
   const scan = await scanLearnedText(root, [candidate.description, candidate.role, candidate.body]);
   if (scan.findings.length > 0) {
@@ -670,31 +718,17 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
   // R4-F1/R5-F1/R5-F2/R7-F2/R7-F3: this login gate checks ONLY
   // `memberEntries` — `gateReviewerText` itself decides, per member, whether
   // `mayCarryReviewerText(entry.provenance)` holds before inspecting that
-  // member's `trigger`/`action`. It never checks `candidate.description`
-  // (== `proposal.summary`) or `proposal.suggestedName` directly here: both
-  // are built by `runGraduate` out of a mix of member content AND fixed
-  // wording (the summary's own template prose, the literal `domain` string,
-  // `REVIEWER_COMMENT_TRIGGER_PREFIX` before `topKeywords` stripped it), so a
-  // raw substring/boundary check over them would reopen the fixed-wording
-  // false-refusal class (R4-F1/R5-F1/R5-F2). See the `extraTokens` re-check
-  // below (R8-F1) for how that content IS still covered, safely.
-  //
-  // R3-F3: a malformed config surfaces as `LearningGraduateConfigError` from
-  // `configuredReviewLogins` — converted here into the named
-  // `review-learning-config-invalid` reason rather than an un-reasoned
-  // throw escaping `applyGraduation`.
-  let configuredLogins: string[];
-  try {
-    configuredLogins = await configuredReviewLogins(root);
-  } catch (error) {
-    if (error instanceof LearningGraduateConfigError) {
-      throw new LearningGraduateError(
-        "review-learning-config-invalid",
-        `proposal "${proposalId}" cannot be applied: .metaproject/review-learning.config.json is invalid: ${error.message}`,
-      );
-    }
-    throw error;
-  }
+  // member's `trigger`/`action`. It never checks `candidate.description` or
+  // `candidate.name` directly here: both are now RECOMPUTED by
+  // `buildAgentCandidate` from `memberEntries` and `configuredLogins` using
+  // the same per-member `mayCarryReviewerText`-scoped filtering
+  // `runGraduate` applies at proposal time (R9-F1/R9-F2) — so a login is
+  // already kept out of them by construction, and there is nothing stale
+  // left to re-check (the removed `extraTokens` re-check this comment used
+  // to point to, R8-F1, inspected STORED tokens instead and could not tell
+  // a stale leaked login apart from an ordinary keyword or the fixed
+  // `learned-<domain>` fallback that only coincidentally shared a
+  // substring with a login).
   if (
     configuredLogins.length > 0 &&
     memberEntries.some((entry) => gateReviewerText({ provenance: entry.provenance, trigger: entry.trigger, action: entry.action }, configuredLogins).refused)
@@ -702,39 +736,6 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
     throw new LearningGraduateError(
       "learning-text-refused",
       `agent candidate for proposal "${proposalId}" refused: contains a configured reviewer login`,
-    );
-  }
-
-  // R8-F1: `runGraduate` filtered `proposal.suggestedName`/`proposal.summary`
-  // against the logins configured AT PROPOSAL TIME (`keywordsOf`'s login
-  // filtering feeding `topKeywords`/`suggestedNameFor`), but a login
-  // configured AFTER that (before this apply) would not have been in that
-  // filter — a glued member token (`alice-style`) that survived clustering
-  // clean can still sit, as a standalone keyword, in the persisted
-  // `suggestedName`/summary. Re-check those tokens now, by token EQUALITY
-  // against `loginKeywordSet` (never a substring test — that would reopen
-  // R7-F1's fixed-wording false-refusal class: `suggestedName`/`summary`
-  // still mix `runGraduate`'s own template prose with keyword-derived
-  // content, and a login merely equal to a SUBSTRING of that prose must not
-  // trip this gate). `gateReviewerText`'s `extraTokens` param does exactly
-  // this token-equality check; `trigger`/`action` are empty and the
-  // provenance is neutral so only the token check runs — this is "the same
-  // member gate", called again with a different input shape.
-  if (
-    configuredLogins.length > 0 &&
-    gateReviewerText(
-      {
-        provenance: { extractor: "graduate-proposal" },
-        trigger: "",
-        action: "",
-        extraTokens: [...proposal.suggestedName.split("-"), ...summaryKeywordTokens(proposal.summary)],
-      },
-      configuredLogins,
-    ).refused
-  ) {
-    throw new LearningGraduateError(
-      "learning-text-refused",
-      `agent candidate for proposal "${proposalId}" refused: suggested name/summary contains a configured reviewer login`,
     );
   }
 

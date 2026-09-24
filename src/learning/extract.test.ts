@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { appendFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { LearningExtractError, loadObservationWindow, runExtract, type ModelExtractor } from "./extract";
+import { deterministicPatternId, LearningExtractError, loadObservationWindow, runExtract, type ModelExtractor } from "./extract";
+import { REVIEWER_COMMENT_TRIGGER_PREFIX } from "./reviewer-id";
 import { validateLearnedPattern } from "./schema";
 import { listPatterns, readPattern, writePattern } from "./store";
 import type { LearnedPattern, ObservationEvent } from "./types";
@@ -761,5 +762,49 @@ describe("runExtract — a malformed review-learning config never leaves a half-
       const report = await runExtract(root, { now: NOW });
       expect(report.created.length).toBe(1);
     });
+  });
+});
+
+// R9-F3 (review round 9, PR #691, info, probe r14/t.ts): a reviewer-comment
+// trigger used to be slugged BEFORE stripping `REVIEWER_COMMENT_TRIGGER_PREFIX`,
+// so the 60-char slug cut counted against the fixed prefix's own words too —
+// on a trigger just past that limit, the cut landed mid-word and could turn
+// a glued login fragment (e.g. `alicestyle`) into a standalone `alice`
+// segment in the id, reading exactly like a bare login. Fixed by slugging
+// only the prefix-stripped hint (a no-op for every non-reviewer-comment
+// trigger, which never carries the prefix) and cutting any overlong slug at
+// a word boundary rather than mid-word.
+describe("deterministicPatternId: reviewer-comment slug (R9-F3)", () => {
+  test("a glued login fragment in the hint never becomes a standalone id segment", () => {
+    const trigger = `${REVIEWER_COMMENT_TRIGGER_PREFIX}abc alicestyle)`;
+    const id = deterministicPatternId("review-conventions", trigger);
+
+    expect(id).toBe("review-conventions.abc-alicestyle-5199172c");
+    expect(id.split("-")).not.toContain("alice");
+  });
+
+  test("slugs the prefix-stripped hint, not the fixed prefix wording", () => {
+    const trigger = `${REVIEWER_COMMENT_TRIGGER_PREFIX}prefer early returns)`;
+    const id = deterministicPatternId("review-conventions", trigger);
+
+    expect(id).toMatch(/^review-conventions\.prefer-early-returns-[0-9a-f]{8}$/);
+  });
+
+  test("a truncated slug never splits a word: cuts back to the last complete word", () => {
+    const longHint = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mikealphastyle";
+    const trigger = `${REVIEWER_COMMENT_TRIGGER_PREFIX}${longHint})`;
+    const id = deterministicPatternId("review-conventions", trigger);
+    const slug = id.replace(/^review-conventions\./, "").replace(/-[0-9a-f]{8}$/, "");
+
+    expect(slug.length).toBeLessThanOrEqual(60);
+    expect(longHint.toLowerCase().startsWith(slug.replace(/-/g, " "))).toBe(true);
+    expect(slug.split("-")).not.toContain("mikealphastyl"); // never a partial trailing word
+  });
+
+  test("a non-reviewer-comment trigger (no fixed prefix) is unaffected", () => {
+    const trigger = "when editing generated protobuf bindings manually here";
+    const id = deterministicPatternId("code-style", trigger);
+
+    expect(id).toMatch(/^code-style\.when-editing-generated-protobuf-bindings-manually-here-[0-9a-f]{8}$/);
   });
 });

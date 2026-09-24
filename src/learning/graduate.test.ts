@@ -595,24 +595,29 @@ describe("runGraduate/applyGraduation: a login glued to member text via a hyphen
   });
 });
 
-// R8-F1 (review round 8, PR #691, minor, probe r12/s.ts S3): dropping R7-F1's
-// second token gate (above) reopened R6-F1 for a login configured AFTER
-// `runGraduate` ran. `runGraduate`'s `keywordsOf`/`topKeywords` filter a
-// glued member token (`alice-style`) out of `suggestedName`/`summary` using
-// only the logins known AT THAT TIME — a login configured afterward, before
-// `applyGraduation` runs, was never in that filter, so the standalone
-// keyword `alice` still reached the persisted proposal file and, unchecked,
-// the applied agent's own name/description. Proven pre-fix (scratch copy of
-// HEAD, before this task's edit, via `bun run r691/r13/s-prefix.ts`):
-// `APPLIED; name/desc: name: alice-early-returns | description: ... sharing:
-// alice, early, returns, style, nested.` `applyGraduation` now re-checks the
-// proposal's own `suggestedName`/summary-keyword tokens against the CURRENT
-// configured-login list, by token equality (`gateReviewerText`'s
-// `extraTokens`), not a substring test — the same rule R7-F1 established is
-// still required for the token check to avoid reopening the fixed-wording
-// false-refusal class.
-describe("applyGraduation: a login glued to member text and configured AFTER runGraduate still refuses at apply time (R8-F1)", () => {
-  test("authors ['alice'] configured only after runGraduate refuses applyGraduation for a proposal whose suggestedName/summary already carry the glued 'alice' keyword", async () => {
+// R9-F1/R9-F2 (review round 9, PR #691, minor, probe r14/p.ts, r14/q.ts):
+// R8-F1's fix (below, superseded) re-checked the PROPOSAL's own persisted
+// `suggestedName`/summary tokens against the current configured-login list
+// at apply time — but that inspected STORED, already-derived tokens, not the
+// member records, so it could not tell a genuinely leaked login apart from
+// (R9-F1) the fixed `learned-<domain>` fallback name (whose split-on-`-`
+// pieces can coincidentally equal a login piece, e.g. `learned-review-
+// conventions` split includes the bare word "review") or (R9-F2) an
+// ordinary keyword that only happens to equal a login piece, INCLUDING one
+// from a member whose signal never reads review text at all (a `code-style`
+// cluster's genuine word "code" refused outright by a login `code-bot`).
+// Both false-refused a clean graduation regardless of what any member
+// record said. The orchestrator decision: `applyGraduation` never re-checks
+// stored derived tokens — it RECOMPUTES the candidate's name/summary from
+// the member records and the CURRENT configured logins
+// (`topKeywords`/`suggestedNameFor`, scoped per member by
+// `mayCarryReviewerText` — R9-F1/R9-F2's other half: filtering is applied
+// only to members whose signal could actually carry review text; every
+// other member's keywords are never login-filtered at all). When the
+// recomputed name differs from the proposal's stale `suggestedName`, the
+// agent is written under the recomputed name.
+describe("applyGraduation: a login glued to member text and configured AFTER runGraduate: name/description are recomputed without it, not refused (R9-F1/R9-F2)", () => {
+  test("authors ['alice'] configured only after runGraduate: applyGraduation recomputes the name/description without 'alice' and still writes the agent", async () => {
     await withProjectRoot(async (root, env) => {
       const capability = createAcceptCapability();
       const rows: readonly [string, string, string][] = [
@@ -641,11 +646,175 @@ describe("applyGraduation: a login glued to member text and configured AFTER run
         JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
       );
 
-      await expect(
-        applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW }),
-      ).rejects.toMatchObject({ reason: "learning-text-refused" });
+      const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+      expect(existsSync(result.path)).toBe(true);
 
-      expect(existsSync(path.join(root, ".metaproject", "agents"))).toBe(false);
+      const agentMd = readFileSync(result.path, "utf8");
+      const nameLine = agentMd.split("\n").find((line) => line.startsWith("name:"));
+      const descriptionLine = agentMd.split("\n").find((line) => line.startsWith("description:"));
+      expect(nameLine?.toLowerCase()).not.toContain("alice");
+      expect(descriptionLine?.toLowerCase()).not.toContain("alice");
+
+      // Recomputed at apply time — differs from the stale proposal.suggestedName
+      // (which still carries the glued 'alice' token), so the agent is written
+      // under the recomputed name, not the stale one.
+      expect(result.path).not.toBe(path.join(root, ".metaproject", "agents", `${agentProposal!.suggestedName}.md`));
+    });
+  });
+});
+
+// R9-F1 (probe r14/p.ts, RC_NOKW): a no-keyword reviewer-comment cluster's
+// `suggestedName` is the FIXED fallback `learned-<domain>` — unaffected by
+// login filtering (it never came from `topKeywords` at all). The old
+// `extraTokens` re-check split that fallback on `-` regardless
+// (`["learned", "review", "conventions"]`) and refused it whenever a
+// configured login happened to equal one of those literal domain-name
+// pieces (`alice-review` -> "review"), whether the login was configured
+// before or after `runGraduate` — the re-check ran unconditionally at apply
+// time either way. Recomputing instead of re-checking never has this
+// problem: the fallback name is domain-derived, not filtered, either way.
+describe("runGraduate/applyGraduation: the fixed learned-<domain> fallback name is never refused by a login that is a substring of the domain name (R9-F1)", () => {
+  const NO_KEYWORD_CLUSTER: readonly [string, string, string][] = [
+    ["review-conventions.nk-aaaaaaaa", "use map", "Use map."],
+    ["review-conventions.nk-bbbbbbbb", "use map now", "Use map, not for."],
+    ["review-conventions.nk-cccccccc", "use map too", "Use a map."],
+  ];
+
+  test.each(["before", "after"] as const)(
+    "login 'alice-review' configured %s runGraduate still graduates a no-keyword review-conventions cluster under the fallback name",
+    async (when) => {
+      await withProjectRoot(async (root, env) => {
+        const capability = createAcceptCapability();
+        for (const [id, hint, action] of NO_KEYWORD_CLUSTER) {
+          await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.9), { env, capability });
+        }
+
+        const { mkdirSync, writeFileSync } = await import("node:fs");
+        const writeConfig = (): void => {
+          mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+          writeFileSync(
+            path.join(root, ".metaproject", "review-learning.config.json"),
+            JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice-review"] }),
+          );
+        };
+        if (when === "before") writeConfig();
+
+        const report = await runGraduate(root, { now: NOW, env });
+        const agentProposal = report.proposals.find((p) => p.target === "agent");
+        expect(agentProposal).toBeDefined();
+        expect(agentProposal!.suggestedName).toBe("learned-review-conventions");
+
+        if (when === "after") writeConfig();
+
+        const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+        expect(result.path).toBe(path.join(root, ".metaproject", "agents", "learned-review-conventions.md"));
+        expect(existsSync(result.path)).toBe(true);
+      });
+    },
+  );
+});
+
+// R9-F2 (probe r14/p.ts, RC_REVIEW and CS_CODE): an ORDINARY keyword that
+// merely happens to equal a login piece is still the member's genuine
+// content, not an attribution leak — refusing it regardless of provenance
+// false-refused both a reviewer-comment cluster that legitimately uses the
+// word "review" (login `alice-review`) and a `repeated-correction`
+// code-style cluster that legitimately uses the word "code" (login
+// `code-bot`, whose signal never reads review text at all — R7-F2's own
+// `mayCarryReviewerText` scoping, which the old `extraTokens` re-check
+// ignored entirely).
+describe("runGraduate/applyGraduation: an ordinary keyword equal to a login piece does not refuse graduation (R9-F2)", () => {
+  test("login 'alice-review' configured after runGraduate on a cluster whose genuine keyword is 'review' still graduates", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const rows: readonly [string, string, string][] = [
+        ["review-conventions.rq-aaaaaaaa", "request review early", "Request a second review before merging risky changes"],
+        ["review-conventions.rq-bbbbbbbb", "request review early always", "Request review from an owner before merging risky changes"],
+        ["review-conventions.rq-cccccccc", "request review sooner", "Request review early for risky changes"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice-review"] }),
+      );
+
+      const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+      expect(existsSync(result.path)).toBe(true);
+    });
+  });
+
+  test("login 'code-bot' configured after runGraduate on a repeated-correction code-style cluster whose genuine keyword is 'code' still graduates", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const rows: readonly [string, string, string][] = [
+        ["code-style.cd-aaaaaaaa", "When editing code under src/api in this project", "Keep code comments short in api handlers"],
+        ["code-style.cd-bbbbbbbb", "When editing code under src/web in this project", "Keep code comments short in web handlers"],
+        ["code-style.cd-cccccccc", "When editing code under src/cli in this project", "Keep code comments short in cli handlers"],
+      ];
+      for (const [id, trigger, action] of rows) {
+        await writePattern(root, makeAccepted(id, trigger, action, "code-style", 0.8), { env, capability });
+      }
+
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["code-bot"] }),
+      );
+
+      const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+      expect(existsSync(result.path)).toBe(true);
+    });
+  });
+});
+
+// R9-F2 continued (probe r14/q.ts): the R7-F2 test above configures 'edit'
+// BEFORE runGraduate; this covers the same reverted-edit cluster with the
+// login configured AFTER runGraduate (so `applyGraduation`'s recompute, not
+// `runGraduate`'s own gate, is what is exercised), plus a second login
+// ('nested', a genuine word in every member's action text) that a
+// substring/stored-token re-check would have refused outright.
+describe("runGraduate/applyGraduation: a reverted-edit member is never login-gated when the login is configured after runGraduate (R9-F2)", () => {
+  test.each(["edit", "nested"])("login '%s' configured after runGraduate does not refuse applying a reverted-edit cluster", async (login) => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const rows: readonly [string, string, string][] = [
+        ["code-style.revert-aaaaaaaa", "When an edit to foo.ts is immediately reverted in this project", "Avoid nested ternaries in foo helpers"],
+        ["code-style.revert-bbbbbbbb", "When an edit to bar.ts is immediately reverted in this project", "Avoid nested ternaries in bar helpers"],
+        ["code-style.revert-cccccccc", "When an edit to baz.ts is immediately reverted in this project", "Avoid nested ternaries in baz helpers"],
+      ];
+      for (const [id, trigger, action] of rows) {
+        const record = makeAccepted(id, trigger, action, "code-style", 0.8);
+        await writePattern(root, { ...record, provenance: { extractor: "reverted-edit", extractorKind: "deterministic" } }, { env, capability });
+      }
+
+      const report = await runGraduate(root, { now: NOW, env });
+      expect(report.refused).toEqual([]);
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: [login] }),
+      );
+
+      const result = await applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+      expect(existsSync(result.path)).toBe(true);
     });
   });
 });
