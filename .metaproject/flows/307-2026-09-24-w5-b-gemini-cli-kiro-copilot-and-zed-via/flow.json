@@ -9,7 +9,7 @@
   "title": "W5-b: Gemini CLI, Kiro, Copilot and Zed-via-ACP adapters, generated capability matrix, keryx integrations CLI",
   "status": "in-progress",
   "createdAt": "2026-09-24T00:56:53.608Z",
-  "updatedAt": "2026-09-24T01:56:55.612Z",
+  "updatedAt": "2026-09-24T02:24:23.624Z",
   "source": {
     "type": "description",
     "ref": null
@@ -78,8 +78,19 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T01:57:33.474Z",
+            "outcome": "started",
+            "detail": "review round 1 (opus) on PR #677"
+          },
+          {
+            "at": "2026-09-24T02:24:23.624Z",
+            "outcome": "failed",
+            "detail": "round 1: 3 major 7 minor fixed in 2 commits"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -289,6 +300,16 @@
       "at": "2026-09-24T01:56:55.612Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T01:57:33.474Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1 (opus) on PR #677"
+    },
+    {
+      "at": "2026-09-24T02:24:23.624Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: 3 major 7 minor fixed in 2 commits"
     }
   ]
 }

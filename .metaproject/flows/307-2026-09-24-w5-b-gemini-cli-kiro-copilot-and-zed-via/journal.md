@@ -28,3 +28,6 @@
 - 2026-09-24 - T3 checks: tsc exit 0; eslint on changed ts exit 0; targeted tests 286 pass 0 fail (src/integrations, commands/integrations, harness pin, ctx hook-install, orient-runtimes, security/agent-hooks, cli-reference-coverage, acp/permission).
 - 2026-09-24T01:56:55.527Z - task-done: T11: End-to-end: integrations install/doctor/uninstall on a temp project for every runtime, legacy alias tests unmodified
 - 2026-09-24T01:56:55.612Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-24T01:57:33.474Z - task-attempt: T4: started (attempt 1) — review round 1 (opus) on PR #677
+- 2026-09-24 - Review round 1 (opus) on PR #677: 3 major, 7 minor, 4 info (reviews/round-1.md). keryx review ingest refused (majors need class_scope enumeration) — round recorded in reviews/round-1.md and T4 attempt 1 instead. Fixes: worker A (F1,F2,F6,F8,F9) and worker B (F2,F3,F4,F5,F7,F10,F11,F13,F14) — both DONE; F12 left (riskNote covers it).
+- 2026-09-24T02:24:23.624Z - task-attempt: T4: failed (attempt 2) — round 1: 3 major 7 minor fixed in 2 commits
