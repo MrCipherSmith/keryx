@@ -411,6 +411,21 @@ export interface ScoutRecordEntry {
    * pack's guard test fails.
    */
   readonly justification?: string;
+
+  /**
+   * Flow 312, W3 T10: provenance when this scout run was recorded as part of
+   * graduating a `learned-pattern` record into a skill (the `nextSteps` a
+   * `keryx learn graduate` skill-target proposal prints: `keryx skills scout
+   * <query> --record <pack-dir> --origin learned --source-ref <id>`).
+   * `sourceRef` is either a `learned-pattern` record id or a graduation
+   * proposal id (`grad-...`) — validated at the CLI layer
+   * (`skills-governance.ts`'s `scoutCommand`), not here: `recordScout` stays
+   * a plain append, same as every other field on this record. Optional and
+   * absent from every scout record predating this field —
+   * `readScoutRecord`'s plain `JSON.parse` already tolerates an absent
+   * field, so no reader change was needed for this to round-trip.
+   */
+  readonly origin?: { readonly kind: "learned"; readonly sourceRef: string };
 }
 
 function scoutLogPath(packDir: string): string {

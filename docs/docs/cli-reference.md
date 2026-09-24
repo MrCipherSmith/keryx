@@ -2375,7 +2375,8 @@ keryx skills learn apply <proposal.json>
 keryx skills export <project-skill> --runtime codex|claude|plugin
 keryx skills sync --runtime codex|claude --target <dir>
 keryx skills contracts validate <file> --schema <name>
-keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all] [--json]
+keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all]
+    [--origin learned --source-ref <id>] [--json]
 keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>] [--model-grader] [--json]
 keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 ```
@@ -3260,6 +3261,7 @@ keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
                             [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                             [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
 keryx review learn --pr <n> [--dry-run] [--json]
+keryx review learn --reviewer <id> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
@@ -3454,12 +3456,22 @@ three things the join needs and nothing else:
 | Flag | Description |
 |---|---|
 | `--pr <n>` | The pull request to learn from. Its comments must already have been collected. |
-| `--dry-run` | Compute the proposal and write no proposal file. |
+| `--reviewer <id>` | Sibling mode (W3): apply an accepted `domain: review-conventions` learned-pattern record to `.metaproject/rules/reviewers/<id>.mdc` instead of the `--pr` path above. `--pr` is not read in this mode. |
+| `--dry-run` | Compute the proposal (or, with `--reviewer`, the rendered profile) and write nothing. |
 | `--json` | Machine-readable result, including the selection counts. |
 
 **There is no `--authors`, `--skill` or `--repo` flag, deliberately.** A flag
 would make the configured list a default, and one invocation could teach a
 project from somebody it never named.
+
+**`--reviewer <id>` applies a per-reviewer profile, not a per-skill proposal.**
+The source is an accepted `keryx learn` record (`domain: review-conventions`,
+`reviewerProfile.reviewerId` set) — a human already ran `keryx learn accept`
+on it. This mode writes `.metaproject/rules/reviewers/<id>.mdc` directly: a
+semver header comment, the generalized conventions, and a changelog entry.
+`<id>` is always the opaque `rv-`-prefixed hash `keryx learn` records —
+never the reviewer's literal login, which the rendered file is refused from
+ever containing.
 
 **A project with no config file does not learn.** That prints one line and exits
 `0`. It is a supported state, not a warning — a tool that warns about the normal
