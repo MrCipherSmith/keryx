@@ -157,7 +157,7 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
   const root = process.cwd();
   const catalog = loadSkillCatalog(root, { scope });
   const result = scoutSkill(query, catalog);
-  const imports = includeImports ? scoutImports(query) : undefined;
+  const imports = includeImports ? await scoutImports(query) : undefined;
   const vetting = candidate !== undefined ? await scoutVetCandidate(path.resolve(root, candidate)) : undefined;
 
   if (record !== undefined) {
@@ -204,6 +204,12 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
   }
   if (imports !== undefined) {
     console.log(`Imports searched: ${imports.searched} (${imports.reason})`);
+    if (imports.searched && imports.skipped.length > 0) {
+      console.log(`Imports skipped (failed re-verification): ${imports.skipped.length}`);
+      for (const skip of imports.skipped) {
+        console.log(`  ${skip.name}: ${skip.reason}`);
+      }
+    }
   }
   if (vetting !== undefined) {
     console.log(

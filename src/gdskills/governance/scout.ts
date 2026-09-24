@@ -49,11 +49,10 @@
 // how the score was COMPUTED, not where the bar was set.
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { cp, mkdtemp, rm } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { normalizeRouteText, routeTokens } from "../../lib/route-tokens";
-import { userStorePaths } from "../../lib/keryx-home";
 import type { CatalogEntry } from "./catalog-index";
 
 /**
@@ -439,10 +438,21 @@ export function recordScout(packDir: string, entry: ScoutRecordEntry): void {
 // ---------------------------------------------------------------------------
 // `--include-imports` (flow 313, W4, T10) — searches
 // `~/.keryx/skills/external-imports.json`, the reference-only registry
-// `keryx bundle import --external` writes (`src/bundle/external.ts`). Read
-// directly here (not through `src/bundle/external.ts`'s own
-// `readExternalImports`) to avoid a module cycle: that file already imports
-// `scoutSkill`/`scoutVetCandidate` from this one.
+// `keryx bundle import --external` writes (`src/bundle/external.ts`).
+//
+// R1-F17 (flow 313 review round 1 fix): this used to read and parse the
+// registry file directly, with no re-verification of a listed import's
+// files — a record whose source moved, was mutated, or vanished after it
+// was accepted still surfaced here as a live match. It now reuses
+// `src/bundle/external.ts`'s own `readExternalImports` (registry shape +
+// case-fold-sibling + integrity checks) and `verifyExternalImports`
+// (per-record re-check against the files on disk) and excludes any record
+// that is not currently `ok`, reporting it under `skipped` instead of
+// silently dropping it. `bundle/external.ts` is imported dynamically
+// (loaded only when this function actually runs, not at module load time)
+// because it in turn statically imports `scoutSkill`/
+// `collectSkillDirectorySnapshot`/`auditSkillSnapshot` from this file — a
+// static import in both directions would be a real circular dependency.
 // ---------------------------------------------------------------------------
 
 export interface ScoutImportMatch {
@@ -451,73 +461,85 @@ export interface ScoutImportMatch {
   readonly sourceRef: string;
 }
 
+export interface ScoutImportSkipped {
+  readonly name: string;
+  readonly reason: string;
+}
+
 export type ScoutImportsReport =
-  | { readonly searched: true; readonly reason: string; readonly matches: readonly ScoutImportMatch[] }
+  | {
+      readonly searched: true;
+      readonly reason: string;
+      readonly matches: readonly ScoutImportMatch[];
+      readonly skipped: readonly ScoutImportSkipped[];
+    }
   | { readonly searched: false; readonly reason: string };
 
-interface ExternalImportsFileShape {
-  readonly imports: Record<string, { readonly sourceRef?: unknown; readonly description?: unknown }>;
-}
-
-function isExternalImportsFileShape(value: unknown): value is ExternalImportsFileShape {
-  if (typeof value !== "object" || value === null) return false;
-  const imports = (value as Record<string, unknown>).imports;
-  return typeof imports === "object" && imports !== null && !Array.isArray(imports);
-}
-
 /**
- * Score `query` against every recorded external skill import, using the SAME
- * lexical scorer `scoutSkill` uses. `{searched: false, reason}` when the
- * registry is absent or corrupt — never a silently empty match list for a
- * failure that isn't "nothing recorded yet".
+ * Score `query` against every recorded external skill import that still
+ * re-verifies as `ok` (R1-F17), using the SAME lexical scorer `scoutSkill`
+ * uses. `{searched: false, reason}` when the registry is absent or corrupt —
+ * never a silently empty match list for a failure that isn't "nothing
+ * recorded yet".
  */
-export function scoutImports(query: string, opts: { env?: NodeJS.ProcessEnv; homeDir?: string } = {}): ScoutImportsReport {
-  const filePath = userStorePaths(opts.env ?? process.env, opts.homeDir).externalSkillImports;
-  if (!existsSync(filePath)) {
+export async function scoutImports(
+  query: string,
+  opts: { env?: NodeJS.ProcessEnv; homeDir?: string } = {},
+): Promise<ScoutImportsReport> {
+  const env = opts.env ?? process.env;
+  const { readExternalImports, verifyExternalImports } = await import("../../bundle/external");
+
+  const read = await readExternalImports(env, opts.homeDir);
+  if (!read.ok) {
+    return { searched: false, reason: read.message };
+  }
+
+  const recorded = Object.entries(read.registry.imports);
+  if (recorded.length === 0) {
+    // In practice this only happens when the registry file itself is absent
+    // (`readExternalImports` returns an empty registry for ENOENT):
+    // `applyExternalImports` never persists a registry with zero entries.
     return { searched: false, reason: "no external skill imports recorded" };
   }
 
-  let raw: string;
-  try {
-    raw = readFileSync(filePath, "utf8");
-  } catch (error) {
-    return { searched: false, reason: `external-imports.json could not be read: ${error instanceof Error ? error.message : String(error)}` };
+  const verify = await verifyExternalImports(env, opts.homeDir);
+  if (verify.refusal !== undefined) {
+    return { searched: false, reason: verify.refusal.message };
+  }
+  const statusByName = new Map(verify.entries.map((entry) => [entry.name, entry.status] as const));
+
+  const skipped: ScoutImportSkipped[] = [];
+  const verified = recorded.filter(([name]) => {
+    const status = statusByName.get(name);
+    if (status !== "ok") {
+      skipped.push({ name, reason: status ?? "unresolvable" });
+      return false;
+    }
+    return true;
+  });
+  skipped.sort((a, b) => a.name.localeCompare(b.name));
+
+  if (verified.length === 0) {
+    return {
+      searched: true,
+      reason: `searched ${recorded.length} external skill import(s); all failed re-verification`,
+      matches: [],
+      skipped,
+    };
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    return { searched: false, reason: `external-imports.json is not valid JSON: ${error instanceof Error ? error.message : String(error)}` };
-  }
-
-  if (!isExternalImportsFileShape(parsed)) {
-    return { searched: false, reason: "external-imports.json has an unrecognized shape" };
-  }
-
-  const entries = Object.entries(parsed.imports)
-    .filter((entry): entry is [string, { sourceRef: string; description: string }] => {
-      const record = entry[1];
-      return typeof record.sourceRef === "string" && typeof record.description === "string";
-    })
-    .map(([name, record]) => ({ name, sourceRef: record.sourceRef, description: record.description }));
-
-  if (entries.length === 0) {
-    return { searched: true, reason: "no external skill imports recorded", matches: [] };
-  }
-
-  const asCatalog: CatalogEntry[] = entries.map((entry) => ({
-    id: entry.name,
+  const asCatalog: CatalogEntry[] = verified.map(([name, record]) => ({
+    id: name,
     category: "external-import",
-    name: entry.name,
-    description: entry.description,
+    name,
+    description: record.description,
     triggers: [],
     body: "",
     bodyLines: 0,
     sha256: "",
-    path: entry.sourceRef,
+    path: record.sourceRef,
   }));
-  const sourceRefById = new Map(entries.map((entry) => [entry.name, entry.sourceRef]));
+  const sourceRefById = new Map(verified.map(([name, record]) => [name, record.sourceRef]));
 
   const scored = scoutSkill(query, asCatalog);
   const matches: ScoutImportMatch[] = scored.matches.map((match) => ({
@@ -526,7 +548,186 @@ export function scoutImports(query: string, opts: { env?: NodeJS.ProcessEnv; hom
     sourceRef: sourceRefById.get(match.skillId) ?? "",
   }));
 
-  return { searched: true, reason: `searched ${entries.length} external skill import(s)`, matches };
+  return { searched: true, reason: `searched ${verified.length} external skill import(s)`, matches, skipped };
+}
+
+// ---------------------------------------------------------------------------
+// Snapshot vetting (flow 313, W4 review round 1 fix — R1-F6/R1-F16/R1-F17):
+// the shared "collect the candidate's files ONCE, hash that exact snapshot,
+// audit that exact snapshot" primitive both `scoutVetCandidate` below
+// (`skills scout --candidate`) and `src/bundle/external.ts#vetExternalCatalog`
+// (W4 `bundle import --external`) now vet a skill directory through, so
+// neither can hash one read of a candidate's files and audit a different,
+// later read of them (R1-F17's TOCTOU).
+//
+// R1-F6: `runHarnessAudit`'s own project-root `skills` surface only walks
+// script-extension files, so a bare `SKILL.md` (the normal Agent Skills
+// shape) or a secret/injection payload hiding in a `.md`/`.txt` reference
+// file was never looked at. This instead stages EVERY regular file the
+// snapshot collected as an `importedBundle` entry of kind `"skill"` — see
+// `src/security/audit-harness/index.ts#scanImportedBundle`'s `"skill"` case,
+// which runs the full check set (secrets, injection, auto-run,
+// prompt-injection-in-instructions, remote-exec) over every TEXT file
+// regardless of name or extension, and fails the surface closed (reason
+// `binary-content`, `pathsUnreadable`) on anything that isn't valid UTF-8
+// text — never a silent skip. A markdown-only skill with nothing to flag now
+// genuinely passes, instead of being rejected `audit-not-applicable` for
+// having "nothing scannable".
+//
+// R1-F16: the depth-capped walk below fails CLOSED with a named reason
+// (`too-deep`/`too-many-files`/`too-large`) instead of silently truncating —
+// there is no longer a "the walk stopped early, but that reads as a clean
+// pass" case to exploit.
+// ---------------------------------------------------------------------------
+
+export interface SnapshotVettingLimits {
+  readonly maxFiles: number;
+  readonly maxTotalBytes: number;
+  readonly maxDepth: number;
+}
+
+/** Generous for a single skill directory (never a whole bundle/archive, which has its own, larger caps — R1-F10 is `src/bundle/archive.ts`'s to fix). */
+export const DEFAULT_SNAPSHOT_VETTING_LIMITS: SnapshotVettingLimits = {
+  maxFiles: 2000,
+  maxTotalBytes: 50 * 1024 * 1024,
+  maxDepth: 20,
+};
+
+export type SnapshotCollectFailureReason = "symlink-refused" | "too-many-files" | "too-large" | "too-deep";
+
+export type SnapshotCollectResult =
+  | { readonly ok: true; readonly files: ReadonlyMap<string, Buffer> }
+  | { readonly ok: false; readonly reason: SnapshotCollectFailureReason; readonly message: string };
+
+/**
+ * Read-only `lstat`-based walk of `dir`: refuses a symlink anywhere — the
+ * directory itself, or any file/directory under it at any depth (`lstat`,
+ * never `stat`, so a symlinked entry is caught by its OWN type, not by
+ * following it) — and enforces `limits` with a named reason rather than an
+ * unbounded read or a silent depth truncation. Every regular file's exact
+ * bytes are read exactly once into the returned map.
+ */
+export async function collectSkillDirectorySnapshot(
+  dir: string,
+  limits: SnapshotVettingLimits = DEFAULT_SNAPSHOT_VETTING_LIMITS,
+): Promise<SnapshotCollectResult> {
+  let rootStat;
+  try {
+    rootStat = await lstat(dir);
+  } catch (error) {
+    return { ok: false, reason: "symlink-refused", message: `cannot read ${dir}: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  if (rootStat.isSymbolicLink()) {
+    return { ok: false, reason: "symlink-refused", message: `${dir} is a symlink` };
+  }
+
+  const files = new Map<string, Buffer>();
+  let totalBytes = 0;
+
+  async function walk(absDir: string, relPrefix: string, depth: number): Promise<SnapshotCollectResult | undefined> {
+    if (depth > limits.maxDepth) {
+      return {
+        ok: false,
+        reason: "too-deep",
+        message: `${relPrefix.length > 0 ? relPrefix : "."} exceeds the maximum directory depth of ${limits.maxDepth}`,
+      };
+    }
+    let entries;
+    try {
+      entries = await readdir(absDir, { withFileTypes: true });
+    } catch {
+      return undefined; // vanished between checks; nothing more to add here.
+    }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const abs = path.join(absDir, entry.name);
+      const rel = relPrefix.length > 0 ? `${relPrefix}/${entry.name}` : entry.name;
+      const entryStat = await lstat(abs);
+      if (entryStat.isSymbolicLink()) {
+        return { ok: false, reason: "symlink-refused", message: `${rel} is a symlink` };
+      }
+      if (entryStat.isDirectory()) {
+        const failure = await walk(abs, rel, depth + 1);
+        if (failure !== undefined) return failure;
+        continue;
+      }
+      if (!entryStat.isFile()) continue;
+      if (files.size >= limits.maxFiles) {
+        return { ok: false, reason: "too-many-files", message: `${dir} has more than ${limits.maxFiles} files` };
+      }
+      totalBytes += entryStat.size;
+      if (totalBytes > limits.maxTotalBytes) {
+        return { ok: false, reason: "too-large", message: `${dir} exceeds ${limits.maxTotalBytes} total bytes` };
+      }
+      files.set(rel, await readFile(abs));
+    }
+    return undefined;
+  }
+
+  const failure = await walk(dir, "", 0);
+  if (failure !== undefined) return failure;
+  return { ok: true, files };
+}
+
+export type SnapshotAuditResult =
+  | { readonly ok: true; readonly gate: "pass" | "fail"; readonly findings: number; readonly bySeverity: Readonly<Record<string, number>> }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * Stages `files` (as `collectSkillDirectorySnapshot` produced them — the
+ * SAME bytes, never re-read from `dir`) into a fresh temp directory and runs
+ * `runHarnessAudit` over it with every entry declared `importedBundle` kind
+ * `"skill"` (the cross-lane contract, flow 313 W4 review round 1 fix). A
+ * caller must see `ok: true` before trusting `gate`/`findings` at all: `ok:
+ * false` covers an empty snapshot, an `imported-bundles` surface that didn't
+ * report `"scanned"`, any unreadable path (including a binary file, reason
+ * `binary-content`) or a coverage reason naming that surface — every one of
+ * those used to read as indistinguishable from a genuinely clean pass
+ * (R1-F6/R1-F16).
+ */
+export async function auditSkillSnapshot(files: ReadonlyMap<string, Buffer>): Promise<SnapshotAuditResult> {
+  if (files.size === 0) {
+    return { ok: false, reason: "audit-not-applicable: the candidate has no files to scan" };
+  }
+
+  let stagingRoot: string | undefined;
+  try {
+    stagingRoot = await mkdtemp(path.join(tmpdir(), "keryx-skill-vet-"));
+    const entries: { path: string; kind: "skill" }[] = [];
+    for (const [rel, bytes] of files) {
+      const abs = path.join(stagingRoot, rel);
+      await mkdir(path.dirname(abs), { recursive: true });
+      await writeFile(abs, bytes);
+      entries.push({ path: rel, kind: "skill" });
+    }
+
+    const { runHarnessAudit, auditGate } = await import("../../security/audit-harness/index");
+    const report = await runHarnessAudit(stagingRoot, { importedBundle: { entries } });
+
+    const surface = report.surfaces.find((s) => s.surface === "imported-bundles");
+    if (surface === undefined || surface.status !== "scanned") {
+      return { ok: false, reason: surface?.error ?? "audit-not-applicable: the imported-bundles surface did not report a clean scan" };
+    }
+    if ((surface.pathsUnreadable?.length ?? 0) > 0) {
+      return { ok: false, reason: `unreadable file(s): ${(surface.pathsUnreadable ?? []).join(", ")}` };
+    }
+    const coverageReasons = (report.coverage.reasons ?? []).filter((r) => r.includes("imported-bundles"));
+    if (coverageReasons.length > 0) {
+      return { ok: false, reason: coverageReasons.join("; ") };
+    }
+
+    const bundleFindings = report.findings.filter((f) => f.surface === "imported-bundles");
+    const bySeverity: Record<string, number> = {};
+    for (const finding of bundleFindings) {
+      bySeverity[finding.severity] = (bySeverity[finding.severity] ?? 0) + 1;
+    }
+    return { ok: true, gate: auditGate(report), findings: bundleFindings.length, bySeverity };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+  } finally {
+    if (stagingRoot !== undefined) {
+      await rm(stagingRoot, { recursive: true, force: true });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -540,28 +741,22 @@ export interface ScoutVettingSummary {
 }
 
 /**
- * Runs W8's `runHarnessAudit` over a scout candidate directory, when asked
- * (`--candidate <dir>`).
+ * Runs the shared snapshot vetting above over a scout candidate directory,
+ * when asked (`--candidate <dir>`).
  *
  * F7 (flow 309 review round 1): `runHarnessAudit(root)` audits a PROJECT
- * root — it discovers scripts under `.claude/skills/**`/`.metaproject/skills/**`
- * relative to `root` (`discoverSkillScripts`), not files directly under an
- * arbitrary directory. Auditing the bare candidate dir itself therefore
- * scanned NOTHING (every surface `not-applicable`, `findings: 0`) and that
- * empty result was reported as `available: true` — indistinguishable from a
- * genuinely clean audit. A malicious `scripts/install.sh` in the candidate
- * never got looked at.
- *
- * The fix: stage the candidate under a throwaway temp project at
- * `<tmp>/.claude/skills/<name>/` (a plain recursive copy — this never
- * touches the caller's real project) and audit THAT root, so the "skills"
- * surface's script walk actually reaches the candidate's files. If the
- * skills surface still comes back with nothing scanned and nothing
- * unreadable (an empty candidate directory, or one with no script-extension
- * files), that is reported as `available: false` / not-applicable with a
- * reason — never as a clean pass, per the "no fake pass" rule the module
- * header above states. The temp project is removed afterward regardless of
- * outcome.
+ * root, not an arbitrary directory — auditing the bare candidate dir
+ * directly used to scan nothing and read back as a fake clean pass. R1-F6/
+ * R1-F16 (flow 313 review round 1): the original fix for F7 (stage under
+ * `.claude/skills/<name>/` and let the `skills` surface's own script-only
+ * walk find it) still only ever looked at script-extension files and still
+ * treated "nothing scanned" as `not-applicable` rather than a name reason
+ * distinguishable from every other kind of empty/partial scan — this now
+ * goes through `collectSkillDirectorySnapshot`/`auditSkillSnapshot`
+ * instead, so a markdown-only skill is genuinely scanned (and accepted when
+ * clean), a symlink or an over-limit directory is refused by name rather
+ * than silently degrading the scan, and the same bytes that get hashed
+ * elsewhere are the ones actually audited.
  *
  * A nonexistent or non-directory `candidateDir` is refused up front, the
  * same guard `keryx security audit-harness` itself added at its CLI layer
@@ -573,35 +768,17 @@ export async function scoutVetCandidate(candidateDir: string): Promise<ScoutVett
     return { available: false, reason: `no such directory: ${candidateDir}` };
   }
 
-  const skillName = path.basename(path.resolve(candidateDir)) || "candidate";
-  let stagingRoot: string | undefined;
-  try {
-    stagingRoot = await mkdtemp(path.join(tmpdir(), "keryx-scout-vet-"));
-    const stagedSkillDir = path.join(stagingRoot, ".claude", "skills", skillName);
-    await cp(candidateDir, stagedSkillDir, { recursive: true });
-
-    const { runHarnessAudit } = await import("../../security/audit-harness/index");
-    const report = await runHarnessAudit(stagingRoot);
-
-    const skillsSurface = report.surfaces.find((surface) => surface.surface === "skills");
-    const scannedSomething = skillsSurface !== undefined && (skillsSurface.pathsScanned.length > 0 || (skillsSurface.pathsUnreadable?.length ?? 0) > 0);
-    if (!scannedSomething) {
-      return {
-        available: false,
-        reason: "not-applicable: the candidate directory has no script files (.sh/.py/.js/.ts) for the skills surface to scan",
-      };
-    }
-
-    const bySeverity: Record<string, number> = {};
-    for (const finding of report.findings) {
-      bySeverity[finding.severity] = (bySeverity[finding.severity] ?? 0) + 1;
-    }
-    return { available: true, summary: { findings: report.findings.length, bySeverity } };
-  } catch (error) {
-    return { available: false, reason: error instanceof Error ? error.message : String(error) };
-  } finally {
-    if (stagingRoot !== undefined) {
-      await rm(stagingRoot, { recursive: true, force: true });
-    }
+  const snapshot = await collectSkillDirectorySnapshot(candidateDir);
+  if (!snapshot.ok) {
+    return { available: false, reason: `${snapshot.reason}: ${snapshot.message}` };
   }
+  if (snapshot.files.size === 0) {
+    return { available: false, reason: "not-applicable: the candidate directory has no files for the skills surface to scan" };
+  }
+
+  const audited = await auditSkillSnapshot(snapshot.files);
+  if (!audited.ok) {
+    return { available: false, reason: audited.reason };
+  }
+  return { available: true, summary: { findings: audited.findings, bySeverity: audited.bySeverity } };
 }
