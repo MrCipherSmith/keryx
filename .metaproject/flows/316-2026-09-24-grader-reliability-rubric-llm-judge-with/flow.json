@@ -10,7 +10,7 @@
   "title": "Grader reliability: rubric LLM judge with anti-gaming tests for skill evals, validated on batch 1",
   "status": "in-progress",
   "createdAt": "2026-09-24T18:51:50.333Z",
-  "updatedAt": "2026-09-24T21:51:23.894Z",
+  "updatedAt": "2026-09-24T22:09:39.590Z",
   "source": {
     "type": "description",
     "ref": null
@@ -373,12 +373,12 @@
       "id": "T17",
       "title": "Adversarial review (opus) incl. judge-gaming attempts; fix loop",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T16"
       ],
       "attempts": {
-        "count": 2,
+        "count": 4,
         "log": [
           {
             "at": "2026-09-24T20:10:11.735Z",
@@ -389,12 +389,23 @@
             "at": "2026-09-24T20:35:07.818Z",
             "outcome": "failed",
             "detail": "round 1: 0 blocker, 4 major, 8 minor, 3 info; fix attempt 1 dispatched (T20-T24)"
+          },
+          {
+            "at": "2026-09-24T21:52:11.659Z",
+            "outcome": "started",
+            "detail": "verification round 2 (sonnet, narrow) at 9b4873b9"
+          },
+          {
+            "at": "2026-09-24T22:09:39.415Z",
+            "outcome": "failed",
+            "detail": "round 2: 0/0/1 minor/1 info; R2-2 fixed at 6f8cff7e; round 3 narrow verification clean; R2-1 info deferred (decided-by: MrCipherSmith, standing rule)"
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T18",
@@ -907,6 +918,21 @@
       "at": "2026-09-24T21:51:23.894Z",
       "event": "task-done",
       "detail": "T24: Docs r1: threat model (consistency not provenance), R1-9 fixes, re-run results, AC9 probe in flow package"
+    },
+    {
+      "at": "2026-09-24T21:52:11.659Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 3) — verification round 2 (sonnet, narrow) at 9b4873b9"
+    },
+    {
+      "at": "2026-09-24T22:09:39.415Z",
+      "event": "task-attempt",
+      "detail": "T17: failed (attempt 4) — round 2: 0/0/1 minor/1 info; R2-2 fixed at 6f8cff7e; round 3 narrow verification clean; R2-1 info deferred (decided-by: MrCipherSmith, standing rule)"
+    },
+    {
+      "at": "2026-09-24T22:09:39.590Z",
+      "event": "task-done",
+      "detail": "T17: Adversarial review (opus) incl. judge-gaming attempts; fix loop"
     }
   ]
 }
