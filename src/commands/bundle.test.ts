@@ -64,6 +64,17 @@ async function makeSourceProject(): Promise<string> {
   return root;
 }
 
+async function makeSourceProjectWithRule(): Promise<string> {
+  const root = await makeTempDir("keryx-bundle-src-rule-");
+  await mkdir(path.join(root, ".metaproject", "rules", "core"), { recursive: true });
+  await writeFile(
+    path.join(root, ".metaproject", "rules", "core", "acme-rule.mdc"),
+    '---\ndescription: "Always widget acme-style."\n---\n\n# acme-rule\n\nBody.\n',
+    "utf8",
+  );
+  return root;
+}
+
 function lastJson(): unknown {
   return JSON.parse(captured.join("\n"));
 }
@@ -285,5 +296,109 @@ describe("keryx bundle — refusal and usage exit codes", () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe("keryx bundle import --render-for", () => {
+  test("importing a rule with --render-for cursor writes the managed keryx:rules block into .cursor/rules/keryx-rules.mdc", async () => {
+    const home = await makeTempDir("keryx-bundle-home-");
+    process.env.KERYX_HOME = home;
+
+    const sourceRoot = await makeSourceProjectWithRule();
+    const bundleDir = path.join(await makeTempDir("keryx-bundle-out-"), "bundle-out");
+
+    install();
+    try {
+      await bundleCommand(["export", "--scope", "project", "--id", "rule-bundle", bundleDir, "--json"], sourceRoot);
+      expect(process.exitCode).toBe(0);
+    } finally {
+      restore();
+    }
+
+    const targetRoot = await makeTempDir("keryx-bundle-target-");
+
+    install();
+    try {
+      await bundleCommand(["import", bundleDir, "--render-for", "cursor", "--json"], targetRoot);
+      expect(process.exitCode).toBe(0);
+      const result = lastJson() as { ok: boolean; written: string[]; rendered?: Array<{ harness: string; status: string; file?: string }> };
+      expect(result.ok).toBe(true);
+      expect(result.written).toContain("project:rules/core/acme-rule.mdc");
+      expect(result.rendered?.some((r) => r.harness === "cursor" && r.file === ".cursor/rules/keryx-rules.mdc")).toBe(true);
+    } finally {
+      restore();
+    }
+
+    const rendered = await readFile(path.join(targetRoot, ".cursor", "rules", "keryx-rules.mdc"), "utf8");
+    expect(rendered).toContain("<!-- keryx:rules -->");
+    expect(rendered).toContain("<!-- /keryx:rules -->");
+    expect(rendered).toContain("acme-rule.mdc");
+  });
+
+  test("importing a rule with no --render-for and no rules-export surface installed creates no harness file", async () => {
+    const home = await makeTempDir("keryx-bundle-home-");
+    process.env.KERYX_HOME = home;
+
+    const sourceRoot = await makeSourceProjectWithRule();
+    const bundleDir = path.join(await makeTempDir("keryx-bundle-out-"), "bundle-out");
+
+    install();
+    try {
+      await bundleCommand(["export", "--scope", "project", "--id", "rule-bundle-noharness", bundleDir, "--json"], sourceRoot);
+    } finally {
+      restore();
+    }
+
+    const targetRoot = await makeTempDir("keryx-bundle-target-");
+
+    install();
+    try {
+      await bundleCommand(["import", bundleDir, "--json"], targetRoot);
+      expect(process.exitCode).toBe(0);
+      const result = lastJson() as { ok: boolean; written: string[]; rendered?: unknown };
+      expect(result.ok).toBe(true);
+      expect(result.written).toContain("project:rules/core/acme-rule.mdc");
+      expect(result.rendered).toBeUndefined();
+    } finally {
+      restore();
+    }
+
+    expect(existsSync(path.join(targetRoot, "CLAUDE.md"))).toBe(false);
+    expect(existsSync(path.join(targetRoot, ".cursor", "rules", "keryx-rules.mdc"))).toBe(false);
+  });
+
+  // BUG (reported under flow 313 T12/T13 verification, not fixed here — this
+  // lane owns tests only, not src/commands/bundle.ts): handleImport never
+  // validates --render-for values against known harness ids before writing.
+  // Today an unknown id still imports (exit 0, files written) and only
+  // renderRulesForHarnesses reports it "unsupported" afterwards — it does
+  // NOT refuse closed the way --scope/--target-scope do. Re-enable this test
+  // (drop `.todo`) once bundle.ts validates renderFor up front.
+  test.todo("an unknown --render-for harness id is refused (exit 2) before anything is written", async () => {
+    const home = await makeTempDir("keryx-bundle-home-");
+    process.env.KERYX_HOME = home;
+
+    const sourceRoot = await makeSourceProjectWithRule();
+    const bundleDir = path.join(await makeTempDir("keryx-bundle-out-"), "bundle-out");
+
+    install();
+    try {
+      await bundleCommand(["export", "--scope", "project", "--id", "rule-bundle-unknown", bundleDir, "--json"], sourceRoot);
+    } finally {
+      restore();
+    }
+
+    const targetRoot = await makeTempDir("keryx-bundle-target-");
+
+    install();
+    try {
+      await bundleCommand(["import", bundleDir, "--render-for", "not-a-real-harness", "--json"], targetRoot);
+      expect(process.exitCode).toBe(2);
+    } finally {
+      restore();
+    }
+
+    // Nothing was written: neither the imported rule file nor any harness file.
+    expect(existsSync(path.join(targetRoot, ".metaproject", "rules", "core", "acme-rule.mdc"))).toBe(false);
   });
 });
