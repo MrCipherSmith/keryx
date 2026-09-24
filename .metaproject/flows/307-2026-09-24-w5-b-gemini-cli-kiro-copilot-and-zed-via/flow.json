@@ -9,7 +9,7 @@
   "title": "W5-b: Gemini CLI, Kiro, Copilot and Zed-via-ACP adapters, generated capability matrix, keryx integrations CLI",
   "status": "in-progress",
   "createdAt": "2026-09-24T00:56:53.608Z",
-  "updatedAt": "2026-09-24T02:24:23.624Z",
+  "updatedAt": "2026-09-24T03:09:29.138Z",
   "source": {
     "type": "description",
     "ref": null
@@ -78,7 +78,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 2,
+        "count": 4,
         "log": [
           {
             "at": "2026-09-24T01:57:33.474Z",
@@ -89,6 +89,16 @@
             "at": "2026-09-24T02:24:23.624Z",
             "outcome": "failed",
             "detail": "round 1: 3 major 7 minor fixed in 2 commits"
+          },
+          {
+            "at": "2026-09-24T03:09:29.056Z",
+            "outcome": "started",
+            "detail": "review round 2 (opus) — re-recorded: a fix worker reverted uncommitted flow.json, dropping the original entry"
+          },
+          {
+            "at": "2026-09-24T03:09:29.138Z",
+            "outcome": "failed",
+            "detail": "round 2: 7 minor (F4,F7,F13,N1,N2,N4 + CI commands-by-task) fixed; 2 info fixed"
           }
         ]
       },
@@ -310,6 +320,16 @@
       "at": "2026-09-24T02:24:23.624Z",
       "event": "task-attempt",
       "detail": "T4: failed (attempt 2) — round 1: 3 major 7 minor fixed in 2 commits"
+    },
+    {
+      "at": "2026-09-24T03:09:29.056Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — review round 2 (opus) — re-recorded: a fix worker reverted uncommitted flow.json, dropping the original entry"
+    },
+    {
+      "at": "2026-09-24T03:09:29.138Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — round 2: 7 minor (F4,F7,F13,N1,N2,N4 + CI commands-by-task) fixed; 2 info fixed"
     }
   ]
 }

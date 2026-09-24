@@ -31,3 +31,7 @@
 - 2026-09-24T01:57:33.474Z - task-attempt: T4: started (attempt 1) — review round 1 (opus) on PR #677
 - 2026-09-24 - Review round 1 (opus) on PR #677: 3 major, 7 minor, 4 info (reviews/round-1.md). keryx review ingest refused (majors need class_scope enumeration) — round recorded in reviews/round-1.md and T4 attempt 1 instead. Fixes: worker A (F1,F2,F6,F8,F9) and worker B (F2,F3,F4,F5,F7,F10,F11,F13,F14) — both DONE; F12 left (riskNote covers it).
 - 2026-09-24T02:24:23.624Z - task-attempt: T4: failed (attempt 2) — round 1: 3 major 7 minor fixed in 2 commits
+- 2026-09-24T02:45:39.739Z - task-attempt: T4: started (attempt 3) — review round 2 (opus) after fixes ad1c5158+cacd6f12
+- 2026-09-24T03:09:29.056Z - task-attempt: T4: started (attempt 3) — review round 2 (opus) — re-recorded: a fix worker reverted uncommitted flow.json, dropping the original entry
+- 2026-09-24T03:09:29.138Z - task-attempt: T4: failed (attempt 4) — round 2: 7 minor (F4,F7,F13,N1,N2,N4 + CI commands-by-task) fixed; 2 info fixed
+- 2026-09-24 - Review round 2 (opus): round-1 majors confirmed fixed; 4 new minor + 3 partial (reviews/round-2.md); CI failed on commands-by-task.md. One fix worker fixed all + CI (422 targeted pass). Incident: that worker reverted the uncommitted flow.json (dropping the round-2 'started' attempt); re-recorded via keryx flow task attempt. Lesson: commit flow.json before dispatching workers.
