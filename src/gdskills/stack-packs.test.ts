@@ -24,7 +24,7 @@ import { lintSkill, lintStackRule, STACK_EXTENSIONS } from "./governance/authori
 import { readScoutRecord } from "./governance/scout";
 import type { EvalReport, EvalScenarioResult, EvalSpecFile, PackEvalDocument, TrialRecord } from "./governance/eval";
 import { checkStablePackGate, PACK_BEHAVIOR_PASS_FLOOR, validateEvalReport } from "./governance/eval";
-import { buildGateReadyReport } from "./governance/eval-fixtures";
+import { buildGateReadyReport } from "./governance/__fixtures__/gate-ready-report";
 import { exportProjectSkill } from "./export";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 import { defaultBundledRoot } from "./bundled-eval";
@@ -318,11 +318,27 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
   // key, a dangling "extends", and an agent-refs.json entry that does not
   // resolve/does not carry the right origin).
 
+  // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios live
+  // against the skill's own CURRENT SKILL.md frontmatter — single-letter/
+  // numbered placeholders ("p1".."p6"/"n1".."n4") tokenize to nothing and
+  // never honestly route anywhere, so these are real (short but
+  // multi-token) phrases, and `writeFixtureSkillFiles` seeds the positives
+  // into the skill's own `triggers:` frontmatter so honest scoring selects
+  // it for its own authored positives (no leave-one-out needed — see
+  // `eval.ts`'s `selectsSkillFull` doc comment for why that is fine for
+  // authored, human-written prompts).
   function validEvalSpec(overrides: Partial<EvalSpecFile> = {}): EvalSpecFile {
     return {
       triggers: {
-        positive: ["p1", "p2", "p3", "p4", "p5", "p6"],
-        negative: ["n1", "n2", "n3", "n4"],
+        positive: [
+          "run the fixture guard task one",
+          "run the fixture guard task two",
+          "run the fixture guard task three",
+          "run the fixture guard task four",
+          "run the fixture guard task five",
+          "run the fixture guard task six",
+        ],
+        negative: ["something entirely unrelated one", "something entirely unrelated two", "something entirely unrelated three", "something entirely unrelated four"],
       },
       scenarios: [
         { id: "s1", prompt: "do the thing", strictness: "low", expected_behavior: [{ grader: "contains", value: "ok" }] },
@@ -627,9 +643,10 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
   function writeFixtureSkillFiles(packDir: string, name: string, evalSpec: EvalSpecFile): void {
     const skillDir = path.join(packDir, "skills", name);
     mkdirSync(skillDir, { recursive: true });
+    const triggersYaml = (evalSpec.triggers?.positive ?? []).map((trigger) => `  - ${trigger}`).join("\n");
     writeFileSync(
       path.join(skillDir, "SKILL.md"),
-      `---\nname: ${name}\ndescription: Use when testing the guard.\n---\n\nBody.\n`,
+      `---\nname: ${name}\ndescription: Use when testing the guard.\ntriggers:\n${triggersYaml.length > 0 ? triggersYaml : "  - testing the guard"}\n---\n\nBody.\n`,
       "utf8",
     );
     writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec, null, 2), "utf8");
@@ -673,6 +690,7 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
     const failingRecord: TrialRecord = {
       output: failingOutput,
       outputSha256: createHash("sha256").update(failingOutput).digest("hex"),
+      promptSha256: passingRecord.promptSha256,
       deterministic: passingRecord.deterministic.map(() => false),
       passed: false,
     };

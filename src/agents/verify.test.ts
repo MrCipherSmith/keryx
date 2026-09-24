@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { EvalSpecFile } from "../gdskills/governance/eval";
-import { buildGateReadyReport } from "../gdskills/governance/eval-fixtures";
+import { buildGateReadyReport } from "../gdskills/governance/__fixtures__/gate-ready-report";
 import { generateStackAgentPair } from "./generate";
 import { checkStackPackGateCleared, verifyAgents } from "./verify";
 
@@ -251,9 +251,17 @@ describe("verifyAgents", () => {
       }),
       "utf8",
     );
-    writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n", "utf8");
+    // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios live
+    // against the skill's own CURRENT SKILL.md frontmatter — its `triggers:`
+    // list is seeded from the same authored positive prompt so honest
+    // routing selects it (single-letter placeholders never route anywhere).
+    writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      "---\nname: fixture-skill\ndescription: fixture skill\ntriggers:\n  - do the fixture task\n---\n\nBody.\n",
+      "utf8",
+    );
     const evalSpec: EvalSpecFile = {
-      triggers: { positive: ["p"], negative: ["n"] },
+      triggers: { positive: ["do the fixture task"], negative: ["something entirely unrelated"] },
       scenarios: [
         { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
       ],
@@ -622,9 +630,17 @@ describe("checkStackPackGateCleared", () => {
   function writePassingEval(packDir: string): void {
     const skillDir = path.join(packDir, "skills", "fixture-skill");
     mkdirSync(skillDir, { recursive: true });
-    writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n", "utf8");
+    // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios live
+    // against the skill's own CURRENT SKILL.md frontmatter — its `triggers:`
+    // list is seeded from the same authored positive prompt so honest
+    // routing selects it (single-letter placeholders never route anywhere).
+    writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      "---\nname: fixture-skill\ndescription: fixture skill\ntriggers:\n  - do the fixture task\n---\n\nBody.\n",
+      "utf8",
+    );
     const evalSpec: EvalSpecFile = {
-      triggers: { positive: ["p"], negative: ["n"] },
+      triggers: { positive: ["do the fixture task"], negative: ["something entirely unrelated"] },
       scenarios: [
         { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
       ],

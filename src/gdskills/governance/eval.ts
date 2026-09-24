@@ -68,6 +68,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { loadSkillCatalog, type CatalogEntry, type CatalogScope } from "./catalog-index";
 import { isAllowlistedJudge, isAllowlistedRunner } from "./gate-policy";
+import { parseSkillFrontmatter } from "../skill-frontmatter";
 import {
   gradeScenarioAnswer,
   JUDGE_PROMPT_VERSION,
@@ -134,6 +135,15 @@ export type ModelGrader = (output: string, expected: ExpectedBehavior, skill: Ca
 export interface TrialRecord {
   readonly output: string;
   readonly outputSha256: string;
+  /**
+   * Flow 316 fix1 (R1-2/R1-9 forgery class): `sha256` of the SCENARIO PROMPT
+   * this trial actually answered — `regradeRecordedReport` requires this to
+   * equal `sha256` of the current scenario's own prompt, which is what stops
+   * a set of real, honestly-graded trial records from one scenario being
+   * copied onto another scenario's report entry (the answer would then be
+   * answering a different question than the one it is credited against).
+   */
+  readonly promptSha256: string;
   /** One boolean per non-judge expectation, in `expected_behavior` order. */
   readonly deterministic: readonly boolean[];
   readonly judge?: JudgeVerdict;
@@ -366,8 +376,25 @@ function validateEvalSpec(value: unknown, specPath: string): asserts value is Ev
       if (typeof calibration.known_wrong !== "string" || calibration.known_wrong.length === 0) {
         throw new EvalSpecError(`${specPath}: scenario "${label}" calibration.known_wrong must be a non-empty string`);
       }
-      if (calibration.known_right === calibration.known_wrong) {
-        throw new EvalSpecError(`${specPath}: scenario "${label}" calibration.known_right and calibration.known_wrong must differ`);
+      // Flow 316 fix1 (shared contract item 1): `vague` (a plausible,
+      // direction-pointing answer with no concrete fix) and `subtle_wrong`
+      // (a realistic answer that still commits the anti-pattern) are
+      // REQUIRED alongside `known_right`/`known_wrong` — the judge was shown
+      // (review round 1, R1-4) to pass vague one-liners the deterministic
+      // calibration set never exercised. Required, not optional: a scenario
+      // that ships no `vague`/`subtle_wrong` answer proves nothing about
+      // whether its rubric actually rejects them.
+      if (typeof calibration.vague !== "string" || calibration.vague.length === 0) {
+        throw new EvalSpecError(`${specPath}: scenario "${label}" calibration.vague must be a non-empty string`);
+      }
+      if (typeof calibration.subtle_wrong !== "string" || calibration.subtle_wrong.length === 0) {
+        throw new EvalSpecError(`${specPath}: scenario "${label}" calibration.subtle_wrong must be a non-empty string`);
+      }
+      const calibrationAnswers = [calibration.known_right, calibration.known_wrong, calibration.vague, calibration.subtle_wrong] as string[];
+      if (new Set(calibrationAnswers).size !== calibrationAnswers.length) {
+        throw new EvalSpecError(
+          `${specPath}: scenario "${label}" calibration answers (known_right, known_wrong, vague, subtle_wrong) must be pairwise different`,
+        );
       }
     }
     if (scenario.anti_patterns !== undefined) {
@@ -470,7 +497,7 @@ function selectsSkillSynthesized(prompt: string, skill: CatalogEntry, catalog: r
   return checkSkillSelectedLeaveOneOut(prompt, skill.id, catalog, sourceTrigger).selected;
 }
 
-/** Exported so the pack-level gate fixtures (`eval-fixtures.ts`) and `regradeRecordedReport` share the exact same deterministic semantics `evalSkill`'s own trial loop applies. */
+/** Exported so the pack-level gate fixtures (`__fixtures__/gate-ready-report.ts`) and `regradeRecordedReport` share the exact same deterministic semantics `evalSkill`'s own trial loop applies. */
 export function gradeDeterministic(output: string, expected: ExpectedBehavior): boolean | undefined {
   switch (expected.grader) {
     case "contains":
@@ -635,6 +662,7 @@ async function runBehaviorTrials(
   gradeOneTrial: (output: string) => Promise<{ readonly deterministic: readonly boolean[]; readonly judge?: JudgeVerdict; readonly passed: boolean }>,
 ): Promise<EvalScenarioResult> {
   const trialRecords: TrialRecord[] = [];
+  const promptSha256 = sha256Hex(behaviorSpec.prompt);
   let passes = 0;
   for (let trial = 0; trial < trials; trial++) {
     const { output } = await runner(behaviorSpec.prompt, skill);
@@ -643,6 +671,7 @@ async function runBehaviorTrials(
     trialRecords.push({
       output,
       outputSha256: sha256Hex(output),
+      promptSha256,
       deterministic: graded.deterministic,
       ...(graded.judge !== undefined ? { judge: graded.judge } : {}),
       passed: graded.passed,
@@ -1024,6 +1053,46 @@ export function computeSkillEvalDigest(skillDir: string): string {
 }
 
 /**
+ * Flow 316 fix1 (R1-1/R1-3): builds the CURRENT `CatalogEntry` for the skill
+ * under gate directly from its own `SKILL.md` on disk — the exact file
+ * `computeSkillEvalDigest`/`readEvalSpec` already read for this same skill —
+ * mirroring `catalog-index.ts`'s own `readCatalogEntry` (kept as a small,
+ * local duplicate rather than an import, so this module never needs that one
+ * exported for a single caller).
+ *
+ * Why this exists: the stable-pack gate's trigger re-score (below) must run
+ * against the skill's CURRENT content, not a possibly-stale snapshot from
+ * whatever `loadSkillCatalog` scan happened to be passed in. For a REAL
+ * bundled stack pack this is a no-op — `checkStablePackGate` is only ever
+ * called on a directory `loadSkillCatalog(..., {scope: "bundled"})` itself
+ * walks, so the scan already contains an identical entry — but it is NOT a
+ * no-op for a fixture pack under a temp directory (every gate unit test),
+ * which is never part of that scan at all. Reading the skill's own current
+ * file directly makes the re-score correct in both cases, without asking
+ * every gate caller to hand-build and inject a matching catalog entry.
+ */
+export function currentSkillCatalogEntry(skillId: string, skillDir: string): CatalogEntry {
+  const skillMdPath = path.join(skillDir, "SKILL.md");
+  const body = readFileSync(skillMdPath, "utf8");
+  const frontmatter = parseSkillFrontmatter(body);
+  const slash = skillId.indexOf("/");
+  const category = slash >= 0 ? skillId.slice(0, slash) : skillId;
+  const name = slash >= 0 ? skillId.slice(slash + 1) : skillId;
+  return {
+    id: skillId,
+    category,
+    name,
+    description: frontmatter.description ?? "",
+    triggers: frontmatter.triggers ?? [],
+    body,
+    bodyLines: body.split("\n").length,
+    ...(frontmatter.metadataOrigin !== undefined ? { origin: frontmatter.metadataOrigin } : {}),
+    sha256: sha256Hex(body),
+    path: skillMdPath,
+  };
+}
+
+/**
  * Flow 316: re-derives every RAN behavior scenario's grading from its own
  * recorded `trialRecords`, against `spec` (the skill's CURRENT `evals.json`
  * — the caller re-reads it, never trusts the report's own copy of a
@@ -1059,11 +1128,30 @@ export function regradeRecordedReport(report: EvalReport, spec: EvalSpecFile | u
     );
     const hasJudgeExpectation = specScenario.expected_behavior.some((expected) => expected.grader === "judge");
 
+    // R1-1 (flow 316 fix1, review round 1): a report used to be trusted to
+    // declare its own `trials` count — nothing checked that `trialRecords`
+    // actually carried that many entries, which let a run's failing records
+    // be quietly dropped (real passing outputs and real judge verdicts
+    // cherry-picked from an otherwise-failing run) while `trials` stayed at
+    // its original, honest value.
+    if (records.length !== scenario.trials) {
+      errors.push(`scenario ${scenario.id}: trialRecords carries ${records.length} record(s) but the scenario declares trials: ${scenario.trials}`);
+    }
+
+    const currentPromptSha256 = sha256Hex(specScenario.prompt);
+
     let passes = 0;
     records.forEach((record, index) => {
       const label = `scenario ${scenario.id} trial ${index + 1}`;
       if (sha256Hex(record.output) !== record.outputSha256) {
         errors.push(`${label}: output does not match its recorded outputSha256 (output was tampered with)`);
+      }
+      // R1-9 (flow 316 fix1): a record's `promptSha256` must match the
+      // CURRENT scenario's own prompt — this is what stops a set of real,
+      // honestly-graded trial records answering one scenario's prompt from
+      // being transplanted onto a different scenario's report entry.
+      if (record.promptSha256 !== currentPromptSha256) {
+        errors.push(`${label}: promptSha256 does not match the current scenario's prompt (record may be transplanted from another scenario)`);
       }
       const recomputedDeterministic = deterministicExpectations.map((expected) => gradeDeterministic(record.output, expected) === true);
       const deterministicMatches =
@@ -1075,6 +1163,14 @@ export function regradeRecordedReport(report: EvalReport, spec: EvalSpecFile | u
       if (hasJudgeExpectation && record.judge === undefined) {
         errors.push(`${label}: a judge scenario is missing a recorded judge verdict`);
       }
+      // R1-8 (flow 316 fix1): a judge verdict carrying `error` (a parse
+      // failure `buildEvalJudge` manufactured after retrying once, never a
+      // genuinely reasoned reply) must never also read `verdict: "pass"` —
+      // `buildEvalJudge` itself never produces that combination, so seeing
+      // it here means the record was hand-edited.
+      if (record.judge?.error !== undefined && record.judge.verdict === "pass") {
+        errors.push(`${label}: judge verdict "pass" carries an "error" (a manufactured verdict, never a genuine one, cannot pass)`);
+      }
       const deterministicOk = record.deterministic.every((value) => value === true);
       const expectedPassed = hasJudgeExpectation ? deterministicOk && record.judge?.verdict === "pass" : deterministicOk;
       if (record.passed !== expectedPassed) {
@@ -1084,6 +1180,20 @@ export function regradeRecordedReport(report: EvalReport, spec: EvalSpecFile | u
     });
     if (passes !== scenario.passes) {
       errors.push(`scenario ${scenario.id}: recorded passes (${scenario.passes}) disagrees with its trialRecords (${passes})`);
+    }
+    // R1-1: `passRate`/`passAtK` used to be trusted as self-declared — a
+    // report with honest, unedited `trialRecords` but a hand-edited
+    // `passRate: 1` cleared the gate. Both are now recomputed from
+    // `trials`/`passes` the same way `runBehaviorTrials` derives them.
+    if (scenario.trials > 0) {
+      const computedPassRate = passes / scenario.trials;
+      if (Math.abs(scenario.passRate - computedPassRate) > 1e-9) {
+        errors.push(`scenario ${scenario.id}: recorded passRate (${scenario.passRate}) disagrees with passes/trials (${computedPassRate})`);
+      }
+    }
+    const computedPassAtK = passes > 0 ? 1 : 0;
+    if (scenario.passAtK !== computedPassAtK) {
+      errors.push(`scenario ${scenario.id}: recorded passAtK (${scenario.passAtK}) disagrees with (passes > 0 ? 1 : 0) = ${computedPassAtK}`);
     }
   }
 
@@ -1126,8 +1236,14 @@ function sameStringSet(a: readonly string[], b: readonly string[]): boolean {
  * reported as a named failure reason, same as a malformed report.
  */
 export interface StablePackGateOptions {
-  /** Overrides the catalog `catalogDigest` drift-check and any resulting trigger re-score are computed against — tests inject a fixture catalog here instead of relying on the real bundled tree. Defaults to `loadSkillCatalog(process.cwd(), { scope: "bundled" })`. */
+  /** Overrides the catalog the trigger re-score runs against — tests inject a fixture catalog here instead of relying on the real bundled tree. Defaults to `loadSkillCatalog(process.cwd(), { scope: "bundled" })`. When given explicitly, it is trusted AS-IS (including whatever entry, or lack of one, it carries for the skill under gate) — a caller that wants full control over the skill's own indexed trigger text (to simulate catalog drift, say) gets it verbatim. When omitted, the skill's own current entry is instead read live from its `SKILL.md` on disk (`currentSkillCatalogEntry`) and layered over this catalog, so a caller need not hand-build one just to make the gate's live re-score find the skill it is gating. */
   readonly catalog?: readonly CatalogEntry[];
+}
+
+/** R1-15 (flow 316 fix1): the catalog `checkPackEvalDocument` resolved ONCE for the whole pack (`options.catalog ?? loadSkillCatalog(bundled)`), threaded down instead of every skill in the pack re-loading it — plus whether it was an explicit override (see `StablePackGateOptions.catalog`'s doc comment for why that changes how the skill's own entry is resolved). */
+interface ResolvedGateCatalog {
+  readonly catalog: readonly CatalogEntry[];
+  readonly explicit: boolean;
 }
 
 function checkSkillReportForPackGate(
@@ -1135,7 +1251,7 @@ function checkSkillReportForPackGate(
   packId: string,
   name: string,
   report: EvalReport | undefined,
-  options: StablePackGateOptions,
+  resolvedCatalog: ResolvedGateCatalog,
 ): string | undefined {
   const skillId = `${packId}/${name}`;
   if (report === undefined) {
@@ -1228,9 +1344,13 @@ function checkSkillReportForPackGate(
   if (ranBehaviorScenarios.length === 0) {
     return `skill "${skillId}": eval report has zero ran behavior scenarios`;
   }
-  const belowFloor = ranBehaviorScenarios.find((scenario) => scenario.passRate < PACK_BEHAVIOR_PASS_FLOOR);
-  if (belowFloor !== undefined) {
-    return `skill "${skillId}": behavior scenario "${belowFloor.id}" passRate ${belowFloor.passRate} is below the pack floor ${PACK_BEHAVIOR_PASS_FLOOR}`;
+  // R1-1 (flow 316 fix1): the pack minimum applies to every RAN behavior
+  // scenario individually, not just the report's own top-level `trials`
+  // field — a report could previously declare a healthy top-level `trials`
+  // while one scenario's own `trials` sat below the pack minimum.
+  const belowMinTrials = ranBehaviorScenarios.find((scenario) => scenario.trials < PACK_MIN_TRIALS);
+  if (belowMinTrials !== undefined) {
+    return `skill "${skillId}": behavior scenario "${belowMinTrials.id}" trials ${belowMinTrials.trials} is below the pack minimum ${PACK_MIN_TRIALS}`;
   }
 
   // Flow 316: when the CURRENT evals.json carries any judge scenario, the
@@ -1260,31 +1380,57 @@ function checkSkillReportForPackGate(
     return `skill "${skillId}": recorded report failed regrade: ${regradeErrors.join("; ")}`;
   }
 
-  // Flow 316: the catalog the trigger scenarios were scored against must be
-  // named, and pinned as closely as possible — a mismatch against the
-  // CURRENT bundled catalog re-scores the trigger scenarios live rather than
-  // failing outright (a catalog-wide digest that invalidated every report on
-  // any bundled skill edit would make CI fail on unrelated PRs), and fails
-  // only when a trigger result actually changed.
+  // R1-1: the pack floor is enforced from the trial RECORDS directly (what
+  // `regradeRecordedReport` just proved consistent with `passes`/`trials`),
+  // not from the report's own self-declared `passRate` — belt-and-suspenders
+  // alongside the `regradeRecordedReport` check above, which already
+  // requires `passRate` to equal `passes / trials` recomputed from the same
+  // records.
+  const belowFloor = ranBehaviorScenarios.find((scenario) => {
+    const records = scenario.trialRecords ?? [];
+    const recordPassRate = records.length > 0 ? records.filter((record) => record.passed).length / records.length : 0;
+    return recordPassRate < PACK_BEHAVIOR_PASS_FLOOR;
+  });
+  if (belowFloor !== undefined) {
+    return `skill "${skillId}": behavior scenario "${belowFloor.id}" passRate ${belowFloor.passRate} is below the pack floor ${PACK_BEHAVIOR_PASS_FLOOR}`;
+  }
+
+  // R1-3 (flow 316 fix1): trigger scoring is deterministic, offline and
+  // cheap — `scoreTriggerScenarios` is the exact function `evalSkill` itself
+  // used to score it. There is no reason to trust a report's own recorded
+  // trigger results at all: they are ALWAYS re-scored live against the
+  // current bundled catalog (or `options.catalog`, for a test's full
+  // control), never conditionally on whether `catalogDigest` happens to
+  // still match — a self-computable digest is trivial for a forger to keep
+  // current while editing everything else. `catalogDigest` is kept on the
+  // report as informational context only, to word the failure reason.
   if (typeof report.catalogDigest !== "string" || report.catalogDigest.length === 0) {
     return `skill "${skillId}": eval report is missing a "catalogDigest"`;
   }
-  const catalog = options.catalog ?? loadSkillCatalog(process.cwd(), { scope: "bundled" });
-  const currentCatalogDigest = computeCatalogTriggerDigest(catalog);
-  if (report.catalogDigest !== currentCatalogDigest) {
-    const skillEntry = catalog.find((entry) => entry.id === skillId);
-    if (skillEntry === undefined) {
-      return `skill "${skillId}": catalogDigest is stale and the skill could not be found in the current catalog to re-score`;
-    }
-    const rescored = scoreTriggerScenarios(skillEntry, catalog, spec, report.strictness);
-    const recordedTriggerScenarios = report.scenarios.filter((scenario) => scenario.kind === "trigger-positive" || scenario.kind === "trigger-negative");
-    const changed = rescored.scenarios.find((freshScenario) => {
-      const recorded = recordedTriggerScenarios.find((scenario) => scenario.id === freshScenario.id);
-      return recorded === undefined || recorded.passRate !== freshScenario.passRate;
-    });
-    if (changed !== undefined) {
-      return `skill "${skillId}": trigger results changed since recording (catalogDigest is stale) — "${changed.id}" now scores differently`;
-    }
+  const { catalog: baseCatalog, explicit: explicitCatalog } = resolvedCatalog;
+  const rescoreCatalog: readonly CatalogEntry[] = explicitCatalog
+    ? baseCatalog
+    : [currentSkillCatalogEntry(skillId, skillDir), ...baseCatalog.filter((entry) => entry.id !== skillId)];
+  const skillEntry = rescoreCatalog.find((entry) => entry.id === skillId);
+  if (skillEntry === undefined) {
+    return `skill "${skillId}": the skill could not be found in the current catalog to re-score its trigger scenarios`;
+  }
+  const currentCatalogDigest = computeCatalogTriggerDigest(rescoreCatalog);
+  const rescored = scoreTriggerScenarios(skillEntry, rescoreCatalog, spec, report.strictness);
+  const recordedTriggerScenarios = report.scenarios.filter((scenario) => scenario.kind === "trigger-positive" || scenario.kind === "trigger-negative");
+  const changedScenario = rescored.scenarios.find((freshScenario) => {
+    const recorded = recordedTriggerScenarios.find((scenario) => scenario.id === freshScenario.id);
+    return recorded === undefined || recorded.passRate !== freshScenario.passRate;
+  });
+  const triggerAccuracyChanged =
+    rescored.triggerAccuracy.truePositive !== report.triggerAccuracy.truePositive ||
+    rescored.triggerAccuracy.falsePositive !== report.triggerAccuracy.falsePositive ||
+    rescored.triggerAccuracy.positives !== report.triggerAccuracy.positives ||
+    rescored.triggerAccuracy.negatives !== report.triggerAccuracy.negatives;
+  if (changedScenario !== undefined || triggerAccuracyChanged) {
+    const digestNote = report.catalogDigest === currentCatalogDigest ? "" : " (catalogDigest is stale)";
+    const detail = changedScenario !== undefined ? `"${changedScenario.id}" now scores differently` : "triggerAccuracy disagrees with a live re-score of the current catalog";
+    return `skill "${skillId}": trigger results changed since recording${digestNote} — ${detail}`;
   }
 
   return undefined;
@@ -1333,9 +1479,19 @@ function checkPackEvalDocument(packDir: string, doc: PackEvalDocument, options: 
     return { status: "fail", reason: `pack.json "skills" lists no skills` };
   }
 
+  // R1-15 (flow 316 fix1): the bundled catalog is loaded ONCE per pack, not
+  // once per skill — `loadSkillCatalog(..., {scope: "bundled"})` walks the
+  // WHOLE bundled tree, so a pack listing several skills used to re-walk it
+  // once per skill for no reason (the result is cwd-independent, so it can
+  // never differ between skills in the same gate call).
+  const resolvedCatalog: ResolvedGateCatalog =
+    options.catalog !== undefined
+      ? { catalog: options.catalog, explicit: true }
+      : { catalog: loadSkillCatalog(process.cwd(), { scope: "bundled" }), explicit: false };
+
   const reportsBySkillId = new Map(doc.reports.map((report) => [report.skillId, report] as const));
   for (const name of [...skillNames].sort()) {
-    const reason = checkSkillReportForPackGate(packDir, pack.id, name, reportsBySkillId.get(`${pack.id}/${name}`), options);
+    const reason = checkSkillReportForPackGate(packDir, pack.id, name, reportsBySkillId.get(`${pack.id}/${name}`), resolvedCatalog);
     if (reason !== undefined) {
       return { status: "fail", reason };
     }

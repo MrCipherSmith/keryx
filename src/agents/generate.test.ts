@@ -305,7 +305,7 @@ describe("generateStackAgentPair", () => {
     const fs = require("node:fs") as typeof import("node:fs");
     const os = require("node:os") as typeof import("node:os");
     const { checkStackPackGateCleared } = require("./verify") as typeof import("./verify");
-    const { buildGateReadyReport } = require("../gdskills/governance/eval-fixtures") as typeof import("../gdskills/governance/eval-fixtures");
+    const { buildGateReadyReport } = require("../gdskills/governance/__fixtures__/gate-ready-report") as typeof import("../gdskills/governance/__fixtures__/gate-ready-report");
 
     const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "keryx-generate-r2-4-"));
     try {
@@ -332,9 +332,18 @@ describe("generateStackAgentPair", () => {
 
       const skillDir = path.join(packDir, "skills", "forged-skill");
       fs.mkdirSync(skillDir, { recursive: true });
-      fs.writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: forged-skill\ndescription: forged skill\n---\n\nBody.\n", "utf8");
+      // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios
+      // live against the skill's own CURRENT SKILL.md frontmatter — its
+      // `triggers:` list is seeded from the same authored positive prompt so
+      // honest routing selects it (single-letter placeholders never route
+      // anywhere).
+      fs.writeFileSync(
+        path.join(skillDir, "SKILL.md"),
+        "---\nname: forged-skill\ndescription: forged skill\ntriggers:\n  - do the forged fixture task\n---\n\nBody.\n",
+        "utf8",
+      );
       const evalSpec = {
-        triggers: { positive: ["p"], negative: ["n"] },
+        triggers: { positive: ["do the forged fixture task"], negative: ["something entirely unrelated"] },
         scenarios: [
           { id: "behavior-1", prompt: "Do the thing", strictness: "high" as const, expected_behavior: [{ grader: "contains" as const, value: "thing" }] },
         ],

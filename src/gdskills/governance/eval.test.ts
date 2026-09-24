@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -11,6 +12,7 @@ import {
   EvalContractError,
   EvalSpecError,
   gradeExpectations,
+  PACK_BEHAVIOR_PASS_FLOOR,
   PACK_MIN_TRIALS,
   regradeRecordedReport,
   scoreTriggerScenarios,
@@ -22,7 +24,7 @@ import {
   evalSkill,
   validateEvalReport,
 } from "./eval";
-import { buildGateReadyReport } from "./eval-fixtures";
+import { buildGateReadyReport } from "./__fixtures__/gate-ready-report";
 import { JUDGE_PROMPT_VERSION, type Judge, type JudgeRequest, type JudgeVerdict } from "./judge";
 
 const catalog = loadSkillCatalog(process.cwd(), { scope: "bundled" });
@@ -1363,6 +1365,8 @@ describe("gradeExpectations (shared grading semantics for the eval-integrity gua
 describe("flow 316: the judge grader", () => {
   const KNOWN_RIGHT = "Run git branch -d feature-x; it refuses when there is unmerged work, which is your cue to double-check.";
   const KNOWN_WRONG = "Just always run git branch -D feature-x, it always works.";
+  const VAGUE = "Delete the branch carefully, making sure not to lose any work.";
+  const SUBTLE_WRONG = "Run git branch -D feature-x since you already merged it upstream, so there is nothing to lose.";
 
   function judgeEvalSpec(overrides: Partial<EvalScenarioSpec> = {}): EvalSpecFile {
     return {
@@ -1380,7 +1384,7 @@ describe("flow 316: the judge grader", () => {
               fail_criteria: ["Force-deletes without warning"],
             },
           ],
-          calibration: { known_right: KNOWN_RIGHT, known_wrong: KNOWN_WRONG },
+          calibration: { known_right: KNOWN_RIGHT, known_wrong: KNOWN_WRONG, vague: VAGUE, subtle_wrong: SUBTLE_WRONG },
           anti_patterns: ["git branch -D"],
           ...overrides,
         },
@@ -1710,6 +1714,56 @@ describe("flow 316: the judge grader", () => {
         rmSync(root, { recursive: true, force: true });
       }
     });
+
+    // F8 (flow 316 fix1, review round 1): `buildEvalJudge` never produces a
+    // record whose judge verdict is "pass" AND carries `error` (an error is
+    // only ever set on a manufactured `fail` after a parse retry) — a record
+    // carrying that combination was hand-edited.
+    test("F8: a judge verdict of 'pass' carrying 'error' (a manufactured verdict) is rejected", () => {
+      const { localCatalog, cleanup } = writeJudgeSkill(judgeEvalSpec());
+      try {
+        const skillDir = path.dirname(localCatalog[0]!.path);
+        const evalSpec = judgeEvalSpec();
+        const report = reportFor(evalSpec, skillDir, "pk", "sample-skill");
+        const tampered = tamperFirstTrialRecord(report, (record) => ({
+          ...record,
+          judge: { verdict: "pass", reason: "manufactured", error: "judge reply was not valid JSON" },
+        }));
+        const errors = regradeRecordedReport(tampered, evalSpec);
+        expect(errors.some((e) => e.includes("error"))).toBe(true);
+      } finally {
+        cleanup();
+      }
+    });
+
+    // F9 (flow 316 fix1, review round 1): trial records genuinely produced
+    // for ONE scenario's prompt, transplanted onto another scenario's report
+    // entry (everything else about them — output, hashes, deterministic
+    // results, judge verdict — stays internally self-consistent) must still
+    // be caught, because they no longer answer the CURRENT scenario's own
+    // prompt.
+    test("F9: a trial record whose promptSha256 answers a DIFFERENT prompt is rejected (transplant)", () => {
+      const root = mkdtempSync(path.join(tmpdir(), "regrade-transplant-"));
+      try {
+        const skillDir = path.join(root, "skills", "fixture-skill");
+        mkdirSync(skillDir, { recursive: true });
+        writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: d\n---\n\nBody.\n", "utf8");
+        const evalSpec: EvalSpecFile = {
+          triggers: { positive: ["p"], negative: ["n"] },
+          scenarios: [{ id: "s1", prompt: "do it", strictness: "high", expected_behavior: [{ grader: "contains", value: "ok" }] }],
+        };
+        writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+        const report = reportFor(evalSpec, skillDir, "pk", "fixture-skill");
+        const tampered = tamperFirstTrialRecord(report, (record) => ({
+          ...record,
+          promptSha256: createHash("sha256").update("a completely different scenario's prompt").digest("hex"),
+        }));
+        const errors = regradeRecordedReport(tampered, evalSpec);
+        expect(errors.some((e) => e.includes("promptSha256") && e.includes("transplanted"))).toBe(true);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("scoreTriggerScenarios (exported, shared with the gate's re-score)", () => {
@@ -1735,15 +1789,32 @@ describe("flow 316: the judge grader", () => {
       const packDir = path.join(root, packId);
       const skillDir = path.join(packDir, "skills", skillName);
       mkdirSync(skillDir, { recursive: true });
-      writeFileSync(path.join(skillDir, "SKILL.md"), `---\nname: ${skillName}\ndescription: fixture skill\n---\n\nBody.\n`, "utf8");
+      // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios
+      // live against the skill's own CURRENT SKILL.md frontmatter — an
+      // authored positive prompt is scored with `field: "full"` (triggers
+      // included, no leave-one-out needed for a human-written prompt), so
+      // the SKILL.md's own `triggers:` list is seeded from the same authored
+      // positives, exactly as a real skill's own trigger list is expected to
+      // read close to its own eval prompts.
+      const triggersYaml = (evalSpec.triggers?.positive ?? []).map((trigger) => `  - ${trigger}`).join("\n");
+      writeFileSync(
+        path.join(skillDir, "SKILL.md"),
+        `---\nname: ${skillName}\ndescription: fixture skill\ntriggers:\n${triggersYaml.length > 0 ? triggersYaml : "  - fixture skill"}\n---\n\nBody.\n`,
+        "utf8",
+      );
       writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
       mkdirSync(path.join(packDir, "governance"), { recursive: true });
       writeFileSync(path.join(packDir, "pack.json"), JSON.stringify({ id: packId, family: "language", modules: [], stability: "stable", skills: { review: [skillName] } }), "utf8");
       return { packDir, skillDir, cleanup: () => rmSync(root, { recursive: true, force: true }) };
     }
 
+    // Flow 316 fix1 (R1-3): the gate ALWAYS re-scores trigger scenarios live
+    // — single-letter placeholders ("p"/"n") tokenize to nothing and never
+    // route anywhere, so the positive/negative prompts here are real (short
+    // but multi-token) phrases that `writeGateFixture` seeds into the
+    // skill's own `triggers:` frontmatter.
     const DETERMINISTIC_SPEC: EvalSpecFile = {
-      triggers: { positive: ["p"], negative: ["n"] },
+      triggers: { positive: ["run the gate fixture task"], negative: ["something entirely unrelated"] },
       scenarios: [{ id: "s1", prompt: "do it", strictness: "high", expected_behavior: [{ grader: "contains", value: "ok" }] }],
     };
 
@@ -1896,6 +1967,226 @@ describe("flow 316: the judge grader", () => {
         expect(result.status).toBe("pass");
       } finally {
         cleanup();
+      }
+    });
+
+    // Flow 316 fix1 (review round 1 forgery classes, R1-1/R1-3/R1-15): the
+    // gate must derive `passRate`/`passAtK`/the pack floor/the pack minimum
+    // FROM the trial records, and re-score triggers live, rather than
+    // trusting any of those self-declared fields.
+    const MIXED_SPEC: EvalSpecFile = {
+      triggers: { positive: ["run the mixed fixture task"], negative: ["something entirely unrelated"] },
+      scenarios: [{ id: "s1", prompt: "do it", strictness: "high", expected_behavior: [{ grader: "contains", value: "ok" }] }],
+    };
+
+    /** Builds a real, honestly-scored `buildGateReadyReport`, then rewrites its one behavior scenario's `trialRecords` into `passes` genuine passing trials and `trials - passes` genuine failing trials (still internally consistent — a real failing output, a real recomputed-false deterministic result, the SAME promptSha256), with `passRate`/`passAtK`/`verdict` recomputed honestly from that split. Every forgery test below takes this honest report and edits exactly one more field away from what the records actually say. */
+    function mixedTrialsReport(skillDir: string, packId: string, skillName: string, passes: number, trials: number): EvalReport {
+      const base = buildGateReadyReport({ packId, skillName, skillDir, evalSpec: MIXED_SPEC, trials });
+      const behaviorScenario = base.scenarios.find((scenario) => scenario.kind === "behavior");
+      if (behaviorScenario === undefined || behaviorScenario.trialRecords === undefined || behaviorScenario.trialRecords.length === 0) {
+        return base;
+      }
+      const passingRecord = behaviorScenario.trialRecords[0]!;
+      const failingOutput = "definitely-not-a-match";
+      const failingRecord: TrialRecord = {
+        output: failingOutput,
+        outputSha256: createHash("sha256").update(failingOutput).digest("hex"),
+        promptSha256: passingRecord.promptSha256,
+        deterministic: passingRecord.deterministic.map(() => false),
+        passed: false,
+      };
+      const trialRecords: TrialRecord[] = Array.from({ length: trials }, (_, index) => (index < passes ? passingRecord : failingRecord));
+      const updated: EvalScenarioResult = {
+        ...behaviorScenario,
+        trials,
+        passes,
+        passRate: passes / trials,
+        passAtK: passes > 0 ? 1 : 0,
+        trialRecords,
+      };
+      const scenarios = base.scenarios.map((scenario) => (scenario.id === updated.id ? updated : scenario));
+      return { ...base, scenarios, verdict: passes / trials >= PACK_BEHAVIOR_PASS_FLOOR ? "pass" : "fail" };
+    }
+
+    test("F2: an honest 2/5 scenario with only passRate edited to 1 fails the gate", () => {
+      const { packDir, skillDir, cleanup } = writeGateFixture(MIXED_SPEC);
+      try {
+        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", 2, PACK_MIN_TRIALS);
+        const behaviorScenario = honest.scenarios.find((scenario) => scenario.kind === "behavior")!;
+        const forgedScenario: EvalScenarioResult = { ...behaviorScenario, passRate: 1 }; // passes (2) and trialRecords stay honest — only passRate forged
+        const forged: EvalReport = {
+          ...honest,
+          verdict: "pass",
+          scenarios: honest.scenarios.map((scenario) => (scenario.id === forgedScenario.id ? forgedScenario : scenario)),
+        };
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [forged] }), "utf8");
+        const result = checkStablePackGate(packDir, "stable");
+        expect(result.status).toBe("fail");
+        expect(result.reason).toContain("passRate");
+      } finally {
+        cleanup();
+      }
+    });
+
+    test("F3: the 3 failing trial records deleted (2 honest-passing records left, trials still declares 5) fails the gate", () => {
+      const { packDir, skillDir, cleanup } = writeGateFixture(MIXED_SPEC);
+      try {
+        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", 2, PACK_MIN_TRIALS);
+        const behaviorScenario = honest.scenarios.find((scenario) => scenario.kind === "behavior")!;
+        const onlyPassingRecords = (behaviorScenario.trialRecords ?? []).filter((record) => record.passed);
+        expect(onlyPassingRecords).toHaveLength(2);
+        // `trials`/`passes` are left exactly as recorded (2 passes out of a
+        // declared 5) — only `trialRecords` and `passRate` are forged, which
+        // is the F3 shape: real passing outputs and real judge verdicts
+        // cherry-picked, nothing invented.
+        const forgedScenario: EvalScenarioResult = { ...behaviorScenario, trialRecords: onlyPassingRecords, passRate: 1 };
+        const forged: EvalReport = {
+          ...honest,
+          verdict: "pass",
+          scenarios: honest.scenarios.map((scenario) => (scenario.id === forgedScenario.id ? forgedScenario : scenario)),
+        };
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [forged] }), "utf8");
+        const result = checkStablePackGate(packDir, "stable");
+        expect(result.status).toBe("fail");
+        expect(result.reason).toContain("trialRecords");
+      } finally {
+        cleanup();
+      }
+    });
+
+    test("a behavior scenario's OWN trials below PACK_MIN_TRIALS fails the gate, even with a healthy top-level trials", () => {
+      const { packDir, skillDir, cleanup } = writeGateFixture(MIXED_SPEC);
+      try {
+        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", 5, PACK_MIN_TRIALS); // report.trials: 5 (>= PACK_MIN_TRIALS)
+        const behaviorScenario = honest.scenarios.find((scenario) => scenario.kind === "behavior")!;
+        const truncatedRecords = (behaviorScenario.trialRecords ?? []).slice(0, 4); // internally consistent among themselves: 4 records, 4 passes
+        const forgedScenario: EvalScenarioResult = { ...behaviorScenario, trials: 4, trialRecords: truncatedRecords, passes: 4, passRate: 1, passAtK: 1 };
+        const forged: EvalReport = { ...honest, scenarios: honest.scenarios.map((scenario) => (scenario.id === forgedScenario.id ? forgedScenario : scenario)) };
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [forged] }), "utf8");
+        const result = checkStablePackGate(packDir, "stable");
+        expect(result.status).toBe("fail");
+        expect(result.reason).toContain(`below the pack minimum ${PACK_MIN_TRIALS}`);
+      } finally {
+        cleanup();
+      }
+    });
+
+    test("passAtK disagreeing with (passes > 0 ? 1 : 0) fails the gate", () => {
+      const { packDir, skillDir, cleanup } = writeGateFixture(MIXED_SPEC);
+      try {
+        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", 4, PACK_MIN_TRIALS); // 4/5, honestly clears the pack floor (0.8)
+        const behaviorScenario = honest.scenarios.find((scenario) => scenario.kind === "behavior")!;
+        const forgedScenario: EvalScenarioResult = { ...behaviorScenario, passAtK: 0 }; // passes (4) > 0, so the honest passAtK is 1
+        const forged: EvalReport = { ...honest, scenarios: honest.scenarios.map((scenario) => (scenario.id === forgedScenario.id ? forgedScenario : scenario)) };
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [forged] }), "utf8");
+        const result = checkStablePackGate(packDir, "stable");
+        expect(result.status).toBe("fail");
+        expect(result.reason).toContain("passAtK");
+      } finally {
+        cleanup();
+      }
+    });
+
+    // F6 (flow 316 fix1, review round 1): trigger scenarios are ALWAYS
+    // re-scored live, never trusted just because `catalogDigest` still
+    // matches the current catalog — a forged trigger-positive result is
+    // caught even when nothing about the catalog or the skill's own files
+    // changed since the report was recorded.
+    test("F6: a forged trigger-positive result, with catalogDigest kept CURRENT, fails the gate", () => {
+      const root = mkdtempSync(path.join(tmpdir(), "gate-f6-"));
+      try {
+        const packDir = path.join(root, "gate-pack");
+        const skillDir = path.join(packDir, "skills", "gate-skill");
+        mkdirSync(skillDir, { recursive: true });
+        // The skill's own `triggers:` frontmatter covers only the FIRST
+        // authored positive — the second genuinely does not route here.
+        writeFileSync(
+          path.join(skillDir, "SKILL.md"),
+          "---\nname: gate-skill\ndescription: fixture skill\ntriggers:\n  - run the f6 fixture task\n---\n\nBody.\n",
+          "utf8",
+        );
+        const evalSpec: EvalSpecFile = {
+          triggers: { positive: ["run the f6 fixture task", "totally unrelated gibberish about nothing at all xyzzy"], negative: ["something entirely unrelated"] },
+          scenarios: [{ id: "s1", prompt: "do it", strictness: "high", expected_behavior: [{ grader: "contains", value: "ok" }] }],
+        };
+        writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+        mkdirSync(path.join(packDir, "governance"), { recursive: true });
+        writeFileSync(
+          path.join(packDir, "pack.json"),
+          JSON.stringify({ id: "gate-pack", family: "language", modules: [], stability: "stable", skills: { review: ["gate-skill"] } }),
+          "utf8",
+        );
+
+        const honest = buildGateReadyReport({ packId: "gate-pack", skillName: "gate-skill", skillDir, evalSpec });
+        const failingPositive = honest.scenarios.find((scenario) => scenario.id === "trigger-positive-2");
+        expect(failingPositive?.passRate).toBe(0); // sanity: genuinely does not route
+        expect(honest.verdict).not.toBe("pass"); // sanity: honestly fails as recorded
+
+        const forgedPositive: EvalScenarioResult = { ...failingPositive!, passes: 1, passRate: 1, passAtK: 1 };
+        const forged: EvalReport = {
+          ...honest,
+          triggerAccuracy: { ...honest.triggerAccuracy, truePositive: honest.triggerAccuracy.truePositive + 1 },
+          scenarios: honest.scenarios.map((scenario) => (scenario.id === forgedPositive.id ? forgedPositive : scenario)),
+          verdict: "pass",
+        };
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [forged] }), "utf8");
+        expect(forged.catalogDigest).toBe(honest.catalogDigest); // the digest was never touched — still "current"
+
+        const result = checkStablePackGate(packDir, "stable");
+        expect(result.status).toBe("fail");
+        expect(result.reason).toContain("trigger results changed since recording");
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    // R1-15: the bundled catalog is resolved ONCE per pack-level gate call,
+    // not once per skill it lists.
+    test("R1-15: the gate loads the bundled catalog once per pack, not once per skill", async () => {
+      const catalogIndexReal = { ...(await import("./catalog-index")) };
+      const root = mkdtempSync(path.join(tmpdir(), "gate-once-"));
+      try {
+        const packId = "multi-gate-pack";
+        const packDir = path.join(root, packId);
+        const skillNames = ["gate-skill-a", "gate-skill-b"];
+        const reports: EvalReport[] = [];
+        for (const skillName of skillNames) {
+          const skillDir = path.join(packDir, "skills", skillName);
+          mkdirSync(skillDir, { recursive: true });
+          const trigger = `run the ${skillName} fixture task`;
+          writeFileSync(path.join(skillDir, "SKILL.md"), `---\nname: ${skillName}\ndescription: fixture skill\ntriggers:\n  - ${trigger}\n---\n\nBody.\n`, "utf8");
+          const evalSpec: EvalSpecFile = {
+            triggers: { positive: [trigger], negative: ["something entirely unrelated"] },
+            scenarios: [{ id: "s1", prompt: "do it", strictness: "high", expected_behavior: [{ grader: "contains", value: "ok" }] }],
+          };
+          writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+          reports.push(buildGateReadyReport({ packId, skillName, skillDir, evalSpec }));
+        }
+        mkdirSync(path.join(packDir, "governance"), { recursive: true });
+        writeFileSync(
+          path.join(packDir, "pack.json"),
+          JSON.stringify({ id: packId, family: "language", modules: [], stability: "stable", skills: { review: skillNames } }),
+          "utf8",
+        );
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports }), "utf8");
+
+        let calls = 0;
+        mock.module("./catalog-index", () => ({
+          ...catalogIndexReal,
+          loadSkillCatalog: (...args: Parameters<typeof catalogIndexReal.loadSkillCatalog>) => {
+            calls += 1;
+            return catalogIndexReal.loadSkillCatalog(...args);
+          },
+        }));
+        try {
+          const result = checkStablePackGate(packDir, "stable");
+          expect(result).toEqual({ status: "pass" });
+          expect(calls).toBe(1);
+        } finally {
+          mock.module("./catalog-index", () => catalogIndexReal);
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true });
       }
     });
   });
