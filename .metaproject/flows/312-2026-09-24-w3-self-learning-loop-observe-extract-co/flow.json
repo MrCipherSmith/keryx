@@ -9,7 +9,7 @@
   "title": "W3: self-learning loop — observe, extract, consent-gated learned patterns, reviewer profiles, promote and graduate",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:32.725Z",
-  "updatedAt": "2026-09-24T12:42:00.354Z",
+  "updatedAt": "2026-09-24T13:16:37.242Z",
   "source": {
     "type": "description",
     "ref": null
@@ -596,6 +596,57 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "Fix R4-F1: login gate checks variable text only, not fixed templates",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T23"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T12:45:01.664Z",
+            "outcome": "started",
+            "detail": "312-T24 sonnet"
+          },
+          {
+            "at": "2026-09-24T12:59:08.797Z",
+            "outcome": "failed",
+            "detail": "narrow verification: R5-F1/F2 same false-refusal class via 5+ substring fallback"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T25",
+      "title": "Re-plan login gate: boundary-only matching (drop substring fallback); graduate gates stripped member text only",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T24"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:59:09.073Z",
+            "outcome": "started",
+            "detail": "312-T25 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -981,6 +1032,41 @@
       "at": "2026-09-24T12:42:00.354Z",
       "event": "task-done",
       "detail": "T23: Narrow re-plan: fix R3-F1..F5 with pre-fix-failing tests"
+    },
+    {
+      "at": "2026-09-24T12:45:01.527Z",
+      "event": "task-added",
+      "detail": "T24: Fix R4-F1: login gate checks variable text only, not fixed templates"
+    },
+    {
+      "at": "2026-09-24T12:45:01.664Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 312-T24 sonnet"
+    },
+    {
+      "at": "2026-09-24T12:56:41.922Z",
+      "event": "task-done",
+      "detail": "T24: Fix R4-F1: login gate checks variable text only, not fixed templates"
+    },
+    {
+      "at": "2026-09-24T12:59:08.797Z",
+      "event": "task-attempt",
+      "detail": "T24: failed (attempt 2) — narrow verification: R5-F1/F2 same false-refusal class via 5+ substring fallback"
+    },
+    {
+      "at": "2026-09-24T12:59:08.936Z",
+      "event": "task-added",
+      "detail": "T25: Re-plan login gate: boundary-only matching (drop substring fallback); graduate gates stripped member text only"
+    },
+    {
+      "at": "2026-09-24T12:59:09.073Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 312-T25 sonnet"
+    },
+    {
+      "at": "2026-09-24T13:16:37.242Z",
+      "event": "task-done",
+      "detail": "T25: Re-plan login gate: boundary-only matching (drop substring fallback); graduate gates stripped member text only"
     }
   ],
   "owner": {
