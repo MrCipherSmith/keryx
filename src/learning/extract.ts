@@ -263,6 +263,46 @@ function configuredReviewLoginsFrom(config: { authors: readonly string[]; review
   return [...new Set([...config.authors, ...(config.reviewerProfiles ?? [])])];
 }
 
+/**
+ * R10-F2 (review round 10, PR #691, minor): a model-backed extractor picks
+ * its own free-text `extractor` label, and neither `scanLearnedText` nor
+ * `gateReviewerText` inspects `provenance.extractor` — both only ever see
+ * `trigger`/`action`. Persisting `draft.extractor` verbatim let a careless or
+ * malicious model-backed extractor smuggle a configured login (or anything
+ * else) straight into a stored record's `provenance.extractor`, unguarded.
+ * Every model-backed draft is recorded (and reported) under this one fixed
+ * label instead; `provenance.extractorKind` (already `"model-backed"`) is
+ * what every downstream reader (`mayCarryReviewerText`, confidence seeding,
+ * `graduate.ts`'s keyword derivation) actually keys on — nothing needs the
+ * extractor's own self-chosen string.
+ */
+const MODEL_BACKED_EXTRACTOR_LABEL = "model-backed";
+
+function extractorLabelFor(draft: Pick<SignalDraft, "extractor" | "extractorKind">): string {
+  return draft.extractorKind === "model-backed" ? MODEL_BACKED_EXTRACTOR_LABEL : draft.extractor;
+}
+
+/**
+ * R10-F2: `sourceRef` (`EvidenceItem`) is documented as a project-relative
+ * path to the artifact that produced the evidence item — never raw quoted
+ * text — but it is never scanned or login-gated on its own either. A
+ * model-backed extractor supplies its own evidence, `sourceRef` included, so
+ * an extractor that echoed observation text (or a login) into `sourceRef`
+ * could smuggle it straight into a stored record's evidence, unguarded. Every
+ * model-backed draft's evidence `sourceRef` is shape-checked here: a
+ * plausible repo-relative path (letters/digits/`._/-` only, optionally with a
+ * trailing `#L<n>` line anchor, no `..` segment, bounded length) — the shape
+ * every deterministic signal's own `sourceRef` already has by construction
+ * (fixed templates plus observation/pattern ids), so this never false-refuses
+ * a deterministic draft (which is never checked here in the first place — see
+ * the call site's `extractorKind === "model-backed"` guard).
+ */
+const PLAUSIBLE_SOURCE_REF_PATTERN = /^[A-Za-z0-9._/-]+(?:#L\d+)?$/;
+
+function isPlausibleSourceRef(sourceRef: string): boolean {
+  return sourceRef.length > 0 && sourceRef.length <= 300 && !sourceRef.includes("..") && PLAUSIBLE_SOURCE_REF_PATTERN.test(sourceRef);
+}
+
 async function upsertDraft(
   root: string,
   draft: SignalDraft,
@@ -273,6 +313,7 @@ async function upsertDraft(
   configuredLogins: readonly string[],
 ): Promise<void> {
   const id = deterministicPatternId(draft.domain, draft.trigger);
+  const extractorLabel = extractorLabelFor(draft);
   let existing: LearnedPattern | undefined;
   try {
     existing = await readPattern(root, id, "project", storeOptions);
@@ -295,7 +336,7 @@ async function upsertDraft(
 
   const scan = await scanLearnedText(root, [draft.trigger, draft.action]);
   if (scan.findings.length > 0) {
-    report.refused.push({ signal: draft.extractor, categories: scan.findings });
+    report.refused.push({ signal: extractorLabel, categories: scan.findings });
     return;
   }
 
@@ -327,8 +368,37 @@ async function upsertDraft(
   // had that prefix, i.e. every model-backed draft), leaving only the
   // keyword hint a login could actually appear in.
   if (gateReviewerText({ provenance: { extractor: draft.extractor, extractorKind: draft.extractorKind }, trigger: draft.trigger, action: draft.action }, configuredLogins).refused) {
-    report.refused.push({ signal: draft.extractor, categories: ["attribution"] });
+    report.refused.push({ signal: extractorLabel, categories: ["attribution"] });
     return;
+  }
+
+  // R10-F2: a model-backed draft's evidence `sourceRef`s are the only other
+  // free-text field this function persists unguarded (`draft.extractor`
+  // itself is already replaced with the fixed `extractorLabel` above). Every
+  // `sourceRef` about to be written for a model-backed draft must (a) look
+  // like a plausible repo-relative artifact path, and (b) not carry a
+  // configured reviewer login — gated through `gateReviewerText`, the one
+  // sanctioned login check every learned-text sink in this module goes
+  // through (see `reviewer-id.ts`'s R8-F3 note). Scoped to model-backed
+  // drafts only: every deterministic signal's `sourceRef` is built from a
+  // fixed template plus an observation/pattern id and can never carry either
+  // problem.
+  if (draft.extractorKind === "model-backed") {
+    for (const item of newEvidence) {
+      if (!isPlausibleSourceRef(item.sourceRef)) {
+        report.refused.push({ signal: extractorLabel, categories: ["evidence-source-ref"] });
+        return;
+      }
+      if (
+        gateReviewerText(
+          { provenance: { extractor: extractorLabel, extractorKind: draft.extractorKind }, trigger: "", action: item.sourceRef },
+          configuredLogins,
+        ).refused
+      ) {
+        report.refused.push({ signal: extractorLabel, categories: ["attribution"] });
+        return;
+      }
+    }
   }
 
   if (!existing) {
@@ -347,10 +417,29 @@ async function upsertDraft(
       status: "candidate",
       supersededBy: null,
       evidence: newEvidence,
-      reviewerProfile: draft.reviewerProfile ?? null,
+      // R1-F5 (review round 1, PR #695, minor): the schema only requires
+      // `reviewerProfile.reviewerId` to be a non-empty string — it does not
+      // (and cannot, generically) require the shape `reviewerIdFor` actually
+      // produces (`rv-<16 hex>`, an opaque per-project hash of a login).
+      // Every DETERMINISTIC `reviewerProfile` comes from
+      // `reviewer-comment.ts`'s own signal, which always calls
+      // `reviewerIdFor` — so it is already trustworthy. A MODEL-BACKED
+      // draft supplies its own `reviewerProfile` (if any) with no such
+      // guarantee: nothing here stops a careless or malicious model-backed
+      // extractor from putting a literal configured login straight into
+      // `reviewerId`, unguarded — the same class of leak R10-F2 already
+      // fixed for `sourceRef`. `reviewerProfile` only ever exists to let
+      // `keryx learn review`'s per-reviewer grouping (`reviewer-profile.ts`)
+      // find every record for one already-hashed reviewer id; a model-backed
+      // extractor has no legitimate way to produce that hash (it does not
+      // know the project identity `reviewerIdFor` salts with, and is never
+      // handed one), so there is no real capability lost by simply dropping
+      // it for this signal rather than trying to validate/gate an
+      // extractor-supplied value.
+      reviewerProfile: draft.extractorKind === "model-backed" ? null : (draft.reviewerProfile ?? null),
       redaction: { scanned: true, findings: [] },
       graduation: null,
-      provenance: { extractor: draft.extractor, extractorKind: draft.extractorKind ?? "deterministic" },
+      provenance: { extractor: extractorLabel, extractorKind: draft.extractorKind ?? "deterministic" },
       ttl: { expiresAt: addDaysIso(now, CANDIDATE_TTL_DAYS) },
       createdAt: nowIso,
       updatedAt: nowIso,

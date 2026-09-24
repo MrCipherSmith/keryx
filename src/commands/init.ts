@@ -1,14 +1,10 @@
-import {
-  chmod,
-  mkdir,
-  readFile,
-  unlink,
-  writeFile,
-} from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { optionValue } from "../lib/args";
+import { mkdirContained, removeContained, writeContained } from "../lib/contained-write";
+import { installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
 import { moduleCommands } from "./module-commands";
 import { registerInitializedProject } from "./projects";
 import { sanitizeForDisplay } from "../lib/project-registry";
@@ -599,12 +595,17 @@ export async function initCommand(args: string[]): Promise<void> {
   });
   const agentRuleSources = syncedAgentRules.map((rule) => rule.source);
 
+  // R2-F2: collects "skipped this hook, here's why" messages from the
+  // installers below, surfaced under the same "Warnings" heading as
+  // gdskillsWarnings rather than aborting the run.
+  const hookWarnings: string[] = [];
+
   if (enableGdgraph) {
     await createGdgraphStructure(metaprojectRoot);
     await installGdgraphCoreScripts(metaprojectRoot);
     await seedAssetsLock(metaprojectRoot);
     if (enableGdgraphHook) {
-      await installGdgraphPostCommitHook(projectRoot);
+      await installGdgraphPostCommitHook(projectRoot, hookWarnings);
     }
   }
 
@@ -615,7 +616,7 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableGdwiki) {
     await createGdwikiStructure(metaprojectRoot);
     if (enableGdgraphHook) {
-      await installGdwikiPostCommitHook(projectRoot);
+      await installGdwikiPostCommitHook(projectRoot, hookWarnings);
     }
   }
 
@@ -626,27 +627,27 @@ export async function initCommand(args: string[]): Promise<void> {
     gdskillsWarnings = gdskillsInstallResult.warnings;
     gdskillsNotices = gdskillsInstallResult.notices;
     if (enableGdskillsHook) {
-      await installGdskillsPostCommitHook(projectRoot);
+      await installGdskillsPostCommitHook(projectRoot, hookWarnings);
     }
   }
 
   if (enableHealth) {
     await createHealthStructure(metaprojectRoot);
     if (enableHealthHook) {
-      await installHealthPostCommitHook(projectRoot);
+      await installHealthPostCommitHook(projectRoot, hookWarnings);
     }
   }
 
   if (enableTesting) {
     await createTestingStructure(metaprojectRoot, enableGdwiki);
     if (enableTestingPostCommitHook) {
-      await installTestingPostCommitHook(projectRoot);
+      await installTestingPostCommitHook(projectRoot, hookWarnings);
     }
     if (enableGdgraphHook || enableGdskillsHook || enableHealthHook || enableTestingPostCommitHook) {
-      await installMetaprojectDashboardPostCommitHook(projectRoot);
+      await installMetaprojectDashboardPostCommitHook(projectRoot, hookWarnings);
     }
     if (enableTestingPrePushHook) {
-      await installTestingPrePushHook(projectRoot);
+      await installTestingPrePushHook(projectRoot, hookWarnings);
     }
     await analyzeTestingProject(projectRoot);
   }
@@ -662,7 +663,7 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableSecurity) {
     await createSecurityStructure(metaprojectRoot);
     if (enableSecurityPrePushHook) {
-      await installSecurityPrePushHook(projectRoot);
+      await installSecurityPrePushHook(projectRoot, hookWarnings);
     }
     if (enableSecurityAgentHook) {
       await installSecurityAgentHooks(projectRoot);
@@ -695,7 +696,8 @@ export async function initCommand(args: string[]): Promise<void> {
     Boolean(existingSecurityHooks?.prePush) ||
     (await prePushHasSecurityBlock(projectRoot));
   if (!enableSecurityPrePushHook && securityPrePushPreviouslyInstalled) {
-    await removeManagedHook(projectRoot, "pre-push", "security-pre-push");
+    const warning = await removeManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push");
+    if (warning) hookWarnings.push(warning);
   }
 
   const manifest = buildManifest({
@@ -752,6 +754,7 @@ export async function initCommand(args: string[]): Promise<void> {
   }
 
   await writeJsonIfChanged(
+    projectRoot,
     path.join(metaprojectRoot, "metaproject.json"),
     manifest,
   );
@@ -762,6 +765,7 @@ export async function initCommand(args: string[]): Promise<void> {
   await registerCapabilitiesFromArgs(projectRoot, args);
 
   await writeTextIfMissing(
+    projectRoot,
     path.join(metaprojectRoot, "README.md"),
     renderMetaprojectReadme({
       enableGdgraph,
@@ -776,14 +780,17 @@ export async function initCommand(args: string[]): Promise<void> {
     }),
   );
   await writeTextIfMissing(
+    projectRoot,
     path.join(metaprojectRoot, "core", "README.md"),
     renderMetaprojectCoreReadme(),
   );
   await writeTextIfChanged(
+    projectRoot,
     path.join(metaprojectRoot, "hooks", "README.md"),
     renderHooksReadme(),
   );
   await writeTextIfChanged(
+    projectRoot,
     path.join(metaprojectRoot, "skills", "project-rules", "README.md"),
     renderProjectRulesSkillReadme({ sources: agentRuleSources }),
   );
@@ -822,6 +829,7 @@ export async function initCommand(args: string[]): Promise<void> {
     throw error;
   }
   await writeTextIfChanged(
+    projectRoot,
     path.join(metaprojectRoot, "keryx-dashboard.html"),
     renderMetaprojectDashboardHtml({
       enableGdgraph,
@@ -838,14 +846,17 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableGdgraph) {
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "modules", "gdgraph.md"),
       renderGdgraphManifest(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "core", "gdgraph", "README.md"),
       renderGdgraphCoreReadme(),
     );
     await writeTextIfChanged(
+      projectRoot,
       path.join(metaprojectRoot, "skills", "gdgraph", "SKILL.md"),
       renderGdgraphSkillReadme(),
     );
@@ -854,18 +865,22 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableGdctx) {
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "gdctx.config.json"),
       renderGdctxConfig(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "modules", "gdctx.md"),
       renderGdctxManifest(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "core", "gdctx", "README.md"),
       renderGdctxCoreReadme(),
     );
     await writeTextIfChanged(
+      projectRoot,
       path.join(metaprojectRoot, "skills", "gdctx", "SKILL.md"),
       renderGdctxSkillReadme(),
     );
@@ -873,18 +888,22 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableGdwiki) {
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "wiki", "index.md"),
       renderWikiIndexScaffold(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "wiki", "templates", "page.md"),
       renderWikiPageTemplate(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "modules", "gdwiki.md"),
       renderGdwikiManifest(),
     );
     await writeTextIfChanged(
+      projectRoot,
       path.join(metaprojectRoot, "skills", "gdwiki", "SKILL.md"),
       renderGdwikiSkillReadme(),
     );
@@ -892,18 +911,22 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableHealth) {
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "health.config.json"),
       renderHealthConfig(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "modules", "health.md"),
       renderHealthManifest(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "core", "health", "README.md"),
       renderHealthCoreReadme(),
     );
     await writeTextIfChanged(
+      projectRoot,
       path.join(metaprojectRoot, "skills", "health", "SKILL.md"),
       renderHealthSkillReadme(),
     );
@@ -911,6 +934,7 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableTesting) {
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "testing.config.json"),
       renderTestingConfig({
         postCommitRefresh: enableTestingPostCommitHook,
@@ -919,23 +943,28 @@ export async function initCommand(args: string[]): Promise<void> {
       }),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "modules", "testing.md"),
       renderTestingManifest(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "core", "testing", "README.md"),
       renderTestingCoreReadme(),
     );
     await writeTextIfChanged(
+      projectRoot,
       path.join(metaprojectRoot, "skills", "testing", "SKILL.md"),
       renderTestingSkillReadme(),
     );
     if (enableGdwiki) {
       await writeTextIfMissing(
+        projectRoot,
         path.join(metaprojectRoot, "wiki", "testing", "README.md"),
         renderTestingWikiReadme(),
       );
       await writeTextIfMissing(
+        projectRoot,
         path.join(metaprojectRoot, "wiki", "testing", "conventions.md"),
         renderTestingWikiConventions(),
       );
@@ -944,26 +973,32 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableMemory) {
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "memory.config.json"),
       renderMemoryConfig(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "memory", "index.md"),
       renderMemoryIndexScaffold(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "memory", "templates", "entry.md"),
       renderMemoryEntryTemplate(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "modules", "memory.md"),
       renderMemoryManifest(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "core", "memory", "README.md"),
       renderMemoryCoreReadme(),
     );
     await writeTextIfChanged(
+      projectRoot,
       path.join(metaprojectRoot, "skills", "memory", "SKILL.md"),
       renderMemorySkillReadme(),
     );
@@ -971,26 +1006,32 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableTasks) {
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "flows", "README.md"),
       renderFlowsReadme(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "modules", "tasks.md"),
       renderTasksManifest(),
     );
     await writeTextIfChanged(
+      projectRoot,
       path.join(metaprojectRoot, "skills", "flow", "SKILL.md"),
       renderFlowSkillRouter(),
     );
     await writeTextIfChanged(
+      projectRoot,
       path.join(metaprojectRoot, "skills", "flow", "init.md"),
       renderFlowInitSkill(),
     );
     await writeTextIfChanged(
+      projectRoot,
       path.join(metaprojectRoot, "skills", "flow", "manage.md"),
       renderFlowManageSkill(),
     );
     await writeTextIfChanged(
+      projectRoot,
       path.join(metaprojectRoot, "skills", "flow", "complete.md"),
       renderFlowCompleteSkill(),
     );
@@ -998,14 +1039,17 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableSecurity) {
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "security.config.json"),
       renderSecurityConfig(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "modules", "security.md"),
       renderSecurityManifest(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "core", "security", "README.md"),
       renderSecurityCoreReadme(),
     );
@@ -1013,14 +1057,17 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableMcp) {
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "core", "mcp", "mcp.config.json"),
       renderMcpConfig(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "modules", "mcp.md"),
       renderMcpManifest(),
     );
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "core", "mcp", "README.md"),
       renderMcpCoreReadme(),
     );
@@ -1028,10 +1075,12 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableSac) {
     await writeTextIfMissing(
+      projectRoot,
       path.join(metaprojectRoot, "modules", "sac.md"),
       renderSacManifest(),
     );
     await writeTextIfChanged(
+      projectRoot,
       path.join(metaprojectRoot, "skills", "sac", "SKILL.md"),
       renderSacSkillReadme(),
     );
@@ -1096,9 +1145,12 @@ export async function initCommand(args: string[]): Promise<void> {
       note(notice);
     }
   }
-  if (gdskillsWarnings.length > 0) {
+  if (gdskillsWarnings.length > 0 || hookWarnings.length > 0) {
     heading("Warnings");
     for (const warning of gdskillsWarnings) {
+      note(warning);
+    }
+    for (const warning of hookWarnings) {
       note(warning);
     }
   }
@@ -1151,7 +1203,7 @@ export async function initCommand(args: string[]): Promise<void> {
   }
 
   // P2: non-secret project sandbox policy skeleton (never overwrites; no API keys).
-  const wroteSandboxPolicy = writeProjectSandboxPolicySkeletonIfMissing(projectRoot);
+  const wroteSandboxPolicy = await writeProjectSandboxPolicySkeletonIfMissing(projectRoot);
   if (wroteSandboxPolicy) {
     statusLine(".keryx/sandbox-policy.json", true, "sandbox policy skeleton (no secrets)");
   }
@@ -1297,7 +1349,23 @@ function printInitHelp(): void {
   ]);
 }
 
+// Every `create*Structure`/legacy-cleanup/scaffold helper below receives the
+// METAPROJECT root (always exactly `<projectRoot>/.metaproject`, as
+// constructed once in `initCommand` and threaded through unchanged) rather
+// than the project root itself. `contained-write.ts`'s containment root must
+// be the PROJECT root — so a `.metaproject` that is ITSELF a symlink escaping
+// the project is caught by the walk, not just a symlink somewhere below it —
+// so every one of them derives it back with `path.dirname`.
+function projectRootOf(metaprojectRoot: string): string {
+  return path.dirname(metaprojectRoot);
+}
+
+async function mkdirAllContained(projectRoot: string, dirs: string[]): Promise<void> {
+  await Promise.all(dirs.map((dir) => mkdirContained(projectRoot, path.relative(projectRoot, dir))));
+}
+
 async function createBaseStructure(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const dirs = [
     root,
     path.join(root, "core"),
@@ -1312,10 +1380,11 @@ async function createBaseStructure(root: string): Promise<void> {
     path.join(root, "hooks", "post-update.d"),
   ];
 
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await mkdirAllContained(projectRoot, dirs);
 }
 
 async function createGdgraphStructure(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const dirs = [
     path.join(root, "core", "gdgraph"),
     path.join(root, "data", "gdgraph", "storage"),
@@ -1325,10 +1394,11 @@ async function createGdgraphStructure(root: string): Promise<void> {
     path.join(root, "skills", "gdgraph"),
   ];
 
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await mkdirAllContained(projectRoot, dirs);
 }
 
 async function createGdctxStructure(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const dirs = [
     path.join(root, "core", "gdctx"),
     path.join(root, "data", "gdctx", "raw"),
@@ -1337,10 +1407,11 @@ async function createGdctxStructure(root: string): Promise<void> {
     path.join(root, "skills", "gdctx"),
   ];
 
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await mkdirAllContained(projectRoot, dirs);
 }
 
 async function createGdwikiStructure(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const dirs = [
     path.join(root, "wiki"),
     path.join(root, "wiki", "templates"),
@@ -1350,10 +1421,11 @@ async function createGdwikiStructure(root: string): Promise<void> {
     path.join(root, "skills", "gdwiki"),
   ];
 
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await mkdirAllContained(projectRoot, dirs);
 }
 
 async function createHealthStructure(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const dirs = [
     path.join(root, "core", "health", "sources"),
     path.join(root, "core", "health", "metrics"),
@@ -1364,10 +1436,11 @@ async function createHealthStructure(root: string): Promise<void> {
     path.join(root, "skills", "health"),
   ];
 
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await mkdirAllContained(projectRoot, dirs);
 }
 
 async function createMemoryStructure(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const dirs = [
     path.join(root, "memory", "templates"),
     ...MEMORY_TYPES.map((entry) => path.join(root, "memory", entry.folder)),
@@ -1378,20 +1451,22 @@ async function createMemoryStructure(root: string): Promise<void> {
     path.join(root, "skills", "memory"),
   ];
 
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await mkdirAllContained(projectRoot, dirs);
 }
 
 async function createTasksStructure(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const dirs = [
     path.join(root, "flows"),
     path.join(root, "skills", "flow"),
     path.join(root, "data", "tasks", "artifacts"),
   ];
 
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await mkdirAllContained(projectRoot, dirs);
 }
 
 async function createSecurityStructure(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const dirs = [
     path.join(root, "core", "security"),
     path.join(root, "data", "security", "artifacts"),
@@ -1401,15 +1476,16 @@ async function createSecurityStructure(root: string): Promise<void> {
     path.join(root, "data", "security", "raw"),
   ];
 
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await mkdirAllContained(projectRoot, dirs);
 }
 
 async function createMcpStructure(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const dirs = [
     path.join(root, "core", "mcp"),
     path.join(root, "data", "mcp", "artifacts"),
   ];
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await mkdirAllContained(projectRoot, dirs);
 }
 
 // SAC's actual data (.metaproject/workspaces/, .metaproject/context-operations/)
@@ -1417,8 +1493,9 @@ async function createMcpStructure(root: string): Promise<void> {
 // skills dir is scaffolded here, matching createTasksStructure's pattern of
 // not pre-creating what is otherwise lazily created.
 async function createSacStructure(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const dirs = [path.join(root, "skills", "sac")];
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await mkdirAllContained(projectRoot, dirs);
 }
 
 // The enriched gdgraph tree-sitter capability entry (B1, spec §4). A ceiling
@@ -1443,6 +1520,7 @@ function testingCoverageMapCapability(enabled: boolean): Record<string, unknown>
 }
 
 async function createTestingStructure(root: string, enableGdwiki: boolean): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const dirs = [
     path.join(root, "core", "testing"),
     path.join(root, "data", "testing", "artifacts"),
@@ -1452,12 +1530,13 @@ async function createTestingStructure(root: string, enableGdwiki: boolean): Prom
     ...(enableGdwiki ? [path.join(root, "wiki", "testing")] : []),
   ];
 
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await mkdirAllContained(projectRoot, dirs);
 }
 
 async function installGdgraphCoreScripts(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const gdgraphCoreRoot = path.join(root, "core", "gdgraph");
-  await mkdir(gdgraphCoreRoot, { recursive: true });
+  await mkdirContained(projectRoot, path.relative(projectRoot, gdgraphCoreRoot));
 
   // One list, shared with `update`, checked by `gdgraph/core-sources.test.ts`
   // against the transitive closure of runtime imports. A hand-maintained copy
@@ -1465,111 +1544,74 @@ async function installGdgraphCoreScripts(root: string): Promise<void> {
   // every fresh install while the suite stayed green.
   for (const file of GDGRAPH_CORE_SOURCES) {
     await copyFileIfChanged(
+      projectRoot,
       runtimeSourcePath(`../gdgraph/${file}`),
       path.join(gdgraphCoreRoot, file),
     );
   }
   await writeTextIfChanged(
+    projectRoot,
     path.join(gdgraphCoreRoot, "cli.ts"),
     renderGdgraphCoreCli(),
   );
 }
 
-async function installGdgraphPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+// R2-F2: each of these pushes onto `warnings` (rather than throwing) when the
+// hook file can't be safely reached — e.g. a symlink escaping both the git
+// common dir and the project root, or a dangling link — so one unreachable
+// hook no longer aborts the whole `keryx init` run.
+async function installGdgraphPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+  if (warning) warnings.push(warning);
 }
 
-async function installGdwikiPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+async function installGdwikiPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+  if (warning) warnings.push(warning);
 }
 
-async function installGdskillsPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
+async function installGdskillsPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
+  if (warning) warnings.push(warning);
 }
 
-async function installHealthPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
+async function installHealthPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
+  if (warning) warnings.push(warning);
 }
 
-async function installTestingPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
+async function installTestingPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
+  if (warning) warnings.push(warning);
 }
 
-async function installMetaprojectDashboardPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "metaproject-dashboard-post-commit", renderMetaprojectDashboardPostCommitHook());
-}
-
-async function installTestingPrePushHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
-}
-
-async function installSecurityPrePushHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
-}
-
-async function installManagedHook(
-  projectRoot: string,
-  hookName: "post-commit" | "pre-push",
-  blockId: string,
-  content: string,
-): Promise<void> {
-  const hooksRoot = await resolveGitHooksRoot(projectRoot);
-  if (!hooksRoot) {
-    return;
-  }
-
-  await mkdir(hooksRoot, { recursive: true });
-
-  const hookPath = path.join(hooksRoot, hookName);
-  const blockStart = `# keryx:${blockId}:begin`;
-  const blockEnd = `# keryx:${blockId}:end`;
-  const managedBlock = `${blockStart}\n${content.trim()}\n${blockEnd}`;
-  const existing = (await pathExists(hookPath))
-    ? await readFile(hookPath, "utf8")
-    : "#!/usr/bin/env sh\n";
-  const blockPattern = new RegExp(
-    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
+async function installMetaprojectDashboardPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(
+    projectRoot,
+    "post-commit",
+    "metaproject-dashboard-post-commit",
+    renderMetaprojectDashboardPostCommitHook(),
   );
-  // `() => managedBlock`, not `managedBlock`: the string form of
-  // String.replace reads `$'`, "$`", `$&` and `$$` as substitution patterns,
-  // and these blocks are shell. See the twin in update.ts.
-  const next = blockPattern.test(existing)
-    ? existing.replace(blockPattern, () => managedBlock)
-    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
-
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
+  if (warning) warnings.push(warning);
 }
 
-// Strip a single keryx managed block from a git hook, leaving all other
-// managed blocks and user-authored content intact. No-op when the hook or block
-// is absent.
-async function removeManagedHook(
-  projectRoot: string,
-  hookName: "post-commit" | "pre-push",
-  blockId: string,
-): Promise<void> {
-  const hooksRoot = await resolveGitHooksRoot(projectRoot);
-  if (!hooksRoot) {
-    return;
-  }
-  const hookPath = path.join(hooksRoot, hookName);
-  if (!(await pathExists(hookPath))) {
-    return;
-  }
-  const existing = await readFile(hookPath, "utf8");
-  const blockStart = `# keryx:${blockId}:begin`;
-  const blockEnd = `# keryx:${blockId}:end`;
-  const blockPattern = new RegExp(
-    `\\n*${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}\\n*`,
-  );
-  if (!blockPattern.test(existing)) {
-    return;
-  }
-  const next = `${existing.replace(blockPattern, "\n").trimEnd()}\n`;
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
+async function installTestingPrePushHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
+  if (warning) warnings.push(warning);
 }
+
+async function installSecurityPrePushHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+  if (warning) warnings.push(warning);
+}
+
+// R1-F3/R1-F6: `installManagedHook`/`removeManagedHook` used to be a local,
+// byte-for-byte copy of `update.ts`'s pair, which let the ratchet's
+// file-granularity ALLOWLIST silently exempt every OTHER raw write this file
+// might grow, and carried a false claim that `resolveGitHooksRoot` itself
+// checked for an escaping symlink (it does not). Both commands now share the
+// one implementation in `src/lib/managed-git-hook.ts`, which actually runs
+// that containment check before writing — see its file header.
 
 // True when the git pre-push hook still carries the managed security block.
 async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
@@ -1599,6 +1641,7 @@ async function agentSettingsHasSecuritySentinel(
 }
 
 async function removeLegacyGdgraphSkillReadme(root: string): Promise<void> {
+  const projectRoot = projectRootOf(root);
   const legacyReadmePath = path.join(root, "skills", "gdgraph", "README.md");
   if (!(await pathExists(legacyReadmePath))) {
     return;
@@ -1617,7 +1660,7 @@ Use this skill when a task requires code graph context, dependency impact analys
 `;
 
   if ((await readFile(legacyReadmePath, "utf8")) === legacyContent) {
-    await unlink(legacyReadmePath);
+    await removeContained(projectRoot, path.relative(projectRoot, legacyReadmePath));
   }
 }
 
@@ -1908,11 +1951,14 @@ function buildManifest({
   };
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
+// `projectRoot` is the containment root for every one of these four; `filePath`
+// (or `to`) is an absolute path somewhere under it, computed by the caller
+// (usually `path.join(metaprojectRoot, ...)`). Converting it to a
+// project-relative path here, once, is what lets a symlinked `.metaproject`
+// itself — not just a symlinked file below it — be caught by `writeContained`'s
+// segment-by-segment walk from `projectRoot`.
 async function writeJsonIfChanged(
+  projectRoot: string,
   filePath: string,
   value: unknown,
 ): Promise<void> {
@@ -1920,33 +1966,35 @@ async function writeJsonIfChanged(
   if ((await pathExists(filePath)) && (await readFile(filePath, "utf8")) === next) {
     return;
   }
-  await writeFile(filePath, next, "utf8");
+  await writeContained(projectRoot, path.relative(projectRoot, filePath), next);
 }
 
 async function writeTextIfChanged(
+  projectRoot: string,
   filePath: string,
   content: string,
 ): Promise<void> {
   if ((await pathExists(filePath)) && (await readFile(filePath, "utf8")) === content) {
     return;
   }
-  await writeFile(filePath, content, "utf8");
+  await writeContained(projectRoot, path.relative(projectRoot, filePath), content);
 }
 
 async function writeTextIfMissing(
+  projectRoot: string,
   filePath: string,
   content: string,
 ): Promise<void> {
   if (await pathExists(filePath)) {
     return;
   }
-  await writeFile(filePath, content, "utf8");
+  await writeContained(projectRoot, path.relative(projectRoot, filePath), content);
 }
 
-async function copyFileIfChanged(from: string, to: string): Promise<void> {
+async function copyFileIfChanged(projectRoot: string, from: string, to: string): Promise<void> {
   const next = await readFile(from, "utf8");
   if ((await pathExists(to)) && (await readFile(to, "utf8")) === next) {
     return;
   }
-  await writeFile(to, next, "utf8");
+  await writeContained(projectRoot, path.relative(projectRoot, to), next);
 }

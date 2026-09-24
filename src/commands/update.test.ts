@@ -1,4 +1,4 @@
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -255,6 +255,51 @@ test("update refreshes generated memory ignore policy without ignoring canonical
       ".metaproject/memory.config.json",
     ], { cwd: root, stdout: "ignore", stderr: "ignore" });
     expect(canonical.exitCode).not.toBe(0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// R2-F2 regression coverage (update side — see init.test.ts for the matching
+// `keryx init` tests, and managed-git-hook.test.ts for the underlying library
+// fix). `keryx update` used to ABORT outright when `.git/hooks/post-commit`
+// resolved outside the git common dir through a symlink, even for a
+// legitimate in-project tracked script. It's now an accepted target.
+test("update succeeds, and writes the hook block, when .git/hooks/post-commit links to an in-project tracked script", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-hook-inproject-link-"));
+  try {
+    Bun.spawnSync(["git", "init", "-q"], { cwd: root, stdout: "ignore", stderr: "ignore" });
+    const scriptDir = path.join(root, "scripts");
+    await mkdir(scriptDir, { recursive: true });
+    const scriptPath = path.join(scriptDir, "post-commit");
+    await writeFile(scriptPath, "#!/usr/bin/env sh\necho tracked\n", "utf8");
+    await mkdir(path.join(root, ".git", "hooks"), { recursive: true });
+    await symlink(path.join("..", "..", "scripts", "post-commit"), path.join(root, ".git", "hooks", "post-commit"));
+
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: { gdgraph: { enabled: true, hooks: { gitPostCommit: true } } },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    const { logs, restore } = captureUpdateConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await updateCommand(["--skip-runtime", "--no-tasks"]);
+      });
+    } finally {
+      restore();
+    }
+
+    expect(logs.some((line) => line.includes("resolves outside") || line.includes("Escape"))).toBe(false);
+    const written = await readFile(scriptPath, "utf8");
+    expect(written).toContain("# keryx:gdgraph-post-commit:begin");
+    expect(written).toContain(renderGdgraphPostCommitHook().trim());
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -1,6 +1,7 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "./fs";
+import { writeContained } from "./contained-write";
 
 export const LEGACY_MEMORY_ARTIFACT_PATHS = [
   ".metaproject/data/memory/artifacts/latest.md",
@@ -35,7 +36,7 @@ export async function syncMetaprojectGitignore(projectRoot: string): Promise<voi
     .join("\n");
   const next = `${withoutLegacyMetaprojectIgnore.trimEnd()}\n\n${managedBlock}\n`;
   if (existing !== next) {
-    await writeFile(gitignorePath, next, "utf8");
+    await writeContained(projectRoot, ".gitignore", next);
   }
 }
 

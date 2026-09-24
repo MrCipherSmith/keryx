@@ -1023,6 +1023,359 @@ describe("applyGraduation: R7-F1 removed final summary/suggestedName token gate"
 // the pipeline now use the same `mayCarryReviewerText` predicate.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// R10-F1 (review round 10, PR #691, minor): an already-proposed (idempotent)
+// cluster used to be skipped BEFORE any login gate ran at all, so a proposal
+// written while no login was configured kept a login-derived
+// suggestedName/summary/nextSteps sitting on disk (and printed verbatim by
+// applyGraduation for a skill/rule target) even after that login was
+// configured. Fixed two ways: `runGraduate` now re-gates and recomputes an
+// already-proposed cluster's stored proposal on every rerun once a login is
+// configured, and `applyGraduation`'s skill/rule refusal message now
+// recomputes `nextSteps` from the member records + current logins instead of
+// echoing `proposal.nextSteps` from disk.
+// ---------------------------------------------------------------------------
+
+describe("runGraduate: a login configured AFTER an already-written proposal is scrubbed from it on rerun (R10-F1)", () => {
+  test("rerunning graduate after configuring the login rewrites the proposal file without it", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const rows: readonly [string, string, string][] = [
+        ["review-conventions.early-returns-aaaaaaaa", "prefer early returns alice-style", "Prefer early returns alice-style over nested conditionals"],
+        ["review-conventions.early-returns-bbbbbbbb", "prefer early returns alice-style always", "Prefer early returns alice-style to reduce nesting"],
+        ["review-conventions.early-returns-cccccccc", "use early returns alice-style", "Use early returns alice-style instead of nested if blocks"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+
+      // First run: no login configured yet — the glued 'alice' keyword
+      // survives into the proposal's suggestedName/summary, same as R6-F1's
+      // "before" setup.
+      const first = await runGraduate(root, { now: NOW, env });
+      const firstProposal = first.proposals.find((p) => p.target === "agent");
+      expect(firstProposal).toBeDefined();
+      expect(firstProposal!.suggestedName.toLowerCase()).toContain("alice");
+
+      // The login is configured only AFTER the first run.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      const second = await runGraduate(root, { now: NOW, env });
+      expect(second.proposals).toEqual([]);
+      expect(second.alreadyProposed).toEqual([firstProposal!.proposalId]);
+
+      const proposalJsonPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.json`);
+      const proposalMdPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.md`);
+      const rewrittenJson = readFileSync(proposalJsonPath, "utf8");
+      const rewrittenMd = readFileSync(proposalMdPath, "utf8");
+      expect(rewrittenJson.toLowerCase()).not.toContain("alice");
+      expect(rewrittenMd.toLowerCase()).not.toContain("alice");
+
+      const rewrittenProposal = JSON.parse(rewrittenJson) as { suggestedName: string; summary: string };
+      expect(rewrittenProposal.suggestedName.toLowerCase()).not.toContain("alice");
+      expect(rewrittenProposal.summary.toLowerCase()).not.toContain("alice");
+
+      // Applying the rewritten proposal writes an agent whose name/description
+      // never carry the login either (the raw member body text is a
+      // separate, documented concern — R4-F1/R6-F1 already cover it via the
+      // per-member `gateReviewerText` refusal, not scrubbing).
+      const result = await applyGraduation(root, firstProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+      const agentMd = readFileSync(result.path, "utf8");
+      const nameLine = agentMd.split("\n").find((line) => line.startsWith("name:"));
+      const descriptionLine = agentMd.split("\n").find((line) => line.startsWith("description:"));
+      expect(nameLine?.toLowerCase()).not.toContain("alice");
+      expect(descriptionLine?.toLowerCase()).not.toContain("alice");
+    });
+  });
+
+  test("a login glued to a member's raw trigger/action (not just a keyword) refuses the already-proposed cluster instead of rewriting it", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const memberId = REVIEWER_COMMENT_CLUSTER[0]![0];
+      const rows: readonly [string, string, string][] = [
+        [memberId, REVIEWER_COMMENT_CLUSTER[0]![1], `@bob prefers ${REVIEWER_COMMENT_CLUSTER[0]![2]}`],
+        [REVIEWER_COMMENT_CLUSTER[1]![0], REVIEWER_COMMENT_CLUSTER[1]![1], REVIEWER_COMMENT_CLUSTER[1]![2]],
+        [REVIEWER_COMMENT_CLUSTER[2]![0], REVIEWER_COMMENT_CLUSTER[2]![1], REVIEWER_COMMENT_CLUSTER[2]![2]],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+
+      // No login configured yet: the genuine "@bob" mention is not gated at
+      // all, so the first run succeeds and writes a proposal normally.
+      const first = await runGraduate(root, { now: NOW, env });
+      const firstProposal = first.proposals.find((p) => p.target === "agent");
+      expect(firstProposal).toBeDefined();
+
+      // The login is configured only AFTER the first run — the same
+      // "configured after the fact" shape R6-F2's test uses, but here
+      // against an ALREADY-PROPOSED cluster rather than a brand-new one.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["bob"] }),
+      );
+
+      const second = await runGraduate(root, { now: NOW, env });
+      expect(second.proposals).toEqual([]);
+      expect(second.alreadyProposed).toEqual([]);
+      expect(second.refused.some((r) => r.categories.includes("attribution") && r.memberIds.includes(memberId))).toBe(true);
+
+      // R1-F4: the re-gate above refuses rather than rewriting — the stale
+      // proposal `.json`/`.md` pair (written by the first, unfiltered run,
+      // and still carrying the raw "@bob" mention) must not be left sitting
+      // on disk once that member is known to gate against a configured
+      // login. Both files are deleted, not just the `.json`.
+      const proposalJsonPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.json`);
+      const proposalMdPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.md`);
+      expect(existsSync(proposalJsonPath)).toBe(false);
+      expect(existsSync(proposalMdPath)).toBe(false);
+    });
+  });
+});
+
+describe("runGraduate: a proposal orphaned by a change in cluster membership is swept once a login is configured (R1-F4)", () => {
+  test("cluster membership changes (proposal id changes); the old proposal, carrying a later-configured login, is deleted on rerun", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const rows: readonly [string, string, string][] = [
+        ["review-conventions.early-returns-aaaaaaaa", "prefer early returns alice-style", "Prefer early returns alice-style over nested conditionals"],
+        ["review-conventions.early-returns-bbbbbbbb", "prefer early returns alice-style always", "Prefer early returns alice-style to reduce nesting"],
+        ["review-conventions.early-returns-cccccccc", "use early returns alice-style", "Use early returns alice-style instead of nested if blocks"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+
+      // No login configured yet: the glued "alice" keyword survives into
+      // the first proposal's suggestedName/summary (same R6-F1 shape).
+      const first = await runGraduate(root, { now: NOW, env });
+      const firstProposal = first.proposals.find((p) => p.target === "agent");
+      expect(firstProposal).toBeDefined();
+      expect(firstProposal!.suggestedName.toLowerCase()).toContain("alice");
+      const orphanedJsonPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.json`);
+      const orphanedMdPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.md`);
+      expect(existsSync(orphanedJsonPath)).toBe(true);
+
+      // A 4th similar member joins the cluster: `proposalIdFor` hashes the
+      // new (larger) sorted member-id set, so the NEW proposal gets a
+      // DIFFERENT id — the old one is now orphaned, not "already proposed".
+      await writePattern(
+        root,
+        makeAcceptedReviewerComment(
+          "review-conventions.early-returns-dddddddd",
+          "prefer early returns alice-style here",
+          "Prefer early returns alice-style in handlers",
+          "review-conventions",
+          0.8,
+        ),
+        { env, capability },
+      );
+
+      // The login is configured only now, after the membership change.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      const second = await runGraduate(root, { now: NOW, env });
+      const secondProposal = second.proposals.find((p) => p.target === "agent");
+      expect(secondProposal).toBeDefined();
+      expect(secondProposal!.proposalId).not.toBe(firstProposal!.proposalId);
+      // The new cluster's own proposal is clean (the main-loop gate already
+      // covered this — R6-F2) — the point under test is the ORPHAN below.
+      expect(secondProposal!.suggestedName.toLowerCase()).not.toContain("alice");
+
+      // The orphaned proposal — never visited by the main loop, since its id
+      // no longer matches any current cluster — is deleted by the sweep
+      // rather than left on disk carrying "alice" forever.
+      expect(existsSync(orphanedJsonPath)).toBe(false);
+      expect(existsSync(orphanedMdPath)).toBe(false);
+    });
+  });
+});
+
+describe("runGraduate: the orphan sweep does not over-delete on a --domain run (R2-F1)", () => {
+  test("a --domain X run leaves a LIVE (non-orphaned) proposal of an unrelated domain Y intact, even though its text carries a later-configured login", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      // A `review-conventions` cluster whose trigger carries a glued token
+      // ("alice-style") that will later equal a configured login. Provenance
+      // is `reviewer-comment` (`mayCarryReviewerText` true), matching the
+      // existing R1-F4 orphan shape, so the token IS a genuine leak once the
+      // login is configured.
+      const rows: readonly [string, string, string][] = [
+        ["review-conventions.early-returns-aaaaaaaa", "prefer early returns alice-style", "Prefer early returns alice-style over nested conditionals"],
+        ["review-conventions.early-returns-bbbbbbbb", "prefer early returns alice-style always", "Prefer early returns alice-style to reduce nesting"],
+        ["review-conventions.early-returns-cccccccc", "use early returns alice-style", "Use early returns alice-style instead of nested if blocks"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+
+      // Unrelated members in a DIFFERENT domain, so a `--domain testing` run
+      // below has something of its own to cluster/report on.
+      for (const [id, trigger, action, scope] of SKILL_CLUSTER) {
+        await writePattern(root, makeAccepted(id, trigger, action, "testing", 0.5, scope), { env, capability });
+      }
+
+      // Full run (no domain filter): writes the review-conventions proposal
+      // while no login is configured yet, so "alice" survives into its
+      // suggestedName.
+      const first = await runGraduate(root, { now: NOW, env });
+      const liveProposal = first.proposals.find((p) => p.domain === "review-conventions");
+      expect(liveProposal).toBeDefined();
+      expect(liveProposal!.suggestedName.toLowerCase()).toContain("alice");
+      const liveJsonPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${liveProposal!.proposalId}.json`);
+      const liveMdPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${liveProposal!.proposalId}.md`);
+      expect(existsSync(liveJsonPath)).toBe(true);
+
+      // The login is configured only now.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      // A `--domain testing` run: `listPatterns` returns only "testing"
+      // records, so the review-conventions cluster above is NOT among this
+      // run's current clusters at all. The proposal is still LIVE (its
+      // cluster is unchanged and still exists), so the sweep must leave it
+      // alone rather than treating "not in this domain-filtered run" as
+      // "orphaned".
+      const domainRun = await runGraduate(root, { now: NOW, env, domain: "testing" });
+      expect(domainRun.proposals.every((p) => p.domain === "testing")).toBe(true);
+
+      expect(existsSync(liveJsonPath)).toBe(true);
+      expect(existsSync(liveMdPath)).toBe(true);
+
+      // A subsequent FULL run still re-gates/rewrites it normally (unrelated
+      // to this finding, just confirming nothing else broke).
+      const full = await runGraduate(root, { now: NOW, env });
+      const rewritten = full.alreadyProposed.includes(liveProposal!.proposalId);
+      expect(rewritten).toBe(true);
+    });
+  });
+
+  test("scoping: an orphaned proposal whose members cannot carry reviewer text is kept even though its stored text matches a later-configured login token", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      // `repeated-correction` provenance -> `mayCarryReviewerText` is false,
+      // so `topKeywords` never filters logins for these entries at ANY time
+      // (see `topKeywords`'s per-entry scoping) — "bobby-style" is this
+      // cluster's own genuine content, not an attribution fragment, even
+      // though "bobby" later becomes a configured login.
+      const rows: readonly [string, string, string][] = [
+        ["code-style.bobby-return-aaaaaaaa", "prefer early returns bobby-style", "Prefer early returns bobby-style over nested conditionals"],
+        ["code-style.bobby-return-bbbbbbbb", "prefer early returns bobby-style always", "Prefer early returns bobby-style to reduce nesting"],
+        ["code-style.bobby-return-cccccccc", "use early returns bobby-style", "Use early returns bobby-style instead of nested if blocks"],
+      ];
+      for (const [id, trigger, action] of rows) {
+        await writePattern(root, makeAccepted(id, trigger, action, "code-style", 0.8), { env, capability });
+      }
+
+      const first = await runGraduate(root, { now: NOW, env });
+      const firstProposal = first.proposals.find((p) => p.target === "agent");
+      expect(firstProposal).toBeDefined();
+      expect(firstProposal!.suggestedName.toLowerCase()).toContain("bobby");
+      const orphanedJsonPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.json`);
+      const orphanedMdPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.md`);
+      expect(existsSync(orphanedJsonPath)).toBe(true);
+
+      // A 4th similar member joins the cluster: the proposal id changes, so
+      // the old one is orphaned (never revisited by the main loop).
+      await writePattern(
+        root,
+        makeAccepted(
+          "code-style.bobby-return-dddddddd",
+          "prefer early returns bobby-style here",
+          "Prefer early returns bobby-style in handlers",
+          "code-style",
+          0.8,
+        ),
+        { env, capability },
+      );
+
+      // The login is configured only now, after the membership change.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["bobby"] }),
+      );
+
+      const second = await runGraduate(root, { now: NOW, env });
+      const secondProposal = second.proposals.find((p) => p.target === "agent");
+      expect(secondProposal).toBeDefined();
+      expect(secondProposal!.proposalId).not.toBe(firstProposal!.proposalId);
+
+      // The orphan's own members cannot carry reviewer text (provenance is
+      // `repeated-correction`), so "bobby-style" is genuine content for
+      // them, not a leaked login — the sweep must keep the orphan rather
+      // than deleting it on a bare token match.
+      expect(existsSync(orphanedJsonPath)).toBe(true);
+      expect(existsSync(orphanedMdPath)).toBe(true);
+    });
+  });
+});
+
+describe("applyGraduation: a login configured AFTER an already-written skill/rule proposal never appears in the printed next-step message (R10-F1)", () => {
+  test("configuring the login after runGraduate: the graduate-apply-agent-only message's next step never contains it", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      // R10-F1's login-filtering recompute only applies to a member whose
+      // signal `mayCarryReviewerText` (reviewer-comment or model-backed) —
+      // an ordinary keyword from any other signal is genuine content, never
+      // an attribution leak (R9-F2). Domain "testing" (not
+      // "review-conventions") keeps `classify` at "skill" for this
+      // 2-member cluster, while the `reviewer-comment` provenance is what
+      // makes the login-derived keyword actually filterable.
+      const rows: readonly [string, string, string][] = [
+        ["testing.rerun-failing-alice-dddddddd", "run the failing test alice-style again before merging the change", "confirm the fix locally before pushing"],
+        ["testing.rerun-failing-alice-eeeeeeee", "rerun the failing test alice-style once more before merging the change", "watch the same test go green twice"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "testing", 0.5), { env, capability });
+      }
+
+      const report = await runGraduate(root, { now: NOW, env });
+      const skillProposal = report.proposals.find((p) => p.target === "skill");
+      expect(skillProposal).toBeDefined();
+      expect(skillProposal!.suggestedName.toLowerCase()).toContain("alice");
+
+      // The login is configured only AFTER runGraduate, so runGraduate's own
+      // rewrite pass (exercised by the describe block above) never ran for
+      // this proposal — applyGraduation's own recompute is what is exercised
+      // here.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      try {
+        await applyGraduation(root, skillProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+        throw new Error("expected applyGraduation to throw");
+      } catch (error) {
+        expect(error).toBeInstanceOf(LearningGraduateError);
+        expect((error as LearningGraduateError).reason).toBe("graduate-apply-agent-only");
+        expect((error as LearningGraduateError).message.toLowerCase()).not.toContain("alice");
+        expect((error as LearningGraduateError).message).toContain("keryx skills scout");
+      }
+    });
+  });
+});
+
 describe("runGraduate/applyGraduation: a reverted-edit member is never login-gated, at either stage (R7-F2)", () => {
   test("login 'edit' does not refuse proposing OR applying a reverted-edit cluster", async () => {
     await withProjectRoot(async (root, env) => {
