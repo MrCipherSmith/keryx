@@ -9,7 +9,7 @@
   "title": "W6: lifecycle hooks in keryx shell that can only tighten the policy engine",
   "status": "in-progress",
   "createdAt": "2026-09-24T00:56:52.772Z",
-  "updatedAt": "2026-09-24T05:39:19.507Z",
+  "updatedAt": "2026-09-24T05:39:24.521Z",
   "source": {
     "type": "description",
     "ref": null
@@ -236,7 +236,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 8,
+        "count": 9,
         "log": [
           {
             "at": "2026-09-24T03:04:44.322Z",
@@ -277,6 +277,11 @@
             "at": "2026-09-24T05:24:20.768Z",
             "outcome": "failed",
             "detail": "r4 narrow verification: F-001..F-003 of r3 fixed; 3 new minor on W8 wiring (strict ask never acknowledged, W8 warnings invisible on allow, rename old path not gated) + 2 info"
+          },
+          {
+            "at": "2026-09-24T05:39:24.521Z",
+            "outcome": "started",
+            "detail": "narrow verification round r5 after T22"
           }
         ]
       },
@@ -762,6 +767,11 @@
       "at": "2026-09-24T05:39:19.507Z",
       "event": "task-done",
       "detail": "T22: Round 4 narrow fix: operator-approved impact-evidence ask acknowledges the file to W8, W8 warnings surfaced, rename/delete source paths gated, hooks test uses the patch shape, service failure not marked done"
+    },
+    {
+      "at": "2026-09-24T05:39:24.521Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 9) — narrow verification round r5 after T22"
     }
   ]
 }
