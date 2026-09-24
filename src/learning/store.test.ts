@@ -481,3 +481,98 @@ describe("createPattern (R1-F1/R1-F7 choke point)", () => {
     });
   });
 });
+
+describe("accepted record field whitelist (R2-F5)", () => {
+  test("refuses to change domain on an ACCEPTED record without the accept capability", async () => {
+    await withProjectRoot(async (root) => {
+      const accepted = makeRecord({
+        id: "testing.accepted-r2f5-01111111",
+        status: "accepted",
+        confidence: 0.61,
+        confidenceLevel: "medium",
+        domain: "testing",
+      });
+      delete (accepted as { ttl?: unknown }).ttl;
+      await writePattern(root, accepted, { capability: createAcceptCapability() });
+
+      // Try to change domain without the capability
+      await expect(
+        updatePattern(root, accepted.id, "project", (current) => ({ ...current, domain: "code-style" })),
+      ).rejects.toMatchObject({ reason: "learning-accepted-field-immutable" });
+
+      // Verify the record is unchanged
+      const read = await readPattern(root, accepted.id, "project");
+      expect(read?.domain).toBe("testing");
+    });
+  });
+
+  test("refuses to change reviewerProfile on an ACCEPTED review-conventions record without the accept capability", async () => {
+    await withProjectRoot(async (root) => {
+      const accepted = makeRecord({
+        id: "testing.accepted-r2f5-02222222",
+        status: "accepted",
+        confidence: 0.61,
+        confidenceLevel: "medium",
+        domain: "review-conventions",
+        reviewerProfile: { reviewerId: "reviewer-abc123", generalizedFrom: 5 },
+      });
+      delete (accepted as { ttl?: unknown }).ttl;
+      await writePattern(root, accepted, { capability: createAcceptCapability() });
+
+      // Try to change reviewerId within reviewerProfile without the capability
+      await expect(
+        updatePattern(root, accepted.id, "project", (current) => ({
+          ...current,
+          reviewerProfile: { ...current.reviewerProfile, reviewerId: "reviewer-xyz789" },
+        })),
+      ).rejects.toMatchObject({ reason: "learning-accepted-field-immutable" });
+
+      // Verify the record is unchanged
+      const read = await readPattern(root, accepted.id, "project");
+      expect(read?.reviewerProfile?.reviewerId).toBe("reviewer-abc123");
+    });
+  });
+
+  test("allows mutating only confidence/confidenceLevel/evidence/updatedAt on an ACCEPTED record without the accept capability", async () => {
+    await withProjectRoot(async (root) => {
+      const accepted = makeRecord({
+        id: "testing.accepted-r2f5-03333333",
+        status: "accepted",
+        confidence: 0.4,
+        confidenceLevel: "low",
+        domain: "testing",
+      });
+      delete (accepted as { ttl?: unknown }).ttl;
+      await writePattern(root, accepted, { capability: createAcceptCapability() });
+
+      // Update only mutable fields without the capability
+      const updated = await updatePattern(root, accepted.id, "project", (current) => ({
+        ...current,
+        confidence: 0.75,
+        confidenceLevel: "medium",
+        evidence: [
+          ...current.evidence,
+          {
+            kind: "reinforcement" as const,
+            sourceType: "observation" as const,
+            sourceRef: ".metaproject/data/learning/observations/2026-09-26.jsonl",
+            observedAt: "2026-09-26T00:00:00.000Z",
+            weight: 1,
+          },
+        ],
+        updatedAt: "2026-09-26T00:00:00.000Z",
+      }));
+
+      expect(updated.confidence).toBe(0.75);
+      expect(updated.confidenceLevel).toBe("medium");
+      expect(updated.evidence.length).toBe(2);
+      expect(updated.updatedAt).toBe("2026-09-26T00:00:00.000Z");
+
+      // Verify it was persisted
+      const read = await readPattern(root, accepted.id, "project");
+      expect(read?.confidence).toBe(0.75);
+      expect(read?.confidenceLevel).toBe("medium");
+      expect(read?.evidence.length).toBe(2);
+    });
+  });
+});
