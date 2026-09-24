@@ -46,6 +46,8 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
   const queryWords: string[] = [];
   let record: string | undefined;
   let candidate: string | undefined;
+  let justification: string | undefined;
+  let skillNameOverride: string | undefined;
   let includeImports = false;
   const json = args.includes("--json");
   const scope = parseScope(args);
@@ -54,6 +56,14 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
     const arg = args[i] as string;
     if (arg === "--record") {
       record = args[++i];
+      continue;
+    }
+    if (arg === "--justification") {
+      justification = args[++i];
+      continue;
+    }
+    if (arg === "--skill-name") {
+      skillNameOverride = args[++i];
       continue;
     }
     if (arg === "--candidate") {
@@ -74,7 +84,9 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
 
   const query = queryWords.join(" ");
   if (query.length === 0) {
-    console.error("Usage: keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all] [--json]");
+    console.error(
+      "Usage: keryx skills scout <name-or-description> [--record <pack-dir>] [--skill-name <name>] [--justification <text>] [--include-imports] [--candidate <dir>] [--scope bundled|all] [--json]",
+    );
     process.exitCode = 1;
     return;
   }
@@ -92,7 +104,16 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
       decision: result.decision,
       topMatch: result.matches[0]?.skillId ?? null,
       recordedAt: new Date().toISOString(),
-      skillName: path.basename(packDir),
+      // `--record <pack-dir>` may name a whole stack pack's root (its
+      // `governance/scout.json` holds one log shared by every skill in the
+      // pack) rather than a single skill's own directory — `path.basename`
+      // of the pack root is then the pack id, not the skill this scout run
+      // is actually about. `--skill-name` lets a caller say which skill the
+      // query is for; omitted, the prior behavior (basename of `--record`)
+      // still holds for the common case where `--record` names the skill's
+      // own directory.
+      skillName: skillNameOverride ?? path.basename(packDir),
+      ...(justification !== undefined ? { justification } : {}),
     });
   }
 

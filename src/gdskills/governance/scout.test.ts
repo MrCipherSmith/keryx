@@ -119,6 +119,42 @@ describe("scout record", () => {
       rmSync(packDir, { recursive: true, force: true });
     }
   });
+
+  test("recordScout accepts and round-trips an optional justification", () => {
+    const packDir = mkdtempSync(path.join(tmpdir(), "scout-record-"));
+    try {
+      recordScout(packDir, {
+        query: "python pytest testing",
+        decision: "fork",
+        topMatch: "review/review-testing-practices",
+        recordedAt: "2026-01-01T00:00:00.000Z",
+        skillName: "python-testing",
+        justification: "top match is a review skill, not an authoring workflow; no generic skill covers pytest-specific fixture/parametrization guidance",
+      });
+      const record = readScoutRecord(packDir);
+      expect(record[0]?.justification).toBe(
+        "top match is a review skill, not an authoring workflow; no generic skill covers pytest-specific fixture/parametrization guidance",
+      );
+    } finally {
+      rmSync(packDir, { recursive: true, force: true });
+    }
+  });
+
+  test("readScoutRecord omits justification when not recorded", () => {
+    const packDir = mkdtempSync(path.join(tmpdir(), "scout-record-"));
+    try {
+      recordScout(packDir, {
+        query: "anything",
+        decision: "create",
+        topMatch: null,
+        recordedAt: "2026-01-01T00:00:00.000Z",
+        skillName: "anything",
+      });
+      expect(readScoutRecord(packDir)[0]?.justification).toBeUndefined();
+    } finally {
+      rmSync(packDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("scoutImports", () => {

@@ -1,0 +1,10 @@
+[
+  {
+    "query": "Use when a Python project's pytest test suite needs writing, extending, or fixing -- covers fixture design, parametrization, mocking, and coverage gaps in existing pytest test files.",
+    "decision": "fork",
+    "topMatch": "review/review-testing-practices",
+    "recordedAt": "2026-09-24T04:48:38.183Z",
+    "skillName": "python-testing",
+    "justification": "top match review/review-testing-practices (0.37) is a review skill that checks existing tests against convention, not an authoring workflow; quality/test-gen (0.23) is a generic cross-language test generator with no pytest-specific fixture/parametrization/mocking guidance and no stack awareness. Decision is fork (below use threshold 0.55), and neither candidate is a substitute for a stack-scoped pytest authoring skill, so create."
+  }
+]

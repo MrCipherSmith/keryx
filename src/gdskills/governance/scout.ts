@@ -271,6 +271,15 @@ export interface ScoutRecordEntry {
   readonly topMatch: string | null;
   readonly recordedAt: string;
   readonly skillName: string;
+  /**
+   * Free-text reason a new skill is being created despite a `use`/`fork`
+   * decision against an existing catalog entry — e.g. the top match is a
+   * REVIEW skill (checks tests against convention) rather than an AUTHORING
+   * workflow, or a generic cross-language skill with no stack-specific
+   * content. Optional: a `create` decision with no competing match needs
+   * none, and older records predate this field.
+   */
+  readonly justification?: string;
 }
 
 function scoutLogPath(packDir: string): string {

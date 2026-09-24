@@ -45,7 +45,17 @@ const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
 // than the repo holds still fails here, which is the defect of 2026-08-31 in
 // its general form. Catalog length would be the wrong source: it counts 82
 // entries, eleven of them rendered on the fly with no SKILL.md to evaluate.
-const SHIPPED_SKILLS = bundledSkillFiles(defaultBundledRoot()).length;
+//
+// Scoped to `bundled/skills`, not the whole `bundled` root (flow 309, W1 Lane
+// D): `evaluateBundledTree` — what `skills verify --bundled` actually
+// sweeps — walks only `<root>/skills`, never `<root>/stacks` (W1's stack
+// packs; none of their skills are structurally evaluated by this sweep yet,
+// see `catalog-index.ts`'s module header for why governance's OWN loader
+// walks stacks/ and this evaluator does not). Counting the whole `bundled`
+// root here double-counted the moment the first stack pack's `SKILL.md`
+// landed under `bundled/stacks/python/skills/`, inflating this constant past
+// what either side of the assertion below actually evaluates.
+const SHIPPED_SKILLS = bundledSkillFiles(path.join(defaultBundledRoot(), "skills")).length;
 
 const MANIFEST = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8")) as {
   bin: Record<string, string>;
