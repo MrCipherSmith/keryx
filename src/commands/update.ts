@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { chmod, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { access, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdirContained, writeContained } from "../lib/contained-write";
+import { installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
 
 // R1-F20: `writeTextIfChanged`/`writeTextIfMissing`/`copyFileIfChanged`/the
 // module-directory scaffolders below all receive an absolute path already
@@ -15,11 +16,12 @@ import { mkdirContained, writeContained } from "../lib/contained-write";
 // segment (the same walk `refuseEscapingSymlink` does), refusing
 // (`escaping-symlink`) the moment `.metaproject` itself — or anything between
 // it and the target — is a symlink resolving outside the project. The git
-// hooks writer (`installManagedHook`/`removeManagedHook`, below) is the one
+// hooks writer (`installManagedHook`/`removeManagedHook`) is the one
 // documented exception: it writes into `.git/hooks` by design, which
-// `contained-write.ts` categorically refuses (`git-directory`), so it keeps
-// its own raw `mkdir`/`writeFile` plus `resolveGitHooksRoot`'s own symlink
-// check instead.
+// `contained-write.ts` categorically refuses (`git-directory`) — it now
+// lives in the shared `src/lib/managed-git-hook.ts` (R1-F3/R1-F6), which
+// runs its own containment check before writing rather than relying on
+// `resolveGitHooksRoot`'s resolution alone.
 function containFromMetaprojectPath(filePath: string): { root: string; rel: string } {
   const marker = `${path.sep}.metaproject${path.sep}`;
   const idx = filePath.indexOf(marker);
@@ -274,9 +276,12 @@ export async function updateCommand(args: string[] = []): Promise<void> {
       note(notice);
     }
   }
-  if (summary.gdskillsWarnings.length > 0) {
+  if (summary.gdskillsWarnings.length > 0 || summary.hookWarnings.length > 0) {
     heading("Warnings");
     for (const warning of summary.gdskillsWarnings) {
+      note(warning);
+    }
+    for (const warning of summary.hookWarnings) {
       note(warning);
     }
   }
@@ -320,6 +325,13 @@ type RefreshSummary = {
    * `keryx update`, and none of it is a warning.
    */
   gdskillsNotices: string[];
+  /**
+   * R2-F2: "skipped this hook, here's why" messages from the git-hook
+   * installers below (a symlinked hook that escapes both the git common dir
+   * and the project root, or a dangling link) — surfaced under the same
+   * "Warnings" heading as gdskillsWarnings instead of aborting the update.
+   */
+  hookWarnings: string[];
   backfilledTasks: boolean;
   recoveredManifest: boolean;
 };
@@ -389,6 +401,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const enableMemory = moduleEnabled(manifest, "memory");
   const enableSecurity = moduleEnabled(manifest, "security");
   const enableSac = moduleEnabled(manifest, "sac");
+  const hookWarnings: string[] = [];
 
   // Task Manager backfill: projects initialized before the tasks module have a
   // bare `tasks: { enabled: false }` stub. `update` enables and scaffolds it
@@ -497,7 +510,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "gdgraph", "SKILL.md"), renderGdgraphSkillReadme());
     await seedAssetsLock(metaprojectRoot);
     if (manifest.modules?.gdgraph?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -513,7 +527,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfChanged(path.join(metaprojectRoot, "modules", "gdwiki.md"), renderGdwikiManifest());
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "gdwiki", "SKILL.md"), renderGdwikiSkillReadme());
     if (manifest.modules?.gdgraph?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -529,7 +544,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     gdskillsWarnings = gdskillsInstallResult.warnings;
     gdskillsNotices = gdskillsInstallResult.notices;
     if (manifest.modules?.gdskills?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -539,7 +555,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfChanged(path.join(metaprojectRoot, "core", "health", "README.md"), renderHealthCoreReadme());
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "health", "SKILL.md"), renderHealthSkillReadme());
     if (manifest.modules?.health?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -559,20 +576,23 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       await writeTextIfMissing(path.join(metaprojectRoot, "wiki", "testing", "conventions.md"), renderTestingWikiConventions());
     }
     if (manifest.modules?.testing?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
     if (manifest.modules?.testing?.hooks?.prePush) {
-      await installManagedHook(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
   if (await shouldInstallDashboardPostCommitHook(projectRoot, manifest)) {
-    await installManagedHook(
+    const warning = await installManagedHookOrWarn(
       projectRoot,
       "post-commit",
       "metaproject-dashboard-post-commit",
       renderMetaprojectDashboardPostCommitHook(),
     );
+    if (warning) hookWarnings.push(warning);
   }
 
   if (enableMemory) {
@@ -600,7 +620,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     // Refresh the security hooks only when the manifest already records them;
     // both installers are merge-safe and never touch data/security or user content.
     if (manifest.modules?.security?.hooks?.prePush) {
-      await installManagedHook(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+      if (warning) hookWarnings.push(warning);
     }
     if (manifest.modules?.security?.hooks?.agent) {
       await installSecurityAgentHooks(projectRoot);
@@ -621,7 +642,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     !manifest.modules?.security?.hooks?.prePush &&
     (await prePushHasSecurityBlock(projectRoot))
   ) {
-    await removeManagedHook(projectRoot, "pre-push", "security-pre-push");
+    const warning = await removeManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push");
+    if (warning) hookWarnings.push(warning);
   }
 
   if (!manifestState.exists || !manifestState.valid) {
@@ -664,6 +686,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     gdskillsProfile,
     gdskillsWarnings,
     gdskillsNotices,
+    hookWarnings,
     backfilledTasks: backfillTasks,
     recoveredManifest,
   };
@@ -1497,70 +1520,13 @@ async function installGdgraphCoreScripts(metaprojectRoot: string): Promise<void>
   await writeTextIfChanged(path.join(gdgraphCoreRoot, "cli.ts"), renderGdgraphCoreCli());
 }
 
-async function installManagedHook(
-  projectRoot: string,
-  hookName: "post-commit" | "pre-push",
-  blockId: string,
-  content: string,
-): Promise<void> {
-  const hooksRoot = await resolveGitHooksRoot(projectRoot);
-  if (!hooksRoot) {
-    return;
-  }
-
-  await mkdir(hooksRoot, { recursive: true });
-
-  const hookPath = path.join(hooksRoot, hookName);
-  const blockStart = `# keryx:${blockId}:begin`;
-  const blockEnd = `# keryx:${blockId}:end`;
-  const managedBlock = `${blockStart}\n${content.trim()}\n${blockEnd}`;
-  const existing = (await pathExists(hookPath))
-    ? await readFile(hookPath, "utf8")
-    : "#!/usr/bin/env sh\n";
-  const blockPattern = new RegExp(`${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`);
-  // `() => managedBlock`, not `managedBlock`. The string form of
-  // String.replace reads `$'`, "$`", `$&` and `$$` in the replacement as
-  // substitution patterns, and these blocks are shell scripts full of `$`.
-  // `$'` means "everything after the match", so a hook containing it spliced
-  // the rest of the file back in and silently duplicated every managed block
-  // below it. The function form has no such reading.
-  const next = blockPattern.test(existing)
-    ? existing.replace(blockPattern, () => managedBlock)
-    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
-
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
-}
-
-// Strip a single keryx managed block from a git hook, preserving all other
-// managed blocks and user-authored content. No-op when the hook or block is
-// absent.
-async function removeManagedHook(
-  projectRoot: string,
-  hookName: "post-commit" | "pre-push",
-  blockId: string,
-): Promise<void> {
-  const hooksRoot = await resolveGitHooksRoot(projectRoot);
-  if (!hooksRoot) {
-    return;
-  }
-  const hookPath = path.join(hooksRoot, hookName);
-  if (!(await pathExists(hookPath))) {
-    return;
-  }
-  const existing = await readFile(hookPath, "utf8");
-  const blockStart = `# keryx:${blockId}:begin`;
-  const blockEnd = `# keryx:${blockId}:end`;
-  const blockPattern = new RegExp(
-    `\\n*${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}\\n*`,
-  );
-  if (!blockPattern.test(existing)) {
-    return;
-  }
-  const next = `${existing.replace(blockPattern, "\n").trimEnd()}\n`;
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
-}
+// R1-F3/R1-F6: `installManagedHook`/`removeManagedHook` used to be a local,
+// byte-for-byte copy of `init.ts`'s pair, which let the ratchet's
+// file-granularity ALLOWLIST silently exempt every OTHER raw write this file
+// might grow, and carried a false claim that `resolveGitHooksRoot` itself
+// checked for an escaping symlink (it does not). Both commands now share the
+// one implementation in `src/lib/managed-git-hook.ts`, which actually runs
+// that containment check before writing — see its file header.
 
 // True when the git pre-push hook still carries the managed security block.
 async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
@@ -1782,10 +1748,6 @@ function runtimeSourcePath(relativePath: string): string {
   }
 
   return directPath;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function printHelp(): void {

@@ -54,4 +54,29 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+### Scope sources
+- Flow 313 journal, section "W4 follow-up flow scope". Review packages: `313-…/reviews/2026-09-24-ingest-690-r05` and `…-r08`.
+- Flow 312 journal, section "Follow-up flow scope". Review package: `312-…/reviews/2026-09-24-ingest-691-r09`.
+- Probes in the session scratchpad:
+  - `review313-r5/`: `cw-probe.ts`, `ratchet-mut.sh`, `rules/`.
+  - `review313-r8/`: `bom7`, `bom8`.
+
+### Containment API (`src/lib/contained-write.ts`)
+- `writeContained(root, rel, data, opts)`
+- `removeContained`
+- `mkdirContained`
+- `renameContained`
+- `rmdirIfEmptyContained`
+- `ContainedWriteError`
+
+The ratchet is `src/lib/contained-write.ratchet.test.ts`, via `COVERED_DIRS` and `COVERED_FILES`.
+
+### Raw write sites before this flow
+- `init.ts`: about 44 hits.
+- `testing/service.ts`: 16 hits, including `writeFileAtomic`.
+- `metaproject-gitignore.ts`: line 38.
+
+### W3 sinks
+- `graduate.ts:437-441` (rerun skip) and `graduate.ts:676-681` (apply prints the stored nextSteps).
+- `extract.ts:329`, `extract.ts:349` and `extract.ts:353` (model-backed label and sourceRef).
+- The gate itself is `src/learning/reviewer-id.ts` `gateReviewerText`.

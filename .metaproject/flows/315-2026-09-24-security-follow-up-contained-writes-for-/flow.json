@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "315",
   "slug": "security-follow-up-contained-writes-for-",
   "title": "Security follow-up: contained writes for init, testing service and .gitignore, plus deferred W3/W4 minors",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T18:05:52.943Z",
-  "updatedAt": "2026-09-24T18:05:52.943Z",
+  "updatedAt": "2026-09-24T19:41:54.840Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:93674c681bf37d0aa5df04a80e06bbf694f4996360fa995f4f253d78214e3c8f",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,594 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by lane tasks T5-T10"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by lane tasks T5-T10"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by lane tasks T5-T10"
+    },
+    {
+      "id": "T5",
+      "title": "Lane A: contained writes for init.ts, testing/service.ts, metaproject-gitignore.ts + ratchet + symlink regression tests (R5-F1, R5-F3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:09:23.133Z",
+            "outcome": "started",
+            "detail": "315-T5 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Lane B: audit-harness R8-F1 UTF-16 BOM auto-run agent test; R8-F2 UTF-32 BOM, R8-F3 direct-path false positive (fix or document)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:09:23.218Z",
+            "outcome": "started",
+            "detail": "315-T6 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Lane C: learning R10-F1 re-gate stale graduation proposals + nextSteps at apply; R10-F2 gate model-backed extractor label/sourceRef",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:09:23.301Z",
+            "outcome": "started",
+            "detail": "315-T7 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Verify: targeted tests, pre-fix failure proof per regression test, typecheck + eslint on changed files",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "PR + adversarial opus review/fix loop (<=3 attempts), CI green",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 6,
+        "log": [
+          {
+            "at": "2026-09-24T18:24:34.864Z",
+            "outcome": "started",
+            "detail": "review round 1 (opus) on PR #695 lanes A/B/C"
+          },
+          {
+            "at": "2026-09-24T18:39:04.059Z",
+            "outcome": "failed",
+            "detail": "round 1 (r01 @64e862a2): 0 blocker, 2 major (R1-F1 init helpers raw writes, R1-F2 UTF-32 shadows UTF-16LE view), 4 minor, 3 info; CI green; fix attempt 1"
+          },
+          {
+            "at": "2026-09-24T19:06:05.911Z",
+            "outcome": "started",
+            "detail": "round 2 narrow verification (opus) of fix attempt 1 at 80efe992"
+          },
+          {
+            "at": "2026-09-24T19:17:59.246Z",
+            "outcome": "failed",
+            "detail": "round 2 (r02 @80efe992): 0 blocker, 0 major, 3 minor (R2-F1 sweep domain scope, R2-F2 in-project hook symlink aborts init, R2-F3 install.ts allowlist granularity), 4 info; all r01 fixed; CI green; fix attempt 2"
+          },
+          {
+            "at": "2026-09-24T19:32:21.918Z",
+            "outcome": "started",
+            "detail": "round 3 narrow verification (opus) of fix attempt 2"
+          },
+          {
+            "at": "2026-09-24T19:41:54.840Z",
+            "outcome": "started",
+            "detail": "round 3 (r03 @5500dd4b): 0 blocker/major/minor, 5 info; CI green; clean"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Merge into feat/agent-platform-expansion and close the flow",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Lane A2: route project-sandbox-policy skeleton writer (called by init) through contained-write + ratchet + symlink regression test (R5-F1 class)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:23:35.817Z",
+            "outcome": "started",
+            "detail": "315-T11 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Fix r01 lane a: init helpers (seed, gdskills install, routing-entrypoint, mcp client-config, capability registry) via contained-write + ratchet; shared managed-git-hook module with containment check (R1-F1, R1-F3, R1-F6, R1-F7, R1-F8, R1-F9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:39:04.402Z",
+            "outcome": "started",
+            "detail": "315-T12 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Fix r01 lane b: UTF-32LE BOM also yields UTF-16LE view, union findings (R1-F2)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:39:04.491Z",
+            "outcome": "started",
+            "detail": "315-T13 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix r01 lane c: delete stale graduation pair on refusal + orphan sweep; drop/validate reviewerProfile on model-backed drafts (R1-F4, R1-F5)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:39:04.575Z",
+            "outcome": "started",
+            "detail": "315-T14 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix r02 lane x: managed-git-hook accepts in-project targets, warn+skip otherwise, named dangling-link refusal, realpath hooksRoot; managed-hook.ts (trigger) routing (R2-F2, R2-F6, R2-F5)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:17:59.564Z",
+            "outcome": "started",
+            "detail": "315-T15 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Fix r02 lane y: install.ts raw unlink/cp into a dedicated allowlisted module; ratchet catches ./fs and .ts specifiers (R2-F3, R2-F4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:17:59.644Z",
+            "outcome": "started",
+            "detail": "315-T16 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix r02 lane z: orphan sweep respects --domain and mayCarryReviewerText scoping (R2-F1)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:17:59.722Z",
+            "outcome": "started",
+            "detail": "315-T17 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-24T18:05:52.943Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T18:09:12.413Z",
+      "event": "task-added",
+      "detail": "T5: Lane A: contained writes for init.ts, testing/service.ts, metaproject-gitignore.ts + ratchet + symlink regression tests (R5-F1, R5-F3)"
+    },
+    {
+      "at": "2026-09-24T18:09:12.502Z",
+      "event": "task-added",
+      "detail": "T6: Lane B: audit-harness R8-F1 UTF-16 BOM auto-run agent test; R8-F2 UTF-32 BOM, R8-F3 direct-path false positive (fix or document)"
+    },
+    {
+      "at": "2026-09-24T18:09:12.585Z",
+      "event": "task-added",
+      "detail": "T7: Lane C: learning R10-F1 re-gate stale graduation proposals + nextSteps at apply; R10-F2 gate model-backed extractor label/sourceRef"
+    },
+    {
+      "at": "2026-09-24T18:09:12.666Z",
+      "event": "task-added",
+      "detail": "T8: Verify: targeted tests, pre-fix failure proof per regression test, typecheck + eslint on changed files"
+    },
+    {
+      "at": "2026-09-24T18:09:12.751Z",
+      "event": "task-added",
+      "detail": "T9: PR + adversarial opus review/fix loop (<=3 attempts), CI green"
+    },
+    {
+      "at": "2026-09-24T18:09:12.833Z",
+      "event": "task-added",
+      "detail": "T10: Merge into feat/agent-platform-expansion and close the flow"
+    },
+    {
+      "at": "2026-09-24T18:09:12.915Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T18:09:12.997Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T18:09:13.083Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T18:09:13.163Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T18:09:13.244Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T18:09:13.329Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-24T18:09:23.133Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 315-T5 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:09:23.219Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 315-T6 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:09:23.301Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 315-T7 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:17:14.166Z",
+      "event": "task-done",
+      "detail": "T6: Lane B: audit-harness R8-F1 UTF-16 BOM auto-run agent test; R8-F2 UTF-32 BOM, R8-F3 direct-path false positive (fix or document)"
+    },
+    {
+      "at": "2026-09-24T18:21:20.361Z",
+      "event": "task-done",
+      "detail": "T7: Lane C: learning R10-F1 re-gate stale graduation proposals + nextSteps at apply; R10-F2 gate model-backed extractor label/sourceRef"
+    },
+    {
+      "at": "2026-09-24T18:23:29.808Z",
+      "event": "task-done",
+      "detail": "T5: Lane A: contained writes for init.ts, testing/service.ts, metaproject-gitignore.ts + ratchet + symlink regression tests (R5-F1, R5-F3)"
+    },
+    {
+      "at": "2026-09-24T18:23:35.723Z",
+      "event": "task-added",
+      "detail": "T11: Lane A2: route project-sandbox-policy skeleton writer (called by init) through contained-write + ratchet + symlink regression test (R5-F1 class)"
+    },
+    {
+      "at": "2026-09-24T18:23:35.817Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 315-T11 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:24:34.864Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — review round 1 (opus) on PR #695 lanes A/B/C"
+    },
+    {
+      "at": "2026-09-24T18:29:00.316Z",
+      "event": "task-done",
+      "detail": "T11: Lane A2: route project-sandbox-policy skeleton writer (called by init) through contained-write + ratchet + symlink regression test (R5-F1 class)"
+    },
+    {
+      "at": "2026-09-24T18:30:01.756Z",
+      "event": "task-done",
+      "detail": "T8: Verify: targeted tests, pre-fix failure proof per regression test, typecheck + eslint on changed files"
+    },
+    {
+      "at": "2026-09-24T18:39:04.059Z",
+      "event": "task-attempt",
+      "detail": "T9: failed (attempt 2) — round 1 (r01 @64e862a2): 0 blocker, 2 major (R1-F1 init helpers raw writes, R1-F2 UTF-32 shadows UTF-16LE view), 4 minor, 3 info; CI green; fix attempt 1"
+    },
+    {
+      "at": "2026-09-24T18:39:04.144Z",
+      "event": "task-added",
+      "detail": "T12: Fix r01 lane a: init helpers (seed, gdskills install, routing-entrypoint, mcp client-config, capability registry) via contained-write + ratchet; shared managed-git-hook module with containment check (R1-F1, R1-F3, R1-F6, R1-F7, R1-F8, R1-F9)"
+    },
+    {
+      "at": "2026-09-24T18:39:04.227Z",
+      "event": "task-added",
+      "detail": "T13: Fix r01 lane b: UTF-32LE BOM also yields UTF-16LE view, union findings (R1-F2)"
+    },
+    {
+      "at": "2026-09-24T18:39:04.316Z",
+      "event": "task-added",
+      "detail": "T14: Fix r01 lane c: delete stale graduation pair on refusal + orphan sweep; drop/validate reviewerProfile on model-backed drafts (R1-F4, R1-F5)"
+    },
+    {
+      "at": "2026-09-24T18:39:04.402Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 315-T12 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:39:04.491Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 315-T13 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:39:04.575Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 315-T14 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:42:35.871Z",
+      "event": "task-done",
+      "detail": "T13: Fix r01 lane b: UTF-32LE BOM also yields UTF-16LE view, union findings (R1-F2)"
+    },
+    {
+      "at": "2026-09-24T18:47:58.414Z",
+      "event": "task-done",
+      "detail": "T14: Fix r01 lane c: delete stale graduation pair on refusal + orphan sweep; drop/validate reviewerProfile on model-backed drafts (R1-F4, R1-F5)"
+    },
+    {
+      "at": "2026-09-24T19:05:52.521Z",
+      "event": "task-done",
+      "detail": "T12: Fix r01 lane a: init helpers (seed, gdskills install, routing-entrypoint, mcp client-config, capability registry) via contained-write + ratchet; shared managed-git-hook module with containment check (R1-F1, R1-F3, R1-F6, R1-F7, R1-F8, R1-F9)"
+    },
+    {
+      "at": "2026-09-24T19:06:05.912Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 3) — round 2 narrow verification (opus) of fix attempt 1 at 80efe992"
+    },
+    {
+      "at": "2026-09-24T19:17:59.246Z",
+      "event": "task-attempt",
+      "detail": "T9: failed (attempt 4) — round 2 (r02 @80efe992): 0 blocker, 0 major, 3 minor (R2-F1 sweep domain scope, R2-F2 in-project hook symlink aborts init, R2-F3 install.ts allowlist granularity), 4 info; all r01 fixed; CI green; fix attempt 2"
+    },
+    {
+      "at": "2026-09-24T19:17:59.324Z",
+      "event": "task-added",
+      "detail": "T15: Fix r02 lane x: managed-git-hook accepts in-project targets, warn+skip otherwise, named dangling-link refusal, realpath hooksRoot; managed-hook.ts (trigger) routing (R2-F2, R2-F6, R2-F5)"
+    },
+    {
+      "at": "2026-09-24T19:17:59.403Z",
+      "event": "task-added",
+      "detail": "T16: Fix r02 lane y: install.ts raw unlink/cp into a dedicated allowlisted module; ratchet catches ./fs and .ts specifiers (R2-F3, R2-F4)"
+    },
+    {
+      "at": "2026-09-24T19:17:59.483Z",
+      "event": "task-added",
+      "detail": "T17: Fix r02 lane z: orphan sweep respects --domain and mayCarryReviewerText scoping (R2-F1)"
+    },
+    {
+      "at": "2026-09-24T19:17:59.564Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 315-T15 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T19:17:59.644Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 315-T16 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T19:17:59.722Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 315-T17 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T19:22:07.967Z",
+      "event": "task-done",
+      "detail": "T17: Fix r02 lane z: orphan sweep respects --domain and mayCarryReviewerText scoping (R2-F1)"
+    },
+    {
+      "at": "2026-09-24T19:28:40.798Z",
+      "event": "task-done",
+      "detail": "T16: Fix r02 lane y: install.ts raw unlink/cp into a dedicated allowlisted module; ratchet catches ./fs and .ts specifiers (R2-F3, R2-F4)"
+    },
+    {
+      "at": "2026-09-24T19:32:14.890Z",
+      "event": "task-done",
+      "detail": "T15: Fix r02 lane x: managed-git-hook accepts in-project targets, warn+skip otherwise, named dangling-link refusal, realpath hooksRoot; managed-hook.ts (trigger) routing (R2-F2, R2-F6, R2-F5)"
+    },
+    {
+      "at": "2026-09-24T19:32:21.918Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 5) — round 3 narrow verification (opus) of fix attempt 2"
+    },
+    {
+      "at": "2026-09-24T19:41:54.840Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 6) — round 3 (r03 @5500dd4b): 0 blocker/major/minor, 5 info; CI green; clean"
     }
   ]
 }

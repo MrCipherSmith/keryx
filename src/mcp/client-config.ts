@@ -14,9 +14,10 @@
 // is only PROBED via `await import()` (never a static import, never installed,
 // never a network call).
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { ContainedWriteError, mkdirContained, writeContained } from "../lib/contained-write";
 import { MCP_CONFIG_DEFAULTS } from "./config";
 
 export type Settings = Record<string, unknown>;
@@ -449,9 +450,13 @@ async function readSettings(file: string): Promise<Settings> {
   }
 }
 
-async function writeSettings(file: string, settings: Settings): Promise<void> {
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+async function writeSettings(root: string, file: string, settings: Settings): Promise<void> {
+  // Routed through writeContained (R1-F1): `root` is the containment base for
+  // this write — the project root for every project-scoped client config
+  // file (`.cursor/mcp.json`, `.mcp.json`, `opencode.json`,
+  // `.vscode/mcp.json`), written by `init --mcp` on the interactive path and
+  // by `keryx integrate`.
+  await writeContained(root, path.relative(root, file), `${JSON.stringify(settings, null, 2)}\n`);
 }
 
 // ---------------------------------------------------------------------------
@@ -580,32 +585,31 @@ See \`.metaproject/modules/mcp.md\` for the command surface.
 `;
 }
 
-async function writeTextIfMissing(filePath: string, content: string): Promise<void> {
-  if (await pathExists(filePath)) {
-    return;
+// Routed through writeContained's `exclusive` mode (R1-F1) rather than a
+// separate `pathExists` check + raw `mkdir`/`writeFile`: `root`/`rel` is
+// containment-checked, parent directories are created by writeContained
+// itself, and `exclusive: true` gives the "only if missing" semantics
+// directly, with no TOCTOU window between a check and the write.
+async function writeTextIfMissing(root: string, rel: string, content: string): Promise<void> {
+  try {
+    await writeContained(root, rel, content, { exclusive: true });
+  } catch (error) {
+    if (error instanceof ContainedWriteError && error.reason === "already-exists") {
+      return;
+    }
+    throw error;
   }
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, content, "utf8");
 }
 
 // Scaffold the mcp module's on-disk structure (mirrors `init --mcp`) so an
 // enabled manifest entry points at real files/dirs and `standard validate`
 // stays green. Idempotent: existing files are left untouched.
 export async function scaffoldMcpModule(metaprojectRoot: string): Promise<void> {
-  await mkdir(path.join(metaprojectRoot, "core", "mcp"), { recursive: true });
-  await mkdir(path.join(metaprojectRoot, "data", "mcp", "artifacts"), { recursive: true });
-  await writeTextIfMissing(
-    path.join(metaprojectRoot, "core", "mcp", "mcp.config.json"),
-    renderMcpConfig(),
-  );
-  await writeTextIfMissing(
-    path.join(metaprojectRoot, "modules", "mcp.md"),
-    renderMcpManifest(),
-  );
-  await writeTextIfMissing(
-    path.join(metaprojectRoot, "core", "mcp", "README.md"),
-    renderMcpCoreReadme(),
-  );
+  await mkdirContained(metaprojectRoot, "core/mcp");
+  await mkdirContained(metaprojectRoot, "data/mcp/artifacts");
+  await writeTextIfMissing(metaprojectRoot, "core/mcp/mcp.config.json", renderMcpConfig());
+  await writeTextIfMissing(metaprojectRoot, "modules/mcp.md", renderMcpManifest());
+  await writeTextIfMissing(metaprojectRoot, "core/mcp/README.md", renderMcpCoreReadme());
 }
 
 // Set `modules.mcp.enabled=true` in `.metaproject/metaproject.json`, preserving
@@ -666,7 +670,7 @@ export async function enableMcpModule(
   root.modules = modules;
 
   await scaffoldMcpModule(path.join(projectRoot, ".metaproject"));
-  await writeFile(manifestPath, `${JSON.stringify(root, null, 2)}\n`, "utf8");
+  await writeContained(projectRoot, path.relative(projectRoot, manifestPath), `${JSON.stringify(root, null, 2)}\n`);
   return { changed: true };
 }
 
@@ -734,7 +738,7 @@ export async function installMcpClient(
       });
       continue;
     }
-    await writeSettings(file, merged);
+    await writeSettings(absoluteProjectRoot, file, merged);
     outcomes.push({ id: runtime.id, filePath: file, wrote: true, errors });
   }
 
@@ -786,7 +790,7 @@ export async function uninstallMcpClient(
     const hadManaged = runtime.hasManaged(settings);
     const stripped = runtime.strip(settings);
     if (options.dryRun !== true) {
-      await writeSettings(file, stripped);
+      await writeSettings(absoluteProjectRoot, file, stripped);
     }
     // `removed` reports what WOULD go under a dry run, which is what a preview
     // is for; the caller distinguishes the two by the flag it passed.

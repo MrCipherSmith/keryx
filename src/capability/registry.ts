@@ -8,8 +8,9 @@
 // exact code path `init`/`update` run.
 
 import path from "node:path";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { pathExists } from "../lib/fs";
+import { writeContained } from "../lib/contained-write";
 import { EXTERNAL_AGENTS_CAPABILITY_DESCRIPTOR } from "./external-agents";
 import {
   loadCapabilityConfig,
@@ -71,17 +72,21 @@ export async function applyCapabilitySelections(
     if (reconcileManifestCapability(manifest, selection)) {
       changed = true;
       if (selection.descriptor.config) {
-        await writeFile(
-          path.join(cwd, selection.descriptor.config),
+        // R1-F1 (latent — the shipped registry is empty today):
+        // `descriptor.config` is already project-relative (e.g.
+        // ".metaproject/gdref.config.json"), so it is the `rel`
+        // writeContained needs directly; `cwd` is the containment root.
+        await writeContained(
+          cwd,
+          selection.descriptor.config,
           renderCapabilityConfig(selection.descriptor, selection.enabled),
-          "utf8",
         );
       }
     }
   }
 
   if (changed) {
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    await writeContained(cwd, path.relative(cwd, manifestPath), `${JSON.stringify(manifest, null, 2)}\n`);
   }
 }
 
@@ -126,17 +131,13 @@ export async function reconcileCapabilitiesOnUpdate(
       if (descriptor.config && !(await pathExists(path.join(cwd, descriptor.config)))) {
         // Materialize the config using the on-disk (or default) merged state.
         const merged = await loadCapabilityConfig(cwd, descriptor, enabled);
-        await writeFile(
-          path.join(cwd, descriptor.config),
-          `${JSON.stringify(merged, null, 2)}\n`,
-          "utf8",
-        );
+        await writeContained(cwd, descriptor.config, `${JSON.stringify(merged, null, 2)}\n`);
       }
     }
   }
 
   if (changed) {
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    await writeContained(cwd, path.relative(cwd, manifestPath), `${JSON.stringify(manifest, null, 2)}\n`);
   }
 }
 

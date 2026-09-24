@@ -1,0 +1,103 @@
+[
+  {
+    "id": "R3-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Accepting the project root as a hook-link container also admits .git/config and tracked source files",
+    "impact": "Only someone who already controls .git can trigger it, and only against their own repo. No clone-reachable vector.",
+    "suggested_fix": "Optional: exclude everything under <commonDir> except hooks/ from the project-root container, or accept only regular files outside .git.",
+    "evidence": "hooks-r3.out: N1 'ok | inside MODIFIED'; N2 'ManagedGitHookEscapeError | OUTSIDE unchanged'; N3 'ok | inside MODIFIED'; N4 'ok | inside MODIFIED (.git/config)'",
+    "confidence": "high",
+    "file": "src/lib/managed-git-hook.ts",
+    "line": 126,
+    "class_scope": {
+      "sites": [
+        "src/lib/managed-git-hook.ts:126 acceptedContainers",
+        "src/lib/managed-git-hook.ts:146 hook-file containers [hooksRootReal, projectRootReal]"
+      ],
+      "enumeration_method": "hooks-r3.ts N1-N4 on HEAD export"
+    },
+    "global_id": "2026-09-24-ingest-695-r03#R3-F1"
+  },
+  {
+    "id": "R3-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "A hook symlink to an in-project directory still crashes init with a raw EISDIR (pre-existing)",
+    "impact": "Fails closed; the command aborts with an unlabelled error.",
+    "suggested_fix": "After the containment check, refuse (as ManagedGitHookEscapeError) any hook path that is not a regular file.",
+    "evidence": "hooks-r3.out N5i 'init: hook -> in-project directory -> Error: EISDIR ... warnings: []'",
+    "confidence": "high",
+    "file": "src/lib/managed-git-hook.ts",
+    "line": 150,
+    "class_scope": {
+      "sites": [
+        "managed-git-hook.ts installManagedHook readFile",
+        "installManagedHookOrWarn catch"
+      ],
+      "enumeration_method": "hooks-r3.ts N5, N5i"
+    },
+    "global_id": "2026-09-24-ingest-695-r03#R3-F2"
+  },
+  {
+    "id": "R3-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "`keryx trigger install` aborts uncaught on an escaping or dangling hook link, leaving hooks partially installed",
+    "impact": "UX only; nothing escapes.",
+    "suggested_fix": "Catch the error per entry, report that entry as skipped with the message, and continue.",
+    "evidence": "hooks-r3.out T1 'ManagedGitHookEscapeError ... OUTSIDE unchanged'; T2 'ok | inside MODIFIED'",
+    "confidence": "high",
+    "file": "src/trigger/hooks.ts",
+    "line": 78,
+    "class_scope": {
+      "sites": [
+        "src/trigger/hooks.ts:78,91",
+        "src/commands/trigger.ts:660,681"
+      ],
+      "enumeration_method": "hooks-r3.ts T1/T2; read of installSubcommand"
+    },
+    "global_id": "2026-09-24-ingest-695-r03#R3-F3"
+  },
+  {
+    "id": "R3-F4",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Ratchet coverage gaps: managed-hook.ts is not scanned, the guarded-fs-ops.ts allowlist entry does nothing, and .js / namespace lib/fs imports are missed",
+    "impact": "A future raw write in managed-hook.ts or in a new src/gdskills module would pass CI with the ratchet green.",
+    "suggested_fix": "Add src/lib/managed-hook.ts to COVERED_FILES with an allowlist reason. Cover all of src/gdskills through COVERED_DIRS so the guarded-fs-ops entry means something. Optionally match a .js suffix and namespace imports of lib/fs.",
+    "evidence": "mutation run: MISSED install writeFileAtomic via ../lib/fs.js; MISSED namespace ../lib/fs; MISSED cp via guarded-fs-ops import; MISSED routing via ./fs.js; MISSED managed-hook.ts raw writeFile; the other 8 CAUGHT",
+    "confidence": "high",
+    "file": "src/lib/contained-write.ratchet.test.ts",
+    "line": 26,
+    "class_scope": {
+      "sites": [
+        "COVERED_FILES/COVERED_DIRS",
+        "libFsImportAliases regex",
+        "ALLOWLIST guarded-fs-ops entry"
+      ],
+      "enumeration_method": "13 prepend-mutations on HEAD export, ratchet run per mutation"
+    },
+    "global_id": "2026-09-24-ingest-695-r03#R3-F4"
+  },
+  {
+    "id": "R3-F5",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "copyDirectoryContained contains no containment check itself; a nested symlinked directory in the target aborts the install (fails closed, pre-existing)",
+    "impact": "No escape. A cloned repo that ships a symlinked subdirectory under .metaproject/skills/... can make init/update abort (denial of service only).",
+    "suggested_fix": "Optional: rename it (e.g. copyDirectoryUnguarded), or lstat-walk the target first and refuse or replace symlinked subdirectories.",
+    "evidence": "cp probe: 'cp threw Cannot overwrite non-directory with directory ... tgt/references' and '... tgt/nested/deep'; the outside directory was unchanged; tgt/references/a.md became a regular file while outside/a.md still read ORIG",
+    "confidence": "high",
+    "file": "src/gdskills/guarded-fs-ops.ts",
+    "line": 90,
+    "class_scope": {
+      "sites": [
+        "guarded-fs-ops.ts:90",
+        "install.ts:163,240,351"
+      ],
+      "enumeration_method": "cp/p.ts probe calling copyDirectoryContained directly"
+    },
+    "global_id": "2026-09-24-ingest-695-r03#R3-F5"
+  }
+]

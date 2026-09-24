@@ -1,0 +1,141 @@
+[
+  {
+    "id": "R2-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "The R1-F4 orphan sweep deletes a live proposal from another domain on a `keryx learn graduate --domain <d>` run",
+    "impact": "A --domain run silently destroys a valid, current graduation proposal from an unrelated domain; the next `learn graduate apply <id>` fails until a full rerun.",
+    "suggested_fix": "Only sweep proposals whose `domain` matches `opts.domain`, or compute the orphan set from clusters over ALL accepted records. Also apply the same `mayCarryReviewerText` scoping: delete an orphan only if its members could carry review text, or when its members no longer exist.",
+    "evidence": "review315-r2/probe315r2-learning.head.out: 'R2-L6 proposal grad-agent-78d6ad729682 name=duplicating-extract-helper | fullRun already=[grad-agent-78d6ad729682] files=[.md,.json] | after --domain review-conventions files=[] | apply threw: no graduation proposal \"grad-agent-78d6ad729682\"' (login configured: helper; members are repeated-correction, non-review)",
+    "confidence": "high",
+    "file": "src/learning/graduate.ts",
+    "line": 669,
+    "class_scope": {
+      "sites": [
+        "src/learning/graduate.ts:669 (sweep call, fed a domain-filtered id set)",
+        "src/learning/graduate.ts:443 proposalFileCarriesLogin (no provenance scoping)",
+        "src/learning/graduate.ts:467 sweepOrphanedProposalsCarryingLogin"
+      ],
+      "enumeration_method": "Read the runGraduate loop and sweep; ran PROBE R2-L6 on a scratch copy of graduate.test.ts"
+    },
+    "global_id": "2026-09-24-ingest-695-r02#R2-F1"
+  },
+  {
+    "id": "R2-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "`keryx init`/`update` now abort when a .git/hooks file is a symlink to a script inside the project (regression)",
+    "impact": "A legitimate user with symlinked, repo-tracked hooks can no longer run `keryx init --yes` or `keryx update`.",
+    "suggested_fix": "Also accept a target that resolves inside the project root (or the worktree root). Alternatively, turn the refusal into a warning and skip that hook instead of throwing, as `checkInstallDestination` does. Map ENOENT from realpath on a dangling link to the same named refusal or warning.",
+    "evidence": "review315-r2/hooks3.head.out 'H3/H10 hook -> in-project tracked script, init -> ManagedGitHookEscapeError ... hook target unchanged'; hooks3.pre.out 'H3/H10 ... -> ok | hook target got keryx block'; hooks2.out H8/H9 'Error: ENOENT ...'",
+    "confidence": "high",
+    "file": "src/lib/managed-git-hook.ts",
+    "line": 105,
+    "class_scope": {
+      "sites": [
+        "src/lib/managed-git-hook.ts:99,105 (assertResolvesInside)",
+        "src/commands/init.ts:1551-1570 (installManagedHook calls, uncaught)",
+        "src/commands/update.ts:502-544"
+      ],
+      "enumeration_method": "hooks2.ts/hooks3.ts probes on HEAD and on the pre-fix export"
+    },
+    "global_id": "2026-09-24-ingest-695-r02#R2-F2"
+  },
+  {
+    "id": "R2-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "gdskills/install.ts was added to the ratchet with a whole-file allowlist, so the ratchet gives it zero protection (R1-F3 class)",
+    "impact": "An R1-F1-style regression in installGdskills (catalog.md, gdskills.md, contracts, SKILL.md) would not be caught by CI.",
+    "suggested_fix": "Allowlist per verb for this file (only `unlink` and `cp`), or move removeStaleRuntimeBuilds, removeUnmodifiedRetiredRules and the three guarded `cp` calls into a small dedicated module and allowlist that module, as managed-git-hook.ts does.",
+    "evidence": "review315-r2/ratchet-mut.out: 'MISSED install.ts raw writeFile (whole-file allowlist)', 'MISSED install.ts raw copyFile (whole-file allowlist)'; init.ts, update.ts, seed.ts, client-config.ts and the aliased writeFileAtomic (R1-F7) mutations are all CAUGHT",
+    "confidence": "high",
+    "file": "src/lib/contained-write.ratchet.test.ts",
+    "line": 109,
+    "class_scope": {
+      "sites": [
+        "src/lib/contained-write.ratchet.test.ts:109 (install.ts entry)",
+        "isAllowed (file granularity)"
+      ],
+      "enumeration_method": "ratchet-mut.sh: 13 prepend-mutations on the scratch export"
+    },
+    "global_id": "2026-09-24-ingest-695-r02#R2-F3"
+  },
+  {
+    "id": "R2-F4",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "The ratchet's writeFileAtomic check misses sibling imports from \"./fs\" and \"../lib/fs.ts\" (pre-existing)",
+    "impact": "A raw writeFileAtomic in a covered src/lib file passes the ratchet.",
+    "suggested_fix": "Also match './fs' and './fs.ts' (relative to the importing file), or resolve the import specifier to an absolute path.",
+    "evidence": "ratchet-mut.out: 'MISSED gitignore.ts writeFileAtomic via ./fs', 'MISSED routing-entrypoint.ts writeFileAtomic via ./fs', 'MISSED service.ts writeFileAtomic via lib/fs.ts ext'",
+    "confidence": "high",
+    "file": "src/lib/contained-write.ratchet.test.ts",
+    "line": 233,
+    "class_scope": {
+      "sites": [
+        "contained-write.ratchet.test.ts:233"
+      ],
+      "enumeration_method": "ratchet-mut.sh"
+    },
+    "global_id": "2026-09-24-ingest-695-r02#R2-F4"
+  },
+  {
+    "id": "R2-F5",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "A second managed-hook writer, src/lib/managed-hook.ts (used by `keryx trigger`), has no symlink containment",
+    "impact": "The same R1-F6 behaviour (writes through a symlinked hooks dir or hook file) remains via `keryx trigger install`. It needs control of .git.",
+    "suggested_fix": "Route trigger/hooks.ts through managed-git-hook.ts's containment check, or share resolveContainedHookPath; fix the 'ONE shared copy' wording.",
+    "evidence": "git cat-file -e 16ee1143:src/lib/managed-hook.ts -> exists; rg shows no lstat/realpath in it",
+    "confidence": "high",
+    "file": "src/lib/managed-hook.ts",
+    "line": 52,
+    "class_scope": {
+      "sites": [
+        "src/lib/managed-hook.ts:60,75,76"
+      ],
+      "enumeration_method": "keryx ctx rg for installManagedHook( across src"
+    },
+    "global_id": "2026-09-24-ingest-695-r02#R2-F5"
+  },
+  {
+    "id": "R2-F6",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "managed-git-hook residue: hooks dir not realpath'd; hard links and a .git gitfile pointing elsewhere are followed",
+    "impact": "Low: a false refusal on a direct-call path, and writes that need prior .git control.",
+    "suggested_fix": "Always set hooksRootReal = await realpath(hooksRoot) when it exists; optionally refuse st_nlink>1 hook files.",
+    "evidence": "hooks2.out: H4 'ManagedGitHookEscapeError' on a sibling link; H7 'ok | watched OUTSIDE file MODIFIED'; H12 'OTHER repo hook has keryx block: true'; H11 linked worktree ok",
+    "confidence": "medium",
+    "file": "src/lib/managed-git-hook.ts",
+    "line": 97,
+    "class_scope": {
+      "sites": [
+        "managed-git-hook.ts:97-107",
+        "git-hooks.ts:4-24"
+      ],
+      "enumeration_method": "hooks2.ts H4, H7, H11, H12"
+    },
+    "global_id": "2026-09-24-ingest-695-r02#R2-F6"
+  },
+  {
+    "id": "R2-F7",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Non-standard BOM layouts still decode to noise (pre-existing, identical on pre-fix)",
+    "impact": "None known for a real consumer.",
+    "suggested_fix": "None required.",
+    "evidence": "bom315v: V3/V9 'pass []' on both HEAD and PRE; all other variants fail as expected",
+    "confidence": "medium",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 288,
+    "class_scope": {
+      "sites": [
+        "decodeTextVariants"
+      ],
+      "enumeration_method": "bom315v.ts V1-V9 on HEAD and pre"
+    },
+    "global_id": "2026-09-24-ingest-695-r02#R2-F7"
+  }
+]
