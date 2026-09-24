@@ -9,7 +9,16 @@ import {
 test("the bundled install-manifest.json validates against install-manifest.schema.json", () => {
   const manifest = loadBundledManifest();
   expect(manifest.schemaVersion).toBe("1.0.0");
-  expect(Object.keys(manifest.profiles).sort()).toEqual(["core", "full", "minimal", "nestjs", "python", "react"]);
+  expect(Object.keys(manifest.profiles).sort()).toEqual([
+    "core",
+    "full",
+    "go",
+    "minimal",
+    "nestjs",
+    "python",
+    "react",
+    "ts-js-node",
+  ]);
 });
 
 test("the bundled manifest carries a minimal, a core, at least one per-stack, and a full profile (W1-AC4)", () => {

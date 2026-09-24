@@ -20,6 +20,17 @@
       ],
       "components": []
     },
+    "ts-js-node": {
+      "description": "Common rules plus the TypeScript/JavaScript (Node.js) stack pack component (`ts-js-node-rules` + `ts-js-node-skills`, from src/gdskills/bundled/stacks/ts-js-node/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "lang:ts-js-node"
+      ],
+      "stackDetectionAware": true
+    },
     "react": {
       "description": "Common rules plus the React/MobX-aware review component set, installed when `keryx stack detect` finds a matching tag (fail open when detection is unavailable or uncertain).",
       "modules": [
@@ -30,6 +41,17 @@
         "capability:mobx",
         "framework:react",
         "lang:ts-js-node"
+      ],
+      "stackDetectionAware": true
+    },
+    "go": {
+      "description": "Common rules plus the Go stack pack component (`go-rules` + `go-skills`, from src/gdskills/bundled/stacks/go/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "lang:go"
       ],
       "stackDetectionAware": true
     },
@@ -70,14 +92,21 @@
         "nestjs-review-skill",
         "nestjs-dto-rule",
         "python-rules",
-        "python-skills"
+        "python-skills",
+        "ts-js-node-rules",
+        "ts-js-node-skills",
+        "react-rules",
+        "react-skills",
+        "go-rules",
+        "go-skills"
       ],
       "components": [
         "lang:ts-js-node",
         "framework:react",
         "capability:mobx",
         "framework:nestjs",
-        "lang:python"
+        "lang:python",
+        "lang:go"
       ]
     }
   },
@@ -291,7 +320,7 @@
     },
     "python-rules": {
       "kind": "rule",
-      "description": "Python stack pack rules (coding-style, scoped to *.py/*.pyi) from src/gdskills/bundled/stacks/python/rules/.",
+      "description": "Python stack pack rules (coding-style, patterns, security, testing; scoped to *.py/*.pyi) from src/gdskills/bundled/stacks/python/rules/.",
       "paths": [
         "src/gdskills/bundled/stacks/python/rules/*.mdc"
       ],
@@ -306,9 +335,103 @@
     },
     "python-skills": {
       "kind": "skill",
-      "description": "Python stack pack skills (pytest test authoring) from src/gdskills/bundled/stacks/python/skills/.",
+      "description": "Python stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/python/skills/.",
       "paths": [
         "src/gdskills/bundled/stacks/python/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "ts-js-node-rules": {
+      "kind": "rule",
+      "description": "TypeScript/JavaScript (Node.js) stack pack rules (coding-style, patterns, security, testing; scoped to *.ts/*.js/*.mjs/*.cjs) from src/gdskills/bundled/stacks/ts-js-node/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ts-js-node/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "ts-js-node-skills": {
+      "kind": "skill",
+      "description": "TypeScript/JavaScript (Node.js) stack pack skills (implementation, testing, code review, build-fix, ESM migration) from src/gdskills/bundled/stacks/ts-js-node/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ts-js-node/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "react-rules": {
+      "kind": "rule",
+      "description": "React stack pack rules (coding-style, patterns, security, testing; scoped to *.tsx/*.jsx) from src/gdskills/bundled/stacks/react/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/react/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "ts-js-node-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "react-skills": {
+      "kind": "skill",
+      "description": "React stack pack skills (implementation, testing, code review, build-fix, upgrade migration) from src/gdskills/bundled/stacks/react/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/react/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "ts-js-node-skills"
+      ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "go-rules": {
+      "kind": "rule",
+      "description": "Go stack pack rules (coding-style, patterns, security, testing; scoped to *.go) from src/gdskills/bundled/stacks/go/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/go/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "go-skills": {
+      "kind": "skill",
+      "description": "Go stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/go/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/go/skills/**"
       ],
       "targets": [
         "claude",
@@ -324,10 +447,14 @@
     "lang:ts-js-node": {
       "family": "language",
       "modules": [
-        "core-common-rules"
+        "core-common-rules",
+        "ts-js-node-rules",
+        "ts-js-node-skills"
       ],
       "detectionMarkers": [
-        "typescript"
+        "typescript",
+        "javascript",
+        "node"
       ],
       "provenance": {
         "origin": "authored"
@@ -336,7 +463,9 @@
     "framework:react": {
       "family": "framework",
       "modules": [
-        "react-review-skills"
+        "react-review-skills",
+        "react-rules",
+        "react-skills"
       ],
       "detectionMarkers": [
         "react"
@@ -379,6 +508,19 @@
       ],
       "detectionMarkers": [
         "python"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "lang:go": {
+      "family": "language",
+      "modules": [
+        "go-rules",
+        "go-skills"
+      ],
+      "detectionMarkers": [
+        "go"
       ],
       "provenance": {
         "origin": "authored"
