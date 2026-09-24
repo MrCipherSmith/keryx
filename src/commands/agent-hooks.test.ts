@@ -153,6 +153,16 @@ test("buildShellHookRuntime wires a real keryx.impact-evidence provider by defau
       "\n",
     );
 
+    // Disable built-in command hooks to ensure the test is hermetic; no keryx
+    // binary on PATH in CI, so keryx.security-check-output crashes with gate
+    // fail-closed deny. This test isolates the impact-evidence port only.
+    await mkdir(path.join(dir, ".metaproject"), { recursive: true });
+    await writeFile(
+      path.join(dir, ".metaproject", "hooks.json"),
+      '{"schemaVersion":"1.0.0","hooks":{"PreToolUse":[{"id":"keryx.security-check-output","enabled":false},{"id":"keryx.ctx-guard","enabled":false}]}}',
+      "utf8",
+    );
+
     const result = buildShellHookRuntime({
       projectRoot: dir,
       sessionId: "impact-session",
@@ -181,7 +191,7 @@ test("buildShellHookRuntime wires a real keryx.impact-evidence provider by defau
       { toolName: "Edit" },
     );
     // gate-advisory: the kill switch's "allow" never denies the tool call.
-    expect(fire.decisions.some((d) => d.decision === "deny")).toBe(false);
+    expect(fire.decisions.filter((d) => d.hookId === "keryx.impact-evidence").some((d) => d.decision === "deny")).toBe(false);
 
     const records = await readLogRecords(dir);
     expect(records.some((r) => r.sessionId === "impact-session" && r.event === "disabled-env")).toBe(true);
