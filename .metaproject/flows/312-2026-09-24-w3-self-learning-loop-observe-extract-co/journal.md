@@ -123,3 +123,4 @@
 - 2026-09-24T14:17:41.389Z - task-attempt: T29: started (attempt 1) — 312-T29 sonnet
 - 2026-09-24T14:31:39.342Z - task-done: T29: Fix R9-F1..F3: recompute graduation name/summary from members with current logins at apply; word-boundary id slug
 - 2026-09-24 - R9 verification (2 minor, 1 info) ingested. T29 DONE: applyGraduation recomputes name/summary from members with the current logins instead of re-checking stored tokens, and pattern-id slugs cut at word boundaries.
+- 2026-09-24 - Stopped on the coordinator's instruction after T29 (c4aa5867). The rule was one narrow fix, then verification, then stop on any finding at minor or above; the run had gone past it. T29 is not yet verified. No merge. T4 stays open.
