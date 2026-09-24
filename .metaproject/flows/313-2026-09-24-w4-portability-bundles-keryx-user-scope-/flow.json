@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T13:51:23.144Z",
+  "updatedAt": "2026-09-24T13:57:40.896Z",
   "source": {
     "type": "description",
     "ref": null
@@ -257,7 +257,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 6,
+        "count": 7,
         "log": [
           {
             "at": "2026-09-24T08:33:25.271Z",
@@ -288,6 +288,11 @@
             "at": "2026-09-24T10:44:08.737Z",
             "outcome": "failed",
             "detail": "round 3: 1 blocker (R3-F1), 6 major; three-attempt budget spent -> re-plan with choke points"
+          },
+          {
+            "at": "2026-09-24T13:57:40.896Z",
+            "outcome": "failed",
+            "detail": "closure verification r06: R5-F2 and R3-F18 partial (minor each); merge rule -> stop"
           }
         ]
       },
@@ -645,6 +650,11 @@
       "at": "2026-09-24T13:51:23.144Z",
       "event": "task-done",
       "detail": "T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force"
+    },
+    {
+      "at": "2026-09-24T13:57:40.896Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 7) — closure verification r06: R5-F2 and R3-F18 partial (minor each); merge rule -> stop"
     }
   ]
 }

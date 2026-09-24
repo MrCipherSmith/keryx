@@ -165,3 +165,34 @@ Source: the review-313-r5.md report, with probes in scratchpad/review313-r5/.
     - With 0 blocker/major/minor in scope: ingest the verification, run `gh pr ready`, and make one merge attempt; if the merge is refused, report READY_TO_MERGE.
     - Otherwise stop and report. No further loop.
 - 2026-09-24T13:51:23.144Z - task-done: T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force
+- 2026-09-24T13:57:40.896Z - task-attempt: T14: failed (attempt 7) — closure verification r06: R5-F2 and R3-F18 partial (minor each); merge rule -> stop
+- 2026-09-24T13:58Z - Closure verification (Opus) recorded as review 2026-09-24-ingest-690-r06, at head 95473737. CI was all green at that head.
+  - **Counts:** 0 blocker, 0 major, 2 minor, 3 info (R6-F1..F3).
+  - **Merge rule:** it applies — STOP. PR #690 stays a draft and is unmerged; the flow stays in-progress; no further fix round.
+  - **Closure prerequisites already done:**
+    - PR comments collected at 95473737: 0 findings, 0 unanswered (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__690.json`).
+    - `keryx health run`: PASS.
+
+### Remaining in-scope minors (report `scratchpad/review-313-r6.md`, probes in `scratchpad/review313-r6/`)
+
+**R5-F2 — partial, minor.**
+- **Fixed:** the round-5 shapes (BOM + ASCII `curl|sh` or injection) are now caught. So are these variants: an odd-length payload after the BOM, a UTF-8 BOM, a UTF-32 BOM, and a BOM in the middle of the file.
+- **Still missed:** a genuine UTF-16 file with a BOM that also contains one unpaired surrogate or one trailing odd byte.
+  - The strict UTF-16 decode (`{fatal:true}` at `src/security/audit-harness/index.ts:176`) throws on those bytes. Only the lossy UTF-8 view is then scanned, and that view is NUL-interleaved noise, so it shows no findings.
+  - Impact is prompt injection only; such a file cannot run as a shell script.
+- **Fix:** decode with `{fatal:false}` whenever a BOM is present, keep the dual scan, and add a regression test with an unpaired surrogate and with a trailing odd byte.
+
+**R3-F18 — partial, minor.**
+- **Fixed:** a missing or mismatched sourceProject is now refused. This holds for case and whitespace variants, an empty string, a v1 ledger record, and `--force` reporting.
+- **Still possible — laundering through the identical bucket, with no `--force`:**
+  - A same-id bundle with no sourceProject but byte-identical content passes as "unchanged". `src/bundle/apply.ts:223-238` then rewrites the ledger record without the original sourceProject, because it checks only the bundleId.
+  - A second same-id bundle is then a plain update and overwrites the file.
+- **Fix:** on an identical entry, never lower or replace a recorded sourceProject. Either keep the existing record untouched, or treat a mismatch as the same conflict.
+- **Docs:** `docs/docs/cli-reference.md` and the comment at `src/bundle/plan.ts:435` call sourceProject unforgeable. It is a hash of the git remote identity, so anyone who knows the remote can compute it. Reword both to "trust on first use, forgeable by anyone who knows the source remote".
+
+**Info:** R6-F1..R6-F3 (see the report).
+
+**Next step for the owner:**
+- Authorise one more tiny fix: `{fatal:false}` plus a test for R5-F2, and never overwrite a recorded sourceProject on an identical entry plus a test and the docs wording for R3-F18.
+- Then run a narrow check and merge.
+- Or merge over these two minors as an explicit owner exception.

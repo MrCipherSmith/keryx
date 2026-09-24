@@ -1,0 +1,82 @@
+[
+  {
+    "id": "R5-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "residual: genuine UTF-16 with a BOM plus one lone surrogate or one trailing odd byte drops the BOM decode, so an injection is scanned only as NUL-interleaved lossy noise (0 findings)",
+    "impact": "a reference.md that is real UTF-16LE/BE text with a BOM, an injection directive and 2 malformed bytes is accepted by vetExternalCatalog, recorded by `bundle import --external` and IMPORTED by `bundle import`, with 0 findings; a lenient BOM-aware reader (Node utf16le) shows the directive in clear text. Injection-only (UTF-16 is not shell-executable), so the exec impact of the original major is closed",
+    "suggested_fix": "decode the BOM variant with {fatal:false} (or never return undefined once a BOM is seen) so contentVariants always includes the UTF-16 view whenever a BOM is present; add lone-surrogate and trailing-byte regression tests for LE and BE",
+    "evidence": "review313-r6/bom6.out: AUDIT/VET/IMP rows h-utf16le-bom-inj-lone-surrogate, h-utf16be-bom-inj-lone-surrogate, l-utf16le-bom-inj-trailing-byte, l-utf16be-bom-inj-trailing-byte are pass 0 / accepted / IMPORTED; EXTCLI records them; control ctl-utf16le-bom-inj-genuine is fail 2; LENIENT lines show the clear-text directive",
+    "confidence": "high",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 176,
+    "class_scope": {
+      "sites": [
+        "src/security/audit-harness/index.ts:170-180 decodeUtf16WithBom (fatal decode)",
+        "src/security/audit-harness/index.ts:417-419 contentVariants selection (reached by audit, bundle import, --external vetting, scout auditSkillSnapshot)"
+      ],
+      "enumeration_method": "read the only decode-selection site after T19 and ran a 16-case encoding matrix through runHarnessAudit, vetExternalCatalog, CLI import --external and CLI bundle import"
+    },
+    "global_id": "2026-09-24-ingest-690-r06#R5-F2"
+  },
+  {
+    "id": "R3-F18",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "residual: an identical-bytes same-id import silently erases or relabels the recorded sourceProject, enabling a later no-force overwrite; docs call sourceProject unforgeable though it is copyable and derivable",
+    "impact": "without --force: step 1, a same-id bundle with no (or a different) sourceProject and byte-identical content exits 0 ('unchanged: 1'), with no conflict or transferred line, and rewrites the ledger record without the original sourceProject; step 2, a same-id bundle with different content is then a plain update and replaces the victim's file. Separately, cli-reference.md and plan.ts:435 state sourceProject cannot be forged, but it is plain text in every bundle.json and a hash of the public remote identity; a copied value replaces the file silently",
+    "suggested_fix": "in apply.ts's identical loop also skip the claim when existingRecord.sourceProject !== plan.bundleSourceProject (mirror plan.ts:456-458), or have plan mark such identical entries as not-ours; reword the docs/comment so bundleId+sourceProject is trust-on-first-use for every case, not a forgery barrier; add L1/L2 regression tests",
+    "evidence": "review313-r6/own6.out L1: 'written: 0, unchanged: 1', ledger sp erased; L2: exit 0, file '# laundered takeover'; L2b: sp relabelled to sha256:evil and then overwritten; P-copy: copied sha256:aaa replaces file exit 0; P-omitted/case/ws/empty all conflict (the plan.ts fix itself holds)",
+    "confidence": "high",
+    "file": "src/bundle/apply.ts",
+    "line": 227,
+    "class_scope": {
+      "sites": [
+        "src/bundle/apply.ts:223-238 identical re-claim (bundleId-only check)",
+        "src/bundle/plan.ts:540-545 identical bucket precedes the ownership check",
+        "docs/docs/cli-reference.md bundle import row and src/bundle/plan.ts:435 comment (unforgeable claim)"
+      ],
+      "enumeration_method": "enumerated every sourceProject reader/writer in src/bundle via keryx ctx rg; exercised the plan conflict rule, the identical re-claim and --force reporting through the CLI"
+    },
+    "global_id": "2026-09-24-ingest-690-r06#R3-F18"
+  },
+  {
+    "id": "R6-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "UTF-32 BOM files and wrong-endianness UTF-16 are scanned only as noise",
+    "impact": "a UTF-32LE/BE BOM file with an injection, or an FF FE BOM over UTF-16BE content, gets 0 findings; few realistic readers decode UTF-32, and a BOM-honouring reader sees noise for the wrong-endian case",
+    "suggested_fix": "optionally add UTF-32 BOM decoding, or strip NULs in normalizeForDetection (the R5-F4 hardening), which also covers these cases",
+    "evidence": "review313-r6/bom6.out c-utf32le-bom-inj, d-utf32be-bom-inj, e-* rows",
+    "confidence": "medium",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 170,
+    "global_id": "2026-09-24-ingest-690-r06#R6-F1"
+  },
+  {
+    "id": "R6-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "the commands/bundle.test.ts R3-F18 tests pass on pre-fix code",
+    "impact": "they cover takeover reporting with two different, present sourceProjects (handled since round 3), not the omitted-field rule; plan.test.ts carries the discriminating test",
+    "suggested_fix": "optionally add a CLI case with an omitted sourceProject",
+    "evidence": "pre-fix run in review313-r6/pre: only 6 of the new tests fail, and neither bundle.test.ts R3-F18 test is among them",
+    "confidence": "high",
+    "file": "src/commands/bundle.test.ts",
+    "line": 361,
+    "global_id": "2026-09-24-ingest-690-r06#R6-F2"
+  },
+  {
+    "id": "R6-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "uninstall after a same-id forced takeover removes the file for both producers",
+    "impact": "inherent to one bundleId shared by two producers; documented by the TOFU text",
+    "suggested_fix": "none required",
+    "evidence": "review313-r6/own6.out 'F uninstall: removed: 1'",
+    "confidence": "high",
+    "file": "src/bundle/apply.ts",
+    "line": 211,
+    "global_id": "2026-09-24-ingest-690-r06#R6-F3"
+  }
+]
