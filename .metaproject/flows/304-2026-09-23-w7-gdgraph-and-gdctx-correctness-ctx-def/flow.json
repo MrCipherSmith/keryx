@@ -7,17 +7,58 @@
   "id": "304",
   "slug": "w7-gdgraph-and-gdctx-correctness-ctx-def",
   "title": "W7: gdgraph and gdctx correctness — ctx defects, read-only git allowlist, correctness benchmark, slim index",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-23T21:26:28.813Z",
-  "updatedAt": "2026-09-23T23:16:18.740Z",
+  "updatedAt": "2026-09-24T03:56:14.814Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-24T03:54:04.993Z",
+      "note": "src/ctx/lines.ts gates FAILURE_STEMS on stderr/non-zero exit; tests src/ctx/lines.test.ts, src/commands/ctx.test.ts (git log 'refuse' exit 0 -> no Errors/Warnings), goldens gdctx-1-* in src/metrics/gdctx-goldens.test.ts; live ctx run printf 'refuse this' -> 0 sections; merged in #674 (dfcde389), CI green"
+    },
+    "AC2": {
+      "at": "2026-09-24T03:54:05.148Z",
+      "note": "trusted-project only for git-tracked in-project files (src/security/read-source.ts, literal pathspecs); override data policies.egress.sourceOverrides, safe badge-param allowlist, userinfo fails closed, token/key/auth query redacts, untrusted/MCP sources unchanged, disable via config tested; tests src/security/resolve.test.ts, read-source.test.ts, guard.test.ts, src/mcp/mcp.test.ts, goldens gdctx-2-*; live README badges kept; merged in #674 (dfcde389), CI green"
+    },
+    "AC3": {
+      "at": "2026-09-24T03:54:05.297Z",
+      "note": "buildRgCommand expands bundles of RG_SAFE_FLAGS letters with argv deep-equal to split form; value-flag/unknown letter refused naming the letter; value-flag operands untouched; tests src/commands/ctx.test.ts, ctx.rg-argv.test.ts; merged in #674 (dfcde389), CI green"
+    },
+    "AC4": {
+      "at": "2026-09-24T03:54:05.567Z",
+      "note": "freshness check on every fact-presenting gdgraph subcommand (+ --json freshness field, gdgraph context); src/commands/gdgraph-freshness.test.ts: fresh -> no note, tracked-file edit without rebuild -> STALE_NOTE naming file for affected and query, missing provenance -> unknown, no git -> UNKNOWN_NOTE; merged in #674 (dfcde389), CI green"
+    },
+    "AC5": {
+      "at": "2026-09-24T03:54:05.708Z",
+      "note": "src/gdgraph/golden-edges.test.ts exact edge sets: barrel export *, type-only re-export, dynamic import(), tsconfig extends+paths (GDGRAPH-3 fixed, effective-baseUrl semantics fixtures A/B/C); merged in #674 (dfcde389), CI green"
+    },
+    "AC6": {
+      "at": "2026-09-24T03:54:05.839Z",
+      "note": "goldens section in fixtures/benchmark/keryx/gdctx-fact-preservation.json recomputed live by src/metrics/gdctx-goldens.test.ts (test:core) at 100% fact agreement; scripts/benchmark/run-gdctx-oracle.ts carries goldens forward; merged in #674 (dfcde389), CI green"
+    },
+    "AC7": {
+      "at": "2026-09-24T03:54:05.969Z",
+      "note": "four known-mistake entries in .metaproject/memory/known-mistakes (gdctx-stem-classifier-misreads-stdout, gdctx-redaction-ignores-trust-tag, gdctx-flag-allowlist-no-bundle-expansion, keryx-gdctx-routing-index-cost-...); keryx memory search gdctx returns all four, gdgraph returns the index-cost entry; merged in #674 (dfcde389), CI green"
+    },
+    "AC8": {
+      "at": "2026-09-24T03:54:06.094Z",
+      "note": "src/lib/templates.test.ts enforces INDEX_GATE_TOKEN_BUDGET=400 (chars/4) on renderIndexGateMarkdown and live .metaproject/index.md (1470 chars ~368 tokens), live equals template render, pointer-only structure; merged in #674 (dfcde389), CI green"
+    },
+    "AC9": {
+      "at": "2026-09-24T03:54:06.225Z",
+      "note": "GIT_READONLY_ALLOW explicit safe-flag list in src/ctx/hook-classify.ts checked before GIT_ROUTABLE; src/ctx/hook-classify-git-readonly.test.ts 'false-block rate on the allowlist is zero' covers status/blame/branch/tag/log --oneline -N/diff --stat; plain diff, unbounded log, show, patch forms stay routed; live ctx hook exit 0 vs 2; merged in #674 (dfcde389), CI green"
+    },
+    "AC10": {
+      "at": "2026-09-24T03:54:06.365Z",
+      "note": "all new tests under test:core dirs (src/ctx, src/commands, src/gdgraph, src/security, src/metrics, src/lib, src/mcp); PR #674 CI all checks green on 72cbc3f4 before merge"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/674"
   },
   "baseBranch": "feat/agent-platform-expansion",
   "tasks": [
@@ -76,7 +117,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 6,
@@ -115,7 +156,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -474,6 +516,328 @@
       "at": "2026-09-23T23:16:18.740Z",
       "event": "task-attempt",
       "detail": "T4: failed (attempt 6) — round 3: 2 minor (R3-1 credential names still enumerable: authorization/privatekey/accesskey_id; R3-2 MCP security.scan absolute path in report) + 1 info (stale comments). CI green on f10ca87e. Budget reached: re-planned R3-1 to a safe-parameter allowlist instead of a credential-name denylist"
+    },
+    {
+      "at": "2026-09-24T03:53:48.231Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T03:53:50.993Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/674 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T03:54:04.993Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/ctx/lines.ts gates FAILURE_STEMS on stderr/non-zero exit; tests src/ctx/lines.test.ts, src/commands/ctx.test.ts (git log 'refuse' exit 0 -> no Errors/Warnings), goldens gdctx-1-* in src/metrics/gdctx-goldens.test.ts; live ctx run printf 'refuse this' -> 0 sections; merged in #674 (dfcde389), CI green (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T03:54:05.148Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: trusted-project only for git-tracked in-project files (src/security/read-source.ts, literal pathspecs); override data policies.egress.sourceOverrides, safe badge-param allowlist, userinfo fails closed, token/key/auth query redacts, untrusted/MCP sources unchanged, disable via config tested; tests src/security/resolve.test.ts, read-source.test.ts, guard.test.ts, src/mcp/mcp.test.ts, goldens gdctx-2-*; live README badges kept; merged in #674 (dfcde389), CI green (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T03:54:05.297Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: buildRgCommand expands bundles of RG_SAFE_FLAGS letters with argv deep-equal to split form; value-flag/unknown letter refused naming the letter; value-flag operands untouched; tests src/commands/ctx.test.ts, ctx.rg-argv.test.ts; merged in #674 (dfcde389), CI green (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T03:54:05.567Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: freshness check on every fact-presenting gdgraph subcommand (+ --json freshness field, gdgraph context); src/commands/gdgraph-freshness.test.ts: fresh -> no note, tracked-file edit without rebuild -> STALE_NOTE naming file for affected and query, missing provenance -> unknown, no git -> UNKNOWN_NOTE; merged in #674 (dfcde389), CI green (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T03:54:05.708Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/gdgraph/golden-edges.test.ts exact edge sets: barrel export *, type-only re-export, dynamic import(), tsconfig extends+paths (GDGRAPH-3 fixed, effective-baseUrl semantics fixtures A/B/C); merged in #674 (dfcde389), CI green (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T03:54:05.839Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: goldens section in fixtures/benchmark/keryx/gdctx-fact-preservation.json recomputed live by src/metrics/gdctx-goldens.test.ts (test:core) at 100% fact agreement; scripts/benchmark/run-gdctx-oracle.ts carries goldens forward; merged in #674 (dfcde389), CI green (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T03:54:05.969Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: four known-mistake entries in .metaproject/memory/known-mistakes (gdctx-stem-classifier-misreads-stdout, gdctx-redaction-ignores-trust-tag, gdctx-flag-allowlist-no-bundle-expansion, keryx-gdctx-routing-index-cost-...); keryx memory search gdctx returns all four, gdgraph returns the index-cost entry; merged in #674 (dfcde389), CI green (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T03:54:06.094Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/lib/templates.test.ts enforces INDEX_GATE_TOKEN_BUDGET=400 (chars/4) on renderIndexGateMarkdown and live .metaproject/index.md (1470 chars ~368 tokens), live equals template render, pointer-only structure; merged in #674 (dfcde389), CI green (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T03:54:06.225Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: GIT_READONLY_ALLOW explicit safe-flag list in src/ctx/hook-classify.ts checked before GIT_ROUTABLE; src/ctx/hook-classify-git-readonly.test.ts 'false-block rate on the allowlist is zero' covers status/blame/branch/tag/log --oneline -N/diff --stat; plain diff, unbounded log, show, patch forms stay routed; live ctx hook exit 0 vs 2; merged in #674 (dfcde389), CI green (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T03:54:06.365Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: all new tests under test:core dirs (src/ctx, src/commands, src/gdgraph, src/security, src/metrics, src/lib, src/mcp); PR #674 CI all checks green on 72cbc3f4 before merge (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T03:54:06.504Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T03:54:14.355Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-24T03:54:14.360Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/304-2026-09-23-w7-gdgraph-and-gdctx-correctness-ctx-def/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#674 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__674.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 674 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-09-24T03:56:08.104Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/674 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T03:56:08.229Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T03:56:14.813Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-24T03:56:14.814Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-24T03:54:04.993Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
+    },
+    {
+      "at": "2026-09-24T03:54:05.148Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
+    },
+    {
+      "at": "2026-09-24T03:54:05.297Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
+    },
+    {
+      "at": "2026-09-24T03:54:05.567Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
+    },
+    {
+      "at": "2026-09-24T03:54:05.708Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
+    },
+    {
+      "at": "2026-09-24T03:54:05.839Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
+    },
+    {
+      "at": "2026-09-24T03:54:05.969Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
+    },
+    {
+      "at": "2026-09-24T03:54:06.094Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
+    },
+    {
+      "at": "2026-09-24T03:54:06.225Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
+    },
+    {
+      "at": "2026-09-24T03:54:06.365Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
+    },
+    {
+      "at": "2026-09-24T03:56:14.814Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1",
+      "headCommit": "72cbc3f407dc4a607ac0a2adcb305baef056e744"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-24T03:54:14.355Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "13 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/304-2026-09-23-w7-gdgraph-and-gdctx-correctness-ctx-def/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#674 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__674.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 674 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "fail",
+          "detail": "no report; run `keryx health run` first"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
+    },
+    {
+      "at": "2026-09-24T03:56:14.813Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "13 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:9df48271c3d143f9915856319722e19f423a4217b84eb93eb6fd9fdb5439bcf1"
     }
   ]
 }
