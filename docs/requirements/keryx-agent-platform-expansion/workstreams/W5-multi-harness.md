@@ -1,6 +1,8 @@
 # W5 — Multi-harness support & capability matrix
 Version: 0.1.3
 
+> **Status (W5-a, flow 305):** the unified registry has landed in `src/integrations/` for the runtimes that existed before this workstream (claude, codex, cursor, windsurf, antigravity, opencode, zed as unsupported, generic-mcp). `HarnessAdapter.surfaces` is a list rather than a per-flag record, because Claude already carries two `block` surfaces in one file (the ctx guard and security check-output). New adapters, the `keryx integrations` CLI and the generated matrix remain W5-b.
+
 ## Summary
 
 Keryx today writes into host-harness settings files through **three separate,

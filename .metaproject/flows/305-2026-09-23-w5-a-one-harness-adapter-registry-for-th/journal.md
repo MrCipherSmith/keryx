@@ -1,3 +1,45 @@
 # Flow Journal
 
 - 2026-09-23T21:26:30.854Z - flow created
+- 2026-09-23T21:32:20.324Z - task-added: T5: Verify: targeted tests of every touched module, typecheck, eslint on changed files, import-policy tests
+- 2026-09-23T21:32:20.414Z - task-added: T6: Verify: end-to-end CLI install/uninstall of ctx guard, security hooks and orient in both orders in a temp project (bun ./src/cli.ts)
+- 2026-09-23T21:32:20.504Z - task-added: T7: Docs: architecture note for src/integrations and W5 status pointer
+- 2026-09-23T21:32:20.607Z - task-added: T8: PR review/fix loop, CI green, merge into feat/agent-platform-expansion
+- 2026-09-23T21:32:31Z - phase 1 filled by flow-orchestrator (dispatched run). completion_outcome=create-pr-and-merge, operator_confirmed=true (dispatch from MrCipherSmith's session via the flow-runner brief), base_branch=feat/agent-platform-expansion. Home chosen: src/integrations/ (core zone). Interface deviation: HarnessAdapter.surfaces is a list, not a per-flag record, because claude already has two block surfaces in one file.
+- 2026-09-23T21:32:31.846Z - frozen: 8 criteria; checksum recorded
+- 2026-09-23T21:32:31.934Z - started
+- 2026-09-23T21:32:32.026Z - task-done: T1: Collect remaining context
+- 2026-09-23T21:32:44.132Z - task-attempt: T2: started (attempt 1) — 305-T2 sonnet implementation dispatch
+- 2026-09-23T21:57:26.498Z - task-done: T2: Implement per plan
+- 2026-09-23T21:57:26Z - T2 DONE_WITH_CONCERNS: (1) orient validator kept lenient (flat-or-nested command match) — decision: accept, it matches pre-refactor behaviour; (2) orient install routed via new installOrientRuntime in ctx/orient-runtimes.ts to avoid a new commands->integrations edge — accept; (3) security split surfaces lack direct tests — covered by T3; (4) 5 pre-existing env test failures (git author mismatch in fixtures) reproduced on unmodified HEAD — not caused by this flow.
+- 2026-09-23T21:57:46.149Z - task-attempt: T3: started (attempt 1) — 305-T3 sonnet tests
+- 2026-09-23T21:57:46.237Z - task-attempt: T7: started (attempt 1) — 305-T7 haiku docs
+- 2026-09-23T22:00:12.054Z - task-done: T7: Docs: architecture note for src/integrations and W5 status pointer
+- 2026-09-23T22:15:07.990Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-23T22:15:12.883Z - task-attempt: T4: started (attempt 1) — 305-T4 opus adversarial review of branch diff
+- 2026-09-23T22:16:55.922Z - task-added: T9: Fix: add src/integrations/ to the test:core script so the new tests run in CI (core-package.test.ts gap check)
+- 2026-09-23T22:16:56.012Z - task-attempt: T9: started (attempt 1) — 305-T9 haiku
+- 2026-09-23T22:17:41.925Z - task-done: T9: Fix: add src/integrations/ to the test:core script so the new tests run in CI (core-package.test.ts gap check)
+- 2026-09-23T22:19:10Z - T5 verification: 38 related test files, 730 pass / 8 fail; 1 fail was a real gap (src/integrations missing from test:core, core-package.test.ts) fixed in T9; the other 7 (trigger-hooks-coexist x3, ctx/orient.test.ts graphContext x4) fail identically on unmodified HEAD because `git commit` in a temp fixture repo exits 1 in this sandbox — environment, not this flow; CI is the judge. tsc --noEmit clean; eslint clean on all 14 changed/new source files.
+- 2026-09-23T22:19:10Z - T6 CLI smoke (scratchpad/t6-smoke.ts, bun ./src/cli.ts in temp git projects): every permutation of ctx install-hook / security hooks install / orient install-hook for claude (6), codex (2), cursor (6), windsurf (2), then each single uninstall: 248 checks, 0 failures, all exit codes 0; the uninstalled surface stops validating and every other stays valid.
+- 2026-09-23T22:19:10.520Z - task-done: T5: Verify: targeted tests of every touched module, typecheck, eslint on changed files, import-policy tests
+- 2026-09-23T22:19:10.610Z - task-done: T6: Verify: end-to-end CLI install/uninstall of ctx guard, security hooks and orient in both orders in a temp project (bun ./src/cli.ts)
+- 2026-09-23T22:31:59.895Z - task-added: T10: Fix review round 1 findings F1-F11 (owner refusal propagation, round-trip validation, honest slots + slot-coverage test, registry-derived runtime lists, flat security orphan cleanup, owner input hygiene, test mutations, interface gaps)
+- 2026-09-23T22:31:59.978Z - task-attempt: T10: started (attempt 1) — 305-T10 sonnet fix round 1
+- 2026-09-23T22:31:59Z - T4 review round 1 (opus): 5 major, 5 minor, 1 info (ingested: reviews/2026-09-23-ingest-feat-agent-platform-expansion). Decisions: fix F1-F5, F7-F10; F6 keep both changes as deliberate improvements (legacy array preserved in unmigratedHooks instead of discarded; claude security validate requires the sentinel, closing the same hostile-entry class the flat .some fix closed) and pin them with tests; F11 clarify the lastVerified meaning. Out of scope, noted for W5-b/W8: MCP client-config files (src/mcp/client-config.ts) not yet under SETTINGS_FILE_OWNERS; install-state probe on surfaces.
+- 2026-09-23T23:07:24.893Z - task-done: T10: Fix review round 1 findings F1-F11 (owner refusal propagation, round-trip validation, honest slots + slot-coverage test, registry-derived runtime lists, flat security orphan cleanup, owner input hygiene, test mutations, interface gaps)
+- 2026-09-23T23:07:33Z - T10 round-1 fixes committed. Worker concern: refusalAction/allowAction for the dynamic --runtime path (security CLI) still switch on ids inside codecs.ts to avoid a codecs->registry cycle; ctx-guard surfaces themselves carry decisionCodec. Left for round-2 review to judge.
+- 2026-09-23T23:07:33.658Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-23T23:08:19.167Z - task-attempt: T8: started (attempt 1) — PR #675 review round 2 (opus) + CI
+- 2026-09-23T23:26:01.299Z - task-attempt: T8: failed (attempt 2) — round 2: 0 blocker/major, 4 minor (R2-F1..F4); CI 18/18 green; fix dispatched
+- 2026-09-23T23:26:01.383Z - task-added: T11: Fix review round 2 minors R2-F1..F4 (registry-resolved refusal codecs, migrates-legacy verification, per-file surface id uniqueness, regression tests for round-1 fixes)
+- 2026-09-23T23:26:01.464Z - task-attempt: T11: started (attempt 1) — 305-T11 sonnet
+- 2026-09-23T23:40:30.632Z - task-done: T11: Fix review round 2 minors R2-F1..F4 (registry-resolved refusal codecs, migrates-legacy verification, per-file surface id uniqueness, regression tests for round-1 fixes)
+- 2026-09-23T23:40:42.093Z - task-attempt: T8: started (attempt 3) — PR #675 review round 3 (opus) on round-2 fix commit + CI
+- 2026-09-24T00:19:04.627Z - task-attempt: T8: failed (attempt 4) — round 3: 0 blocker/major, 2 minor (R3-F1 two codec sources, R3-F2 wrapper propagation untested); CI 18/18 green; attempt budget (3) reached -> re-plan
+- 2026-09-24T00:19:04Z - T8 attempt budget reached (3 rounds: 5M/5m/1i -> 4m -> 2m; loop check: no repetition). Re-plan per flow-orchestrator Phase 4 step 5. Cause of the tail: each fix round added a check or test ON TOP of a duplicated fact (two decision-codec sources; wrappers with no injectable owner), so every round could only find the next seam. Materially different strategy: remove the duplication structurally instead of adding coherence checks — (1) ctx-guard surfaces stop carrying their own decisionCodec; the adapter's decisionCodec is the only one and runtimeFromSurface reads it (so a mismatch cannot be expressed); (2) the four installer wrappers take an optional owner parameter (default: the registry owner), and tests drive the real wrappers with a fake-sibling owner; the circular assertion is deleted. Then one narrow mutation-verification pass (opus) limited to R3-F1/F2 and a check that nothing else moved; no open-ended review round.
+- 2026-09-24T00:19:04.708Z - task-added: T12: Re-planned fix for round 3: single decision-codec source on the adapter; injectable owner on installer wrappers with real-wrapper refusal tests
+- 2026-09-24T00:19:04.786Z - task-attempt: T12: started (attempt 1) — 305-T12 sonnet
+- 2026-09-24T00:34:39.688Z - task-done: T12: Re-planned fix for round 3: single decision-codec source on the adapter; injectable owner on installer wrappers with real-wrapper refusal tests
+- 2026-09-24T00:44:46.572Z - task-attempt: T8: started (attempt 5) — verification round after re-plan: 0 findings; CI all green on c36c788a
+- 2026-09-24T00:44:56Z - Verification round after re-plan (opus, narrow): 0 findings; mutations M1-M2 and G5-G10 killed; ctx hook byte parity. CI 19 checks green on c36c788a. Review loop closed at threshold minor. Remaining info (not fixed, stated for the report): R3 info — the migrates-legacy never-create/retype check seeds only the slot's own type (a migrating surface deleting another surface's hooks object is caught by the owner permutation/coexistence tests instead).

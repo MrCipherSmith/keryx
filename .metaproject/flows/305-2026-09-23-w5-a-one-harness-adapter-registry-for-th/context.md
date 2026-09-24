@@ -55,4 +55,56 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+Collected by the flow orchestrator (2026-09-23).
+
+### Current registries (what W5-a replaces)
+
+- `src/ctx/runtimes.ts` — `CtxRuntime`, `CTX_RUNTIMES` (claude, codex, cursor,
+  windsurf verified; antigravity, opencode experimental), `UNSUPPORTED_RUNTIMES`
+  (zed), sentinel `ctx-agent-hooks`, walker `managedGroupsFor` /
+  `hasRunnableGuard` / `hasStalePreToolUseMatcher` / `describeExistingGuard`,
+  `mergeIntoHookArray` with legacy-array -> `unmigratedHooks` migration,
+  `refusalAction` / `allowAction` (also used by `src/commands/security.ts`),
+  hook-side payload parsers used by `keryx ctx hook` (`src/ctx/hook.ts`).
+- `src/ctx/orient-runtimes.ts` — `OrientRuntime`, `ORIENT_RUNTIMES` (claude,
+  codex, cursor), `UNSUPPORTED_ORIENT` (windsurf, zed, opencode, antigravity),
+  sentinel `ctx-orient-hooks`, its own lenient `hasManaged` walker.
+- `src/security/agent-hooks/runtimes.ts` — `RuntimeHook`, `RUNTIME_HOOKS`
+  (claude event-keyed; cursor, windsurf, generic-mcp flat under
+  `securityHooks`), sentinel `security-agent-hooks`, `dropLegacyEntries`,
+  `.some`-over-managed validator (hostile-entry fix).
+
+### Installers (three read/write loops today)
+
+- `src/ctx/hook-install.ts` (`installRuntimeHook` / `uninstallRuntimeHook`) ←
+  `src/commands/ctx.ts` `handleInstallHook` / `handleUninstallHook`.
+- `src/security/agent-hooks.ts` (`installRuntimeHooks` / `uninstallRuntimeHooks`,
+  `installSecurityAgentHooks` for init/update) ← `src/commands/security.ts`
+  `handleHooks`, `src/commands/init.ts`, `src/commands/update.ts`.
+- `src/commands/orient.ts` (`installOne` / `uninstallOne`, private).
+
+### Settings files and the surfaces targeting them
+
+| file | surfaces |
+|---|---|
+| `.claude/settings.json` | ctx-guard (PreToolUse), orient (UserPromptSubmit), security check-input (UserPromptSubmit), security check-output (PreToolUse Write\|Edit) |
+| `.codex/hooks.json` | ctx-guard (PreToolUse), orient (UserPromptSubmit) |
+| `.cursor/hooks.json` | ctx-guard (hooks.beforeShellExecution), orient (hooks.sessionStart), security (securityHooks[]) |
+| `.windsurf/hooks.json` | ctx-guard (hooks.pre_run_command), security (securityHooks[]) |
+| `.agents/hooks.json` | ctx-guard (keryx-ctx-guard.PreToolUse) |
+| `.opencode/plugin/keryx-ctx-guard.js` | ctx-guard (JS plugin, non-JSON) |
+| `.mcp/security-hooks.json` | security (securityHooks[]) |
+
+### Constraints found
+
+- `src/lib/import-zones.ts` `ZONE_TABLE`: a new top-level `src/` segment must be
+  classified or `unclassifiedSegments()` fails; `integrations` -> core.
+- `import-policy.live.test.ts` ratchets `client-imports-core-internal`; keep
+  commands importing the existing modules (no new adapter->core edges).
+- Tests pin `_keryxManaged` exact arrays (hook-install.test.ts lines 66-142,
+  orient-runtimes.test.ts 59-100, agent-hooks.test.ts 53/112): sentinel order
+  and "pre-existing sentinel without entries is left alone" must be preserved.
+- Memory: installed `keryx` on PATH is stale — use `bun ./src/cli.ts` for the
+  code under change. gdgraph/gdctx answers on this repo are known unreliable
+  (user memory), so impacted files were enumerated with `keryx ctx rg` import
+  searches rather than `gdgraph affected`.
