@@ -1,13 +1,19 @@
 // Flow 308 (W8, Lane B, T6): AC10-AC15 for the impact-evidence provider.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createImpactEvidenceProvider, impactEvidenceHookClass } from "./provider";
+import {
+  createImpactEvidenceProvider,
+  impactEvidenceHookClass,
+  normalizeRequestFiles,
+  redactCommandForLog,
+} from "./provider";
 import { readLogRecords } from "./state";
 import type { ImpactEvidence, ImpactEvidenceRequest } from "./types";
 import type { ImpactEvidenceConfig } from "../types";
+import { computeConfigChecksum, mergeSecurityConfig } from "../config";
 
 const DEFAULT_CONFIG: ImpactEvidenceConfig = { enabled: true, strict: false, exemptGlobs: [], dampenAfter: 3 };
 
@@ -186,5 +192,127 @@ describe("impact-evidence provider", () => {
     const second = await provider(req(true)); // denial 2 -> at threshold
     expect(second.additionalContext).toContain("dampened");
     expect(second.record.event).toBe("dampened");
+  });
+
+  test("F17: dampening is per-file — a dampened file gets a condensed notice, a sibling first-touch file still gets full evidence", async () => {
+    const computeEvidence = async (_root: string, file: string) => fakeEvidence(file);
+    const dampenSoonConfig: ImpactEvidenceConfig = { ...DEFAULT_CONFIG, dampenAfter: 2 };
+    const provider = createImpactEvidenceProvider({ computeEvidence, loadConfig: async () => dampenSoonConfig });
+
+    // Two denied first-touch requests for src/a.ts alone cross dampenAfter:2.
+    await provider(baseRequest(root, { sessionId: "s1", files: ["src/a.ts"], denied: true })); // denial 1
+    await provider(baseRequest(root, { sessionId: "s1", files: ["src/a.ts"], denied: true })); // denial 2 -> dampened
+
+    // Same session, a batch naming the now-dampened src/a.ts alongside a
+    // fresh first-touch src/b.ts that was never denied.
+    const decision = await provider(baseRequest(root, { sessionId: "s1", files: ["src/a.ts", "src/b.ts"] }));
+    expect(decision.additionalContext).toContain("dampened after repeated denials for: src/a.ts");
+    // Full evidence for src/b.ts is still rendered (not just named) — its
+    // "## src/b.ts" section header, not merely a mention.
+    expect(decision.additionalContext).toContain("## src/b.ts");
+    expect(decision.additionalContext).not.toContain("## src/a.ts");
+  });
+
+  test("F12: strict (gate) mode fails CLOSED on evidence-service failure in every profile, reason hook-failed", async () => {
+    const throwingCompute = async (): Promise<ImpactEvidence> => {
+      throw new Error("boom");
+    };
+    const strictConfig: ImpactEvidenceConfig = { ...DEFAULT_CONFIG, strict: true };
+
+    for (const profile of ["read-only-review", "monitored-trusted-local", "unattended-untrusted"] as const) {
+      const provider = createImpactEvidenceProvider({ computeEvidence: throwingCompute, loadConfig: async () => strictConfig });
+      const decision = await provider(baseRequest(root, { sessionId: `s-strict-${profile}`, files: ["src/x.ts"], profile }));
+      expect(decision.outcome).toBe("deny");
+      expect(decision.reason).toBe("hook-failed");
+      expect(decision.hookClass).toBe("gate");
+    }
+  });
+
+  test("F14: an absolute file_path inside root is normalized to a root-relative POSIX path before evidence is computed", async () => {
+    const seen: string[] = [];
+    const computeEvidence = async (_root: string, file: string) => {
+      seen.push(file);
+      return fakeEvidence(file);
+    };
+    const provider = createImpactEvidenceProvider({ computeEvidence, loadConfig: async () => DEFAULT_CONFIG });
+
+    const absolute = path.join(root, "src", "a.ts");
+    const decision = await provider(baseRequest(root, { files: [absolute] }));
+
+    expect(seen).toEqual(["src/a.ts"]);
+    expect(decision.additionalContext).toContain("src/a.ts");
+    expect(decision.additionalContext).not.toContain(absolute);
+  });
+
+  test("F14: a path that normalizes outside root is dropped with a warning and a path-rejected log entry", async () => {
+    const computeEvidence = async (_root: string, file: string) => fakeEvidence(file);
+    const provider = createImpactEvidenceProvider({ computeEvidence, loadConfig: async () => DEFAULT_CONFIG });
+
+    const outside = path.join(path.dirname(root), "elsewhere", "secret.ts");
+    const decision = await provider(baseRequest(root, { sessionId: "s-outside", files: [outside] }));
+
+    expect(decision.warnings.some((w) => w.includes("outside the project root"))).toBe(true);
+    const records = await readLogRecords(root);
+    expect(records.some((r) => r.sessionId === "s-outside" && r.event === "path-rejected" && r.files.includes(outside))).toBe(
+      true,
+    );
+  });
+
+  test("normalizeRequestFiles: relative traversal (`../x`) is rejected the same way an absolute escape is", () => {
+    const result = normalizeRequestFiles("/proj", ["../outside.ts", "./src/a.ts", "src/b.ts"]);
+    expect(result.files.sort()).toEqual(["src/a.ts", "src/b.ts"]);
+    expect(result.rejected).toEqual(["../outside.ts"]);
+  });
+
+  test("F15: the log stores a redacted command (hash + family), never the raw destructive command text", async () => {
+    const provider = createImpactEvidenceProvider({ loadConfig: async () => DEFAULT_CONFIG });
+    await provider(baseRequest(root, { sessionId: "s-redact", files: [], command: "rm -rf /" }));
+
+    const records = await readLogRecords(root);
+    const record = records.find((r) => r.sessionId === "s-redact" && r.event === "rollback-required");
+    expect(record?.detail).toBeDefined();
+    expect(record?.detail).not.toBe("rm -rf /");
+    expect(record?.detail).not.toContain("rm -rf /");
+    expect(record?.detail).toContain("family:rm");
+    expect(record?.detail).toMatch(/^sha256:[0-9a-f]{12} family:rm$/);
+  });
+
+  test("redactCommandForLog: identical commands hash identically, different commands do not", () => {
+    const a = redactCommandForLog("rm -rf /tmp/x");
+    const b = redactCommandForLog("rm -rf /tmp/x");
+    const c = redactCommandForLog("git reset --hard");
+    expect(a).toBe(b);
+    expect(a).not.toBe(c);
+    expect(a).not.toContain("/tmp/x");
+  });
+
+  test("F11: a tampered impactEvidence.enabled:false kill switch is ignored — the gate stays on and logs config-tampered", async () => {
+    const merged = mergeSecurityConfig({ impactEvidence: { enabled: true, strict: false, exemptGlobs: [], dampenAfter: 3 } });
+    const sealed = { ...merged, configChecksum: computeConfigChecksum(merged) };
+    // Tamper the kill switch WITHOUT resealing the checksum.
+    const tampered = { ...sealed, impactEvidence: { ...sealed.impactEvidence!, enabled: false } };
+
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, ".metaproject", "security.config.json"), JSON.stringify(tampered, null, 2), "utf8");
+    await mkdir(path.join(root, ".metaproject", "data", "gdgraph", "storage"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"),
+      '{"id":"src/a.ts","kind":"file","path":"src/a.ts","language":"typescript"}\n',
+      "utf8",
+    );
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n", "utf8");
+
+    // No `loadConfig` override here — this exercises the REAL on-disk config
+    // + checksum path (`resolveImpactEvidenceConfigTrusted`), unlike every
+    // other test in this file.
+    const provider = createImpactEvidenceProvider();
+    const decision = await provider(baseRequest(root, { sessionId: "s-tampered", files: ["src/a.ts"] }));
+
+    expect(decision.record.event).not.toBe("disabled-config");
+    expect(decision.warnings.some((w) => w.includes("checksum"))).toBe(true);
+
+    const records = await readLogRecords(root);
+    expect(records.some((r) => r.sessionId === "s-tampered" && r.event === "config-tampered")).toBe(true);
   });
 });

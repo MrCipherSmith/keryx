@@ -12,21 +12,35 @@ import {
   readLogRecords,
   renderEvidenceBlock,
   resolveImpactEvidenceConfig,
+  resolveImpactEvidenceConfigTrusted,
   verifyConfigChecksum,
   type ImpactEvidenceProfile,
   type ImpactEvidenceRequest,
 } from "../security/service";
 import { optionValue } from "../lib/args";
 
-async function readStdin(): Promise<string> {
+/**
+ * F13 (review round 1): the real signature reads `process.stdin`; tests
+ * inject an async iterable of chunks instead so `handleHook`'s malformed-JSON
+ * and provider-throw paths are reachable without a real piped process.
+ */
+export interface ImpactEvidenceCliDeps {
+  stdin?: AsyncIterable<Buffer | string>;
+}
+
+async function readStdin(source: AsyncIterable<Buffer | string>): Promise<string> {
   const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.from(chunk));
+  for await (const chunk of source) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   return Buffer.concat(chunks).toString("utf8");
 }
 
-export async function handleImpactEvidence(cwd: string, args: string[]): Promise<void> {
+export async function handleImpactEvidence(
+  cwd: string,
+  args: string[],
+  deps: ImpactEvidenceCliDeps = {},
+): Promise<void> {
   const subcommand = args[0];
   const rest = args.slice(1);
 
@@ -43,7 +57,7 @@ export async function handleImpactEvidence(cwd: string, args: string[]): Promise
       await handleTest(cwd, rest);
       return;
     case "hook":
-      await handleHook(cwd, rest);
+      await handleHook(cwd, rest, deps);
       return;
     default:
       console.error(`Unknown impact-evidence command: ${subcommand}`);
@@ -127,7 +141,39 @@ async function handleTest(cwd: string, args: string[]): Promise<void> {
   console.log(renderEvidenceBlock(evidences, files));
 }
 
-async function handleHook(cwd: string, args: string[]): Promise<void> {
+/**
+ * F13 (review round 1, major): a malformed stdin payload or the provider
+ * throwing used to ALWAYS "refuse without blocking" (exit 0, no decision) —
+ * including under `unattended-untrusted` and strict (`gate`) mode, where W6's
+ * failure table (W6-shell-hooks.md ~l.203-223) requires failing CLOSED, not
+ * open. This maps a hook-level failure to the same semantics `provider.ts`
+ * already uses for an evidence-service failure (F12): `gate` in ANY profile,
+ * or `gate-advisory` specifically under `unattended-untrusted`, denies with
+ * reason `hook-failed`; the two supervised `gate-advisory` profiles get no
+ * decision at all (a true refuse-without-blocking) plus a stderr warning.
+ */
+function isStrictHookClass(strict: boolean, profile: ImpactEvidenceProfile): boolean {
+  return strict || profile === "unattended-untrusted";
+}
+
+function emitHookFailure(message: string, strict: boolean, profile: ImpactEvidenceProfile): void {
+  if (isStrictHookClass(strict, profile)) {
+    console.error(`impact-evidence hook: ${message} — denying (fail-closed).`);
+    console.log(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: "hook-failed",
+        },
+      }),
+    );
+    return;
+  }
+  console.error(`impact-evidence hook: ${message} — refusing without blocking (no decision).`);
+}
+
+async function handleHook(cwd: string, args: string[], deps: ImpactEvidenceCliDeps = {}): Promise<void> {
   const runtime = optionValue(args, "--runtime") ?? "claude";
   const profileArg = optionValue(args, "--profile");
   const profile: ImpactEvidenceProfile =
@@ -146,32 +192,89 @@ async function handleHook(cwd: string, args: string[]): Promise<void> {
     return;
   }
 
-  const raw = await readStdin();
+  // Needed to decide fail-open vs fail-closed on a hook-level failure below
+  // BEFORE the provider (which resolves this same config) ever runs — a
+  // tampered/unreadable config is treated the same as `provider.ts` treats
+  // it (F11): untrusted, so `strict` only comes from it when the checksum
+  // verifies.
+  const security = await loadSecurityConfig(cwd);
+  const { config: effective } = resolveImpactEvidenceConfigTrusted(security);
+  const strict = effective.strict;
+
+  const raw = await readStdin(deps.stdin ?? process.stdin);
   let payload: Record<string, unknown>;
   try {
     payload = JSON.parse(raw) as Record<string, unknown>;
   } catch {
-    console.error("impact-evidence hook: stdin was not valid JSON — refusing without blocking.");
+    emitHookFailure("stdin was not valid JSON", strict, profile);
     process.exitCode = 0;
     return;
   }
 
   const request = requestFromClaudePayload(cwd, profile, payload);
   const provider = createImpactEvidenceProvider();
-  const decision = await provider(request);
+  let decision: Awaited<ReturnType<typeof provider>>;
+  try {
+    decision = await provider(request);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    emitHookFailure(`provider threw (${message})`, strict, profile);
+    process.exitCode = 0;
+    return;
+  }
 
-  const permissionDecision = decision.outcome;
+  // F1 (review round 1, blocker): `permissionDecision: "allow"` is not a
+  // no-op in Claude Code's PreToolUse hook contract — it AUTO-APPROVES the
+  // tool call, bypassing the user's own permission prompt entirely. Every
+  // path above this point that reaches "allow" (no evidence needed, already
+  // touched, kill switch, …) used to emit it anyway, silently granting every
+  // Edit/Write/Bash the gate did not explicitly ask about or deny. Only
+  // "ask"/"deny" are real decisions this hook is entitled to make; "allow"
+  // means "defer to Claude Code's own prompt", which is what omitting the
+  // key does.
   const output: Record<string, unknown> = {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
-      permissionDecision,
-      ...(decision.reason ? { permissionDecisionReason: decision.reason } : {}),
+      ...(decision.outcome !== "allow"
+        ? {
+            permissionDecision: decision.outcome,
+            ...(decision.reason ? { permissionDecisionReason: decision.reason } : {}),
+          }
+        : {}),
       ...(decision.additionalContext ? { additionalContext: decision.additionalContext } : {}),
     },
+    // F18 (review round 1, minor): `decision.warnings` (a tampered config, a
+    // rejected out-of-root path, a failed-open evidence service, …) used to
+    // be computed and then dropped on the floor — nothing in the hook output
+    // surfaced them anywhere a human or the model would see them. Claude
+    // Code's hook JSON supports a top-level `systemMessage` shown to the
+    // user; stderr carries the same text for anyone reading hook logs.
+    ...(decision.warnings.length > 0 ? { systemMessage: decision.warnings.join("\n") } : {}),
   };
+  for (const warning of decision.warnings) {
+    console.error(`impact-evidence: ${warning}`);
+  }
   console.log(JSON.stringify(output));
 }
 
+/**
+ * F19 (review round 1, minor/documentation): `acknowledgement`,
+ * `rollback_line`, and `denied` below are read from the payload for the day a
+ * caller sends them, but the Claude Code PreToolUse hook contract this
+ * function decodes TODAY never populates them — Claude's own hook JSON has no
+ * field for "the model acknowledges this evidence" or "here is the rollback
+ * command", and no mechanism yet feeds back "the previous prompt for this
+ * file was denied" on the next call. That is why `provider.ts`'s
+ * acknowledgement-required / rollback-line-required paths return `outcome:
+ * "ask"` with the evidence/rollback prompt in `additionalContext` rather than
+ * ever silently treating an absent acknowledgement as given or withheld: the
+ * host hook asks, and a HUMAN answers through Claude Code's own permission
+ * prompt. Actually wiring `acknowledgement`/`rollback_line`/`denied` end to
+ * end — so a human's answer at that prompt round-trips back into the next
+ * hook invocation's payload — is W6's runtime integration to build, not this
+ * flow's; no behavior is invented here beyond decoding the fields if a future
+ * payload ever does carry them.
+ */
 function requestFromClaudePayload(
   cwd: string,
   profile: ImpactEvidenceProfile,

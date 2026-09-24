@@ -84,6 +84,32 @@ describe("computeImpactEvidence", () => {
     expect(evidence.importers.status).toBe("ok");
   });
 
+  // F22 (review round 1, info): AC9's own test above compares
+  // `computeImpactEvidence` against a direct `buildAffectedReport` call —
+  // both sides of `evidence.ts`'s OWN import, so it cannot catch the
+  // provider's importers section drifting from what the actual `keryx
+  // gdgraph affected --json` COMMAND prints (a bug in `runAffected`'s own
+  // wiring, e.g. a stale re-export, would not show up there). This spies on
+  // `console.log` around the real `gdgraphCommand` entry point instead.
+  test("F22: importers section matches the actual `keryx gdgraph affected --json` command's stdout, not just the shared builder", async () => {
+    const { gdgraphCommand } = await import("../../commands/gdgraph");
+    const loggedOut: string[] = [];
+    const originalLog = console.log;
+    console.log = (...parts: unknown[]) => {
+      loggedOut.push(parts.map(String).join(" "));
+    };
+    const originalExitCode = process.exitCode;
+    try {
+      await gdgraphCommand(["affected", "src/a.ts", "--json"]);
+    } finally {
+      console.log = originalLog;
+      process.exitCode = originalExitCode;
+    }
+
+    const evidence = await computeImpactEvidence(root, "src/a.ts");
+    expect(evidence.importers.json).toBe(loggedOut.join("\n"));
+  });
+
   test("picks up a memory caveat scoped to the file", async () => {
     const evidence = await computeImpactEvidence(root, "src/a.ts");
     expect(evidence.memoryCaveats).toHaveLength(1);

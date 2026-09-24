@@ -2,6 +2,7 @@
 // append-only event log for the impact-evidence gate.
 
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { pathExists, writeFileAtomic } from "../../lib/fs";
 import { readJsonObjectFile } from "../../lib/json";
@@ -29,8 +30,21 @@ export function sanitizeSessionId(sessionId: string): string {
   return cleaned.length > 0 ? cleaned : "_";
 }
 
+/**
+ * F26 (review round 1): the sanitized session id ALONE collides — `"a/b"` and
+ * `"a_b"` both sanitize to `a_b`, so two distinct sessions could read and
+ * overwrite each other's touch/denial state. The filename is the sanitized
+ * id (kept for readability/debuggability) plus an 8-hex-char sha256 prefix of
+ * the RAW id, which only collides at the same odds as a hash collision.
+ */
+function sessionStateFilename(sessionId: string): string {
+  const sanitized = sanitizeSessionId(sessionId);
+  const suffix = createHash("sha256").update(sessionId).digest("hex").slice(0, 8);
+  return `${sanitized}-${suffix}.json`;
+}
+
 function sessionStatePath(root: string, sessionId: string): string {
-  return path.join(impactEvidenceDataRoot(root), "sessions", `${sanitizeSessionId(sessionId)}.json`);
+  return path.join(impactEvidenceDataRoot(root), "sessions", sessionStateFilename(sessionId));
 }
 
 export async function loadSessionState(root: string, sessionId: string): Promise<ImpactEvidenceSessionState> {
@@ -115,6 +129,8 @@ export function isEventKnown(event: string): event is ImpactEvidenceLogEvent {
     "rollback-required",
     "rollback-accepted",
     "service-failed",
+    "config-tampered",
+    "path-rejected",
   ].includes(event);
 }
 

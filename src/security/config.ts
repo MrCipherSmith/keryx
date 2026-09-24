@@ -267,9 +267,14 @@ function mergeImpactEvidence(
   const exemptGlobs = Array.isArray(override?.exemptGlobs)
     ? override.exemptGlobs.filter((g): g is string => typeof g === "string")
     : base.exemptGlobs;
+  // F17 (review round 1): `dampenAfter` is a denial COUNT — zero or negative
+  // would dampen (or never inject at all) on the very first touch, silently
+  // neutering the gate. A valid override is clamped to a whole number >= 1;
+  // anything else (including 0, negative, NaN, Infinity) falls back to the
+  // default rather than being merged as-is.
   const dampenAfter =
-    typeof override?.dampenAfter === "number" && Number.isFinite(override.dampenAfter)
-      ? override.dampenAfter
+    typeof override?.dampenAfter === "number" && Number.isFinite(override.dampenAfter) && override.dampenAfter >= 1
+      ? Math.trunc(override.dampenAfter)
       : base.dampenAfter;
   return {
     enabled: override?.enabled ?? base.enabled,
@@ -290,6 +295,44 @@ function mergeImpactEvidence(
  */
 export function resolveImpactEvidenceConfig(config: SecurityConfig): ImpactEvidenceConfig {
   return config.impactEvidence ? mergeImpactEvidence(config.impactEvidence) : DEFAULT_IMPACT_EVIDENCE_CONFIG;
+}
+
+/**
+ * F11 (review round 1, blocker-adjacent): `resolveImpactEvidenceConfig` above
+ * takes `config.impactEvidence` on trust — including its `enabled: false`
+ * kill switch — even when `configChecksum` does not verify (or the file
+ * could not be read at all, `config.configUnreadable`). A tampered
+ * `security.config.json` could flip `impactEvidence.enabled` to `false`
+ * without resealing the checksum and the gate would honor it, which defeats
+ * the entire point of checksumming the block in the first place (§14).
+ *
+ * When the checksum verifies, this is exactly `resolveImpactEvidenceConfig`.
+ * When it does NOT — or the config could not be established at all — the
+ * whole block is untrusted, not just `enabled`: `exemptGlobs` and
+ * `dampenAfter` could just as easily be tuned to defeat the gate quietly
+ * (exempt everything; dampen after 1). The fallback is the shipped defaults
+ * (`enabled: true`, no exemptions, `dampenAfter: 3`), with one exception: a
+ * tampered `strict: true` is honored, because a FALSE claim of strict mode is
+ * strictly more protective, never a bypass, so there is no reason to distrust
+ * it even from data we otherwise cannot trust.
+ */
+export function resolveImpactEvidenceConfigTrusted(config: SecurityConfig): {
+  config: ImpactEvidenceConfig;
+  tampered: boolean;
+} {
+  const resolved = resolveImpactEvidenceConfig(config);
+  const checksum = verifyConfigChecksum(config);
+  const tampered = !checksum.match || config.configUnreadable === true;
+  if (!tampered) {
+    return { config: resolved, tampered: false };
+  }
+  return {
+    config: {
+      ...DEFAULT_IMPACT_EVIDENCE_CONFIG,
+      strict: resolved.strict === true ? true : DEFAULT_IMPACT_EVIDENCE_CONFIG.strict,
+    },
+    tampered: true,
+  };
 }
 
 // Deep-merge a partial user config over the defaults. Unknown keys are ignored;

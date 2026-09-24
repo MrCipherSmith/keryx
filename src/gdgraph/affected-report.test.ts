@@ -90,4 +90,110 @@ describe("buildAffectedReport", () => {
     expect(report.exitCode).toBe(1);
     expect(report.json.code).toBe("index-incomplete");
   });
+
+  // F25 (review round 1, info): the ambiguous-suffix caller-error path
+  // (`resolveGraphTarget` throwing) is NOT built by `buildAffectedReport` —
+  // it propagates the throw, and `runAffected --json`'s catch block is what
+  // must reproduce the PRE-REFACTOR behavior byte-for-byte: the message on
+  // stderr, exit 1, and — critically — NO stdout at all (a `--json` caller
+  // must never see a prose error mixed into what should be parseable JSON,
+  // nor a half-printed JSON document). Verified against
+  // `git show stack/wave0:src/commands/gdgraph.ts`'s own catch block, which
+  // this reproduces exactly (same message format, same exit code, same
+  // "print nothing to stdout" contract regardless of `--json`).
+  test("F25: an ambiguous suffix throws (never silently guesses), and the CLI's --json path reproduces stderr+exit-1+no-stdout byte-identically", async () => {
+    await writeFile(
+      path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"),
+      [
+        '{"id":"src/foo/a.ts","kind":"file","path":"src/foo/a.ts","language":"typescript"}',
+        '{"id":"src/bar/a.ts","kind":"file","path":"src/bar/a.ts","language":"typescript"}',
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(path.join(root, ".metaproject", "data", "gdgraph", "storage", "edges.jsonl"), "", "utf8");
+
+    await expect(buildAffectedReport(root, "a.ts")).rejects.toThrow(/ambiguous/);
+
+    let directMessage = "";
+    try {
+      await buildAffectedReport(root, "a.ts");
+    } catch (error) {
+      directMessage = error instanceof Error ? error.message : String(error);
+    }
+
+    const loggedErr: string[] = [];
+    const originalError = console.error;
+    console.error = (...parts: unknown[]) => {
+      loggedErr.push(parts.map(String).join(" "));
+    };
+    try {
+      await gdgraphCommand(["affected", "a.ts", "--json"]);
+    } finally {
+      console.error = originalError;
+    }
+
+    expect(loggedOut.length).toBe(0); // no stdout at all, `--json` or not
+    expect(process.exitCode).toBe(1);
+    expect(loggedErr.join("\n")).toBe(`gdgraph: ${directMessage}`);
+  });
+
+  // F22 (review round 1, info): the AC9 test above calls `buildAffectedReport`
+  // from BOTH sides of its own comparison (once directly, once indirectly
+  // through `gdgraphCommand` → `runAffected` → `buildAffectedReport`) — it
+  // proves the function is deterministic, not that today's shape matches
+  // what `runAffected --json` printed BEFORE the T6 extraction. This locks
+  // the three JSON shapes to the exact key sets and exit codes the
+  // pre-refactor inline builder produced (`git show
+  // stack/wave0:src/commands/gdgraph.ts`, its three `console.log(JSON.stringify(...))`
+  // call sites for the success / target-not-indexed / index-incomplete
+  // paths) — a change to any key here is a behavior change for every
+  // existing `--json` consumer, not a refactor.
+  describe("F22: golden — shape is byte-identical to the pre-refactor (stack/wave0) inline builder", () => {
+    test("success shape: exactly {...affected, freshness} — schemaVersion is NOT re-added by the wrapper", async () => {
+      const report = await buildAffectedReport(root, "src/a.ts");
+      expect(report.exitCode).toBe(0);
+      expect(Object.keys(report.json).sort()).toEqual(
+        ["target", "depth", "dependencies", "dependents", "ranked", "freshness"].sort(),
+      );
+    });
+
+    test("target-not-indexed shape: schemaVersion, code, error, reason, nextActions, target, dependencies, dependents, removal, freshness", async () => {
+      const report = await buildAffectedReport(root, "src/does-not-exist.ts");
+      expect(report.exitCode).toBe(1);
+      expect(Object.keys(report.json).sort()).toEqual(
+        [
+          "schemaVersion",
+          "code",
+          "error",
+          "reason",
+          "nextActions",
+          "target",
+          "dependencies",
+          "dependents",
+          "removal",
+          "freshness",
+        ].sort(),
+      );
+      expect(report.json.code).toBe("target-not-indexed");
+      expect(report.json.error).toBe("target-not-indexed");
+      const removal = report.json.removal as Record<string, unknown>;
+      expect(Object.keys(removal).sort()).toEqual(["verdict", "reason", "referencedBy", "trailPath"].sort());
+    });
+
+    test("index-incomplete shape: schemaVersion, code, error, reason, nextActions, target, dependencies (empty), dependents (empty), freshness — no removal key", async () => {
+      await rm(path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"));
+      await writeFile(path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"), "", "utf8");
+
+      const report = await buildAffectedReport(root, "src/a.ts");
+      expect(report.exitCode).toBe(1);
+      expect(Object.keys(report.json).sort()).toEqual(
+        ["schemaVersion", "code", "error", "reason", "nextActions", "target", "dependencies", "dependents", "freshness"].sort(),
+      );
+      expect(report.json.code).toBe("index-incomplete");
+      expect(report.json.dependencies).toEqual([]);
+      expect(report.json.dependents).toEqual([]);
+      expect("removal" in report.json).toBe(false);
+    });
+  });
 });

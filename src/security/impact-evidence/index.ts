@@ -12,6 +12,17 @@
 // surface is registered for any adapter yet (`host.ts#hostDeliveryStatus`
 // reports every adapter as `not-registered` today). Wiring that surface is
 // NOT this flow's job — see `host.ts`'s doc comment.
+//
+// F19 (review round 1, documentation): `ImpactEvidenceRequest.acknowledgement`
+// / `.rollbackLine` / `.denied` cannot be supplied by today's Claude Code
+// PreToolUse delivery — its hook payload carries no such fields, and there is
+// no round-trip yet from a human's answer at the permission prompt back into
+// the NEXT hook call. Until W6's runtime wires that round-trip, the host
+// (Claude) delivery path in `src/commands/security-impact-evidence.ts`
+// necessarily returns `outcome: "ask"` with the evidence/rollback prompt in
+// `additionalContext` whenever this provider needs one of those fields, and a
+// human answers through Claude Code's own permission UI — this module makes
+// no attempt to invent or infer an acknowledgement/rollback line on its own.
 
 export type {
   AffectedEvidenceSection,

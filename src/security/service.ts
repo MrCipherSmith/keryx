@@ -83,7 +83,7 @@ export type { AuditFinding, AuditReport, AuditSeverity } from "./audit-harness";
 // needs both the impact-evidence config helpers and the impact-evidence
 // module's own public door, without reaching past this facade into
 // `security/config.ts` or `security/impact-evidence/index.ts` directly.
-export { resolveImpactEvidenceConfig, verifyConfigChecksum } from "./config";
+export { resolveImpactEvidenceConfig, resolveImpactEvidenceConfigTrusted, verifyConfigChecksum } from "./config";
 // `loadSecurityConfig` is already bound above via the top-of-file import
 // (this module's own `analyze`/`createSecurityService` use it); re-exported
 // under that same binding rather than a second `from "./config"` re-export,

@@ -9,6 +9,7 @@ import {
   computeConfigChecksum,
   mergeSecurityConfig,
   resolveImpactEvidenceConfig,
+  resolveImpactEvidenceConfigTrusted,
   verifyConfigChecksum,
 } from "./config";
 
@@ -60,5 +61,65 @@ describe("impactEvidence config + checksum", () => {
     const a = mergeSecurityConfig({ impactEvidence: { enabled: true, strict: false, exemptGlobs: [], dampenAfter: 3 } });
     const b = mergeSecurityConfig({ impactEvidence: { enabled: false, strict: false, exemptGlobs: [], dampenAfter: 3 } });
     expect(computeConfigChecksum(a)).not.toBe(computeConfigChecksum(b));
+  });
+
+  test("F17: a dampenAfter <= 0 (or non-finite) is rejected and falls back to the default, never merged as-is", () => {
+    for (const bad of [0, -1, -100, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const merged = mergeSecurityConfig({
+        impactEvidence: { enabled: true, strict: false, exemptGlobs: [], dampenAfter: bad },
+      });
+      expect(resolveImpactEvidenceConfig(merged).dampenAfter).toBe(3);
+    }
+  });
+
+  test("F17: a valid dampenAfter override is truncated to a whole number and kept", () => {
+    const merged = mergeSecurityConfig({
+      impactEvidence: { enabled: true, strict: false, exemptGlobs: [], dampenAfter: 5.9 },
+    });
+    expect(resolveImpactEvidenceConfig(merged).dampenAfter).toBe(5);
+
+    const mergedOne = mergeSecurityConfig({
+      impactEvidence: { enabled: true, strict: false, exemptGlobs: [], dampenAfter: 1 },
+    });
+    expect(resolveImpactEvidenceConfig(mergedOne).dampenAfter).toBe(1);
+  });
+
+  test("F11: resolveImpactEvidenceConfigTrusted returns the resolved config untouched when the checksum verifies", () => {
+    const merged = mergeSecurityConfig({ impactEvidence: { enabled: false, strict: false, exemptGlobs: [], dampenAfter: 3 } });
+    const sealed = { ...merged, configChecksum: computeConfigChecksum(merged) };
+    const { config, tampered } = resolveImpactEvidenceConfigTrusted(sealed);
+    expect(tampered).toBe(false);
+    expect(config.enabled).toBe(false); // an honestly-sealed kill switch IS honored
+  });
+
+  test("F11: resolveImpactEvidenceConfigTrusted ignores an untrusted enabled:false and falls back to safe defaults", () => {
+    const merged = mergeSecurityConfig({ impactEvidence: { enabled: true, strict: false, exemptGlobs: [], dampenAfter: 3 } });
+    const sealed = { ...merged, configChecksum: computeConfigChecksum(merged) };
+    const tampered = { ...sealed, impactEvidence: { ...sealed.impactEvidence!, enabled: false, exemptGlobs: ["**/*"] } };
+
+    const result = resolveImpactEvidenceConfigTrusted(tampered);
+    expect(result.tampered).toBe(true);
+    expect(result.config.enabled).toBe(true);
+    expect(result.config.exemptGlobs).toEqual([]); // the whole block is untrusted, not just `enabled`
+    expect(result.config.dampenAfter).toBe(3);
+  });
+
+  test("F11: a tampered block's strict:true is still honored (never a bypass, only more protective)", () => {
+    const merged = mergeSecurityConfig({ impactEvidence: { enabled: true, strict: true, exemptGlobs: [], dampenAfter: 3 } });
+    const sealed = { ...merged, configChecksum: computeConfigChecksum(merged) };
+    const tampered = { ...sealed, impactEvidence: { ...sealed.impactEvidence!, enabled: false } };
+
+    const result = resolveImpactEvidenceConfigTrusted(tampered);
+    expect(result.tampered).toBe(true);
+    expect(result.config.strict).toBe(true);
+    expect(result.config.enabled).toBe(true);
+  });
+
+  test("F11: a config that cannot be established (configUnreadable) is treated as tampered too", () => {
+    const merged = mergeSecurityConfig({ impactEvidence: { enabled: false, strict: false, exemptGlobs: [], dampenAfter: 3 } });
+    const sealed = { ...merged, configChecksum: computeConfigChecksum(merged), configUnreadable: true };
+    const result = resolveImpactEvidenceConfigTrusted(sealed);
+    expect(result.tampered).toBe(true);
+    expect(result.config.enabled).toBe(true);
   });
 });
