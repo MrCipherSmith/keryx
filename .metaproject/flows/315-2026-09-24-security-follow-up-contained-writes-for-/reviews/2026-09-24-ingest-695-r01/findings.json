@@ -20,7 +20,17 @@
       ],
       "enumeration_method": "Listed init.ts's imports of helpers that write, grepped each helper module at HEAD for raw fs write verbs, then ran a 17-case symlink matrix of keryx init --yes with before/after snapshots of the outside dir, on HEAD and pre-fix"
     },
-    "global_id": "2026-09-24-ingest-695-r01#R1-F1"
+    "global_id": "2026-09-24-ingest-695-r01#R1-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 80efe992 by round-r02 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit ce3ce9e5 (T12); verified fixed by round 2 (opus) at 80efe992"
+    }
   },
   {
     "id": "R1-F2",
@@ -42,7 +52,17 @@
       ],
       "enumeration_method": "Every decodeTextVariants call site (keryx ctx rg); bom315.ts on HEAD vs pre for the rule, memory-entry and agent kinds, plus a CLI bundle import"
     },
-    "global_id": "2026-09-24-ingest-695-r01#R1-F2"
+    "global_id": "2026-09-24-ingest-695-r01#R1-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 80efe992 by round-r02 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 4ac08500 (T13); verified fixed by round 2 (opus) at 80efe992"
+    }
   },
   {
     "id": "R1-F3",
@@ -63,7 +83,17 @@
       ],
       "enumeration_method": "ratchet-mut.sh on a scratch export: 8 mutations"
     },
-    "global_id": "2026-09-24-ingest-695-r01#R1-F3"
+    "global_id": "2026-09-24-ingest-695-r01#R1-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 80efe992 by round-r02 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit ce3ce9e5 (T12); verified fixed by round 2 (opus) at 80efe992"
+    }
   },
   {
     "id": "R1-F4",
@@ -83,7 +113,17 @@
       ],
       "enumeration_method": "PROBE315-L1 and L2 appended to a scratch copy of graduate.test.ts, run on HEAD and pre"
     },
-    "global_id": "2026-09-24-ingest-695-r01#R1-F4"
+    "global_id": "2026-09-24-ingest-695-r01#R1-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 80efe992 by round-r02 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit df0bb575 (T14); verified fixed by round 2 (opus) at 80efe992"
+    }
   },
   {
     "id": "R1-F5",
@@ -104,7 +144,17 @@
       ],
       "enumeration_method": "Enumerated every draft field that reaches LearnedPattern; PROBE315-L3 ran 6 variants on HEAD and pre"
     },
-    "global_id": "2026-09-24-ingest-695-r01#R1-F5"
+    "global_id": "2026-09-24-ingest-695-r01#R1-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 80efe992 by round-r02 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit df0bb575 (T14); verified fixed by round 2 (opus) at 80efe992"
+    }
   },
   {
     "id": "R1-F6",
@@ -125,7 +175,17 @@
       ],
       "enumeration_method": "Read the function and its callers; hooks-escape.ts probe"
     },
-    "global_id": "2026-09-24-ingest-695-r01#R1-F6"
+    "global_id": "2026-09-24-ingest-695-r01#R1-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 80efe992 by round-r02 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit ce3ce9e5 (T12); verified fixed by round 2 (opus) at 80efe992"
+    }
   },
   {
     "id": "R1-F7",
@@ -144,7 +204,17 @@
       ],
       "enumeration_method": "ratchet-mut.sh"
     },
-    "global_id": "2026-09-24-ingest-695-r01#R1-F7"
+    "global_id": "2026-09-24-ingest-695-r01#R1-F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 80efe992 by round-r02 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit ce3ce9e5 (T12); verified fixed by round 2 (opus) at 80efe992"
+    }
   },
   {
     "id": "R1-F8",
@@ -164,7 +234,17 @@
       ],
       "enumeration_method": "Ran the new tests on the pre/ export (all 4 fail); init-escape.pre.out shows the rules link is CLEAN"
     },
-    "global_id": "2026-09-24-ingest-695-r01#R1-F8"
+    "global_id": "2026-09-24-ingest-695-r01#R1-F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 80efe992 by round-r02 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit ce3ce9e5 (T12); verified fixed by round 2 (opus) at 80efe992"
+    }
   },
   {
     "id": "R1-F9",
@@ -184,6 +264,16 @@
       ],
       "enumeration_method": "Code read; sandbox-policy.ts probe on 64e862a2 and pre"
     },
-    "global_id": "2026-09-24-ingest-695-r01#R1-F9"
+    "global_id": "2026-09-24-ingest-695-r01#R1-F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 80efe992 by round-r02 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit ce3ce9e5 (T12); verified fixed by round 2 (opus) at 80efe992"
+    }
   }
 ]

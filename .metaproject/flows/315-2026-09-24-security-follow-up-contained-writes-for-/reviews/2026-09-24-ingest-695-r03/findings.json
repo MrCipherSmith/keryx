@@ -17,7 +17,11 @@
       ],
       "enumeration_method": "hooks-r3.ts N1-N4 on HEAD export"
     },
-    "global_id": "2026-09-24-ingest-695-r03#R3-F1"
+    "global_id": "2026-09-24-ingest-695-r03#R3-F1",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
+    }
   },
   {
     "id": "R3-F2",
@@ -37,7 +41,11 @@
       ],
       "enumeration_method": "hooks-r3.ts N5, N5i"
     },
-    "global_id": "2026-09-24-ingest-695-r03#R3-F2"
+    "global_id": "2026-09-24-ingest-695-r03#R3-F2",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
+    }
   },
   {
     "id": "R3-F3",
@@ -57,7 +65,11 @@
       ],
       "enumeration_method": "hooks-r3.ts T1/T2; read of installSubcommand"
     },
-    "global_id": "2026-09-24-ingest-695-r03#R3-F3"
+    "global_id": "2026-09-24-ingest-695-r03#R3-F3",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
+    }
   },
   {
     "id": "R3-F4",
@@ -78,7 +90,11 @@
       ],
       "enumeration_method": "13 prepend-mutations on HEAD export, ratchet run per mutation"
     },
-    "global_id": "2026-09-24-ingest-695-r03#R3-F4"
+    "global_id": "2026-09-24-ingest-695-r03#R3-F4",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
+    }
   },
   {
     "id": "R3-F5",
@@ -98,6 +114,10 @@
       ],
       "enumeration_method": "cp/p.ts probe calling copyDirectoryContained directly"
     },
-    "global_id": "2026-09-24-ingest-695-r03#R3-F5"
+    "global_id": "2026-09-24-ingest-695-r03#R3-F5",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
+    }
   }
 ]

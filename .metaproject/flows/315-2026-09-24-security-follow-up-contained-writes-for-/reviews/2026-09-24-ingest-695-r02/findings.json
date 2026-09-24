@@ -18,7 +18,17 @@
       ],
       "enumeration_method": "Read the runGraduate loop and sweep; ran PROBE R2-L6 on a scratch copy of graduate.test.ts"
     },
-    "global_id": "2026-09-24-ingest-695-r02#R2-F1"
+    "global_id": "2026-09-24-ingest-695-r02#R2-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 5500dd4b by round-r03 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit b56c0de7 (T17); verified fixed by round 3 (opus) at 5500dd4b"
+    }
   },
   {
     "id": "R2-F2",
@@ -39,7 +49,17 @@
       ],
       "enumeration_method": "hooks2.ts/hooks3.ts probes on HEAD and on the pre-fix export"
     },
-    "global_id": "2026-09-24-ingest-695-r02#R2-F2"
+    "global_id": "2026-09-24-ingest-695-r02#R2-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 5500dd4b by round-r03 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 10de8668 (T15); verified fixed by round 3 (opus) at 5500dd4b"
+    }
   },
   {
     "id": "R2-F3",
@@ -59,7 +79,17 @@
       ],
       "enumeration_method": "ratchet-mut.sh: 13 prepend-mutations on the scratch export"
     },
-    "global_id": "2026-09-24-ingest-695-r02#R2-F3"
+    "global_id": "2026-09-24-ingest-695-r02#R2-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 5500dd4b by round-r03 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 35813d39 (T16); verified fixed by round 3 (opus) at 5500dd4b"
+    }
   },
   {
     "id": "R2-F4",
@@ -78,7 +108,17 @@
       ],
       "enumeration_method": "ratchet-mut.sh"
     },
-    "global_id": "2026-09-24-ingest-695-r02#R2-F4"
+    "global_id": "2026-09-24-ingest-695-r02#R2-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 5500dd4b by round-r03 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 35813d39 (T16); verified fixed by round 3 (opus) at 5500dd4b"
+    }
   },
   {
     "id": "R2-F5",
@@ -97,7 +137,17 @@
       ],
       "enumeration_method": "keryx ctx rg for installManagedHook( across src"
     },
-    "global_id": "2026-09-24-ingest-695-r02#R2-F5"
+    "global_id": "2026-09-24-ingest-695-r02#R2-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 5500dd4b by round-r03 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 10de8668 (T15); verified fixed by round 3 (opus) at 5500dd4b"
+    }
   },
   {
     "id": "R2-F6",
@@ -117,7 +167,17 @@
       ],
       "enumeration_method": "hooks2.ts H4, H7, H11, H12"
     },
-    "global_id": "2026-09-24-ingest-695-r02#R2-F6"
+    "global_id": "2026-09-24-ingest-695-r02#R2-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-checked at 5500dd4b by round-r03 (opus, original probe re-run plus a new bypass attempt): does not reproduce.",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 10de8668 (T15); verified fixed by round 3 (opus) at 5500dd4b"
+    }
   },
   {
     "id": "R2-F7",
@@ -136,6 +196,10 @@
       ],
       "enumeration_method": "bom315v.ts V1-V9 on HEAD and pre"
     },
-    "global_id": "2026-09-24-ingest-695-r02#R2-F7"
+    "global_id": "2026-09-24-ingest-695-r02#R2-F7",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "info, reviewer recommended no action; decided-by: MrCipherSmith (owner, in chat), standing rule"
+    }
   }
 ]
