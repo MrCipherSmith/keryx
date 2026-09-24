@@ -34,7 +34,11 @@ export type Confidence = "verified" | "experimental";
  * - `host-hook`: keryx writes into a settings file (or plugin file) the
  *   harness's own process reads — today's shape for every registered surface.
  * - `policy-travels-with-agent`: the policy ships with the agent definition
- *   rather than a host settings file (zed's future shape — W5-b).
+ *   rather than a host settings file. Zed's shape (W5-b): keryx runs AS the
+ *   ACP agent, so its own deny-by-default permission mapping
+ *   (`src/acp/permission.ts`'s `approvalFromPermissionResponse`) already
+ *   implements the surface — there is no Zed-owned settings file to install
+ *   into at all.
  * - `instruction-only`: no scriptable enforcement; only a documented
  *   convention (e.g. AGENTS.md).
  */
@@ -105,6 +109,8 @@ export interface SurfaceSlot {
 export const SUBSYSTEM_CTX_GUARD = "ctx-guard";
 export const SUBSYSTEM_ORIENT = "orient";
 export const SUBSYSTEM_SECURITY = "security";
+export const SUBSYSTEM_INSTRUCTIONS = "instructions";
+export const SUBSYSTEM_ACP_PERMISSION = "acp-permission";
 
 /**
  * One installable capability of one harness. `id` is unique within its
@@ -135,11 +141,46 @@ export interface SurfaceAdapter {
    */
   readonly relativePath?: string;
   readonly slots: readonly SurfaceSlot[];
+  /**
+   * True when `relativePath` is a file Keryx itself creates and is the ONLY
+   * writer of (e.g. `.kiro/hooks/keryx-ctx-guard.json`) — as opposed to a
+   * file other tools or the user's own config may also hold keys in (e.g.
+   * `.claude/settings.json`). `uninstallSurfaces` (review round 1, F6) deletes
+   * the file outright, instead of writing `{}`, only when this is set AND the
+   * post-strip settings are empty — never for a shared file, regardless of
+   * whether stripping happened to empty it out.
+   */
+  readonly ownsWholeFile?: boolean;
   merge?(settings: Settings): Settings;
   strip?(settings: Settings): Settings;
   validate?(settings: Settings): string[];
   customInstall?(projectRoot: string): Promise<string[]>;
   customUninstall?(projectRoot: string): Promise<boolean>;
+  /**
+   * Health check for a surface that has no `merge`/`strip` to validate
+   * against — a non-JSON artifact (a generated plugin file, a markdown
+   * instructions block) or a surface satisfied entirely by keryx's own
+   * runtime behavior (zed's `acp-permission` block surface). Returns a
+   * problem string per issue found, `[]` when healthy. `doctor` calls this
+   * for any surface lacking `validate`.
+   */
+  probe?(projectRoot: string): Promise<string[]>;
+  /**
+   * Structured dry-run probe for a custom (non-JSON) surface (review round 2,
+   * F4/N1): reports exactly what `customInstall`/`customUninstall` would find
+   * as a typed state, instead of a caller having to string-match a `probe`
+   * message. Markdown-block `instructions` surfaces (gemini-cli/kiro/
+   * github-copilot-agent) wire this to `inspectMarkdownBlock`
+   * (`markdown-block.ts`); a custom surface without one (the OpenCode plugin)
+   * falls back to a plain file-existence dry-run check in `installer.ts`.
+   * `"malformed"` (an unterminated/unpairable block) is the one state that
+   * must make a dry run report `failed` — the same outcome the real
+   * install/uninstall would hit.
+   */
+  inspect?(projectRoot: string): Promise<{
+    readonly state: "absent-file" | "no-block" | "present" | "stale" | "malformed";
+    readonly message?: string;
+  }>;
 
   // --- ctx-guard-only presentation/decode facts -----------------------------
   // Carried on the surface (rather than hand-duplicated per view module) so
@@ -152,6 +193,16 @@ export interface SurfaceAdapter {
   readonly groupShape?: "flat" | "nested";
   readonly groupKey?: string;
   readonly groupContainer?: string;
+  /**
+   * Extra field a managed group must carry to belong to THIS surface, when
+   * `groupKey`/`groupContainer` alone are ambiguous — e.g. the flat security
+   * surfaces, where `security-check-input`/`security-check-output` share one
+   * array (`securityHooks`) and are told apart only by each entry's own `on`
+   * field. `installer.ts`'s `wasSurfaceInstalled` (review round 3, M2) reads
+   * this to judge per-surface presence without needing a second, surface-id-
+   * keyed special case.
+   */
+  readonly groupMatchField?: { readonly key: string; readonly value: string };
   /** Native tools (beyond the shell) this ctx-guard runtime's matcher also covers. */
   readonly nativeSearchTools?: readonly string[];
   /** Parses this harness's hook payload into the shell command it carries. */
@@ -168,6 +219,8 @@ export interface HarnessAdapter {
   /** Reason strings for flags this harness cannot support today (verbatim carry-over). */
   readonly unsupported: Partial<Record<SurfaceFlag, string>>;
   readonly sourceDocs: readonly string[];
+  /** Free-text caveats about this harness's adapter as a whole (non-empty when `confidence: "experimental"`). */
+  readonly riskNotes?: readonly string[];
   /** ISO date the confidence/unsupported facts were last checked against docs. */
   readonly lastVerified: string;
   /**

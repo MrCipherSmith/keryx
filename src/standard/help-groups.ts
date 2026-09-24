@@ -343,6 +343,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "integrations",
+    group: "External agents, ACP and MCP",
+    summary: "Install, audit and uninstall Keryx's hooks and instructions in another coding agent.",
+  },
+  {
+    kind: "cli",
     name: "serve-mcp",
     group: "External agents, ACP and MCP",
     summary: "Expose Metaproject services over the Model Context Protocol (opt-in).",

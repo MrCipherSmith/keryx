@@ -25,6 +25,58 @@ export function parseToolInputCommand(payload: string): string | null {
   return typeof command === "string" ? command : null;
 }
 
+// Gemini CLI hooks (https://geminicli.com/docs/hooks/reference/):
+// { tool_name:"run_shell_command", tool_input.command }. Same envelope shape
+// as `parseToolInputCommand`, but Gemini CLI's shell tool is named
+// `run_shell_command`, not `Bash` — a distinct codec rather than widening
+// `parseToolInputCommand`'s check, since that one is pinned by existing tests
+// against the literal `"Bash"` tool name.
+export function parseRunShellCommandInput(payload: string): string | null {
+  const record = parseJson(payload);
+  if (!record || record.tool_name !== "run_shell_command") return null;
+  const input = record.tool_input;
+  if (typeof input !== "object" || input === null) return null;
+  const command = (input as Record<string, unknown>).command;
+  return typeof command === "string" ? command : null;
+}
+
+// Kiro hooks (`.kiro/hooks/keryx-ctx-guard.json`): stdin field names are
+// THIRD-PARTY ONLY (see surfaces-w5b.ts riskNotes) — accept `tool_input.command`
+// (mirroring the documented shape other harnesses use) and tolerate a bare
+// top-level `command`, so a slightly different real payload still parses.
+// Fail-open (null) for anything else.
+export function parseKiroCommand(payload: string): string | null {
+  const record = parseJson(payload);
+  if (!record) return null;
+  const input = record.tool_input;
+  if (typeof input === "object" && input !== null) {
+    const command = (input as Record<string, unknown>).command;
+    if (typeof command === "string") return command;
+  }
+  const topLevel = record.command;
+  return typeof topLevel === "string" ? topLevel : null;
+}
+
+// GitHub Copilot agent hooks (https://docs.github.com/en/copilot/reference/hooks-reference):
+// { toolName, toolArgs: { command } } — `toolArgs` is documented as an
+// object, but tolerate it arriving as a JSON string too (some hook runners
+// stringify nested payloads before delivering them over stdin).
+export function parseCopilotToolArgsCommand(payload: string): string | null {
+  const record = parseJson(payload);
+  if (!record) return null;
+  let toolArgs = record.toolArgs;
+  if (typeof toolArgs === "string") {
+    try {
+      toolArgs = JSON.parse(toolArgs) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof toolArgs !== "object" || toolArgs === null) return null;
+  const command = (toolArgs as Record<string, unknown>).command;
+  return typeof command === "string" ? command : null;
+}
+
 /** The `tool_name` of a PreToolUse payload, for runtimes that shape it that way. */
 export function parseToolName(payload: string): string | null {
   const record = parseJson(payload);
@@ -94,5 +146,22 @@ export const ANTIGRAVITY_DECISION_CODEC: DecisionCodec = {
     stdout: `${JSON.stringify({ allow_tool: false, deny_reason: message })}\n`,
   }),
   allow: (_runtimeId) => ({ exitCode: 0, stdout: `${JSON.stringify({ allow_tool: true })}\n` }),
+};
+
+/**
+ * GitHub Copilot agent: refuse via exit 2 + stdout
+ * `{"permissionDecision":"deny","permissionDecisionReason":<message>}` (also
+ * mirrored on stderr); allow via plain exit 0 with no stdout. `src/ctx/hook.ts`'s
+ * escape-reason stderr note only fires when `allow()` produced no `stdout`
+ * (see `runtimeFromSurface` in `src/ctx/runtimes.ts`), which this allow shape
+ * satisfies.
+ */
+export const COPILOT_DECISION_CODEC: DecisionCodec = {
+  refuse: (_runtimeId, message) => ({
+    exitCode: 2,
+    stdout: `${JSON.stringify({ permissionDecision: "deny", permissionDecisionReason: message })}\n`,
+    stderr: `${message}\n`,
+  }),
+  allow: (_runtimeId) => ({ exitCode: 0 }),
 };
 

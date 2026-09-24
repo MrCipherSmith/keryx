@@ -298,6 +298,16 @@
         "managedSentinel": {
           "type": "boolean",
           "description": "Whether the written file(s) carry a `_keryxManaged` sentinel. Files sharing a host config with user content (e.g. a merged settings.json block) must be true; a file Keryx owns outright may still be true for consistency."
+        },
+        "keryxVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Additive (W5-b, `keryx integrations`): the running Keryx version at the moment this record was written. Optional so a pre-W5-b install-state document (or a hand-authored one) stays valid; consumed by `keryx integrations doctor`'s drift reports (\"installed by Keryx X on <date> and is now missing/invalid\")."
+        },
+        "installedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Additive (W5-b, `keryx integrations`): ISO date-time this specific record was last written (install or re-install), distinct from the install-state document's own top-level `recordedAt`, which reflects the whole document's last write. Optional for the same reason as `keryxVersion`; consumed by `keryx integrations doctor`'s drift reports."
         }
       }
     }

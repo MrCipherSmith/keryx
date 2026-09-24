@@ -57,6 +57,11 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
       "writes MCP client configuration into editor/agent files outside this project's managed surface — the same reason `mcp`, whose spelling it replaces, is excluded",
   },
   { verb: "mcp", reason: "retired spelling of serve-mcp and integrate; excluded for the same reasons as both" },
+  {
+    verb: "integrations",
+    reason:
+      "install/uninstall can remove the agent's own guard hooks (its ctx-guard/security block), so the verb must not be agent-invocable — the exclusion is at the VERB level, not per-subcommand, so read-only subcommands (doctor, matrix) are excluded alongside install/uninstall rather than carved out",
+  },
   { verb: "sync", reason: "writes into external runtime directories outside the project" },
   { verb: "skills", reason: "skill lifecycle incl. install/export/sync writing outside the project; needs its own review before exposure" },
   { verb: "skill-verify-skill", reason: "standalone alias of skills verify; not part of the agent surface" },

@@ -82,17 +82,25 @@ test("flow 303 AC5: --help, -h and bare `keryx` print the identical flat usage, 
 describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned against their pre-flow output", () => {
   const FIXTURES_ROOT = path.join(import.meta.dir, "../fixtures/cli-help-pre-flow-303");
 
-  // The ONLY lines these two flows are allowed to have added to the flat
+  // The ONLY lines these flows are allowed to have added to the flat
   // block. Flow 303: one in USAGE_BODY, one in the Commands: summary table.
   // Flow 304 (review finding #5): `keryx --help` never listed the new
   // `providers test`/`providers remove` subcommands — both added here, in
   // USAGE_BODY only (they are subcommands of an existing verb, so no new
   // Commands: summary row is needed, unlike flow 303's brand-new `help` verb).
+  // Flow 307 (W5-b): brand-new `integrations` verb, same shape as flow 303's
+  // `help` — one USAGE_BODY line per subcommand (it has four: install,
+  // uninstall, doctor, matrix) plus one Commands: summary row.
   const NEW_LINES = [
     "  keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)\n",
     "  help      Grouped command help by task: every verb, in nine onboarding-ordered groups\n",
     "  keryx providers test <name> [--json]\n",
     "  keryx providers remove <name> [--yes] [--json]\n",
+    "  keryx integrations install --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]\n",
+    "  keryx integrations uninstall --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]\n",
+    "  keryx integrations doctor --runtime <id>[,<id>...|all] [--json]\n",
+    "  keryx integrations matrix [--check] [--write] [--json] [--file <path>]\n",
+    "  integrations Install/uninstall/audit Keryx's hooks and instructions in another coding agent, and the generated capability matrix\n",
   ];
 
   test("the flat --help block is the pre-flow fixture plus exactly those lines, nothing else", async () => {

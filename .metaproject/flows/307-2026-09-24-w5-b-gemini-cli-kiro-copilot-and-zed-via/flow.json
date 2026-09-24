@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "307",
   "slug": "w5-b-gemini-cli-kiro-copilot-and-zed-via",
   "title": "W5-b: Gemini CLI, Kiro, Copilot and Zed-via-ACP adapters, generated capability matrix, keryx integrations CLI",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T00:56:53.608Z",
-  "updatedAt": "2026-09-24T00:56:53.608Z",
+  "updatedAt": "2026-09-24T03:39:32.420Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:19753afffb0ce29bcedf2997f565b1dfb26ec1db649a63e647b7fd1708abca83",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,350 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T9 (split implementation tasks)"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 8,
+        "log": [
+          {
+            "at": "2026-09-24T01:57:33.474Z",
+            "outcome": "started",
+            "detail": "review round 1 (opus) on PR #677"
+          },
+          {
+            "at": "2026-09-24T02:24:23.624Z",
+            "outcome": "failed",
+            "detail": "round 1: 3 major 7 minor fixed in 2 commits"
+          },
+          {
+            "at": "2026-09-24T03:09:29.056Z",
+            "outcome": "started",
+            "detail": "review round 2 (opus) — re-recorded: a fix worker reverted uncommitted flow.json, dropping the original entry"
+          },
+          {
+            "at": "2026-09-24T03:09:29.138Z",
+            "outcome": "failed",
+            "detail": "round 2: 7 minor (F4,F7,F13,N1,N2,N4 + CI commands-by-task) fixed; 2 info fixed"
+          },
+          {
+            "at": "2026-09-24T03:09:44.609Z",
+            "outcome": "started",
+            "detail": "review round 3 (opus) on e826d83f"
+          },
+          {
+            "at": "2026-09-24T03:14:28.320Z",
+            "outcome": "failed",
+            "detail": "round 3: 3 minor (M1 markdown round trip, M2 presence check, M3 doctor abort)"
+          },
+          {
+            "at": "2026-09-24T03:30:25.497Z",
+            "outcome": "started",
+            "detail": "review round 4 (opus): post-replan verification of e3752a36"
+          },
+          {
+            "at": "2026-09-24T03:39:32.420Z",
+            "outcome": "failed",
+            "detail": "round 4: 1 minor (R4-1) fixed in follow-up commit and verified by repro; no open finding >= minor"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Register gemini-cli, kiro, github-copilot-agent, zed (ACP) and keryx-shell adapters with codecs, instructions surfaces and probes",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Integrations installer core with per-target install-state; legacy installers delegate to it",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Generated capability matrix, checked-in artifact, schema validation, guard test and CI step",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "keryx integrations install|doctor|uninstall|matrix CLI, help and command registry",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Docs: integrations page, W5 spec status, matrix artifact reference",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Verify keryx harness run|exec|extension|wave help and behavior unchanged (pinning test)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "End-to-end: integrations install/doctor/uninstall on a temp project for every runtime, legacy alias tests unmodified",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-24T00:56:53.608Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T01:02:27.197Z",
+      "event": "task-added",
+      "detail": "T5: Register gemini-cli, kiro, github-copilot-agent, zed (ACP) and keryx-shell adapters with codecs, instructions surfaces and probes"
+    },
+    {
+      "at": "2026-09-24T01:02:27.275Z",
+      "event": "task-added",
+      "detail": "T6: Integrations installer core with per-target install-state; legacy installers delegate to it"
+    },
+    {
+      "at": "2026-09-24T01:02:27.352Z",
+      "event": "task-added",
+      "detail": "T7: Generated capability matrix, checked-in artifact, schema validation, guard test and CI step"
+    },
+    {
+      "at": "2026-09-24T01:02:27.430Z",
+      "event": "task-added",
+      "detail": "T8: keryx integrations install|doctor|uninstall|matrix CLI, help and command registry"
+    },
+    {
+      "at": "2026-09-24T01:02:27.516Z",
+      "event": "task-added",
+      "detail": "T9: Docs: integrations page, W5 spec status, matrix artifact reference"
+    },
+    {
+      "at": "2026-09-24T01:02:27.602Z",
+      "event": "task-added",
+      "detail": "T10: Verify keryx harness run|exec|extension|wave help and behavior unchanged (pinning test)"
+    },
+    {
+      "at": "2026-09-24T01:02:27.683Z",
+      "event": "task-added",
+      "detail": "T11: End-to-end: integrations install/doctor/uninstall on a temp project for every runtime, legacy alias tests unmodified"
+    },
+    {
+      "at": "2026-09-24T01:02:32.926Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T01:02:33.006Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-24T01:02:33.084Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T01:05:53.530Z",
+      "event": "task-done",
+      "detail": "T10: Verify keryx harness run|exec|extension|wave help and behavior unchanged (pinning test)"
+    },
+    {
+      "at": "2026-09-24T01:06:16.305Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T01:20:23.122Z",
+      "event": "task-done",
+      "detail": "T5: Register gemini-cli, kiro, github-copilot-agent, zed (ACP) and keryx-shell adapters with codecs, instructions surfaces and probes"
+    },
+    {
+      "at": "2026-09-24T01:36:13.050Z",
+      "event": "task-done",
+      "detail": "T7: Generated capability matrix, checked-in artifact, schema validation, guard test and CI step"
+    },
+    {
+      "at": "2026-09-24T01:39:32.432Z",
+      "event": "task-done",
+      "detail": "T6: Integrations installer core with per-target install-state; legacy installers delegate to it"
+    },
+    {
+      "at": "2026-09-24T01:39:32.509Z",
+      "event": "task-done",
+      "detail": "T9: Docs: integrations page, W5 spec status, matrix artifact reference"
+    },
+    {
+      "at": "2026-09-24T01:55:40.671Z",
+      "event": "task-done",
+      "detail": "T8: keryx integrations install|doctor|uninstall|matrix CLI, help and command registry"
+    },
+    {
+      "at": "2026-09-24T01:56:55.527Z",
+      "event": "task-done",
+      "detail": "T11: End-to-end: integrations install/doctor/uninstall on a temp project for every runtime, legacy alias tests unmodified"
+    },
+    {
+      "at": "2026-09-24T01:56:55.612Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T01:57:33.474Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1 (opus) on PR #677"
+    },
+    {
+      "at": "2026-09-24T02:24:23.624Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: 3 major 7 minor fixed in 2 commits"
+    },
+    {
+      "at": "2026-09-24T03:09:29.056Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — review round 2 (opus) — re-recorded: a fix worker reverted uncommitted flow.json, dropping the original entry"
+    },
+    {
+      "at": "2026-09-24T03:09:29.138Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — round 2: 7 minor (F4,F7,F13,N1,N2,N4 + CI commands-by-task) fixed; 2 info fixed"
+    },
+    {
+      "at": "2026-09-24T03:09:44.609Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 5) — review round 3 (opus) on e826d83f"
+    },
+    {
+      "at": "2026-09-24T03:14:28.321Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 6) — round 3: 3 minor (M1 markdown round trip, M2 presence check, M3 doctor abort)"
+    },
+    {
+      "at": "2026-09-24T03:30:25.497Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 7) — review round 4 (opus): post-replan verification of e3752a36"
+    },
+    {
+      "at": "2026-09-24T03:39:32.420Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 8) — round 4: 1 minor (R4-1) fixed in follow-up commit and verified by repro; no open finding >= minor"
     }
   ]
 }

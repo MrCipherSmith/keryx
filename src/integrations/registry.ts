@@ -20,10 +20,21 @@ import {
   SECURITY_CHECK_OUTPUT_CURSOR,
   SECURITY_CHECK_OUTPUT_GENERIC_MCP,
   SECURITY_CHECK_OUTPUT_WINDSURF,
-  UNSUPPORTED_CTX_GUARD,
   UNSUPPORTED_ORIENT,
 } from "./surfaces";
-import { ANTIGRAVITY_DECISION_CODEC, CURSOR_DECISION_CODEC, EXIT_CODE_DECISION_CODEC } from "./codecs";
+import {
+  ACP_PERMISSION_ZED,
+  CTX_GUARD_GEMINI_CLI,
+  CTX_GUARD_GITHUB_COPILOT_AGENT,
+  CTX_GUARD_KIRO,
+  INSTRUCTIONS_GEMINI_CLI,
+  INSTRUCTIONS_GITHUB_COPILOT_AGENT,
+  INSTRUCTIONS_KIRO,
+  INSTRUCTIONS_ZED,
+  KERYX_SHELL_UNSUPPORTED,
+  LAST_VERIFIED_W5B,
+} from "./surfaces-w5b";
+import { ANTIGRAVITY_DECISION_CODEC, COPILOT_DECISION_CODEC, CURSOR_DECISION_CODEC, EXIT_CODE_DECISION_CODEC } from "./codecs";
 import type { DecisionCodec, HarnessAdapter, HookAction, SettingsFileOwner, SurfaceAdapter, SurfaceFlag } from "./types";
 import { createSettingsFileOwner } from "./settings-file";
 
@@ -105,21 +116,26 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     id: "zed",
     label: "Zed",
     confidence: "experimental",
-    // Zed has no scriptable host hook today, so it is registered with NO
-    // surfaces at all — only the unsupported reasons. W5-b is expected to
-    // turn this into `policy-travels-with-agent` once Zed ships its
-    // agent-carried policy mechanism; left as `instruction-only` until then,
-    // matching today's fallback guidance (static tool_permissions).
-    adapterKind: "instruction-only",
-    surfaces: [],
+    // W5-b (flow 307): Zed still has no scriptable HOST hook (no settings
+    // file to write into — `UNSUPPORTED_CTX_GUARD.zed` stays accurate and is
+    // still what `keryx ctx install-hook --runtime zed` reports, since the
+    // ctx-guard SUBSYSTEM has no zed surface here), but keryx running AS the
+    // ACP agent inside Zed already implements the `block` surface's safety
+    // property by construction (`src/acp/permission.ts`) — see
+    // `ACP_PERMISSION_ZED` in `surfaces-w5b.ts`. That makes the adapter kind
+    // `policy-travels-with-agent`, not `instruction-only`: the policy travels
+    // with the agent binary rather than living in a Zed-owned config file.
+    adapterKind: "policy-travels-with-agent",
+    surfaces: [ACP_PERMISSION_ZED, INSTRUCTIONS_ZED],
+    // `block` is deliberately absent here now — the harness DOES support it,
+    // via the acp-permission surface above, not the ctx-guard subsystem.
     unsupported: {
-      block: UNSUPPORTED_CTX_GUARD.zed!,
       "inject-context": UNSUPPORTED_ORIENT.zed!,
     },
-    sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts"],
+    sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "src/acp/permission.ts", "src/acp/permission.test.ts"],
     lastVerified: LAST_VERIFIED,
-    // No scriptable host hook at all (see the surfaces:[] note above), so this
-    // is never actually invoked — the exit-code form is the harmless default.
+    // Still no scriptable HOST hook (see above), so this is never actually
+    // invoked for zed — the exit-code form is the harmless default.
     decisionCodec: EXIT_CODE_DECISION_CODEC,
   },
   {
@@ -131,6 +147,84 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     unsupported: {},
     sourceDocs: ["src/security/agent-hooks/runtimes.ts"],
     lastVerified: LAST_VERIFIED,
+    decisionCodec: EXIT_CODE_DECISION_CODEC,
+  },
+  // --- W5-b (flow 307): new adapters -----------------------------------------
+  {
+    id: "gemini-cli",
+    label: "Gemini CLI",
+    confidence: "experimental",
+    adapterKind: "host-hook",
+    surfaces: [CTX_GUARD_GEMINI_CLI, INSTRUCTIONS_GEMINI_CLI],
+    unsupported: {},
+    riskNotes: [
+      "Gemini CLI's hooks default-enabled flag and the version it was introduced in are not confirmed in first-party docs; verify on a live install.",
+    ],
+    sourceDocs: [
+      "https://geminicli.com/docs/hooks/",
+      "https://geminicli.com/docs/hooks/reference/",
+      "https://geminicli.com/docs/hooks/writing-hooks/",
+      "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md",
+    ],
+    lastVerified: LAST_VERIFIED_W5B,
+    decisionCodec: EXIT_CODE_DECISION_CODEC,
+  },
+  {
+    id: "kiro",
+    label: "Kiro",
+    confidence: "experimental",
+    adapterKind: "host-hook",
+    surfaces: [CTX_GUARD_KIRO, INSTRUCTIONS_KIRO],
+    unsupported: {},
+    riskNotes: [
+      "Kiro's hook stdin field names and its shell tool's name are third-party-reported only, not confirmed by first-party docs.",
+      "Open Kiro issues report that steering file `inclusion` modes are not always honoured.",
+    ],
+    sourceDocs: [
+      "https://kiro.dev/docs/hooks/",
+      "https://kiro.dev/docs/hooks/types/",
+      "https://kiro.dev/docs/hooks/actions/",
+      "https://kiro.dev/docs/cli/v3/hooks-migration/",
+      "https://kiro.dev/docs/steering/",
+    ],
+    lastVerified: LAST_VERIFIED_W5B,
+    decisionCodec: EXIT_CODE_DECISION_CODEC,
+  },
+  {
+    id: "github-copilot-agent",
+    label: "GitHub Copilot agent",
+    confidence: "experimental",
+    adapterKind: "host-hook",
+    surfaces: [CTX_GUARD_GITHUB_COPILOT_AGENT, INSTRUCTIONS_GITHUB_COPILOT_AGENT],
+    unsupported: {},
+    riskNotes: [
+      "The shell tool name Copilot's hook payload carries is not documented; the guard parses any tool call carrying `toolArgs.command`.",
+    ],
+    sourceDocs: [
+      "https://docs.github.com/en/copilot/reference/hooks-reference",
+      "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-hooks",
+      "https://docs.github.com/en/copilot/concepts/agents/hooks",
+      "https://docs.github.com/en/copilot/how-tos/configure-custom-instructions-in-your-ide/add-repository-instructions-in-your-ide",
+      "https://github.blog/changelog/2025-08-28-copilot-coding-agent-now-supports-agents-md-custom-instructions/",
+    ],
+    lastVerified: LAST_VERIFIED_W5B,
+    decisionCodec: COPILOT_DECISION_CODEC,
+  },
+  {
+    id: "keryx-shell",
+    label: "Keryx shell",
+    confidence: "experimental",
+    // W6's own `keryx shell` lifecycle-hook runtime — no surfaces of its own
+    // yet (Non-goals, W5-multi-harness.md); registered as a placeholder so
+    // the matrix and the CLI have a precise "not yet" answer for every one of
+    // the 12 W5 flags, mirroring how `UNSUPPORTED_CTX_GUARD`/`UNSUPPORTED_ORIENT`
+    // give a precise message instead of "unknown runtime" today.
+    adapterKind: "policy-travels-with-agent",
+    surfaces: [],
+    unsupported: KERYX_SHELL_UNSUPPORTED,
+    riskNotes: ["No surfaces are implemented yet; every flag below is a W6 target, not a shipped capability."],
+    sourceDocs: ["docs/requirements/keryx-agent-platform-expansion/workstreams/W6-shell-hooks.md"],
+    lastVerified: LAST_VERIFIED_W5B,
     decisionCodec: EXIT_CODE_DECISION_CODEC,
   },
 ];

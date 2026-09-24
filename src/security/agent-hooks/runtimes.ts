@@ -11,7 +11,7 @@ import {
   surfacesOf,
   type Settings as IntegrationSettings,
   type SurfaceAdapter,
-} from "../../integrations";
+} from "../../integrations/service";
 
 // Multi-runtime agent-hook registry (Block E, E5). Each supported agent runtime
 // declares WHERE its settings live, HOW to merge/strip the managed security

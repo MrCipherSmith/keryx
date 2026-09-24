@@ -73,7 +73,7 @@ function nestedCtxValidate(id: string, matcher: string, container: string | unde
   };
 }
 
-function nestedCtxSurface(opts: {
+export function nestedCtxSurface(opts: {
   id: string;
   relativePath: string;
   confidence: "verified" | "experimental";
@@ -81,9 +81,14 @@ function nestedCtxSurface(opts: {
   container?: string;
   key: string;
   sourceDocs: readonly string[];
+  /** Explicit matcher override — default is `Bash` plus `nativeSearchTools`. Used by W5-b adapters whose shell tool is not named `Bash`. */
+  matcher?: string;
+  riskNotes?: readonly string[];
+  /** Payload codec override — default `parseToolInputCommand` (`{tool_name:"Bash", tool_input.command}`). */
+  payloadCodec?: SurfaceAdapter["payloadCodec"];
 }): SurfaceAdapter {
-  const { id, relativePath, confidence, nativeSearchTools, container, key, sourceDocs } = opts;
-  const matcher = preToolUseMatcher(nativeSearchTools);
+  const { id, relativePath, confidence, nativeSearchTools, container, key, sourceDocs, riskNotes, payloadCodec } = opts;
+  const matcher = opts.matcher ?? preToolUseMatcher(nativeSearchTools);
   return {
     id: "ctx-guard",
     flag: "block",
@@ -91,6 +96,7 @@ function nestedCtxSurface(opts: {
     sentinel: CTX_HOOK_SENTINEL,
     confidence,
     sourceDocs,
+    ...(riskNotes !== undefined ? { riskNotes } : {}),
     settingsFile: (root) => path.join(root, ...relativePath.split("/")),
     relativePath,
     // `mergeIntoHookArray` also writes `_keryxManaged` and, when migrating a
@@ -109,9 +115,13 @@ function nestedCtxSurface(opts: {
     label: `${relativePath} (${key})`,
     groupShape: "nested",
     groupKey: key,
-    ...(container !== undefined ? { groupContainer: container } : {}),
+    // Always set explicitly (review round 3, M2) — `mergeIntoHookArray`/
+    // `stripFromHookArray` always nest under the `hooks` object by default,
+    // so `installer.ts`'s `wasSurfaceInstalled` must see the SAME default
+    // `container`, not treat "no container given" as "no container at all".
+    groupContainer: container ?? "hooks",
     ...(nativeSearchTools !== undefined ? { nativeSearchTools } : {}),
-    payloadCodec: parseToolInputCommand,
+    payloadCodec: payloadCodec ?? parseToolInputCommand,
   };
 }
 
@@ -174,6 +184,7 @@ export const CTX_GUARD_CURSOR: SurfaceAdapter = {
   label: ".cursor/hooks.json (beforeShellExecution)",
   groupShape: "flat",
   groupKey: "beforeShellExecution",
+  groupContainer: "hooks",
   payloadCodec: parseCursorCommand,
 };
 
@@ -203,6 +214,7 @@ export const CTX_GUARD_WINDSURF: SurfaceAdapter = {
   label: ".windsurf/hooks.json (pre_run_command)",
   groupShape: "flat",
   groupKey: "pre_run_command",
+  groupContainer: "hooks",
   payloadCodec: parseWindsurfCommand,
 };
 
@@ -324,6 +336,25 @@ export const CTX_GUARD_OPENCODE: SurfaceAdapter = {
     await rm(file, { force: true });
     return true;
   },
+  // Non-JSON artifact: nothing to `validate`, so `doctor` needs a `probe`
+  // instead. Healthy means the file exists and matches the generated plugin
+  // text byte-for-byte — anything else (missing, edited, stale generator
+  // output) is reported as a precise problem string.
+  probe: async (root) => {
+    const { readFile } = await import("node:fs/promises");
+    const { pathExists } = await import("../lib/fs");
+    const file = CTX_GUARD_OPENCODE.settingsFile!(root);
+    if (!(await pathExists(file))) {
+      return [`opencode: ${CTX_GUARD_OPENCODE.relativePath} is missing — run \`keryx ctx install-hook --runtime opencode\``];
+    }
+    const content = await readFile(file, "utf8");
+    if (content !== OPENCODE_PLUGIN) {
+      return [
+        `opencode: ${CTX_GUARD_OPENCODE.relativePath} does not match the generated plugin — re-run \`keryx ctx install-hook --runtime opencode\``,
+      ];
+    }
+    return [];
+  },
 };
 
 // Harnesses with NO scriptable pre-exec gate today.
@@ -384,6 +415,8 @@ export const ORIENT_CLAUDE: SurfaceAdapter = {
   strip: (s) => stripFromHookArray(s, "UserPromptSubmit", ORIENT_SENTINEL),
   validate: orientValidate("claude", "UserPromptSubmit", "claude: missing UserPromptSubmit orientation hook"),
   label: ".claude/settings.json (UserPromptSubmit)",
+  groupKey: "UserPromptSubmit",
+  groupContainer: "hooks",
 };
 
 export const ORIENT_CODEX: SurfaceAdapter = {
@@ -410,6 +443,8 @@ export const ORIENT_CODEX: SurfaceAdapter = {
   strip: (s) => stripFromHookArray(s, "UserPromptSubmit", ORIENT_SENTINEL),
   validate: orientValidate("codex", "UserPromptSubmit", "codex: missing UserPromptSubmit orientation hook"),
   label: ".codex/hooks.json (UserPromptSubmit)",
+  groupKey: "UserPromptSubmit",
+  groupContainer: "hooks",
 };
 
 export const ORIENT_CURSOR: SurfaceAdapter = {
@@ -439,6 +474,8 @@ export const ORIENT_CURSOR: SurfaceAdapter = {
   strip: (s) => stripFromHookArray(s, "sessionStart", ORIENT_SENTINEL),
   validate: orientValidate("cursor", "sessionStart", "cursor: missing sessionStart orientation hook"),
   label: ".cursor/hooks.json (sessionStart)",
+  groupKey: "sessionStart",
+  groupContainer: "hooks",
 };
 
 // Harnesses whose hooks CANNOT inject context (block-only / undocumented).
@@ -499,6 +536,8 @@ export const SECURITY_CHECK_INPUT_CLAUDE: SurfaceAdapter = {
     hasStartsWithCommand(s, "hooks", "UserPromptSubmit", AGENT_CHECK_INPUT_COMMAND)
       ? []
       : ["claude: missing UserPromptSubmit check-input hook"],
+  groupKey: "UserPromptSubmit",
+  groupContainer: "hooks",
 };
 
 export const SECURITY_CHECK_OUTPUT_CLAUDE: SurfaceAdapter = {
@@ -531,6 +570,8 @@ export const SECURITY_CHECK_OUTPUT_CLAUDE: SurfaceAdapter = {
     hasStartsWithCommand(s, "hooks", "PreToolUse", AGENT_CHECK_OUTPUT_COMMAND)
       ? []
       : ["claude: missing PreToolUse check-output hook"],
+  groupKey: "PreToolUse",
+  groupContainer: "hooks",
 };
 
 /**
@@ -672,6 +713,12 @@ function flatSecuritySurface(harnessId: string, on: "input" | "output", relative
         .filter((c): c is string => typeof c === "string");
       return managedCommands.some((c) => c.startsWith(base)) ? [] : [`${harnessId}: missing ${on} hook routing to check-${on}`];
     },
+    // review round 3, M2: input/output share one flat array — the `on` field
+    // (not the key/container, which are identical for both) is what tells
+    // `installer.ts`'s `wasSurfaceInstalled` which entries belong to THIS
+    // surface.
+    groupKey: SECURITY_HOOKS_KEY,
+    groupMatchField: { key: "on", value: on },
   };
 }
 

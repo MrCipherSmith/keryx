@@ -112,6 +112,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx agents` | Manage optional global agent bootstrap instructions. |
 | `keryx mcp` | Retired spelling of serve-mcp / integrate; still works, names its replacement. |
 | `keryx integrate` | Wire this project into an editor or agent as an MCP server. |
+| `keryx integrations` | Install, audit and uninstall Keryx's hooks and instructions in another coding agent. |
 | `keryx serve-mcp` | Expose Metaproject services over the Model Context Protocol (opt-in). |
 | `keryx bus` | Agent bus: list peers and leases, read the log, send a message, prune. |
 | `keryx workspace` | Shared Agent Context: workspaces, FWK reads, propose/review (module sac). |

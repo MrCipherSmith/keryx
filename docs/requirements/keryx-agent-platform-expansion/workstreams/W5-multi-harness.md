@@ -1,7 +1,34 @@
 # W5 — Multi-harness support & capability matrix
-Version: 0.1.3
+Version: 0.1.4
 
 > **Status (W5-a, flow 305):** the unified registry has landed in `src/integrations/` for the runtimes that existed before this workstream (claude, codex, cursor, windsurf, antigravity, opencode, zed as unsupported, generic-mcp). `HarnessAdapter.surfaces` is a list rather than a per-flag record, because Claude already carries two `block` surfaces in one file (the ctx guard and security check-output). New adapters, the `keryx integrations` CLI and the generated matrix remain W5-b.
+>
+> **Status (W5-b, flow 307):** adapters for gemini-cli, kiro, and
+> github-copilot-agent have landed in `src/integrations/surfaces-w5b.ts`, each
+> at `confidence: "experimental"` with non-empty `risk_notes`/`source_docs`
+> (`block` via a host-hook settings file, plus an `instructions` surface).
+> Zed is registered as `adapterKind: "policy-travels-with-agent"`, with its
+> `block` surface `confidence: "verified"` against `src/acp/permission.ts`,
+> and a probe-only `instructions` surface against `AGENTS.md`. A
+> `keryx-shell` placeholder adapter is registered with every surface flag
+> `unsupported`, pending W6. The generated capability matrix artifact
+> (`docs/integrations/harness-capability-matrix.json`, produced by
+> `src/integrations/matrix.ts`) is checked in and drift-guarded by
+> `src/integrations/harness-capability-matrix.test.ts` and `keryx
+> integrations matrix --check` in CI. The `keryx integrations
+> install|doctor|uninstall|matrix` CLI family exists, with per-target
+> install-state at
+> `.metaproject/data/integrations/install-state/<runtime>.json` (written only
+> when `.metaproject/` already exists), and the legacy `keryx ctx
+> install-hook|uninstall-hook`, `keryx orient install-hook|uninstall-hook`,
+> and `keryx security hooks install|uninstall` commands keep working
+> unchanged, delegating internally to the same installer core. `keryx ctx
+> hook <runtime>` is unchanged and now also serves gemini-cli, kiro, and
+> github-copilot-agent. Still open: **OQ-3** (unverified `securityHooks` key
+> on Cursor/Windsurf) is not resolved by this flow; MCP client-config
+> ownership (`keryx integrate`) has not been moved into this registry; and
+> the Kiro/GitHub-Copilot-agent payload field names remain third-party-only,
+> unconfirmed by first-party docs.
 
 ## Summary
 

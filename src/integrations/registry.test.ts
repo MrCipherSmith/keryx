@@ -54,7 +54,7 @@ const THE_12_W5_FLAGS: readonly SurfaceFlag[] = [
   "mcp",
 ];
 
-describe("AC1: HARNESS_ADAPTERS names exactly the 8 W5 harnesses, in order", () => {
+describe("AC1: HARNESS_ADAPTERS names the 8 W5-a harnesses plus the W5-b (flow 307) additions, in order", () => {
   test("ids, in order", () => {
     expect(HARNESS_ADAPTERS.map((a) => a.id)).toEqual([
       "claude",
@@ -65,31 +65,32 @@ describe("AC1: HARNESS_ADAPTERS names exactly the 8 W5 harnesses, in order", () 
       "opencode",
       "zed",
       "generic-mcp",
+      "gemini-cli",
+      "kiro",
+      "github-copilot-agent",
+      "keryx-shell",
     ]);
   });
 
-  test("no harness outside the W5 set is registered", () => {
-    const excluded = ["gemini-cli", "kiro", "github-copilot-agent", "keryx-shell"];
-    for (const id of excluded) {
-      expect({ id, adapter: getHarnessAdapter(id) }).toEqual({ id, adapter: undefined });
-    }
-  });
-
-  test("no `keryx integrations` CLI command exists yet", () => {
+  test("the `keryx integrations` CLI command is registered (flow 307, T8)", () => {
     // `CLI_ROUTES` (src/cli.ts) is the dispatch table's own source of truth —
     // see its doc comment: "the only honest source for what commands this CLI
     // actually has". Asserting against it, rather than a hand-written list of
     // verbs, means this test cannot itself drift from the dispatcher.
-    expect(Object.keys(CLI_ROUTES)).not.toContain("integrations");
-    // And no command MODULE for it exists either, so a future `integrations`
-    // route wired up without registering it in CLI_ROUTES still fails this.
+    //
+    // This test used to pin the OPPOSITE fact ("no such command exists yet"),
+    // as a marker that T6 (installer core) and T7 (capability matrix) landed
+    // before the CLI surface did. T8 is that CLI surface — flipped here to a
+    // positive pin rather than deleted, so the command module and its
+    // registration in `CLI_ROUTES` stay proven present together.
+    expect(Object.keys(CLI_ROUTES)).toContain("integrations");
     let integrationsCommandExists = true;
     try {
       readFileSync(path.join(__dirname, "..", "commands", "integrations.ts"), "utf8");
     } catch {
       integrationsCommandExists = false;
     }
-    expect(integrationsCommandExists).toBe(false);
+    expect(integrationsCommandExists).toBe(true);
   });
 });
 
@@ -112,11 +113,12 @@ describe("AC1: the SurfaceFlag vocabulary is exactly the 12 W5 flags", () => {
         });
       }
     }
-    // Non-vacuous: W5-a actually wires up a proper subset (block, prompt-gate,
-    // inject-context), never the full 12 — the rest are named for W5-b to grow
-    // into (plan.md, types.ts doc comment).
+    // Non-vacuous: W5-a wired up block/prompt-gate/inject-context; W5-b
+    // (flow 307, this change) adds the `instructions` surfaces for
+    // gemini-cli/kiro/github-copilot-agent/zed — still a proper subset of
+    // the 12, never all of them.
     expect(seen.size).toBeGreaterThan(0);
-    expect([...seen].sort()).toEqual(["block", "inject-context", "prompt-gate"]);
+    expect([...seen].sort()).toEqual(["block", "inject-context", "instructions", "prompt-gate"]);
   });
 
   test("every unsupported reason's key is one of the 12 flags", () => {
@@ -144,6 +146,13 @@ describe("AC2: CTX_RUNTIMES is derived, with parity against the pre-refactor val
       { id: "windsurf", confidence: "verified" },
       { id: "antigravity", confidence: "experimental" },
       { id: "opencode", confidence: "experimental" },
+      // W5-b (flow 307): gemini-cli/kiro/github-copilot-agent each register a
+      // ctx-guard surface too (subsystem "ctx-guard"), so `keryx ctx hook <id>`
+      // works for them with no change to the handler. zed and generic-mcp
+      // have none, so they do not appear here.
+      { id: "gemini-cli", confidence: "experimental" },
+      { id: "kiro", confidence: "experimental" },
+      { id: "github-copilot-agent", confidence: "experimental" },
     ]);
   });
 
@@ -156,6 +165,9 @@ describe("AC2: CTX_RUNTIMES is derived, with parity against the pre-refactor val
       windsurf: path.join(root, ".windsurf", "hooks.json"),
       antigravity: path.join(root, ".agents", "hooks.json"),
       opencode: path.join(root, ".opencode", "plugin", "keryx-ctx-guard.js"),
+      "gemini-cli": path.join(root, ".gemini", "settings.json"),
+      kiro: path.join(root, ".kiro", "hooks", "keryx-ctx-guard.json"),
+      "github-copilot-agent": path.join(root, ".github", "hooks", "keryx-ctx-guard.json"),
     };
     for (const runtime of CTX_RUNTIMES) {
       expect({ id: runtime.id, locate: runtime.locate(root) }).toEqual({ id: runtime.id, locate: expected[runtime.id]! });
@@ -547,6 +559,12 @@ describe("R3-F1: refusalAction/allowAction/CTX_RUNTIMES agree with the pre-refac
         return { exitCode: 0, stdout: `${JSON.stringify({ permission: "deny", agent_message: message })}\n` };
       case "antigravity":
         return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: false, deny_reason: message })}\n` };
+      case "github-copilot-agent":
+        return {
+          exitCode: 2,
+          stdout: `${JSON.stringify({ permissionDecision: "deny", permissionDecisionReason: message })}\n`,
+          stderr: `${message}\n`,
+        };
       default:
         return { exitCode: 2, stderr: `${message}\n` };
     }

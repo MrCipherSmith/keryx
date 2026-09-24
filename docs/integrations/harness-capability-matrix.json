@@ -1,0 +1,413 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-09-24T00:00:00Z",
+  "harnesses": [
+    {
+      "id": "claude",
+      "label": "Claude Code",
+      "state": "native",
+      "adapterKind": "host-hook",
+      "confidence": "verified",
+      "surfaces_supported": [
+        {
+          "surface": "block",
+          "state": "native",
+          "settingsFile": ".claude/settings.json"
+        },
+        {
+          "surface": "prompt-gate",
+          "state": "native",
+          "settingsFile": ".claude/settings.json"
+        },
+        {
+          "surface": "inject-context",
+          "state": "native",
+          "settingsFile": ".claude/settings.json"
+        }
+      ],
+      "surfaces_unsupported": [],
+      "install_command": "keryx integrations install --runtime claude",
+      "verification_command": "keryx integrations doctor --runtime claude",
+      "risk_notes": "",
+      "last_verified": "2026-09-23",
+      "source_docs": [
+        "src/ctx/orient-runtimes.ts",
+        "src/ctx/runtimes.ts",
+        "src/security/agent-hooks/runtimes.ts"
+      ]
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "state": "native",
+      "adapterKind": "host-hook",
+      "confidence": "verified",
+      "surfaces_supported": [
+        {
+          "surface": "block",
+          "state": "native",
+          "settingsFile": ".codex/hooks.json"
+        },
+        {
+          "surface": "inject-context",
+          "state": "native",
+          "settingsFile": ".codex/hooks.json"
+        }
+      ],
+      "surfaces_unsupported": [],
+      "install_command": "keryx integrations install --runtime codex",
+      "verification_command": "keryx integrations doctor --runtime codex",
+      "risk_notes": "",
+      "last_verified": "2026-09-23",
+      "source_docs": [
+        "docs/docs/harness.md",
+        "src/ctx/orient-runtimes.ts",
+        "src/ctx/runtimes.ts"
+      ]
+    },
+    {
+      "id": "cursor",
+      "label": "Cursor",
+      "state": "native",
+      "adapterKind": "host-hook",
+      "confidence": "verified",
+      "surfaces_supported": [
+        {
+          "surface": "block",
+          "state": "native",
+          "settingsFile": ".cursor/hooks.json"
+        },
+        {
+          "surface": "prompt-gate",
+          "state": "adapter",
+          "settingsFile": ".cursor/hooks.json"
+        },
+        {
+          "surface": "inject-context",
+          "state": "native",
+          "settingsFile": ".cursor/hooks.json"
+        }
+      ],
+      "surfaces_unsupported": [],
+      "install_command": "keryx integrations install --runtime cursor",
+      "verification_command": "keryx integrations doctor --runtime cursor",
+      "risk_notes": "`securityHooks` matches no documented hook contract for this harness; it is keryx's own invention (tracked as OQ-3).",
+      "last_verified": "2026-09-23",
+      "source_docs": [
+        "src/ctx/orient-runtimes.ts",
+        "src/ctx/runtimes.ts",
+        "src/security/agent-hooks/runtimes.ts"
+      ]
+    },
+    {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "state": "native",
+      "adapterKind": "host-hook",
+      "confidence": "verified",
+      "surfaces_supported": [
+        {
+          "surface": "block",
+          "state": "native",
+          "settingsFile": ".windsurf/hooks.json"
+        },
+        {
+          "surface": "prompt-gate",
+          "state": "adapter",
+          "settingsFile": ".windsurf/hooks.json"
+        }
+      ],
+      "surfaces_unsupported": [
+        {
+          "surface": "inject-context",
+          "reason": "Windsurf hooks are exit-code only (block/allow); no documented field injects context. Use its rules/memories for standing context."
+        }
+      ],
+      "install_command": "keryx integrations install --runtime windsurf",
+      "verification_command": "keryx integrations doctor --runtime windsurf",
+      "risk_notes": "`securityHooks` matches no documented hook contract for this harness; it is keryx's own invention (tracked as OQ-3).",
+      "last_verified": "2026-09-23",
+      "source_docs": [
+        "src/ctx/orient-runtimes.ts",
+        "src/ctx/runtimes.ts",
+        "src/security/agent-hooks/runtimes.ts"
+      ]
+    },
+    {
+      "id": "antigravity",
+      "label": "Antigravity",
+      "state": "adapter",
+      "adapterKind": "host-hook",
+      "confidence": "experimental",
+      "surfaces_supported": [
+        {
+          "surface": "block",
+          "state": "adapter",
+          "settingsFile": ".agents/hooks.json"
+        }
+      ],
+      "surfaces_unsupported": [
+        {
+          "surface": "inject-context",
+          "reason": "Antigravity's context-injection hook is unverified (no first-party docs). Its pre-exec block hook IS supported — see `keryx ctx install-hook --runtime antigravity`."
+        }
+      ],
+      "install_command": "keryx integrations install --runtime antigravity",
+      "verification_command": "keryx integrations doctor --runtime antigravity",
+      "risk_notes": "No first-party docs confirm this hook contract; verify on a live install.",
+      "last_verified": "2026-09-23",
+      "source_docs": [
+        "src/ctx/orient-runtimes.ts",
+        "src/ctx/runtimes.ts"
+      ]
+    },
+    {
+      "id": "opencode",
+      "label": "OpenCode",
+      "state": "adapter",
+      "adapterKind": "host-hook",
+      "confidence": "experimental",
+      "surfaces_supported": [
+        {
+          "surface": "block",
+          "state": "adapter",
+          "settingsFile": ".opencode/plugin/keryx-ctx-guard.js"
+        }
+      ],
+      "surfaces_unsupported": [
+        {
+          "surface": "inject-context",
+          "reason": "OpenCode's chat.message / experimental.chat.system.transform can inject context in theory, but propagation is undocumented and known-buggy (sst/opencode#17100, oh-my-openagent#885). Left out until stable — use AGENTS.md for standing context."
+        }
+      ],
+      "install_command": "keryx integrations install --runtime opencode",
+      "verification_command": "keryx integrations doctor --runtime opencode",
+      "risk_notes": "Bridged via a generated plugin file rather than a documented hook config.",
+      "last_verified": "2026-09-23",
+      "source_docs": [
+        "src/ctx/orient-runtimes.ts",
+        "src/ctx/runtimes.ts"
+      ]
+    },
+    {
+      "id": "zed",
+      "label": "Zed",
+      "state": "adapter",
+      "adapterKind": "policy-travels-with-agent",
+      "confidence": "experimental",
+      "surfaces_supported": [
+        {
+          "surface": "block",
+          "state": "adapter"
+        },
+        {
+          "surface": "instructions",
+          "state": "instruction-only",
+          "settingsFile": "AGENTS.md"
+        }
+      ],
+      "surfaces_unsupported": [
+        {
+          "surface": "inject-context",
+          "reason": "Zed has no scriptable session/prompt hook. Use static agent settings."
+        }
+      ],
+      "install_command": "keryx integrations install --runtime zed",
+      "verification_command": "keryx integrations doctor --runtime zed",
+      "risk_notes": "Zed uses the first matching rules file among .rules, .cursorrules, .windsurfrules, .clinerules, .github/copilot-instructions.md, AGENT.md, AGENTS.md, CLAUDE.md, GEMINI.md, ... — an earlier file in that list shadows AGENTS.md even when AGENTS.md itself carries Keryx's block.",
+      "last_verified": "2026-09-23",
+      "source_docs": [
+        "https://github.com/zed-industries/zed/blob/main/docs/src/ai/rules.md",
+        "https://zed.dev/docs/ai/external-agents",
+        "src/acp/permission.test.ts",
+        "src/acp/permission.ts",
+        "src/ctx/orient-runtimes.ts",
+        "src/ctx/runtimes.ts"
+      ]
+    },
+    {
+      "id": "generic-mcp",
+      "label": "Generic MCP host",
+      "state": "adapter",
+      "adapterKind": "host-hook",
+      "confidence": "experimental",
+      "surfaces_supported": [
+        {
+          "surface": "block",
+          "state": "adapter",
+          "settingsFile": ".mcp/security-hooks.json"
+        },
+        {
+          "surface": "prompt-gate",
+          "state": "adapter",
+          "settingsFile": ".mcp/security-hooks.json"
+        }
+      ],
+      "surfaces_unsupported": [],
+      "install_command": "keryx integrations install --runtime generic-mcp",
+      "verification_command": "keryx integrations doctor --runtime generic-mcp",
+      "risk_notes": "`securityHooks` matches no documented hook contract for this harness; it is keryx's own invention (tracked as OQ-3).",
+      "last_verified": "2026-09-23",
+      "source_docs": [
+        "src/security/agent-hooks/runtimes.ts"
+      ]
+    },
+    {
+      "id": "gemini-cli",
+      "label": "Gemini CLI",
+      "state": "adapter",
+      "adapterKind": "host-hook",
+      "confidence": "experimental",
+      "surfaces_supported": [
+        {
+          "surface": "block",
+          "state": "adapter",
+          "settingsFile": ".gemini/settings.json"
+        },
+        {
+          "surface": "instructions",
+          "state": "instruction-only",
+          "settingsFile": "GEMINI.md"
+        }
+      ],
+      "surfaces_unsupported": [],
+      "install_command": "keryx integrations install --runtime gemini-cli",
+      "verification_command": "keryx integrations doctor --runtime gemini-cli",
+      "risk_notes": "Gemini CLI's hooks default-enabled flag and the version it was introduced in are not confirmed in first-party docs; verify on a live install. Whether Gemini CLI actually reads GEMINI.md end-to-end (beyond the documented context.fileName option) is not independently confirmed here.",
+      "last_verified": "2026-09-24",
+      "source_docs": [
+        "https://geminicli.com/docs/hooks/",
+        "https://geminicli.com/docs/hooks/reference/",
+        "https://geminicli.com/docs/hooks/writing-hooks/",
+        "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md"
+      ]
+    },
+    {
+      "id": "kiro",
+      "label": "Kiro",
+      "state": "adapter",
+      "adapterKind": "host-hook",
+      "confidence": "experimental",
+      "surfaces_supported": [
+        {
+          "surface": "block",
+          "state": "adapter",
+          "settingsFile": ".kiro/hooks/keryx-ctx-guard.json"
+        },
+        {
+          "surface": "instructions",
+          "state": "instruction-only",
+          "settingsFile": ".kiro/steering/keryx.md"
+        }
+      ],
+      "surfaces_unsupported": [],
+      "install_command": "keryx integrations install --runtime kiro",
+      "verification_command": "keryx integrations doctor --runtime kiro",
+      "risk_notes": "Kiro's hook stdin field names and its shell tool's name are third-party-reported only, not confirmed by first-party docs. Open Kiro issues report that steering file `inclusion` modes are not always honoured. Kiro's hook stdin field names and its shell tool's name are third-party-reported only, not confirmed by first-party docs — the matcher above is a best guess and may gate nothing on a real install; verify before relying on it. Open Kiro issues report that steering file `inclusion` modes are not always honoured, even with `inclusion: always` set — verify on a live install.",
+      "last_verified": "2026-09-24",
+      "source_docs": [
+        "https://kiro.dev/docs/cli/v3/hooks-migration/",
+        "https://kiro.dev/docs/hooks/",
+        "https://kiro.dev/docs/hooks/actions/",
+        "https://kiro.dev/docs/hooks/types/",
+        "https://kiro.dev/docs/steering/"
+      ]
+    },
+    {
+      "id": "github-copilot-agent",
+      "label": "GitHub Copilot agent",
+      "state": "adapter",
+      "adapterKind": "host-hook",
+      "confidence": "experimental",
+      "surfaces_supported": [
+        {
+          "surface": "block",
+          "state": "adapter",
+          "settingsFile": ".github/hooks/keryx-ctx-guard.json"
+        },
+        {
+          "surface": "instructions",
+          "state": "instruction-only",
+          "settingsFile": ".github/copilot-instructions.md"
+        }
+      ],
+      "surfaces_unsupported": [],
+      "install_command": "keryx integrations install --runtime github-copilot-agent",
+      "verification_command": "keryx integrations doctor --runtime github-copilot-agent",
+      "risk_notes": "The shell tool name Copilot's hook payload carries is not documented; the guard parses any tool call carrying `toolArgs.command`. The shell tool's name Copilot's hook payload carries is not documented; this guard parses any tool call whose payload carries `toolArgs.command`, whatever `toolName` is. Whether the Copilot coding agent (as opposed to the Copilot CLI/IDE chat) reads .github/copilot-instructions.md the same way is not independently confirmed here.",
+      "last_verified": "2026-09-24",
+      "source_docs": [
+        "https://docs.github.com/en/copilot/concepts/agents/hooks",
+        "https://docs.github.com/en/copilot/how-tos/configure-custom-instructions-in-your-ide/add-repository-instructions-in-your-ide",
+        "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-hooks",
+        "https://docs.github.com/en/copilot/reference/hooks-reference",
+        "https://github.blog/changelog/2025-08-28-copilot-coding-agent-now-supports-agents-md-custom-instructions/"
+      ]
+    },
+    {
+      "id": "keryx-shell",
+      "label": "Keryx shell",
+      "state": "unsupported",
+      "adapterKind": "policy-travels-with-agent",
+      "confidence": "experimental",
+      "surfaces_supported": [],
+      "surfaces_unsupported": [
+        {
+          "surface": "block",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        },
+        {
+          "surface": "prompt-gate",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        },
+        {
+          "surface": "inject-context",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        },
+        {
+          "surface": "pre-tool-context",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        },
+        {
+          "surface": "observe",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        },
+        {
+          "surface": "post-tool",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        },
+        {
+          "surface": "session-start",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        },
+        {
+          "surface": "stop",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        },
+        {
+          "surface": "skills",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        },
+        {
+          "surface": "agents",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        },
+        {
+          "surface": "instructions",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        },
+        {
+          "surface": "mcp",
+          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+        }
+      ],
+      "install_command": "keryx integrations install --runtime keryx-shell",
+      "verification_command": "keryx integrations doctor --runtime keryx-shell",
+      "risk_notes": "No surfaces are implemented yet; every flag below is a W6 target, not a shipped capability.",
+      "last_verified": "2026-09-24",
+      "source_docs": [
+        "docs/requirements/keryx-agent-platform-expansion/workstreams/W6-shell-hooks.md"
+      ]
+    }
+  ]
+}
