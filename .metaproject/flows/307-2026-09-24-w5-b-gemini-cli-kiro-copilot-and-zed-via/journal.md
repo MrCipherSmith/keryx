@@ -11,3 +11,20 @@
 - 2026-09-24T01:02:32.926Z - frozen: 8 criteria; checksum recorded
 - 2026-09-24T01:02:33.006Z - started
 - 2026-09-24T01:02:33.084Z - task-done: T2: Implement per plan
+- 2026-09-24T01:05:53.530Z - task-done: T10: Verify keryx harness run|exec|extension|wave help and behavior unchanged (pinning test)
+- 2026-09-24T01:06:16.305Z - task-done: T1: Collect remaining context
+- 2026-09-24T01:20:23.122Z - task-done: T5: Register gemini-cli, kiro, github-copilot-agent, zed (ACP) and keryx-shell adapters with codecs, instructions surfaces and probes
+- 2026-09-24 - completion_outcome create-pr-and-merge from dispatch (operator_confirmed by MrCipherSmith via program brief); stacked addendum: PR base stack/wave0, no merge by agent.
+- 2026-09-24 - T1 research (sonnet) DONE_WITH_CONCERNS: Gemini default-enabled flag/version not found; Kiro stdin field names + shell tool name third-party only; Copilot sessionStart/userPromptSubmitted injection not confirmed. Decision: all new host-hook surfaces experimental with these gaps in riskNotes; no inject-context surfaces added for new harnesses.
+- 2026-09-24 - Decision: MCP client-config ownership (src/mcp/client-config.ts, keryx integrate) not moved — W5 spec does not require it; follow-up.
+- 2026-09-24 - Decision: new block surfaces use subsystem ctx-guard so keryx ctx hook <id> serves them with no handler change; ctx install-hook --runtime all now also covers gemini-cli/kiro/github-copilot-agent (experimental warning), same pattern as antigravity/opencode.
+- 2026-09-24 - T10 DONE (harness namespace pin test, 13 pass). T5 DONE (adapters; src/integrations 152 pass; tsc clean). Local-only failures in src/ctx/orient.test.ts + src/commands/ctx.test.ts: global git commit hook rejects the fake test author (env, pre-existing, untouched files).
+- 2026-09-24T01:36:13.050Z - task-done: T7: Generated capability matrix, checked-in artifact, schema validation, guard test and CI step
+- 2026-09-24T01:39:32.432Z - task-done: T6: Integrations installer core with per-target install-state; legacy installers delegate to it
+- 2026-09-24T01:39:32.509Z - task-done: T9: Docs: integrations page, W5 spec status, matrix artifact reference
+- 2026-09-24T01:55:40.671Z - task-done: T8: keryx integrations install|doctor|uninstall|matrix CLI, help and command registry
+- 2026-09-24 - T6 DONE (installer core + install-state; legacy suites 317/317 unmodified). T7 DONE (matrix + artifact + guard test; no validator change needed). T9 DONE (docs/docs/integrations.md, W5 spec 0.1.4). T8 DONE (CLI, cli-reference, mkdocs nav, CI step 'Harness capability matrix drift gate (W5)'; fixed zed riskNote duplicate and alias table to use surface ids).
+- 2026-09-24 - T11 e2e: temp project with .metaproject — integrations install --runtime all wrote every surface; zed instructions fails without AGENTS.md (by design: managed by keryx init/update); doctor all ok; 10 install-state files; uninstall --runtime all left only empty JSON residues ({} / {"version":...}) and removed markdown blocks. git diff vs stack/wave0 touches no pre-existing test except src/integrations/registry.test.ts (W5-a registry enumeration).
+- 2026-09-24 - T3 checks: tsc exit 0; eslint on changed ts exit 0; targeted tests 286 pass 0 fail (src/integrations, commands/integrations, harness pin, ctx hook-install, orient-runtimes, security/agent-hooks, cli-reference-coverage, acp/permission).
+- 2026-09-24T01:56:55.527Z - task-done: T11: End-to-end: integrations install/doctor/uninstall on a temp project for every runtime, legacy alias tests unmodified
+- 2026-09-24T01:56:55.612Z - task-done: T3: Add/adjust tests and make them pass

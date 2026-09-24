@@ -9,7 +9,7 @@
   "title": "W5-b: Gemini CLI, Kiro, Copilot and Zed-via-ACP adapters, generated capability matrix, keryx integrations CLI",
   "status": "in-progress",
   "createdAt": "2026-09-24T00:56:53.608Z",
-  "updatedAt": "2026-09-24T01:02:33.084Z",
+  "updatedAt": "2026-09-24T01:56:55.612Z",
   "source": {
     "type": "description",
     "ref": null
@@ -26,7 +26,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -34,7 +34,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
@@ -58,7 +59,7 @@
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -66,7 +67,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -87,7 +89,7 @@
       "id": "T5",
       "title": "Register gemini-cli, kiro, github-copilot-agent, zed (ACP) and keryx-shell adapters with codecs, instructions surfaces and probes",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -95,13 +97,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Integrations installer core with per-target install-state; legacy installers delegate to it",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -109,13 +112,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Generated capability matrix, checked-in artifact, schema validation, guard test and CI step",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -123,13 +127,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "keryx integrations install|doctor|uninstall|matrix CLI, help and command registry",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -137,13 +142,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Docs: integrations page, W5 spec status, matrix artifact reference",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -151,13 +157,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Verify keryx harness run|exec|extension|wave help and behavior unchanged (pinning test)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -165,13 +172,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "End-to-end: integrations install/doctor/uninstall on a temp project for every runtime, legacy alias tests unmodified",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -179,7 +187,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -235,6 +244,51 @@
       "at": "2026-09-24T01:02:33.084Z",
       "event": "task-done",
       "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T01:05:53.530Z",
+      "event": "task-done",
+      "detail": "T10: Verify keryx harness run|exec|extension|wave help and behavior unchanged (pinning test)"
+    },
+    {
+      "at": "2026-09-24T01:06:16.305Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T01:20:23.122Z",
+      "event": "task-done",
+      "detail": "T5: Register gemini-cli, kiro, github-copilot-agent, zed (ACP) and keryx-shell adapters with codecs, instructions surfaces and probes"
+    },
+    {
+      "at": "2026-09-24T01:36:13.050Z",
+      "event": "task-done",
+      "detail": "T7: Generated capability matrix, checked-in artifact, schema validation, guard test and CI step"
+    },
+    {
+      "at": "2026-09-24T01:39:32.432Z",
+      "event": "task-done",
+      "detail": "T6: Integrations installer core with per-target install-state; legacy installers delegate to it"
+    },
+    {
+      "at": "2026-09-24T01:39:32.509Z",
+      "event": "task-done",
+      "detail": "T9: Docs: integrations page, W5 spec status, matrix artifact reference"
+    },
+    {
+      "at": "2026-09-24T01:55:40.671Z",
+      "event": "task-done",
+      "detail": "T8: keryx integrations install|doctor|uninstall|matrix CLI, help and command registry"
+    },
+    {
+      "at": "2026-09-24T01:56:55.527Z",
+      "event": "task-done",
+      "detail": "T11: End-to-end: integrations install/doctor/uninstall on a temp project for every runtime, legacy alias tests unmodified"
+    },
+    {
+      "at": "2026-09-24T01:56:55.612Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ]
 }
