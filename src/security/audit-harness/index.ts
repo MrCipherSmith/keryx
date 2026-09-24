@@ -141,8 +141,66 @@ function isTextContent(buffer: Buffer): boolean {
   }
 }
 
+/**
+ * R2-F12: a small, explicitly documented magic-bytes allowlist of common
+ * BINARY asset types a skill can legitimately carry (an icon, a screenshot in
+ * its docs, a bundled font) — `isTextContent` above already refuses any
+ * OTHER binary payload outright (reason: binary-content, surface `error`,
+ * import fails closed). An allowlisted asset is instead recorded as `scanned`
+ * (its bytes are already hashed/checksummed by the bundle manifest layer)
+ * with a coverage NOTE that it was not text-scanned — that note never fails
+ * the W8 gate (`auditGate` only looks at severity counts), it only keeps
+ * `coverage.status` honest about what was and was not scanned.
+ * Deliberately excludes ZIP-based container formats (docx/pptx/xlsx and
+ * plain .zip all share the `PK\x03\x04` magic) — those can smuggle arbitrary
+ * nested content and stay unscanned-binary refused, same as before this fix.
+ */
+function knownBinaryAssetType(buffer: Buffer): string | undefined {
+  const ascii = (start: number, end: number): string => (buffer.length >= end ? buffer.toString("latin1", start, end) : "");
+  if (buffer.length >= 8 && buffer[0] === 0x89 && ascii(1, 4) === "PNG") return "png";
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "jpeg";
+  if (buffer.length >= 6 && (ascii(0, 6) === "GIF87a" || ascii(0, 6) === "GIF89a")) return "gif";
+  if (buffer.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "webp";
+  if (buffer.length >= 4 && buffer[0] === 0x00 && buffer[1] === 0x00 && buffer[2] === 0x01 && buffer[3] === 0x00) return "ico";
+  if (buffer.length >= 4 && ascii(0, 4) === "%PDF") return "pdf";
+  if (buffer.length >= 4 && ascii(0, 4) === "wOFF") return "woff";
+  if (buffer.length >= 4 && ascii(0, 4) === "wOF2") return "woff2";
+  return undefined;
+}
+
 type JsonRecord = Record<string, unknown>;
 
+/**
+ * R2-F3: shell-quotes a single argv element for the PATTERN-MATCHING string
+ * this walker builds — never a real shell command (the hook runtime spawns
+ * `argv` directly, per `hook-config.schema.json`, exactly to avoid shell
+ * interpolation). An element with no shell metacharacters is left bare; an
+ * element that needs one is single-quoted, with any single quote inside it
+ * escaped the POSIX way (`'\''`), so the joined string always parses the way
+ * a shell actually would and a payload's own quotes can't break out of it.
+ */
+function shellQuoteForMatching(arg: string): string {
+  if (/^[A-Za-z0-9_\-./:@=]+$/.test(arg)) return arg;
+  return `'${arg.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * R2-F3: the hook-config schema `plan.ts:245-262` enforces requires
+ * `command: {argv: [...]}` (an object, never a bare string) — this walker
+ * used to look ONLY for a string `command`, so every schema-valid hook the
+ * import path actually accepts got zero checks, and the remote-exec/
+ * injection/exfiltration/suppression checks below were dead code on that
+ * path (`R2-F3`). An argv array is joined into one shell-quoted string (so
+ * the existing text-shaped checks — which look for `curl ... | sh`-style
+ * SHAPES, not individual tokens — still fire on the reconstructed command,
+ * e.g. `["sh","-c","curl ... | sh"]` still reads as `sh -c 'curl ... | sh'`)
+ * AND each element is also pushed on its own, at its own pointer, so a
+ * directive smuggled into a single argv element (rather than assembled only
+ * once joined) is still caught and still gets its own precise pointer.
+ * The legacy bare-string `command` shape (the live `hooks`/`securityHooks`/
+ * `unmigratedHooks` settings-surface shape, unrelated to this schema) is
+ * still read exactly as before — this is additive, not a replacement.
+ */
 function collectHookCommands(value: unknown, pointer: string, out: Array<{ command: string; pointer: string }>): void {
   if (Array.isArray(value)) {
     value.forEach((item, index) => collectHookCommands(item, `${pointer}/${index}`, out));
@@ -152,10 +210,36 @@ function collectHookCommands(value: unknown, pointer: string, out: Array<{ comma
     const record = value as JsonRecord;
     if (typeof record.command === "string") {
       out.push({ command: record.command, pointer: `${pointer}/command` });
+    } else if (record.command && typeof record.command === "object" && !Array.isArray(record.command)) {
+      const rawArgv: unknown = (record.command as JsonRecord).argv;
+      if (Array.isArray(rawArgv) && rawArgv.every((v): v is string => typeof v === "string")) {
+        const argv = rawArgv;
+        out.push({ command: argv.map(shellQuoteForMatching).join(" "), pointer: `${pointer}/command/argv` });
+        argv.forEach((element, index) => {
+          out.push({ command: element, pointer: `${pointer}/command/argv/${index}` });
+        });
+      }
     }
     for (const [key, nested] of Object.entries(record)) {
       if (key === "command") continue;
       collectHookCommands(nested, `${pointer}/${key}`, out);
+    }
+  }
+}
+
+/** R2-F11: every string value in a parsed JSON document, depth-first — used so a `learned-pattern` bundle entry's checks run against the DECODED string content (an escaped `\n` becomes a real newline) rather than the raw serialized JSON text, which hid an auto-run directive inside a JSON string literal from the line-oriented `[^.\n]`-bounded check patterns. */
+function collectJsonStrings(value: unknown, out: string[]): void {
+  if (typeof value === "string") {
+    out.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectJsonStrings(item, out));
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const nested of Object.values(value as JsonRecord)) {
+      collectJsonStrings(nested, out);
     }
   }
 }
@@ -217,10 +301,11 @@ function isSafeBundleEntryPath(relativePath: string): boolean {
 async function scanImportedBundle(
   root: string,
   entries: ReadonlyArray<{ path: string; kind: ImportedBundleEntryKind }>,
-): Promise<{ raw: RawFinding[]; surface: SurfaceResult }> {
+): Promise<{ raw: RawFinding[]; surface: SurfaceResult; notes: string[] }> {
   const raw: RawFinding[] = [];
   const scanned: string[] = [];
   const unreadable: string[] = [];
+  const notes: string[] = [];
   const sorted = [...entries].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
   for (const entry of sorted) {
@@ -274,7 +359,17 @@ async function scanImportedBundle(
     // canonically-cased `SKILL.md`.
     if (entry.kind === "skill") {
       const buffer = await safeReadBuffer(absolute);
-      if (buffer === undefined || !isTextContent(buffer)) {
+      if (buffer === undefined) {
+        unreadable.push(entry.path);
+        continue;
+      }
+      if (!isTextContent(buffer)) {
+        const binaryType = knownBinaryAssetType(buffer);
+        if (binaryType !== undefined) {
+          scanned.push(entry.path);
+          notes.push(`${entry.path}: recorded as hashed but not text-scanned (binary asset: ${binaryType})`);
+          continue;
+        }
         unreadable.push(entry.path);
         continue;
       }
@@ -335,8 +430,45 @@ async function scanImportedBundle(
         );
         break;
       }
-      case "learned-pattern":
+      case "learned-pattern": {
+        // R2-F11: `learned-pattern` content is a JSON record (the same
+        // `learnedPatternSchemaJson` shape `plan.ts` validates), not free
+        // text — checking the raw SERIALIZED text meant a directive inside a
+        // JSON string value survived as its ESCAPED form (`\n` stayed the two
+        // characters `\` and `n`, never a real newline), which is enough to
+        // dodge the `[^.\n]{0,N}`-bounded auto-run/injection patterns above.
+        // Parsed and every string value re-joined (one per line) so the
+        // checks see the DECODED text a consumer of the pattern actually
+        // reads. A parse failure (plan.ts already refuses this before import
+        // reaches here — R1-F12 — so this is defense in depth only) falls
+        // back to the raw text rather than scanning nothing.
+        let decoded = content;
+        try {
+          const parsedJson: unknown = JSON.parse(content);
+          const strings: string[] = [];
+          collectJsonStrings(parsedJson, strings);
+          if (strings.length > 0) decoded = strings.join("\n");
+        } catch {
+          // not valid JSON — scan the raw text as a fallback.
+        }
+        raw.push(
+          ...asBundleFindings(
+            checkSecretsInText("instructions", "secret-in-instructions", entry.path, decoded, "critical"),
+            "bundle-secret-in-instructions",
+          ),
+        );
+        raw.push(
+          ...asBundleFindings(
+            checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, decoded, "high"),
+            "bundle-prompt-injection-in-instructions",
+          ),
+        );
+        raw.push(...asBundleFindings(checkAutoRunDirective("instructions", entry.path, decoded), "bundle-auto-run-directive"));
+        break;
+      }
       case "memory-entry": {
+        // Memory entries are markdown (see `src/memory/store.ts`), not JSON
+        // — scanned as plain text, unchanged.
         raw.push(
           ...asBundleFindings(
             checkSecretsInText("instructions", "secret-in-instructions", entry.path, content, "critical"),
@@ -359,7 +491,7 @@ async function scanImportedBundle(
     }
   }
 
-  return { raw, surface: surfaceResult("imported-bundles", scanned, unreadable) };
+  return { raw, surface: surfaceResult("imported-bundles", scanned, unreadable), notes };
 }
 
 async function mcpBaselineTools(root: string): Promise<{ tools: Record<string, string>; state: "absent" | "ok" | "unreadable" }> {
@@ -610,9 +742,10 @@ export async function computeAuditInternal(
 
   // --- imported-bundles ----------------------------------------------------------
   if (options.importedBundle) {
-    const { raw: bundleRaw, surface: bundleSurface } = await scanImportedBundle(root, options.importedBundle.entries);
+    const { raw: bundleRaw, surface: bundleSurface, notes: bundleNotes } = await scanImportedBundle(root, options.importedBundle.entries);
     raw.push(...bundleRaw);
     surfaces.push(bundleSurface);
+    coverageReasons.push(...bundleNotes);
   } else {
     surfaces.push({ surface: "imported-bundles", status: "not-applicable", pathsScanned: [] });
   }
