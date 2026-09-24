@@ -58,12 +58,25 @@ describe("mapToolsForTarget", () => {
     expect([...droppedTools].sort()).toEqual(["get_cwd", "not_a_real_tool"].sort());
   });
 
-  test("codex and kiro drop everything (no verified mapping yet) without throwing", () => {
-    for (const target of ["codex", "kiro"] as const) {
-      const { mappedTools, droppedTools } = mapToolsForTarget(["read_file", "shell_exec"], target);
-      expect(mappedTools).toEqual([]);
-      expect(droppedTools).toEqual(["read_file", "shell_exec"]);
-    }
+  test("codex has no per-tool allowlist — every tool drops from the map (sandbox_mode governs instead, see compile.ts)", () => {
+    const { mappedTools, droppedTools } = mapToolsForTarget(["read_file", "shell_exec"], "codex");
+    expect(mappedTools).toEqual([]);
+    expect(droppedTools).toEqual(["read_file", "shell_exec"]);
+  });
+
+  test("kiro maps every vocabulary entry onto its four coarse tags — nothing drops", () => {
+    const { mappedTools, droppedTools } = mapToolsForTarget(
+      ["read_file", "list_dir", "get_cwd", "search_code", "graph_affected", "memory_search", "apply_patch", "shell_exec", "web_fetch", "web_search"],
+      "kiro",
+    );
+    expect([...mappedTools].sort()).toEqual(["read", "shell", "web", "write"]);
+    expect(droppedTools).toEqual([]);
+  });
+
+  test("opencode now maps web_search onto websearch (T7 docs check correction)", () => {
+    const { mappedTools, droppedTools } = mapToolsForTarget(["web_search"], "opencode");
+    expect(mappedTools).toEqual(["websearch"]);
+    expect(droppedTools).toEqual([]);
   });
 
   test("an empty tools[] maps to no tools and no drops", () => {

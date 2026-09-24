@@ -167,9 +167,15 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // support which hook surfaces, and the JSON walkers that install them).
   // Deterministic project-state bookkeeping over hand-authored settings
   // files, no provider registry and no model call — same shape as
-  // `sync`/`forgetting`/`trigger` above. `src/ctx` and `src/security`
-  // (both core) are its only intended importers; `src/commands` reaches it
-  // only indirectly, through those two.
+  // `sync`/`forgetting`/`trigger` above. `src/ctx` and `src/security` (both
+  // core) were its original importers; flow 310 (W2) adds `src/agents`
+  // (also core) as a third — its `export.ts` reads this registry's `agents`
+  // surface classification (AC4) and its `agents` surfaces (T7,
+  // `surfaces-agents.ts`) call back into `src/agents`'s catalog/export
+  // functions, a deliberate two-way core-to-core dependency (see both
+  // files' headers) rather than a cycle either segment treats as an
+  // accident. `src/commands` reaches this segment only indirectly, through
+  // one of those three.
   { segment: "integrations", zone: "core" },
   // Flow 310, W2: the agent-definition catalog (`types`/`schema`/
   // `frontmatter`/`catalog`/`baseline`/`tools`/`policy`/`compile`) —
@@ -182,6 +188,10 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // `src/harness/child/quarantine.ts` (both `client`): `policy.ts` resolves
   // profile NAMES only, and `baseline.ts` mirrors `quarantine.ts`'s posture
   // in its own constant rather than importing it — see both files' headers.
+  // T7 adds `export.ts`, which DOES import `src/integrations` (also core) —
+  // see that segment's own comment above for the two-way core-to-core
+  // dependency this creates and why it is not a cycle either side treats as
+  // accidental.
   { segment: "agents", zone: "core" },
 ];
 

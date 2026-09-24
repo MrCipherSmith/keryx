@@ -14,4 +14,5 @@ export * from "./tools";
 export * from "./policy";
 export * from "./compile";
 export * from "./catalog";
+export * from "./export";
 export * from "./bootstrap";

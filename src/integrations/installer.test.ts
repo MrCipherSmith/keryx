@@ -135,10 +135,19 @@ describe("resolveSurfaceSelection", () => {
     expect(byId.map((s) => s.id)).toEqual(["ctx-guard"]);
   });
 
-  test("empty selector list selects every surface", () => {
+  test("empty selector list selects every non-opt-in surface (flow 310: an opt-in surface like `agents` is excluded by default)", () => {
     const claude = getHarnessAdapter("claude")!;
-    expect(resolveSurfaceSelection(claude, []).length).toBe(claude.surfaces.length);
-    expect(resolveSurfaceSelection(claude).length).toBe(claude.surfaces.length);
+    const nonOptIn = claude.surfaces.filter((s) => !s.optIn).length;
+    expect(resolveSurfaceSelection(claude, []).length).toBe(nonOptIn);
+    expect(resolveSurfaceSelection(claude).length).toBe(nonOptIn);
+    // Sanity: claude DOES carry an opt-in surface today (`agents`), so this
+    // test would not have caught a regression if `optIn` had no effect.
+    expect(nonOptIn).toBeLessThan(claude.surfaces.length);
+  });
+
+  test("an opt-in surface is still selected when named explicitly (by flag or id)", () => {
+    const claude = getHarnessAdapter("claude")!;
+    expect(resolveSurfaceSelection(claude, ["agents"]).map((s) => s.id)).toEqual(["agents"]);
   });
 
   test("unknown selector throws, naming it and the valid flags/ids for that runtime", () => {

@@ -48,7 +48,11 @@ export function resolveSurfaceSelection(
   adapter: HarnessAdapter,
   selectors: readonly string[] = [],
 ): SurfaceAdapter[] {
-  if (selectors.length === 0) return [...adapter.surfaces];
+  // F10 (flow 310, W2): an opt-in surface (`agents`) is excluded from the
+  // empty-selector default — it is only reached by naming its flag or id
+  // explicitly, below. `keryx integrations install --runtime <id>` with no
+  // `--surface` therefore keeps installing exactly what it always has.
+  if (selectors.length === 0) return adapter.surfaces.filter((s) => !s.optIn);
 
   const resolved: SurfaceAdapter[] = [];
   const unknown: string[] = [];
@@ -89,7 +93,8 @@ export function resolveSurfaceSelectionLenient(
   adapter: HarnessAdapter,
   selectors: readonly string[] = [],
 ): SurfaceAdapter[] {
-  if (selectors.length === 0) return [...adapter.surfaces];
+  // F10 (flow 310, W2): same opt-in exclusion as `resolveSurfaceSelection` above.
+  if (selectors.length === 0) return adapter.surfaces.filter((s) => !s.optIn);
   const resolved: SurfaceAdapter[] = [];
   for (const selector of selectors) {
     for (const match of adapter.surfaces.filter((s) => s.flag === selector || s.id === selector)) {

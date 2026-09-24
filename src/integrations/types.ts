@@ -111,6 +111,8 @@ export const SUBSYSTEM_ORIENT = "orient";
 export const SUBSYSTEM_SECURITY = "security";
 export const SUBSYSTEM_INSTRUCTIONS = "instructions";
 export const SUBSYSTEM_ACP_PERMISSION = "acp-permission";
+/** Flow 310 (W2): the agent-definitions export subsystem — a harness's own `<runtime>/agents/*` directory, written by `src/agents/export.ts`. */
+export const SUBSYSTEM_AGENTS = "agents";
 
 /**
  * One installable capability of one harness. `id` is unique within its
@@ -127,6 +129,17 @@ export interface SurfaceAdapter {
   readonly confidence: Confidence;
   readonly riskNotes?: readonly string[];
   readonly sourceDocs: readonly string[];
+  /**
+   * Flow 310 (W2): true excludes this surface from an EMPTY-selector
+   * install/uninstall (`resolveSurfaceSelection`/`resolveSurfaceSelectionLenient`
+   * in `installer.ts`) — `keryx integrations install --runtime <id>` with no
+   * `--surface` keeps installing exactly what it always has, unchanged. An
+   * opt-in surface is only selected by naming it explicitly: its own flag
+   * (`--surface agents`) or its id. Used by the `agents` surfaces (T7) so a
+   * default install never starts silently writing per-agent export files
+   * nobody asked for.
+   */
+  readonly optIn?: boolean;
   /** Absolute path of the settings artifact this surface installs into. */
   settingsFile?(root: string): string;
   /**

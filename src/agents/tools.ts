@@ -46,11 +46,17 @@ export type HostToolTarget = "claude" | "opencode" | "codex" | "kiro";
  * per W2's "Per-harness exporters" table and plan.md's module layout
  * ("claude: Read/Glob/Grep/Edit/Write/Bash/WebFetch/WebSearch; opencode:
  * read/glob/grep/edit/write/bash/webfetch"); entries with no keryx-tool
- * analog (`get_cwd`, `graph_affected`, `memory_search`, and — for OpenCode,
- * whose documented vocabulary this table draws from has no web-search
- * primitive — `web_search`) are intentionally absent so they surface as
- * `droppedTools` rather than being force-mapped to something that does not
- * exist on that host.
+ * analog (`get_cwd`, `graph_affected`, `memory_search`) are intentionally
+ * absent so they surface as `droppedTools` rather than being force-mapped to
+ * something that does not exist on that host.
+ *
+ * T7 (flow 310) update, per context.md's first-party docs check
+ * (2026-09-24): OpenCode's own documented tool vocabulary DOES include a
+ * `websearch` primitive ("Tool names: read, write, edit, apply_patch, glob,
+ * grep, list, bash, webfetch, websearch") — T5's original comment here
+ * ("whose documented vocabulary this table draws from has no web-search
+ * primitive") predated that confirmed check and was wrong; `web_search` is
+ * now mapped rather than dropped.
  */
 const TOOL_TARGET_MAPS: Readonly<Record<HostToolTarget, ReadonlyMap<AgentToolName, string>>> = {
   claude: new Map<AgentToolName, string>([
@@ -69,13 +75,33 @@ const TOOL_TARGET_MAPS: Readonly<Record<HostToolTarget, ReadonlyMap<AgentToolNam
     ["apply_patch", "edit"],
     ["shell_exec", "bash"],
     ["web_fetch", "webfetch"],
+    ["web_search", "websearch"],
   ]),
-  // Left empty until T7 confirms codex's tool-permission vocabulary against
-  // its first-party docs (plan.md "Host formats: Codex").
+  // Left empty (T7, plan.md "Host formats: Codex"): Codex's first-party docs
+  // confirm NO per-tool allowlist exists at all — access is governed solely
+  // by `sandbox_mode` (`policy.ts`'s `read-only`/`workspace-write`, see
+  // `compile.ts`'s codex renderer). A tools[] entry is therefore never
+  // "dropped" in the droppedTools sense for codex (there is nothing it could
+  // have been mapped INTO); the renderer reports `droppedTools: []` and
+  // documents the sandbox-governs-everything choice inline rather than
+  // populating this map with an invented allowlist codex cannot enforce.
   codex: new Map<AgentToolName, string>(),
-  // Left empty until T7 confirms kiro's tool-permission vocabulary against
-  // its first-party docs (plan.md "Host formats: Kiro").
-  kiro: new Map<AgentToolName, string>(),
+  // Kiro's documented tool vocabulary (T7, per context.md's first-party docs
+  // check) is coarse category tags — `read`, `write`, `shell`, `web` — rather
+  // than one-tool-per-name, so EVERY vocabulary entry maps onto one of the
+  // four tags (nothing is dropped for kiro).
+  kiro: new Map<AgentToolName, string>([
+    ["read_file", "read"],
+    ["list_dir", "read"],
+    ["get_cwd", "read"],
+    ["search_code", "read"],
+    ["graph_affected", "read"],
+    ["memory_search", "read"],
+    ["apply_patch", "write"],
+    ["shell_exec", "shell"],
+    ["web_fetch", "web"],
+    ["web_search", "web"],
+  ]),
 };
 
 export interface HostToolMapping {
