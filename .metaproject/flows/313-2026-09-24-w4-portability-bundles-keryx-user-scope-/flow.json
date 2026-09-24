@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T10:44:08.737Z",
+  "updatedAt": "2026-09-24T10:44:09.151Z",
   "source": {
     "type": "description",
     "ref": null
@@ -324,6 +324,20 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Re-plan after round 3: choke-point fixes (contained-write primitive, canonical path key, audit binary rule, memory splitter, distill matcher, own-repo round-trip CI test)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -529,6 +543,11 @@
       "at": "2026-09-24T10:44:08.737Z",
       "event": "task-attempt",
       "detail": "T14: failed (attempt 6) — round 3: 1 blocker (R3-F1), 6 major; three-attempt budget spent -> re-plan with choke points"
+    },
+    {
+      "at": "2026-09-24T10:44:09.151Z",
+      "event": "task-added",
+      "detail": "T17: Re-plan after round 3: choke-point fixes (contained-write primitive, canonical path key, audit binary rule, memory splitter, distill matcher, own-repo round-trip CI test)"
     }
   ]
 }
