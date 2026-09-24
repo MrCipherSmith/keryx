@@ -19,7 +19,17 @@
       ],
       "enumeration_method": "reviewer probes forge.ts / live-attacks logs and code reading, per review-r1.md class scope sections"
     },
-    "global_id": "2026-09-24-ingest-698#R1-1"
+    "global_id": "2026-09-24-ingest-698#R1-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc; verified by round 2"
+    }
   },
   {
     "id": "R1-2",
@@ -41,7 +51,17 @@
       ],
       "enumeration_method": "reviewer probes forge.ts / live-attacks logs and code reading, per review-r1.md class scope sections"
     },
-    "global_id": "2026-09-24-ingest-698#R1-2"
+    "global_id": "2026-09-24-ingest-698#R1-2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc 99f5d778: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc 99f5d778; verified by round 2"
+    }
   },
   {
     "id": "R1-3",
@@ -63,7 +83,17 @@
       ],
       "enumeration_method": "reviewer probes forge.ts / live-attacks logs and code reading, per review-r1.md class scope sections"
     },
-    "global_id": "2026-09-24-ingest-698#R1-3"
+    "global_id": "2026-09-24-ingest-698#R1-3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc; verified by round 2"
+    }
   },
   {
     "id": "R1-4",
@@ -84,7 +114,17 @@
       ],
       "enumeration_method": "reviewer probes forge.ts / live-attacks logs and code reading, per review-r1.md class scope sections"
     },
-    "global_id": "2026-09-24-ingest-698#R1-4"
+    "global_id": "2026-09-24-ingest-698#R1-4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 1309bf5a c0960ea9 15362951: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 1309bf5a c0960ea9 15362951; verified by round 2"
+    }
   },
   {
     "id": "R1-5",
@@ -97,7 +137,17 @@
     "confidence": "high",
     "file": "src/gdskills/bundled/stacks/python/skills/python-implementation/evals.json",
     "line": 1,
-    "global_id": "2026-09-24-ingest-698#R1-5"
+    "global_id": "2026-09-24-ingest-698#R1-5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix c729d45d f0a12949: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in c729d45d f0a12949; verified by round 2"
+    }
   },
   {
     "id": "R1-6",
@@ -110,7 +160,17 @@
     "confidence": "high",
     "file": "src/gdskills/bundled/stacks/ts-js-node/skills/nodejs-build-fix/evals.json",
     "line": 36,
-    "global_id": "2026-09-24-ingest-698#R1-6"
+    "global_id": "2026-09-24-ingest-698#R1-6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 1309bf5a a758ac5d: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 1309bf5a a758ac5d; verified by round 2"
+    }
   },
   {
     "id": "R1-7",
@@ -123,7 +183,17 @@
     "confidence": "high",
     "file": "src/gdskills/stack-pack-eval-integrity.test.ts",
     "line": 305,
-    "global_id": "2026-09-24-ingest-698#R1-7"
+    "global_id": "2026-09-24-ingest-698#R1-7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 1309bf5a c2727b4d: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 1309bf5a c2727b4d; verified by round 2"
+    }
   },
   {
     "id": "R1-8",
@@ -136,7 +206,17 @@
     "confidence": "high",
     "file": "src/gdskills/governance/eval.ts",
     "line": 1075,
-    "global_id": "2026-09-24-ingest-698#R1-8"
+    "global_id": "2026-09-24-ingest-698#R1-8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc 1309bf5a: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc 1309bf5a; verified by round 2"
+    }
   },
   {
     "id": "R1-9",
@@ -149,7 +229,17 @@
     "confidence": "high",
     "file": "docs/docs/cli-reference.md",
     "line": 2463,
-    "global_id": "2026-09-24-ingest-698#R1-9"
+    "global_id": "2026-09-24-ingest-698#R1-9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 99f5d778: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 99f5d778; verified by round 2"
+    }
   },
   {
     "id": "R1-10",
@@ -162,7 +252,17 @@
     "confidence": "high",
     "file": "src/gdskills/governance/eval-fixtures.ts",
     "line": 68,
-    "global_id": "2026-09-24-ingest-698#R1-10"
+    "global_id": "2026-09-24-ingest-698#R1-10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc; verified by round 2"
+    }
   },
   {
     "id": "R1-11",
@@ -175,7 +275,17 @@
     "confidence": "high",
     "file": "src/gdskills/bundled/stacks/ts-js-node/skills/nodejs-build-fix/evals.json",
     "line": 42,
-    "global_id": "2026-09-24-ingest-698#R1-11"
+    "global_id": "2026-09-24-ingest-698#R1-11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix a758ac5d c729d45d: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a758ac5d c729d45d; verified by round 2"
+    }
   },
   {
     "id": "R1-12",
@@ -188,7 +298,17 @@
     "confidence": "high",
     "file": "src/gdskills/stack-pack-eval-integrity.test.ts",
     "line": 462,
-    "global_id": "2026-09-24-ingest-698#R1-12"
+    "global_id": "2026-09-24-ingest-698#R1-12",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 1309bf5a: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 1309bf5a; verified by round 2"
+    }
   },
   {
     "id": "R1-13",
@@ -201,7 +321,17 @@
     "confidence": "high",
     "file": ".metaproject/flows/316-2026-09-24-grader-reliability-rubric-llm-judge-with/journal.md",
     "line": 62,
-    "global_id": "2026-09-24-ingest-698#R1-13"
+    "global_id": "2026-09-24-ingest-698#R1-13",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 9b4873b9: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 9b4873b9; verified by round 2"
+    }
   },
   {
     "id": "R1-14",
@@ -214,7 +344,11 @@
     "confidence": "high",
     "file": "src/gdskills/bundled/stacks/ts-js-node/governance/eval.json",
     "line": 1,
-    "global_id": "2026-09-24-ingest-698#R1-14"
+    "global_id": "2026-09-24-ingest-698#R1-14",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "info: floor fragility noted in W1; the v2 re-run demoted react honestly. decided-by: MrCipherSmith (owner, in chat), standing rule"
+    }
   },
   {
     "id": "R1-15",
@@ -227,6 +361,16 @@
     "confidence": "high",
     "file": "src/gdskills/governance/eval.ts",
     "line": 1272,
-    "global_id": "2026-09-24-ingest-698#R1-15"
+    "global_id": "2026-09-24-ingest-698#R1-15",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc; verified by round 2"
+    }
   }
 ]

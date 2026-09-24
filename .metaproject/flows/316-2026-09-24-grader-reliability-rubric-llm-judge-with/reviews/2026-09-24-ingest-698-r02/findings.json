@@ -10,7 +10,11 @@
     "confidence": "medium",
     "file": "src/gdskills/bundled/stacks/ts-js-node/skills/nodejs-build-fix/evals.json",
     "line": 43,
-    "global_id": "2026-09-24-ingest-698-r02#R2-1"
+    "global_id": "2026-09-24-ingest-698-r02#R2-1",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "info: getter-accessor fix judged legitimate; optional extra calibration deferred. decided-by: MrCipherSmith (owner, in chat), standing rule"
+    }
   },
   {
     "id": "R2-2",
@@ -23,6 +27,16 @@
     "confidence": "high",
     "file": "src/gdskills/governance/judge-recordings.ts",
     "line": 204,
-    "global_id": "2026-09-24-ingest-698-r02#R2-2"
+    "global_id": "2026-09-24-ingest-698-r02#R2-2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces after fix 6f8cff7e: the new recordedJudge test fails before the fix (Expected false, Received true) and passes after it; integrity suite 1197 pass",
+      "verifier": "review-verification-r3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6f8cff7e; verified by round 3"
+    }
   }
 ]
