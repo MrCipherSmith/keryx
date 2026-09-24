@@ -674,3 +674,83 @@ describe("F20: install/uninstall refuse a symlink anywhere in the target's path"
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Review round 2, F8: the F20 refusal above was over-broad — it refused ANY
+// symlink on the path, even one whose resolved target stays INSIDE the
+// project root (`CLAUDE.md -> AGENTS.md`, a common repo layout). These
+// reproduce the exact reviewer scenario and fail on the pre-fix code: before
+// this fix, `installMarkdownBlock`/`uninstallMarkdownBlock`/`inspectMarkdownBlock`
+// all refused an in-repo symlink outright instead of writing through it.
+// ---------------------------------------------------------------------------
+
+describe("F8: an in-repo symlink (target resolves inside the project root) is followed, not refused", () => {
+  test("install writes through a symlinked target file whose real path stays inside root", async () => {
+    await withTempDir(async (root) => {
+      await mkdir(root, { recursive: true });
+      await writeFile(path.join(root, "AGENTS.md"), "# Project\n", "utf8");
+      symlinkSync(path.join(root, "AGENTS.md"), path.join(root, "CLAUDE.md"));
+
+      const errors = await installMarkdownBlock(root, "CLAUDE.md");
+      expect(errors).toEqual([]);
+      const written = await readFile(path.join(root, "AGENTS.md"), "utf8");
+      expect(written).toContain(INSTRUCTIONS_START_MARKER);
+    });
+  });
+
+  test("uninstall removes the block through a symlinked target whose real path stays inside root", async () => {
+    await withTempDir(async (root) => {
+      await mkdir(root, { recursive: true });
+      const before = `# Project\n\n${INSTRUCTIONS_START_MARKER}\nsomething\n${INSTRUCTIONS_END_MARKER}\n`;
+      await writeFile(path.join(root, "AGENTS.md"), before, "utf8");
+      symlinkSync(path.join(root, "AGENTS.md"), path.join(root, "CLAUDE.md"));
+
+      const removed = await uninstallMarkdownBlock(root, "CLAUDE.md");
+      expect(removed).toBe(true);
+      const after = await readFile(path.join(root, "AGENTS.md"), "utf8");
+      expect(after).not.toContain(INSTRUCTIONS_START_MARKER);
+    });
+  });
+
+  test("inspect reports an in-repo symlinked target normally (not malformed)", async () => {
+    await withTempDir(async (root) => {
+      await mkdir(root, { recursive: true });
+      await writeFile(path.join(root, "AGENTS.md"), "# Project\n", "utf8");
+      symlinkSync(path.join(root, "AGENTS.md"), path.join(root, "CLAUDE.md"));
+
+      const inspection = await inspectMarkdownBlock(root, "CLAUDE.md");
+      expect(inspection.state).toBe("no-block");
+    });
+  });
+
+  test("an in-repo symlinked PARENT directory is also followed, not refused", async () => {
+    await withTempDir(async (root) => {
+      const realDir = path.join(root, "real-rules");
+      await mkdir(realDir, { recursive: true });
+      symlinkSync(realDir, path.join(root, ".cursor-rules-link"));
+
+      const errors = await installMarkdownBlock(root, ".cursor-rules-link/keryx-rules.mdc");
+      expect(errors).toEqual([]);
+      expect(existsSync(path.join(realDir, "keryx-rules.mdc"))).toBe(true);
+    });
+  });
+
+  test("a symlink whose real path escapes the root is still refused (F8 narrows F20, it does not remove it)", async () => {
+    await withTempDir(async (root) => {
+      const outsideDir = await mkdtemp(path.join(tmpdir(), "keryx-markdown-block-outside-"));
+      try {
+        const outsideFile = path.join(outsideDir, "outside-target.md");
+        await writeFile(outsideFile, "OUTSIDE FILE\n", "utf8");
+        await mkdir(root, { recursive: true });
+        symlinkSync(outsideFile, path.join(root, RELATIVE_PATH));
+
+        const errors = await installMarkdownBlock(root, RELATIVE_PATH);
+        expect(errors.length).toBe(1);
+        expect(errors[0]).toContain("symlink");
+        expect(await readFile(outsideFile, "utf8")).toBe("OUTSIDE FILE\n");
+      } finally {
+        await rm(outsideDir, { recursive: true, force: true });
+      }
+    });
+  });
+});

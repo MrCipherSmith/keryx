@@ -236,13 +236,10 @@ there, not this block). Read the rule that matches your task before acting:
 
 It is **opt-in** (`optIn: true`) — `keryx integrations install --runtime
 <id>` with no `--surface` never writes it; reach it explicitly with `--surface
-rules-export` (its id) or `--surface rules` (its flag). Review round 1, F19:
-this surface used to share the `instructions` flag with the pre-existing
-`keryx:instructions` pointer surfaces (gemini-cli/kiro/github-copilot-agent),
-which meant `--surface instructions` silently ALSO installed/uninstalled
-`rules-export` — no longer truly opt-in. `rules` is its own flag precisely so
-`--surface instructions` reaches only the pointer surfaces, and `--surface
-rules`/`rules-export` reaches only this one. Registered for
+rules-export` (its id) or `--surface rules` (its flag), kept deliberately
+independent of `--surface instructions` (the pre-existing `keryx:instructions`
+pointer surfaces on gemini-cli/kiro/github-copilot-agent): naming one never
+also reaches the other. Registered for
 `claude` (`CLAUDE.md`), `codex` (`AGENTS.md`), `gemini-cli` (`GEMINI.md`),
 `github-copilot-agent` (`.github/copilot-instructions.md`, appended with no
 front matter), `cursor` (`.cursor/rules/keryx-rules.mdc`, created with
@@ -258,10 +255,19 @@ Metaproject bootstrap, or GEMINI.md/`.github/copilot-instructions.md`'s
 pointer block) keeps that other block byte-for-byte. Re-running install after
 a rule changes updates only the block; `keryx integrations uninstall
 --runtime <id> --surface rules-export` removes it and restores the
-surrounding file exactly as it was before install. A rule's own title/
-description text is neutralised before rendering (HTML comment delimiters and
-backticks are stripped/rewritten) so a rule file can never forge or close the
-marker itself.
+surrounding file, with the same caveats "The `instructions` surface's managed
+markdown block" above documents for the byte-exactness of that round trip (a
+file with no final newline may gain one; a pre-existing empty/whitespace-only
+file install wrote the block into is deleted on uninstall along with it). A
+rule's own title/description text is neutralised before rendering (HTML
+comment delimiters and backticks are stripped/rewritten) so a rule file can
+never forge or close the marker itself; a rule whose own **path** cannot be
+neutralised this way (it contains a control character, `<`, `>`, a backtick,
+or a literal `<!--`/`-->`) is skipped — not rendered — and reported as an
+install warning naming the path and reason, while every other rule still
+installs. Install/uninstall also refuse to write through a symlink whose
+resolved target leaves the project root (a symlink that stays inside the
+project, e.g. `CLAUDE.md -> AGENTS.md`, is followed normally).
 
 `src/integrations/rules-export.ts`'s `renderRulesForHarnesses`/
 `installedRulesExportHarnesses` are the programmatic entry points a later

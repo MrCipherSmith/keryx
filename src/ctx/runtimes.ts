@@ -163,7 +163,24 @@ function runtimeFromSurface(adapterId: string, surface: SurfaceAdapter, decision
     ...(surface.merge !== undefined ? { merge: surface.merge } : {}),
     ...(surface.strip !== undefined ? { strip: surface.strip } : {}),
     ...(surface.validate !== undefined ? { validate: surface.validate } : {}),
-    ...(surface.customInstall !== undefined ? { customInstall: surface.customInstall } : {}),
+    // Flow 313 (W4 portability) review round 2 fix (R2-F6): `SurfaceAdapter.customInstall`
+    // may now return the richer `CustomInstallResult` (a surface that can
+    // partially succeed, skipping part of what it manages with a warning
+    // rather than failing outright — e.g. `rules-export` skipping one unsafe
+    // rule name). `CtxRuntime` itself is a narrower, ctx-guard-only view (see
+    // `SUBSYSTEM_CTX_GUARD` filter below) that never carries a `rules-export`
+    // surface, so this just normalizes the return shape down to the plain
+    // `string[]` (errors only — a ctx-guard surface has no warnings channel
+    // to preserve) `CtxRuntime` expects, mirroring `customUninstall`'s own
+    // normalization just below.
+    ...(surface.customInstall !== undefined
+      ? {
+          customInstall: async (projectRoot: string) => {
+            const outcome = await surface.customInstall!(projectRoot);
+            return Array.isArray(outcome) ? outcome : [...outcome.errors];
+          },
+        }
+      : {}),
     // T17: `SurfaceAdapter.customUninstall` may now return the richer
     // `CustomUninstallResult` (a surface that can keep part of what it
     // manages, e.g. `agents`'s hand-edited files) alongside the plain

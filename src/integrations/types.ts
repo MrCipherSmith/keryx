@@ -149,6 +149,27 @@ export interface CustomUninstallResult {
 }
 
 /**
+ * Review round 2 fix (R2-F6): the richer `customInstall` return shape for a
+ * surface that can partially succeed — writing SOME of what it manages while
+ * skipping a piece it refuses on principled grounds (e.g. `rules-export`
+ * skipping one unsafe rule name, per `export-render.ts`'s F7 fix, while still
+ * indexing every other rule). `errors` is what the plain `string[]` shape
+ * always meant: a non-empty `errors` makes `installer.ts` report `failed` and
+ * skip `recordSurfaceInstalled`, exactly as before. `warnings` — folded into
+ * the surface's `SurfaceResult.warnings` the same way `CustomUninstallResult.warnings`
+ * and an experimental surface's static risk notes already are — reports a
+ * partial skip WITHOUT making the operation a failure: before this fix,
+ * `rules-export` had no way to say "the block was written, but rule X wasn't
+ * indexed" without also reporting the whole install `failed`, which left the
+ * block on disk while the CLI and install-state disagreed with it (exit 1,
+ * but the file was written and never recorded).
+ */
+export interface CustomInstallResult {
+  readonly errors: readonly string[];
+  readonly warnings?: readonly string[];
+}
+
+/**
  * One installable capability of one harness. `id` is unique within its
  * `HarnessAdapter`. JSON-config surfaces implement `merge`/`strip`/`validate`;
  * a surface that writes a non-JSON artifact (the OpenCode plugin) leaves those
@@ -201,7 +222,13 @@ export interface SurfaceAdapter {
   merge?(settings: Settings): Settings;
   strip?(settings: Settings): Settings;
   validate?(settings: Settings): string[];
-  customInstall?(projectRoot: string): Promise<string[]>;
+  /**
+   * Review round 2, F6: the plain `string[]` shape (every pre-flow-313
+   * surface) is treated exactly as before — every entry is an error, and any
+   * non-empty result fails the install. A surface that can partially succeed
+   * returns `CustomInstallResult` instead — see its own doc comment.
+   */
+  customInstall?(projectRoot: string): Promise<string[] | CustomInstallResult>;
   /**
    * Uninstall this surface's artifact. The plain `boolean` shape (every
    * pre-flow-310 surface) reports only whether anything was removed. T17: a

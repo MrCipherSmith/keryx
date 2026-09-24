@@ -31,6 +31,26 @@ type Section = {
 const marker = "<!-- keryx:index -->";
 const endMarker = "<!-- /keryx:index -->";
 
+/**
+ * R2-F7: every OTHER managed-block pair `keryx rules distill` must never
+ * split apart, because it does not own them — `keryx:rules` is
+ * `src/integrations/surfaces-rules.ts`'s opt-in rules-export block, and
+ * `keryx:instructions` is `markdown-block.ts`'s pointer block. Before this
+ * fix, `stripManagedBlock` only knew about `keryx:index`; a sibling block
+ * left in the body fell through to `splitMarkdownSections`, which has no
+ * concept of a managed block and treated its content as ordinary markdown —
+ * its START marker line usually landed in whatever section preceded it (kept
+ * or distilled away), and its END marker landed wherever the NEXT heading
+ * happened to fall, leaving a lone orphaned start marker in the rewritten
+ * entrypoint. `extractOtherManagedBlocks` removes each COMPLETE pair before
+ * sectioning ever runs, and `rewriteEntrypoint` re-appends the removed text
+ * verbatim (byte-for-byte, markers included) after the kept human sections.
+ */
+const OTHER_MANAGED_BLOCK_MARKERS: ReadonlyArray<{ readonly start: string; readonly end: string }> = [
+  { start: "<!-- keryx:rules -->", end: "<!-- /keryx:rules -->" },
+  { start: "<!-- keryx:instructions -->", end: "<!-- /keryx:instructions -->" },
+];
+
 export async function distillAgentEntrypoints(
   projectRoot: string,
   metaprojectRoot: string,
@@ -53,7 +73,8 @@ export async function distillAgentEntrypoints(
     }
 
     const original = await readFile(sourcePath, "utf8");
-    const sourceBody = stripManagedBlock(original);
+    const withoutIndexBlock = stripManagedBlock(original);
+    const { body: sourceBody, blocks: preservedBlocks } = extractOtherManagedBlocks(withoutIndexBlock);
     const sections = splitMarkdownSections(sourceBody);
     const kept: Section[] = [];
 
@@ -72,7 +93,7 @@ export async function distillAgentEntrypoints(
       }
     }
 
-    await rewriteEntrypoint(projectRoot, source, kept, options.enableTasks);
+    await rewriteEntrypoint(projectRoot, source, kept, options.enableTasks, preservedBlocks);
   }
 
   await writeDistilledIndex(metaprojectRoot, rules, skills, keptRootSections);
@@ -99,6 +120,30 @@ function stripManagedBlock(content: string): string {
     return `${content.slice(0, index)}\n${content.slice(endIndex + endMarker.length)}`.trim();
   }
   return content.slice(0, index).trim();
+}
+
+/**
+ * Removes every COMPLETE `keryx:rules`/`keryx:instructions` block from
+ * `content`, returning the remaining body plus each removed block's exact
+ * text (markers included), in the order found. An UNPAIRED marker (a start
+ * with no matching end — not this module's job to repair) is left exactly
+ * where it is rather than guessed at; the section splitter downstream may
+ * still mishandle that pre-existing corruption, which is no worse than
+ * before this fix and is a `markdown-block.ts` install/probe concern, not
+ * distill's.
+ */
+function extractOtherManagedBlocks(content: string): { body: string; blocks: string[] } {
+  let body = content;
+  const blocks: string[] = [];
+  for (const { start, end } of OTHER_MANAGED_BLOCK_MARKERS) {
+    const startIndex = body.indexOf(start);
+    if (startIndex < 0) continue;
+    const endIndex = body.indexOf(end, startIndex + start.length);
+    if (endIndex < 0) continue;
+    blocks.push(body.slice(startIndex, endIndex + end.length));
+    body = `${body.slice(0, startIndex)}\n${body.slice(endIndex + end.length)}`;
+  }
+  return { body: body.trim(), blocks };
 }
 
 function splitMarkdownSections(content: string): Section[] {
@@ -196,14 +241,26 @@ async function writeDistilledSkill(
   return relative;
 }
 
-async function rewriteEntrypoint(projectRoot: string, source: string, kept: Section[], enableTasks: boolean): Promise<void> {
+async function rewriteEntrypoint(
+  projectRoot: string,
+  source: string,
+  kept: Section[],
+  enableTasks: boolean,
+  preservedBlocks: readonly string[],
+): Promise<void> {
   const sourcePath = path.join(projectRoot, source);
   const title = `# ${source.replace(/\.md$/i, "")} Instructions`;
   const body = kept.length > 0
     ? kept.map((section) => `${"#".repeat(Math.max(2, section.level))} ${section.title}\n\n${section.body}`.trim()).join("\n\n")
     : "Project-specific rules and skills were moved into `.metaproject/`. Keep only global, personal, or repository-critical always-on instructions here.";
-  await writeFile(sourcePath, `${title}\n\n${body}\n`, "utf8");
-  await ensureMetaprojectReference(sourcePath, { enableTasks });
+  // R2-F7: every OTHER managed block this source carried (`keryx:rules`,
+  // `keryx:instructions`) is carried through verbatim, appended after the
+  // kept human content — `ensureMetaprojectReference` below still owns
+  // `keryx:index` on its own, since it must also handle the "no block yet"
+  // insertion case these preserved blocks never need.
+  const preserved = preservedBlocks.length > 0 ? `\n\n${preservedBlocks.join("\n\n")}` : "";
+  await writeFile(sourcePath, `${title}\n\n${body}${preserved}\n`, "utf8");
+  await ensureMetaprojectReference(sourcePath, { enableTasks, root: projectRoot });
 }
 
 async function writeDistilledIndex(

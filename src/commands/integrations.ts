@@ -515,7 +515,7 @@ export function printIntegrationsHelp(): void {
   ]);
   helpOptions([
     { flag: "--runtime <id>", desc: "Required for install/uninstall/doctor. Comma-separated, or `all` for every registered adapter." },
-    { flag: "--surface <flag|id>", desc: "Repeatable (and comma-separated). Selects surfaces by SurfaceFlag or surface id. Omit to select every surface the adapter declares." },
+    { flag: "--surface <flag|id>", desc: "Repeatable (and comma-separated). Selects surfaces by SurfaceFlag or surface id. Omit to select every surface the adapter declares EXCEPT its opt-in ones (e.g. agents, rules) — name those explicitly." },
     { flag: "--dry-run", desc: "Report what would be written/removed; change nothing." },
     { flag: "--json", desc: "Print the structured result objects only." },
     { flag: "--check", desc: "matrix: regenerate, validate, and diff against the checked-in artifact; exits 1 on drift." },

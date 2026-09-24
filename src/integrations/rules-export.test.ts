@@ -272,6 +272,54 @@ describe("renderRulesForHarnesses", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Review round 2, F6: an unsafe rule name used to make the WHOLE install
+// report `failed` (exit 1) while the block was still written (with every
+// SAFE rule indexed) and no install-state was recorded — dry-run predicted
+// success the entire time. Fix: skip the unsafe rule, report the install as
+// `installed` with a warning naming it, and record install state exactly
+// like an install with no unsafe rules. These fail on the pre-fix code,
+// where `install.results[0]!.status` was `"failed"` and
+// `installedRulesExportHarnesses` never listed the harness.
+// ---------------------------------------------------------------------------
+
+describe("rules-export surface: R2-F6 an unsafe rule name is skipped with a warning, not a failure", () => {
+  test("install reports installed (not failed), writes the block for every safe rule, and records install state", async () => {
+    await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    // `<` triggers export-render.ts's `isUnsafeRulePath` — the rule's own
+    // relativePath, not its rendered text, is what is unsafe here.
+    await writeRule("bad<name>.mdc", "Would forge a marker via its own path.");
+
+    const install = await installIntegration(root, "claude", { surfaces: ["rules-export"] });
+    expect(install.errors).toEqual([]);
+    expect(install.results[0]!.status).toBe("installed");
+    expect(install.results[0]!.warnings.some((w) => w.includes("bad<name>.mdc"))).toBe(true);
+
+    const content = await readTarget("CLAUDE.md");
+    expect(content).toContain("<!-- keryx:rules -->");
+    expect(content).toContain("git-concurrency.mdc");
+    expect(content).not.toContain("bad<name>.mdc");
+
+    // Install state was recorded exactly as a fully-safe install would be —
+    // before the fix this never ran, because the skip message counted as an
+    // `errors` entry and `installer.ts` short-circuited before it.
+    expect(await installedRulesExportHarnesses(root)).toEqual(["claude"]);
+  });
+
+  test("--dry-run agrees with the real install: both report success for the same unsafe-rule set", async () => {
+    await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    await writeRule("bad<name>.mdc", "Would forge a marker via its own path.");
+
+    const dryRun = await installIntegration(root, "claude", { surfaces: ["rules-export"], dryRun: true });
+    expect(dryRun.errors).toEqual([]);
+    expect(dryRun.results[0]!.status).toBe("would-install");
+
+    const real = await installIntegration(root, "claude", { surfaces: ["rules-export"] });
+    expect(real.errors).toEqual([]);
+    expect(real.results[0]!.status).toBe("installed");
+  });
+});
+
 describe("installedRulesExportHarnesses", () => {
   test("reflects installs and uninstalls", async () => {
     await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");

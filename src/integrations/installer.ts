@@ -456,17 +456,39 @@ export async function installIntegration(
     // surface, and it must not stop a LATER custom surface, or the
     // satisfied-by-runtime loop below, from being processed.
     let customErrors: string[];
+    // R2-F6: `customInstall` may return the richer `CustomInstallResult`
+    // shape (an `errors` channel that still fails the install exactly like
+    // the plain `string[]` shape, plus a separate `warnings` channel for a
+    // partial skip that must NOT fail it — see `CustomInstallResult`'s own
+    // doc comment).
+    let customWarnings: string[] = [];
     try {
-      customErrors = surface.customInstall ? await surface.customInstall(root) : [];
+      const result = surface.customInstall ? await surface.customInstall(root) : [];
+      if (Array.isArray(result)) {
+        customErrors = result;
+      } else {
+        customErrors = [...result.errors];
+        customWarnings = [...(result.warnings ?? [])];
+      }
     } catch (error) {
       customErrors = [(error as Error).message];
     }
     if (customErrors.length > 0) {
       errors.push(...customErrors);
-      results.push({ ...baseResult(surface, surface.relativePath), status: "failed", errors: customErrors, warnings: warningsFor(surface) });
+      results.push({
+        ...baseResult(surface, surface.relativePath),
+        status: "failed",
+        errors: customErrors,
+        warnings: [...warningsFor(surface), ...customWarnings],
+      });
       continue;
     }
-    results.push({ ...baseResult(surface, surface.relativePath), status: "installed", errors: [], warnings: warningsFor(surface) });
+    results.push({
+      ...baseResult(surface, surface.relativePath),
+      status: "installed",
+      errors: [],
+      warnings: [...warningsFor(surface), ...customWarnings],
+    });
     if (surface.relativePath) {
       await recordSurfaceInstalled(root, runtimeId, {
         moduleId: surface.id,

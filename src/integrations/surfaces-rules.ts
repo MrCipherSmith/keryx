@@ -35,7 +35,13 @@ import {
   uninstallMarkdownBlock,
   type ManagedBlockSpec,
 } from "./markdown-block";
-import { SUBSYSTEM_RULES_EXPORT, type Confidence, type CustomUninstallResult, type SurfaceAdapter } from "./types";
+import {
+  SUBSYSTEM_RULES_EXPORT,
+  type Confidence,
+  type CustomInstallResult,
+  type CustomUninstallResult,
+  type SurfaceAdapter,
+} from "./types";
 
 export const LAST_VERIFIED_RULES_EXPORT = "2026-09-24";
 
@@ -59,10 +65,24 @@ function skippedMessages(skipped: readonly SkippedCanonicalRule[]): string[] {
   return skipped.map((s) => `${s.relativePath}: ${s.reason}`);
 }
 
-async function installRulesExport(root: string, relativePath: string, frontMatter?: string): Promise<string[]> {
+/**
+ * Review round 2 fix (R2-F6): a rule `collectCanonicalRules` skips (an unsafe
+ * name) used to be merged into the SAME `string[]` `installMarkdownBlock`
+ * itself returns real errors on, so `installer.ts` treated a skip exactly
+ * like a hard failure — exit 1, `rules-export` reported `failed`, and
+ * `recordSurfaceInstalled` never ran, even though the block WAS written to
+ * disk (with every SAFE rule indexed) and `--dry-run` predicted success the
+ * whole time. Chosen fix: skip unsafe rules and report success-with-warnings,
+ * consistently between dry-run and a real install — `errors` carries only a
+ * REAL `installMarkdownBlock` failure (a symlink refusal, an unterminated
+ * block), and `warnings` carries the skip messages, which `installer.ts`
+ * folds into the surface's `SurfaceResult.warnings` without failing the
+ * install or skipping `recordSurfaceInstalled`.
+ */
+async function installRulesExport(root: string, relativePath: string, frontMatter?: string): Promise<CustomInstallResult> {
   const { spec, skipped } = await rulesSpec(root);
   const errors = await installMarkdownBlock(root, relativePath, frontMatter, spec);
-  return [...skippedMessages(skipped), ...errors];
+  return { errors, warnings: skippedMessages(skipped) };
 }
 
 async function uninstallRulesExport(

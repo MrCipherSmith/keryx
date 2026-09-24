@@ -4,6 +4,7 @@
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { readSettingsFile, writeSettingsFile } from "./settings-json";
+import { refuseEscapingSymlink } from "../lib/symlink-safety";
 import type { Settings, SettingsFileOwner, SurfaceAdapter } from "./types";
 
 /** A JSON round-trip clone: what actually survives `JSON.stringify`/parse. */
@@ -107,6 +108,11 @@ export async function installSurfaces(
   owner: SettingsFileOwner,
 ): Promise<{ file: string; errors: string[] }> {
   const file = fileFor(root, relativePath);
+  // Review round 2, F8 (shared helper, `./symlink-safety`): refuse only when
+  // a symlink on this path resolves OUTSIDE the project root — a common
+  // in-repo layout (e.g. a symlinked config directory) must keep working.
+  const symlinkRefusal = await refuseEscapingSymlink(root, relativePath);
+  if (symlinkRefusal) return { file, errors: [symlinkRefusal] };
   const existing = await readSettingsFile(file);
   const { settings, errors } = owner.apply(existing, { install: surfaceIds });
   if (errors.length > 0) return { file, errors };
@@ -131,6 +137,8 @@ export async function uninstallSurfaces(
   owner: SettingsFileOwner,
 ): Promise<{ file: string; errors: string[] }> {
   const file = fileFor(root, relativePath);
+  const symlinkRefusal = await refuseEscapingSymlink(root, relativePath);
+  if (symlinkRefusal) return { file, errors: [symlinkRefusal] };
   const existing = await readSettingsFile(file);
   const { settings, errors } = owner.apply(existing, { uninstall: surfaceIds });
   if (errors.length > 0) return { file, errors };
