@@ -1,14 +1,14 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { installSurfaces, settingsFileOwnerFor, uninstallSurfaces, type SettingsFileOwner } from "../integrations";
 import {
   CLAUDE_RUNTIME,
   MANAGED_KEY,
   getRuntime,
   runtimeIds,
   type RuntimeHook,
-  type Settings,
 } from "./agent-hooks/runtimes";
+
+const SECURITY_SURFACE_IDS = ["security-check-input", "security-check-output"] as const;
 
 // Merge-safe installer for the Metaproject Security agent guard hooks. Block E
 // generalizes the shipped Claude-Code installer over a multi-runtime registry
@@ -51,52 +51,43 @@ export function securityAgentHookEntries(): {
   };
 }
 
-async function readSettings(file: string): Promise<Settings> {
-  if (!(await pathExists(file))) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(await readFile(file, "utf8")) as unknown;
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-      return parsed as Settings;
-    }
-    return {};
-  } catch {
-    throw new Error(`Cannot parse ${file}: file is not valid JSON`);
-  }
-}
-
-async function writeSettings(file: string, settings: Settings): Promise<void> {
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-}
-
-// Install the managed guard hooks for one runtime, creating the settings file if
-// absent, preserving every pre-existing key/entry, and staying idempotent.
+// Install the managed guard hooks for one runtime, creating the settings file
+// if absent, preserving every pre-existing key/entry, and staying idempotent.
+// Routes through the runtime's `SettingsFileOwner` so this install can never
+// silently invalidate a ctx-guard/orient surface sharing the same file.
+// Returns the owner's errors (empty = written and valid) instead of
+// discarding them, so a caller (CLI, or `installSecurityAgentHooks` below)
+// can tell a refused write from a successful one.
 export async function installRuntimeHooks(
   projectRoot: string,
   runtime: RuntimeHook,
-): Promise<boolean> {
-  const file = runtime.settingsPath(projectRoot);
-  const settings = await readSettings(file);
-  const merged = runtime.merge(settings);
-  await writeSettings(file, merged);
-  return true;
+  owner: SettingsFileOwner | undefined = settingsFileOwnerFor(runtime.relativePath),
+): Promise<{ ok: boolean; errors: string[] }> {
+  if (!owner) {
+    // Every registered runtime's file has an owner (derived from the same
+    // registry these surfaces come from) — unreachable in practice.
+    throw new Error(`${runtime.id}: no settings-file owner registered for ${runtime.relativePath}`);
+  }
+  const { errors } = await installSurfaces(projectRoot, runtime.relativePath, [...SECURITY_SURFACE_IDS], owner);
+  return { ok: errors.length === 0, errors };
 }
 
 // Remove ONLY the managed guard hooks for one runtime, preserving user content.
+// Returns the owner's errors alongside whether anything was removed.
 export async function uninstallRuntimeHooks(
   projectRoot: string,
   runtime: RuntimeHook,
-): Promise<boolean> {
+  owner: SettingsFileOwner | undefined = settingsFileOwnerFor(runtime.relativePath),
+): Promise<{ ok: boolean; errors: string[] }> {
   const file = runtime.settingsPath(projectRoot);
   if (!(await pathExists(file))) {
-    return false;
+    return { ok: false, errors: [] };
   }
-  const settings = await readSettings(file);
-  const stripped = runtime.strip(settings);
-  await writeSettings(file, stripped);
-  return true;
+  if (!owner) {
+    return { ok: false, errors: [] };
+  }
+  const { errors } = await uninstallSurfaces(projectRoot, runtime.relativePath, [...SECURITY_SURFACE_IDS], owner);
+  return { ok: errors.length === 0, errors };
 }
 
 // Resolve requested runtime ids (`"all"` ⇒ every registered runtime). Unknown
@@ -117,12 +108,25 @@ export function resolveRuntimes(ids: string[]): {
 }
 
 // Claude-Code convenience wrappers (shipped API — used by `init`/`update`).
+// Boolean-compatible for their existing callers, but a refused write now
+// throws instead of silently returning `true`: `init`/`update` call these
+// unguarded (no try/catch at the call site), so a thrown error propagates the
+// same way any other failed install step in those commands does, rather than
+// letting the manifest/CLI claim success for a write that never happened.
 export async function installSecurityAgentHooks(projectRoot: string): Promise<boolean> {
-  return installRuntimeHooks(projectRoot, CLAUDE_RUNTIME);
+  const { ok, errors } = await installRuntimeHooks(projectRoot, CLAUDE_RUNTIME);
+  if (!ok) {
+    throw new Error(`installSecurityAgentHooks: ${errors.join("; ")}`);
+  }
+  return true;
 }
 
 export async function uninstallSecurityAgentHooks(projectRoot: string): Promise<boolean> {
-  return uninstallRuntimeHooks(projectRoot, CLAUDE_RUNTIME);
+  const { ok, errors } = await uninstallRuntimeHooks(projectRoot, CLAUDE_RUNTIME);
+  if (errors.length > 0) {
+    throw new Error(`uninstallSecurityAgentHooks: ${errors.join("; ")}`);
+  }
+  return ok;
 }
 
 // Re-exported for callers that referenced the managed-key constant.

@@ -782,7 +782,14 @@ async function handleHooks(cwd: string, args: string[]): Promise<void> {
   heading(`keryx security hooks ${action}`);
   for (const runtime of runtimes) {
     if (action === "install") {
-      await installRuntimeHooks(cwd, runtime);
+      const { errors: ownerErrors } = await installRuntimeHooks(cwd, runtime);
+      if (ownerErrors.length > 0) {
+        for (const e of ownerErrors) {
+          console.log(`  ${style.red(symbols.cross)} ${e}`);
+        }
+        process.exitCode = 1;
+        continue;
+      }
       const errors = runtime.validate(
         JSON.parse(await readFile(runtime.settingsPath(cwd), "utf8")) as Record<string, unknown>,
       );
@@ -808,7 +815,14 @@ async function handleHooks(cwd: string, args: string[]): Promise<void> {
         process.exitCode = 1;
       }
     } else {
-      const removed = await uninstallRuntimeHooks(cwd, runtime);
+      const { ok: removed, errors: ownerErrors } = await uninstallRuntimeHooks(cwd, runtime);
+      if (ownerErrors.length > 0) {
+        for (const e of ownerErrors) {
+          console.log(`  ${style.red(symbols.cross)} ${e}`);
+        }
+        process.exitCode = 1;
+        continue;
+      }
       console.log(
         `  ${removed ? style.green(symbols.ok) : style.gray(symbols.off)} ${runtime.id} ${style.dim(removed ? "removed" : "nothing to remove")}`,
       );
@@ -1054,8 +1068,10 @@ function decideHookOutcome(
  * hook knows which harness is asking. Without it — a human at a terminal, or a
  * script — the plain CLI convention of a non-zero exit stands.
  *
- * The document shapes come from `src/ctx/runtimes.ts`, which owns them; the
- * OUTCOME comes from `decideHookOutcome`, which owns that.
+ * The document shapes come from the integrations registry's per-adapter
+ * `decisionCodec` (`src/integrations/registry.ts`'s `refusalAction`/
+ * `allowAction`, re-exported here via `src/ctx/runtimes.ts`); the OUTCOME
+ * comes from `decideHookOutcome`, which owns that.
  */
 function applyRuntimeDecision(
   args: string[],
