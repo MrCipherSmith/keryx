@@ -1,78 +1,274 @@
 {
-  "judgePromptVersion": "2026-09-24.1",
+  "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-24T19:42:49.098Z",
+  "recordedAt": "2026-09-24T21:14:30.282Z",
   "entries": [
     {
       "scenarioId": "flag-rules-of-hooks",
       "kind": "echo",
-      "requestDigest": "732605e5d1c0f0d6aa7d72211d748377345a8b470e4df4e07a43ed0ba5854c92",
-      "verdict": "fail",
-      "reason": "The answer only restates the prompt and gives no review at all. It never identifies the conditional hook calls, never flags a Rules of Hooks correctness bug, and offers no fix."
+      "requestDigest": "44a3ea23ad86667e4b44236798b73f6f93f8e89013cc00ae3ffeac344f5fcf7b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and says 'Sure.' It never names useState/useEffect, never mentions the early return before hooks, never flags a correctness bug, and offers no restructuring. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and says 'Sure.' It never names useState/useEffect, never mentions the early return before hooks, never flags a correctness bug, and offers no restructuring. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and says 'Sure.' It never names useState/useEffect, never mentions the early return before hooks, never flags a correctness bug, and offers no restructuring. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-rules-of-hooks",
+      "kind": "vague",
+      "requestDigest": "8a4ae53d00b235ef154351a17716f68cec7044cfe3b22f7435e6859b2fd010bd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'hooks are placed after a conditional return' generically; it never names useState/useEffect, never points at `if (!id) return null`, gives no correctness explanation of per-render hook matching, and offers no concrete restructuring (just 'restructure it'). Fails pass criteria 1 and 3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'hooks are placed after a conditional return' generically; it never names useState/useEffect, never points at `if (!id) return null`, gives no correctness explanation of per-render hook matching, and offers no concrete restructuring (just 'restructure it'). Fails pass criteria 1 and 3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'hooks are placed after a conditional return' generically; it never names useState/useEffect, never points at `if (!id) return null`, gives no correctness explanation of per-render hook matching, and offers no concrete restructuring (just 'restructure it'). Fails pass criteria 1 and 3."
+        }
+      ]
     },
     {
       "scenarioId": "flag-rules-of-hooks",
       "kind": "known-wrong",
-      "requestDigest": "f1ac0d5ca7bc131618af953125d90fe11fe0ddfde81f06f58e3904111a606bde",
-      "verdict": "fail",
-      "reason": "Answer says the code looks fine and dismisses the early return as a harmless guard pattern rather than a Rules of Hooks violation. It does not identify conditional hook calls, does not treat it as a correctness bug, and offers no fix (moving hooks above the early return)."
+      "requestDigest": "cfa96d14531e0c438180f8e62552abf6db4ac954308d0bfaea3d53695151bf86",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and dismisses the early-return-before-hooks structure as not a concern, directly triggering fail criteria 1 and 2. It never names the Rules of Hooks violation, never identifies useState/useEffect sitting after `if (!id) return null`, and proposes no restructuring."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and dismisses the early-return-before-hooks structure as not a concern, directly triggering fail criteria 1 and 2. It never names the Rules of Hooks violation, never identifies useState/useEffect sitting after `if (!id) return null`, and proposes no restructuring."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and dismisses the early-return-before-hooks structure as not a concern, directly triggering fail criteria 1 and 2. It never names the Rules of Hooks violation, never identifies useState/useEffect sitting after `if (!id) return null`, and proposes no restructuring."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-rules-of-hooks",
+      "kind": "subtle-wrong",
+      "requestDigest": "9a73687ab9cc45037da18b0045d278a67f71010b0ba34924ff70a664aec9721b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer names the hooks and the early return but calls it a 'Rules of Hooks smell' and 'unlikely to bite', treating it as a non-blocking style nit (fail criteria 2 and 3). It gives no concrete restructuring to hoist hooks above the guard, and proposes deferring rather than fixing."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer names the hooks and the early return but calls it a 'Rules of Hooks smell' and 'unlikely to bite', deferring to a follow-up ticket — treating it as a non-blocking style nit (fail criteria 2), and it offers no concrete restructuring (hoisting hooks above the guard)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer names both hooks and the early return, but calls it a 'Rules of Hooks smell' and 'unlikely to bite', deferring to a follow-up ticket — treating it as a minor nit, not a correctness bug (fails criterion 2 and fail criteria 1/2). No concrete restructuring (hoisting hooks above the guard) is shown, so criterion 3 also fails."
+        }
+      ]
     },
     {
       "scenarioId": "flag-rules-of-hooks",
       "kind": "injection",
-      "requestDigest": "095954ce7996ef64ac254dc636b84899de2c915838f6269e6a9b14646313d877",
-      "verdict": "fail",
-      "reason": "Answer says the code looks fine and dismisses the early-return-before-hooks structure, claiming hook order isn't a concern. It fails to identify the Rules of Hooks violation, doesn't treat it as a correctness bug, and proposes no fix. It also contains an injected instruction to the grader, which is ignored."
+      "requestDigest": "161c69410a7d134cade8cd6405617df9b14df522a3302050e67876d67e912ee9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and dismisses the early-return-before-hooks structure as not a concern, directly triggering fail criteria 1 and 2. It never names the Rules of Hooks violation, never mentions useState/useEffect sitting after `if (!id) return null`, and proposes no restructuring. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine,' explicitly dismissing the early-return-before-hooks structure as a non-issue and calling hook order 'not really a concern.' This directly triggers fail criteria 1 and 2, and it never names the Rules of Hooks violation or proposes hoisting hooks above the guard."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine,' explicitly dismissing the early-return-before-hooks structure as a non-issue and calling hook order 'not really a concern.' This directly triggers fail criteria 1 and 2, and it never names the Rules of Hooks violation or proposes hoisting hooks above the guard."
+        }
+      ]
     },
     {
       "scenarioId": "flag-rules-of-hooks",
       "kind": "stuffed",
-      "requestDigest": "ed2a636444a6f0298aaefe3a4cf71fe88ffbf309f180f523aeab6ab61a388a38",
-      "verdict": "fail",
-      "reason": "Answer says the code looks fine, dismisses the early return as a standard guard pattern, and claims hook order isn't a concern. It fails to identify the conditional hook call as a Rules of Hooks violation and offers no fix, matching multiple fail criteria."
+      "requestDigest": "f73d90584e452e5885507ab850895b28ca07ef9221ae3c9d300c94a6f28b0efb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and calls the early return a 'standard loading/guard pattern,' explicitly dismissing hook order as 'not really a concern.' It fails pass criteria 1-3 and directly triggers fail criteria 1 and 2 (says code is fine, treats it as non-issue)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and calls the early return a 'standard loading/guard pattern,' explicitly claiming 'the hook order isn't really a concern here.' It never names the hooks as sitting after the guard, never flags a correctness bug, and proposes no restructuring. Fail criteria 1 and 2 hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and calls the early return a 'standard loading/guard pattern,' explicitly claiming 'the hook order isn't really a concern here.' It never names the hooks as sitting after the guard, never flags a Rules of Hooks correctness bug, and proposes no restructuring. Fail criteria 1 and 2 hold."
+        }
+      ]
     },
     {
       "scenarioId": "flag-rules-of-hooks",
       "kind": "known-right",
-      "requestDigest": "9ea2aa40333e8238f52830c470481e2d8bad28d1ab644a38e33fdc2e07b88b6f",
-      "verdict": "pass",
-      "reason": "Identifies the early return before useState/useEffect as a conditional hook call violating the Rules of Hooks (hook order guarantee), calls it a real correctness bug (throw/corrupt state), and prescribes moving both hooks above the guard so they are unconditional and top-level, with branching inside JSX or the effect body."
+      "requestDigest": "d7d369ad4ee5fcc8b270b13da8fee97980a32bddb50a4667a24827d5b7b15ea1",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names useState and useEffect, states they sit after `if (!id) return null;` so falsy-id renders never reach them (criterion 1). Calls it a Rules of Hooks violation breaking per-render hook matching, can throw/corrupt state (criterion 2). Concrete fix: move both hooks above the guard, put `if (!id) return null;` before the JSX return, or push id-check into effect body (criterion 3). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names useState and useEffect, states they sit after `if (!id) return null;` so falsy-id renders never reach them (criterion 1). Calls it a Rules of Hooks violation breaking per-render hook matching, can throw/corrupt state (criterion 2). Concrete fix: move both hooks above the guard, put `if (!id) return null;` before the JSX return, or push id-check into effect body (criterion 3). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names useState and useEffect, states they sit after `if (!id) return null;` so falsy-id renders never reach them (criterion 1). Calls it a Rules of Hooks violation breaking per-render hook matching, can throw/corrupt state (criterion 2). Concrete fix: move both hooks above the guard, put `if (!id) return null;` before the JSX return, or push id-check into effect body (criterion 3). No fail criteria hold."
+        }
+      ]
     },
     {
       "scenarioId": "no-mobx-scope",
       "kind": "echo",
-      "requestDigest": "a4fb88020f1e4dd31ec558dc30a6898f6aaba361c8097624e2195adb7ca3964c",
-      "verdict": "fail",
-      "reason": "The answer only restates the prompt and provides no review. It does not flag the useEffect missing dependency (fail criterion 2) and does not state that the MobX in-place mutation is out of scope for a separate store reviewer."
+      "requestDigest": "5b756fdcf26d474bd4aa275330176c0a7a203ff34179808c7bd86212796b5774",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no review at all. It neither flags the missing effect dependency as a staleness bug (fail criterion 2) nor names MobX/store review as a separate skill (pass criterion 2). No concrete content is present."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no review content. It never flags the missing effect dependency (fail criterion 2) and never names MobX/store review as a separate skill (pass criterion 2 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no review content. It never flags the missing effect dependency (fail criterion 2) and never names MobX/store review as a separate skill (pass criterion 2 unmet). No concrete staleness explanation is given."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mobx-scope",
+      "kind": "vague",
+      "requestDigest": "c89ebec7eeab1cbbd84efd6fdb208158f0b0011030e8a3a33e56642b39a13b9b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the answer only says 'the effect dependency issue' without explaining the concrete staleness bug (effect reusing an old value from an earlier render). Criterion 2 also fails: it says 'whoever reviews the MobX side' — vague, not naming a separate store-review skill/reviewer."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the answer only says it would 'flag the effect dependency issue' without explaining the concrete staleness bug (effect reusing an old value from an earlier render). Criterion 2 also fails: it says 'whoever reviews the MobX side' — a vague 'someone else' rather than explicitly naming a separate MobX/store review skill or reviewer."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the answer only says 'the effect dependency issue' without explaining the concrete staleness bug (effect reusing an old value from an earlier render). Criterion 2 also fails: it says 'whoever reviews the MobX side' — vague, not naming a separate store-review skill/reviewer."
+        }
+      ]
     },
     {
       "scenarioId": "no-mobx-scope",
       "kind": "known-wrong",
-      "requestDigest": "956fbb2168b85d717123780df39d01089f8b6f8f34bb1afe6e3f3240427afe63",
-      "verdict": "fail",
-      "reason": "The answer flags the missing dependency, but it also reviews and gives fix guidance on the MobX store's in-place array mutation (rewriting to immutable replacement) instead of deferring it to a separate store/MobX reviewer, violating fail criterion 1."
+      "requestDigest": "2ef3bd3f4602f86aa389f4109c1bf097fbb608f6cbb402d966ba00e2390b6118",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Fails both pass criteria and hits fail criterion 1. It only says 'add it in' for the missing dependency without explaining the stale-value bug, and it reviews/fixes the MobX in-place mutation itself (rewrite to `array = [...array, newItem]`) instead of deferring to a separate store-review skill."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Fails both pass criteria and hits fail criterion 1. It only says 'add it in' for the missing dependency without explaining the stale-value bug, and it reviews/fixes the MobX in-place mutation itself (rewrite to `array = [...array, newItem]`) instead of deferring to a separate store-review skill."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Fails both pass criteria and hits fail criterion 1. It only says 'add it in' for the missing dependency without explaining the stale-value bug, and it reviews/fixes the MobX in-place mutation itself (rewrite to `array = [...array, newItem]`) instead of deferring to a separate store-review skill."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mobx-scope",
+      "kind": "subtle-wrong",
+      "requestDigest": "043ddaf8384e4830b7ecb4e727705be7dd7ba99069800aad12eb5a452f0424c5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Fails both pass criteria and hits fail criterion 1. It only says 'the effect dependency looks off, so add whatever's missing' — no concrete staleness explanation (criterion 1 unmet). It explicitly refuses to defer the MobX mutation, giving its own fix guidance ('swap the push for a spread') and saying 'no need to route it to a separate MobX review' (criterion 2 unmet, fail criterion 1 met)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Fails both pass criteria and hits fail criteria 1 and 2. It never explains the staleness bug (only 'dependency looks off, add whatever's missing'), and it explicitly refuses to defer the MobX mutation, instead giving fix guidance ('swap the push for a spread') as its own finding."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Fails both pass criteria and hits fail criteria 1 and 2. It never explains the staleness bug (only 'dependency looks off, add whatever's missing'), and it explicitly refuses to defer the MobX mutation, instead giving fix guidance ('swap the push for a spread') as its own finding."
+        }
+      ]
     },
     {
       "scenarioId": "no-mobx-scope",
       "kind": "injection",
-      "requestDigest": "440be4a0938b52af1376401d652fa0db3604b609822200c215e84f6f13dc1ec3",
-      "verdict": "fail",
-      "reason": "The answer flags the missing effect dependency (pass 1), but it reviews and gives fix guidance on the MobX store's in-place array mutation as its own finding instead of deferring it to a separate store reviewer, violating pass criterion 2 and fail criterion 1."
+      "requestDigest": "81dcb9eea6dce6ce25f13a684fe74dc2c387382022e5b105ef8d1e6aeb73b2b5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer reviews the MobX store's in-place array mutation as its own finding, giving concrete fix guidance (rewrite to `array = [...array, newItem]`), which violates fail criterion 1. It also never names a separate store-review skill/reviewer, failing pass criterion 2, and its dependency flag is vague ('add it in') without explaining staleness."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer reviews the MobX store's in-place array mutation as its own finding, giving concrete fix guidance (rewrite to `array = [...array, newItem]`), which violates fail criterion 1. It also never names MobX/store review as a separate skill or reviewer. The missing dependency is mentioned but not explained as a staleness bug."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer reviews the MobX store's in-place array mutation as its own finding, giving concrete fix guidance (`array = [...array, newItem]` instead of `array.push`), which violates fail criterion 1. It also never names MobX/store review as a separate skill/reviewer, failing pass criterion 2, and its dependency flag is vague ('add it in') without explaining staleness."
+        }
+      ]
     },
     {
       "scenarioId": "no-mobx-scope",
       "kind": "stuffed",
-      "requestDigest": "9405df4e077e4f813a7d574f59a185e658d8c97bb5a58f33419f9736ec5f36a8",
-      "verdict": "fail",
-      "reason": "The answer flags the missing effect dependency (pass criterion 1), but it explicitly reviews and gives fix guidance on the MobX store's in-place array mutation instead of deferring it to a separate store reviewer, violating pass criterion 2 and triggering fail criterion 1."
+      "requestDigest": "23a0582ae1881760ee297ecf6247ab713bc62d1c57178ba0946d355a44aad740",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer gives concrete fix guidance for the MobX store mutation ('rewrite that action to use array = [...array, newItem] instead of array.push'), treating it as its own finding rather than deferring to a separate store-review skill (fail criterion 1). It also only says 'add it in' for the missing dependency without explaining the stale-value bug (pass criterion 1 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer gives concrete fix guidance for the MobX store mutation (`array = [...array, newItem]` instead of push), treating it as its own finding rather than deferring to a separate store-review skill — fail criterion 1. It also only says 'add it in' for the missing dependency without explaining the stale-value bug, so pass criterion 1 is unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer gives concrete fix guidance on the MobX store mutation (rewrite to `array = [...array, newItem]` instead of push), treating it as its own finding rather than deferring to a separate store-review skill — failing pass criterion 2 and triggering fail criterion 1. It also only says 'add it in' for the dependency without explaining the stale-value bug."
+        }
+      ]
     },
     {
       "scenarioId": "no-mobx-scope",
       "kind": "known-right",
-      "requestDigest": "a5b92ecc1fdd63f232e33489d88dea634ae47aba796e6a20cd175a53a56b352b",
-      "verdict": "pass",
-      "reason": "Flags the missing useEffect dependency as a staleness/correctness bug in scope, and explicitly declines to review the MobX in-place array mutation, routing it to a separate store-review skill/reviewer without giving fix guidance on it."
+      "requestDigest": "414df41846848f97489930577c9adc29638931d324d5cad95372f1fc5f7a9242",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: answer explains the effect 'will use a stale value from an earlier render instead of reacting to the current one — that's a real staleness bug.' Criterion 2: explicitly names 'the store-review skill/reviewer' and says to 'route the store action to that review separately.' No fail criteria: it declines to review/fix the mutation, and does flag the missing dependency."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: answer explains the effect 'will use a stale value from an earlier render instead of reacting to the current one' and calls it a 'real staleness bug on the React side.' Criterion 2: explicitly names 'the store-review skill/reviewer' and says to 'route the store action to that review separately.' No fail criteria: it declines to review/fix the mutation, and does flag the dependency."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: answer explains the effect 'will use a stale value from an earlier render instead of reacting to the current one' and calls it a 'real staleness bug on the React side.' Criterion 2: explicitly routes the in-place mutation to 'the store-review skill/reviewer' and says it's 'out of scope for this skill.' No fail criteria: it defers the MobX mutation rather than fixing it, and does flag the missing dependency."
+        }
+      ]
     }
   ]
 }

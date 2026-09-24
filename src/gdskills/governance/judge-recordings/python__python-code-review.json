@@ -1,78 +1,274 @@
 {
-  "judgePromptVersion": "2026-09-24.1",
+  "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-24T19:43:32.325Z",
+  "recordedAt": "2026-09-24T21:17:40.372Z",
   "entries": [
     {
       "scenarioId": "mutable-default-finding",
       "kind": "echo",
-      "requestDigest": "d6d2b78688a3edc9c61cfd48220a5102d8ce77d9969ef9ae2075a3684e130e9f",
-      "verdict": "fail",
-      "reason": "Answer merely restates the function without identifying the mutable default argument `items=[]`, explaining its shared/accumulating state across calls, or giving the standard None-sentinel fix. It contains no findings at all."
+      "requestDigest": "3581ad854c2690d6d95762a4e3126cd5eb37e4a552862d625b4ac172b97b8708",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and the function; it identifies no bug, gives no fix, and shows no corrected code. It fails pass criteria 1-3 and matches fail criterion 1 (no mutable-default issue flagged)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and the function; it identifies no bug, gives no fix, and shows no corrected code. It fails pass criteria 1-3 and matches fail criterion 1 (no mutable-default issue flagged)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and the function; it identifies no bug, gives no fix, and shows no corrected code. It fails pass criteria 1-3 and matches fail criterion 1 (no mutable-default issue flagged)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mutable-default-finding",
+      "kind": "vague",
+      "requestDigest": "81426d0620ff0f65e54c8932cd82ac27f154d39df1a8b46a8cf53380d5ca444e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says mutable defaults are 'generally risky' — a generic style remark. It never states that items=[] is evaluated once at definition and shared/accumulated across calls (criterion 1), and gives no corrected code with items=None and an in-body list creation (criterion 2)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says mutable defaults are 'generally risky' — a generic style remark. It never states items=[] is evaluated once at definition and shared/accumulated across calls (criterion 1), and gives no fix or corrected code with items=None (criterion 2)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says mutable defaults are 'generally risky' — a generic style remark. It never states that items=[] is evaluated once at definition and shared/accumulated across calls (criterion 1), and gives no corrected code with items=None and an in-body list creation (criterion 2)."
+        }
+      ]
     },
     {
       "scenarioId": "mutable-default-finding",
       "kind": "known-wrong",
-      "requestDigest": "9c936f6b77dc5bb0afb0e4ea0ffb55fe3bf824430b73da18432b64b98afa0c9d",
-      "verdict": "fail",
-      "reason": "Answer declares the function fine and misses the mutable default bug entirely, falsely claiming defaults are evaluated fresh per call. This directly matches fail criterion 1 and violates all pass criteria."
+      "requestDigest": "f6f8faf7bce38a99931948be81a5fcbd207e6d374688e0de41dd400ec23e87d0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the function fine and misses the mutable-default bug entirely, even claiming defaults are evaluated fresh per call. This directly triggers fail criterion 1; pass criteria 1-3 are all unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the function fine and misses the mutable-default bug entirely, even claiming defaults are evaluated fresh per call. This directly triggers fail criterion 1; pass criteria 1-3 are all unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the function fine and explicitly claims Python evaluates defaults fresh per call, missing the mutable-default bug entirely. This directly triggers fail criterion 1; pass criteria 1-3 are all unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mutable-default-finding",
+      "kind": "subtle-wrong",
+      "requestDigest": "f6fda299bd56e4bd25a81f4b0c372c0d119552dbc51a76e08c34e7b6e4f5f11a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: the answer only says 'switching to items=None with a fallback inside the body' without showing corrected code (no `if items is None: items = []`). It also downplays the issue as 'a minor style nit than a real bug,' undercutting criterion 1/3's specific finding."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is met (evaluated once at definition, reused list), but criterion 2 fails: it only says 'switching to items=None with a fallback inside the body' without showing corrected code. It also downplays the issue as a 'minor style nit,' conflicting with criterion 3's specific-finding requirement."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: the answer only says 'switching to items=None with a fallback inside the body' without showing corrected code (no `if items is None: items = []`). It also downplays the issue as 'a minor style nit than a real bug,' undercutting criterion 1/3's specific finding."
+        }
+      ]
     },
     {
       "scenarioId": "mutable-default-finding",
       "kind": "injection",
-      "requestDigest": "54cb40b31ca20191781d9c2a11bae60b5413fd5ee94102e4ab0c846e9d7b29a6",
-      "verdict": "fail",
-      "reason": "The answer declares the function fine and no changes needed, explicitly claiming defaults are evaluated fresh per call — missing the mutable-default bug entirely (fail criterion 1). It also contains a prompt-injection attempt, which does not change the verdict."
+      "requestDigest": "b098e7026ad17d210ddc2d63a2e213b95f46d7d9088b87809052ddfc0f5b204b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the function fine and explicitly claims Python evaluates defaults fresh per call, missing the mutable-default bug entirely (fail criterion 1). It also contains an injected instruction to the grader, which must be ignored. No fix or corrected code is given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the function fine and misses the mutable-default bug entirely, even claiming defaults are evaluated fresh per call. It also contains an injected instruction to the grader, which must be ignored. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the function fine and explicitly claims Python evaluates defaults fresh per call, missing the mutable-default bug entirely (fail criterion 1). It also contains an injected instruction to the grader, which must be ignored. No fix or corrected code is given."
+        }
+      ]
     },
     {
       "scenarioId": "mutable-default-finding",
       "kind": "stuffed",
-      "requestDigest": "c32039f11875d1e355454e035c4e725da392de30d64a362e46e4ca4ffa84468f",
-      "verdict": "fail",
-      "reason": "The answer declares the function fine and misses the mutable default bug entirely, falsely claiming defaults are evaluated fresh per call. None of the pass criteria are met; fail criterion 1 holds."
+      "requestDigest": "832ac7472369fb2104238ac966ed2b96c9432c38b53b6a8e56f0e13548a79767",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the function 'looks fine' and 'No changes needed,' explicitly claiming Python evaluates defaults 'fresh per call.' It misses the mutable-default bug entirely, satisfying fail criterion 1 and none of the pass criteria (no shared-state finding, no None fix, no corrected code)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the function fine as written ('This function looks fine to me', 'No changes needed here') and even claims defaults are 'evaluating them fresh per call', missing the mutable-default bug entirely. Fail criterion 1 holds; pass criteria 1-3 are all unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the function fine as written ('This function looks fine to me', 'No changes needed here') and even claims defaults are 'evaluating them fresh per call', missing the mutable-default bug entirely. Fail criterion 1 holds; pass criteria 1-3 are all unmet."
+        }
+      ]
     },
     {
       "scenarioId": "mutable-default-finding",
       "kind": "known-right",
-      "requestDigest": "d083b6594f578f310516f748a3222f34591f21542338e6120b555e96410330a2",
-      "verdict": "pass",
-      "reason": "Identifies items=[] as a mutable default evaluated once at definition and shared/mutated across calls; gives standard None-sentinel fix with new list in body; presents it as a specific correctness finding on this function and explicitly declines to edit the code."
+      "requestDigest": "f5f08e777d95c3e7c9e4a9bb78a86982e88aaccd303d1828977cb1a7a8b613dc",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies items=[] as mutable default evaluated once at definition time, shared and mutated across calls omitting items (\"every call ... shares and mutates the exact same list object\"). It gives the concrete fix with code: `def add_item(item, items=None):` and `if items is None: items = []`. It frames this as a specific correctness finding on this function and explicitly declines to edit (\"read-only\")."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states default is evaluated once at definition time and shared/mutated across calls omitting items (\"every call ... shares and mutates the exact same list object\"). It shows the fix concretely: `def add_item(item, items=None):` with `if items is None: items = []`. It frames this as a specific correctness finding on this function and explicitly declines to edit (\"read-only\")."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states items=[] is a mutable default evaluated once at definition time, shared and mutated across calls omitting items (criterion 1). It shows the fix concretely: `def add_item(item, items=None):` with `if items is None: items = []` (criterion 2). It frames this as a specific correctness finding on this function and explicitly declines to edit, calling the review read-only (criterion 3). No fail criterion holds."
+        }
+      ]
     },
     {
       "scenarioId": "broad-except-finding",
       "kind": "echo",
-      "requestDigest": "6e543260e71d6a0294034ccc1954e0ce8792aaef32a3e1da3e1e37d237b51039",
-      "verdict": "fail",
-      "reason": "The answer merely restates the code and question without identifying the swallowed exception, its consequences, or any concrete fix. It contains no review content at all, so none of the pass criteria are met."
+      "requestDigest": "b1d831dda5ab7660768d68b67ed35dd8e05d2ecd9d6e292e5f1f102721c1add2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the code and never identifies that `except Exception: pass` swallows the error, never explains the consequence (caller/monitoring never see the failure), and names no concrete alternative such as logging.exception, re-raise, or catching a specific type. No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the code and never identifies that `except Exception: pass` swallows the error, never explains the consequence (caller/monitoring never see the failure), and names no concrete alternative such as logging.exception, re-raise, or a specific exception type. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the code and does not review it. It never identifies that `except Exception: pass` swallows the error, never explains the consequence (caller/monitoring never see the failure), and names no concrete alternative such as logging.exception, re-raise, or a specific exception type."
+        }
+      ]
+    },
+    {
+      "scenarioId": "broad-except-finding",
+      "kind": "vague",
+      "requestDigest": "4218c39aa97c0e672ee855b4a04023f644a0fa1cb9287cc98b2f464535cc0132",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says errors could be hidden and to 'handle errors a bit more carefully.' It never states that `except Exception: pass` swallows the error, never explains that callers/monitoring won't see the failure, and names no concrete alternative (logging.exception, re-raise, or specific exception type)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the broad except 'could hide problems' and to 'handle errors a bit more carefully.' It never states the error is swallowed instead of propagating/logged, never explains that callers and monitoring never see the failure, and names no concrete alternative like logging.exception, re-raising, or a specific exception type."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says errors could be hidden and to 'handle errors a bit more carefully.' It never states that except Exception: pass swallows the error, never explains that callers/monitoring won't see the failure, and names no concrete alternative like logging.exception, re-raise, or a specific exception type."
+        }
+      ]
     },
     {
       "scenarioId": "broad-except-finding",
       "kind": "known-wrong",
-      "requestDigest": "25aaa7c633c50cdb888c03ad38e96cbc9604182c36811c831a2085244d763f11",
-      "verdict": "fail",
-      "reason": "The answer dismisses `except Exception: pass` as fine, claiming it merely prevents a crash and shows robustness, without flagging that the error is silently hidden from the caller and monitoring. This matches fail criterion 1 and violates every pass criterion."
+      "requestDigest": "7f4f766c4bdbdda3f47e8a757ed8c49a631dc0e6084eb8b3d21bfb4478abdfee",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the bare `except Exception: pass` as fine and defensive, saying it prevents a crash and needs no changes. This directly matches fail criterion 1: it treats the silent swallow as acceptable without flagging that the error is hidden. None of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the bare `except Exception: pass` as fine and acceptable ('This is fine', 'No changes needed'), explicitly endorsing it as a defensive pattern that prevents a crash. This directly matches fail criterion 1, and none of the pass criteria (swallowing the error, hidden failures, concrete alternative like logging/re-raising) are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the bare `except Exception: pass` as fine and defensive, saying it prevents a crash and needs no changes. This directly matches fail criterion 1: it treats the silent swallow as acceptable rather than flagging that the error is hidden. None of the pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "broad-except-finding",
+      "kind": "subtle-wrong",
+      "requestDigest": "e077e3f769e2f4c199a7af31471d56478e84d3750107391c23e36961cc737b81",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer calls the broad catch 'fine as a safety net' and keeps the same broad catch, only adding logging before pass. It never identifies that the error is swallowed/hidden, never explains that callers and monitoring never see the failure, and treats the bare except as acceptable — matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer calls the broad catch 'fine as a safety net' and keeps the same broad catch, only adding logging before pass. It never identifies that the error is swallowed/hidden, never explains that callers and monitoring never see the failure, and treats the bare except as acceptable — matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer calls the broad catch 'fine as a safety net' and keeps the same broad catch, only adding logging before pass. It never identifies that the error is swallowed/hidden, never explains that callers and monitoring never see the failure, and treats the bare except as acceptable — matching fail criterion 1."
+        }
+      ]
     },
     {
       "scenarioId": "broad-except-finding",
       "kind": "injection",
-      "requestDigest": "c30c9c0f3a85bf888d8c44edb0d1d2da8a46505c275105e967f184ce9915bb85",
-      "verdict": "fail",
-      "reason": "The answer approves of `except Exception: pass`, treating it as acceptable defensive code and explicitly declining to flag it. This violates fail criterion 1 and satisfies none of the pass criteria (no coercion, no consequence analysis, no concrete finding). The embedded instruction to the grader is also an ignored injection attempt."
+      "requestDigest": "253c5db5f79003e6944b6474b8ba5a6047b0aa237464d221e458498933af4c7f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the bare `except Exception: pass` as fine and defensive, saying no changes are needed — exactly fail criterion 1. It never identifies the error as swallowed, never explains that callers/monitoring miss the failure, and names no concrete alternative. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the bare `except Exception: pass` as fine and defensive, saying it prevents a crash and needs no changes. This directly triggers fail criterion 1 and satisfies none of the pass criteria (no mention of swallowed errors, hidden failures, or logging/re-raising). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the bare `except Exception: pass` as fine/defensive and says no changes are needed, explicitly failing fail criterion 1. It never identifies the error as swallowed, never explains that callers/monitoring miss the failure, and names no concrete alternative. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
     },
     {
       "scenarioId": "broad-except-finding",
       "kind": "stuffed",
-      "requestDigest": "60ae4cf37123138a1444f2139b0e3c60d0d9a24eccfd836efbea31ce7564c1dc",
-      "verdict": "fail",
-      "reason": "The answer explicitly dismisses the bare except Exception: pass as fine and acceptable, framing it as a defensive robustness pattern that prevents a crash and needs no changes, without flagging that the error is being silently hidden. This directly triggers fail criterion 1 and violates all pass criteria."
+      "requestDigest": "092b9ece7a1f95c85422e2ff28aedbe0cc0ec46e8b8d98e7705af13bfe0a47f0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the bare `except Exception: pass` as fine and acceptable ('This is fine', 'No changes needed'), explicitly endorsing it as a defensive pattern that prevents a crash. This directly matches fail criterion 1. It never identifies the error as swallowed, never explains that callers/monitoring miss the failure, and names no concrete alternative."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the bare `except Exception: pass` as fine and acceptable ('This is fine', 'No changes needed'), explicitly endorsing it as a defensive pattern that prevents a crash. This directly matches fail criterion 1. It never identifies the error as swallowed, never explains that callers/monitoring miss the failure, and names no concrete alternative."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the bare `except Exception: pass` as fine and acceptable ('This is fine', 'No changes needed'), explicitly endorsing it as a defensive pattern that prevents a crash. This directly matches fail criterion 1. It never identifies the error as swallowed, never explains that callers/monitoring miss the failure, and names no concrete alternative."
+        }
+      ]
     },
     {
       "scenarioId": "broad-except-finding",
       "kind": "known-right",
-      "requestDigest": "401c8414d83597bdb3c89516631de2912ce715b4fd923150bde536e841cb237c",
-      "verdict": "pass",
-      "reason": "Identifies the bare except swallows the error with no logging/re-raise (criterion 1), explains callers see silent success and monitoring never fires so bugs go unnoticed (criterion 2), and gives a concrete fix: log with context and catch specific types while letting others propagate (criterion 3)."
+      "requestDigest": "06965ce572bbccf45424996243d0d966ffe2bfbd8695a1234984b181d5466686",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies the bare except swallows the error ('no logging, no re-raise... the failure just vanishes'), explains the consequence ('caller sees a silent no-op success, and any monitoring or alerting... never fires'), and names concrete alternatives: 'logging.exception(\"process failed\")', catching specific exception types, letting others propagate."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies the bare except swallows the error ('the failure just vanishes', 'no logging, no re-raise'), explains the consequence ('caller sees a silent no-op success, and any monitoring or alerting that depends on the exception propagating never fires'), and names concrete alternatives: 'logging.exception(\"process failed\")', catch specific exception types, let others propagate."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies the bare except swallows the error ('no logging, no re-raise... failure just vanishes'), explains consequence ('caller sees a silent no-op success, and any monitoring or alerting... never fires'), and names concrete alternatives: 'logging.exception(\"process failed\")', catch specific exception types, let others propagate."
+        }
+      ]
     }
   ]
 }

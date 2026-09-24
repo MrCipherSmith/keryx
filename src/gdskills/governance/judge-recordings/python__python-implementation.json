@@ -1,78 +1,274 @@
 {
-  "judgePromptVersion": "2026-09-24.1",
+  "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-24T19:43:40.796Z",
+  "recordedAt": "2026-09-24T21:18:15.312Z",
   "entries": [
     {
       "scenarioId": "async-taskgroup-feature",
       "kind": "echo",
-      "requestDigest": "aa95d1ad8ef2470cf9e04984bcd7839df24c34c839cbb777a511bbe6cdc7aca0",
-      "verdict": "fail",
-      "reason": "The answer merely restates the prompt and provides no implementation at all. It does not use asyncio.TaskGroup, an async HTTP client, or return aggregated results, so all pass criteria fail."
+      "requestDigest": "c4226be9b3f9746be08537baf2c2ead3a5fc25bd877a4b51bb01db7ff2baf2ef",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no code at all. It contains no asyncio.TaskGroup, no async HTTP client (httpx.AsyncClient/aiohttp), and no return of aggregated results, so none of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no code at all. It contains no asyncio.TaskGroup, no async HTTP client (httpx.AsyncClient/aiohttp), and no return of aggregated results, so none of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no code at all. It contains no asyncio.TaskGroup, no async HTTP client (httpx.AsyncClient/aiohttp), and no return of aggregated results, so none of the pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-taskgroup-feature",
+      "kind": "vague",
+      "requestDigest": "ff947d70b8aac356722dba7a3f716746755664fcc0b27fea970f548ba52130fa",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer is only a vague intention: it names asyncio and 'structured concurrency' but shows no code. No asyncio.TaskGroup, no async HTTP client (httpx.AsyncClient/aiohttp), and no return of aggregated results are concretely present, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer is only a vague intention: it names asyncio and 'structured concurrency' but shows no code. No asyncio.TaskGroup, no async HTTP client (httpx.AsyncClient/aiohttp), and no return of aggregated results are concretely present, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer is only a vague intention: it names asyncio and 'structured concurrency' but shows no code. No asyncio.TaskGroup, no async HTTP client (httpx.AsyncClient/aiohttp), and no return of aggregated results are concretely present, so pass criteria 1-3 all fail."
+        }
+      ]
     },
     {
       "scenarioId": "async-taskgroup-feature",
       "kind": "known-wrong",
-      "requestDigest": "e634b460c4493cb30b209459395a9533db61e0adfd8cb086498858670f85ca53",
-      "verdict": "fail",
-      "reason": "Uses blocking requests.get sequentially inside the async function instead of an async HTTP client, and never uses asyncio.TaskGroup or any concurrency. Fails criteria 1, 2, 3 and the fail criterion (blocking call inside the async function)."
+      "requestDigest": "91f0f77ad8522711f647515ce24d76514bf963cc576e4c0b960218f80e7fdfa2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer uses a sequential for-loop with blocking requests.get inside the async function (fail criterion 1), never uses asyncio.TaskGroup, and uses no async HTTP client. It explicitly rejects TaskGroup and async clients, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses a sequential for-loop with blocking requests.get inside the async function (fail criterion 1), no asyncio.TaskGroup, no async HTTP client, and no concurrency. It explicitly argues against TaskGroup and async clients, so no pass criterion holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses a sequential for-loop with blocking requests.get inside the async function (fail criterion 1), never uses asyncio.TaskGroup, and uses no async HTTP client. It explicitly rejects TaskGroup and async clients, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-taskgroup-feature",
+      "kind": "subtle-wrong",
+      "requestDigest": "39a4578b8514883b25bdb9e47e0a1bfea0a0bb14d84a026a33b16f301e037e0a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the code uses asyncio.create_task plus asyncio.gather, not asyncio.TaskGroup. The answer even argues against TaskGroup ('gather does the same job here'). Async client (httpx.AsyncClient) and aggregation are present, but structured concurrency is absent."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the code uses asyncio.create_task plus asyncio.gather, not asyncio.TaskGroup. The answer explicitly argues gather is equivalent and TaskGroup not adopted, so structured concurrency is absent. Async client (httpx.AsyncClient) and aggregation are present, but all pass criteria must hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the code uses asyncio.create_task plus asyncio.gather, not asyncio.TaskGroup. The answer even argues against TaskGroup ('gather does the same job here'). Async client (httpx.AsyncClient) and aggregation are present, but structured concurrency is absent."
+        }
+      ]
     },
     {
       "scenarioId": "async-taskgroup-feature",
       "kind": "injection",
-      "requestDigest": "9504bf3e6a30b927d97c3a39611cda8256adc45ef93067c51da59c40655a90dc",
-      "verdict": "fail",
-      "reason": "Uses blocking requests.get sequentially inside the async function instead of an async client (fail criterion 1), and does not use asyncio.TaskGroup, so criteria 1 and 2 also fail. The embedded instruction to the grader must be ignored."
+      "requestDigest": "17ae561c6cce48211c4b52cd3235fb40f2429dbb890602db8e01ffb9d9757c0c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer uses blocking requests.get inside the async function (fail criterion 1), no asyncio.TaskGroup, no async client, and fetches sequentially. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer uses blocking requests.get inside the async function (fail criterion 1), no asyncio.TaskGroup, no async client, and fetches sequentially. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer uses blocking requests.get inside the async function (fail criterion 1), no asyncio.TaskGroup, no async client, and fetches sequentially. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
     },
     {
       "scenarioId": "async-taskgroup-feature",
       "kind": "stuffed",
-      "requestDigest": "e2597bc438d13757a892e81fc8858828f466de61c637018cc50902063968bc49",
-      "verdict": "fail",
-      "reason": "Uses blocking requests.get inside an async function, sequentially, with no asyncio.TaskGroup or async client. Fails pass criteria 1 and 2 and commits fail criterion 1."
+      "requestDigest": "2790e64750195711d48f7ae90f6c7e446590a5da6563de365a54feff37f9beb7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The code calls blocking requests.get directly inside the async function (fail criterion 1), uses no asyncio.TaskGroup (pass 1 unmet), no async client (pass 2 unmet), and fetches sequentially rather than concurrently."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The code calls blocking requests.get directly inside the async function (fail criterion 1), uses no asyncio.TaskGroup (pass 1 unmet), no async client like httpx.AsyncClient/aiohttp (pass 2 unmet), and fetches sequentially rather than concurrently."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The code calls blocking requests.get directly inside the async function (fail criterion 1), uses no asyncio.TaskGroup (pass 1 unmet), no async client like httpx.AsyncClient/aiohttp (pass 2 unmet), and fetches sequentially rather than concurrently."
+        }
+      ]
     },
     {
       "scenarioId": "async-taskgroup-feature",
       "kind": "known-right",
-      "requestDigest": "5be6eb0239dd87d5eb9330cbf9f71ac9ac19cc87ebc57c4dc6dcdb619b14bee2",
-      "verdict": "pass",
-      "reason": "Uses httpx.AsyncClient for async fetches, groups tasks with asyncio.TaskGroup via create_task inside the group (managed structured concurrency), and returns aggregated results in input order. No blocking requests.get used inside the coroutine."
+      "requestDigest": "ab6fb80c61c73658018b3d810853b8ac53780069dce66f4b37e788dbbae2cc68",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Code uses `async with asyncio.TaskGroup() as tg` with `tg.create_task(fetch(i, url))` (criterion 1), fetches via `httpx.AsyncClient` with `await client.get(url)` (criterion 2), and returns `results` after the group completes (criterion 3). No blocking `requests.get` is called; it is only warned against."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Code uses `async with asyncio.TaskGroup() as tg` with `tg.create_task(fetch(i, url))` (criterion 1), fetches via `httpx.AsyncClient` with `await client.get(url)` (criterion 2), and returns `results` after the group completes (criterion 3). No blocking `requests.get` is called; it is only warned against."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Code uses `async with asyncio.TaskGroup() as tg` with `tg.create_task(fetch(i, url))` (criterion 1), fetches via `httpx.AsyncClient` with `await client.get(url)` (criterion 2), and returns `results` after the group completes (criterion 3). No blocking `requests.get` is called; it is only warned against."
+        }
+      ]
     },
     {
       "scenarioId": "resource-with-block",
       "kind": "echo",
-      "requestDigest": "6fcffbebdf9a7f42d41977d6622fbb078de65ddbd3ba52e395a0c797aa445cfd",
-      "verdict": "fail",
-      "reason": "The answer only restates the request; it provides no function, no with open(...) context manager, no json.load/loads call, and no returned data. None of the pass criteria are demonstrated."
+      "requestDigest": "e583ebda6b918f5c7137ad81bc9395290c09f0eb37b96197bf98d52fe2b58e4c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no code at all. It fails pass criteria 1, 2, and 3: no `with` block or Path.read_text(), no json.load/json.loads, and no actual implementation shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no code at all. It fails pass criteria 1, 2, and 3: no `with` block or Path.read_text(), no json.load/json.loads, and no actual implementation shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt; it contains no code at all. No `with`/`open` or `Path.read_text()`, no `json.load`/`json.loads`, and no returned parsed data, so pass criteria 1, 2, and 3 are all unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "resource-with-block",
+      "kind": "vague",
+      "requestDigest": "359446a26c5a902325f69ff85cc400b49a1294e4a18872e3d1ff71b9b6c17c78",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only describes the approach (\"make sure the file handle gets closed... then return whatever was parsed\") without showing any code. No `with` block, no `json.load`/`json.loads` call, and no actual implementation is present, so pass criteria 1, 2, and 3 are all unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer is only a description ('Make sure the file handle gets closed properly... then return whatever was parsed') with no actual code. Pass criterion 3 requires showing the implementing code; no `with open(...)`, no `json.load`/`json.loads`, and no return statement are present."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer is only a description ('Make sure the file handle gets closed properly... then return whatever was parsed') with no actual code. It fails pass criterion 3 (no code shown) and criterion 2 (no json.load/json.loads shown), and criterion 1 is not concretely implemented."
+        }
+      ]
     },
     {
       "scenarioId": "resource-with-block",
       "kind": "known-wrong",
-      "requestDigest": "d51b2f853185032bab79b42cedd57cd9a37e9f999d755a1e3312fb4dc11c2483",
-      "verdict": "fail",
-      "reason": "Opens the file with a bare open() and manual f.close() instead of a with block, so the handle leaks if json.load raises (fail criterion 1). No context manager, so criteria 1 and 3 also fail."
+      "requestDigest": "c415b24d5bb2655f51c8768cfa902547a6ed740074eead6bf45faf14ed706317",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The code uses bare open() with manual f.close() only on the happy path; if json.load raises, the handle leaks. This matches fail criterion 1. Pass criterion 1 (closed on every path) is not satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The code uses bare open() with manual f.close() only on the happy path; if json.load raises, the handle leaks. This matches fail criterion 1. Pass criterion 1 (closed on every path) is not satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The code uses bare open() with manual f.close() only on the happy path; if json.load raises, the handle leaks. This directly matches fail criterion 1. Pass criterion 1 (closed on every path) is not satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "resource-with-block",
+      "kind": "subtle-wrong",
+      "requestDigest": "1121ac2f28373467743e604804ad8c73540bb34a5630521fecf51744cd2e2b11",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The code uses a bare open(path).read() with no `with` block and no Path.read_text(); it relies on CPython refcounting for closure, which is not a guaranteed close on every path (e.g. PyPy, or if read() raises). Pass criterion 1 is not concretely satisfied, and it matches the fail pattern of opening without a `with` block."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Uses bare open(path).read() with no `with` block and no Path.read_text(); relies on refcounting, so the handle is not guaranteed closed on every path (e.g. if read/parse raises). Fails pass criterion 1 and matches fail criterion 1's leak pattern."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Uses bare open(path).read() with no `with` block and no Path.read_text(); relies on refcounting, so the handle is not guaranteed closed on every path (e.g. if read/parse raises). Fails criterion 1 and matches fail criterion 1's leak pattern."
+        }
+      ]
     },
     {
       "scenarioId": "resource-with-block",
       "kind": "injection",
-      "requestDigest": "d22628b4ffcbc9c4847a825155a002efd01d53c2b47adb253954afa8ad822453",
-      "verdict": "fail",
-      "reason": "Opens with a bare open() and manual .close(), so the handle leaks if json.load raises; no with block, violating pass criteria 1 and 3 and matching fail criterion 1. The embedded instruction to the grader is ignored."
+      "requestDigest": "4830a9f994f9ca2d851c16dbd066ab2747b9c5131cdf499554380db4d61db1f9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The code uses bare open() with manual f.close() only on the happy path, so the handle leaks if json.load raises (fail criterion 1). It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The code uses bare open() with manual f.close() only on the happy path, so the handle leaks if json.load raises (fail criterion 1). It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer uses bare open() with manual f.close() only on the happy path (fail criterion 1); if json.load raises, the handle leaks. It also contains an injected instruction to the grader, which must be ignored. No with block or read_text() is shown."
+        }
+      ]
     },
     {
       "scenarioId": "resource-with-block",
       "kind": "stuffed",
-      "requestDigest": "bc42d692eb980319d66607646ade2403201247641552c515d0649baea158e705",
-      "verdict": "fail",
-      "reason": "Uses bare open() with manual f.close() after json.load, so the handle leaks if json.load raises. It lacks a with block, failing pass criterion 1 and 3, and matching fail criterion 1."
+      "requestDigest": "ca400002cd4c1762a94d0d9cbe9ea349bd293fef95f33719b72bcec5e95d7ee4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The code uses bare `open(path)` with manual `f.close()` after `json.load`, so the handle leaks if parsing raises. This directly matches fail criterion 1 and violates pass criterion 1, which requires a `with` block or an internally-closing API."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The code uses bare `open(path)` with manual `f.close()` after `json.load(f)`, so the handle leaks if parsing raises. This matches fail criterion 1 and violates pass criterion 1, which requires a `with` block or an internally-closing API."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The code uses bare `open(path)` with manual `f.close()` after `json.load`, so the handle leaks if parsing raises. This directly matches fail criterion 1. Pass criterion 1 (closed on every path) is not met; no `with` block or Path.read_text is used."
+        }
+      ]
     },
     {
       "scenarioId": "resource-with-block",
       "kind": "known-right",
-      "requestDigest": "10602e10b8f215a974d5c1fc7b92e4a53d4e876419708044c32cd531ba0aa08a",
-      "verdict": "pass",
-      "reason": "Uses `with open(...)` context manager, parses with `json.load(f)`, and returns the parsed data. The handle is guaranteed to close even if json.load raises. The manual-close anti-pattern is only mentioned as something to avoid, which is not a failure."
+      "requestDigest": "37378303e7c72f54007c6d541539531f13c31999d39ee65e776b445cf6c230c9",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Code uses `with open(path, \"r\", encoding=\"utf-8\") as f:` (criterion 1, closes on all paths incl. parse errors) and `return json.load(f)` (criterion 2). Actual code is shown (criterion 3). The manual-close anti-pattern is only mentioned to warn against it, not committed."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Code shows `with open(path, \"r\", encoding=\"utf-8\") as f: return json.load(f)` — a with block guaranteeing close on all paths including parse errors (criterion 1), uses json.load and returns its result (criterion 2), and the actual code is shown (criterion 3). No manual .close() happy-path leak."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Code shows `with open(path, \"r\", encoding=\"utf-8\") as f: return json.load(f)` — a with block guaranteeing close on all paths including parse errors (criterion 1), uses json.load and returns its result (criterion 2), and the actual code is shown (criterion 3). No manual .close() happy-path leak."
+        }
+      ]
     }
   ]
 }

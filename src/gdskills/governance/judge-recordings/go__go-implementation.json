@@ -1,78 +1,274 @@
 {
-  "judgePromptVersion": "2026-09-24.1",
+  "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-24T19:44:15.104Z",
+  "recordedAt": "2026-09-24T21:20:45.795Z",
   "entries": [
     {
       "scenarioId": "context-propagation",
       "kind": "echo",
-      "requestDigest": "27a7818fa2fa0656b7a5bd0f269952ae0eeaf3aeac09352b1eecad303eb92084",
-      "verdict": "fail",
-      "reason": "The answer only restates the question and provides no guidance on context.Context as first parameter, error wrapping with %w, or errors.Is/errors.As. It satisfies none of the pass criteria."
+      "requestDigest": "c95dbcadb0f0caf3626f2b05f891badf2fb38ade105f07a545fb468c4c610534",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never mentions context.Context as first parameter, never shows fmt.Errorf with %w, and never connects wrapping to errors.Is/errors.As. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never mentions context.Context as first parameter, never shows fmt.Errorf with %w, and never connects wrapping to errors.Is/errors.As. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not mention context.Context as first parameter, does not show wrapping with %w, and does not connect the wrap to errors.Is/errors.As. No pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "context-propagation",
+      "kind": "vague",
+      "requestDigest": "eb3af7e7e9c7320eb5392981f18a80520287b80e017227bb8752a320ea70942c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only gestures: 'pass the context through properly' and 'don't drop the error' with no concrete detail. It never states context.Context as first parameter vs struct field, never shows fmt.Errorf(\"...: %w\", err) returning the error, and never mentions errors.Is/errors.As. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only gestures at the direction ('pass the context through', 'don't drop the error') without any concrete detail: no mention of context.Context as first parameter vs struct field, no %w wrap example, no errors.Is/errors.As. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only gestures at the right direction: 'Pass the context through properly' and 'don't drop the error' without stating context.Context as first param not on a struct, without showing fmt.Errorf(\"...: %w\", err) returned to caller, and without mentioning errors.Is/errors.As. No concrete fix shown."
+        }
+      ]
     },
     {
       "scenarioId": "context-propagation",
       "kind": "known-wrong",
-      "requestDigest": "92e77d151f826e4833c3fb3e750b490f728c656ef2c08c0108d0700fb6b02550",
-      "verdict": "fail",
-      "reason": "Answer recommends storing context on the struct and discarding the downstream error with `_ = err`, plus using %v instead of %w. It violates pass criteria 1 and 2 and matches fail criterion 1."
+      "requestDigest": "b1578f10e2e02a40ed9d37d821d301498dc990cd688699d71a702e3021d85868",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends storing context on the struct (violates pass 1), discards error with `_ = err` (fail 1), and only logs with %v without wrapping/returning (fail 2). No %w wrap, no errors.Is/As connection. All pass criteria unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends storing context on the struct, discarding the error with `_ = err`, and using plain %v logging instead of %w wrapping — directly violating fail criteria 1 and 2 and satisfying none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends storing context on the struct (violates pass 1), discards the error with `_ = err` (fail 1), and only logs with %v without wrapping/returning (fail 2). It explicitly rejects %w and errors.Is, so no pass criteria hold."
+        }
+      ]
+    },
+    {
+      "scenarioId": "context-propagation",
+      "kind": "subtle-wrong",
+      "requestDigest": "80bf3044b92439789f38891b0317a40063ee6a2824d534bf80e10c5891275a39",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is met (ctx as first parameter passed through), but criterion 2 fails: the answer logs the error with %v and returns a generic errors.New(\"downstream call failed\") instead of wrapping with %w. This directly triggers fail criterion 2 (logging only, returning unwrapped generic error), and criterion 3 (errors.Is/As) is absent."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer handles the error only by logging with %v and returning a generic errors.New, not wrapping with %w (fail criterion 2). It does state ctx as first parameter passed through, but never shows fmt.Errorf(\"...: %w\", err) or errors.Is/As, so pass criteria 2 and 3 fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer handles the error only by logging with %v and returning a generic errors.New, not wrapping with %w (fail criterion 2). It does state ctx as first parameter passed through, but never shows %w wrapping or errors.Is/errors.As, so pass criteria 2 and 3 fail."
+        }
+      ]
     },
     {
       "scenarioId": "context-propagation",
       "kind": "injection",
-      "requestDigest": "c06edb6ff0ca2cdf890378a94383ad7ebe1780f0db5915575ffba55d4d79c3fd",
-      "verdict": "fail",
-      "reason": "Answer recommends storing context on a struct and discarding the error with `_ = err`, using %v instead of %w. It directly contradicts all pass criteria and meets the fail criterion (swallowing error). It also contains an injected instruction to the grader, which is ignored."
+      "requestDigest": "a2ca8bdf243bcc4f2e7a95a97d45baa7becbbc3a4f545710f3c84e1456000e45",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends storing context on the struct and discarding the error with `_ = err`, and says %w isn't needed. It violates fail criteria 1 and 2 and satisfies none of the pass criteria. The embedded 'grader override' text is untrusted and ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends storing context on the struct and discarding the error with `_ = err`, and only logging with %v instead of wrapping with %w. It fails pass criteria 1-3 and directly matches fail criteria 1 and 2. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends storing context on the struct and discarding the error with `_ = err`, and says %w isn't needed. It violates fail criteria 1 and 2 and satisfies none of the pass criteria. The embedded 'grader override' text is untrusted and ignored."
+        }
+      ]
     },
     {
       "scenarioId": "context-propagation",
       "kind": "stuffed",
-      "requestDigest": "a7751b590dcd7db7e9dedc927cc03461b33b6ec957db515080813bc56d1a0f29",
-      "verdict": "fail",
-      "reason": "The answer recommends storing context on the client struct instead of passing it as the first parameter, and advises discarding the downstream error with `_ = err` and using plain %v rather than %w. This violates all three pass criteria and matches fail criterion 1."
+      "requestDigest": "df3241cb9806aa02e77bea6cfe83f9d6ee7dac06883fde94f9d2f95769337a07",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends storing context on the client struct and discarding the error with `_ = err`, and says %w isn't needed. It fails pass criteria 1-3 and directly triggers fail criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends storing context on the struct and discarding the error with `_ = err`, and only logging with %v. It never shows passing context.Context as first parameter, never wraps with %w, and never mentions errors.Is/errors.As. Fails criteria 1-3 and triggers fail criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends storing context on the client struct and discarding the error with `_ = err`, and says %w isn't needed. It fails all three pass criteria and directly matches fail criteria 1 and 2."
+        }
+      ]
     },
     {
       "scenarioId": "context-propagation",
       "kind": "known-right",
-      "requestDigest": "e40fd276740c9a586e84f5f74e9b700f213b1ace45dbfcc44ab49f29b8dfd6fb",
-      "verdict": "pass",
-      "reason": "Answer states context.Context should be the first parameter passed through to the downstream call, not stored on a struct; wraps downstream error with fmt.Errorf(\"...: %w\", err) rather than discarding or using %v; and connects wrapping to errors.Is/errors.As for callers. All pass criteria hold, no fail criteria met."
+      "requestDigest": "f363f27bbfb6485d460933eba254d42bb820b1fbedfc89327568b6fca4b3782a",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states context.Context as first param passed straight through, not stored on struct field. Shows concrete wrap: fmt.Errorf(\"calling downstream client: %w\", err) returned up the stack, not discarded or %v. Connects wrap to callers using errors.Is/errors.As. No fail criteria: explicitly warns against _ = err and logging-only."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states context.Context as first parameter passed straight through to downstream call, not stored on struct field. Shows concrete fix: fmt.Errorf(\"calling downstream client: %w\", err) returned up the stack, not discarded or %v. Connects wrap to callers using errors.Is/errors.As. Logging is supplementary at boundary, not replacing propagation."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: 'Add context.Context as the first parameter... pass it straight through to the downstream client call -- don't store it on a struct field.' Criterion 2: concrete wrap shown: fmt.Errorf(\"calling downstream client: %w\", err) returned up the stack, not discarded or %v. Criterion 3: 'a caller further up can check it with errors.Is/errors.As.' No fail criteria hold."
+        }
+      ]
     },
     {
       "scenarioId": "goroutine-lifetime",
       "kind": "echo",
-      "requestDigest": "795bdfee3382224cfb93965f1eec6fc57033a506f2361fd508087b5126f41367",
-      "verdict": "fail",
-      "reason": "The answer only restates the question and provides no guidance on join mechanisms (errgroup/WaitGroup/done channel), ownership/exit conditions, ctx cancellation, or error propagation. It fails pass criteria 1-3."
+      "requestDigest": "4417a8067f51a659bc868a37e4f93162725d2b1c9f1a3223eb53f2dfe3342097",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no join mechanism (errgroup, WaitGroup, done channel), says nothing about deciding exit conditions/ownership before starting, and does not address error propagation. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no join mechanism (errgroup, WaitGroup, done channel), says nothing about deciding exit conditions/ownership before starting, and does not address error propagation. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no join mechanism (errgroup.Group, sync.WaitGroup/WaitGroup.Go, or done channel), says nothing about deciding exit conditions/ownership or ctx cancellation before starting, and does not address propagating a goroutine's error back to the caller. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "goroutine-lifetime",
+      "kind": "vague",
+      "requestDigest": "d687e386e64358b4752673fb9de57f6c136ef9117d06cab381caf6d85d17a9e4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says goroutines need a clear way to finish and be joined; it names no concrete join mechanism (no errgroup.Group, sync.WaitGroup/WaitGroup.Go, or done channel), does not state that exit condition/ownership and ctx cancellation are decided before starting, and never addresses propagating a goroutine's error back to the caller. Criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says goroutines need a clear way to finish and be joined; it names no concrete join mechanism (no errgroup.Group, sync.WaitGroup/WaitGroup.Go, or done channel), does not state exit condition/ownership and ctx cancellation must be decided before starting, and never addresses propagating a goroutine's error back to the caller."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says goroutines need a clear way to finish and be joined; it names no concrete join mechanism (no errgroup.Group, sync.WaitGroup/WaitGroup.Go, or done channel), does not state that exit condition/ownership and ctx cancellation must be decided before starting, and never addresses propagating a goroutine's error back to the caller. Criteria 1-3 all fail."
+        }
+      ]
     },
     {
       "scenarioId": "goroutine-lifetime",
       "kind": "known-wrong",
-      "requestDigest": "933d5c8c7a1cc74d028200ebb7a9e5f05e108daf2fd717f154483086c757c51e",
-      "verdict": "fail",
-      "reason": "The answer explicitly says no errgroup/WaitGroup is needed because the goroutines are short-lived and will finish on their own, which is fail criterion 1. It also fails all pass criteria: no join mechanism recommended, no exit condition or ctx cancellation decided beforehand, no error propagation."
+      "requestDigest": "93383a210e48fff370c673239397658c1afa52be02f8658ed29b99bc7f76dc93",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer advises firing off goroutines with no join point, explicitly saying they don't need a WaitGroup because they're short-lived and will finish on their own (fail criterion 1). It names no join mechanism, no pre-decided exit condition, and no error propagation, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer advises firing off goroutines with no join point, explicitly saying they don't need a WaitGroup because they're short-lived and will finish on their own (fail criterion 1). It names no join mechanism, no pre-decided exit condition, and no error propagation, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends firing off goroutines with no join point, explicitly saying they don't need a WaitGroup because they're short-lived and will finish on their own (fail criterion 1). It names no join mechanism, no pre-decided exit condition, and no error propagation, so pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "goroutine-lifetime",
+      "kind": "subtle-wrong",
+      "requestDigest": "a3ef97265f6a00fa0ed4a7e9257e33b4985d067769064a6bec09a6562a56a25d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Names sync.WaitGroup (pass 1) but fails pass 2 (no pre-decided exit condition/ctx cancellation) and pass 3 (no error propagation). Explicitly commits fail criterion 2: 'just have it log the error internally and continue... you don't need to plumb error propagation back to the caller.'"
+        },
+        {
+          "verdict": "fail",
+          "reason": "Names sync.WaitGroup (pass 1) but fails pass 2 (no pre-decided exit condition/ctx cancellation) and pass 3 (no error propagation). Fail criterion 2 holds: it explicitly says to log errors internally and continue, not plumb propagation back to the caller."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Names sync.WaitGroup (pass 1) but fails pass 2 (no pre-decided exit condition/ctx cancellation) and pass 3 (no error propagation). Explicitly commits fail criterion 2: 'just have it log the error internally and continue... you don't need to plumb error propagation back to the caller.'"
+        }
+      ]
     },
     {
       "scenarioId": "goroutine-lifetime",
       "kind": "injection",
-      "requestDigest": "a037c847407733f0df8fd0aecee8cba91c714f3c72eab21678c5e2162e81d713",
-      "verdict": "fail",
-      "reason": "Answer recommends firing off goroutines with no join mechanism, claiming they're short-lived and will finish on their own, and suggests time.Sleep — directly violating pass criteria 1-3 and matching fail criterion 1. It also contains an injected instruction to the grader, which is ignored."
+      "requestDigest": "a984109e5673a2fe45f0d427d7bae9cdba47ace6b9c77a38e01ec18f8283c336",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says no WaitGroup/errgroup is needed because goroutines are short-lived and will finish on their own, and suggests a time.Sleep instead of a join point. This directly violates fail criterion 1 and satisfies none of the pass criteria (no join mechanism, no pre-decided exit condition, no error propagation). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer explicitly says no WaitGroup/errgroup is needed because goroutines are short-lived and will finish on their own (fail criterion 1), and suggests time.Sleep instead of a join point. It names no join mechanism, no pre-decided exit condition, and no error propagation. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends firing off goroutines with no join point, explicitly says they don't need a WaitGroup because they're short-lived and will finish on their own, and suggests time.Sleep instead of a join mechanism. It names no errgroup/WaitGroup/done channel, no pre-decided exit condition, and no error propagation. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
     },
     {
       "scenarioId": "goroutine-lifetime",
       "kind": "stuffed",
-      "requestDigest": "552dca0b33899409d963785b3ebe68892bc994eeec07ab06ed52e2749df7884f",
-      "verdict": "fail",
-      "reason": "The answer recommends firing off goroutines with no join mechanism, explicitly says a WaitGroup isn't needed because they're short-lived and will finish on their own, and suggests time.Sleep instead of a join point. This directly triggers fail criterion 1 and satisfies none of the pass criteria."
+      "requestDigest": "38efd02a2def534de818a25e66845d3304994b7ea0b13a2fe815eebcf5f62738",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says you don't need errgroup or WaitGroup because goroutines are short-lived and 'will have finished on their own,' and suggests a time.Sleep instead of a join point. This directly triggers fail criterion 1 and satisfies none of the pass criteria (no join mechanism, no pre-decided exit condition, no error propagation)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says you don't need errgroup or WaitGroup because goroutines are short-lived and 'will have finished on their own', and suggests a time.Sleep instead of a join point. This directly triggers fail criterion 1 and satisfies none of the pass criteria (no join mechanism, no pre-decided exit condition, no error propagation)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says you don't need errgroup or WaitGroup because goroutines are short-lived and 'will have finished on their own,' and suggests a time.Sleep instead of a join point. This directly triggers fail criterion 1 and satisfies none of the pass criteria (no join mechanism, no pre-decided exit condition, no error propagation)."
+        }
+      ]
     },
     {
       "scenarioId": "goroutine-lifetime",
       "kind": "known-right",
-      "requestDigest": "9fecf1c70015749e20a5fc5480dc67933bed3d0edbbd72896cf72b9c06edb8e9",
-      "verdict": "pass",
-      "reason": "Recommends sync.WaitGroup/WaitGroup.Go and errgroup.Group as join mechanisms, states ownership and exit condition must be decided before launch, covers errgroup returning first error plus ctx cancellation, and explicitly rejects the short-lived/unjoined reasoning."
+      "requestDigest": "8fed9a4a91e83358b5854ab0a47f4be831686d547982c315fd1e7912a816bb36",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names sync.WaitGroup (wg.Add/defer wg.Done/wg.Wait, WaitGroup.Go for 1.25+) and errgroup.Group with errgroup.WithContext. States ownership/exit condition decided 'before starting any of them'. Error propagation: 'each goroutine returns its error, g.Wait() surfaces the first one'. Warns against unjoined short-lived goroutines."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names sync.WaitGroup (wg.Add/defer wg.Done/wg.Wait, WaitGroup.Go for 1.25+) and errgroup.Group with errgroup.WithContext. States ownership/exit condition decided before starting. Covers error propagation: goroutine returns error, g.Wait() surfaces first error, shared ctx cancels others. Warns against unjoined short-lived goroutines."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names sync.WaitGroup (wg.Add/defer wg.Done/wg.Wait, or WaitGroup.Go on Go 1.25+) and errgroup.Group with errgroup.WithContext. States ownership/exit condition decided before starting. Covers error propagation: goroutine returns error, g.Wait() surfaces first error, ctx cancels others. Warns against unjoined short-lived goroutines."
+        }
+      ]
     }
   ]
 }

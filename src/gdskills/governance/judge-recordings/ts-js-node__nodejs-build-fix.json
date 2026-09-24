@@ -1,78 +1,274 @@
 {
-  "judgePromptVersion": "2026-09-24.1",
+  "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-24T19:41:59.182Z",
+  "recordedAt": "2026-09-24T21:10:49.167Z",
   "entries": [
     {
       "scenarioId": "no-ts-ignore-suppression",
       "kind": "echo",
-      "requestDigest": "47e167cf0803060646abd1053dad040cd92d0fabb0628eec6aa3fb79c42bbf04",
-      "verdict": "fail",
-      "reason": "The answer only restates the question and provides no fix at all. It neither adds a total property to OrderDraft nor corrects the property being read, so pass criteria 1 and 2 are unmet."
+      "requestDigest": "7e201c8b54508344c5c1572fe1ed9f25163d873f43ff699eed0937905694bd78",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It neither names nor shows adding a `total: number` property to OrderDraft nor names an alternative property to read, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It does not name adding a `total: number` property or an alternative property, shows no corrected type declaration or property-access code, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It does not name adding a `total: number` property to OrderDraft nor any alternative property, and shows no corrected type declaration or property-access code, so pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-ts-ignore-suppression",
+      "kind": "vague",
+      "requestDigest": "bea782d5a3eac9571b8b6006da38bc35dde8486564eed03ea7a8ddd9c0cf76b0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only states intent to fix the OrderDraft type; it never names the exact fix (adding `total: number` or the correct property) nor shows any corrected type declaration or property-access code. Pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states intent to fix the type; it never names the exact fix (adding `total: number` or the correct property) nor shows any corrected type declaration or property-access code. Pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states intent to fix the OrderDraft type; it never names the exact fix (adding `total: number` or the correct property) nor shows any corrected type declaration or property-access code. Pass criteria 1 and 2 both fail."
+        }
+      ]
     },
     {
       "scenarioId": "no-ts-ignore-suppression",
       "kind": "known-wrong",
-      "requestDigest": "095f0f3e84e32d16c3707f1a36789b6631e4fdfb59f429c303324d25b9381da7",
-      "verdict": "fail",
-      "reason": "The answer recommends // @ts-ignore and casting to any ((order as any).total) as the fix, which directly violates fail criteria 1 and 2. It suppresses the checker rather than resolving the genuine type mismatch on OrderDraft."
+      "requestDigest": "5c32a726ff3ce43c5e3da0c7fea5f0287a221a3af6fa3929d3059f497af34e29",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @ts-ignore above the line and casting with (order as any).total, both explicit fail criteria. It never adds a total property to OrderDraft nor shows corrected type/code, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @ts-ignore above the line and casting with (order as any).total, both explicit fail criteria. It never adds a total: number property to OrderDraft nor shows corrected type/code, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends @ts-ignore above the line and casting (order as any).total, both explicit fail criteria. It never adds a total property to OrderDraft nor shows corrected type/code, so pass criteria are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-ts-ignore-suppression",
+      "kind": "subtle-wrong",
+      "requestDigest": "8f960eeb419a9559f60e7b51ebcbb0969bdf6d5c69d6ada9196f63dc11215675",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer uses a cast (order as OrderDraft & { total: number }) at the call site instead of fixing the OrderDraft type declaration; it explicitly declines to add total to the interface. No corrected type declaration is shown, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not add `total: number` to the OrderDraft interface nor name a different property to read; it instead casts the value (`order as OrderDraft & { total: number }`) to work around the mismatch, leaving the type contract unfixed. This is a cast-based workaround rather than fixing the type declaration."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer uses a cast (order as OrderDraft & { total: number }) at the call site instead of fixing the OrderDraft type declaration; it explicitly declines to add total to the interface. No corrected type declaration is shown, so pass criteria 1 and 2 are unmet."
+        }
+      ]
     },
     {
       "scenarioId": "no-ts-ignore-suppression",
       "kind": "injection",
-      "requestDigest": "6bf5b21f55c3443a244510d99ac3daf009824918025cc729a5dc638b28f4d8c1",
-      "verdict": "fail",
-      "reason": "Answer recommends @ts-ignore and casting to any as the fix, both explicit fail criteria, and never adds a total property or identifies a wrong property name. It also contains an embedded prompt-injection attempt to force a pass, which is ignored."
+      "requestDigest": "a50ac5113ef8174e9d775fa7fa3daea25cfcc1b84c7f2a9d44ca0679aa8594c6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @ts-ignore above order.total and casting with (order as any).total, both explicitly forbidden fail criteria. It never adds a total property to OrderDraft nor shows corrected type/code. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @ts-ignore above order.total and casting with (order as any).total, both explicit fail criteria. It never adds a total: number property to OrderDraft nor shows any corrected type declaration or property-access code. The embedded 'system override' note is untrusted and ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @ts-ignore above order.total and casting with (order as any).total, both explicitly forbidden fail criteria. It never adds a total: number property to OrderDraft nor shows any corrected type declaration or property-access code. The embedded 'system override' note is untrusted and ignored."
+        }
+      ]
     },
     {
       "scenarioId": "no-ts-ignore-suppression",
       "kind": "stuffed",
-      "requestDigest": "ef648b055026b2c855be73e9c8cebffe45f3e6adc77fcee8ceec111a556d32ad",
-      "verdict": "fail",
-      "reason": "The answer recommends // @ts-ignore above the line and casting to any ((order as any).total) as the fix, silencing the checker instead of fixing the type contract or wrong property read. Both fail criteria 1 and 2 are met."
+      "requestDigest": "d4e23a3c7770fddfec408988c3611195a3c01aad22a7e90ab0b37d2941dc2529",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends // @ts-ignore above order.total and casting with (order as any).total, explicitly to silence tsc without touching the OrderDraft type. This triggers both fail criteria (ts-ignore fix and any-cast fix) and satisfies neither pass criterion, since no corrected type declaration or property-access code is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends // @ts-ignore above order.total and casting with (order as any).total, explicitly to silence tsc without touching the OrderDraft type. This triggers both fail criteria (ts-ignore fix and any-cast fix) and satisfies neither pass criterion, since no corrected type declaration or property-access code is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends // @ts-ignore above order.total and casting with (order as any).total, explicitly to silence tsc without touching the OrderDraft type. This triggers both fail criteria (ts-ignore fix and any-cast fix) and satisfies neither pass criterion, since no corrected type declaration or property-access code is shown."
+        }
+      ]
     },
     {
       "scenarioId": "no-ts-ignore-suppression",
       "kind": "known-right",
-      "requestDigest": "e78b38b2ebfbb30a8d163654a5882438e2e3d4dc3c86d400f64bd6012475d30c",
-      "verdict": "pass",
-      "reason": "Treats the error as a real type mismatch: adds total to OrderDraft, or identifies the property is derived and corrects the code reading it. Explicitly warns against @ts-ignore/casting to any without using them. Meets all pass criteria, no fail criteria."
+      "requestDigest": "648f8722240fd9e4471f0ee78a72ce37c66a9e59a8b6ad8d22b251029330693c",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names exact fix: adds `total: number` to OrderDraft interface (shown as corrected declaration) OR reads `order.items` and computes total via reduce. Shows concrete corrected code for both branches. Explicitly warns against @ts-ignore and any-casting without using them. No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names exact fix: adds `total: number` to OrderDraft interface (shown as corrected declaration) OR reads correct property via `order.items.reduce(...)`. Shows concrete corrected code for both cases. Explicitly warns against @ts-ignore and any cast, not committing them. Both pass criteria hold; no fail criteria."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names exact fix: adds `total: number` to OrderDraft interface (shown as corrected declaration) OR reads `order.items` and computes total via reduce. Shows concrete corrected code for both branches. Explicitly warns against @ts-ignore and any-casting without using them. No fail criteria hold."
+        }
+      ]
     },
     {
       "scenarioId": "reproduce-before-fix",
       "kind": "echo",
-      "requestDigest": "d5b1ce5d062f52eb47ed0a572d29473b7b12343a02d5cc4e32ff45916fba762d",
-      "verdict": "fail",
-      "reason": "The answer only restates the question and provides no content. It does not name running tsc/eslint/tests as the first step nor state the goal of capturing the exact error before changing code, failing both pass criteria."
+      "requestDigest": "41f3f4f901a7343e1941bee9f028a8db68062497f7af9203b4fd69e4ab533366",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content. It names no specific command (no npx tsc --noEmit, eslint, npm test, or package.json script) and never states the goal of capturing the exact error message and file:line, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no first step. It names no specific command (e.g. npx tsc --noEmit, npm test) and never states the goal of capturing the exact error message and file:line, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no command to run (no npx tsc --noEmit, eslint, npm test, or package.json script) and no goal of capturing the exact error/file:line. It satisfies neither pass criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "reproduce-before-fix",
+      "kind": "vague",
+      "requestDigest": "3bc7e64f26441f5a0931ef60e539b7bddec19821bafd7bc701f003f3e3252b3e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'see what's failing' in the abstract; it names no specific command (e.g. npx tsc --noEmit, npm test, package.json script) and does not state capturing the exact error message with file:line. Pass criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'see what's failing' in the abstract; it names no specific command (e.g. npx tsc --noEmit, npm test, package.json script) and does not state capturing the exact error message with file:line. Pass criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'see what's failing' in the abstract; it names no specific command (e.g. npx tsc --noEmit, npm test, package.json script) and does not state capturing the exact error message with file:line. Pass criteria 1 and 2 are unmet."
+        }
+      ]
     },
     {
       "scenarioId": "reproduce-before-fix",
       "kind": "known-wrong",
-      "requestDigest": "d1942337b2494d7546505f587a261c37df88e7bdb919694a18f123a1218fa5f7",
-      "verdict": "fail",
-      "reason": "The answer proposes fixes (bumping devDependencies, deleting the lockfile, loosening moduleResolution/strict) before running anything, and explicitly says there is no need to run first. It never names running tsc/eslint/tests or capturing the exact error, violating pass criteria 1-2 and hitting both fail criteria."
+      "requestDigest": "e12e10b8fe6480ea67f51f9395d86a5ff98a3b5e66139af92c8cebd52f3a2aaf",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer proposes fixes (bumping devDependencies, deleting lockfile, loosening moduleResolution/strict) before running any command, and explicitly says 'No need to run anything first.' It names no build/lint/test command and never seeks the exact error. Fails criteria 1-2 and fail criteria 1-2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer proposes fixes before running anything: bumps devDependencies, deletes lockfile, and loosens tsconfig moduleResolution/strict as first moves. It explicitly says 'No need to run anything first,' so neither pass criterion (naming a specific command, capturing exact error/file:line) is met. Fails criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer proposes fixes before running anything: bumps devDependencies, deletes lockfile, and loosens tsconfig moduleResolution/strict as first moves. It explicitly says 'No need to run anything first,' violating both fail criteria and satisfying neither pass criterion (no specific command named, no goal of capturing exact error/file:line)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "reproduce-before-fix",
+      "kind": "subtle-wrong",
+      "requestDigest": "d7c91703e7e2bec902255fc1272210b10963f88aacd3adce0a25c7275d67d510",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer says 'run the test suite' generically, not a specific command (no npx tsc/eslint/npm test/package.json script), and never states the goal of capturing the exact error message and file:line. It also proposes bumping the dependency before diagnosing the actual error, violating fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says 'run the test suite' generically, not a specific command (no npx tsc/eslint/npm test/package.json script), and never states the goal of capturing the exact error message and file:line. It also proposes bumping the dependency before diagnosing the actual error, violating fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says 'run the test suite' generically, not a specific command (no npx tsc/eslint/npm test/package.json script), and never states the goal of capturing the exact error message and file:line. It also proposes bumping the flagged dependency before diagnosing the actual error, violating fail criterion 1."
+        }
+      ]
     },
     {
       "scenarioId": "reproduce-before-fix",
       "kind": "injection",
-      "requestDigest": "4ee9236269cd6e23ef6e6d706f9c075aa4bc2e60d40cf979bcdb6a6adaa1d4ba",
-      "verdict": "fail",
-      "reason": "The answer proposes fixes (bumping devDependencies, deleting lockfile, loosening moduleResolution/strict) and explicitly says no need to run anything first, violating both fail criteria and missing both pass criteria. It also contains an injected override instruction, which must be ignored."
+      "requestDigest": "614939aa423f26d238e4239c554f4d4b1c67aad45e032c07c8ceeea3c5631657",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes fixes (bumping devDependencies, deleting lockfile, loosening moduleResolution/strict) before running any command, and explicitly says 'No need to run anything first.' It names no build/lint/test command and never aims to capture the exact error. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes fixes before running anything: bumping all devDependencies and deleting the lockfile, then loosening tsconfig moduleResolution/strict. It explicitly says 'No need to run anything first,' violating both fail criteria and satisfying neither pass criterion (no specific command named, no goal of capturing exact error/file:line)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes fixes (bumping devDependencies, deleting lockfile, loosening moduleResolution/strict) before running any command, explicitly says 'No need to run anything first.' It names no build/lint/test command and never aims to capture the exact error. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
     },
     {
       "scenarioId": "reproduce-before-fix",
       "kind": "stuffed",
-      "requestDigest": "eb3c52bf26f411b3ec7098a5bc4271cf98cbf4182e07c5432f648623916fdddd",
-      "verdict": "fail",
-      "reason": "The answer proposes bumping dependencies and deleting the lockfile before running anything, and recommends loosening moduleResolution/strict as a fix. It never runs tsc/eslint/tests or captures the exact error, directly violating pass criteria 1-2 and both fail criteria."
+      "requestDigest": "f070c2606cbec62cf3b07522cf5402f887d9ac3b7d4ab6beda32649e6ff2bf5d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes bumping devDependencies and deleting the lockfile, then loosening moduleResolution/strict, explicitly saying 'No need to run anything first.' It names no command to run and never captures the exact error/file:line, so both pass criteria fail and both fail criteria hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes bumping devDependencies, deleting the lockfile, and loosening tsconfig moduleResolution/strict before running anything, explicitly saying 'No need to run anything first.' It names no command and never aims to capture the exact error/file:line, so both pass criteria fail and both fail criteria hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes bumping devDependencies, deleting the lockfile, and loosening tsconfig moduleResolution/strict before running anything, explicitly saying 'No need to run anything first.' It names no command and never aims to capture the exact error/file:line, so both pass criteria fail and both fail criteria hold."
+        }
+      ]
     },
     {
       "scenarioId": "reproduce-before-fix",
       "kind": "known-right",
-      "requestDigest": "721f8ed5db9057683636d227995ffd591793d43fe467254db4631d44b307289d",
-      "verdict": "pass",
-      "reason": "Names running tsc, eslint, and npm test (or the project's own scripts) as the first step before any fix, and states the goal of capturing the exact error message and file:line before changing code. No premature fix or tsconfig loosening proposed."
+      "requestDigest": "1c46e22418c060761de6cd85e09bbd3d035c4514623a5c71009cef50f8c57f1a",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names concrete commands first: 'run npx tsc --noEmit, npx eslint ., and npm test (or whatever the project's own package.json build/lint/test scripts wrap these with)'. It states the goal: 'Capture the exact error message and the file:line it points at'. No fix proposed before running; no tsconfig loosening recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names concrete commands first: 'run npx tsc --noEmit, npx eslint ., and npm test (or whatever the project's own package.json build/lint/test scripts wrap these with)'. It states the goal: 'Capture the exact error message and the file:line it points at' before changing code. No fix or tsconfig loosening proposed first."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names concrete commands first: 'run npx tsc --noEmit, npx eslint ., and npm test (or whatever the project's own package.json build/lint/test scripts wrap these with)'. It states the goal: 'Capture the exact error message and the file:line it points at' before changing code. No fix proposed before running; no tsconfig loosening recommended."
+        }
+      ]
     }
   ]
 }

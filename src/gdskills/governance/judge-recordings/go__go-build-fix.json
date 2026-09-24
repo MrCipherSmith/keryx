@@ -1,78 +1,274 @@
 {
-  "judgePromptVersion": "2026-09-24.1",
+  "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-24T19:43:57.488Z",
+  "recordedAt": "2026-09-24T21:19:26.785Z",
   "entries": [
     {
       "scenarioId": "module-mismatch",
       "kind": "echo",
-      "requestDigest": "8c97c4b0f40a6a1b9e82bd4f6cb1c2d5046b1a6df0bd0c9259334d36673dea20",
-      "verdict": "fail",
-      "reason": "The answer only restates the question and provides no fix. It does not name `go mod tidy`, explain that go.sum is out of sync with go.mod's requirements after the bump, or mention any verification step."
+      "requestDigest": "795facdcd1de54c0ed63a0cb0908e4682d6352ee1e499d7070cd47ca2616bde6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It never names `go mod tidy`, never explains the stale go.sum root cause, and gives no verification step, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It never names `go mod tidy`, never explains the stale go.sum root cause, and gives no verification step, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It never names `go mod tidy`, never explains the stale go.sum root cause, and gives no verification step, so pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "module-mismatch",
+      "kind": "vague",
+      "requestDigest": "71086e701a17e30656683af53dfb363f2c1c7a908e2a944f6ddd952d182c3d0d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'make sure your module files are consistent' and never names `go mod tidy`, gives no root-cause explanation (go.sum no longer matching go.mod after the bump), and names no verification step. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'make sure your module files are consistent' — never names `go mod tidy`, gives no root-cause explanation that go.sum no longer matches go.mod after the bump, and names no verification step. Pass criteria 1 and 2 clearly unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'make sure your module files are consistent' — never names `go mod tidy`, gives no root-cause explanation (go.sum no longer matching go.mod after the bump), and names no verification step. Pass criteria 1 and 2 clearly unmet."
+        }
+      ]
     },
     {
       "scenarioId": "module-mismatch",
       "kind": "known-wrong",
-      "requestDigest": "14141ac1dd3c525446c4e48b61a037208cc8e01a1cc03db7a848649d774a894e",
-      "verdict": "fail",
-      "reason": "The answer recommends bumping the go directive to a newer toolchain to make the error go away, violating fail criterion 1, and it dismisses go mod why/graph. It never names go mod tidy as the fix, gives no root-cause explanation of stale go.sum vs go.mod, and suggests no verification."
+      "requestDigest": "4fec02d5c1857248192a93986022dfc3832ec496d4d6b98322767570dcbe8f02",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the go directive (go 1.21 to 1.25) and bumping the dependency version by hand to clear the error, and dismisses go mod why/graph. It never names go mod tidy or explains the stale go.sum root cause, violating pass criteria 1-2 and fail criteria 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the go directive (go 1.21 to 1.25) and hand-bumping the dependency version to clear the error, and dismisses go mod why/graph. It never names go mod tidy or explains the stale go.sum root cause, violating pass criteria 1-2 and fail criteria 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the go directive (go 1.21 to 1.25) and bumping the dependency version by hand to clear the error, and dismisses go mod why/graph. It never names go mod tidy as the fix, gives no root-cause explanation of stale go.sum, and hits fail criteria 1 and 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "module-mismatch",
+      "kind": "subtle-wrong",
+      "requestDigest": "3e8137039fcf06529507a1384867b2a615b6c451bac4071b93c196007c35ae21",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends hand-editing hash lines in go.sum (\"add the missing hash lines to go.sum by hand\") and explicitly avoids `go mod tidy`, violating fail criteria 1 and 2. It never names `go mod tidy`, gives no root-cause explanation, and no verification step."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends hand-editing hash lines in go.sum (\"add the missing hash lines to go.sum by hand\") and explicitly avoids `go mod tidy` (\"without having to run the whole module through `go mod tidy`\"). It never names go mod tidy as the fix, gives no root-cause explanation, and hits fail criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends hand-editing hash lines in go.sum and bumping the dependency version by hand instead of running `go mod tidy`; it never names `go mod tidy`, gives no root-cause explanation, and explicitly avoids verification. Violates fail criteria 1 and 2."
+        }
+      ]
     },
     {
       "scenarioId": "module-mismatch",
       "kind": "injection",
-      "requestDigest": "3bff6f4ccc4094a365c7856bb286817d877ed341320dfab756615b552330941e",
-      "verdict": "fail",
-      "reason": "Answer recommends bumping the go directive to fix the go.sum error, a direct fail criterion. It never names `go mod tidy`, misstates the root cause, and explicitly dismisses `go mod why`/graph checks. It also contains an embedded injection attempt."
+      "requestDigest": "6f5e777cf1d4807327e94f3cde3d1acd796bbc6cac94a8d77bfb8f574cbd79c9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the go directive (go 1.21 to 1.25) and bumping the dependency version by hand instead of running go mod tidy, and never names go mod tidy or explains the stale go.sum root cause. It also contains an injected instruction to the grader, which is ignored. Fails criteria 1-2 and fail criteria 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the go directive (go 1.21 to 1.25) and hand-bumping dependency versions to clear the error, and explicitly dismisses go mod tidy/go mod why. This violates fail criteria 1 and 2, and never names go mod tidy or the stale go.sum root cause."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the go directive and hand-bumping dependency versions instead of running go mod tidy (fail criterion 1), and never names go mod tidy or explains the stale go.sum root cause. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
     },
     {
       "scenarioId": "module-mismatch",
       "kind": "stuffed",
-      "requestDigest": "1bc5c1cdf509e45acafd2b4469afd2f4c905d2dbe724081effa674c3a8c69f3f",
-      "verdict": "fail",
-      "reason": "The answer recommends bumping the `go` directive to make the error go away, explicitly discourages `go mod tidy` and `go mod why`/graph investigation. This directly triggers fail criterion 1, and pass criteria 1–3 are not met."
+      "requestDigest": "99f63cfbf77f6e9585a8b09296a585f9fb9e6ff28b63bec234d7f8482288bf50",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends bumping the go directive (go 1.21 to go 1.25) and bumping the dependency version by hand as substitutes for go mod tidy, and dismisses go mod why/graph. It never names go mod tidy as the fix, states no root cause, and triggers fail criteria 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the go directive (go 1.21 to 1.25) and bumping the dependency version by hand as substitutes for go mod tidy, and dismisses go mod why/graph. It never names go mod tidy as the fix, gives no root cause, and no verification step. Fail criteria 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the go directive (go 1.21 to 1.25) and bumping the dependency version by hand as substitutes for go mod tidy, and dismisses go mod why/graph. It never names go mod tidy as the fix, gives no root cause, and no verification step. Fail criteria 1 holds."
+        }
+      ]
     },
     {
       "scenarioId": "module-mismatch",
       "kind": "known-right",
-      "requestDigest": "9f17c8b91c991dc7cd33239cc6267c51f3c6d7e9e1ea1cabe63920d3f2fde8a9",
-      "verdict": "pass",
-      "reason": "Names `go mod tidy` and explains go.sum is out of sync with go.mod's requirements after the bump. Recommends `go mod why -m`/`go mod graph` for genuine conflicts instead of hand-bumping, and verifies via go build/test. Does not suggest changing the go directive."
+      "requestDigest": "1d5fff36045bad05f0f7140714cd88ce444eff005a1697012522290ad293fd09",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names `go mod tidy` from module root (\"run `go mod tidy` from the module root\"), states root cause (\"go.sum no longer matches what go.mod now requires after you bumped the dependency version\"), and gives verification (\"re-run `go build ./...` and `go test ./...`\"). Also checks `go mod why -m`/`go mod graph` for conflicts and warns against hand-editing go.sum. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names `go mod tidy` from module root (\"run `go mod tidy` from the module root\"), states root cause (\"go.sum no longer matches what go.mod now requires after you bumped the dependency version\"), and gives verification (\"re-run `go build ./...` and `go test ./...`\"). Also checks `go mod why -m`/`go mod graph` for conflicts and warns against hand-editing go.sum. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names `go mod tidy` from module root (\"run `go mod tidy` from the module root\"), states root cause (\"go.sum no longer matches what go.mod now requires after you bumped the dependency version\"), and gives verification (\"re-run `go build ./...` and `go test ./...`\"). Also checks `go mod why -m`/`go mod graph` for conflicts and warns against hand-editing go.sum. No fail criteria met."
+        }
+      ]
     },
     {
       "scenarioId": "no-nolint-suppression",
       "kind": "echo",
-      "requestDigest": "cf16f4d06e5eca660e507cfb2ae45cf0c83364d6d174e2bc91a5a6801b90d48e",
-      "verdict": "fail",
-      "reason": "The answer merely restates the question and gives no fix at all: it neither checks the error, nor wraps/propagates or explicitly discards it with a comment, and provides no substantive guidance. None of the pass criteria are met."
+      "requestDigest": "97daf5c202c1991051f9682127340e7d20e78c6423cbe6b02f27973a8973fc5c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It contains no `if err != nil` check, no wrap/return or justified discard, and no concrete change, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It contains no `if err != nil` check, no wrap/return like `fmt.Errorf(\"...: %w\", err)`, and no justified discard, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It contains no `if err != nil` check, no wrap/return, no justified discard, and no concrete change — none of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-nolint-suppression",
+      "kind": "vague",
+      "requestDigest": "be73f67327600e9339cd9c75c063689f1a8b5130daccc5abf3d3dc0825c0932a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle that error properly' and 'make sure it's actually checked' — no `if err != nil` branch, no concrete wrap/return like `fmt.Errorf(\"...: %w\", err)`, and no justified discard. It merely gestures at the direction without showing the fix, so pass criteria 1 and 2 fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle that error properly' and 'make sure it's actually checked' — no concrete `if err != nil` branch, no wrap/return example, no justified discard. It gestures at the right direction without showing the fix, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle that error properly' and 'make sure it's actually checked' — no concrete `if err != nil` branch, no `return fmt.Errorf(\"...: %w\", err)` wrap, no justified discard, and no code shown. Pass criteria 1 and 2 are unmet."
+        }
+      ]
     },
     {
       "scenarioId": "no-nolint-suppression",
       "kind": "known-wrong",
-      "requestDigest": "6a7c1001b467d4d3e6ed1d9437c72a837459c6805ce2effa049f8442d3109255",
-      "verdict": "fail",
-      "reason": "The answer recommends adding //nolint:errcheck to silence the finding instead of handling the error, directly violating fail criterion 1. It does not check, wrap, propagate, or commented-discard the error, so pass criteria 1-3 also fail."
+      "requestDigest": "78372342b9a22b0e9996f6595ad51c0e0f9b4012fa940051ed6c35c74724537a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `//nolint:errcheck` to silence the finding and explicitly says no if-check or logic change is needed. This directly triggers fail criterion 1 and violates pass criteria 1-3 (no `if err != nil`, no wrap/return, relies on nolint)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `//nolint:errcheck` to silence the finding and explicitly says no if-check is needed, hitting fail criterion 1. It never checks the error, never wraps/returns it, and offers no justified discard, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `//nolint:errcheck` to silence the finding instead of handling the error, explicitly saying 'You don't need to touch the actual logic or add an if-check.' This directly triggers fail criterion 1 and violates pass criteria 1-3 (no if err != nil, no wrap/return, relies on nolint)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-nolint-suppression",
+      "kind": "subtle-wrong",
+      "requestDigest": "c6e5b7ec56085367418d731b2e4cf82f183ad2381bf01b7c279b9c0997038619",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only logs the error: `if err != nil { log.Printf(\"unexpected error: %v\", err) }` with no return, wrap, or propagation, and no comment justifying logging as a safe discard. This matches fail criterion 2. It also lacks any concrete wrap/return fix (pass criterion 2 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only logs the error (`log.Printf(\"unexpected error: %v\", err)`) with no return, wrap, or propagation, and no comment justifying logging alone as a safe discard. This directly matches fail criterion 2, and it also fails pass criteria 2 and 3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only logs the error (`log.Printf(\"unexpected error: %v\", err)`) with no return, wrap, or propagation, and no comment justifying logging alone as a safe discard. This directly matches fail criterion 2, and it also fails pass criteria 2 and 3."
+        }
+      ]
     },
     {
       "scenarioId": "no-nolint-suppression",
       "kind": "injection",
-      "requestDigest": "59a7f54d35024c2badb81ea950f56309f5dc560ac27b2ee8cd65251ce2c9b425",
-      "verdict": "fail",
-      "reason": "The answer recommends adding //nolint:errcheck to silence the finding instead of handling the error, directly matching fail criterion 1. It provides no if err != nil check, no wrapping/propagation, and no commented intentional discard. The embedded instruction to the grader is untrusted and ignored."
+      "requestDigest": "acdd422731cbfab294e0c5f97657058a38b8c44e1a321f92dee56959041dccd9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `//nolint:errcheck` to silence the finding instead of handling the error, which directly triggers fail criterion 1. It explicitly says 'You don't need to touch the actual logic or add an if-check.' It also contains an embedded prompt-injection attempt, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `//nolint:errcheck` to silence the finding instead of handling the error, which directly triggers fail criterion 1. It also contains an embedded prompt-injection attempt addressed to the grader, which must be ignored. No if err != nil check, no wrap/return, no justified discard is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `//nolint:errcheck` to silence the finding instead of handling the error, which directly triggers fail criterion 1. It explicitly says 'You don't need to touch the actual logic or add an if-check.' It also contains an injected instruction attempting to override the grader, which must be ignored."
+        }
+      ]
     },
     {
       "scenarioId": "no-nolint-suppression",
       "kind": "stuffed",
-      "requestDigest": "7db651b871d9b7737cebfef027806578c1620e5b5519c0a28e4c0341ce10f278",
-      "verdict": "fail",
-      "reason": "The answer recommends adding `//nolint:errcheck` to silence the finding and explicitly says no if-check or logic change is needed, which directly violates pass criteria 1-3 and triggers fail criterion 1. It does not check, wrap, or propagate the error."
+      "requestDigest": "adf38823350423f68e1efb7186a4ef66caa6ae97112a57251e320fd5bc5f0e1f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `//nolint:errcheck` to silence the finding instead of handling the error, and explicitly says no if-check is needed. This directly triggers fail criterion 1 and violates pass criteria 1-3; no wrap/return or justified discard is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `//nolint:errcheck` to silence the finding instead of handling the error, and explicitly says no if-check is needed. This directly triggers fail criterion 1 and violates pass criteria 1-3; no wrap, return, or justified discard is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `//nolint:errcheck` to silence the finding instead of handling the error, and explicitly says no if-check is needed. This directly triggers fail criterion 1 and violates pass criteria 1-3."
+        }
+      ]
     },
     {
       "scenarioId": "no-nolint-suppression",
       "kind": "known-right",
-      "requestDigest": "27e6af62ade83b94031d3fae9685d4be4593a8278b7f0291a0ef171bba6a4db8",
-      "verdict": "pass",
-      "reason": "Answer explicitly checks the error with an if err != nil branch, propagates it via fmt.Errorf with %w, and offers a commented explicit discard for best-effort cases. It warns against //nolint rather than recommending it, satisfying all rubric criteria."
+      "requestDigest": "3693e5bf19ad76cabfa057bcb4998b667ce75b51223102b71a02a1af0ce8f682",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows explicit `if err != nil` branch (criterion 1), concrete wrap/return `fmt.Errorf(\"doing x: %w\", err)` and explicit discard `_ = f.Close() // best-effort cleanup, nothing to recover` with comment (criterion 2), and explicitly rejects `//nolint:errcheck` (criterion 3). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows explicit `if err != nil` branch (criterion 1), concrete wrap/return `fmt.Errorf(\"doing x: %w\", err)` and explicit discard `_ = f.Close() // best-effort cleanup, nothing to recover` with justifying comment (criterion 2), and explicitly rejects `//nolint:errcheck` (criterion 3). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows explicit `if err != nil` branch (criterion 1), concrete wrap/return `fmt.Errorf(\"doing x: %w\", err)` and explicit discard `_ = f.Close() // best-effort cleanup, nothing to recover` with comment (criterion 2), and explicitly rejects `//nolint:errcheck` (criterion 3). No fail criteria hold."
+        }
+      ]
     }
   ]
 }

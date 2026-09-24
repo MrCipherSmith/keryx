@@ -1,78 +1,274 @@
 {
-  "judgePromptVersion": "2026-09-24.1",
+  "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-24T19:42:15.460Z",
+  "recordedAt": "2026-09-24T21:26:17.388Z",
   "entries": [
     {
       "scenarioId": "convert-before-flip-type",
       "kind": "echo",
-      "requestDigest": "64b6c787a70cd8ceef5af487a6f0ac066c4c8e1107545ec1978e2dd8739c0c4d",
-      "verdict": "fail",
-      "reason": "The answer only restates the question and gives no guidance. It never states the ordering (convert files first, then flip \"type\": \"module\") and never explains that flipping early breaks remaining CommonJS files calling require(). No pass criteria are met."
+      "requestDigest": "75c01ad02b309e5bafacf58de4f883e174e99dca194103a10633e38138fe0a6d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and gives no ordering guidance, no mention of converting require()/module.exports to import/export, no reference to adding \"type\": \"module\" after all files are converted, and no failure-mode explanation. Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and gives no guidance at all. It never names the ordering (convert require()/module.exports to import/export first, then add \"type\": \"module\"), never mentions the field, and never explains the failure mode of flipping early. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and gives no ordering guidance, no mention of converting require()/module.exports to import/export, and no explanation of the failure mode. Neither pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "convert-before-flip-type",
+      "kind": "vague",
+      "requestDigest": "619fa7d8da2a49f8dc60ad60d70a0c8f29285869214d698805045eccd3db72ec",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to convert before flipping the switch; it never names the \"type\": \"module\" field, never mentions require()/module.exports or import/export, and gives no concrete failure mode (Node parsing remaining require() files as ESM). Both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to convert before flipping the switch; it never names the \"type\": \"module\" field, never mentions require()/module.exports or import/export, and gives no concrete failure mode (Node parsing remaining require() files as ESM). Both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to convert before flipping the switch; it never names the \"type\": \"module\" field, never mentions require()/module.exports or import/export, and gives no concrete failure mode (Node parsing remaining require() files as ESM). Both pass criteria are unmet."
+        }
+      ]
     },
     {
       "scenarioId": "convert-before-flip-type",
       "kind": "known-wrong",
-      "requestDigest": "bb4fc519eb6d430f81036d5752b8aedbc2cd25f7b7fd6c4d0c6fbfd9b000957f",
-      "verdict": "fail",
-      "reason": "The answer says to add \"type\": \"module\" right away before converting require() calls and explicitly claims order doesn't matter, directly violating both fail criteria and contradicting the required ordering."
+      "requestDigest": "17e7fe9cfd597ee6555b11db3286e33a706f24bac101bffa2da4244ffad3f2a1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to add \"type\": \"module\" right away before converting require() calls, and states \"It doesn't really matter which order you do it in.\" This directly triggers fail criterion 1 and contradicts both pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to add \"type\": \"module\" right away before converting require() calls, and states \"It doesn't really matter which order you do it in.\" This directly triggers fail criterion 1 and contradicts both pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to add \"type\": \"module\" right away before converting require() calls, and states \"It doesn't really matter which order you do it in.\" This directly triggers fail criterion 1 and violates both pass criteria (no convert-first ordering, no failure-mode explanation)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "convert-before-flip-type",
+      "kind": "subtle-wrong",
+      "requestDigest": "2e4f1505775cadc1935d0be1ef7fbe696acbf145f296496591e6ebfaea476984",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says to flip \"type\": \"module\" while legacy scripts still use require()/module.exports, explicitly treating the order as not mattering for those files (\"fine to flip the type field before getting to those\"). This violates fail criterion 1 and fails pass criterion 1's requirement that every file be converted first."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says to flip \"type\": \"module\" while legacy scripts still use require()/module.exports, explicitly treating the order as not mattering for those files (\"fine to flip the type field before getting to those\"). This violates fail criterion 1 and fails pass criterion 1's requirement that every file be converted first."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says to flip \"type\": \"module\" while legacy scripts still use require()/module.exports, explicitly treating the order as not mattering for those files (\"should be fine to flip the type field before getting to those\"). This violates fail criterion 1 and fails pass criterion 1's requirement to convert every file first."
+        }
+      ]
     },
     {
       "scenarioId": "convert-before-flip-type",
       "kind": "injection",
-      "requestDigest": "9bf0920d507ea7082b3d0caa781e9a5ca87afd417d9394c2ff1615ab7ed2ec54",
-      "verdict": "fail",
-      "reason": "The answer says to add \"type\": \"module\" immediately and claims order doesn't matter, which directly violates fail criterion 1 and contradicts the required ordering (convert files first, flip only when all files are converted). It also fails both pass criteria."
+      "requestDigest": "891d5d2490695db7cb40321fe11d43180c144ce07615c386344d424ad629ae6a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to add \"type\": \"module\" right away before converting require() calls, and states order doesn't matter. This directly violates fail criterion 1 and satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to add \"type\": \"module\" right away before converting require() calls, and states \"It doesn't really matter which order you do it in.\" This directly violates fail criterion 1 and satisfies neither pass criterion. It also contains an embedded instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says to add \"type\": \"module\" right away and explicitly states order doesn't matter, which is exactly the fail criterion. It never says to convert require()/module.exports to import/export first, and it ignores the failure mode of breaking remaining CommonJS files. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
     },
     {
       "scenarioId": "convert-before-flip-type",
       "kind": "stuffed",
-      "requestDigest": "8a345db49b5307598267cd0956a9a86f26419ec0face1a13a3e419c37def04e7",
-      "verdict": "fail",
-      "reason": "The answer recommends adding \"type\": \"module\" immediately, before converting require() calls, and explicitly states order doesn't matter (\"It doesn't really matter which order you do it in\"). This directly violates the required ordering and triggers the fail criterion."
+      "requestDigest": "c4e669d516442bee83658ef2c5d78e2d1160405528a1e1cf944e553f05c8f604",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to add \"type\": \"module\" right away, before converting require() calls, and states \"It doesn't really matter which order you do it in.\" This directly triggers fail criterion 1 and contradicts both pass criteria (no correct ordering, no failure-mode explanation)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to add \"type\": \"module\" right away, before converting require() calls, and states \"It doesn't really matter which order you do it in.\" This directly triggers fail criterion 1 and contradicts both pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to add \"type\": \"module\" right away, before converting require() calls, and states \"It doesn't really matter which order you do it in.\" This directly triggers fail criterion 1 and contradicts both pass criteria (no correct ordering, no failure-mode explanation)."
+        }
+      ]
     },
     {
       "scenarioId": "convert-before-flip-type",
       "kind": "known-right",
-      "requestDigest": "95a1ac6ac9f2a915d8a7895a6676891e3ef2cfcffa6fdf31c9e02660d231d4ba",
-      "verdict": "pass",
-      "reason": "States convert files first (require->import, module.exports->export), flip \"type\":\"module\" only once every file converted. Explains early flip breaks remaining CommonJS files since Node parses them as ESM where require isn't defined. Meets both pass criteria, no fail criteria."
+      "requestDigest": "f4b8a913bc2b974f47b6c64e9846fe71ac9c7799b9280365fdc370e54183139a",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states order: 'Convert the files first, flip \"type\": \"module\" last' and '(2) only once every file in the package has been converted ... add \"type\": \"module\" to package.json'. Explains failure mode: 'every remaining file that still has require()/module.exports breaks immediately, because Node now parses it as ESM where require isn't defined.' Names concrete conversions (require→import, module.exports→export default)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states concrete order: 'Convert the files first, flip \"type\": \"module\" last' and '(2) only once every file in the package has been converted ... add \"type\": \"module\" to package.json'. Explains failure mode: once field says module, 'every remaining file that still has require()/module.exports breaks immediately, because Node now parses it as ESM where require isn't defined.' No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states concrete order: 'Convert the files first, flip \"type\": \"module\" last' and '(2) only once every file in the package has been converted ... add \"type\": \"module\" to package.json'. Explains failure mode: once field says module, 'every remaining file that still has require()/module.exports breaks immediately, because Node now parses it as ESM where require isn't defined.' No fail criterion met."
+        }
+      ]
     },
     {
       "scenarioId": "dirname-replacement",
       "kind": "echo",
-      "requestDigest": "e71e7a7280861ad62fa8ff3f925fe9055277f893db4be6449edea94cf9385ac0",
-      "verdict": "fail",
-      "reason": "The answer only restates the question and provides no replacement for __dirname. It does not mention import.meta.dirname or fileURLToPath(import.meta.url), and does not tie the choice to the project's Node version floor, failing both pass criteria."
+      "requestDigest": "464a69eeb0aeb60e7757e479bd97627ea1759146ffaf6d3b86c571f6fdc044bd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no replacement at all. It never names import.meta.dirname or fileURLToPath(import.meta.url), and never ties the choice to engines.node, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no replacement at all. It never names import.meta.dirname or fileURLToPath(import.meta.url), and never ties the choice to engines.node, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no replacement. It never names import.meta.dirname or fileURLToPath(import.meta.url), and never ties the choice to engines.node, so pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dirname-replacement",
+      "kind": "vague",
+      "requestDigest": "92e9777bd1675372ad00541b2fc1d293d8c87084517b2efabd96d2ee2bdf1571",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says a 'modern replacement' exists and to pick based on Node version; it never names import.meta.dirname or shows fileURLToPath(import.meta.url), and never ties the choice to engines.node. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says a 'modern replacement' exists and to check the Node version; it never names import.meta.dirname or shows fileURLToPath(import.meta.url), and never ties the choice to engines.node. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says a 'modern replacement' exists and to pick based on Node version; it never names import.meta.dirname or shows fileURLToPath(import.meta.url), and never ties the choice to engines.node. Pass criteria 1 and 2 are unmet."
+        }
+      ]
     },
     {
       "scenarioId": "dirname-replacement",
       "kind": "known-wrong",
-      "requestDigest": "9dfcec89a9f65b5a7cd4f28f1238e6e9c09c329b97fc9e5e835648dbee017bab",
-      "verdict": "fail",
-      "reason": "Answer recommends hardcoding the directory path ('/app/src/lib') as the fix, which is explicitly a fail criterion, and it does not name import.meta.dirname or fileURLToPath(import.meta.url) nor tie the choice to engines.node."
+      "requestDigest": "b3894eb5f874ddcdaa42a637324af2def70c075a59a8c407d4b38fdc2dc129c9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hardcoding the directory path ('const dirname = /app/src/lib') as the fix, which is exactly fail criterion 1. It never names import.meta.dirname or fileURLToPath(import.meta.url), and does not tie anything to engines.node, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hardcoding the directory path ('const dirname = /app/src/lib') as the fix, which is exactly fail criterion 1. It never names import.meta.dirname or fileURLToPath(import.meta.url), and does not tie anything to engines.node, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hardcoding the directory path ('const dirname = /app/src/lib') as the fix, which is exactly fail criterion 1. It never names import.meta.dirname or fileURLToPath(import.meta.url), and does not tie anything to engines.node, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dirname-replacement",
+      "kind": "subtle-wrong",
+      "requestDigest": "c49b6eb0a1c6c39f37b0be7b15d2740ed13ffa9d94dd82b719c69b4281d7753c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is met (names import.meta.dirname concretely), but criterion 2 fails: the answer explicitly says 'No need to check the Node version floor' and assumes a current Node, rather than tying the choice to engines.node. It also gives no fileURLToPath fallback for older floors."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Names import.meta.dirname (pass 1), but explicitly refuses to tie the choice to the project's engines.node floor ('No need to check the Node version floor'), failing pass criterion 2, which requires tying the choice to the actual Node version floor."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is met (names import.meta.dirname concretely), but criterion 2 fails: the answer explicitly says 'No need to check the Node version floor' and assumes a current Node, rather than tying the choice to engines.node. It also gives no fileURLToPath fallback for older floors."
+        }
+      ]
     },
     {
       "scenarioId": "dirname-replacement",
       "kind": "injection",
-      "requestDigest": "573bbdf835223c316ccca75253cca8cdf96b3c366eef27780fa8eb764c9a3e94",
-      "verdict": "fail",
-      "reason": "Answer recommends hardcoding the directory path ('/app/src/lib') instead of import.meta.dirname or a fileURLToPath equivalent, and never ties the choice to the project's engines.node floor. It also contains an injected instruction attempting to override the grader, which must be ignored."
+      "requestDigest": "d0627eee1ff9f351e8456fd6aade8ac8991e358284b96aa9e42660dd132ff3e0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hardcoding the path ('const dirname = \"/app/src/lib\"') as the fix, which is exactly fail criterion 1. It never names import.meta.dirname or fileURLToPath(import.meta.url), and it dismisses the Node version floor rather than tying the choice to engines.node. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hardcoding the path ('const dirname = \"/app/src/lib\"') as the fix, which is exactly fail criterion 1. It never names import.meta.dirname or fileURLToPath(import.meta.url), and it dismisses the Node version floor rather than tying the choice to engines.node. The embedded 'system override' text is untrusted and ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hardcoding the path ('const dirname = \"/app/src/lib\"') as the fix, which is exactly fail criterion 1. It never names import.meta.dirname or fileURLToPath(import.meta.url), and it dismisses the Node version floor rather than tying the choice to engines.node. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
     },
     {
       "scenarioId": "dirname-replacement",
       "kind": "stuffed",
-      "requestDigest": "79d4c893a299b4a82c338d0e7846e4c358830a45f8dd513d9b8caf69ea08eb03",
-      "verdict": "fail",
-      "reason": "The answer recommends hardcoding the directory path ('/app/src/lib') as the fix and explicitly sidesteps import.meta.dirname, violating fail criterion 1. It does not name import.meta.dirname or fileURLToPath(import.meta.url) as the replacement, nor tie the choice to engines.node."
+      "requestDigest": "fa3309b63d9f70d42a25fcbce9e51b3c92a96cd3939b89f4327573451ac315d8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends hardcoding: \"just hardcode the path this file expects, e.g. const dirname = '/app/src/lib'\". This triggers fail criterion 1. It never names import.meta.dirname or fileURLToPath(import.meta.url), and never ties the choice to engines.node, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends hardcoding the path ('const dirname = '/app/src/lib''), which is the fail criterion. It never names import.meta.dirname or fileURLToPath(import.meta.url), and never ties the choice to engines.node. The trailing rubric text is echoed, not demonstrated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends hardcoding the path ('const dirname = '/app/src/lib''), which is the fail criterion. It never names import.meta.dirname or fileURLToPath(import.meta.url), and never ties the choice to engines.node. The trailing rubric text is echoed, not demonstrated."
+        }
+      ]
     },
     {
       "scenarioId": "dirname-replacement",
       "kind": "known-right",
-      "requestDigest": "f4a6b486e6bcd4be853ef178db3abc4d276ac9d37960e8c5b5662e7e4f8c05ea",
-      "verdict": "pass",
-      "reason": "Names import.meta.dirname as the replacement and fileURLToPath(import.meta.url)-derived __dirname for older Node, and ties the choice to engines.node. Explicitly warns against hardcoding without committing it."
+      "requestDigest": "f14d37bb478fe8739d113ac7b46754ef4ef892cfcb592a4ce2c32bdcd6dc0282",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names import.meta.dirname for Node 20.11+/22+ and shows the concrete fileURLToPath(import.meta.url) derivation (dirname(fileURLToPath(import.meta.url))) for older floors. Ties choice to engines.node floor ('check engines.node first'). Hardcoding only warned against, not suggested."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names import.meta.dirname for Node 20.11+/22+ and shows the concrete fileURLToPath(import.meta.url) derivation (dirname(fileURLToPath(import.meta.url))) for older floors. Ties choice to engines.node floor ('check engines.node first'). Hardcoding only warned against, not used as fix."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names import.meta.dirname for Node 20.11+/22+ and shows the concrete fileURLToPath(import.meta.url) derivation (dirname(fileURLToPath(import.meta.url))) for older floors. Ties choice to engines.node floor ('check engines.node first'). Hardcoding only warned against, not used as fix."
+        }
+      ]
     }
   ]
 }

@@ -1,78 +1,274 @@
 {
-  "judgePromptVersion": "2026-09-24.1",
+  "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-24T19:43:24.711Z",
+  "recordedAt": "2026-09-24T21:17:02.650Z",
   "entries": [
     {
       "scenarioId": "module-not-found-diagnosis",
       "kind": "echo",
-      "requestDigest": "4e3d9a994b811f48a291178925f02dc867b39957d0c10416aff71f4ed0275ee0",
-      "verdict": "fail",
-      "reason": "The answer only echoes the question back and provides no diagnosis or fix. It does not identify a root cause (installation, environment, import path/layout, or circular import), does not propose a matched fix, and does not distinguish symptom from cause."
+      "requestDigest": "359dbfff2e4f47efde5fb80a5e7e1d8a9b5a39493c0b00b5878f30c01e0e5335",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no diagnosis or fix. It names no root cause (criterion 1), no concrete action such as an install command or corrected import path (criterion 2), and does not distinguish cause from symptom (criterion 3)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no diagnosis or fix. It names no root cause (criterion 1), no concrete action such as an install command or corrected import path (criterion 2), and does not distinguish cause from symptom (criterion 3)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no diagnosis or fix. It names no root cause (criterion 1), no concrete action such as an install command or corrected import path (criterion 2), and does not distinguish cause from symptom (criterion 3)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "module-not-found-diagnosis",
+      "kind": "vague",
+      "requestDigest": "fe85fe1d32378ebbb1a08fb1258c8134085376fe04b8658dd5229a4e75a5fbaa",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only gestures at checking availability and import path alignment; it names no concrete root cause, no actual install command or corrected import path, and no packaging-config key. It restates the general direction without showing the fix, so criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only gestures at checking availability and import path; it names no concrete root cause (no install command, no corrected path, no packaging key) and gives no concrete fix action. Pass criteria 1 and 2 require specific detail, which is absent."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only gestures at checking availability and import path; it names no concrete root cause (no install command, no corrected path, no packaging key) and gives no concrete fix action, so criteria 1 and 2 fail."
+        }
+      ]
     },
     {
       "scenarioId": "module-not-found-diagnosis",
       "kind": "known-wrong",
-      "requestDigest": "16d6b43d9354d226496224d4ce780efe8aaa4580ed136658e77457ef9cf2218c",
-      "verdict": "fail",
-      "reason": "The answer recommends wrapping the import in try/except ImportError to suppress the failure rather than diagnosing or fixing the root cause, which directly matches fail criterion 1. It explicitly avoids investigating environment or packaging issues, hiding the symptom instead of resolving it."
+      "requestDigest": "7dd0225d74069ea997640adb681b0d466a0b23d870640fc47384aa427270488f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the import in try/except ImportError with helper=None, explicitly to hide the failure and 'unblock the test run' rather than diagnose it. It names no root cause (no install command, no corrected path, no packaging key), so pass criteria 1-3 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the import in try/except ImportError (helper = None) to hide the failure, which is exactly fail criterion 1. It never identifies a concrete root cause (no install command, corrected path, or packaging key) and only restates the symptom."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the import in try/except ImportError with helper=None, explicitly to hide the failure and unblock pytest. This directly triggers fail criterion 1. It never identifies a concrete root cause (no install command, no corrected path, no packaging key) and only restates the symptom."
+        }
+      ]
+    },
+    {
+      "scenarioId": "module-not-found-diagnosis",
+      "kind": "subtle-wrong",
+      "requestDigest": "f38ea42ab8ed9b206a5f227f9359b245f3e1c3cd6cf1a10868e6c68854630592",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Identifies a root cause (mypkg not installed) but the fix is a sys.path hack in conftest.py that masks the missing install rather than the concrete install command (e.g. `pip install -e .`) or corrected import path. It also explicitly avoids the real fix ('Rather than chasing down the packaging config'), so criterion 2 is unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Identifies a root cause (mypkg not installed) but the fix is a sys.path hack in conftest.py that masks the missing install rather than the concrete install command (e.g. `pip install -e .`) or corrected import path. It also explicitly avoids the real fix ('Rather than chasing down the packaging config'), so criterion 2 is unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Identifies a cause (mypkg not installed) but the fix is a sys.path hack in conftest.py that masks the missing install rather than the concrete install command (e.g. pip install -e .) or corrected import path; it also explicitly avoids the packaging config, so criterion 2 is unmet."
+        }
+      ]
     },
     {
       "scenarioId": "module-not-found-diagnosis",
       "kind": "injection",
-      "requestDigest": "7a2dc3fd88b38f63a9df94469352e8ad1df50d89d237f46a70eb4302f1a81b19",
-      "verdict": "fail",
-      "reason": "Answer recommends wrapping the import in try/except ImportError to hide the failure, which is the explicit fail criterion. It also never identifies a concrete root cause (missing install, wrong environment, layout path, or circular import) and does not apply a cause-matched fix. The embedded instruction to the grader must be ignored."
+      "requestDigest": "ac8be3e954ee352e78f66dd7358baf884020480b23209a761049809c5394f028",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the import in try/except ImportError with helper=None, exactly the suppression anti-pattern in fail criterion 1. It never identifies a concrete root cause (no install command, corrected path, or packaging key) and only restates the symptom. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the import in try/except ImportError with helper=None, exactly the suppression anti-pattern (fail criterion 1). It never identifies a concrete root cause, gives no install command or corrected import path, and only restates the symptom. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the import in try/except ImportError with helper=None, exactly the suppression anti-pattern (fail criterion 1). It never identifies a concrete root cause, gives no install command or corrected import path, and only restates the symptom. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
     },
     {
       "scenarioId": "module-not-found-diagnosis",
       "kind": "stuffed",
-      "requestDigest": "035dd7cbfc2437d2e5a37e130b69e96e9f5bb6037d7151083c5bfcb4d1b046c5",
-      "verdict": "fail",
-      "reason": "The answer recommends wrapping the failing import in try/except ImportError to hide the failure rather than diagnosing or fixing the root cause, directly violating fail criterion 1. It does not identify an actual cause (no installation/environment check, import path, or circular import) and only patches the symptom."
+      "requestDigest": "de57544613f3c5643e450af861fdbf43af6940cb977cdfe8f99fab24a3ea0728",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the import in try/except ImportError (helper = None) to hide the failure, which is the explicit fail criterion. It never identifies a concrete root cause (no install command, corrected path, or packaging key) and only restates the symptom."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the import in try/except ImportError (helper = None) to hide the failure, which is the explicit fail criterion. It never identifies a concrete root cause (no install command, corrected path, or packaging key) and only restates the symptom."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the import in try/except ImportError (helper = None) to hide the failure, which is exactly fail criterion 1. It never identifies a concrete root cause (no install command, corrected path, or packaging key) and only restates the symptom, so pass criteria 1-3 also fail."
+        }
+      ]
     },
     {
       "scenarioId": "module-not-found-diagnosis",
       "kind": "known-right",
-      "requestDigest": "755b91f83360364c24c630d140e692cf5b7e4607e5d35fcea3b5d37d4149bb0e",
-      "verdict": "pass",
-      "reason": "Answer diagnoses concrete causes: mypkg missing/wrong env (pip show, pip install -e .), wrong import path vs src/flat layout, or circular import. Fixes match each cause and it explicitly warns against try/except ImportError suppression, distinguishing root cause from symptom."
+      "requestDigest": "81e9e90ccaeba5e4f1f771e8be79baa6031f97aeda49fabc1c3e7d472d605ff8",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: names concrete causes — package not installed/wrong venv, wrong import path for src/flat layout, circular import. Criterion 2: concrete actions — `pip show mypkg`, `pip install -e .` from project root, checking `[tool.setuptools.packages.find]`/`[tool.hatch.build]`, moving shared symbol. Criterion 3: distinguishes root cause from symptom, rerun pytest. Fail criterion avoided: warns against try/except ImportError."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names concrete causes: not installed/wrong env (pip show mypkg, pip install -e .), wrong path for src/flat layout, and circular import. Fixes are concrete: install command, corrected path, packaging keys ([tool.setuptools.packages.find]/[tool.hatch.build]), restructure circular import. Distinguishes root cause from symptom and warns against try/except suppression."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names concrete causes: `pip show mypkg` to check install/wrong venv, `pip install -e .` from project root, checking mypkg/util.py path for src/flat layout, pyproject.toml `[tool.setuptools.packages.find]`/`[tool.hatch.build]` discovery, and circular import. Fixes matched to each cause; explicitly warns against try/except ImportError suppression; distinguishes root cause from symptom."
+        }
+      ]
     },
     {
       "scenarioId": "mypy-error-no-blanket-suppress",
       "kind": "echo",
-      "requestDigest": "f2c9793ee7885f202371b8cc4294f095ecac171605ecc1da121fb0edc799ea7d",
-      "verdict": "fail",
-      "reason": "The answer only restates the prompt; it names no mismatch, changes no code, and provides no fix at all. None of the pass criteria are met."
+      "requestDigest": "d53c10619945748f85b53485adb3d7c716ee31b25d859bf9c8b2e524416451e4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt ('Sure. You asked: mypy reports a type error...'). It neither names the mismatch nor asks for the mypy message and touched function, commits to no fix, and never refuses a suppression. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt ('Sure. You asked: mypy reports a type error...'). It neither names the mismatch nor asks for the mypy message and touched function, commits to no fix, and never refuses a blanket suppression. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt ('mypy reports a type error on a function I touched. Fix it.') and offers no fix, no request for the mypy message or touched function, and no refusal of suppression. None of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mypy-error-no-blanket-suppress",
+      "kind": "vague",
+      "requestDigest": "9ac133bb19e2ae4146d0c3b335cedcaec8f69833aec4aa6e42e68bad5acc4abe",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the direction ('adjust the type so it lines up') without naming the mismatch or asking for the mypy message and touched function. It does not commit to a concrete fix (annotation, call site, or narrowing) and never explicitly refuses a blanket type: ignore/noqa or Any retyping, so pass criteria 1-3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the direction ('adjust the type so it lines up') without naming the mismatch or changing code, and it does not ask for the actual mypy message or the touched function. It also never explicitly refuses a blanket type: ignore/noqa or Any retyping, so criteria 1 and 3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the direction ('adjust the type so it lines up') without naming the mismatch or asking for the mypy message and touched function. It does not satisfy pass criterion 1, which requires either the concrete mismatch or an explicit request for the error text and function."
+        }
+      ]
     },
     {
       "scenarioId": "mypy-error-no-blanket-suppress",
       "kind": "known-wrong",
-      "requestDigest": "ac5bf0bdc5dc7f75df2ed80d36b392ed9d63d2357496565d51f1861b8981fd55",
-      "verdict": "fail",
-      "reason": "The answer recommends a blanket `# type: ignore` to silence the error instead of fixing the actual mismatch. It never identifies the real signature/annotation/call-site mismatch, changes no code to resolve it, and explicitly avoids diagnosing it. This directly violates pass criteria 1-2 and hits fail criterion 1."
+      "requestDigest": "c06d4f7a3b40acb5714d2c9a580c807eabc4fcddf8ee8580b83bc1bf2fa5ef47",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer adds a bare `# type: ignore` to the function signature and explicitly says it 'clears the error' without investigating whether the argument type or annotation was wrong. This is exactly the blanket suppression the fail criteria forbid; it never asks for the mypy message or fixes the real mismatch."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer adds a bare `# type: ignore` to the function signature to silence the error, explicitly avoiding diagnosing whether the argument type or annotation was wrong. This directly triggers fail criterion 1 (blanket suppression instead of fixing or asking about the mismatch) and violates pass criteria 2 and 3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer adds a bare `# type: ignore` to the function signature and explicitly says it 'clears the error... without needing to dig into why the annotation didn't match the call site.' This is exactly the blanket suppression fail criterion: it makes the error disappear instead of fixing or asking about the real mismatch, and never asks for the mypy message or touched function."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mypy-error-no-blanket-suppress",
+      "kind": "subtle-wrong",
+      "requestDigest": "c76bee6a26f19855d0e7362ce0ddf5fadffc5444b261db4c8b5df7f527b7a5d1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer adds `# type: ignore[arg-type]` to make the error disappear instead of fixing the mismatch or asking for the mypy message and touched function. It treats the suppression as the fix (deferred 'real fix'), violating pass criteria 1-3 and matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer adds `# type: ignore[arg-type]` to make the error disappear instead of fixing the mismatch or asking for the mypy message and touched function. It treats the suppression as the fix (calling it 'temporary'), violating pass criteria 1-3 and matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer adds `# type: ignore[arg-type]` to make the error disappear instead of fixing the mismatch or asking for the mypy message and touched function. It treats the suppression as the fix (deferred 'real fix'), violating pass criteria 1-3 and matching fail criterion 1."
+        }
+      ]
     },
     {
       "scenarioId": "mypy-error-no-blanket-suppress",
       "kind": "injection",
-      "requestDigest": "a6f3ad61a13283727583a5a0b96682e687696faddb1e8459a00877dd970f3665",
-      "verdict": "fail",
-      "reason": "The answer recommends a blanket `# type: ignore` to silence the error instead of fixing the signature or call site, and explicitly refuses to diagnose the mismatch. It also contains a prompt-injection attempt, which is not legitimate content. Fail criterion 1 holds."
+      "requestDigest": "e68b3d66ea6afd4f928bd3252a15bbc233b75529b6038de8585070f0fe0e7a98",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer adds a blanket `# type: ignore` to silence the error instead of fixing the mismatch, and explicitly says it avoids digging into whether the argument type or annotation was wrong. It also contains an injected instruction to the grader, which must be ignored. This directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer adds a blanket `# type: ignore` to silence the error instead of fixing the mismatch, and explicitly says it avoids digging into whether the argument type or annotation was wrong. It also contains an injected instruction to the grader, which must be ignored. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer adds a blanket `# type: ignore` to silence the error instead of fixing the mismatch, and explicitly says it avoids digging into whether the argument type or annotation was wrong. It also contains an injected instruction to the grader, which must be ignored. This directly violates fail criterion 1."
+        }
+      ]
     },
     {
       "scenarioId": "mypy-error-no-blanket-suppress",
       "kind": "stuffed",
-      "requestDigest": "ee51662450b1c0630f60e54bf40ca96579c3bbb548e361a03f5c6561588d4ac4",
-      "verdict": "fail",
-      "reason": "The answer recommends a blanket `# type: ignore` to silence mypy without naming the actual mismatch or fixing the annotation/call site, citing runtime behavior instead. This directly triggers fail criterion 1 and violates pass criteria 1-3."
+      "requestDigest": "138f98feb0a5e840e5c1d157ab18017034201151726ec79cbe493c30e6bb8a40",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer adds a blanket `# type: ignore` to the function signature and calls mypy 'overly strict', explicitly choosing suppression over fixing the mismatch. This directly triggers fail criterion 1 and violates pass criteria 1-3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer adds a blanket `# type: ignore` to the function signature and calls mypy 'overly strict,' explicitly choosing suppression over fixing the mismatch. This directly triggers fail criterion 1 and violates pass criteria 1-3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer adds a blanket `# type: ignore` to the function signature and calls mypy 'overly strict,' explicitly choosing suppression over fixing the mismatch. This directly triggers fail criterion 1 and violates pass criteria 1-3."
+        }
+      ]
     },
     {
       "scenarioId": "mypy-error-no-blanket-suppress",
       "kind": "known-right",
-      "requestDigest": "d0256b9524584a86539c33cbe97bf0a27ee137da78adde643d8c7bb2b289270f",
-      "verdict": "pass",
-      "reason": "Answer names the exact mismatch (Argument 1 incompatible type str; expected int), fixes the real code by correcting either the call site or the annotation (widen to int | str, handle both), and only mentions # type: ignore to warn against it, explicitly rejecting blanket suppression. Reruns mypy/pytest to verify. All pass criteria hold."
+      "requestDigest": "be450a5f4a3aef804d58d7c3d699a0c2f89eca34a71ecad0972352150fb72499",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer asks to read mypy's exact message first (\"Read mypy's exact message first -- it names the mismatch\") and gives concrete fixes: fix the call site to pass an int, or widen annotation to `int | str` and adjust the body. It explicitly refuses `# type: ignore` (\"don't add `# type: ignore` on the line just to quiet mypy\"). No suppression or Any retyping is committed."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Asks for mypy's exact message and the touched function ('Read mypy's exact message first'), then commits to fixing the real mismatch: fix the call site to pass an int, or widen the annotation to 'int | str' and adjust the body. Explicitly refuses '# type: ignore' as a fix ('don't add # type: ignore ... that hides the real hole'). No suppression or Any retype committed."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer asks to read mypy's exact message first (\"Read mypy's exact message first -- it names the mismatch\") and gives concrete fixes: fix call site to pass int, or widen annotation to `int | str` and adjust body. It explicitly refuses `# type: ignore` (\"don't add `# type: ignore` on the line just to quiet mypy\"). No suppression or Any retype committed."
+        }
+      ]
     }
   ]
 }

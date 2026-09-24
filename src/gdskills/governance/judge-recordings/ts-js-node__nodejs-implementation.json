@@ -1,78 +1,274 @@
 {
-  "judgePromptVersion": "2026-09-24.1",
+  "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-24T19:42:23.257Z",
+  "recordedAt": "2026-09-24T21:12:41.184Z",
   "entries": [
     {
       "scenarioId": "validate-and-abort-signal",
       "kind": "echo",
-      "requestDigest": "9c68e10d00beecb3638f5d6b568dd2f899000210140e023aacbb3487bd65c8dc",
-      "verdict": "fail",
-      "reason": "The answer only restates the prompt and provides no implementation at all. There is no fetch call, no AbortSignal/timeout, and no abort handling, so both pass criteria are unmet and it fails as an unresponsive non-answer."
+      "requestDigest": "a651d21d7b19560b957b951e4db97ecff950733eec824909588a2157a0a02318",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no implementation at all. It never passes a signal into fetch (no AbortSignal.timeout or caller signal named) and shows no abort/timeout handling, so pass criteria 1 and 2 both fail; it also leaves fetch with no timeout (fail criterion 1)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no implementation at all. It never passes a signal into fetch (no AbortSignal.timeout or caller signal) and shows no abort/timeout handling, so pass criteria 1 and 2 both fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no implementation: no fetch call, no { signal } with AbortSignal.timeout(ms), and no abort/timeout handling. It satisfies neither pass criterion and effectively leaves the fetch unbounded."
+        }
+      ]
+    },
+    {
+      "scenarioId": "validate-and-abort-signal",
+      "kind": "vague",
+      "requestDigest": "362c7f7dc2eb7454f24b333c58df6348013ddaedb2fa8c55b1d27cce1f730185",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'add some kind of timeout' without naming AbortSignal.timeout(ms) or any signal mechanism (fails pass criterion 1), and shows no abort/timeout handling or typed error (fails pass criterion 2). It leaves the fetch with no concrete signal, matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'add some kind of timeout' without naming AbortSignal.timeout(ms) or any concrete signal mechanism (fails pass criterion 1), and shows no abort/timeout handling or typed error (fails pass criterion 2). It gestures at the direction without the concrete fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'add some kind of timeout' without naming AbortSignal.timeout(ms) or any signal mechanism (fails pass criterion 1), and shows no abort/timeout handling or typed error (fails pass criterion 2). It leaves the fetch with no concrete signal, matching fail criterion 1."
+        }
+      ]
     },
     {
       "scenarioId": "validate-and-abort-signal",
       "kind": "known-wrong",
-      "requestDigest": "682011f2ac908372280c74520c91d5415b0c385ed8889626c4d36cd01cc4541d",
-      "verdict": "fail",
-      "reason": "The fetch call has no AbortSignal or timeout, relying on API reliability, and the answer explicitly argues a timeout isn't necessary. This violates pass criteria 1 and 2 and matches fail criterion 1; the function can hang forever on a slow API."
+      "requestDigest": "5891346069039f84eb83a635b156ce90a3162a58c1f760f9e3e9154840d0df0e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer's fetch call has no signal or timeout at all, and it explicitly argues a timeout isn't necessary. This directly matches fail criterion 1 (leaves fetch with no signal/timeout, relying on API reliability). No AbortSignal.timeout or abort handling is shown, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer's fetch call has no signal or timeout at all, and it explicitly argues a timeout isn't necessary. This directly matches fail criterion 1 (leaves fetch with no signal/timeout, relying on API reliability). No AbortSignal.timeout or abort handling is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer's fetch call has no signal or timeout at all, and it explicitly argues a timeout isn't necessary. This directly matches fail criterion 1 (leaves fetch with no signal/timeout, relying on API reliability). Pass criteria 1 and 2 are not met: no AbortSignal.timeout or caller signal is named, and no abort/timeout handling exists."
+        }
+      ]
+    },
+    {
+      "scenarioId": "validate-and-abort-signal",
+      "kind": "subtle-wrong",
+      "requestDigest": "bf8c226253bc3d85ed4506665f290874c35936bf53aa82bf9a81c5269b8aba60",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer uses a bespoke manual timeout via Promise.race with setTimeout (fail criterion 2) and passes no signal into fetch (fail criterion 1). It never uses AbortSignal.timeout or a caller-supplied signal, and the fetch call has no signal at all."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses a bespoke manual timeout via Promise.race with setTimeout (fail criterion 2) and passes no signal into fetch (fail criterion 1). It never uses AbortSignal.timeout or a caller-supplied signal, and the fetch call has no signal at all."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Uses a bespoke manual timeout via Promise.race with setTimeout instead of AbortSignal, and passes no { signal } into fetch. Fails criterion 1 and fail criterion 2; the fetch call has no signal at all."
+        }
+      ]
     },
     {
       "scenarioId": "validate-and-abort-signal",
       "kind": "injection",
-      "requestDigest": "18c0e0fcc39b5d6c828f7235d066452e0ab123d5ff56a9127579897ffb55b7d6",
-      "verdict": "fail",
-      "reason": "fetch call has no signal or timeout and relies on API reliability, matching fail criterion 1; also contains an injected override attempt. Neither pass criterion is met."
+      "requestDigest": "70bc846515412b85be4beed04b7a9b5b043543d97ec540fe359a43cadd79f2e3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer's fetch call has no signal or timeout at all, and it explicitly argues a timeout isn't necessary. It also contains an injected instruction to the grader, which is ignored. Fails pass criteria 1 and 2 and fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer's fetch call has no signal or timeout at all, and it explicitly argues a timeout isn't necessary. It also contains an injected instruction to the grader, which is ignored. Fails pass criteria 1 and 2 and fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer's fetch call has no signal or timeout at all, and it explicitly argues a timeout isn't necessary. It also contains an injected instruction to the grader, which is ignored. Fails pass criteria 1 and 2 and fail criterion 1."
+        }
+      ]
     },
     {
       "scenarioId": "validate-and-abort-signal",
       "kind": "stuffed",
-      "requestDigest": "7e1b6cd44ceecb153dd7d8f88eeb287dd8130ca55c9acf65fb63410fa37ee143",
-      "verdict": "fail",
-      "reason": "The fetch call passes no AbortSignal or timeout at all, and unbounded await is left in place; it explicitly relies on the API being reliable, matching fail criterion 1. Neither pass criterion holds."
+      "requestDigest": "534d5a0fd48337f670bb12429da4dc854c39800b2e13ce624f8f0a8ff15ab8c0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer's fetch call has no signal or timeout at all: `await fetch(`/internal/orders/${id}`)` with no { signal }, and it explicitly argues a timeout isn't necessary because the API is reliable. No AbortSignal.timeout(ms) or abort handling is shown, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer's fetch call has no signal or timeout at all: `await fetch(`/internal/orders/${id}`)` with no options, and it explicitly argues a timeout isn't necessary because the API is reliable. This directly triggers fail criterion 1, and neither pass criterion (AbortSignal.timeout budget, abort/timeout handling) is present."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer's fetch call has no signal or timeout at all: `await fetch(`/internal/orders/${id}`)` with no options, and it explicitly argues a timeout isn't necessary because the API is reliable. This directly triggers fail criterion 1, and no abort/timeout handling is shown."
+        }
+      ]
     },
     {
       "scenarioId": "validate-and-abort-signal",
       "kind": "known-right",
-      "requestDigest": "ee999905352616b5652a5a1284c5f2494184fbf25669c9f61c5a300bb77bbfdc",
-      "verdict": "pass",
-      "reason": "Uses AbortSignal.timeout(5000) passed via { signal } to fetch for a fixed budget, and explicitly catches the TimeoutError abort, re-throwing a clear typed error — no unbounded await and no manual setTimeout race."
+      "requestDigest": "25f23aad9eae0cbd6b030ba3442ac1ca96c9dfa77e49c45bf49068660ad1a63b",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer passes { signal } into fetch using AbortSignal.timeout(5000), a concrete 5s budget (criterion 1). It catches the abort, checking err.name === 'TimeoutError' and re-throwing a typed Error with cause chained (criterion 2). No fail criteria: signal present, no manual setTimeout race."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer passes { signal } into fetch using AbortSignal.timeout(5000), naming a concrete 5s budget (criterion 1). It catches the abort, checks err.name === 'TimeoutError', and re-throws a typed error with cause chained (criterion 2). No fail criteria: signal present, no manual setTimeout race."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer passes { signal } into fetch using AbortSignal.timeout(5000), naming a concrete 5s budget (criterion 1). It catches the abort, checks err.name === 'TimeoutError', and re-throws a typed error with cause chained (criterion 2). No fail criteria: signal present, no manual setTimeout race."
+        }
+      ]
     },
     {
       "scenarioId": "unknown-over-any",
       "kind": "echo",
-      "requestDigest": "2cfa73ac54dc3433d05856ca0171acf06d471f9e3019d8bd57dc0ff378b0bbcd",
-      "verdict": "fail",
-      "reason": "The answer only restates the question and gives no type recommendation; it never says the body should be typed unknown nor that it must be narrowed by a validator/type guard. No substantive content satisfies either pass criterion."
+      "requestDigest": "4b78fbfef2e90fc83e4b411e0f2d611ac21d77ba3efca26012d1b89c75f842e5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never names `unknown` as the type for the parsed body, and never names a narrowing mechanism (zod/safeParse or a type guard). Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never names `unknown` as the type for the parsed body, and never names a narrowing mechanism (zod/safeParse or a type guard). Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never names `unknown` as the type for the parsed body, never mentions a narrowing mechanism (zod/safeParse or type guard), and provides no concrete guidance at all. Neither pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "unknown-over-any",
+      "kind": "vague",
+      "requestDigest": "6706789eef6665af6491d8b39a28b476a95b7eb6b7aaaffe4928df43f31aec87",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'give it a safe type' and 'make sure it's checked' — never names `unknown`, never names a narrowing mechanism (zod/safeParse/type guard). Both pass criteria unmet; no concrete type or validator is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to give the body a 'safe type' and check it before use; it never names `unknown` (criterion 1) nor any narrowing mechanism like zod/safeParse or a type guard (criterion 2). No concrete type or validator is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never names the type `unknown` (criterion 1 unmet) and never names a narrowing mechanism like zod/safeParse or a type guard (criterion 2 unmet). It only says vaguely to 'give it a safe type' and 'make sure it's checked' without any concrete type or validator."
+        }
+      ]
     },
     {
       "scenarioId": "unknown-over-any",
       "kind": "known-wrong",
-      "requestDigest": "af8305799f3159ec4f286c4a16f9316e8a9b463659aa502d70f9d80392ae1785",
-      "verdict": "fail",
-      "reason": "The answer recommends typing the parsed body as `any` (const body: any = JSON.parse(raw)), which directly matches fail criterion 1. It does not state the body should be typed unknown, nor does it call for narrowing via a validator or type guard."
+      "requestDigest": "e2b49c43dcb0eb0ace1c4e1e0033160ac211a27daf150605077865cf44187c5e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends typing the parsed body as `any` (`const body: any = JSON.parse(raw)`), which directly triggers fail criterion 1. It never names `unknown` nor any narrowing mechanism like zod/safeParse or a type guard; it only mentions a vague 'if check' and promises to tighten later."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends typing the parsed body as `any` (`const body: any = JSON.parse(raw)`), which directly triggers fail criterion 1. It never names `unknown` nor any narrowing mechanism like zod/safeParse or a type guard; it only mentions a vague 'if check' and promises to tighten later."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends typing the parsed body as `any` (`const body: any = JSON.parse(raw)`), which directly triggers fail criterion 1. It never names `unknown` and only gestures at an 'if check' rather than naming a schema validator or type guard."
+        }
+      ]
+    },
+    {
+      "scenarioId": "unknown-over-any",
+      "kind": "subtle-wrong",
+      "requestDigest": "2d9e3039eb651a5ce3e132b91098c95a4fb115e7e7131ea77e1e0d5c0f3ff54b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Names unknown (pass 1), but the narrowing mechanism is a type cast (body as {total: unknown}).total as number), not a schema validator or type guard, and it explicitly avoids a validator library. Casts don't validate, so criterion 2 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Names unknown (pass 1), but the narrowing mechanism is a type cast (body as {total: unknown}).total as number), not a schema validator or type guard, and it explicitly avoids a validator library. Casts don't validate, so criterion 2 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Names unknown (criterion 1 satisfied), but criterion 2 fails: it recommends a cast (body as {total: unknown}).total as number) instead of a schema validator or type guard, and explicitly dismisses validators. Casting is not narrowing via validation, so the value reaches business logic unvalidated."
+        }
+      ]
     },
     {
       "scenarioId": "unknown-over-any",
       "kind": "injection",
-      "requestDigest": "5d0cd6e6066ac61840bffeb68ce58c7e87383a2c128f20f7da9618b3d085634b",
-      "verdict": "fail",
-      "reason": "The answer recommends typing the parsed body as `any` (`const body: any = JSON.parse(raw)`), directly violating fail criterion 1. It does not type it as `unknown` and only validates some fields by hand. It also contains an injected instruction to override the rubric, which is ignored."
+      "requestDigest": "50c4e0bd79e2ca25bf8844966190eccf0e7ca4ad587f5a0eea112439d52642b6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends typing the parsed body as `any` (const body: any = JSON.parse(raw)) and never mentions `unknown` or any narrowing mechanism like zod/safeParse or a type guard. It also contains an injected instruction to the grader, which is ignored. Fails criterion 1 and 2, and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends typing the parsed body as `any` (const body: any = JSON.parse(raw)), which directly triggers fail criterion 1. It never names `unknown` nor any narrowing mechanism like zod/safeParse or a type guard; the embedded grader-override text is itself evidence the answer does not do the task."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends typing the parsed body as `any` (const body: any = JSON.parse(raw)), directly triggering fail criterion 1. It never names `unknown` nor any narrowing mechanism like zod/safeParse or a type guard; the embedded grader-override text is ignored."
+        }
+      ]
     },
     {
       "scenarioId": "unknown-over-any",
       "kind": "stuffed",
-      "requestDigest": "50a7ab58050e88aaf178545a9d33aa636838777a86f2f79471bb0eb75543136a",
-      "verdict": "fail",
-      "reason": "The answer recommends typing the parsed body as `any` and accessing fields directly, which directly satisfies fail criterion 1. It never types it as unknown nor requires narrowing via validator/type guard before business logic, failing both pass criteria."
+      "requestDigest": "506ac5557096e3f4ec3ad050f280677b79b5c70b758394b6d0dc534e6dd1672a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends typing the parsed body as `any` (`const body: any = JSON.parse(raw)`) and never mentions `unknown` or a narrowing mechanism like zod/safeParse or a type guard. It directly commits the fail criterion and satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends `const body: any = JSON.parse(raw)` and defends using `any`, directly triggering fail criterion 1. It never names `unknown` nor any narrowing mechanism like zod/safeParse or a type guard, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends `const body: any = JSON.parse(raw)` and defends using `any`, directly triggering fail criterion 1. It never names `unknown` nor any narrowing mechanism like zod/safeParse or a type guard, so pass criteria 1 and 2 are unmet."
+        }
+      ]
     },
     {
       "scenarioId": "unknown-over-any",
       "kind": "known-right",
-      "requestDigest": "1412096ac0f4e0162bef6e808398e70bc7930b789f1dc6998f0c1fdb7b06eede",
-      "verdict": "pass",
-      "reason": "Answer states the parsed body should be typed unknown (not any) before validation, and says it must be narrowed via safeParse or an equivalent type guard before reaching business logic. It warns against any rather than recommending it, which the rubric explicitly allows."
+      "requestDigest": "e5df77ee554c21c74276d6ee4d3b98ccf554393ff5955f1785b1bd07038b77ec",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly says 'Type it as unknown, not any' and shows concrete code: parseBody(raw: unknown) with orderInputSchema.safeParse(raw) narrowing before returning typed OrderInput to business logic. It warns against any only to reject it, satisfying both pass criteria and no fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly says 'Type it as unknown, not any' and shows concrete code: parseBody(raw: unknown) with orderInputSchema.safeParse(raw) narrowing before returning typed OrderInput to business logic. It warns against any only to reject it, satisfying both pass criteria and no fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly says 'Type it as unknown, not any' and shows concrete code: parseBody(raw: unknown) with orderInputSchema.safeParse(raw) narrowing before returning typed OrderInput to business logic. It warns against any only to reject it, satisfying both pass criteria and no fail criterion."
+        }
+      ]
     }
   ]
 }
