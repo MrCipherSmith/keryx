@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { writeContained } from "../lib/contained-write";
 
 // Seed the tree-sitter grammar assets into a project's `assets.lock.json` so the
 // gdgraph symbol layer works out of the box: `keryx gdgraph symbols enable` then
@@ -92,7 +93,12 @@ export async function seedAssetsLock(metaprojectRoot: string): Promise<void> {
 
   const { lock, changed } = mergeGrammarAssets(existing);
   if (changed || !present) {
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, `${JSON.stringify(lock, null, 2)}\n`, "utf8");
+    // Routed through writeContained (R1-F1): metaprojectRoot is the
+    // containment root, "assets.lock.json" the project-relative target — a
+    // symlink at that path (or at metaprojectRoot itself) pointing outside
+    // the project is refused rather than followed. writeContained creates
+    // parent directories itself, so the separate `mkdir` this used to do is
+    // gone.
+    await writeContained(metaprojectRoot, "assets.lock.json", `${JSON.stringify(lock, null, 2)}\n`);
   }
 }

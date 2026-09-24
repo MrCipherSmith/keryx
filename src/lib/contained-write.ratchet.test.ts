@@ -34,6 +34,12 @@ const COVERED_FILES = [
   "src/testing/service.ts",
   "src/lib/metaproject-gitignore.ts",
   "src/lib/project-sandbox-policy.ts",
+  "src/assets/seed.ts",
+  "src/gdskills/install.ts",
+  "src/lib/routing-entrypoint.ts",
+  "src/mcp/client-config.ts",
+  "src/capability/registry.ts",
+  "src/lib/managed-git-hook.ts",
 ];
 
 /** Every write/remove/rename/mkdir-shaped `node:fs`/`node:fs/promises` export the review's 13 shapes exercise. */
@@ -100,12 +106,12 @@ const ALLOWLIST: ReadonlyArray<{ readonly file: string; readonly reason: string 
     reason: "mkdirRecordingCreated's raw mkdir and the rollback's raw rmdir are mitigated: refuseSymlinkChain re-checks the scope root and every segment immediately before each write in the same loop, and rollback's rmdir only ever removes a directory this same apply just created and is a no-op if non-empty (R4-F1 allowlist, matches the round-4 site enumeration).",
   },
   {
-    file: "src/commands/update.ts",
-    reason: "installManagedHook/removeManagedHook write into .git/hooks by design (a managed git hook) — contained-write.ts categorically refuses any .git path segment, so these two keep raw mkdir/writeFile plus resolveGitHooksRoot's own symlink check; every OTHER write in this file is routed through contained-write/mkdirContained (R1-F20, R4-F1 allowlist).",
+    file: "src/gdskills/install.ts",
+    reason: "Raw `unlink` (removeStaleRuntimeBuilds, removeUnmodifiedRetiredRules) and raw `cp` (skill/shared/rules directory copies) keep their own, more discriminating containment: unlink only ever fires after an `lstat`+`realpath` walk that refuses a symlinked skills root, category, or skill directory (see removeStaleRuntimeBuilds's doc comment) or an `lstat`-confirmed-regular-file retired rule; `cp` targets are directories `mkdirContained` (R1-F1 fix) just confirmed resolve inside metaprojectRoot with no escaping symlink on the way, immediately before each `cp` call. Every plain single-file write in this module (catalog.md, gdskills.md, contracts, per-skill SKILL.md, the mkdir tree) is routed through writeContained/mkdirContained (flow 315 T12 allowlist).",
   },
   {
-    file: "src/commands/init.ts",
-    reason: "installManagedHook/removeManagedHook (init's own copy of update.ts's pair) write into .git/hooks by design — same categorical .git refusal, same raw mkdir/writeFile/chmod plus resolveGitHooksRoot's own symlink check; every OTHER write, mkdir and remove in this file is routed through contained-write/mkdirContained/removeContained (flow 315 T5 allowlist, mirrors the update.ts entry above).",
+    file: "src/lib/managed-git-hook.ts",
+    reason: "installManagedHook/removeManagedHook write into .git/hooks by design (a managed git hook) — contained-write.ts categorically refuses any .git path segment, so this module keeps raw mkdir/writeFile/chmod. R1-F3/R1-F6 fix: this is now the ONE shared copy (deduplicated out of init.ts and update.ts, which no longer contain raw hook writes and carry no allowlist entry of their own), and unlike the old per-command comment this module actually verifies containment itself before writing — it lstat/realpath-checks that both the hooks directory and the target hook file resolve inside the git common dir resolveGitHooksRoot derived from, refusing (not silently writing through) a hooks dir or hook file symlinked elsewhere (flow 315 T12 allowlist).",
   },
 ];
 
@@ -202,11 +208,40 @@ function detectRawWrites(source: string): string[] {
     }
   }
 
-  if (/\bwriteFileAtomic\s*\(/.test(source) && /from\s*["'][./]*lib\/fs["']/.test(source)) {
-    hits.push('imports and calls "writeFileAtomic" from lib/fs — a raw-write wrapper, not the containment primitive');
+  // R1-F7: parses the `lib/fs` import BLOCK for every name it binds
+  // `writeFileAtomic` to — the plain name, or an alias via `as` — rather
+  // than just checking the unaliased name appears as a call anywhere in the
+  // file. `import { writeFileAtomic as w } from "../lib/fs"; w(p, c);` used
+  // to pass uncaught: `writeFileAtomic(` never occurred literally, so the
+  // old regex's `\bwriteFileAtomic\s*\(` half never matched.
+  for (const alias of libFsImportAliases(source, "writeFileAtomic")) {
+    if (new RegExp(`\\b${alias}\\s*\\(`).test(source)) {
+      hits.push(
+        alias === "writeFileAtomic"
+          ? 'imports and calls "writeFileAtomic" from lib/fs — a raw-write wrapper, not the containment primitive'
+          : `imports "writeFileAtomic" from lib/fs aliased as "${alias}" and calls it — a raw-write wrapper, not the containment primitive`,
+      );
+    }
   }
 
   return hits;
+}
+
+/** Every alias `source`'s `lib/fs` import block binds `name` to — the plain name (no `as`) or an aliased one. */
+function libFsImportAliases(source: string, name: string): string[] {
+  const aliases: string[] = [];
+  const importBlockRe = /import\s*\{([^}]*)\}\s*from\s*["'][./]*lib\/fs["']/g;
+  let match: RegExpExecArray | null;
+  while ((match = importBlockRe.exec(source)) !== null) {
+    const names = (match[1] ?? "").split(",").map((n) => n.trim()).filter((n) => n.length > 0);
+    for (const entry of names) {
+      const parts = entry.split(/\s+as\s+/).map((p) => p.trim());
+      if (parts[0] === name) {
+        aliases.push(parts[1] ?? parts[0]);
+      }
+    }
+  }
+  return aliases;
 }
 
 describe("contained-write ratchet", () => {
@@ -259,6 +294,10 @@ describe("contained-write ratchet: detection shapes (mutation coverage, R4-F1)",
     { name: "dynamic destructured import", source: 'const { writeFile } = await import("node:fs/promises");\nwriteFile(a, b);' },
     { name: "open(p, \"w\") plus handle.writeFile", source: 'import { open } from "node:fs/promises";\nconst h = await open(p, "w");' },
     { name: "writeFileAtomic from lib/fs", source: 'import { writeFileAtomic } from "../lib/fs";\nawait writeFileAtomic(p, c);' },
+    {
+      name: "aliased writeFileAtomic from lib/fs (R1-F7)",
+      source: 'import { writeFileAtomic as w } from "../lib/fs";\nawait w(p, c);',
+    },
     { name: "createWriteStream", source: 'import { createWriteStream } from "node:fs";\ncreateWriteStream(p);' },
     { name: "rmSync", source: 'import { rmSync } from "node:fs";\nrmSync(p);' },
     { name: "namespace mkdir", source: 'import * as fs from "node:fs/promises";\nfs.mkdir(p, { recursive: true });' },

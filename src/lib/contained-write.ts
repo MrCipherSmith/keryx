@@ -232,10 +232,43 @@ export async function writeContained(
   data: string | Uint8Array,
   opts: WriteContainedOptions = {},
 ): Promise<void> {
-  const { targetPath, resolvedPath, resolvedDir } = await assertContained(root, rel, { requireRegularIfExists: true });
+  const { resolvedPath, resolvedDir } = await assertContained(root, rel, { requireRegularIfExists: true });
 
-  if (opts.exclusive && (await pathExistsLstat(targetPath))) {
-    throw new ContainedWriteError("already-exists", `${rel}: refuses to overwrite an existing file (exclusive write)`);
+  if (opts.exclusive) {
+    // R1-F9: a true `O_EXCL` create — `open(resolvedPath, "wx")` atomically
+    // fails with `EEXIST` if anything is there — rather than the old
+    // lstat-then-temp-file-then-rename sequence, whose final `rename`
+    // unconditionally overwrote whatever a racing writer created in the gap
+    // between the lstat check and the rename, however small. This does NOT
+    // go through the temp-file-then-rename dance the non-exclusive branch
+    // below uses (that dance is for atomically REPLACING a file that already
+    // exists — there is nothing to replace here): `wx` both creates and
+    // writes in one open, so a reader can only ever observe "not there yet"
+    // or "present with this exact content", never a half-written temp file
+    // racing into place. `resolvedPath` is safe to open directly for the
+    // same reason it always was: `assertContained` above already walked
+    // every symlink segment on the way there and refused a dangling or
+    // escaping one, so by this point `resolvedPath` is either the plain
+    // (non-symlink) target itself, or a symlink's real target confirmed to
+    // resolve safely inside `root` — an `EEXIST` here means precisely "a
+    // file, or a symlink pointing at one, already sits at `rel`", matching
+    // what the old lstat-on-`targetPath` check refused.
+    await mkdir(resolvedDir, { recursive: true });
+    let handle;
+    try {
+      handle = await open(resolvedPath, "wx", opts.mode);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+        throw new ContainedWriteError("already-exists", `${rel}: refuses to overwrite an existing file (exclusive write)`);
+      }
+      throw error;
+    }
+    try {
+      await handle.writeFile(data);
+    } finally {
+      await handle.close();
+    }
+    return;
   }
 
   // Writes go to `resolvedPath` — `targetPath` followed through any safe

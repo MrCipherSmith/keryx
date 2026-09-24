@@ -1,14 +1,10 @@
-import {
-  chmod,
-  mkdir,
-  readFile,
-  writeFile,
-} from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { optionValue } from "../lib/args";
 import { mkdirContained, removeContained, writeContained } from "../lib/contained-write";
+import { installManagedHook, removeManagedHook } from "../lib/managed-git-hook";
 import { moduleCommands } from "./module-commands";
 import { registerInitializedProject } from "./projects";
 import { sanitizeForDisplay } from "../lib/project-registry";
@@ -1583,81 +1579,13 @@ async function installSecurityPrePushHook(projectRoot: string): Promise<void> {
   await installManagedHook(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
 }
 
-// `installManagedHook`/`removeManagedHook` deliberately keep raw `mkdir`/
-// `writeFile`/`chmod` rather than `contained-write.ts`'s helpers: they write
-// into `.git/hooks` by design (a managed git hook), and `contained-write.ts`
-// categorically refuses any `.git` path segment, whatever the containment
-// root — a hook is a legitimate, git-owned write these two are the only place
-// in this file that performs. `resolveGitHooksRoot` runs its own `git
-// rev-parse --git-common-dir` resolution (falling back to a plain `stat` of
-// `.git`) before either function ever touches disk, so a `.git` that is
-// itself a symlink pointing outside the project is resolved through git's own
-// machinery, not bypassed. This mirrors `src/commands/update.ts`'s identical
-// pair and its ratchet allowlist entry — every OTHER write in this file is
-// routed through `contained-write`/`mkdirContained`.
-async function installManagedHook(
-  projectRoot: string,
-  hookName: "post-commit" | "pre-push",
-  blockId: string,
-  content: string,
-): Promise<void> {
-  const hooksRoot = await resolveGitHooksRoot(projectRoot);
-  if (!hooksRoot) {
-    return;
-  }
-
-  await mkdir(hooksRoot, { recursive: true });
-
-  const hookPath = path.join(hooksRoot, hookName);
-  const blockStart = `# keryx:${blockId}:begin`;
-  const blockEnd = `# keryx:${blockId}:end`;
-  const managedBlock = `${blockStart}\n${content.trim()}\n${blockEnd}`;
-  const existing = (await pathExists(hookPath))
-    ? await readFile(hookPath, "utf8")
-    : "#!/usr/bin/env sh\n";
-  const blockPattern = new RegExp(
-    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
-  );
-  // `() => managedBlock`, not `managedBlock`: the string form of
-  // String.replace reads `$'`, "$`", `$&` and `$$` as substitution patterns,
-  // and these blocks are shell. See the twin in update.ts.
-  const next = blockPattern.test(existing)
-    ? existing.replace(blockPattern, () => managedBlock)
-    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
-
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
-}
-
-// Strip a single keryx managed block from a git hook, leaving all other
-// managed blocks and user-authored content intact. No-op when the hook or block
-// is absent.
-async function removeManagedHook(
-  projectRoot: string,
-  hookName: "post-commit" | "pre-push",
-  blockId: string,
-): Promise<void> {
-  const hooksRoot = await resolveGitHooksRoot(projectRoot);
-  if (!hooksRoot) {
-    return;
-  }
-  const hookPath = path.join(hooksRoot, hookName);
-  if (!(await pathExists(hookPath))) {
-    return;
-  }
-  const existing = await readFile(hookPath, "utf8");
-  const blockStart = `# keryx:${blockId}:begin`;
-  const blockEnd = `# keryx:${blockId}:end`;
-  const blockPattern = new RegExp(
-    `\\n*${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}\\n*`,
-  );
-  if (!blockPattern.test(existing)) {
-    return;
-  }
-  const next = `${existing.replace(blockPattern, "\n").trimEnd()}\n`;
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
-}
+// R1-F3/R1-F6: `installManagedHook`/`removeManagedHook` used to be a local,
+// byte-for-byte copy of `update.ts`'s pair, which let the ratchet's
+// file-granularity ALLOWLIST silently exempt every OTHER raw write this file
+// might grow, and carried a false claim that `resolveGitHooksRoot` itself
+// checked for an escaping symlink (it does not). Both commands now share the
+// one implementation in `src/lib/managed-git-hook.ts`, which actually runs
+// that containment check before writing — see its file header.
 
 // True when the git pre-push hook still carries the managed security block.
 async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
@@ -1995,10 +1923,6 @@ function buildManifest({
       root: agentRuleSources,
     },
   };
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // `projectRoot` is the containment root for every one of these four; `filePath`

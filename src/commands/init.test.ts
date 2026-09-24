@@ -294,6 +294,120 @@ test("keryx init refuses to create .metaproject/reports through a directory syml
   }
 }, 120_000);
 
+// Flow 315 T12 (R1-F1 major): `keryx init`'s OWN writers were fixed by flow
+// 315 T5 (the two tests above), but `seedAssetsLock` — a helper `init` calls
+// on the default `--yes` path — still used raw `mkdir`/`writeFile` against
+// `<metaprojectRoot>/assets.lock.json`. A symlink there pointing outside the
+// project used to be followed: the victim file (which does not parse as the
+// lock's JSON shape) was treated as "malformed, reseed" and overwritten with
+// the grammar-pins JSON, and `init` exited 0. `seedAssetsLock` now routes
+// through `writeContained`, which refuses instead.
+test("keryx init refuses to write assets.lock.json through a symlink that escapes the project", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-escape-assets-lock-"));
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "keryx-init-escape-assets-lock-outside-"));
+  try {
+    const sentinelPath = path.join(outsideRoot, "victim.json");
+    await writeFile(sentinelPath, "NOT THE LOCK SHAPE\n", "utf8");
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await symlink(sentinelPath, path.join(root, ".metaproject", "assets.lock.json"));
+
+    let caught: unknown;
+    await withCwd(root, async () => {
+      try {
+        await initCommand(["--yes"]);
+      } catch (error) {
+        caught = error;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(ContainedWriteError);
+    expect((caught as ContainedWriteError).reason).toBe("escaping-symlink");
+    expect(await readFile(sentinelPath, "utf8")).toBe("NOT THE LOCK SHAPE\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+}, 120_000);
+
+// Flow 315 T12 (R1-F1 major): same failure mode, in `installGdskills` (called
+// by `init` on the default `--yes` path). `skills/catalog.md` used to be a
+// raw `writeFile`; a symlink there pointing outside the project was followed
+// and the outside file silently became the rendered gdskills catalog.
+// `installGdskills` now routes the catalog (and manifest) write through
+// `writeContained`, which refuses before anything downstream of it runs.
+test("keryx init refuses to write skills/catalog.md through a symlink that escapes the project", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-escape-catalog-"));
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "keryx-init-escape-catalog-outside-"));
+  try {
+    const sentinelPath = path.join(outsideRoot, "victim.md");
+    await writeFile(sentinelPath, "ORIGINAL\n", "utf8");
+    await mkdir(path.join(root, ".metaproject", "skills"), { recursive: true });
+    await symlink(sentinelPath, path.join(root, ".metaproject", "skills", "catalog.md"));
+
+    let caught: unknown;
+    await withCwd(root, async () => {
+      try {
+        await initCommand(["--yes"]);
+      } catch (error) {
+        caught = error;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(ContainedWriteError);
+    expect((caught as ContainedWriteError).reason).toBe("escaping-symlink");
+    expect(await readFile(sentinelPath, "utf8")).toBe("ORIGINAL\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+}, 120_000);
+
+// Flow 315 T12 (R1-F1 major, resolves R1-F8): the `reports` test just above
+// symlinks a directory NOTHING actually writes a file into during a default
+// `--yes` init — pre-fix, `mkdir(dir, { recursive: true })` on a link to an
+// EXISTING directory is a no-op, so the test still "fails" pre-fix (nothing
+// throws, so `caught` stays `undefined`), but only through that incidental
+// assertion, never by observing a real escape. This test instead symlinks
+// `.metaproject/core/gdskills` — a directory `installGdskills`
+// (default-enabled) actually writes FILES into (`core/gdskills/contracts/*`,
+// via `installContracts`) — so pre-fix this proves the real R1-F1 escape
+// (the contract files land in the linked-to directory, outside the project,
+// and `init` exits 0), not just an inert mkdir no-op. The symlink sits at
+// `core/gdskills` specifically, not the whole `core` directory: `core/gdgraph`
+// is written first (by gdgraph, already contained since flow 315 T5) and
+// must succeed normally so this test isolates the gdskills-specific fix
+// rather than incidentally re-proving T5's. (`.metaproject/rules` is NOT
+// tested the same way: it was already contained pre-fix, independently of
+// this flow's `contained-write` retrofit — `syncAgentRules`, which owns that
+// directory, already refused an escaping `rules` link before flow 315 T5
+// touched anything, and `installBundledRules`'s OWN `rules/core` copy below
+// gdskills' install is covered by the read-only-directory and
+// symlinked-contracts-directory tests in `install.test.ts`.)
+test("keryx init refuses to write core/gdskills/contracts/* through a directory symlink that escapes the project", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-escape-core-gdskills-"));
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "keryx-init-escape-core-gdskills-outside-"));
+  try {
+    await mkdir(path.join(root, ".metaproject", "core"), { recursive: true });
+    await symlink(outsideRoot, path.join(root, ".metaproject", "core", "gdskills"));
+
+    let caught: unknown;
+    await withCwd(root, async () => {
+      try {
+        await initCommand(["--yes"]);
+      } catch (error) {
+        caught = error;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(ContainedWriteError);
+    expect((caught as ContainedWriteError).reason).toBe("escaping-symlink");
+    expect(await readdir(outsideRoot)).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+}, 120_000);
+
 test("memory index output is ignored and reproducible after init", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-init-memory-index-"));
   try {

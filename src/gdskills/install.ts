@@ -1,9 +1,10 @@
-import { cp, copyFile, lstat, mkdir, readFile, readdir, readlink, realpath, unlink, writeFile } from "node:fs/promises";
+import { cp, lstat, readFile, readdir, readlink, realpath, unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathExists } from "../lib/fs";
+import { ContainedWriteError, mkdirContained, writeContained } from "../lib/contained-write";
 import { CONTRACTS, contractPath } from "./contracts";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import {
@@ -20,6 +21,27 @@ import {
   type RetiredRuleFailureStage,
   type RetiredRuleOutcome,
 } from "./retired-rules";
+
+/**
+ * `mkdirContained`, but a containment refusal becomes a warning string
+ * instead of a thrown `ContainedWriteError` — matching
+ * `checkInstallDestination`'s posture: a directory keryx cannot safely
+ * create (an escaping symlink or cycle anywhere on the path, a dangling
+ * link, a non-directory in the way) is reported and simply not created,
+ * rather than aborting the whole install (R1-F1).
+ */
+async function mkdirContainedOrWarn(metaprojectRoot: string, target: string): Promise<string | null> {
+  const rel = path.relative(metaprojectRoot, target);
+  try {
+    await mkdirContained(metaprojectRoot, rel);
+    return null;
+  } catch (error) {
+    if (error instanceof ContainedWriteError) {
+      return `${rel} was not created because ${error.message}`;
+    }
+    throw error;
+  }
+}
 
 export type InstallGdskillsResult = {
   profile: GdskillsProfile;
@@ -67,30 +89,56 @@ export async function installGdskills(
   const contractsRoot = path.join(coreRoot, "contracts");
   const projectSkillsRoot = path.join(metaprojectRoot, "project-skills");
 
-  await Promise.all([
-    mkdir(skillsRoot, { recursive: true }),
-    mkdir(contractsRoot, { recursive: true }),
-    mkdir(projectSkillsRoot, { recursive: true }),
-    mkdir(path.join(metaprojectRoot, "jobs"), { recursive: true }),
-    mkdir(path.join(metaprojectRoot, "modules"), { recursive: true }),
-    ...(options.createDataDirs === false ? [] : [
-      mkdir(path.join(dataRoot, "artifacts"), { recursive: true }),
-      mkdir(path.join(dataRoot, "reports"), { recursive: true }),
-      mkdir(path.join(dataRoot, "proposals"), { recursive: true }),
-    ]),
-  ]);
-
   const skippedDestinationWarnings: string[] = [];
+
+  // R1-F1: each scaffold directory is containment-checked individually,
+  // never as one `Promise.all` — a single escaping symlink anywhere used to
+  // be either silently followed (the vulnerability) or, naively routed
+  // through `mkdirContained` in a batch, would abort the WHOLE install with
+  // an uncaught exception the first time any one of them refused. Neither is
+  // right: a directory keryx cannot safely create is reported as a warning
+  // and simply not created, the same posture `checkInstallDestination`
+  // already takes for a write target, and the rest of the install proceeds.
+  // `skillsRoot` and `contractsRoot` are deliberately NOT pre-created here:
+  // every write beneath them re-validates full-path containment on its own
+  // (the per-skill loop's own `mkdirContained` below, and `installContracts`'s
+  // `checkInstallDestination` + `writeContained`, which creates its own
+  // parent directories) — pre-creating them here would only add a second,
+  // redundant place this could silently diverge from those checks.
+  for (const dir of [
+    path.join(metaprojectRoot, "jobs"),
+    path.join(metaprojectRoot, "modules"),
+    projectSkillsRoot,
+    ...(options.createDataDirs === false ? [] : [
+      path.join(dataRoot, "artifacts"),
+      path.join(dataRoot, "reports"),
+      path.join(dataRoot, "proposals"),
+    ]),
+  ]) {
+    const warning = await mkdirContainedOrWarn(metaprojectRoot, dir);
+    if (warning) skippedDestinationWarnings.push(warning);
+  }
   let installedSkills = 0;
 
   for (const skillEntry of skills) {
     const skillDir = path.join(skillsRoot, skillEntry.category, skillEntry.name);
-    const destination = await checkInstallDestination(skillDir, path.relative(metaprojectRoot, skillDir));
+    const relSkillDir = path.relative(metaprojectRoot, skillDir);
+    const destination = await checkInstallDestination(skillDir, relSkillDir);
     if (!destination.usable) {
       skippedDestinationWarnings.push(destination.warning);
       continue;
     }
-    await mkdir(skillDir, { recursive: true });
+    // mkdirContainedOrWarn walks metaprojectRoot -> relSkillDir segment by
+    // segment, refusing an escaping symlink anywhere on the path (R1-F1) —
+    // the gap `checkInstallDestination` above does not close, since it only
+    // lstats the FINAL component (a symlinked CATEGORY directory, for
+    // example, leaves `skillDir` itself lstat-ing as a plain directory
+    // reached THROUGH the link).
+    const mkdirWarning = await mkdirContainedOrWarn(metaprojectRoot, skillDir);
+    if (mkdirWarning) {
+      skippedDestinationWarnings.push(mkdirWarning);
+      continue;
+    }
     const bundledSkillPath = bundledSkillSourcePath(skillEntry.category, skillEntry.name);
     if (existsSync(bundledSkillPath)) {
       // Known, pre-existing, and NOT addressed here: if `skillDir` is a symlink
@@ -101,9 +149,16 @@ export async function installGdskills(
       // difference only shows on Linux (it surfaced as a CI-only failure in flow
       // 257 T24). Changing the copy strategy is out of that flow's scope; this
       // note exists so the next person does not rediscover it from a CI log.
+      //
+      // `cp` itself has no containment primitive to route through (it copies a
+      // whole directory tree, not a single file). The `mkdirContained` just
+      // above already confirmed `skillDir` resolves inside `metaprojectRoot`
+      // with no escaping symlink anywhere on the way — belt-and-braces, not
+      // gap-free (a symlink swapped in between the two calls is not caught),
+      // the same narrowing every other TOCTOU note in this file accepts.
       await cp(bundledSkillPath, skillDir, { recursive: true, force: true });
     } else {
-      await writeFile(path.join(skillDir, "SKILL.md"), renderBundledSkill(skillEntry), "utf8");
+      await writeContained(metaprojectRoot, path.join(relSkillDir, "SKILL.md"), renderBundledSkill(skillEntry));
     }
     installedSkills += 1;
   }
@@ -120,10 +175,14 @@ export async function installGdskills(
   const retiredRuleOutcomes = rulesInstall.outcomes;
 
   const catalogPath = path.join(metaprojectRoot, "skills", "catalog.md");
-  await writeFile(catalogPath, await preserveProjectSkillsSection(catalogPath, renderGdskillsCatalog(profile)), "utf8");
+  await writeContained(
+    metaprojectRoot,
+    path.relative(metaprojectRoot, catalogPath),
+    await preserveProjectSkillsSection(catalogPath, renderGdskillsCatalog(profile)),
+  );
 
   const manifestPath = path.join(metaprojectRoot, "modules", "gdskills.md");
-  await writeFile(manifestPath, renderGdskillsManifest(profile), "utf8");
+  await writeContained(metaprojectRoot, path.relative(metaprojectRoot, manifestPath), renderGdskillsManifest(profile));
 
   skippedDestinationWarnings.push(...await installContracts(contractsRoot, metaprojectRoot));
 
@@ -460,9 +519,18 @@ async function installBundledSharedSkills(skillsRoot: string, metaprojectRoot: s
     return null;
   }
   const sharedTarget = path.join(skillsRoot, "shared");
-  const destination = await checkInstallDestination(sharedTarget, path.relative(metaprojectRoot, sharedTarget));
+  const relSharedTarget = path.relative(metaprojectRoot, sharedTarget);
+  const destination = await checkInstallDestination(sharedTarget, relSharedTarget);
   if (!destination.usable) {
     return destination.warning;
+  }
+  // See the identical note in installGdskills's per-skill loop:
+  // mkdirContainedOrWarn confirms containment before the raw recursive `cp`,
+  // refusing (with a warning, not a crash) rather than following an
+  // escaping symlink.
+  const mkdirWarning = await mkdirContainedOrWarn(metaprojectRoot, sharedTarget);
+  if (mkdirWarning) {
+    return mkdirWarning;
   }
   await cp(sharedSource, sharedTarget, { recursive: true, force: true });
   return null;
@@ -562,9 +630,18 @@ async function installBundledRules(
   if (!existsSync(rulesSource)) {
     return { outcomes: [], warning: null };
   }
-  const destination = await checkInstallDestination(rulesTarget, path.relative(metaprojectRoot, rulesTarget));
+  const relRulesTarget = path.relative(metaprojectRoot, rulesTarget);
+  const destination = await checkInstallDestination(rulesTarget, relRulesTarget);
   if (!destination.usable) {
     return { outcomes: [], warning: destination.warning };
+  }
+  // See the identical note in installGdskills's per-skill loop:
+  // mkdirContainedOrWarn confirms containment before the raw recursive `cp`,
+  // refusing (with a warning, not a crash) rather than following an
+  // escaping symlink.
+  const mkdirWarning = await mkdirContainedOrWarn(metaprojectRoot, rulesTarget);
+  if (mkdirWarning) {
+    return { outcomes: [], warning: mkdirWarning };
   }
   await cp(rulesSource, rulesTarget, { recursive: true, force: true });
   return { outcomes: await removeUnmodifiedRetiredRules(rulesTarget), warning: null };
@@ -766,14 +843,18 @@ async function installContracts(contractsRoot: string, metaprojectRoot: string):
   const results = await Promise.all(
     CONTRACTS.map(async (contract) => {
       const destination = path.join(contractsRoot, contract.fileName);
-      const check = await checkInstallFile(destination, path.relative(metaprojectRoot, destination));
+      const relDestination = path.relative(metaprojectRoot, destination);
+      const check = await checkInstallFile(destination, relDestination);
       if (!check.usable) {
         return check.warning;
       }
-      await copyFile(
-        contract.sourcePath ? contractPath(contract) : contractSourcePath(contract.fileName),
-        destination,
-      );
+      const sourcePath = contract.sourcePath ? contractPath(contract) : contractSourcePath(contract.fileName);
+      // Routed through writeContained rather than `copyFile` (R1-F1):
+      // `copyFile` FOLLOWS a symlinked destination (see the file-header note
+      // above), and writeContained's containment walk refuses an escaping
+      // symlink anywhere on `relDestination`'s path, not just the final
+      // component `checkInstallFile` already lstats.
+      await writeContained(metaprojectRoot, relDestination, await readFile(sourcePath));
       return null;
     }),
   );
