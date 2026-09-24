@@ -14,23 +14,21 @@ import path from "node:path";
 import { helpOptions, helpTitle, helpUsage, heading, note, style, symbols } from "../lib/ui";
 import { optionValue } from "../lib/args";
 import {
+  DEFAULT_MATRIX_ARTIFACT,
+  SURFACE_FLAG_ORDER,
+  checkCapabilityMatrix,
   doctorIntegration,
+  generateCapabilityMatrix,
   getHarnessAdapter,
   harnessAdapterIds,
   installIntegration,
   uninstallIntegration,
+  writeCapabilityMatrix,
+  type CapabilityMatrixDocument,
   type DoctorIntegrationResult,
   type HarnessAdapter,
   type SurfaceResult,
-} from "../integrations";
-import {
-  DEFAULT_MATRIX_ARTIFACT,
-  SURFACE_FLAG_ORDER,
-  checkCapabilityMatrix,
-  generateCapabilityMatrix,
-  writeCapabilityMatrix,
-  type CapabilityMatrixDocument,
-} from "../integrations/matrix";
+} from "../integrations/service";
 
 export async function integrationsCommand(args: string[], cwd: string = process.cwd()): Promise<void> {
   const sub = args[0];

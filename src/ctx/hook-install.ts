@@ -1,5 +1,5 @@
-import { getHarnessAdapter, installIntegration, uninstallIntegration, type SettingsFileOwner } from "../integrations";
-// Deep import, deliberately (F10 — see the note on `src/integrations/index.ts`):
+import { getHarnessAdapter, installIntegration, uninstallIntegration, type SettingsFileOwner } from "../integrations/service";
+// Deep import, deliberately (F10 — see the note on `src/integrations/service.ts`):
 // this is the one place outside `src/integrations` that reads the pre-merge
 // settings directly, to report what an install would upgrade
 // (`describeExistingGuard` below) before the write overwrites the evidence.

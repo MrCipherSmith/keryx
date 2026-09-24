@@ -17,7 +17,7 @@ import {
   type HookAction,
   type Settings as IntegrationSettings,
   type SurfaceAdapter,
-} from "../integrations";
+} from "../integrations/service";
 
 // Multi-harness registry for the gdctx routing guard. This module is a VIEW
 // over `src/integrations` (flow 305, W5-a): `CTX_RUNTIMES` below is BUILT by

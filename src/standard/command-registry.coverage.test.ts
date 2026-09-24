@@ -57,6 +57,11 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
       "writes MCP client configuration into editor/agent files outside this project's managed surface — the same reason `mcp`, whose spelling it replaces, is excluded",
   },
   { verb: "mcp", reason: "retired spelling of serve-mcp and integrate; excluded for the same reasons as both" },
+  {
+    verb: "integrations",
+    reason:
+      "writes Keryx's hooks and instructions into another coding agent's own config/instruction files outside this project's managed surface — the same reason `integrate` is excluded",
+  },
   { verb: "sync", reason: "writes into external runtime directories outside the project" },
   { verb: "skills", reason: "skill lifecycle incl. install/export/sync writing outside the project; needs its own review before exposure" },
   { verb: "skill-verify-skill", reason: "standalone alias of skills verify; not part of the agent surface" },

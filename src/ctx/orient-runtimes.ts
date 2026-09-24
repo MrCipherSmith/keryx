@@ -9,7 +9,7 @@ import {
   type Settings as IntegrationSettings,
   type SettingsFileOwner,
   type SurfaceAdapter,
-} from "../integrations";
+} from "../integrations/service";
 
 const ORIENT_SURFACE_ID = "orient";
 

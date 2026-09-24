@@ -11,7 +11,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { integrationsCommand } from "./integrations";
 import { ctxCommand } from "./ctx";
 import { validateCapabilityMatrix, type CapabilityMatrixDocument } from "../integrations/matrix";
-import { HARNESS_ADAPTERS } from "../integrations";
+import { HARNESS_ADAPTERS } from "../integrations/service";
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 

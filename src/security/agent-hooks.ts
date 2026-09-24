@@ -1,4 +1,4 @@
-import { installIntegration, settingsFileOwnerFor, uninstallIntegration, type SettingsFileOwner } from "../integrations";
+import { installIntegration, settingsFileOwnerFor, uninstallIntegration, type SettingsFileOwner } from "../integrations/service";
 import {
   CLAUDE_RUNTIME,
   MANAGED_KEY,
