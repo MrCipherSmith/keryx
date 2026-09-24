@@ -54,4 +54,3 @@ claim left unverified.
 The reply's first line is `STATUS: DONE|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED`
 per the subagent-result contract. Use `NEEDS_CONTEXT` when the code change
 itself was not enough information to know what documentation it affects.
-</content>

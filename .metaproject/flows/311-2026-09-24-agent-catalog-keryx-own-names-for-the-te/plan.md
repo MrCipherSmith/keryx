@@ -24,21 +24,22 @@ does the final commit per batch so any overlap is caught at commit time.
 1. T1 (context) — done by orchestrator directly: rename map, per-name file
    inventory (above), confirmed no other agent-name occurrences hidden
    under `.metaproject/skills` outside flow/review history.
-2. T2 (implement, batch A) — sonnet worker renames architect, planner,
+2. T5 (implement, batch A) — sonnet worker renames architect, planner,
    code-explorer, tdd-guide, refactor-cleaner and all their references.
-3. T3 (implement, batch B) — sonnet worker renames silent-failure-hunter,
+3. T6 (implement, batch B) — sonnet worker renames silent-failure-hunter,
    doc-updater, security-reviewer, performance-reviewer, e2e-runner and all
    their references.
-4. T4 (test) — run `bun ./src/cli.ts agents verify`,
+4. T3 (test) — run `bun ./src/cli.ts agents verify`,
    `bun ./src/cli.ts integrations matrix --check`, targeted tests for
    `src/agents`, `src/commands/agents*`,
    `src/gdskills/agent-catalogue-xref.test.ts`, `src/security/audit-harness`,
    `check:doc-links`, and a final exhaustive `keryx ctx rg -i` sweep for
    every old name across `src/` `docs/` `fixtures/` excluding flow/review
    history.
-5. T5 (review) — opus adversarial review of the PR diff; fix loop per the
+5. T4 (review) — opus adversarial review of the PR diff; fix loop per the
    flow-runner template; open PR against `feat/agent-platform-expansion`,
-   get it green, merge.
+   get it green, merge. T2 is a scaffold row superseded by T5/T6 and closed
+   `--disposition skipped`.
 
 ## Risks
 

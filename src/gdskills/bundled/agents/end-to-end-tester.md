@@ -54,4 +54,3 @@ likely area of the codebase responsible.
 The reply's first line is `STATUS: DONE|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED`
 per the subagent-result contract. Use `DONE_WITH_CONCERNS` when the suite ran
 but has failures; `BLOCKED` when the suite could not be run at all.
-</content>

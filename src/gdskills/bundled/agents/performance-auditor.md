@@ -61,4 +61,3 @@ The reply's first line is `STATUS: DONE|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED
 per the subagent-result contract. Use `DONE_WITH_CONCERNS` when findings
 exist; plain `DONE` only when the scope was checked and nothing significant
 was found.
-</content>

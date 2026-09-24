@@ -1,5 +1,5 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.5
+Version: 0.1.4
 
 ## Summary
 
