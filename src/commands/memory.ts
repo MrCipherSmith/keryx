@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { createMemoryService } from "../memory/service";
+import { createMemoryService, selectHandoffEntries, MEMORY_HARNESS_IDS, isMemoryHarnessId } from "../memory/service";
 import { loadMemoryConfig } from "../memory/config";
 import { reflectMemory } from "../memory/reflect";
 import { renderSearchMarkdown } from "../memory/search";
@@ -17,8 +17,6 @@ import {
 import { runAssetsSubcommand } from "../assets/command";
 import { MEMORY_CLASS_VALUES, MEMORY_TYPES } from "../memory/types";
 import { collectEntriesStrict, memoryRoot, memoryRootFor } from "../memory/store";
-import { selectHandoffEntries } from "../memory/handoff";
-import { MEMORY_HARNESS_IDS, isMemoryHarnessId } from "../memory/harness-identity";
 import { isNotFound } from "../lib/fs";
 import { MemoryValidationError } from "../memory/validation";
 import type { MemoryClass, MemoryStatus, ScoredEntry, SearchFilters } from "../memory/types";

@@ -112,6 +112,12 @@ export {
 } from "./surfaces";
 
 export {
+  installedRulesExportHarnesses,
+  renderRulesForHarnesses,
+  type RulesExportResult,
+} from "./rules-export";
+
+export {
   ACP_PERMISSION_ZED,
   CTX_GUARD_GEMINI_CLI,
   CTX_GUARD_GITHUB_COPILOT_AGENT,

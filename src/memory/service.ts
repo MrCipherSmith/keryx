@@ -30,6 +30,8 @@ import type { MemoryConfig, MemoryEntry, ScoredEntry, SearchFilters } from "./ty
 // facade, never `./harness-identity` directly — M-3 boundary test) can
 // validate a harness id without a second cross-module import.
 export { isMemoryHarnessId, MEMORY_HARNESS_IDS, MEMORY_TYPE_VALUES };
+
+export { selectHandoffEntries } from "./handoff";
 import type {
   MemoryCreateInput,
   MemoryCreateResult,

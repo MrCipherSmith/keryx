@@ -34,8 +34,7 @@ import {
   type BundleScope,
   type PlanEntry,
 } from "../bundle/service";
-import { getHarnessAdapter, harnessAdapterIds } from "../integrations/registry";
-import { installedRulesExportHarnesses, renderRulesForHarnesses, type RulesExportResult } from "../integrations/rules-export";
+import { getHarnessAdapter, harnessAdapterIds, installedRulesExportHarnesses, renderRulesForHarnesses, type RulesExportResult } from "../integrations/service";
 
 const RULES_EXPORT_SURFACE_ID = "rules-export";
 
