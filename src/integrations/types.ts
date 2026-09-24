@@ -230,6 +230,17 @@ export interface SurfaceAdapter {
    */
   customInstall?(projectRoot: string): Promise<string[] | CustomInstallResult>;
   /**
+   * Round-4 fix (R2-F6 remainder): `--dry-run` never actually calls
+   * `customInstall`, so a surface whose REAL install can report warnings
+   * (`CustomInstallResult.warnings` — `rules-export` skipping an unsafe rule
+   * name, per its own doc comment) had no way to report those SAME warnings
+   * from `--dry-run` — `keryx integrations install --dry-run` (human and
+   * `--json`) reported `warnings: []` right up until the real install that
+   * followed reported the skip. Optional: a surface without a dry-run-visible
+   * warning source (most of them) simply omits it.
+   */
+  dryRunWarnings?(projectRoot: string): Promise<readonly string[]>;
+  /**
    * Uninstall this surface's artifact. The plain `boolean` shape (every
    * pre-flow-310 surface) reports only whether anything was removed. T17: a
    * surface that can legitimately REFUSE to delete part of what it manages —

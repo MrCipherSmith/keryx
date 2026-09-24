@@ -117,6 +117,19 @@ async function inspectRulesExport(root: string, relativePath: string) {
   return inspectMarkdownBlock(root, relativePath, spec);
 }
 
+/**
+ * Round-4 fix (R2-F6 remainder): the same skip warnings `installRulesExport`
+ * reports on a real install, computed here too so `installer.ts`'s
+ * `customInstallDryRun` can surface them from `--dry-run` — before this fix,
+ * `keryx integrations install --dry-run` (human and `--json`) always
+ * reported `warnings: []` for this surface, even when an unsafe rule name
+ * would be skipped, and only the immediately-following real install said so.
+ */
+async function dryRunRulesExportWarnings(root: string): Promise<readonly string[]> {
+  const { skipped } = await rulesSpec(root);
+  return skippedMessages(skipped);
+}
+
 interface RulesExportParams {
   readonly relativePath: string;
   readonly frontMatter?: string;
@@ -151,6 +164,7 @@ function rulesExportSurface(params: RulesExportParams): SurfaceAdapter {
     customUninstall: (root) => uninstallRulesExport(root, relativePath, frontMatter),
     probe: (root) => probeRulesExport(root, relativePath),
     inspect: (root) => inspectRulesExport(root, relativePath),
+    dryRunWarnings: (root) => dryRunRulesExportWarnings(root),
   };
 }
 

@@ -3,6 +3,37 @@ import { chmod, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { access, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdirContained, writeContained } from "../lib/contained-write";
+
+// R1-F20: `writeTextIfChanged`/`writeTextIfMissing`/`copyFileIfChanged`/the
+// module-directory scaffolders below all receive an absolute path already
+// built as `path.join(metaprojectRoot, ...)` — never touching every one of
+// their ~45 call sites to thread `projectRoot` through, this derives the
+// containment root from the path itself: everything up to and including the
+// LAST `.metaproject` path segment is the boundary that must not be escaped,
+// and `writeContained`/`mkdirContained` then walk that boundary segment by
+// segment (the same walk `refuseEscapingSymlink` does), refusing
+// (`escaping-symlink`) the moment `.metaproject` itself — or anything between
+// it and the target — is a symlink resolving outside the project. The git
+// hooks writer (`installManagedHook`/`removeManagedHook`, below) is the one
+// documented exception: it writes into `.git/hooks` by design, which
+// `contained-write.ts` categorically refuses (`git-directory`), so it keeps
+// its own raw `mkdir`/`writeFile` plus `resolveGitHooksRoot`'s own symlink
+// check instead.
+function containFromMetaprojectPath(filePath: string): { root: string; rel: string } {
+  const marker = `${path.sep}.metaproject${path.sep}`;
+  const idx = filePath.indexOf(marker);
+  if (idx < 0) {
+    if (filePath.endsWith(`${path.sep}.metaproject`)) {
+      const root = filePath.slice(0, filePath.length - ".metaproject".length - path.sep.length);
+      return { root, rel: ".metaproject" };
+    }
+    throw new Error(`${filePath}: expected a path under a .metaproject directory`);
+  }
+  const root = filePath.slice(0, idx);
+  const rel = filePath.slice(idx + path.sep.length).split(path.sep).join("/");
+  return { root, rel };
+}
 import { installGdskills } from "../gdskills/install";
 import { moduleCommands } from "./module-commands";
 import {
@@ -344,7 +375,10 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const manifest = manifestState.manifest;
   const recoveredManifest = !manifestState.exists || !manifestState.valid;
   if (manifestState.migrated) {
-    await writeFile(path.join(metaprojectRoot, "metaproject.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    {
+      const { root, rel } = containFromMetaprojectPath(path.join(metaprojectRoot, "metaproject.json"));
+      await writeContained(root, rel, `${JSON.stringify(manifest, null, 2)}\n`);
+    }
   }
   const enableGdgraph = moduleEnabled(manifest, "gdgraph");
   const enableGdctx = moduleEnabled(manifest, "gdctx");
@@ -1281,7 +1315,10 @@ async function writeRecoveredManifest(
     },
   };
 
-  await writeFile(path.join(metaprojectRoot, "metaproject.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  {
+    const { root, rel } = containFromMetaprojectPath(path.join(metaprojectRoot, "metaproject.json"));
+    await writeContained(root, rel, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
 }
 
 // Enables the tasks module in metaproject.json without disturbing other keys.
@@ -1305,7 +1342,10 @@ async function enableTasksInManifest(metaprojectRoot: string): Promise<void> {
     commands: moduleCommands("tasks"),
   };
   raw.modules = modules;
-  await writeFile(manifestPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+  {
+    const { root, rel } = containFromMetaprojectPath(manifestPath);
+    await writeContained(root, rel, `${JSON.stringify(raw, null, 2)}\n`);
+  }
 }
 
 async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSources: string[]): Promise<void> {
@@ -1324,7 +1364,10 @@ async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSourc
   agentEntrypoints.metaproject = ".metaproject/index.md";
   raw.agentEntrypoints = agentEntrypoints;
   applyStandardManifestFields(raw);
-  await writeFile(manifestPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+  {
+    const { root, rel } = containFromMetaprojectPath(manifestPath);
+    await writeContained(root, rel, `${JSON.stringify(raw, null, 2)}\n`);
+  }
 }
 
 // Ensure the manifest carries the schema-required `standardVersion` and the
@@ -1432,12 +1475,20 @@ async function createServiceDirs(
     ] : []),
   ];
 
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await Promise.all(
+    dirs.map((dir) => {
+      const { root, rel } = containFromMetaprojectPath(dir);
+      return mkdirContained(root, rel);
+    }),
+  );
 }
 
 async function installGdgraphCoreScripts(metaprojectRoot: string): Promise<void> {
   const gdgraphCoreRoot = path.join(metaprojectRoot, "core", "gdgraph");
-  await mkdir(gdgraphCoreRoot, { recursive: true });
+  {
+    const { root, rel } = containFromMetaprojectPath(gdgraphCoreRoot);
+    await mkdirContained(root, rel);
+  }
   // Shared with `init` — see the note there. Two hand-maintained copies of this
   // list is how the copied core silently stopped being import-closed.
   for (const file of GDGRAPH_CORE_SOURCES) {
@@ -1691,16 +1742,16 @@ async function writeTextIfChanged(filePath: string, content: string): Promise<vo
   if ((await pathExists(filePath)) && (await readFile(filePath, "utf8")) === content) {
     return;
   }
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, content, "utf8");
+  const { root, rel } = containFromMetaprojectPath(filePath);
+  await writeContained(root, rel, content);
 }
 
 async function writeTextIfMissing(filePath: string, content: string): Promise<void> {
   if (await pathExists(filePath)) {
     return;
   }
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, content, "utf8");
+  const { root, rel } = containFromMetaprojectPath(filePath);
+  await writeContained(root, rel, content);
 }
 
 async function copyFileIfChanged(from: string, to: string): Promise<void> {
@@ -1708,8 +1759,8 @@ async function copyFileIfChanged(from: string, to: string): Promise<void> {
   if ((await pathExists(to)) && (await readFile(to, "utf8")) === next) {
     return;
   }
-  await mkdir(path.dirname(to), { recursive: true });
-  await writeFile(to, next, "utf8");
+  const { root, rel } = containFromMetaprojectPath(to);
+  await writeContained(root, rel, next);
 }
 
 function runtimeSourcePath(relativePath: string): string {

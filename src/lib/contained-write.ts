@@ -21,14 +21,21 @@
 //     repository's history by constructing a path with `path.join(root,
 //     "..", "..git", "hooks", "pre-commit")`.
 //
-// Writes are atomic by default (round 3 findings R3-F11/R3-F12 wanted
-// installs that do not leave a surface half-written): the payload goes to
-// a temp file in the SAME directory as the target (so the final `rename`
-// is same-filesystem and atomic on every platform Keryx supports), then
-// renamed over the target. `atomic: false` is available for call sites
-// that intentionally want a partial write to be visible mid-write (none
-// currently do; kept for completeness of the suggested API).
-import { lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+// Writes are ALWAYS atomic (round 3 findings R3-F11/R3-F12 wanted installs
+// that do not leave a surface half-written; round 4, R4-F2, found the
+// `atomic: false` escape hatch this used to offer wrote straight through a
+// hardlink into whatever else that inode was linked to — no caller ever used
+// it, so it is simply gone rather than hardened): the payload goes to a temp
+// file in the SAME directory as the target (so the final `rename` is
+// same-filesystem and atomic on every platform Keryx supports), then renamed
+// over the target. R4-F3: when the target already exists, the temp file is
+// `chmod`'d to the EXISTING file's mode before the rename, so an atomic
+// overwrite preserves it (a plain `rename` over an 0600 file used to leave
+// the replacement at the process's default 0644). Only the mode is carried
+// forward this way — the owner, group, ACLs and any extra hardlinks on the
+// previous inode are NOT preserved, because the replacement is a new inode
+// by construction (that is what makes the write atomic).
+import { chmod, lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, stat } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { refuseEscapingSymlink } from "./symlink-safety";
@@ -56,33 +63,44 @@ export class ContainedWriteError extends Error {
 }
 
 export interface WriteContainedOptions {
-  /** File mode for a newly created file (passed to `writeFile`). */
+  /** File mode for a newly created file. Ignored when the target already exists — see R4-F3. */
   readonly mode?: number;
   /** Refuse (reason `"already-exists"`) instead of overwriting when the target already exists. */
   readonly exclusive?: boolean;
-  /** Write via a same-directory temp file + rename. Default `true`. */
-  readonly atomic?: boolean;
 }
 
 function splitRel(rel: string): string[] {
   return rel.split("/").filter((s) => s.length > 0);
 }
 
-/** Lexical checks that need no filesystem access: absolute paths, `..` segments, a literal `.git` segment. */
+/**
+ * Lexical checks that need no filesystem access: absolute paths, `..` or `.`
+ * segments, a `.git` segment at ANY depth (R4-F2: matched case-insensitively
+ * — `.GIT`, `.Git` are the same directory on a case-insensitive filesystem),
+ * and a `rel` that is empty, `.`-only, or otherwise resolves to `root` itself
+ * (R4-F2: `removeContained(root, "")` used to delete the whole root).
+ */
 function assertSafeRel(rel: string): string[] {
   if (path.isAbsolute(rel)) {
     throw new ContainedWriteError("absolute-path", `${rel}: refuses an absolute path`);
   }
   const segments = splitRel(rel);
+  const nonDotSegments = segments.filter((segment) => segment !== ".");
+  if (nonDotSegments.length === 0) {
+    throw new ContainedWriteError(
+      "lexical-traversal",
+      `${JSON.stringify(rel)}: refuses an empty or "." path that resolves to the root itself`,
+    );
+  }
   for (const segment of segments) {
     if (segment === "..") {
       throw new ContainedWriteError("lexical-traversal", `${rel}: refuses a ".." path segment`);
     }
-    if (segment === ".git") {
+    if (segment.toLowerCase() === ".git") {
       throw new ContainedWriteError("git-directory", `${rel}: refuses to write through a .git directory`);
     }
   }
-  return segments;
+  return nonDotSegments;
 }
 
 /**
@@ -228,10 +246,14 @@ export async function writeContained(
   // (`CLAUDE.md -> AGENTS.md` and similar in-repo layouts).
   await mkdir(resolvedDir, { recursive: true });
 
-  const atomic = opts.atomic ?? true;
-  if (!atomic) {
-    await writeFile(resolvedPath, data, opts.mode !== undefined ? { mode: opts.mode } : undefined);
-    return;
+  // R4-F3: preserve the existing target's mode across an atomic overwrite.
+  // `undefined` (no existing file) leaves `opts.mode` — the caller's
+  // requested mode for a NEW file, `open`'s own default when omitted — alone.
+  let existingMode: number | undefined;
+  try {
+    existingMode = (await stat(resolvedPath)).mode & 0o777;
+  } catch {
+    existingMode = undefined;
   }
 
   const tmp = path.join(resolvedDir, `.${path.basename(resolvedPath)}.tmp-${randomBytes(6).toString("hex")}`);
@@ -241,6 +263,9 @@ export async function writeContained(
       await handle.writeFile(data);
     } finally {
       await handle.close();
+    }
+    if (existingMode !== undefined) {
+      await chmod(tmp, existingMode);
     }
     await rename(tmp, resolvedPath);
   } catch (error) {

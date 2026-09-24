@@ -21,6 +21,26 @@ function rulesExportSurfaceFor(harnessId: string): SurfaceAdapter | undefined {
   return getHarnessAdapter(harnessId)?.surfaces.find((s) => s.id === RULES_EXPORT_SURFACE_ID);
 }
 
+/**
+ * Orchestrator note (final surgical pass): `pathExists` only asks "is there
+ * an entry at this path", not "is it a regular file" — a DIRECTORY sitting
+ * where a harness's rules-export target should be (e.g. something else
+ * created `CLAUDE.md/` as a directory) passes `pathExists` and then throws an
+ * unhandled EISDIR out of `readFile`. Before this fix that crashed the whole
+ * `renderRulesForHarnesses` call for EVERY harness in the batch, not just the
+ * one with the bad path — defeating this function's own documented promise
+ * ("one bad id in a batch does not abort the rest"). Wrapping the read turns
+ * it into a named, per-harness `"failed"` result instead, with the path in
+ * the message.
+ */
+async function readTargetFileSafely(file: string): Promise<{ ok: true; content: string } | { ok: false; message: string }> {
+  try {
+    return { ok: true, content: await readFile(file, "utf8") };
+  } catch (error) {
+    return { ok: false, message: `${file}: cannot read (${error instanceof Error ? error.message : String(error)})` };
+  }
+}
+
 export interface RulesExportResult {
   readonly harness: string;
   readonly status: "installed" | "unchanged" | "failed" | "unsupported";
@@ -63,7 +83,20 @@ export async function renderRulesForHarnesses(
     }
 
     const file = surface.settingsFile ? surface.settingsFile(root) : undefined;
-    const before = !opts.dryRun && file && (await pathExists(file)) ? await readFile(file, "utf8") : undefined;
+    let before: string | undefined;
+    if (!opts.dryRun && file && (await pathExists(file))) {
+      const read = await readTargetFileSafely(file);
+      if (!read.ok) {
+        results.push({
+          harness: harnessId,
+          status: "failed",
+          ...(surface.relativePath ? { file: surface.relativePath } : {}),
+          messages: [read.message],
+        });
+        continue;
+      }
+      before = read.content;
+    }
 
     const installResult = await installIntegration(root, harnessId, {
       surfaces: [RULES_EXPORT_SURFACE_ID],
@@ -93,7 +126,20 @@ export async function renderRulesForHarnesses(
 
     let status: RulesExportResult["status"] = "installed";
     if (!opts.dryRun && file) {
-      const after = (await pathExists(file)) ? await readFile(file, "utf8") : undefined;
+      let after: string | undefined;
+      if (await pathExists(file)) {
+        const read = await readTargetFileSafely(file);
+        if (!read.ok) {
+          results.push({
+            harness: harnessId,
+            status: "failed",
+            ...(surface.relativePath ? { file: surface.relativePath } : {}),
+            messages: [read.message],
+          });
+          continue;
+        }
+        after = read.content;
+      }
       status = after === before ? "unchanged" : "installed";
     }
 

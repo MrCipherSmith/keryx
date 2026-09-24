@@ -302,12 +302,17 @@ async function customUninstallDryRun(
  * an install always attempts to write the block regardless of the surface's
  * current state, everything else reports `would-install`.
  */
-async function customInstallDryRun(root: string, surface: SurfaceAdapter): Promise<{ status: InstallSurfaceStatus; errors: string[] }> {
+async function customInstallDryRun(root: string, surface: SurfaceAdapter): Promise<{ status: InstallSurfaceStatus; errors: string[]; warnings: string[] }> {
+  // Round-4 fix (R2-F6 remainder): the same skip warnings a real install
+  // would report (`surface.dryRunWarnings`, e.g. rules-export's skipped
+  // unsafe rule names) are computed here too, so `--dry-run` (human and
+  // `--json`) reports them BEFORE any write happens, not only after.
+  const warnings = surface.dryRunWarnings ? [...(await surface.dryRunWarnings(root))] : [];
   if (surface.inspect) {
     const inspection = await surface.inspect(root);
-    if (inspection.state === "malformed") return { status: "failed", errors: [inspection.message ?? "malformed"] };
+    if (inspection.state === "malformed") return { status: "failed", errors: [inspection.message ?? "malformed"], warnings };
   }
-  return { status: "would-install", errors: [] };
+  return { status: "would-install", errors: [], warnings };
 }
 
 /** Partition a resolved surface list into JSON-owned (grouped by file), custom-install, and satisfied-by-runtime. */
@@ -487,7 +492,12 @@ export async function installIntegration(
       // regardless of whether the real install would actually fail.
       const dryRun = await customInstallDryRun(root, surface);
       if (dryRun.errors.length > 0) errors.push(...dryRun.errors);
-      results.push({ ...baseResult(surface, surface.relativePath), status: dryRun.status, errors: dryRun.errors, warnings: warningsFor(surface) });
+      results.push({
+        ...baseResult(surface, surface.relativePath),
+        status: dryRun.status,
+        errors: dryRun.errors,
+        warnings: [...warningsFor(surface), ...dryRun.warnings],
+      });
       continue;
     }
     // N1: a thrown error from `customInstall` (an `UnterminatedInstructionsBlockError`

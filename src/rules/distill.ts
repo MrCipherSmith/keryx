@@ -7,6 +7,7 @@ import {
   ruleFileNameFor,
   syncAgentRules,
 } from "./agent-entrypoints";
+import { computeFencedRanges, indexOfMarkerLine } from "./marker-matching";
 
 export type DistilledEntry = {
   source: string;
@@ -66,6 +67,13 @@ export async function distillAgentEntrypoints(
   const rules: DistilledEntry[] = [];
   const skills: DistilledEntry[] = [];
   const keptRootSections: DistilledEntry[] = [];
+  // R1-F20: contain every write below against `projectRoot`, never
+  // `metaprojectRoot` — see the matching comment in
+  // `agent-entrypoints.ts#syncAgentRules`. `metaprojectRoot` is always
+  // `<projectRoot>/.metaproject`; writing through it directly moved the
+  // containment boundary outside the project when `.metaproject` itself was
+  // a symlink.
+  const metaprojectRel = path.relative(projectRoot, metaprojectRoot).split(path.sep).join("/");
 
   for (const source of sources) {
     const sourcePath = path.join(projectRoot, source);
@@ -86,10 +94,10 @@ export async function distillAgentEntrypoints(
         kept.push(section);
         keptRootSections.push({ source, title: section.title, kind, slug });
       } else if (kind === "skill") {
-        const skillPath = await writeDistilledSkill(metaprojectRoot, source, slug, section);
+        const skillPath = await writeDistilledSkill(projectRoot, metaprojectRel, source, slug, section);
         skills.push({ source, title: section.title, kind, slug, path: skillPath });
       } else {
-        const rulePath = await writeDistilledRule(metaprojectRoot, source, slug, section);
+        const rulePath = await writeDistilledRule(projectRoot, metaprojectRel, source, slug, section);
         rules.push({ source, title: section.title, kind, slug, path: rulePath });
       }
     }
@@ -97,7 +105,7 @@ export async function distillAgentEntrypoints(
     await rewriteEntrypoint(projectRoot, source, kept, options.enableTasks, preservedBlocks);
   }
 
-  await writeDistilledIndex(metaprojectRoot, rules, skills, keptRootSections);
+  await writeDistilledIndex(projectRoot, metaprojectRel, rules, skills, keptRootSections);
   return { sources, rules, skills, keptRootSections };
 }
 
@@ -111,50 +119,18 @@ export async function listRootEntrypoints(projectRoot: string, manifestSources: 
   return candidates.filter((candidate) => entries.has(candidate));
 }
 
-// R3-F4 fix: every marker below is matched as a WHOLE LINE (its trimmed
-// content equals the marker exactly), never a bare substring, and a marker
-// found inside a fenced code block is never trusted either way — mirroring
-// `agent-entrypoints.ts`'s `indexOfMarkerLine` (whole-line) and
-// `markdown-block.ts`'s `computeFencedRanges` (fence-aware). Before this fix,
-// `content.indexOf(marker)` matched an inline prose MENTION of the marker
-// (e.g. a sentence documenting `<!-- keryx:index -->`) exactly like a real
-// block boundary, silently deleting every human section between that mention
-// and the next real marker it happened to pair with.
-
-/** Char ranges (start inclusive, end exclusive) covered by fenced code blocks (``` or ~~~, >=3 backticks/tildes). */
-function computeFencedRanges(content: string): Array<[number, number]> {
-  const ranges: Array<[number, number]> = [];
-  const lines = content.split("\n");
-  let offset = 0;
-  let fenceStart: number | null = null;
-  for (const line of lines) {
-    if (/^(`{3,}|~{3,})/.test(line.trim())) {
-      if (fenceStart === null) fenceStart = offset;
-      else {
-        ranges.push([fenceStart, offset + line.length]);
-        fenceStart = null;
-      }
-    }
-    offset += line.length + 1;
-  }
-  if (fenceStart !== null) ranges.push([fenceStart, content.length]);
-  return ranges;
-}
-
-function isWithinRanges(offset: number, ranges: Array<[number, number]>): boolean {
-  return ranges.some(([s, e]) => offset >= s && offset < e);
-}
-
-/** The character offset of the first LINE whose trimmed content equals `marker` exactly, skipping any match inside a fenced code block, or -1. */
-function indexOfMarkerLine(content: string, marker: string, fenced: Array<[number, number]>): number {
-  const lines = content.split("\n");
-  let offset = 0;
-  for (const line of lines) {
-    if (line.trim() === marker && !isWithinRanges(offset, fenced)) return offset;
-    offset += line.length + 1;
-  }
-  return -1;
-}
+// R3-F4 / round-4 fix (R2-F15): every marker below is matched as a WHOLE
+// LINE (its trimmed content equals the marker exactly), never a bare
+// substring, and a marker found inside a fenced code block is never trusted
+// either way — via the ONE shared matcher `./marker-matching` also exports to
+// `agent-entrypoints.ts`, rather than each module carrying its own
+// independently-maintained copy (that drift is exactly what let
+// `agent-entrypoints.ts`'s copy fall behind and lose fence-awareness before
+// this fix). Before the original fix, `content.indexOf(marker)` matched an
+// inline prose MENTION of the marker (e.g. a sentence documenting
+// `<!-- keryx:index -->`) exactly like a real block boundary, silently
+// deleting every human section between that mention and the next real marker
+// it happened to pair with.
 
 function stripManagedBlock(content: string): string {
   const fenced = computeFencedRanges(content);
@@ -262,30 +238,32 @@ function classifySection(section: Section): "rule" | "skill" | "root" {
 }
 
 async function writeDistilledRule(
-  metaprojectRoot: string,
+  projectRoot: string,
+  metaprojectRel: string,
   source: string,
   slug: string,
   section: Section,
 ): Promise<string> {
   const relative = `rules/entrypoints/${slug}.md`;
   await writeContained(
-    metaprojectRoot,
-    relative,
+    projectRoot,
+    `${metaprojectRel}/${relative}`,
     `---\ntype: distilled-entrypoint-rule\npriority: high\nsource: ${JSON.stringify(source)}\nversion: "1.0.0"\ngenerated_by: keryx rules distill\n---\n\n# ${section.title}\n\n${section.body}\n`,
   );
   return relative;
 }
 
 async function writeDistilledSkill(
-  metaprojectRoot: string,
+  projectRoot: string,
+  metaprojectRel: string,
   source: string,
   slug: string,
   section: Section,
 ): Promise<string> {
   const relative = `project-skills/entrypoints/${slug}/SKILL.md`;
   await writeContained(
-    metaprojectRoot,
-    relative,
+    projectRoot,
+    `${metaprojectRel}/${relative}`,
     `---\nname: ${slug}\ndescription: Use when working with the project-specific workflow extracted from ${source}: ${section.title}.\nmetadata:\n  source: ${source}\n  version: "1.0.0"\n  generated_by: keryx rules distill\n---\n\n# ${section.title}\n\n## When To Use\n\nUse this skill when the task matches the workflow, agent behavior, or project-specific procedure below.\n\n## Procedure\n\n${section.body}\n\n## Source\n\nExtracted from \`${source}\` by \`keryx rules distill\`.\n`,
   );
   return relative;
@@ -314,7 +292,8 @@ async function rewriteEntrypoint(
 }
 
 async function writeDistilledIndex(
-  metaprojectRoot: string,
+  projectRoot: string,
+  metaprojectRel: string,
   rules: DistilledEntry[],
   skills: DistilledEntry[],
   keptRootSections: DistilledEntry[],
@@ -330,8 +309,8 @@ async function writeDistilledIndex(
     : "| _none_ | No root-only sections kept |";
 
   await writeContained(
-    metaprojectRoot,
-    "rules/entrypoints/index.md",
+    projectRoot,
+    `${metaprojectRel}/rules/entrypoints/index.md`,
     `# Distilled Entrypoint Rules\n\nGenerated by \`keryx rules distill\`.\n\n## Extracted Rules\n\n| Source | Section | Entry |\n|--------|---------|-------|\n${ruleRows}\n\n## Extracted Skills\n\n| Source | Section | Entry |\n|--------|---------|-------|\n${skillRows}\n\n## Kept In Root Entrypoints\n\n| Source | Section |\n|--------|---------|\n${rootRows}\n`,
   );
 }

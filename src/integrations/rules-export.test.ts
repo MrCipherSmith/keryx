@@ -319,6 +319,23 @@ describe("rules-export surface: R2-F6 an unsafe rule name is skipped with a warn
     expect(real.results[0]!.status).toBe("installed");
   });
 
+  // R2-F6 (round-4 remainder): `--dry-run` used to always report
+  // `warnings: []` for a skipped unsafe rule name, even though the real
+  // install immediately after reported the skip as a warning. This fails on
+  // the pre-fix `customInstallDryRun`, which never consulted anything about
+  // skipped rules.
+  test("--dry-run reports the SAME skip warning the real install reports", async () => {
+    await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    await writeRule("bad<name>.mdc", "Would forge a marker via its own path.");
+
+    const dryRun = await installIntegration(root, "claude", { surfaces: ["rules-export"], dryRun: true });
+    expect(dryRun.results[0]!.status).toBe("would-install");
+    expect(dryRun.results[0]!.warnings.some((w) => w.includes("bad<name>.mdc"))).toBe(true);
+
+    const real = await installIntegration(root, "claude", { surfaces: ["rules-export"] });
+    expect(real.results[0]!.warnings).toEqual(dryRun.results[0]!.warnings);
+  });
+
   // R3-F6 (the still-open half of R2-F6): `probe` used to merge the same
   // skipped-rule warning into its `problems`, and `installer.ts`'s
   // `liveStatusOf` treats ANY non-empty `probe` result as `invalid` — so
@@ -336,6 +353,29 @@ describe("rules-export surface: R2-F6 an unsafe rule name is skipped with a warn
     const rulesExport = doctor.surfaces.find((s) => s.surfaceId === "rules-export");
     expect(rulesExport?.live).toBe("valid");
     expect(rulesExport?.problems).toEqual([]);
+  });
+});
+
+// Orchestrator note (final surgical pass): a directory sitting at the
+// harness's rules-export target path used to throw an unhandled EISDIR out
+// of the unguarded "before" read, crashing `renderRulesForHarnesses` for
+// EVERY harness in the batch — not merely the one with the bad path. This
+// fails on the pre-fix code (the whole call rejects instead of returning a
+// per-harness `"failed"` result).
+describe("renderRulesForHarnesses: a directory at the target path is a named per-harness failure, not a crash", () => {
+  test("a directory at CLAUDE.md fails only the claude harness; codex still installs", async () => {
+    await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    await mkdir(path.join(root, "CLAUDE.md"), { recursive: true }); // a directory, not a file
+
+    const results = await renderRulesForHarnesses(root, ["claude", "codex"]);
+
+    const claudeResult = results.find((r) => r.harness === "claude");
+    expect(claudeResult?.status).toBe("failed");
+    expect(claudeResult?.messages.some((m) => m.includes("CLAUDE.md"))).toBe(true);
+
+    const codexResult = results.find((r) => r.harness === "codex");
+    expect(codexResult?.status).toBe("installed");
+    expect(await readTarget("AGENTS.md")).toContain("git-concurrency.mdc");
   });
 });
 

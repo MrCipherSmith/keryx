@@ -9,6 +9,7 @@ import {
   renderImportedAgentRules,
   renderProjectRulesSkillReadme,
 } from "../lib/templates";
+import { computeFencedRanges, hasMarkerLine, indexOfMarkerLine } from "./marker-matching";
 
 // Review round 2 fix (R1-F20 remainder): re-exported so callers that only
 // import from `./agent-entrypoints` (this module's own public surface) can
@@ -74,8 +75,22 @@ export async function syncAgentRules(
     existingSources.push({ source, sourcePath });
   }
 
-  await mkdirContained(metaprojectRoot, "rules");
-  await mkdirContained(metaprojectRoot, "skills/project-rules");
+  // R1-F20: EVERY write below is contained against `projectRoot`, never
+  // `metaprojectRoot` directly — `metaprojectRoot` is always
+  // `<projectRoot>/.metaproject` (every in-repo caller constructs it that
+  // way), but `writeContained`'s root is `realpath`'d and used as the
+  // symlink-containment boundary. Containing against `metaprojectRoot`
+  // itself means a `.metaproject` that is ITSELF a symlink (a cloned repo
+  // shaped `.metaproject -> ../../.claude` is the reviewer's reproduction)
+  // moves the whole boundary outside the project, so every write below
+  // silently escaped through it. Routing the rel path as
+  // `<metaprojectRel>/...` against `projectRoot` means the segment walk in
+  // `refuseEscapingSymlink` inspects `.metaproject` itself, same as any
+  // other segment, and refuses (`escaping-symlink`) the moment it resolves
+  // outside `projectRoot`.
+  const metaprojectRel = path.relative(projectRoot, metaprojectRoot).split(path.sep).join("/");
+  await mkdirContained(projectRoot, `${metaprojectRel}/rules`);
+  await mkdirContained(projectRoot, `${metaprojectRel}/skills/project-rules`);
 
   const synced: SyncedAgentRule[] = [];
   for (const { source, sourcePath } of existingSources) {
@@ -85,13 +100,17 @@ export async function syncAgentRules(
     });
     const ruleFile = ruleFileNameFor(source);
     const sourceContent = await readFile(sourcePath, "utf8");
-    await writeTextIfChanged(metaprojectRoot, `rules/${ruleFile}`, renderImportedAgentRules({ source, content: sourceContent }));
+    await writeTextIfChanged(
+      projectRoot,
+      `${metaprojectRel}/rules/${ruleFile}`,
+      renderImportedAgentRules({ source, content: sourceContent }),
+    );
     synced.push({ source, ruleFile, priority: "high", version: "1.0.0" });
   }
 
   await writeTextIfChanged(
-    metaprojectRoot,
-    "skills/project-rules/README.md",
+    projectRoot,
+    `${metaprojectRel}/skills/project-rules/README.md`,
     renderProjectRulesSkillReadme({ sources: synced.map((rule) => rule.source) }),
   );
 
@@ -117,34 +136,23 @@ async function assertMetaprojectReferenceSafe(projectRoot: string, source: strin
 }
 
 /**
- * Review round 2 fix (R2-F15): `marker`/`endMarker` must each be matched as a
- * WHOLE LINE (its trimmed content, ignoring a trailing `\r`, equals the
- * marker exactly) — never a mere substring. Before this fix, a rule file
- * that only MENTIONS `<!-- keryx:index -->` in prose (documenting the
- * marker, not using it) read as "has a start marker", found no matching end
- * marker anywhere else in the file, and refused the whole operation with a
- * message that never named which file was at fault.
+ * Round 4 fix (R2-F15 remainder): `marker`/`endMarker` matching (whole-line,
+ * fence-aware) now comes from the ONE shared matcher `distill.ts` also uses
+ * (`./marker-matching`) — see that module's header for why a second,
+ * independently written copy is exactly the bug this closes. Before this
+ * fix, this module's own whole-line-but-not-fence-aware copy let a fenced
+ * WORKED EXAMPLE of the managed block (e.g. a rule file showing what
+ * `<!-- keryx:index -->...<!-- /keryx:index -->` looks like) get matched as
+ * the real block: `replaceManagedBlock` then overwrote the fenced example
+ * with the live block (destroying the example) while the actual managed
+ * block elsewhere in the file was left stale.
  */
-function hasMarkerLine(content: string, marker: string): boolean {
-  return indexOfMarkerLine(content, marker) >= 0;
-}
-
-/** The character offset of the first LINE whose trimmed content equals `marker` exactly, or -1. */
-function indexOfMarkerLine(content: string, marker: string): number {
-  const lines = content.split("\n");
-  let offset = 0;
-  for (const line of lines) {
-    if (line.trim() === marker) return offset;
-    offset += line.length + 1;
-  }
-  return -1;
-}
-
 function assertMarkerPairingSafe(content: string, filePath: string, marker: string, endMarker: string): void {
-  const start = indexOfMarkerLine(content, marker);
+  const fenced = computeFencedRanges(content);
+  const start = indexOfMarkerLine(content, marker, fenced);
   if (start < 0) return;
   const afterStart = content.slice(start + marker.length);
-  if (indexOfMarkerLine(afterStart, endMarker) < 0) {
+  if (indexOfMarkerLine(afterStart, endMarker, computeFencedRanges(afterStart)) < 0) {
     throw new UnterminatedMetaprojectReferenceError(
       `${filePath}: unterminated ${marker} block: found ${marker} with no matching ${endMarker} — fix it by hand`,
     );
@@ -259,16 +267,19 @@ async function ensureDefaultAgentEntrypoints(projectRoot: string, entrypoints: s
 }
 
 function replaceManagedBlock(content: string, filePath: string, marker: string, endMarker: string, block: string): string {
-  // Review round 2 fix (R2-F15): both markers are matched as whole LINES
-  // (`indexOfMarkerLine`), never as a bare substring — a prose sentence that
-  // merely quotes `<!-- keryx:index -->` (documenting it, rather than using
-  // it) must not be mistaken for a real marker on either end.
-  const start = indexOfMarkerLine(content, marker);
+  // Round 4 fix (R2-F15 remainder): both markers are matched as whole,
+  // fence-aware LINES via the shared matcher (`./marker-matching`) — never
+  // as a bare substring, and never a marker line sitting inside a fenced
+  // code block (a worked example must not be mistaken for the real block on
+  // either end).
+  const fenced = computeFencedRanges(content);
+  const start = indexOfMarkerLine(content, marker, fenced);
   if (start < 0) {
     return content;
   }
   const searchFrom = start + marker.length;
-  const endOffset = indexOfMarkerLine(content.slice(searchFrom), endMarker);
+  const rest = content.slice(searchFrom);
+  const endOffset = indexOfMarkerLine(rest, endMarker, computeFencedRanges(rest));
   if (endOffset < 0) {
     // Review round 1, F7: this used to return
     // `content.slice(0, start) + block`, silently DROPPING everything from

@@ -76,6 +76,23 @@ describe("refuseEscapingSymlink", () => {
     expect(refusal).toContain(".git");
   });
 
+  test("R4-F2: refuses a symlink into a NESTED repository's .git directory (not only root's own)", async () => {
+    await mkdir(path.join(root, "sub", ".git"), { recursive: true });
+    await writeFile(path.join(root, "sub", ".git", "config"), "[core]\n", "utf8");
+    await symlink(path.join(root, "sub", ".git", "config"), path.join(root, "SUB.md"));
+    const refusal = await refuseEscapingSymlink(root, "SUB.md");
+    expect(refusal).toBeDefined();
+    expect(refusal).toContain(".git");
+  });
+
+  test("R4-F2: the .git refusal is case-insensitive", async () => {
+    await mkdir(path.join(root, ".GIT", "hooks"), { recursive: true });
+    await writeFile(path.join(root, ".GIT", "hooks", "pre-commit"), "#!/bin/sh\n", "utf8");
+    await symlink(path.join(root, ".GIT", "hooks", "pre-commit"), path.join(root, "CLAUDE.md"));
+    const refusal = await refuseEscapingSymlink(root, "CLAUDE.md");
+    expect(refusal).toBeDefined();
+  });
+
   test("never follows a symlink to decide whether a later segment exists", async () => {
     // `linked` -> outside dir that does not itself exist yet: lstat on
     // `linked` still finds the symlink and refuses it before the "does the

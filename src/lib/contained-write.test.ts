@@ -78,6 +78,49 @@ describe("writeContained", () => {
     expect(await reasonOf(() => writeContained(root, ".git/hooks/pre-commit", "x"))).toBe("git-directory");
   });
 
+  // R4-F2: the `.git` refusal is case-insensitive (`.GIT`, `.Git` are the
+  // same directory on a case-insensitive filesystem) and applies at ANY
+  // depth, not only directly under root.
+  test("refuses a case-variant .git path segment", async () => {
+    expect(await reasonOf(() => writeContained(root, ".GIT/config", "x"))).toBe("git-directory");
+    expect(await reasonOf(() => writeContained(root, ".Git/hooks/pre-commit", "x"))).toBe("git-directory");
+  });
+
+  test("refuses a nested .git path segment at any depth", async () => {
+    expect(await reasonOf(() => writeContained(root, "sub/.git/config", "x"))).toBe("git-directory");
+    expect(await reasonOf(() => writeContained(root, "sub/.GIT/config", "x"))).toBe("git-directory");
+  });
+
+  // R4-F2: an empty, "."-only, or otherwise root-equal `rel` refuses instead
+  // of resolving to `root` itself.
+  test("refuses an empty rel", async () => {
+    expect(await reasonOf(() => writeContained(root, "", "x"))).toBe("lexical-traversal");
+  });
+
+  test("refuses a '.' rel", async () => {
+    expect(await reasonOf(() => writeContained(root, ".", "x"))).toBe("lexical-traversal");
+  });
+
+  // R4-F3: an atomic overwrite preserves the existing file's mode instead of
+  // dropping it to the process default (0644).
+  test("preserves the existing file's mode across an atomic overwrite", async () => {
+    await writeContained(root, "secret.txt", "one", { mode: 0o600 });
+    await Bun.file(path.join(root, "secret.txt")).exists(); // sanity: file exists before chmod check
+    const before = (await import("node:fs/promises").then((m) => m.stat(path.join(root, "secret.txt")))).mode & 0o777;
+    expect(before).toBe(0o600);
+    await writeContained(root, "secret.txt", "two");
+    const after = (await import("node:fs/promises").then((m) => m.stat(path.join(root, "secret.txt")))).mode & 0o777;
+    expect(after).toBe(0o600);
+    expect(await readFile(path.join(root, "secret.txt"), "utf8")).toBe("two");
+  });
+
+  test("preserves a 0755 mode across an atomic overwrite", async () => {
+    await writeContained(root, "script.sh", "one", { mode: 0o755 });
+    await writeContained(root, "script.sh", "two");
+    const after = (await import("node:fs/promises").then((m) => m.stat(path.join(root, "script.sh")))).mode & 0o777;
+    expect(after).toBe(0o755);
+  });
+
   test("refuses writing over a directory", async () => {
     await mkdir(path.join(root, "dir"), { recursive: true });
     expect(await reasonOf(() => writeContained(root, "dir", "x"))).toBe("not-a-regular-file");
@@ -130,6 +173,27 @@ describe("removeContained", () => {
     await writeFile(outsideFile, "TOP SECRET\n", "utf8");
     await symlink(outsideFile, path.join(root, "escape.txt"));
     expect(await reasonOf(() => removeContained(root, "escape.txt"))).toBe("escaping-symlink");
+  });
+
+  // R4-F2: `removeContained(root, "")` and `(root, ".")` used to delete the
+  // whole root directory instead of refusing.
+  test("refuses an empty rel instead of deleting the root", async () => {
+    await writeContained(root, "keep.txt", "x");
+    expect(await reasonOf(() => removeContained(root, ""))).toBe("lexical-traversal");
+    expect(await Bun.file(path.join(root, "keep.txt")).exists()).toBe(true);
+  });
+
+  test("refuses a '.' rel instead of deleting the root", async () => {
+    await writeContained(root, "keep.txt", "x");
+    expect(await reasonOf(() => removeContained(root, "."))).toBe("lexical-traversal");
+    expect(await Bun.file(path.join(root, "keep.txt")).exists()).toBe(true);
+  });
+
+  test("refuses a case-variant .GIT rel instead of deleting .git", async () => {
+    await mkdir(path.join(root, ".git"), { recursive: true });
+    await writeFile(path.join(root, ".git", "config"), "x", "utf8");
+    expect(await reasonOf(() => removeContained(root, ".GIT"))).toBe("git-directory");
+    expect(await Bun.file(path.join(root, ".git", "config")).exists()).toBe(true);
   });
 });
 

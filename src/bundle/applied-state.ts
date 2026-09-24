@@ -155,20 +155,40 @@ export async function readAppliedState(ledgerPath: string): Promise<ReadAppliedS
 }
 
 /**
- * `ledgerPath` is always `<root>/data/bundles/applied-state.json` (project/
- * team) or `<userStoreRoot>/bundles/applied-state.json` (user) —
- * `writeContained`'s `root` is the ledger's own parent directory, so the
- * "contained write" check is over an already-fixed, non-bundle-controlled
- * location; the containment guard still matters because a symlink planted
- * at that fixed location (or an ancestor of it) must not be followed.
+ * R3-I2 (K5): `ledgerPath` is always `<projectRoot>/.metaproject/data/bundles/applied-state.json`
+ * (project/team, from `appliedStatePath`/`scopeRoot`) or
+ * `<userStoreRoot>/bundles/applied-state.json` (user). The write used to be
+ * contained against the ledger's own PARENT directory (`data/bundles` or
+ * `bundles`) — that only refuses a symlinked `applied-state.json` itself, not
+ * a symlinked `.metaproject`, `.metaproject/data` or `data/bundles` ABOVE it,
+ * so a `.metaproject/data -> outside` link was followed straight through.
+ * `containedRootAndRel` walks back up to the real scope root instead —
+ * `projectRoot` for project/team (every segment from `.metaproject` down is
+ * then in `writeContained`'s own segment walk), `userStoreRoot` for user
+ * (`bundles` is walked too) — so any symlink anywhere on that path is
+ * refused, not just the leaf.
  */
+function containedRootAndRel(ledgerPath: string): { root: string; rel: string } {
+  const marker = `${path.sep}.metaproject${path.sep}`;
+  const idx = ledgerPath.indexOf(marker);
+  if (idx >= 0) {
+    return { root: ledgerPath.slice(0, idx), rel: ledgerPath.slice(idx + path.sep.length).split(path.sep).join("/") };
+  }
+  // User scope: no `.metaproject` segment. Contain against `userStoreRoot`
+  // itself (two path segments above the ledger file — `bundles/applied-state.json`)
+  // rather than merely its `bundles` subdirectory.
+  const bundlesDir = path.dirname(ledgerPath);
+  const root = path.dirname(bundlesDir);
+  const rel = path.join(path.basename(bundlesDir), path.basename(ledgerPath)).split(path.sep).join("/");
+  return { root, rel };
+}
+
 export async function writeAppliedState(ledgerPath: string, state: AppliedState): Promise<void> {
-  const dir = path.dirname(ledgerPath);
-  const rel = path.basename(ledgerPath);
+  const { root, rel } = containedRootAndRel(ledgerPath);
   const sortedEntries: Record<string, AppliedStateEntry> = {};
   for (const key of Object.keys(state.entries).sort()) {
     sortedEntries[key] = state.entries[key] as AppliedStateEntry;
   }
   const payload = `${JSON.stringify({ schemaVersion: APPLIED_STATE_SCHEMA_VERSION, entries: sortedEntries }, null, 2)}\n`;
-  await writeContained(dir, rel, payload);
+  await writeContained(root, rel, payload);
 }
