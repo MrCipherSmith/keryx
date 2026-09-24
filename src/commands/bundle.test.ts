@@ -22,14 +22,25 @@ async function makeTempDir(prefix: string): Promise<string> {
 }
 
 let originalKeryxHome: string | undefined;
+let originalExitCode: number | undefined;
 
 beforeEach(() => {
   originalKeryxHome = process.env.KERYX_HOME;
+  // These tests exercise `bundleCommand`'s own `process.exitCode = ...`
+  // side effect directly (several assert a nonzero code, e.g. the usage-
+  // error tests below). Without saving/restoring it here, a test that sets
+  // a nonzero code leaves it set for every test (and file) that runs
+  // AFTER it in the same process — bun's own `bun test` exit code then
+  // reflects that leftover value instead of this file's actual pass/fail,
+  // which can make an unrelated CI shard exit nonzero depending on file
+  // order.
+  originalExitCode = process.exitCode;
 });
 
 afterEach(async () => {
   if (originalKeryxHome === undefined) delete process.env.KERYX_HOME;
   else process.env.KERYX_HOME = originalKeryxHome;
+  process.exitCode = originalExitCode;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
