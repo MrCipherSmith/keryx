@@ -36,6 +36,7 @@ import {
   LAST_VERIFIED_W5B,
 } from "./surfaces-w5b";
 import { AGENTS_CLAUDE, AGENTS_CODEX, AGENTS_KIRO, AGENTS_OPENCODE } from "./surfaces-agents";
+import { LEARNING_OBSERVER_CLAUDE } from "./surfaces-learning";
 import { ANTIGRAVITY_DECISION_CODEC, COPILOT_DECISION_CODEC, CURSOR_DECISION_CODEC, EXIT_CODE_DECISION_CODEC } from "./codecs";
 import type { DecisionCodec, HarnessAdapter, HookAction, SettingsFileOwner, SurfaceAdapter, SurfaceFlag } from "./types";
 import { createSettingsFileOwner } from "./settings-file";
@@ -53,7 +54,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "Claude Code",
     confidence: "verified",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_CLAUDE, ORIENT_CLAUDE, SECURITY_CHECK_INPUT_CLAUDE, SECURITY_CHECK_OUTPUT_CLAUDE, AGENTS_CLAUDE],
+    surfaces: [CTX_GUARD_CLAUDE, ORIENT_CLAUDE, SECURITY_CHECK_INPUT_CLAUDE, SECURITY_CHECK_OUTPUT_CLAUDE, AGENTS_CLAUDE, LEARNING_OBSERVER_CLAUDE],
     unsupported: {},
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "src/security/agent-hooks/runtimes.ts"],
     lastVerified: LAST_VERIFIED,
