@@ -146,6 +146,7 @@ import {
   resolveReasoningEffort,
   runAgentTurn,
 } from "./agent";
+import { buildShellHookRuntime, type ShellHookContext } from "./agent-hooks";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
 import type { ShellDeps, ShellIO, ShellModelParams, ShellSessionOpts } from "./shell-types";
 import {
@@ -1978,7 +1979,7 @@ export async function runAgentRepl(
       // pattern from before the lease existed must not silently answer for it
       // either (see `rememberExactShellGrant`'s own `publishLease` guard below).
       const rememberable =
-        !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation && !evaled.publishLease;
+        !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation && !evaled.publishLease && !evaled.hookAsk;
       const prompt = rememberable ? "[y/N/A=always] " : "[y/N] ";
       out(`\n${GUTTER}${style.yellow(`Run: ${evaled.command}`)} ${style.dim(prompt)}`);
       const answer = ((await readLine()) ?? "").trim();
@@ -1987,6 +1988,7 @@ export async function runAgentRepl(
       if (always && approved) {
         const stored = rememberExactShellGrant(evaled.command, sessionShellAllow, {
           publishLease: evaled.publishLease,
+          hookAsk: evaled.hookAsk,
           // Spread, not `dir: configDir`: under `exactOptionalPropertyTypes`
           // an explicit `undefined` is not the same as an absent field, and
           // absent is what reproduces the default-directory behaviour.
@@ -3464,6 +3466,33 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       });
       return mcpRuntime;
     };
+    // Flow 306 (W6 T9): session-scoped, built ONCE like `mcpRuntime` above —
+    // `makeAgentDeps` reruns on every `/model`/`/connect` rebuild, and a fresh
+    // `HookRuntime` per rebuild would re-read both config files and reset
+    // `HookRuntime.inheritedHookIds()`'s dedup state for no reason. `profileId`
+    // is fixed at construction (`createHookRuntime`'s own contract — it gates
+    // WHICH registrations apply, unlike the per-call `policyProfile` this
+    // module's `agent.ts` counterpart sends a hook command in its stdin,
+    // which DOES track a live `/plan` toggle): an interactive `keryx shell`
+    // session is always built as `monitored-trusted-local`, so a hook scoped
+    // ONLY to `read-only-review` never fires here even while `/plan` is on —
+    // a known v1 gap, not a regression (no interactive call site rebuilds
+    // this runtime on `/plan` toggle either). `KERYX_HOOKS=off` disables it
+    // entirely (see `buildShellHookRuntime`'s own doc comment).
+    const shellHookSessionId = randomUUID();
+    let shellHooks: ShellHookContext | undefined;
+    const getShellHooks = (): ShellHookContext | undefined => {
+      if (shellHooks === undefined) {
+        shellHooks = buildShellHookRuntime({
+          projectRoot: resolveProjectRoot(cwd),
+          sessionId: shellHookSessionId,
+          runId: randomUUID(),
+          interactive: true,
+          profileId: "monitored-trusted-local",
+        });
+      }
+      return shellHooks;
+    };
     const makeAgentDeps = async (
       sel: { provider: string; model: string; baseUrl?: string },
       getSlateSession: () => SlateSessionRef | undefined,
@@ -3654,6 +3683,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
         ...(contextWindow !== undefined ? { contextWindow } : {}),
         ...(Object.keys(resolvedModelParams).length > 0 ? { modelParams: resolvedModelParams } : {}),
+        ...((): { hooks: ShellHookContext } | Record<string, never> => {
+          const h = getShellHooks();
+          return h !== undefined ? { hooks: h } : {};
+        })(),
       };
       // The instruction is built from the roster it describes, so it never
       // names a tool this session was not given.
@@ -4015,6 +4048,17 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // this point and would otherwise have nothing to close.
       readlineMcp = mcpRuntime;
       reportMcpProblems(mcpRuntime);
+      // Flow 306 (W6 T9): one hook runtime per readline agent session,
+      // mirroring the TUI branch's `getShellHooks` above (same rationale as
+      // `jobRegistry`/`mcpRuntime`: built once, never rebuilt — this branch
+      // has no `/model`-rebuild path at all).
+      const shellHooks = buildShellHookRuntime({
+        projectRoot: resolveProjectRoot(agentCwd),
+        sessionId: randomUUID(),
+        runId: randomUUID(),
+        interactive: true,
+        profileId: "monitored-trusted-local",
+      });
       const searchProviderController = createDefaultSearchProviderController();
       // SLATE-3a (flow 161, AC5): `slate_read`/`slate_write_seed` need the
       // CURRENT session dir at tool-invoke time, not whatever was true when
@@ -4100,6 +4144,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // provider/model this whole readline session was started with — no
         // rebuild-on-switch path exists in this branch, unlike the TUI).
         ...(Object.keys(initialModelParams).length > 0 ? { modelParams: initialModelParams } : {}),
+        ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       };
       // The instruction is built from the roster it describes, so it never
       // names a tool this session was not given.

@@ -1339,6 +1339,12 @@ export async function pickShellApproval(
   // can name the lease instead of just flagging that one applies. Optional
   // and trailing like `publishLease`, so existing call sites keep compiling.
   publishLeaseDetail?: string,
+  // Flow 306 (W6 T9): `ShellApprovalEval.hookAsk` — a `PreToolUse` lifecycle
+  // hook tightened this call to `ask`. Same shape as `publishLease` above
+  // (trailing, defaulted, excludes both "always" grants): a hook asking
+  // about a specific call is not a property of the command text either, and
+  // must never be answerable from a remembered grant.
+  hookAsk = false,
 ): Promise<ShellApprovalChoice> {
   let context: Promise<string> | undefined;
   try {
@@ -1357,8 +1363,8 @@ export async function pickShellApproval(
   // `formatShellApprovalHints` (`../commands/shell-approval.ts`): while the
   // lease applies, neither grant is offered, whatever `suggestShellPatterns`
   // says.
-  const canOfferExact = offerExact && !publishLease;
-  const canOfferPrefix = offerPrefix && !publishLease;
+  const canOfferExact = offerExact && !publishLease && !hookAsk;
+  const canOfferPrefix = offerPrefix && !publishLease && !hookAsk;
   const options = [
     {
       id: "once",
@@ -4828,6 +4834,9 @@ export async function launchTuiAgentShell(opts: {
           ev.publishLease,
           // Flow 275 F1: name the lease's holder/reason in the title when resolved.
           ev.publishLeaseDetail,
+          // Flow 306 (W6 T9): never offer to remember while a `PreToolUse`
+          // hook asked about this specific call.
+          ev.hookAsk,
         ),
       );
       input.focus();
