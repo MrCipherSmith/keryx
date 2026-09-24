@@ -9,7 +9,7 @@
   "title": "Wave 4 batch 1: stack packs and agent pairs for ts-js-node, react, python, go",
   "status": "in-progress",
   "createdAt": "2026-09-24T11:38:46.681Z",
-  "updatedAt": "2026-09-24T16:20:38.965Z",
+  "updatedAt": "2026-09-24T18:03:15.529Z",
   "source": {
     "type": "description",
     "ref": null
@@ -79,8 +79,19 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T16:21:38.587Z",
+            "outcome": "started",
+            "detail": "review round 1 on PR #692"
+          },
+          {
+            "at": "2026-09-24T16:34:39.617Z",
+            "outcome": "failed",
+            "detail": "round 1: 1 blocker, 6 major, 7 minor, 1 info -> T17"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -337,6 +348,26 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Review round-1 fixes (R1-1..R1-15): gate honesty, gate binding, generate safety, content accuracy, tests",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T16:34:39.536Z",
+            "outcome": "started",
+            "detail": "fix attempt 1: lanes A (gate code) + C1-C4 (pack content)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -557,6 +588,41 @@
       "at": "2026-09-24T16:20:38.965Z",
       "event": "task-done",
       "detail": "T14: Docs: W1/W2 spec updates, coverage count in journal after gate"
+    },
+    {
+      "at": "2026-09-24T16:21:38.587Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1 on PR #692"
+    },
+    {
+      "at": "2026-09-24T16:34:18.069Z",
+      "event": "task-added",
+      "detail": "T17: Review round-1 fixes (R1-1..R1-15): gate honesty, gate binding, generate safety, content accuracy, tests"
+    },
+    {
+      "at": "2026-09-24T16:34:39.536Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — fix attempt 1: lanes A (gate code) + C1-C4 (pack content)"
+    },
+    {
+      "at": "2026-09-24T16:34:39.617Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: 1 blocker, 6 major, 7 minor, 1 info -> T17"
+    },
+    {
+      "at": "2026-09-24T18:03:15.359Z",
+      "event": "ac-updated",
+      "detail": "After review round 1 (skills and graders had been tuned to each other), the owner moved the gate to deepseek-chat, kept the 0.8 floor and forbade tuning. The honest run failed all four packs (e.g. nodejs-build-fix no-ts-ignore-suppression 0, react-build-fix no-disable-hooks-lint 0, python-build-fix mypy-error-no-blanket-suppress 0, go-testing table-driven-subtests 0.4). The criterion now pins the honest process and the recorded outcome, not a pass."
+    },
+    {
+      "at": "2026-09-24T18:03:15.443Z",
+      "event": "ac-updated",
+      "detail": "The honest DeepSeek gate run left all four packs experimental, so by W2 D-7 no pair may ship. The generator and its safety fixes from review round 1 are the deliverable."
+    },
+    {
+      "at": "2026-09-24T18:03:15.529Z",
+      "event": "ac-updated",
+      "detail": "No pack cleared the honest gate, so the coverage count must not rise (metrics-and-validation: increases only after a batch passes its gate). The earlier 2 -> 5 journal entry was based on the grader-tuned run that review round 1 invalidated."
     }
   ]
 }
