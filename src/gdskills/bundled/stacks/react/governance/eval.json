@@ -189,8 +189,8 @@
           "prompt": "This React component has a useEffect that calls setState every time the `user` prop changes, just to copy user.name into a local `displayName` state variable used only for rendering. How should I fix it?",
           "strictness": "high",
           "trials": 5,
-          "passes": 4,
-          "passRate": 0.8,
+          "passes": 5,
+          "passRate": 1,
           "passAtK": 1,
           "grader": "regex+not-contains",
           "status": "ran"
@@ -208,7 +208,12 @@
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "dc1fdcfae42781b80754d50bcdaeed876ddf4b960bbc142b08df39f97769c0fd",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:51:59.873Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -385,8 +390,8 @@
           "prompt": "I need a React Testing Library test that clicks the submit button on a login form and checks an error message appears when the password is empty. How should I query for the button and the error?",
           "strictness": "high",
           "trials": 5,
-          "passes": 4,
-          "passRate": 0.8,
+          "passes": 5,
+          "passRate": 1,
           "passAtK": 1,
           "grader": "regex+regex",
           "status": "ran"
@@ -397,14 +402,19 @@
           "prompt": "My component test needs to mock an API call that the component makes on mount. Where should I put the mock?",
           "strictness": "high",
           "trials": 5,
-          "passes": 5,
-          "passRate": 1,
+          "passes": 3,
+          "passRate": 0.6,
           "passAtK": 1,
           "grader": "regex+not-contains",
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "9a08aeefe111c3d478a340beec1e6a730a958a3f399bc47e4ebf9d4b720a73b4",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:52:44.910Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -581,8 +591,8 @@
           "prompt": "Review this snippet: `function UserPanel({ id }) { if (!id) return null; const [user, setUser] = useState(null); useEffect(() => { fetchUser(id).then(setUser); }, [id]); return <div>{user?.name}</div>; }` What's wrong?",
           "strictness": "high",
           "trials": 5,
-          "passes": 3,
-          "passRate": 0.6,
+          "passes": 5,
+          "passRate": 1,
           "passAtK": 1,
           "grader": "regex+regex",
           "status": "ran"
@@ -600,7 +610,12 @@
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "eb6e905c33e2583a4816088be23ae61ed54d36f256e75102a1ff8ee5f5d44f9c",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:52:45.641Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -777,9 +792,9 @@
           "prompt": "react-hooks/exhaustive-deps is failing on my useEffect because it's missing a dependency. What should I do to fix the build?",
           "strictness": "high",
           "trials": 5,
-          "passes": 5,
-          "passRate": 1,
-          "passAtK": 1,
+          "passes": 0,
+          "passRate": 0,
+          "passAtK": 0,
           "grader": "not-contains+regex",
           "status": "ran"
         },
@@ -796,7 +811,12 @@
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "fail",
+      "scope": "bundled",
+      "skillDigest": "ca089e3a15d291cc457a1718b03581432336aecc8ca83e926bada16e76f96ac4",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:53:21.681Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -973,8 +993,8 @@
           "prompt": "We're upgrading from React 18 to React 19. Where should I start?",
           "strictness": "high",
           "trials": 5,
-          "passes": 4,
-          "passRate": 0.8,
+          "passes": 5,
+          "passRate": 1,
           "passAtK": 1,
           "grader": "regex+regex",
           "status": "ran"
@@ -992,7 +1012,12 @@
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "cd7869659e0ade5308d45e1e6165916d9a79504b51e0422adab89cf57bb6dd41",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:53:20.751Z"
     }
   ]
 }

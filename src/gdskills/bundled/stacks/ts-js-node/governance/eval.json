@@ -176,8 +176,8 @@
           "prompt": "Implement a Node.js function `fetchOrder(id: string)` that calls an internal orders API over fetch and should not hang forever if the API is slow.",
           "strictness": "high",
           "trials": 5,
-          "passes": 4,
-          "passRate": 0.8,
+          "passes": 5,
+          "passRate": 1,
           "passAtK": 1,
           "grader": "regex",
           "status": "ran"
@@ -195,7 +195,12 @@
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "cac040485a3928a336d814ebae4732dcb5257afdbb5487d1290763f2687ea56c",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:51:10.706Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -369,11 +374,11 @@
         {
           "id": "discover-runner-first",
           "kind": "behavior",
-          "prompt": "This Node.js TypeScript repo has vitest in its devDependencies and a vitest.config.ts. Write a test for a function `sumOrderTotals(orders)`. What should you check before writing the test file?",
+          "prompt": "This Node.js TypeScript repo's test setup isn't described here. Write a test for a function `sumOrderTotals(orders)`. What should you check before writing the test file?",
           "strictness": "high",
           "trials": 5,
-          "passes": 4,
-          "passRate": 0.8,
+          "passes": 5,
+          "passRate": 1,
           "passAtK": 1,
           "grader": "regex",
           "status": "ran"
@@ -384,14 +389,19 @@
           "prompt": "I'm writing a test for a function that calls an internal helper `formatOrder` and also calls out to a network client `httpClient.get`. What should I mock?",
           "strictness": "high",
           "trials": 5,
-          "passes": 4,
-          "passRate": 0.8,
-          "passAtK": 1,
-          "grader": "regex+not-contains",
+          "passes": 0,
+          "passRate": 0,
+          "passAtK": 0,
+          "grader": "regex+regex+not-contains",
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "fail",
+      "scope": "bundled",
+      "skillDigest": "75900595297b045759ff2f2d907518d5c6bd67dd3522b35372b67292d5b7f6aa",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:50:46.996Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -583,11 +593,16 @@
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "not-contains",
+          "grader": "regex+regex+not-contains",
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "6f74f7b781ba8dac594084e6c14e4606252b8e8e11192a9caddeae72f91edf2c",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:51:07.965Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -764,10 +779,10 @@
           "prompt": "tsc reports: Property 'total' does not exist on type 'OrderDraft'. What's the right way to fix this?",
           "strictness": "high",
           "trials": 5,
-          "passes": 4,
-          "passRate": 0.8,
-          "passAtK": 1,
-          "grader": "not-contains+not-contains",
+          "passes": 0,
+          "passRate": 0,
+          "passAtK": 0,
+          "grader": "regex+not-contains+not-contains",
           "status": "ran"
         },
         {
@@ -783,7 +798,12 @@
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "fail",
+      "scope": "bundled",
+      "skillDigest": "4b324ca4b7cadafedadcc035ee1c88bf9bf1255eed755a976f0d0fa746a89634",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:51:07.060Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -957,13 +977,13 @@
         {
           "id": "convert-before-flip-type",
           "kind": "behavior",
-          "prompt": "I want to migrate this Node.js package to ESM. Should I add \"type\": \"module\" to package.json first, before converting the require() calls in each file?",
+          "prompt": "I'm migrating this Node.js package to ES modules. Should the package.json \"type\" field become \"module\" before I convert the require() calls in each file, or only once every file is done?",
           "strictness": "high",
           "trials": 5,
-          "passes": 5,
-          "passRate": 1,
+          "passes": 1,
+          "passRate": 0.2,
           "passAtK": 1,
-          "grader": "regex",
+          "grader": "regex+regex",
           "status": "ran"
         },
         {
@@ -979,7 +999,12 @@
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "fail",
+      "scope": "bundled",
+      "skillDigest": "7d6b18c81af0bef12ac90f796924113fcb07838a4a47417d36fd819d21f9cca9",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:51:47.935Z"
     }
   ]
 }

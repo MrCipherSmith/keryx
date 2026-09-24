@@ -176,8 +176,8 @@
           "prompt": "I'm adding a new function to internal/order that calls a downstream client. How should I handle the context and errors?",
           "strictness": "high",
           "trials": 5,
-          "passes": 4,
-          "passRate": 0.8,
+          "passes": 5,
+          "passRate": 1,
           "passAtK": 1,
           "grader": "regex+regex",
           "status": "ran"
@@ -195,7 +195,12 @@
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "c1a73ccbb6e62215aa969afed8001bb9f022825770082859f2d7b85b33d04160",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:56:08.582Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -372,8 +377,8 @@
           "prompt": "I need to add several test cases for this Go function that validates an order. How should I structure them?",
           "strictness": "high",
           "trials": 5,
-          "passes": 5,
-          "passRate": 1,
+          "passes": 2,
+          "passRate": 0.4,
           "passAtK": 1,
           "grader": "regex+regex",
           "status": "ran"
@@ -391,7 +396,12 @@
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "fail",
+      "scope": "bundled",
+      "skillDigest": "431f46c1c2bd8e3fa6b99c9dd8bc7704efef7e443aa03845db0b1c157d150772",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:55:55.257Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -568,10 +578,10 @@
           "prompt": "Review this Go diff: a struct field `ctx context.Context` was added and populated in the constructor. What do you find?",
           "strictness": "high",
           "trials": 5,
-          "passes": 4,
-          "passRate": 0.8,
+          "passes": 5,
+          "passRate": 1,
           "passAtK": 1,
-          "grader": "regex+not-contains",
+          "grader": "regex+regex+not-contains",
           "status": "ran"
         },
         {
@@ -583,11 +593,16 @@
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex",
+          "grader": "regex+regex",
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "a16fcffa81c9ab79c11a3433783a938cd66c51bc5c7fd4b3b1beef7ab095fa8d",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:56:54.802Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -779,11 +794,16 @@
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "not-contains",
+          "grader": "regex",
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "227471b794a2e28840cd27491cba67521114f2153e2d6c06cd3225da97cc60c5",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:56:54.015Z"
     }
   ]
 }

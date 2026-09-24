@@ -7,7 +7,7 @@
       "strictness": "high",
       "trials": 5,
       "triggerAccuracy": {
-        "truePositive": 7,
+        "truePositive": 6,
         "falsePositive": 0,
         "positives": 7,
         "negatives": 6
@@ -85,9 +85,9 @@
           "prompt": "Add a new feature to this Python service that logs each request with the logging module",
           "strictness": "high",
           "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
+          "passes": 0,
+          "passRate": 0,
+          "passAtK": 0,
           "grader": "trigger-rank-fork-family",
           "status": "ran",
           "deterministic": true
@@ -189,8 +189,8 @@
           "prompt": "Implement a Python async function `fetch_all(urls)` that fetches several URLs concurrently and returns their results. Use current best practice for grouping the concurrent calls.",
           "strictness": "high",
           "trials": 5,
-          "passes": 4,
-          "passRate": 0.8,
+          "passes": 5,
+          "passRate": 1,
           "passAtK": 1,
           "grader": "regex+not-contains",
           "status": "ran"
@@ -201,14 +201,19 @@
           "prompt": "Write a Python function that opens a file, reads its JSON contents, and returns the parsed data.",
           "strictness": "high",
           "trials": 5,
-          "passes": 5,
-          "passRate": 1,
+          "passes": 1,
+          "passRate": 0.2,
           "passAtK": 1,
           "grader": "regex",
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "fail",
+      "scope": "bundled",
+      "skillDigest": "6489343424c4ee3fd5391f33737a8a269b2d95dd42c75a99fc409a915c0ff35e",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:54:29.810Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -385,10 +390,10 @@
           "prompt": "I need a pytest fixture used by only one test file. Where should it live and what scope should it have?",
           "strictness": "high",
           "trials": 5,
-          "passes": 4,
-          "passRate": 0.8,
+          "passes": 5,
+          "passRate": 1,
           "passAtK": 1,
-          "grader": "regex+regex",
+          "grader": "regex+regex+not-contains",
           "status": "ran"
         },
         {
@@ -397,14 +402,19 @@
           "prompt": "Write a pytest test for a function that calls an internal helper in the same package and also calls an external HTTP API. What should be mocked?",
           "strictness": "high",
           "trials": 5,
-          "passes": 5,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "regex+not-contains",
+          "passes": 0,
+          "passRate": 0,
+          "passAtK": 0,
+          "grader": "regex+regex+not-contains",
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "fail",
+      "scope": "bundled",
+      "skillDigest": "de31689fbaaa2edf36bb0ad1f0632ee973daea0a783389641e8d6e44a061cada",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:53:56.737Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -596,11 +606,16 @@
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex",
+          "grader": "regex+not-contains",
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "05da5c8f3e540f5585ad11fb7a21b928d69084b3fd1db2311bf2d97e33e4b1d2",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:55:09.011Z"
     },
     {
       "schemaVersion": "1.0.0",
@@ -789,14 +804,19 @@
           "prompt": "mypy reports a type error on a function I touched. Fix it.",
           "strictness": "high",
           "trials": 5,
-          "passes": 5,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "not-contains",
+          "passes": 0,
+          "passRate": 0,
+          "passAtK": 0,
+          "grader": "regex+not-contains",
           "status": "ran"
         }
       ],
-      "verdict": "pass"
+      "verdict": "fail",
+      "scope": "bundled",
+      "skillDigest": "d4e6d936888d8a843725a7d1cf6ede2215e50a6c70e5a78a0c4d04b8dde83eba",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T17:55:19.404Z"
     }
   ]
 }

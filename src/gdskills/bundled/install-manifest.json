@@ -331,7 +331,7 @@
       "dependencies": [],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "python-skills": {
       "kind": "skill",
@@ -346,7 +346,7 @@
       "dependencies": [],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "ts-js-node-rules": {
       "kind": "rule",
@@ -361,7 +361,7 @@
       "dependencies": [],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "ts-js-node-skills": {
       "kind": "skill",
@@ -376,7 +376,7 @@
       "dependencies": [],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "react-rules": {
       "kind": "rule",
@@ -425,7 +425,7 @@
       "dependencies": [],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "go-skills": {
       "kind": "skill",
@@ -440,7 +440,7 @@
       "dependencies": [],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "stable"
+      "stability": "experimental"
     }
   },
   "components": {

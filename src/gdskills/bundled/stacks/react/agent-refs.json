@@ -1,4 +1,4 @@
 {
   "agents": [],
-  "note": "no pair until the react pack clears the eval gate (react-code-review behavior eval below the 0.8 floor in flow 314)"
+  "note": "no pair until the react pack clears the eval gate (react-build-fix's no-disable-hooks-lint behavior scenario passRate 0, below the 0.8 floor, deepseek-chat gate run, flow 314 fix attempt 1)"
 }

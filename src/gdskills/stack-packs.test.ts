@@ -21,8 +21,8 @@ import installManifestSchemaJson from "../../docs/requirements/keryx-agent-platf
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { lintSkill, lintStackRule, STACK_EXTENSIONS } from "./governance/authoring-lint";
 import { readScoutRecord } from "./governance/scout";
-import type { EvalReport, EvalSpecFile, PackEvalDocument } from "./governance/eval";
-import { checkStablePackGate, PACK_BEHAVIOR_PASS_FLOOR, validateEvalReport } from "./governance/eval";
+import type { EvalReport, EvalScenarioResult, EvalSpecFile, PackEvalDocument } from "./governance/eval";
+import { checkStablePackGate, computeSkillEvalDigest, PACK_BEHAVIOR_PASS_FLOOR, validateEvalReport } from "./governance/eval";
 import { exportProjectSkill } from "./export";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 import { defaultBundledRoot } from "./bundled-eval";
@@ -445,8 +445,14 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
           {
             id: "fixture-lang",
             family: "language",
-            // ts-js-node-rules is a real install-manifest module, shipped "stable".
-            modules: ["ts-js-node-rules"],
+            // core-common-rules is a real install-manifest module, shipped
+            // "stable" (flow 314 review round 1: this used to name
+            // ts-js-node-rules, but the honest eval rerun demoted that
+            // module to "experimental" alongside its pack, which made this
+            // fixture's own claimed "experimental" agree instead of
+            // disagree — swapped to a module that is actually stable so the
+            // fixture still proves a genuine mismatch).
+            modules: ["core-common-rules"],
             stability: "experimental",
             skills: { implement: [], test: [], review: [], "build-fix": [], migrate: [] },
           },
@@ -522,25 +528,43 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
     }
   });
 
+  // Flow 314 review round 1: a stack pack MUST ship the pack-level `{
+  // schemaVersion, reports: EvalReport[] }` form (R1-4) — the legacy
+  // single-report shape is always a named fail for a stable stack pack (see
+  // the "must ship a pack-level eval document" fixture below). This fixture
+  // now builds a real pack-level document with a report that clears every
+  // `checkSkillReportForPackGate` requirement: strictness "high", trials >=
+  // `PACK_MIN_TRIALS`, scope "bundled", a stamped runner/model/recordedAt,
+  // and a `skillDigest` computed from the fixture skill actually written to
+  // disk (so it agrees with `computeSkillEvalDigest` recomputed by the gate).
   test("checkStablePackGate: a 'stable' pack with a valid, passing eval.json passes", () => {
     const packDir = makeFixturePack();
     try {
-      const report: EvalReport = {
+      writePackJson(packDir, { implement: ["fixture-skill"], test: [], review: [], "build-fix": [], migrate: [] });
+      const evalSpec = validEvalSpec();
+      writeFixtureSkillFiles(packDir, "fixture-skill", evalSpec);
+      const doc: PackEvalDocument = {
         schemaVersion: "1.0.0",
-        skillId: "fixture-lang/fixture-skill",
-        strictness: "low",
-        trials: 3,
-        triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
-        evidence: "authored",
-        scenarios: [
-          { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "low", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-          { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "low", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-        ],
-        verdict: "pass",
+        reports: [passingSkillReport(packDir, "fixture-skill", "fixture-lang", evalSpec, 1)],
       };
-      writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(report, null, 2), "utf8");
+      writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
       const result = checkStablePackGate(packDir, "stable");
       expect(result.status).toBe("pass");
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("checkStablePackGate: a 'stable' pack with the legacy single-report eval.json form fails (stack packs must ship a pack-level document)", () => {
+    const packDir = makeFixturePack();
+    try {
+      const evalSpec = validEvalSpec();
+      writeFixtureSkillFiles(packDir, "fixture-skill", evalSpec);
+      const report: EvalReport = passingSkillReport(packDir, "fixture-skill", "fixture-lang", evalSpec, 1);
+      writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(report, null, 2), "utf8");
+      const result = checkStablePackGate(packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toMatch(/pack-level eval document/);
     } finally {
       cleanup();
     }
@@ -598,20 +622,97 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
     );
   }
 
-  function passingSkillReport(skillId: string, behaviorPassRate: number): EvalReport {
+  /** Writes a real SKILL.md + evals.json for a fixture skill so `computeSkillEvalDigest` (and the gate's own scenario-id/trigger-prompt agreement checks) have real files to read, instead of a report describing a skill that was never actually written to disk. */
+  function writeFixtureSkillFiles(packDir: string, name: string, evalSpec: EvalSpecFile): void {
+    const skillDir = path.join(packDir, "skills", name);
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      `---\nname: ${name}\ndescription: Use when testing the guard.\n---\n\nBody.\n`,
+      "utf8",
+    );
+    writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec, null, 2), "utf8");
+  }
+
+  /**
+   * Flow 314 review round 1 (R1-3/R1-11/R1-15): a pack-level `EvalReport`
+   * that clears every `checkSkillReportForPackGate` requirement — strictness
+   * "high", `trials >= PACK_MIN_TRIALS`, `scope: "bundled"`, a stamped
+   * runner/model/recordedAt, a `skillDigest` computed from the fixture
+   * skill's OWN files on disk (`writeFixtureSkillFiles` must be called for
+   * the same `packDir`/`name` first), and behavior-scenario ids / trigger
+   * prompts equal to `evalSpec` (the same spec written to that skill's
+   * evals.json) — so the gate's digest and content-agreement checks are
+   * satisfied by construction rather than by coincidence.
+   */
+  function passingSkillReport(packDir: string, name: string, packId: string, evalSpec: EvalSpecFile, behaviorPassRate: number): EvalReport {
+    const skillId = `${packId}/${name}`;
+    const skillDigest = computeSkillEvalDigest(path.join(packDir, "skills", name));
+    const positives = evalSpec.triggers?.positive ?? [];
+    const negatives = evalSpec.triggers?.negative ?? [];
+    const behavior = evalSpec.scenarios?.[0];
+    const behaviorScenarios: EvalScenarioResult[] = behavior
+      ? [
+          {
+            id: behavior.id,
+            kind: "behavior",
+            prompt: behavior.prompt,
+            strictness: "high",
+            trials: 5,
+            passes: Math.round(behaviorPassRate * 5),
+            passRate: behaviorPassRate,
+            passAtK: behaviorPassRate > 0 ? 1 : 0,
+            grader: behavior.expected_behavior.map((expected) => expected.grader).join("+") || "none",
+            status: "ran",
+          },
+        ]
+      : [];
     return {
       schemaVersion: "1.0.0",
       skillId,
-      strictness: "low",
-      trials: 3,
-      triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+      strictness: "high",
+      trials: 5,
+      triggerAccuracy: { truePositive: positives.length, falsePositive: 0, positives: positives.length, negatives: negatives.length },
       evidence: "authored",
+      scope: "bundled",
+      skillDigest,
+      runner: "ollama",
+      model: "llama3.1:latest",
+      recordedAt: new Date().toISOString(),
       scenarios: [
-        { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "low", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-        { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "low", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-        { id: "behavior-1", kind: "behavior", prompt: "do the thing", strictness: "low", trials: 3, passes: Math.round(behaviorPassRate * 3), passRate: behaviorPassRate, passAtK: behaviorPassRate > 0 ? 1 : 0, grader: "contains", status: "ran" },
+        ...positives.map(
+          (prompt, index): EvalScenarioResult => ({
+            id: `trigger-positive-${index + 1}`,
+            kind: "trigger-positive",
+            prompt,
+            strictness: "high",
+            trials: 1,
+            passes: 1,
+            passRate: 1,
+            passAtK: 1,
+            grader: "trigger-rank-fork-family",
+            status: "ran",
+            deterministic: true,
+          }),
+        ),
+        ...negatives.map(
+          (prompt, index): EvalScenarioResult => ({
+            id: `trigger-negative-${index + 1}`,
+            kind: "trigger-negative",
+            prompt,
+            strictness: "high",
+            trials: 1,
+            passes: 1,
+            passRate: 1,
+            passAtK: 1,
+            grader: "trigger-rank-fork-family",
+            status: "ran",
+            deterministic: true,
+          }),
+        ),
+        ...behaviorScenarios,
       ],
-      verdict: behaviorPassRate >= 0.5 ? "pass" : "fail",
+      verdict: positives.length > 0 && negatives.length > 0 && behaviorPassRate >= 0.5 ? "pass" : "fail",
     };
   }
 
@@ -619,9 +720,11 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
     const packDir = makeFixturePack();
     try {
       writePackJson(packDir, { implement: ["fixture-skill"], test: [], review: [], "build-fix": [], migrate: [] });
+      const evalSpec = validEvalSpec();
+      writeFixtureSkillFiles(packDir, "fixture-skill", evalSpec);
       const doc: PackEvalDocument = {
         schemaVersion: "1.0.0",
-        reports: [passingSkillReport("fixture-lang/fixture-skill", 1)],
+        reports: [passingSkillReport(packDir, "fixture-skill", "fixture-lang", evalSpec, 1)],
       };
       writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
       const result = checkStablePackGate(packDir, "stable");
@@ -635,9 +738,11 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
     const packDir = makeFixturePack();
     try {
       writePackJson(packDir, { implement: ["fixture-skill", "second-skill"], test: [], review: [], "build-fix": [], migrate: [] });
+      const evalSpec = validEvalSpec();
+      writeFixtureSkillFiles(packDir, "fixture-skill", evalSpec);
       const doc: PackEvalDocument = {
         schemaVersion: "1.0.0",
-        reports: [passingSkillReport("fixture-lang/fixture-skill", 1)],
+        reports: [passingSkillReport(packDir, "fixture-skill", "fixture-lang", evalSpec, 1)],
       };
       writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
       const result = checkStablePackGate(packDir, "stable");
@@ -652,9 +757,11 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
     const packDir = makeFixturePack();
     try {
       writePackJson(packDir, { implement: ["fixture-skill"], test: [], review: [], "build-fix": [], migrate: [] });
+      const evalSpec = validEvalSpec();
+      writeFixtureSkillFiles(packDir, "fixture-skill", evalSpec);
       const doc: PackEvalDocument = {
         schemaVersion: "1.0.0",
-        reports: [passingSkillReport("fixture-lang/fixture-skill", 0.6)],
+        reports: [passingSkillReport(packDir, "fixture-skill", "fixture-lang", evalSpec, 0.6)],
       };
       writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
       const result = checkStablePackGate(packDir, "stable");
@@ -669,7 +776,9 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
     const packDir = makeFixturePack();
     try {
       writePackJson(packDir, { implement: ["fixture-skill"], test: [], review: [], "build-fix": [], migrate: [] });
-      const report = passingSkillReport("fixture-lang/fixture-skill", 1);
+      const evalSpec = validEvalSpec();
+      writeFixtureSkillFiles(packDir, "fixture-skill", evalSpec);
+      const report = passingSkillReport(packDir, "fixture-skill", "fixture-lang", evalSpec, 1);
       // A synthesized-evidence report is REFUSED verdict "pass" by
       // `validateEvalReport` itself (F5) — so a hand-edited doc claiming both
       // is caught either by that contract check or by the evidence check;
