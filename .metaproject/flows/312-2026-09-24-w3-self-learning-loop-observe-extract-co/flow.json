@@ -9,7 +9,7 @@
   "title": "W3: self-learning loop — observe, extract, consent-gated learned patterns, reviewer profiles, promote and graduate",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:32.725Z",
-  "updatedAt": "2026-09-24T13:32:40.845Z",
+  "updatedAt": "2026-09-24T13:50:32.308Z",
   "source": {
     "type": "description",
     "ref": null
@@ -670,6 +670,29 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T27",
+      "title": "Fix R7-F1..F3: one shared mayCarryReviewerText predicate for every attribution gate; drop summary token gate",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T26"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T13:37:20.185Z",
+            "outcome": "started",
+            "detail": "312-T27 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -1105,6 +1128,21 @@
       "at": "2026-09-24T13:32:40.845Z",
       "event": "task-done",
       "detail": "T26: Fix R6-F1..F4: attribution gate at the source (reviewer-comment text), login-equal keyword filter in graduate, comments"
+    },
+    {
+      "at": "2026-09-24T13:37:20.042Z",
+      "event": "task-added",
+      "detail": "T27: Fix R7-F1..F3: one shared mayCarryReviewerText predicate for every attribution gate; drop summary token gate"
+    },
+    {
+      "at": "2026-09-24T13:37:20.185Z",
+      "event": "task-attempt",
+      "detail": "T27: started (attempt 1) — 312-T27 sonnet"
+    },
+    {
+      "at": "2026-09-24T13:50:32.308Z",
+      "event": "task-done",
+      "detail": "T27: Fix R7-F1..F3: one shared mayCarryReviewerText predicate for every attribution gate; drop summary token gate"
     }
   ],
   "owner": {

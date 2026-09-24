@@ -111,3 +111,7 @@
 - 2026-09-24T13:22:50.907Z - task-attempt: T26: started (attempt 1) — 312-T26 sonnet
 - 2026-09-24 - Verification at 07adc5ec (R6): 3 minor, 1 info, all in the attribution gate (derived graduate keywords, the ungated proposal writer, fixed wording of other signals, comments). Structural fix in T26: gate only reviewer-comment-derived text (the only source of logins), filter login-equal tokens out of derived keywords, and gate runGraduate's proposal write.
 - 2026-09-24T13:32:40.845Z - task-done: T26: Fix R6-F1..F4: attribution gate at the source (reviewer-comment text), login-equal keyword filter in graduate, comments
+- 2026-09-24T13:37:20.042Z - task-added: T27: Fix R7-F1..F3: one shared mayCarryReviewerText predicate for every attribution gate; drop summary token gate
+- 2026-09-24T13:37:20.185Z - task-attempt: T27: started (attempt 1) — 312-T27 sonnet
+- 2026-09-24T13:50:32.308Z - task-done: T27: Fix R7-F1..F3: one shared mayCarryReviewerText predicate for every attribution gate; drop summary token gate
+- 2026-09-24 - R7 verification (3 minor, attribution scoping) ingested. T27 DONE: one mayCarryReviewerText predicate (reviewer-comment OR model-backed) now scopes every gate, and the summary token gate is removed. Tests fail pre-fix on a scratch copy.
