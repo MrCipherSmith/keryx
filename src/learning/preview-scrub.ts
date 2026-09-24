@@ -192,17 +192,49 @@ function matchPrefixedPath(inner: string): PrefixMatch | null {
 const FILE_URL_RE = /file:\/\/(\/[^\s"'`)\]},]*)/;
 
 /**
- * An embedded path start (R2-F1): a `/`, `~`, or drive-letter path
- * immediately after one of `( < > " ' \` = : [ { ,` — inside a stack-trace
- * frame `(/Users/…)`, a JSON string value `:"/Users/…"`, a shell redirect
- * `2>/home/…`, or a backtick-quoted literal `` `/Users/…` ``. The
- * `/(?!\/)` guard on the plain-slash alternative keeps a `scheme://host/…`
- * URL (`:` immediately followed by `//`) from being misread as a
- * `:`-prefixed embedded path — `file://` itself is handled separately by
- * `FILE_URL_RE`. The match stops at whitespace, a quote, `` ` ``, `)`,
- * `]`, `}`, or `,`.
+ * Delimiters before a `/`-rooted or drive-letter embedded path start
+ * (R2-F1, extended by R3-F1 with `;`, `|`, `&`, `@` — a `;`/`&&`/`||`/`@`
+ * -prefixed path, e.g. `x;/Users/bob/secret/y` or
+ * `make&&/Users/bob/secret/run.sh`, used to fall straight through
+ * unscrubbed since none of those four characters were in the delimiter
+ * set).
  */
-const EMBEDDED_PATH_RE = /(?<=[(<>"'`=:[{,])(\/(?!\/)[^\s"'`)\]},]*|~[^\s"'`)\]},]*|[A-Za-z]:[\\/][^\s"'`)\]},]*)/;
+const PATH_DELIM_CHARS = "(<>\"'`=:[{,;|&@";
+
+/**
+ * Delimiters before a `~`-rooted embedded path start — the same set MINUS
+ * `=` (R3-F5): bash's `[[ $x =~ pattern ]]` regex-match operator would
+ * otherwise read as `=` followed by a bare embedded `~` home reference.
+ */
+const TILDE_DELIM_CHARS = "(<>\"'`:[{,;|&@";
+
+/**
+ * A `~`-rooted path start (R3-F5): `~` alone at the very end of the
+ * scanned region, `~/…`, or `~user/…` — never a bare `~user` with nothing
+ * after it, which is indistinguishable by shape alone from a semver range
+ * (`~4.17.21`) and used to be rewritten to `[home]`.
+ */
+const TILDE_PATH_SOURCE = '~(?:[A-Za-z0-9_.-]*/[^\\s"\'`)\\]},]*|$)';
+
+/**
+ * An embedded path start (R2-F1): a `/`, `~`, or drive-letter path
+ * immediately after one of `( < > " ' \` = : [ { , ; | & @` — inside a
+ * stack-trace frame `(/Users/…)`, a JSON string value `:"/Users/…"`, a
+ * shell redirect `2>/home/…`, a `;`/`&&`/`||`/`@`-prefixed path (R3-F1), or
+ * a backtick-quoted literal `` `/Users/…` ``. The `/(?!\/)` guard on the
+ * plain-slash alternative keeps a `scheme://host/…` URL (`:` immediately
+ * followed by `//`) from being misread as a `:`-prefixed embedded path —
+ * `file://` itself is handled separately by `FILE_URL_RE`. The `~`
+ * alternative has its own, narrower delimiter set and shape (R3-F5,
+ * `TILDE_PATH_SOURCE`) so a semver range (`"~4.17.21"`) or bash's `=~`
+ * operator is never misread as a home reference. The match stops at
+ * whitespace, a quote, `` ` ``, `)`, `]`, `}`, or `,`.
+ */
+const EMBEDDED_PATH_RE = new RegExp(
+  `((?:(?<=[${PATH_DELIM_CHARS}])\\/(?!\\/)[^\\s"'\`)\\]},]*)` +
+    `|(?:(?<=[${TILDE_DELIM_CHARS}])${TILDE_PATH_SOURCE})` +
+    `|(?:(?<=[${PATH_DELIM_CHARS}])[A-Za-z]:[\\\\/][^\\s"'\`)\\]},]*))`,
+);
 
 const EMBEDDED_SCAN_RE = new RegExp(`${FILE_URL_RE.source}|${EMBEDDED_PATH_RE.source}`, "g");
 
@@ -224,6 +256,18 @@ function scrubEmbeddedPaths(root: string, inner: string): string {
   });
 }
 
+/**
+ * True when the WHOLE token `inner` (already isolated by whitespace/quotes)
+ * starts with a `~`-rooted path (R3-F5): `~` alone, or `~`/`~user` followed
+ * by a `/`. A bare `~user` with nothing after it is deliberately NOT
+ * counted — indistinguishable by shape alone from a semver range
+ * (`~4.17.21`), which must stay untouched (probe: `{"lodash":"~4.17.21"}`).
+ */
+function isTildePathStart(inner: string): boolean {
+  if (inner === "~") return true;
+  return inner.startsWith("~") && inner.includes("/", 1);
+}
+
 /** Classifies the path shape (if any) found within one already-unquoted token: a drive-letter absolute path (checked first so `C:` is never misread as a `host:` prefix), a flag/`=`/`host:`-prefixed path, a bare `/`, `~`, `./`, `../` start, or — failing all of those — an embedded path start found anywhere later in the token (`scrubEmbeddedPaths`, R2-F1). Returns `null` (token left unchanged) when none of these shapes match — this is what keeps `bun test ./src/a.test.ts`'s `bun`/`test` words and `(fail) … 1 fail` intact. */
 function classifyPathInToken(root: string, inner: string): string | null {
   if (/^[A-Za-z]:[\\/]/.test(inner)) {
@@ -235,7 +279,7 @@ function classifyPathInToken(root: string, inner: string): string | null {
     const { core, suffix } = splitTrailingPathSuffix(prefixed.rest);
     return `${prefixed.prefix}${renderClassifiedPathForText(classifyPath(root, core))}${suffix}`;
   }
-  if (/^\/|^~|^\.\.?\//.test(inner)) {
+  if (inner.startsWith("/") || /^\.\.?\//.test(inner) || isTildePathStart(inner)) {
     const { core, suffix } = splitTrailingPathSuffix(inner);
     return renderClassifiedPathForText(classifyPath(root, core)) + suffix;
   }
@@ -253,19 +297,39 @@ function scrubToken(root: string, token: string): string {
 }
 
 /**
+ * Boundary characters before which a `"`/`'` counts as potentially OPENING a
+ * quoted run (R3-F1): start of string, whitespace, or one of the same
+ * delimiters `EMBEDDED_PATH_RE` treats as preceding an embedded path. A
+ * quote character sitting BETWEEN two word characters — `it's`, `don't`,
+ * `bob's` — is a prose apostrophe, not a quote open, and must never be
+ * treated as one: that used to make `findUnbalancedQuoteRun` see the whole
+ * rest of the string (however unrelated — failure counts, a relative test
+ * path) as "inside an unterminated quote".
+ */
+const QUOTE_OPEN_BOUNDARY = /[\s(<>=:[{,;|&@]/;
+
+function isQuoteOpenBoundary(charBefore: string | undefined): boolean {
+  return charBefore === undefined || QUOTE_OPEN_BOUNDARY.test(charBefore);
+}
+
+/**
  * True when `text` has an opening `"`/`'` with no matching close after it —
  * a shell/JSON quoting error (R2-F1). When that happens, the text from that
  * quote to the end of the string must be treated as ONE run rather than
  * re-tokenized on whitespace, or a directory name containing a space
  * (`Acme Merger/plan.txt`) leaks through as an un-scrubbed word once the
- * space splits it from the path token before it. Returns the index of the
- * unmatched quote and which character it is, or `null` when every quote in
- * `text` is balanced.
+ * space splits it from the path token before it. A quote character is only
+ * considered here when it sits at a token/delimiter boundary (R3-F1,
+ * `isQuoteOpenBoundary`) — an apostrophe glued between word characters
+ * (`it's`, `don't`) never opens a run. Returns the index of the unmatched
+ * quote and which character it is, or `null` when every quote in `text` is
+ * balanced (or every quote-shaped character in it is just a prose
+ * apostrophe).
  */
 function findUnbalancedQuoteRun(text: string): { start: number; quoteChar: string } | null {
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
-    if (ch === '"' || ch === "'") {
+    if ((ch === '"' || ch === "'") && isQuoteOpenBoundary(text[i - 1])) {
       const closeIdx = text.indexOf(ch, i + 1);
       if (closeIdx === -1) return { start: i, quoteChar: ch };
       i = closeIdx;
@@ -275,26 +339,66 @@ function findUnbalancedQuoteRun(text: string): { start: number; quoteChar: strin
 }
 
 /**
+ * From the very start of `rest` (a run beginning right at a path start with
+ * no closing quote to bound it), grows the path candidate across whitespace
+ * one token at a time until a token completes a plausible file extension
+ * (`.<1-8 alnum chars>`, ignoring trailing sentence punctuation) — the point
+ * at which a real path almost always ends — or `rest` itself ends. Returns
+ * the index into `rest` where the path-shaped run stops; anything after
+ * that index is ordinary trailing text, scrubbed token-by-token like the
+ * text before the path (R3-F1) rather than folded into the same basename
+ * (`.../secret dir/y.txt for details, 2 fail` must keep `for details, 2
+ * fail` intact once the path itself — the part with the space in it — ends
+ * at `y.txt`).
+ */
+const RUN_EXTENSION_RE = /\.[A-Za-z0-9]{1,8}[,;:!?)\]}>]*$/;
+
+function findPathRunEnd(rest: string): number {
+  let end = rest.length;
+  let sawToken = false;
+  for (const match of rest.matchAll(/\S+/g)) {
+    sawToken = true;
+    end = (match.index ?? 0) + match[0].length;
+    if (RUN_EXTENSION_RE.test(match[0])) break;
+  }
+  return sawToken ? end : rest.length;
+}
+
+/**
  * Handles the tail after an unbalanced quote (`findUnbalancedQuoteRun`):
  * finds the first embedded path start in `run` — at the very start or after
- * a delimiter, mirroring `EMBEDDED_PATH_RE` — and classifies everything
- * from there to the end of the string as one path literal, spaces and all
- * (this is what reduces `Acme Merger/plan.txt` to a bare basename instead
- * of leaking `Merger/plan.txt` as a second, un-scrubbed word). The text
- * before the path start is scrubbed token-by-token as usual. Falls back to
- * ordinary token scrubbing when nothing in `run` looks like a path start.
+ * a delimiter (R3-F1: now also `;`, `|`, `&`, `@`), mirroring
+ * `EMBEDDED_PATH_RE`/`TILDE_PATH_SOURCE` — and classifies the path-shaped
+ * run from there (`findPathRunEnd`, R3-F1) as one path literal, spaces and
+ * all (this is what reduces `Acme Merger/plan.txt` to a bare basename
+ * instead of leaking `Merger/plan.txt` as a second, un-scrubbed word),
+ * WITHOUT swallowing unrelated trailing prose past the path's own end. The
+ * text before the path start, and any text after the path-shaped run ends,
+ * are both scrubbed token-by-token as usual. Falls back to ordinary token
+ * scrubbing when nothing in `run` looks like a path start.
  */
 function scrubUnclosedRun(root: string, run: string): string {
-  const match = /(^|[\s(<>"'`=:[{,])(\/(?!\/)|~|[A-Za-z]:[\\/])/.exec(run);
-  if (match === null) return run.replace(TOKEN_RE, (token) => scrubToken(root, token));
-  const boundaryLen = match[1]?.length ?? 0;
-  const pathStartIdx = (match.index ?? 0) + boundaryLen;
+  const match = new RegExp(`(^|[\\s${PATH_DELIM_CHARS}])(\\/(?!\\/)|[A-Za-z]:[\\\\/])`).exec(run);
+  const tildeMatch = new RegExp(`(^|[\\s${TILDE_DELIM_CHARS}])(${TILDE_PATH_SOURCE})`).exec(run);
+  const best =
+    match !== null && tildeMatch !== null
+      ? (match.index ?? 0) <= (tildeMatch.index ?? 0)
+        ? match
+        : tildeMatch
+      : (match ?? tildeMatch);
+  if (best === null) return run.replace(TOKEN_RE, (token) => scrubToken(root, token));
+  const boundaryLen = best[1]?.length ?? 0;
+  const pathStartIdx = (best.index ?? 0) + boundaryLen;
   const before = run.slice(0, pathStartIdx);
-  const pathPart = run.slice(pathStartIdx);
+  const rest = run.slice(pathStartIdx);
   const rewrittenBefore = before.replace(TOKEN_RE, (token) => scrubToken(root, token));
+  const pathRunEnd = findPathRunEnd(rest);
+  const pathPart = rest.slice(0, pathRunEnd);
+  const tail = rest.slice(pathRunEnd);
   const { core, suffix } = splitTrailingPathSuffix(pathPart);
   const rendered = renderClassifiedPathForText(classifyPath(root, core));
-  return `${rewrittenBefore}${rendered}${suffix}`;
+  const rewrittenTail = tail.replace(TOKEN_RE, (token) => scrubToken(root, token));
+  return `${rewrittenBefore}${rendered}${suffix}${rewrittenTail}`;
 }
 
 /**

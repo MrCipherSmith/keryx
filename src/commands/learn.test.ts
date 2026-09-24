@@ -277,12 +277,219 @@ describe("keryx learn: a value flag's own value is never read as the positional 
   });
 });
 
+// R3-F4 (review round 3, PR #691, minor): the finding lists this among the
+// missing regression tests — R2-F8's "would delete"/"would expire" dry-run
+// wording (distinguishing a preview from a real destructive run) had no
+// test.
+describe("keryx learn prune: --dry-run wording says 'would', a real run says the deed is done (R2-F8, R3-F4)", () => {
+  test("--dry-run prints 'would delete'/'would expire' and deletes nothing", async () => {
+    await withTempHome(async (root, env) => {
+      const observationsDir = path.join(root, ".metaproject", "data", "learning", "observations");
+      mkdirSync(observationsDir, { recursive: true });
+      const staleFile = path.join(observationsDir, "2020-01-01.jsonl");
+      writeFileSync(staleFile, `${JSON.stringify({ line: 1 })}\n`);
+
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["prune", "--dry-run"], deps));
+      expect(run.exitCode).toBe(0);
+      expect(run.stdout).toContain("would delete");
+      expect(run.stdout).toContain("(dry run — nothing written)");
+      expect(run.stdout).not.toMatch(/(?<!would )deleted \d/);
+      expect(readFileSync(staleFile, "utf8")).toContain('"line":1'); // untouched
+    });
+  });
+
+  test("a real run (no --dry-run) says 'deleted', not 'would delete', and actually deletes", async () => {
+    await withTempHome(async (root, env) => {
+      const observationsDir = path.join(root, ".metaproject", "data", "learning", "observations");
+      mkdirSync(observationsDir, { recursive: true });
+      const staleFile = path.join(observationsDir, "2020-01-01.jsonl");
+      writeFileSync(staleFile, `${JSON.stringify({ line: 1 })}\n`);
+
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["prune"], deps));
+      expect(run.exitCode).toBe(0);
+      expect(run.stdout).toContain("deleted");
+      expect(run.stdout).not.toContain("would delete");
+      expect(run.stdout).not.toContain("dry run");
+      expect(() => readFileSync(staleFile, "utf8")).toThrow(); // actually deleted
+    });
+  });
+});
+
 describe("keryx learn: unknown subcommand", () => {
   test("is refused with a non-zero exit", async () => {
     await withTempHome(async (root, env) => {
       const deps: LearnCommandDeps = { cwd: root, env };
       const run = await capture(() => learnCommand(["bogus"], deps));
       expect(run.exitCode).toBe(1);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R3-F4 (review round 3, PR #691, minor): the review lists this among the
+// missing regression tests — per-verb `-h`/`--help` and positional-arity
+// enforcement (`learn.ts`'s `wantsHelp`/`positionalArityError`, R2-F2) had
+// no test at all before this. Each case below proves the guard by disabling
+// it in a scratch copy (see this task's reply for the exact commands run;
+// never `git stash`), not just by asserting the current behavior.
+// ---------------------------------------------------------------------------
+
+describe("keryx learn: per-verb -h/--help prints usage and does nothing (R2-F2, R3-F4)", () => {
+  const CASES: ReadonlyArray<readonly [string[], string]> = [
+    [["observe", "-h"], "keryx learn observe"],
+    [["extract", "-h"], "keryx learn extract"],
+    [["list", "-h"], "keryx learn list"],
+    [["review", "-h"], "keryx learn review"],
+    [["accept", "-h"], "keryx learn accept"],
+    [["reject", "-h"], "keryx learn reject"],
+    [["apply", "-h"], "keryx learn apply"],
+    [["promote", "-h"], "keryx learn promote"],
+    [["graduate", "-h"], "keryx learn graduate"],
+    [["graduate", "apply", "-h"], "keryx learn graduate apply"],
+    [["prune", "-h"], "keryx learn prune"],
+  ];
+
+  for (const [args, usageSubstring] of CASES) {
+    test(`\`${args.join(" ")}\` prints just that verb's usage, exit 0, no side effects`, async () => {
+      await withTempHome(async (root, env) => {
+        const deps: LearnCommandDeps = { cwd: root, env, isTerminal: false };
+        const run = await capture(() => learnCommand(args, deps));
+        expect(run.exitCode).toBe(0);
+        expect(run.stdout).toContain("Usage:");
+        expect(run.stdout).toContain(usageSubstring);
+        // Never reached the mutating/reading verb body: no observations dir,
+        // no candidates dir, nothing created under .metaproject/.
+        expect(() => readFileSync(path.join(root, ".metaproject"), "utf8")).toThrow();
+      });
+    });
+  }
+
+  test("--help (long spelling) works the same as -h", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["prune", "--help"], deps));
+      expect(run.exitCode).toBe(0);
+      expect(run.stdout).toContain("keryx learn prune");
+    });
+  });
+
+  test("-h wins even alongside other args (never reaches arity/flag validation)", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["accept", "-h", "--bogus-flag"], deps));
+      expect(run.exitCode).toBe(0);
+      expect(run.stdout).toContain("keryx learn accept");
+      expect(run.stderr).toBe("");
+    });
+  });
+});
+
+describe("keryx learn: positional arity is enforced per verb (R2-F2, R3-F4)", () => {
+  test("accept with no id refuses with a usage message, never calls acceptPattern", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env, isTerminal: true };
+      const run = await capture(() => learnCommand(["accept"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("usage: keryx learn accept");
+    });
+  });
+
+  test("accept with two positionals refuses with the extra argument named", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env, isTerminal: true };
+      const run = await capture(() => learnCommand(["accept", "id-one", "id-two"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("unexpected argument(s): id-two");
+    });
+  });
+
+  test("reject with no id refuses with a usage message", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["reject"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("usage: keryx learn reject");
+    });
+  });
+
+  test("promote with no id refuses with a usage message", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env, isTerminal: true };
+      const run = await capture(() => learnCommand(["promote"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("usage: keryx learn promote");
+    });
+  });
+
+  test("graduate apply with no proposal id refuses with a usage message", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env, isTerminal: true };
+      const run = await capture(() => learnCommand(["graduate", "apply"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("usage: keryx learn graduate apply");
+    });
+  });
+
+  test("review takes at most one positional; a second is reported as unexpected", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["review", "id-a", "id-b"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("unexpected argument(s): id-b");
+    });
+  });
+
+  test("observe takes no positionals; one is reported as unexpected", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["observe", "bogus"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("unexpected argument(s): bogus");
+    });
+  });
+
+  test("prune takes no positionals; one is reported as unexpected, nothing pruned", async () => {
+    await withTempHome(async (root, env) => {
+      const observationsDir = path.join(root, ".metaproject", "data", "learning", "observations");
+      mkdirSync(observationsDir, { recursive: true });
+      const staleFile = path.join(observationsDir, "2020-01-01.jsonl");
+      writeFileSync(staleFile, `${JSON.stringify({ line: 1 })}\n`);
+
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["prune", "bogus"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("unexpected argument(s): bogus");
+      expect(readFileSync(staleFile, "utf8")).toContain('"line":1');
+    });
+  });
+});
+
+describe("keryx learn: a single-dash flag (other than the lone '-') is refused, not silently accepted as a positional (R2-F2, R3-F4)", () => {
+  test("prune -n is refused as an unknown flag, and nothing is pruned", async () => {
+    await withTempHome(async (root, env) => {
+      const observationsDir = path.join(root, ".metaproject", "data", "learning", "observations");
+      mkdirSync(observationsDir, { recursive: true });
+      const staleFile = path.join(observationsDir, "2020-01-01.jsonl");
+      writeFileSync(staleFile, `${JSON.stringify({ line: 1 })}\n`);
+
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["prune", "-n"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("unknown flag");
+      expect(run.stderr).toContain("-n");
+      expect(readFileSync(staleFile, "utf8")).toContain('"line":1');
+    });
+  });
+
+  test("extract -x is refused as an unknown flag", async () => {
+    await withTempHome(async (root, env) => {
+      const deps: LearnCommandDeps = { cwd: root, env };
+      const run = await capture(() => learnCommand(["extract", "-x"], deps));
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("unknown flag");
+      expect(run.stderr).toContain("-x");
     });
   });
 });

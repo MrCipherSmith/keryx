@@ -972,3 +972,27 @@ test("`review learn --reviewer <id> --dry-run=1` is refused, not silently treate
   // created either, since the write path is never entered).
   await expect(readFile(path.join(ROOT, ".metaproject", "rules", "reviewers", "rv-0123456789abcdef.mdc"), "utf8")).rejects.toBeTruthy();
 });
+
+// R3-F4 (review round 3, PR #691, minor): the finding lists these among the
+// missing regression tests — `keryx review learn`'s OWN `--pr` path parsing
+// (not just `--reviewer`'s) had no test for `--dry-run=1`, and neither
+// `--reviewer` mode had a test for a repeated or empty `--reviewer`.
+test("`review learn --pr <n> --dry-run=1` is refused on the --pr path too, not just --reviewer", async () => {
+  await reviewCommand(["learn", "--pr", "3", "--dry-run=1"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--dry-run=1");
+});
+
+test("`review learn --reviewer` given twice is refused, never applying either value", async () => {
+  await reviewCommand(["learn", "--reviewer", "rv-aaaaaaaaaaaaaaaa", "--reviewer", "rv-bbbbbbbbbbbbbbbb", "--dry-run"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("more than once");
+  await expect(readFile(path.join(ROOT, ".metaproject", "rules", "reviewers", "rv-aaaaaaaaaaaaaaaa.mdc"), "utf8")).rejects.toBeTruthy();
+  await expect(readFile(path.join(ROOT, ".metaproject", "rules", "reviewers", "rv-bbbbbbbbbbbbbbbb.mdc"), "utf8")).rejects.toBeTruthy();
+});
+
+test("`review learn --reviewer=` (empty value) is refused, not silently falling through to the --pr path", async () => {
+  await reviewCommand(["learn", "--reviewer=", "--dry-run"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("needs a value");
+});

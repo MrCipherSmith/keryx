@@ -252,6 +252,56 @@ describe("applyLearnedPattern", () => {
       ).rejects.toThrow();
     });
   });
+
+  // R3-F4 (review round 3, PR #691, minor): the login gate itself (R2-F6
+  // defense-in-depth, independent of `domain: "review-conventions"`'s own
+  // refusal above) had no test exercising a REAL configured login present
+  // in a non-review-conventions record's trigger/action text.
+  test("refuses learning-text-refused when the record's trigger/action names a configured reviewer login", async () => {
+    await withProject(async (root) => {
+      await seedRegistry(root, [{ module: "alpha", name: "module" }]);
+      await seedSkill(root, "alpha", "module");
+      const record = makeAccepted({ action: "octocat said to check the first edit's assumptions before writing a second one" });
+      await writePattern(root, record, { capability: createAcceptCapability() });
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      await writeFile(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["octocat"] }),
+        "utf8",
+      );
+
+      await expect(applyLearnedPattern(root, record.id, { skill: "alpha/module" })).rejects.toMatchObject({
+        reason: "learning-text-refused",
+      });
+    });
+  });
+
+  // R3-F3 (review round 3, PR #691, minor): a malformed
+  // `.metaproject/review-learning.config.json` used to make the login gate
+  // throw an un-reasoned error straight out of `loadReviewLearningConfig`.
+  // `applyLearnedPattern` now goes through the guarded loader and refuses
+  // with the named reason `review-learning-config-invalid` — simplest
+  // consistent rule: apply needs the login gate to be trustworthy before it
+  // can write anything, so an unreadable config is a refusal, not a
+  // silent "no configured logins".
+  test("refuses with review-learning-config-invalid when the review-learning config is malformed", async () => {
+    await withProject(async (root) => {
+      await seedRegistry(root, [{ module: "alpha", name: "module" }]);
+      await seedSkill(root, "alpha", "module");
+      const record = makeAccepted();
+      await writePattern(root, record, { capability: createAcceptCapability() });
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      // schemaVersion 99 fails loadReviewLearningConfig's own validation (must be 1).
+      await writeFile(path.join(root, ".metaproject", "review-learning.config.json"), JSON.stringify({ schemaVersion: 99 }), "utf8");
+
+      await expect(applyLearnedPattern(root, record.id, { skill: "alpha/module" })).rejects.toMatchObject({
+        reason: "review-learning-config-invalid",
+      });
+      // Refused before ever writing a proposal.
+      const proposalsDir = path.join(root, ".metaproject", "data", "gdskills", "proposals");
+      await expect(readdir(proposalsDir)).rejects.toThrow();
+    });
+  });
 });
 
 // Re-exported so a caller catching a store failure alongside an apply

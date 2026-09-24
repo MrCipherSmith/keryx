@@ -190,6 +190,43 @@ describe("writePattern refusals", () => {
       await expect(writePattern(root, record)).rejects.toBeInstanceOf(LearningPathError);
     });
   });
+
+  // R3-F4 (review round 3, PR #691, minor): `writeRecordUnlocked`'s own
+  // accepted-text-immutable check (R2-F4) — the low-level guard every
+  // writer funnels through, including `writePattern` called directly — had
+  // no test of its own. `updatePattern`'s equivalent check (exercised
+  // elsewhere in this suite) is a SEPARATE comparison one layer up; this
+  // proves the guard survives even when `updatePattern` is bypassed
+  // entirely and `writePattern` is called with a whole replacement record.
+  test("refuses learning-accepted-text-immutable when trigger/action differs from the already-accepted stored copy", async () => {
+    await withProjectRoot(async (root) => {
+      const accepted = makeRecord({ id: "testing.immutable-text-44444444", status: "accepted", confidence: 0.61, confidenceLevel: "medium" });
+      delete (accepted as { ttl?: unknown }).ttl;
+      await writePattern(root, accepted, { capability: createAcceptCapability() });
+
+      const rewritten = { ...accepted, action: "a completely different action than what was accepted" };
+      await expect(writePattern(root, rewritten)).rejects.toMatchObject({
+        reason: "learning-accepted-text-immutable",
+      });
+
+      // Nothing was overwritten — the stored copy still has the original text.
+      const stillStored = await readPattern(root, accepted.id, "project");
+      expect(stillStored?.action).toBe(accepted.action);
+    });
+  });
+
+  test("a write that does not change trigger/action of an already-accepted record still succeeds without the capability (non-transition, e.g. reinforcement)", async () => {
+    await withProjectRoot(async (root) => {
+      const accepted = makeRecord({ id: "testing.immutable-text-55555555", status: "accepted", confidence: 0.61, confidenceLevel: "medium" });
+      delete (accepted as { ttl?: unknown }).ttl;
+      await writePattern(root, accepted, { capability: createAcceptCapability() });
+
+      const sameText = { ...accepted, confidence: 0.7 };
+      await writePattern(root, sameText);
+      const stored = await readPattern(root, accepted.id, "project");
+      expect(stored?.confidence).toBe(0.7);
+    });
+  });
 });
 
 describe("listPatterns", () => {

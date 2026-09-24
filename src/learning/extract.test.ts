@@ -196,6 +196,43 @@ describe("runExtract — AC12 refusal", () => {
   });
 });
 
+// R3-F4 (review round 3, PR #691, minor): the finding lists this among the
+// missing regression tests — `upsertDraft`'s own configured-login refusal
+// (R2-F6's defense-in-depth check, independent of the reviewer-comment
+// signal's own stripping) had no test exercising it through a NON-
+// review-conventions signal, whose trigger/action text can carry a
+// configured login by coincidence (e.g. a test file whose name happens to
+// match a configured reviewer's login).
+describe("runExtract — a draft whose trigger/action names a configured login is refused (R3-F4, R2-F6)", () => {
+  test("a failing-to-passing-test draft naming a configured login in its test-file trigger is refused with category attribution, and stores nothing", async () => {
+    await withProjectRoot(async (root) => {
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["octocat"] }),
+      );
+      appendObservation(root, "2026-09-24", {
+        event: "tool-failed",
+        inputPreview: "bun test src/octocat.test.ts",
+        outputPreview: "1 fail",
+        toolUseId: "tu-1",
+      });
+      appendObservation(root, "2026-09-24", {
+        event: "tool-complete",
+        inputPreview: "bun test src/octocat.test.ts",
+        outputPreview: "0 fail 3 pass",
+        toolUseId: "tu-2",
+        observedAt: "2026-09-24T00:05:00.000Z",
+      });
+
+      const report = await runExtract(root, { now: NOW, domain: "testing" });
+      expect(report.created.length).toBe(0);
+      expect(report.refused.some((entry) => entry.categories.includes("attribution"))).toBe(true);
+      expect(await listPatterns(root, { domain: "testing" })).toEqual([]);
+    });
+  });
+});
+
 describe("runExtract — model extractor capability gate", () => {
   const fakeExtractor: ModelExtractor = {
     id: "fake",
@@ -373,5 +410,113 @@ describe("runExtract — decay is idempotent under cadence (R1-F8)", () => {
       rmSync(rootA, { recursive: true, force: true });
       rmSync(rootB, { recursive: true, force: true });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R3-F3 (review round 3, PR #691, minor): a malformed
+// `.metaproject/review-learning.config.json` used to be read lazily —
+// AFTER `decayExistingRecords` had already run and written its decay — so a
+// bad config threw straight out of `runExtract` with decay's write already
+// on disk (a half-done run). `runExtract` now loads (and validates) the
+// config BEFORE any write, decay included, so a malformed config either
+// degrades or refuses cleanly, but never leaves a partial run. Proven
+// against the pre-fix code (git HEAD, before this task's edit) in
+// `w3-f3-check.ts`: with a stale candidate record on disk and a malformed
+// config, pre-fix throws with the record's confidence ALREADY decayed;
+// post-fix does not throw, and the record still decays exactly once.
+// ---------------------------------------------------------------------------
+
+describe("runExtract — a malformed review-learning config never leaves a half-done run (R3-F3)", () => {
+  function staleFixture(overrides: Partial<LearnedPattern> = {}): LearnedPattern {
+    return {
+      schemaVersion: 1,
+      id: "testing.stale-config-fixture-00000000",
+      trigger: "the same file region is edited twice in one turn window",
+      action: "check the first edit's assumptions before writing a second one",
+      domain: "testing",
+      scope: "project",
+      project: PROJECT,
+      confidence: 0.4,
+      confidenceLevel: "low",
+      status: "candidate",
+      supersededBy: null,
+      evidence: [
+        {
+          kind: "reinforcement",
+          sourceType: "observation",
+          sourceRef: ".metaproject/data/learning/observations/2026-09-01.jsonl",
+          observedAt: "2026-09-01T00:00:00.000Z",
+          weight: 1,
+        },
+      ],
+      reviewerProfile: null,
+      redaction: { scanned: true, findings: [] },
+      graduation: null,
+      provenance: { extractor: "repeated-correction", extractorKind: "deterministic" },
+      ttl: { expiresAt: "2026-10-20T00:00:00.000Z" },
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  function writeMalformedConfig(root: string): void {
+    mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+    // schemaVersion 99 fails `loadReviewLearningConfig`'s own validation
+    // (must be 1) — the same shape the round-3 probe (e1.ts) used.
+    writeFileSync(path.join(root, ".metaproject", "review-learning.config.json"), JSON.stringify({ schemaVersion: 99 }));
+  }
+
+  test("does not throw, and decay still runs exactly once", async () => {
+    await withProjectRoot(async (root) => {
+      writeMalformedConfig(root);
+      await writePattern(root, staleFixture());
+
+      const now = new Date("2026-09-24T00:00:00.000Z");
+      let report: Awaited<ReturnType<typeof runExtract>> | undefined;
+      let threw: unknown;
+      try {
+        report = await runExtract(root, { domain: "testing", now });
+      } catch (error) {
+        threw = error;
+      }
+      expect(threw).toBeUndefined();
+      expect(report).toBeDefined();
+
+      const after = await readPattern(root, "testing.stale-config-fixture-00000000", "project");
+      expect(after?.confidence).toBeLessThan(0.4); // decay still applied
+      expect(after?.confidence).toBeGreaterThan(0); // and applied only once (not corrupted/re-applied)
+    });
+  });
+
+  test("reports the config error (under the reviewer-comment signal) rather than swallowing it", async () => {
+    await withProjectRoot(async (root) => {
+      writeMalformedConfig(root);
+      const report = await runExtract(root, { domain: "testing", now: NOW });
+      expect(report.refused.some((entry) => entry.categories.includes("review-learning-config-invalid"))).toBe(true);
+    });
+  });
+
+  test("a non-review domain (testing) still extracts normally despite the malformed config", async () => {
+    await withProjectRoot(async (root) => {
+      writeMalformedConfig(root);
+      appendObservation(root, "2026-09-24", {
+        event: "tool-failed",
+        inputPreview: "bun test src/foo.test.ts",
+        outputPreview: "1 fail",
+        toolUseId: "tu-1",
+      });
+      appendObservation(root, "2026-09-24", {
+        event: "tool-complete",
+        inputPreview: "bun test src/foo.test.ts",
+        outputPreview: "0 fail 3 pass",
+        toolUseId: "tu-2",
+        observedAt: "2026-09-24T00:05:00.000Z",
+      });
+
+      const report = await runExtract(root, { now: NOW });
+      expect(report.created.length).toBe(1);
+    });
   });
 });

@@ -129,4 +129,42 @@ describe("containsConfiguredLogin", () => {
   test("empty/whitespace-only logins are ignored, not treated as always-matching", () => {
     expect(containsConfiguredLogin("anything at all", ["", "   "])).toBe(false);
   });
+
+  // R3-F2 (review round 3, PR #691, minor): this used to be a plain
+  // case-insensitive substring test, so a short configured login matched
+  // inside ordinary English words and hard-refused lessons/apply/graduate
+  // apply that never actually named the login. Proven against the pre-fix
+  // code (git HEAD, before this task's edit) in `w3-f2-check.ts`:
+  // `containsConfiguredLogin("Prefer named exports over default exports in
+  // shared modules", ["ed"])` pre-fix -> `true` (matches inside "named");
+  // post-fix -> `false`.
+  test("a short login does not match inside an ordinary word (named/already/problem/max-width/developer)", () => {
+    expect(containsConfiguredLogin("Prefer named exports over default exports in shared modules", ["ed"])).toBe(false);
+    expect(containsConfiguredLogin("Keep functions small and focused on a single responsibility", ["al"])).toBe(false);
+    expect(containsConfiguredLogin("Avoid nested ternaries because they make problems harder to debug", ["rob"])).toBe(false);
+    expect(containsConfiguredLogin("Use max-width tokens rather than raw pixel values", ["max"])).toBe(false);
+    expect(containsConfiguredLogin("Keep devDependencies pinned to exact versions", ["dev"])).toBe(false);
+  });
+
+  // R3-F2: the specific regression named in the finding — `graduate.ts`'s
+  // own fixed agent-candidate role template contains "graduated" and
+  // "learned", both of which contain "ed" as a substring but never at an
+  // identifier boundary — must not trip the login gate for a project that
+  // configured a short login like "ed".
+  test("the graduate role template's fixed text does not trip a short configured login", () => {
+    const roleTemplate =
+      'Applies guidance graduated from 3 learned pattern(s) in the "testing" domain. ' +
+      "Read-only: report findings and suggested guidance rather than making changes yourself.";
+    expect(containsConfiguredLogin(roleTemplate, ["ed"])).toBe(false);
+  });
+
+  // A real occurrence must still be refused: `_` counts as a boundary
+  // (R2-F6), and the character right after a bare login mention is
+  // essentially never itself `[A-Za-z0-9-]`.
+  test("a real occurrence (@mention, bracketed bot suffix, possessive) is still refused", () => {
+    expect(containsConfiguredLogin("as @ed pointed out, this needs a null check", ["ed"])).toBe(true);
+    expect(containsConfiguredLogin("ed[bot] flagged this in review", ["ed"])).toBe(true);
+    expect(containsConfiguredLogin("Per ed's review, keep it small", ["ed"])).toBe(true);
+    expect(containsConfiguredLogin("ed_reviewer left a comment", ["ed"])).toBe(true);
+  });
 });

@@ -232,3 +232,86 @@ describe("scrubPathsInText (R2-F1: embedded paths inside a token)", () => {
     });
   });
 });
+
+// R3-F1 (review round 3, PR #691, minor): a lone apostrophe between two word
+// characters (`it's`, `don't`, `bob's`) is prose, not an unclosed shell/JSON
+// quote — `findUnbalancedQuoteRun` used to treat ANY quote-shaped character
+// as an opening quote, so a path with an apostrophe in it (or a sentence
+// with a contraction anywhere before/after a path) fell into
+// `scrubUnclosedRun` and had everything from that apostrophe to the end of
+// the string folded into ONE basename — leaking the directory name it was
+// supposed to hide (`it's-secret`) in one case, and destroying unrelated
+// failure counts extraction reads (`2 fail`, `3 pass`) in another. Proven
+// against the pre-fix code (git HEAD, before this task's edit) in
+// `w3-f1-check.ts`: `"cp /Users/bob/it's-secret/y.txt /tmp/z"` pre-fix ->
+// `"cp it's-secret/y.txt z"` (the secret directory name leaks); post-fix ->
+// `"cp y.txt z"`.
+describe("scrubPathsInText (R3-F1: a prose apostrophe is not an unclosed quote)", () => {
+  test("an apostrophe inside a path segment (it's-secret) never opens a false unclosed-quote run and the directory name is scrubbed, not leaked", () => {
+    const out = scrubPathsInText("/Users/bob/proj", "cp /Users/bob/it's-secret/y.txt /tmp/z");
+    expect(out).not.toContain("it's-secret");
+    expect(out).not.toContain("secret");
+    expect(out).toContain("y.txt");
+  });
+
+  test("bob's (possessive apostrophe) never triggers unclosed-run collapse of the rest of the sentence", () => {
+    const out = scrubPathsInText("/Users/bob/proj", "see bob's notes at /Users/bob/secret/notes.md, 2 fail 1 pass");
+    expect(out).toContain("2 fail 1 pass");
+    expect(out).not.toContain("secret");
+    expect(out).toContain("notes.md");
+  });
+
+  test("a leading contraction (don't) never collapses trailing failure counts and a relative test path into one basename", () => {
+    const out = scrubPathsInText(
+      "/Users/bob/proj",
+      "don't: /tmp/a/b then 2 fail and 3 pass in src/x/y.test.ts",
+    );
+    expect(out).toContain("2 fail and 3 pass");
+    expect(out).toContain("src/x/y.test.ts");
+    expect(out).not.toContain("/tmp/a/b");
+  });
+
+  test(";, |, &&, and @-prefixed embedded paths are now scrubbed (previously untouched delimiters)", () => {
+    expect(scrubPathsInText("/Users/bob/proj", "x;/Users/bob/secret/y")).not.toContain("secret");
+    expect(scrubPathsInText("/Users/bob/proj", "x|/Users/bob/secret/y")).not.toContain("secret");
+    expect(scrubPathsInText("/Users/bob/proj", "make&&/Users/bob/secret/run.sh")).not.toContain("secret");
+    expect(scrubPathsInText("/Users/bob/proj", "x@/Users/bob/secret/y")).not.toContain("secret");
+  });
+
+  test("a genuinely unclosed quote still scrubs a space-containing directory name, but does not swallow unrelated trailing prose past the path's own extension", () => {
+    const out = scrubPathsInText(
+      "/Users/bob/proj",
+      'warning: unterminated "/Users/bob/secret dir/y.txt for details, 2 fail 1 pass',
+    );
+    expect(out).not.toContain("secret");
+    expect(out).toContain("y.txt");
+    expect(out).toContain("for details, 2 fail 1 pass");
+  });
+});
+
+// R3-F5 (review round 3, PR #691, info): the embedded `~` alternative used to
+// rewrite ANY `~`-prefixed run of version/word characters as `[home]` —
+// including a semver range (`~4.17.21`, indistinguishable by shape from
+// `~user`) and bash's `=~` regex-match operator (`[[ $x =~ pattern ]]`,
+// where the `~` is a bare operator character, not a home reference at all).
+// Proven against pre-fix code in `w3-f1-check.ts`:
+// `'{"lodash":"~4.17.21"}'` pre-fix -> `'{"lodash":"[home]"}'`; post-fix ->
+// unchanged. `"[[ $x =~ ^foo ]]"` pre-fix -> `"[[ $x =[home] ^foo ]]"`;
+// post-fix -> unchanged.
+describe("scrubPathsInText (R3-F5: '~' is a home reference only with a trailing '/' or at the end)", () => {
+  test("a semver range embedded in JSON is left untouched, not rewritten to [home]", () => {
+    const out = scrubPathsInText("/nonexistent-root", '{"lodash":"~4.17.21","react":"^18.2.0"}');
+    expect(out).toBe('{"lodash":"~4.17.21","react":"^18.2.0"}');
+  });
+
+  test("bash's =~ regex-match operator is left untouched, not rewritten to =[home]", () => {
+    const out = scrubPathsInText("/nonexistent-root", "[[ $x =~ ^foo ]] && echo ok");
+    expect(out).toBe("[[ $x =~ ^foo ]] && echo ok");
+  });
+
+  test("a real ~user/... path is still reduced to its basename (regression guard)", () => {
+    const out = scrubPathsInText("/nonexistent-root", "cat ~bob/secret.txt");
+    expect(out).not.toContain("bob");
+    expect(out).toContain("secret.txt");
+  });
+});

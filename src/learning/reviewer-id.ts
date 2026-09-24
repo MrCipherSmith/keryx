@@ -34,9 +34,9 @@ function escapeForRegExp(value: string): string {
 }
 
 /**
- * True when `text` contains any of `logins` as a case-insensitive substring
- * — the last-resort check `generalizeLesson` runs on its OWN output (R2-F6):
- * regardless of how the boundary regex below is tuned, a login that somehow
+ * True when `text` contains any of `logins` at an identifier boundary — the
+ * last-resort check `generalizeLesson` runs on its OWN output (R2-F6):
+ * regardless of how the strip pass above is tuned, a login that somehow
  * survives generalization (a shape neither this file's author anticipated,
  * or a login containing regex-special characters some future caller passes
  * unescaped) is caught here rather than shipped into a stored record, a
@@ -45,12 +45,40 @@ function escapeForRegExp(value: string): string {
  * later (extract's upsert, `graduate.ts`'s agent-candidate body,
  * `apply.ts`'s proposal rendering) re-runs this same check as a final gate
  * right before that text reaches disk.
+ *
+ * R3-F2: this used to be a plain case-insensitive substring test, so a short
+ * configured login (`ed`, `al`, `rob`, `max`, `dev`) matched inside ordinary
+ * English words (`named`, `already`, `problem`, `max-width`, `developer`)
+ * and hard-refused every lesson/apply/graduate-apply that happened to
+ * contain one — including `graduate.ts`'s own fixed agent-candidate
+ * template text ("...learned pattern(s)...", "graduated from...") for a
+ * project that configured a login like `ed`. It now uses the SAME
+ * identifier-boundary rule `generalizeLesson`'s strip pass uses (never
+ * preceded/followed by `[A-Za-z0-9-]`; `_` counts as a boundary, not a
+ * word character, per R2-F6) — a real occurrence (`@login`, `login[bot]`,
+ * `login-reviewer`, `Login's`) is still caught, since the character right
+ * after a bare login mention is essentially never itself `[A-Za-z0-9-]`.
+ *
+ * A short login (under 5 characters) is boundary-matched ONLY — a false
+ * positive there is common (see above) and the cost of a false negative is
+ * small (a 2-4 character login gluing onto surrounding text without ANY
+ * boundary character, e.g. `edmore`, is unlikely to occur by accident). A
+ * login of 5+ characters ALSO falls back to a plain substring match — the
+ * R2-F6 defense-in-depth case this file's own tests rely on
+ * (`alicedeveloper`/`alicedevxreview` still catching `alicedev` with no
+ * boundary character on either side) — because a false positive there is
+ * rare (a 5+ character login is unlikely to be a true substring of an
+ * unrelated English word) while a missed longer login is exactly the
+ * attribution leak this function exists to catch.
  */
 export function containsConfiguredLogin(text: string, logins: readonly string[]): boolean {
   const lower = text.toLowerCase();
   return logins.some((login) => {
-    const trimmed = login.trim().toLowerCase();
-    return trimmed.length > 0 && lower.includes(trimmed);
+    const trimmed = login.trim();
+    if (trimmed.length === 0) return false;
+    const escaped = escapeForRegExp(trimmed);
+    if (new RegExp(`(?<![A-Za-z0-9-])${escaped}(?![A-Za-z0-9-])`, "i").test(text)) return true;
+    return trimmed.length >= 5 && lower.includes(trimmed.toLowerCase());
   });
 }
 

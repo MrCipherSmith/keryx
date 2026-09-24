@@ -19,7 +19,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { validateAgentDefinition, type AgentDefinition } from "../agents";
 import { isPathInside, pathExists, withFileLock, writeFileAtomic } from "../lib/fs";
-import { loadReviewLearningConfig } from "../review/review-learning";
+import { loadReviewLearningConfigSafe, type ReviewLearningConfig } from "../review/review-learning";
 import { appendDecision } from "./decisions";
 import { assertInsideLearningRoot, graduationDir, learningDataDir, projectLockPath } from "./paths";
 import { containsConfiguredLogin } from "./reviewer-id";
@@ -27,9 +27,28 @@ import { scanLearnedText } from "./scan";
 import { listPatterns, readPattern, updatePattern, type StoreEnvOptions } from "./store";
 import type { GraduationTarget, LearnedPattern, LearningDomain, LearningScope } from "./types";
 
-/** `config.authors` + `config.reviewerProfiles`, deduped — or `[]` when the project has no review-learning config. Duplicated from `extract.ts` rather than shared: a two-line pure lookup, not worth a cross-file dependency between these two feature modules. */
+export class LearningGraduateConfigError extends Error {}
+
+/**
+ * `config.authors` + `config.reviewerProfiles`, deduped. Duplicated from
+ * `extract.ts` rather than shared: a two-line pure lookup, not worth a
+ * cross-file dependency between these two feature modules.
+ *
+ * R3-F3: goes through the guarded loader — a malformed
+ * `review-learning.config.json` throws `LearningGraduateConfigError` here
+ * (caught by `applyGraduation` and re-thrown as `LearningGraduateError`
+ * with the named reason `review-learning-config-invalid`) rather than
+ * letting `loadReviewLearningConfig`'s own un-reasoned error escape.
+ * Simplest consistent rule: graduate apply needs the login gate to be
+ * trustworthy before it can write an agent candidate, so a config it
+ * cannot read at all is refused, full stop.
+ */
 async function configuredReviewLogins(root: string): Promise<string[]> {
-  const config = await loadReviewLearningConfig(root);
+  const result = await loadReviewLearningConfigSafe(root);
+  if (!result.ok) {
+    throw new LearningGraduateConfigError(result.error);
+  }
+  const config: ReviewLearningConfig | null = result.config;
   if (config === null) return [];
   return [...new Set([...config.authors, ...(config.reviewerProfiles ?? [])])];
 }
@@ -546,7 +565,23 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
   // somehow survived into a stored record (or arrived via a differently
   // configured login list at graduation time) is still refused before it
   // reaches `.metaproject/agents/<name>.md`.
-  const configuredLogins = await configuredReviewLogins(root);
+  //
+  // R3-F3: a malformed config surfaces as `LearningGraduateConfigError` from
+  // `configuredReviewLogins` — converted here into the named
+  // `review-learning-config-invalid` reason rather than an un-reasoned
+  // throw escaping `applyGraduation`.
+  let configuredLogins: string[];
+  try {
+    configuredLogins = await configuredReviewLogins(root);
+  } catch (error) {
+    if (error instanceof LearningGraduateConfigError) {
+      throw new LearningGraduateError(
+        "review-learning-config-invalid",
+        `proposal "${proposalId}" cannot be applied: .metaproject/review-learning.config.json is invalid: ${error.message}`,
+      );
+    }
+    throw error;
+  }
   if (
     configuredLogins.length > 0 &&
     [candidate.description, candidate.role, candidate.body].some((text) => containsConfiguredLogin(text, configuredLogins))

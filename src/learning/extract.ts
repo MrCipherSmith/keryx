@@ -24,7 +24,7 @@ import { REVIEWER_COMMENT_SIGNAL } from "./signals/reviewer-comment";
 import type { ObservationLine, SignalDraft, SignalRunner } from "./signals/types";
 import { createPattern, listPatterns, readPattern, updatePattern, type StoreEnvOptions } from "./store";
 import type { EvidenceItem, LearnedPattern, LearningDomain, ObservationEvent } from "./types";
-import { loadReviewLearningConfig } from "../review/review-learning";
+import { loadReviewLearningConfigSafe } from "../review/review-learning";
 
 export class LearningExtractError extends Error {
   constructor(
@@ -215,9 +215,13 @@ async function decayExistingRecords(
   }
 }
 
-/** `config.authors` + `config.reviewerProfiles`, deduped — or `[]` when the project has no review-learning config. */
-async function configuredReviewLogins(root: string): Promise<string[]> {
-  const config = await loadReviewLearningConfig(root);
+/**
+ * `config.authors` + `config.reviewerProfiles`, deduped — `[]` when the
+ * project has no review-learning config OR when it is malformed (R3-F3: the
+ * caller decides how to report the malformed case; this helper never
+ * throws).
+ */
+function configuredReviewLoginsFrom(config: { authors: readonly string[]; reviewerProfiles?: readonly string[] } | null): string[] {
   if (config === null) return [];
   return [...new Set([...config.authors, ...(config.reviewerProfiles ?? [])])];
 }
@@ -378,12 +382,32 @@ export async function runExtract(root: string, opts: RunExtractOptions = {}): Pr
     signals: {},
   };
 
+  // R3-F3: load (and validate) the review-learning config BEFORE any write —
+  // decay included — so one run is all-or-nothing. This used to be read
+  // lazily, well after decay had already run, so a malformed config threw
+  // straight out of this function with decay's writes already on disk (a
+  // half-done run). A malformed config no longer throws: it degrades every
+  // OTHER domain's login gate to "no configured logins" (harmless — those
+  // signals never draft attribution text in the first place) and skips ONLY
+  // the `reviewer-comment` signal (the one signal that actually reads this
+  // config), reporting the error under that signal's name rather than
+  // aborting the whole pass.
+  const configResult = await loadReviewLearningConfigSafe(root);
+  const configuredLogins = configResult.ok ? configuredReviewLoginsFrom(configResult.config) : [];
+  if (!configResult.ok) {
+    report.refused.push({ signal: "reviewer-comment", categories: ["review-learning-config-invalid"] });
+  }
+
   await decayExistingRecords(root, now, storeOptions, report);
 
   const since = opts.since ?? defaultSince(now);
   const window = await loadObservationWindow(root, since);
 
-  const signalsToRun = DETERMINISTIC_SIGNALS.filter((signal) => opts.domain === undefined || signal.domain === opts.domain);
+  const signalsToRun = DETERMINISTIC_SIGNALS.filter(
+    (signal) =>
+      (opts.domain === undefined || signal.domain === opts.domain) &&
+      (configResult.ok || signal !== REVIEWER_COMMENT_SIGNAL),
+  );
   const drafts: SignalDraft[] = [];
   let anyDeterministicFired = false;
   for (const signal of signalsToRun) {
@@ -415,7 +439,6 @@ export async function runExtract(root: string, opts: RunExtractOptions = {}): Pr
   }
 
   const projectIdentity = resolveProjectIdentity(root);
-  const configuredLogins = await configuredReviewLogins(root);
   for (const draft of drafts) {
     await upsertDraft(root, draft, projectIdentity, now, storeOptions, report, configuredLogins);
   }

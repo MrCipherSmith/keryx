@@ -271,6 +271,68 @@ describe("applyGraduation: agent target", () => {
   });
 });
 
+// R3-F3 (review round 3, PR #691, minor): `applyGraduation`'s login gate
+// used to call `loadReviewLearningConfig` directly, so a malformed
+// `.metaproject/review-learning.config.json` threw an un-reasoned error
+// straight out of `applyGraduation`. It now goes through the guarded
+// loader (`configuredReviewLogins`) and refuses with the named reason
+// `review-learning-config-invalid` — simplest consistent rule: graduate
+// apply needs the login gate to be trustworthy before it can write an
+// agent candidate, so an unreadable config is a refusal, not a silent "no
+// configured logins".
+describe("applyGraduation: malformed review-learning config (R3-F3)", () => {
+  test("refuses with review-learning-config-invalid, writing no agent candidate", async () => {
+    await withProjectRoot(async (root, env) => {
+      await seedClusters(root, env);
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
+      // schemaVersion 99 fails loadReviewLearningConfig's own validation (must be 1).
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(path.join(root, ".metaproject", "review-learning.config.json"), JSON.stringify({ schemaVersion: 99 }));
+
+      await expect(
+        applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW }),
+      ).rejects.toMatchObject({ reason: "review-learning-config-invalid" });
+
+      expect(existsSync(path.join(root, ".metaproject", "agents", `${agentProposal!.suggestedName}.md`))).toBe(false);
+    });
+  });
+
+  // R3-F4 (review round 3, PR #691, minor): the login gate itself (R2-F6
+  // defense-in-depth) had no test exercising a REAL configured login
+  // present in a member record's trigger/action text, which the built
+  // agent candidate body concatenates verbatim.
+  test("refuses learning-text-refused when a member record's trigger names a configured reviewer login, writing no agent candidate", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      for (const [id, trigger, action] of AGENT_CLUSTER) {
+        const withLogin =
+          id === AGENT_CLUSTER[0]?.[0] ? `octocat says: ${trigger}` : trigger;
+        await writePattern(root, makeAccepted(id, withLogin, action, "code-style", 0.8), { env, capability });
+      }
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["octocat"] }),
+      );
+
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+
+      await expect(
+        applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW }),
+      ).rejects.toMatchObject({ reason: "learning-text-refused" });
+
+      expect(existsSync(path.join(root, ".metaproject", "agents", `${agentProposal!.suggestedName}.md`))).toBe(false);
+    });
+  });
+});
+
 describe("applyGraduation: skill/rule targets refuse", () => {
   test("skill target refuses graduate-apply-agent-only with the proposal's own next step", async () => {
     await withProjectRoot(async (root, env) => {

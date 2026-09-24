@@ -13,7 +13,7 @@ import { isPathInside, withFileLock, writeFileAtomic } from "../lib/fs";
 import { renderProposalMarkdown, resolveRegisteredSkillTarget, suggestedSectionsFor } from "../gdskills/learn";
 import type { ApplyLearningProposalResult, LearningProposal, LearningSourceType } from "../gdskills/learn";
 import { applyLearningProposal } from "../gdskills/learn";
-import { loadReviewLearningConfig } from "../review/review-learning";
+import { loadReviewLearningConfigSafe } from "../review/review-learning";
 import { containsConfiguredLogin } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { readPattern, type StoreEnvOptions } from "./store";
@@ -187,10 +187,23 @@ export async function applyLearnedPattern(
   // login is most likely) are already refused above, but a login named in
   // free text on another domain's `trigger`/`action` (e.g. someone quoted in
   // a `code-style` lesson) must not reach the rendered skill proposal either.
-  const configuredLogins = await (async (): Promise<string[]> => {
-    const config = await loadReviewLearningConfig(root);
-    return config === null ? [] : [...new Set([...config.authors, ...(config.reviewerProfiles ?? [])])];
-  })();
+  //
+  // R3-F3: the config is loaded through the guarded loader — a malformed
+  // `review-learning.config.json` refuses THIS gate with a named reason
+  // (`review-learning-config-invalid`) instead of throwing an un-reasoned
+  // error straight out of `loadReviewLearningConfig`. Simplest consistent
+  // rule: apply needs the login gate to be trustworthy before it can apply
+  // anything, so a config it cannot read at all is refused, full stop —
+  // never silently treated as "no configured logins".
+  const configResult = await loadReviewLearningConfigSafe(root);
+  if (!configResult.ok) {
+    throw new LearningApplyError(
+      "review-learning-config-invalid",
+      `record "${id}" cannot be applied: .metaproject/review-learning.config.json is invalid: ${configResult.error}`,
+    );
+  }
+  const configuredLogins =
+    configResult.config === null ? [] : [...new Set([...configResult.config.authors, ...(configResult.config.reviewerProfiles ?? [])])];
   if (configuredLogins.length > 0 && (containsConfiguredLogin(record.trigger, configuredLogins) || containsConfiguredLogin(record.action, configuredLogins))) {
     throw new LearningApplyError("learning-text-refused", `record "${id}" refused: contains a configured reviewer login`);
   }
