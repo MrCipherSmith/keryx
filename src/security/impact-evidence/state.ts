@@ -11,9 +11,14 @@ import type { ImpactEvidenceLogEvent, ImpactEvidenceLogRecord } from "./types";
 export interface ImpactEvidenceSessionState {
   touched: string[];
   denials: Record<string, number>;
+  // N8 (review round 2): files a strict-mode `ask` already showed evidence
+  // for and is still waiting on a non-empty acknowledgement for. Optional so
+  // a state file written before this field existed still loads (see
+  // `loadSessionState` below, which defaults it to `[]`).
+  pendingAck?: string[];
 }
 
-const EMPTY_STATE: ImpactEvidenceSessionState = { touched: [], denials: {} };
+const EMPTY_STATE: ImpactEvidenceSessionState = { touched: [], denials: {}, pendingAck: [] };
 
 /** `.metaproject/data/security/impact-evidence` under `root`. */
 export function impactEvidenceDataRoot(root: string): string {
@@ -50,11 +55,11 @@ function sessionStatePath(root: string, sessionId: string): string {
 export async function loadSessionState(root: string, sessionId: string): Promise<ImpactEvidenceSessionState> {
   const file = sessionStatePath(root, sessionId);
   if (!(await pathExists(file))) {
-    return { touched: [], denials: {} };
+    return { touched: [], denials: {}, pendingAck: [] };
   }
   const read = await readJsonObjectFile(file);
   if (read.state !== "object") {
-    return { touched: [], denials: {} };
+    return { touched: [], denials: {}, pendingAck: [] };
   }
   const value = read.value as Partial<ImpactEvidenceSessionState>;
   const touched = Array.isArray(value.touched) ? value.touched.filter((v): v is string => typeof v === "string") : [];
@@ -66,7 +71,10 @@ export async function loadSessionState(root: string, sessionId: string): Promise
           ),
         )
       : {};
-  return { touched, denials };
+  const pendingAck = Array.isArray(value.pendingAck)
+    ? value.pendingAck.filter((v): v is string => typeof v === "string")
+    : [];
+  return { touched, denials, pendingAck };
 }
 
 export async function saveSessionState(
@@ -129,7 +137,7 @@ export function isEventKnown(event: string): event is ImpactEvidenceLogEvent {
     "rollback-required",
     "rollback-accepted",
     "service-failed",
-    "config-tampered",
+    "config-untrusted",
     "path-rejected",
   ].includes(event);
 }

@@ -298,40 +298,67 @@ export function resolveImpactEvidenceConfig(config: SecurityConfig): ImpactEvide
 }
 
 /**
- * F11 (review round 1, blocker-adjacent): `resolveImpactEvidenceConfig` above
- * takes `config.impactEvidence` on trust — including its `enabled: false`
- * kill switch — even when `configChecksum` does not verify (or the file
- * could not be read at all, `config.configUnreadable`). A tampered
- * `security.config.json` could flip `impactEvidence.enabled` to `false`
- * without resealing the checksum and the gate would honor it, which defeats
- * the entire point of checksumming the block in the first place (§14).
+ * F11 (review round 1, blocker-adjacent; round 2 fix was incomplete — see the
+ * "trusted" definition below): `resolveImpactEvidenceConfig` above takes
+ * `config.impactEvidence` on trust — including its `enabled: false` kill
+ * switch — regardless of whether a `configChecksum` was ever recorded. A
+ * hand-written `security.config.json` with `{"impactEvidence":{"enabled":
+ * false}}` and NO `configChecksum` at all defeats the gate just as surely as
+ * a tampered checksum does, and the round-1 fix missed it because
+ * `verifyConfigChecksum` (below) treats an ABSENT checksum as a match —
+ * correct for its other callers (`policy validate`, `status`: "nothing to
+ * tamper with yet" on a fresh/default config), wrong here, where the block's
+ * presence is itself the thing that must be provably the operator's own
+ * doing.
  *
- * When the checksum verifies, this is exactly `resolveImpactEvidenceConfig`.
- * When it does NOT — or the config could not be established at all — the
- * whole block is untrusted, not just `enabled`: `exemptGlobs` and
- * `dampenAfter` could just as easily be tuned to defeat the gate quietly
- * (exempt everything; dampen after 1). The fallback is the shipped defaults
- * (`enabled: true`, no exemptions, `dampenAfter: 3`), with one exception: a
- * tampered `strict: true` is honored, because a FALSE claim of strict mode is
- * strictly more protective, never a bypass, so there is no reason to distrust
- * it even from data we otherwise cannot trust.
+ * The rule this function enforces: the `impactEvidence` block is trusted for
+ * LOOSENING fields (`enabled: false`, `strict: false` when the default would
+ * be tighter — the default is already `false` so only `enabled`,
+ * `exemptGlobs` non-empty, or `dampenAfter` above the default loosen
+ * anything) ONLY when `configChecksum` is PRESENT and it matches. Absent or
+ * mismatched, every loosening field is ignored (defaults are used in their
+ * place) — but a TIGHTENING field, `strict: true`, may still apply, because a
+ * false claim of strict mode is strictly more protective, never a bypass, so
+ * there is no reason to distrust it even from data we otherwise cannot
+ * trust. `configUnreadable` (the file did not parse at all) is untrusted the
+ * same way.
+ *
+ * This is a STRICTER rule than `verifyConfigChecksum` implements generally,
+ * so it is implemented here rather than by changing that function's
+ * behavior — `verifyConfigChecksum` is depended on by other callers
+ * (`security.test.ts` among them) whose "absent checksum = nothing to tamper
+ * with" reading must stay exactly as it is.
  */
 export function resolveImpactEvidenceConfigTrusted(config: SecurityConfig): {
   config: ImpactEvidenceConfig;
   tampered: boolean;
+  /** Present only when `tampered`: which of the two untrusted cases this is. */
+  detail?: "absent" | "mismatch";
 } {
   const resolved = resolveImpactEvidenceConfig(config);
   const checksum = verifyConfigChecksum(config);
-  const tampered = !checksum.match || config.configUnreadable === true;
-  if (!tampered) {
+  const checksumPresent = config.configChecksum !== undefined && config.configChecksum !== null;
+  const unreadable = config.configUnreadable === true;
+  const blockDeclared = config.impactEvidence !== undefined;
+  // When the config never declares an `impactEvidence` block at all, there
+  // is no operator-written loosening to distrust — `resolved` is already
+  // exactly the shipped defaults (`resolveImpactEvidenceConfig` above), and
+  // the ordinary `verifyConfigChecksum` reading applies (an absent checksum
+  // is "nothing to tamper with yet"). The stricter "a checksum must be
+  // PRESENT and match" rule applies only once the block itself exists —
+  // that presence is the thing that must be provably the operator's own.
+  const trusted = blockDeclared ? checksumPresent && checksum.match && !unreadable : checksum.match && !unreadable;
+  if (trusted) {
     return { config: resolved, tampered: false };
   }
+  const detail: "absent" | "mismatch" = checksumPresent ? "mismatch" : "absent";
   return {
     config: {
       ...DEFAULT_IMPACT_EVIDENCE_CONFIG,
       strict: resolved.strict === true ? true : DEFAULT_IMPACT_EVIDENCE_CONFIG.strict,
     },
     tampered: true,
+    detail,
   };
 }
 

@@ -151,7 +151,7 @@ describe("keryx security impact-evidence", () => {
     expect(loggedErr.some((line) => line.includes("not valid JSON") || line.includes("was not valid JSON"))).toBe(true);
   });
 
-  test("F13: malformed stdin JSON under unattended-untrusted fails CLOSED (deny, hook-failed)", async () => {
+  test("F13: malformed stdin JSON under unattended-untrusted fails CLOSED (deny, hook-crashed)", async () => {
     await handleImpactEvidence(root, ["hook", "--profile", "unattended-untrusted"], {
       stdin: stdinFrom("{ not valid json"),
     });
@@ -161,7 +161,7 @@ describe("keryx security impact-evidence", () => {
       hookSpecificOutput: { permissionDecision?: string; permissionDecisionReason?: string };
     };
     expect(output.hookSpecificOutput.permissionDecision).toBe("deny");
-    expect(output.hookSpecificOutput.permissionDecisionReason).toBe("hook-failed");
+    expect(output.hookSpecificOutput.permissionDecisionReason).toBe("hook-crashed");
   });
 
   test("F13: malformed stdin JSON under strict (impactEvidence.strict:true) fails CLOSED regardless of profile", async () => {
@@ -177,6 +177,67 @@ describe("keryx security impact-evidence", () => {
 
     const output = JSON.parse(loggedOut.join("\n")) as { hookSpecificOutput: { permissionDecision?: string } };
     expect(output.hookSpecificOutput.permissionDecision).toBe("deny");
+  });
+
+  test("F14 (round 2): the hook payload's own cwd (not this process's cwd) decides the project root — state lands under the real root, not a subdirectory", async () => {
+    await mkdir(path.join(root, "src", "sub"), { recursive: true });
+
+    // Invoked with process cwd == root, but the Claude payload reports the
+    // tool call ran from a SUBDIRECTORY (`root/src/sub`) — the common case
+    // for a host that forwards its own cwd, not the project root.
+    await handleImpactEvidence(root, ["hook"], {
+      stdin: stdinFrom(claudePayload({ cwd: path.join(root, "src", "sub"), tool_input: { file_path: "src/a.ts" } })),
+    });
+
+    expect(process.exitCode).toBe(0);
+    const logPath = path.join(root, ".metaproject", "data", "security", "impact-evidence", "log.jsonl");
+    const stray = path.join(root, "src", "sub", ".metaproject");
+    const { pathExists } = await import("../lib/fs");
+    expect(await pathExists(logPath)).toBe(true);
+    expect(await pathExists(stray)).toBe(false);
+  });
+
+  test("F14 (round 2): a request whose only file resolves outside root denies under unattended-untrusted, rather than silently proceeding", async () => {
+    const outsideAbsolute = path.join(tmpdir(), "not-under-root-deny", "secret.ts");
+    await handleImpactEvidence(root, ["hook", "--profile", "unattended-untrusted"], {
+      stdin: stdinFrom(claudePayload({ tool_input: { file_path: outsideAbsolute } })),
+    });
+
+    const output = JSON.parse(loggedOut.join("\n")) as {
+      hookSpecificOutput: { permissionDecision?: string; permissionDecisionReason?: string };
+    };
+    expect(output.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(output.hookSpecificOutput.permissionDecisionReason).toBe("path-outside-root");
+  });
+
+  test("F11 (round 2): a hand-written security.config.json with impactEvidence.enabled:false and NO configChecksum does not disable the gate via the hook CLI", async () => {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "security.config.json"),
+      JSON.stringify({ impactEvidence: { enabled: false } }, null, 2),
+      "utf8",
+    );
+
+    await handleImpactEvidence(root, ["hook", "--profile", "unattended-untrusted"], {
+      stdin: stdinFrom(claudePayload({ tool_input: { file_path: "src/a.ts" } })),
+    });
+
+    const output = JSON.parse(loggedOut.join("\n")) as {
+      hookSpecificOutput: { additionalContext?: string };
+      systemMessage?: string;
+    };
+    // Disabled would mean an "allow" with no evidence and no warning; the
+    // gate must still run (additionalContext present) and the untrusted
+    // config surfaced.
+    expect(output.hookSpecificOutput.additionalContext).toBeDefined();
+    expect(output.systemMessage).toContain("configChecksum");
+  });
+
+  test("`test` command rejects an out-of-root path instead of reading it", async () => {
+    const outsideAbsolute = path.join(tmpdir(), "impact-evidence-test-outside", "secret.ts");
+    await handleImpactEvidence(root, ["test", outsideAbsolute]);
+    expect(process.exitCode).toBe(1);
+    expect(loggedErr.some((line) => line.includes("outside the project root"))).toBe(true);
   });
 
   test("F18: warnings from the decision are surfaced via systemMessage and stderr, not dropped", async () => {

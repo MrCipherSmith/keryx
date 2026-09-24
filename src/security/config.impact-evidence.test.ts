@@ -8,6 +8,7 @@ import {
   DEFAULT_SECURITY_CONFIG,
   computeConfigChecksum,
   mergeSecurityConfig,
+  renderSecurityConfig,
   resolveImpactEvidenceConfig,
   resolveImpactEvidenceConfigTrusted,
   verifyConfigChecksum,
@@ -121,5 +122,41 @@ describe("impactEvidence config + checksum", () => {
     const result = resolveImpactEvidenceConfigTrusted(sealed);
     expect(result.tampered).toBe(true);
     expect(result.config.enabled).toBe(true);
+  });
+
+  test("F11 (round 2): an impactEvidence block with NO configChecksum at all is untrusted, not verified — a hand-written enabled:false is ignored, detail is 'absent'", () => {
+    // A hand-written config: the block is present, but `configChecksum` was
+    // never computed for it at all (not merely wrong).
+    const merged = mergeSecurityConfig({ impactEvidence: { enabled: false, strict: false, exemptGlobs: ["**/*"], dampenAfter: 999 } });
+    expect(merged.configChecksum).toBeUndefined();
+
+    const result = resolveImpactEvidenceConfigTrusted(merged);
+    expect(result.tampered).toBe(true);
+    expect(result.detail).toBe("absent");
+    expect(result.config.enabled).toBe(true); // the loosening field is ignored
+    expect(result.config.exemptGlobs).toEqual([]);
+    expect(result.config.dampenAfter).toBe(3);
+  });
+
+  test("F11 (round 2): a mismatched configChecksum reports detail 'mismatch'", () => {
+    const merged = mergeSecurityConfig({ impactEvidence: { enabled: true, strict: false, exemptGlobs: [], dampenAfter: 3 } });
+    const sealed = { ...merged, configChecksum: computeConfigChecksum(merged) };
+    const tampered = { ...sealed, impactEvidence: { ...sealed.impactEvidence!, enabled: false } };
+
+    const result = resolveImpactEvidenceConfigTrusted(tampered);
+    expect(result.tampered).toBe(true);
+    expect(result.detail).toBe("mismatch");
+  });
+
+  test("F11 (round 2): resealing via renderSecurityConfig (a real, matching configChecksum) is honored, loosening fields included", () => {
+    const merged = mergeSecurityConfig({ impactEvidence: { enabled: false, strict: false, exemptGlobs: ["docs/**"], dampenAfter: 5 } });
+    const rendered = JSON.parse(renderSecurityConfig(merged)) as typeof merged;
+    expect(rendered.configChecksum).toBeDefined();
+
+    const result = resolveImpactEvidenceConfigTrusted(rendered);
+    expect(result.tampered).toBe(false);
+    expect(result.config.enabled).toBe(false);
+    expect(result.config.exemptGlobs).toEqual(["docs/**"]);
+    expect(result.config.dampenAfter).toBe(5);
   });
 });

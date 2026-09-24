@@ -93,6 +93,7 @@ export {
   computeImpactEvidence,
   createImpactEvidenceProvider,
   hostDeliveryStatus,
+  normalizeRequestFiles,
   readLogRecords,
   renderEvidenceBlock,
 } from "./impact-evidence";

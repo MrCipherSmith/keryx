@@ -53,7 +53,7 @@ export {
 } from "./state";
 export type { ImpactEvidenceSessionState } from "./state";
 
-export { createImpactEvidenceProvider, impactEvidenceHookClass } from "./provider";
+export { createImpactEvidenceProvider, impactEvidenceHookClass, normalizeRequestFiles } from "./provider";
 export type { ImpactEvidenceProviderDeps } from "./provider";
 
 export { hostDeliveryStatus } from "./host";

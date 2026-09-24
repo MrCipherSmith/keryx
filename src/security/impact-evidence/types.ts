@@ -30,11 +30,19 @@ export type ImpactEvidenceReason =
   | "rollback-line-required"
   | "acknowledgement-required"
   | "hook-advisory-failed"
-  // F12/F13 (review round 1): a `gate` (strict) hook class fails CLOSED on any
-  // service/parse failure, in EVERY profile — this is the reason it denies
-  // with. `hook-advisory-failed` stays reserved for `gate-advisory` denying
-  // under `unattended-untrusted` specifically (the pre-existing behavior).
-  | "hook-failed";
+  // N5 (review round 2): aligned with W6's failure-table names. A `gate`
+  // (strict) hook class fails CLOSED on any service/parse failure, in EVERY
+  // profile, with THIS reason — W6's name for a gate hook crash.
+  // `hook-advisory-failed` stays reserved for `gate-advisory` denying under
+  // `unattended-untrusted` specifically (the pre-existing behavior).
+  // `hook-timeout` is reserved for a future timeout distinction and unused
+  // here.
+  | "hook-crashed"
+  | "hook-timeout"
+  // F14 (review round 2): a request whose files were ALL rejected by
+  // containment (or, under a gate class, any rejected) does not fall through
+  // to allow — `gate`/`unattended-untrusted` deny with this reason.
+  | "path-outside-root";
 
 /** Named, stable events the append-only log records (see `state.ts`). */
 export type ImpactEvidenceLogEvent =
@@ -47,11 +55,16 @@ export type ImpactEvidenceLogEvent =
   | "rollback-required"
   | "rollback-accepted"
   | "service-failed"
-  // F11 (review round 1): the config's checksum did not verify (or the config
-  // could not be read) while the resolved block would otherwise have
-  // disabled the gate or loosened it — the tampered block was ignored in
+  // F11 (review round 1/2): the config's `impactEvidence` block is not
+  // provably the operator's own — no checksum was ever recorded, or the
+  // recorded one does not match — while the resolved block would otherwise
+  // have disabled the gate or loosened it. The untrusted block was ignored in
   // favor of safe defaults. See `config.ts#resolveImpactEvidenceConfigTrusted`.
-  | "config-tampered"
+  // Renamed from "config-tampered" (round 1) to "config-untrusted" (round 2)
+  // because an ABSENT checksum is not tampering, just never-sealed — the
+  // record's `detail` field ("absent" | "mismatch") keeps the two
+  // distinguishable.
+  | "config-untrusted"
   // F14 (review round 1): a request named a file that normalizes outside
   // `root` — dropped rather than fed to the evidence builder. See
   // `provider.ts#normalizeRequestFiles`.

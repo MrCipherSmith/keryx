@@ -9,15 +9,16 @@ import {
   createImpactEvidenceProvider,
   hostDeliveryStatus,
   loadSecurityConfig,
+  normalizeRequestFiles,
   readLogRecords,
   renderEvidenceBlock,
-  resolveImpactEvidenceConfig,
   resolveImpactEvidenceConfigTrusted,
   verifyConfigChecksum,
   type ImpactEvidenceProfile,
   type ImpactEvidenceRequest,
 } from "../security/service";
 import { optionValue } from "../lib/args";
+import { resolveProjectRoot } from "../lib/contained-path";
 
 /**
  * F13 (review round 1): the real signature reads `process.stdin`; tests
@@ -68,7 +69,15 @@ export async function handleImpactEvidence(
 
 async function handleStatus(cwd: string, args: string[]): Promise<void> {
   const security = await loadSecurityConfig(cwd);
-  const effective = resolveImpactEvidenceConfig(security);
+  // F11 (review round 2): `resolveImpactEvidenceConfig` alone takes the
+  // declared block on trust — exactly the reading a hand-written, unchecked
+  // `security.config.json` exploits. `status` must show what the GATE
+  // actually uses, so it goes through the same
+  // `resolveImpactEvidenceConfigTrusted` the provider does, and surfaces
+  // whether the declared block was trusted at all (and why not, when it
+  // wasn't).
+  const trustedResult = resolveImpactEvidenceConfigTrusted(security);
+  const effective = trustedResult.config;
   const checksum = verifyConfigChecksum(security);
   const killSwitch = process.env.KERYX_DISABLE_IMPACT_GATE === "1" || process.env.KERYX_DISABLE_IMPACT_GATE === "true";
   const host = hostDeliveryStatus();
@@ -89,6 +98,8 @@ async function handleStatus(cwd: string, args: string[]): Promise<void> {
           config: effective,
           configDeclared: security.impactEvidence !== undefined,
           configChecksum: { match: checksum.match, expected: checksum.expected, actual: checksum.actual },
+          configTrusted: !trustedResult.tampered,
+          ...(trustedResult.tampered ? { configUntrustedReason: trustedResult.detail } : {}),
           envKillSwitch: killSwitch,
           hostDelivery: host,
           recentLog: recent,
@@ -109,6 +120,9 @@ async function handleStatus(cwd: string, args: string[]): Promise<void> {
   console.log(`dampenAfter: ${effective.dampenAfter}`);
   console.log(`config declared impactEvidence block: ${security.impactEvidence !== undefined ? "yes" : "no (using defaults)"}`);
   console.log(`configChecksum: ${checksum.match ? "ok" : "MISMATCH"}`);
+  console.log(
+    `impactEvidence block trusted: ${trustedResult.tampered ? `no (${trustedResult.detail === "absent" ? "no configChecksum recorded" : "configChecksum mismatch"}) — loosening fields ignored, safe defaults used` : "yes"}`,
+  );
   console.log("");
   console.log("## Host delivery (pre-tool-context surface per adapter)");
   for (const entry of host) {
@@ -122,16 +136,31 @@ async function handleStatus(cwd: string, args: string[]): Promise<void> {
 }
 
 async function handleTest(cwd: string, args: string[]): Promise<void> {
-  const files = args.filter((arg) => !arg.startsWith("--"));
-  if (files.length === 0) {
+  const requested = args.filter((arg) => !arg.startsWith("--"));
+  if (requested.length === 0) {
     console.error("Usage: keryx security impact-evidence test <file...> [--json]");
+    process.exitCode = 1;
+    return;
+  }
+
+  // F14 (review round 2): the same containment `normalizeRequestFiles`
+  // gives the live `hook` path applies here too — an absolute or
+  // traversal-shaped argument (`../../etc/passwd`) must not be handed to
+  // `computeImpactEvidence`, which reads the file. Run against the project
+  // root, not the raw CLI cwd, for the same reason the hook path does.
+  const root = resolveProjectRoot(cwd);
+  const { files, rejected } = normalizeRequestFiles(root, requested);
+  if (rejected.length > 0) {
+    console.error(`skipped ${rejected.length} path(s) outside the project root: ${rejected.join(", ")}`);
+  }
+  if (files.length === 0) {
     process.exitCode = 1;
     return;
   }
 
   // Dry-run: computes and prints only. Writes NOTHING — no session state, no
   // log — unlike `hook`, which is the live path.
-  const evidences = await Promise.all(files.map((file) => computeImpactEvidence(cwd, file)));
+  const evidences = await Promise.all(files.map((file) => computeImpactEvidence(root, file)));
 
   if (args.includes("--json")) {
     console.log(JSON.stringify({ schemaVersion: 1, files, evidences }, null, 2));
@@ -149,7 +178,8 @@ async function handleTest(cwd: string, args: string[]): Promise<void> {
  * open. This maps a hook-level failure to the same semantics `provider.ts`
  * already uses for an evidence-service failure (F12): `gate` in ANY profile,
  * or `gate-advisory` specifically under `unattended-untrusted`, denies with
- * reason `hook-failed`; the two supervised `gate-advisory` profiles get no
+ * reason `hook-crashed` (N5, review round 2 — the W6 failure-table name for
+ * a gate hook crash); the two supervised `gate-advisory` profiles get no
  * decision at all (a true refuse-without-blocking) plus a stderr warning.
  */
 function isStrictHookClass(strict: boolean, profile: ImpactEvidenceProfile): boolean {
@@ -164,7 +194,7 @@ function emitHookFailure(message: string, strict: boolean, profile: ImpactEviden
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
-          permissionDecisionReason: "hook-failed",
+          permissionDecisionReason: "hook-crashed",
         },
       }),
     );
@@ -192,26 +222,44 @@ async function handleHook(cwd: string, args: string[], deps: ImpactEvidenceCliDe
     return;
   }
 
+  // F14 (review round 2): stdin must be parsed BEFORE the project root is
+  // decided, because the root itself depends on `payload.cwd` — Claude's
+  // hook payload carries the tool-call's own cwd, which can be a
+  // subdirectory of the project (or a different directory than this
+  // process's own `cwd`, e.g. an MCP server invoked from elsewhere). Using
+  // the raw, un-resolved `cwd` as `request.root` used to write session
+  // state/log entries under whatever subdirectory happened to invoke the
+  // hook instead of the one true project root `loadSecurityConfig` itself
+  // already walks up to — splitting a single project's impact-evidence
+  // state across directories exactly the way `resolveProjectRoot`'s own doc
+  // comment (`lib/contained-path.ts`) describes for the security config.
+  const raw = await readStdin(deps.stdin ?? process.stdin);
+  let payload: Record<string, unknown> = {};
+  let payloadOk = true;
+  try {
+    payload = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    payloadOk = false;
+  }
+  const payloadCwd = payloadOk && typeof payload.cwd === "string" ? payload.cwd : undefined;
+  const root = resolveProjectRoot(payloadCwd ?? cwd);
+
   // Needed to decide fail-open vs fail-closed on a hook-level failure below
   // BEFORE the provider (which resolves this same config) ever runs — a
   // tampered/unreadable config is treated the same as `provider.ts` treats
   // it (F11): untrusted, so `strict` only comes from it when the checksum
   // verifies.
-  const security = await loadSecurityConfig(cwd);
+  const security = await loadSecurityConfig(root);
   const { config: effective } = resolveImpactEvidenceConfigTrusted(security);
   const strict = effective.strict;
 
-  const raw = await readStdin(deps.stdin ?? process.stdin);
-  let payload: Record<string, unknown>;
-  try {
-    payload = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
+  if (!payloadOk) {
     emitHookFailure("stdin was not valid JSON", strict, profile);
     process.exitCode = 0;
     return;
   }
 
-  const request = requestFromClaudePayload(cwd, profile, payload);
+  const request = requestFromClaudePayload(root, profile, payload);
   const provider = createImpactEvidenceProvider();
   let decision: Awaited<ReturnType<typeof provider>>;
   try {

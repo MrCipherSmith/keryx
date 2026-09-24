@@ -5,6 +5,7 @@
 
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { isDestructiveCommand } from "../../lib/command-risk";
 import { commandWord, splitSegments } from "../../lib/shell-syntax";
 import { isPathInside, toPosix } from "../../lib/fs";
@@ -34,34 +35,79 @@ function killSwitchEnabled(env: Record<string, string | undefined>): boolean {
 }
 
 /**
- * F14 (review round 1): Claude (and any other host) can send an absolute
- * `file_path`. Left un-normalized, it never matches anything the graph/test
- * indexes know about (they are keyed on root-relative POSIX paths), so
- * evidence was unconditionally "not indexed" for every real edit. Every file
- * in the request is normalized to root-relative POSIX before it reaches
- * exemption matching, touch tracking, or `computeEvidence` — a path that
- * normalizes OUTSIDE `root` (a symlink target elsewhere, `../secrets`, a
- * different project) is dropped rather than guessed at, and reported back to
- * the caller as a warning plus a `path-rejected` log entry.
+ * Resolve `p` to its real, symlink-free form. When `p` (or some suffix of
+ * it) does not exist yet — the common case for a `Write` of a brand-new
+ * file — walk up to the nearest EXISTING ancestor, realpath THAT (resolving
+ * any symlink in the existing part of the path, including a symlinked
+ * project root such as macOS's `/tmp` -> `/private/tmp`), and rejoin the
+ * non-existent tail lexically. Falls back to the lexical path if even the
+ * filesystem root can't be realpath'd (should not happen in practice).
+ */
+function realpathNearestExisting(p: string): string {
+  let current = p;
+  const tail: string[] = [];
+  for (;;) {
+    try {
+      const real = realpathSync(current);
+      return tail.length > 0 ? path.join(real, ...tail) : real;
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) {
+        return tail.length > 0 ? path.join(current, ...tail) : current;
+      }
+      tail.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+/**
+ * F14 (review round 1, tightened in round 2): Claude (and any other host)
+ * can send an absolute `file_path`. Left un-normalized, it never matches
+ * anything the graph/test indexes know about (they are keyed on
+ * root-relative POSIX paths), so evidence was unconditionally "not indexed"
+ * for every real edit. Every file in the request is normalized to
+ * root-relative POSIX before it reaches exemption matching, touch tracking,
+ * or `computeEvidence` — a path that normalizes OUTSIDE `root` (a symlink
+ * target elsewhere, `../secrets`, a different project) is dropped rather
+ * than guessed at, and reported back to the caller as a warning plus a
+ * `path-rejected` log entry.
+ *
+ * Round 1's version had three gaps a determined path could exploit:
+ *
+ *   1. It compared LEXICAL paths, so a symlink under `root` pointing
+ *      outside it (or a symlink `root` itself sits behind — the classic
+ *      macOS `/tmp` -> `/private/tmp` alias) either escaped undetected or was
+ *      wrongly rejected as "outside" a root it was really inside. Both `root`
+ *      and each candidate are resolved to their real path — `root` via
+ *      `realpathNearestExisting` (it always exists), each candidate via the
+ *      same helper so a not-yet-created file (a `Write` target) still gets
+ *      its EXISTING ancestors' symlinks resolved.
+ *   2. A relative path with a mid-string `..` that didn't start with `../`
+ *      literally — `src/../../../etc/passwd` — passed the `startsWith`
+ *      check untouched. Every candidate is `path.resolve`d against the
+ *      (real) root first, which collapses `..` segments before containment
+ *      is ever checked, so there is no lexical form left to sneak one past.
+ *   3. The absolute-path branch's `isPathInside` call ran on the lexical,
+ *      un-realpath'd root and candidate, missing the same symlink cases as
+ *      (1). There is now exactly one containment check, after both sides are
+ *      resolved to their real form, used by both the absolute and the
+ *      relative branch.
  */
 export function normalizeRequestFiles(root: string, files: string[]): { files: string[]; rejected: string[] } {
+  const rootReal = realpathNearestExisting(path.resolve(root));
   const normalized: string[] = [];
   const rejected: string[] = [];
   for (const file of files) {
-    if (path.isAbsolute(file)) {
-      if (!isPathInside(root, file)) {
-        rejected.push(file);
-        continue;
-      }
-      normalized.push(toPosix(path.relative(path.resolve(root), path.resolve(file))));
-      continue;
-    }
-    const relative = toPosix(file).replace(/^\.\//, "");
-    if (relative === ".." || relative.startsWith("../") || path.isAbsolute(relative)) {
+    const lexicalAbsolute = path.isAbsolute(file)
+      ? path.resolve(file)
+      : path.resolve(rootReal, toPosix(file).replace(/^\.\//, ""));
+    const effective = realpathNearestExisting(lexicalAbsolute);
+    if (!isPathInside(rootReal, effective)) {
       rejected.push(file);
       continue;
     }
-    normalized.push(relative);
+    normalized.push(toPosix(path.relative(rootReal, effective)));
   }
   return { files: [...new Set(normalized)], rejected };
 }
@@ -89,7 +135,9 @@ export interface ImpactEvidenceProviderDeps {
   loadConfig?: (root: string) => Promise<ImpactEvidenceConfig>;
 }
 
-async function defaultResolveConfig(root: string): Promise<{ config: ImpactEvidenceConfig; tampered: boolean }> {
+async function defaultResolveConfig(
+  root: string,
+): Promise<{ config: ImpactEvidenceConfig; tampered: boolean; detail?: "absent" | "mismatch" }> {
   const security = await loadSecurityConfig(root);
   return resolveImpactEvidenceConfigTrusted(security);
 }
@@ -123,12 +171,14 @@ export function createImpactEvidenceProvider(
     // that is exactly what `resolveImpactEvidenceConfigTrusted` adds.
     let config: ImpactEvidenceConfig;
     let tampered = false;
+    let detail: "absent" | "mismatch" | undefined;
     if (loadConfigOverride) {
       config = await loadConfigOverride(request.root);
     } else {
       const resolved = await defaultResolveConfig(request.root);
       config = resolved.config;
       tampered = resolved.tampered;
+      detail = resolved.detail;
     }
     const hookClass = impactEvidenceHookClass(config.strict);
 
@@ -136,22 +186,47 @@ export function createImpactEvidenceProvider(
     const extraWarnings: string[] = [];
 
     if (rejected.length > 0) {
-      await appendLogRecord(request.root, {
+      const record = await appendLogRecord(request.root, {
         sessionId: request.sessionId,
         event: "path-rejected",
         files: rejected,
       });
-      extraWarnings.push(`skipped ${rejected.length} path(s) outside the project root: ${rejected.join(", ")}`);
+      const message = `skipped ${rejected.length} path(s) outside the project root: ${rejected.join(", ")}`;
+      // F14(d) (review round 2): a request whose file(s) were rejected as
+      // outside `root` used to fall through unconditionally — under
+      // `gate`/`unattended-untrusted` a rejected path was silently dropped
+      // and the request proceeded (or, if EVERY file was rejected, fell
+      // into the ordinary "no files" allow path), rather than denying. Only
+      // the two SUPERVISED `gate-advisory` profiles still allow through
+      // (with a warning) — a human is watching there, so surfacing the
+      // rejection is enough.
+      if (hookClass === "gate" || request.profile === "unattended-untrusted") {
+        return {
+          hookId: IMPACT_EVIDENCE_HOOK_ID,
+          hookClass,
+          outcome: "deny",
+          reason: "path-outside-root",
+          warnings: [message],
+          record,
+        };
+      }
+      extraWarnings.push(message);
     }
 
     if (tampered) {
       await appendLogRecord(request.root, {
         sessionId: request.sessionId,
-        event: "config-tampered",
+        event: "config-untrusted",
         files,
+        // F11 (review round 2): distinguishes "no configChecksum was ever
+        // recorded" from "one was recorded and does not match" — both are
+        // untrusted, but only the second is provably tampered.
+        ...(detail !== undefined ? { detail } : {}),
       });
       extraWarnings.push(
-        "impact-evidence config checksum did not verify (or the config could not be read) — ignoring the stored block and using safe defaults",
+        detail === "absent"
+          ? "impact-evidence config has no configChecksum — the impactEvidence block is not provably the operator's own, so loosening fields (enabled/exemptGlobs/dampenAfter) are ignored in favor of safe defaults"
+          : "impact-evidence config checksum did not verify (or the config could not be read) — ignoring the stored block's loosening fields and using safe defaults",
       );
     }
 
@@ -267,7 +342,11 @@ async function computeDecision(ctx: DecisionContext): Promise<ImpactEvidenceDeci
     for (const file of files) {
       denials[file] = (denials[file] ?? 0) + 1;
     }
-    await saveSessionState(request.root, request.sessionId, { touched: state.touched, denials });
+    await saveSessionState(request.root, request.sessionId, {
+      touched: state.touched,
+      denials,
+      pendingAck: state.pendingAck ?? [],
+    });
   }
 
   if (firstTouch.length === 0) {
@@ -283,14 +362,39 @@ async function computeDecision(ctx: DecisionContext): Promise<ImpactEvidenceDeci
   }
 
   const dampenAfter = config.dampenAfter;
+  const hasAcknowledgement = Boolean(request.acknowledgement && request.acknowledgement.trim().length > 0);
+
+  // N8 (review round 2): strict mode's `ask` below never marked a file
+  // touched (an acknowledgement can only arrive on a LATER request), so a
+  // file that was asked about once and never acknowledged used to be asked
+  // about again, from scratch, with the FULL evidence block, forever —
+  // every edit re-asks forever. `state.pendingAck` (persisted below, on the
+  // `ask` branch) remembers which files this session already asked about;
+  // a follow-up request for one of them that still carries no
+  // acknowledgement gets the condensed notice instead of recomputing full
+  // evidence, and — like a reported denial — counts toward the ordinary
+  // per-file dampening threshold too, so a file that is never acknowledged
+  // eventually folds into the same "dampened after repeated denials"
+  // bucket. Only a NON-empty acknowledgement clears it (see the allow path
+  // below).
+  const pendingAckSet = new Set(state.pendingAck ?? []);
+  const pendingReAsk =
+    config.strict && !hasAcknowledgement ? firstTouch.filter((file) => pendingAckSet.has(file)) : [];
+  for (const file of pendingReAsk) {
+    denials[file] = (denials[file] ?? 0) + 1;
+  }
+
   // F17 (review round 1): dampening used to be an ALL-OR-NOTHING call over
   // the whole batch (`.some(...)`) — one repeatedly-denied file collapsed the
   // evidence for every OTHER first-touch file in the same batch too, even
   // one that had never been denied. Split per file instead: a dampened file
   // gets the condensed notice, every other first-touch file in the batch
   // still gets its full evidence block.
-  const dampenedFiles = firstTouch.filter((file) => (denials[file] ?? 0) >= dampenAfter);
-  const normalFiles = firstTouch.filter((file) => (denials[file] ?? 0) < dampenAfter);
+  const deniedDampened = firstTouch.filter(
+    (file) => (denials[file] ?? 0) >= dampenAfter && !pendingReAsk.includes(file),
+  );
+  const dampenedFiles = [...new Set([...deniedDampened, ...pendingReAsk])];
+  const normalFiles = firstTouch.filter((file) => !dampenedFiles.includes(file));
 
   let evidences: ImpactEvidence[] = [];
   if (normalFiles.length > 0) {
@@ -314,7 +418,7 @@ async function computeDecision(ctx: DecisionContext): Promise<ImpactEvidenceDeci
           hookId: IMPACT_EVIDENCE_HOOK_ID,
           hookClass,
           outcome: "deny",
-          reason: "hook-failed",
+          reason: "hook-crashed",
           warnings: [`impact-evidence service failed: ${message}`],
           record,
         };
@@ -344,9 +448,14 @@ async function computeDecision(ctx: DecisionContext): Promise<ImpactEvidenceDeci
   if (evidences.length > 0) {
     parts.push(renderEvidenceBlock(evidences, normalFiles));
   }
-  if (dampenedFiles.length > 0) {
+  if (deniedDampened.length > 0) {
     parts.push(
-      `Impact evidence dampened after repeated denials for: ${dampenedFiles.join(", ")}. Proceed with care — evidence is still available via \`keryx security impact-evidence test\`.`,
+      `Impact evidence dampened after repeated denials for: ${deniedDampened.join(", ")}. Proceed with care — evidence is still available via \`keryx security impact-evidence test\`.`,
+    );
+  }
+  if (pendingReAsk.length > 0) {
+    parts.push(
+      `Impact evidence pending acknowledgement for: ${pendingReAsk.join(", ")} (already shown; condensed until acknowledged). Full evidence is still available via \`keryx security impact-evidence test\`.`,
     );
   }
   const additionalContext = parts.join("\n\n");
@@ -354,11 +463,21 @@ async function computeDecision(ctx: DecisionContext): Promise<ImpactEvidenceDeci
 
   // Strict mode: an injection needs an acknowledgement before it is
   // allowed to proceed.
-  if (config.strict && (!request.acknowledgement || request.acknowledgement.trim().length === 0)) {
+  if (config.strict && !hasAcknowledgement) {
     const record = await appendLogRecord(request.root, {
       sessionId: request.sessionId,
       event,
       files: firstTouch,
+    });
+    // N8: remember these files as awaiting acknowledgement — and persist the
+    // bumped `denials` from the `pendingReAsk` re-asks above — so a follow-up
+    // request that still carries no acknowledgement is recognized next time
+    // instead of asking about the same file, from scratch, forever.
+    const newPendingAck = [...new Set([...pendingAckSet, ...firstTouch])];
+    await saveSessionState(request.root, request.sessionId, {
+      touched: state.touched,
+      denials,
+      pendingAck: newPendingAck,
     });
     return {
       hookId: IMPACT_EVIDENCE_HOOK_ID,
@@ -377,7 +496,10 @@ async function computeDecision(ctx: DecisionContext): Promise<ImpactEvidenceDeci
   // denial-dampening path above instead of silently falling into
   // `skipped-repeat` the moment it was ever shown once.
   const newTouched = request.denied ? state.touched : [...new Set([...state.touched, ...firstTouch])];
-  await saveSessionState(request.root, request.sessionId, { touched: newTouched, denials });
+  // N8: a file that just got its acknowledgement (or was allowed through a
+  // non-strict path) is no longer awaiting one.
+  const newPendingAck = state.pendingAck ? state.pendingAck.filter((file) => !firstTouch.includes(file)) : [];
+  await saveSessionState(request.root, request.sessionId, { touched: newTouched, denials, pendingAck: newPendingAck });
 
   const record = await appendLogRecord(request.root, {
     sessionId: request.sessionId,

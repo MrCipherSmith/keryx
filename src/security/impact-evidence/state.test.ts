@@ -38,11 +38,17 @@ describe("impact-evidence session state", () => {
   test("a session id round-trips through save/load unaffected by the filename hash suffix", async () => {
     await saveSessionState(root, "session-123", { touched: ["src/x.ts"], denials: { "src/x.ts": 2 } });
     const state = await loadSessionState(root, "session-123");
-    expect(state).toEqual({ touched: ["src/x.ts"], denials: { "src/x.ts": 2 } });
+    expect(state).toEqual({ touched: ["src/x.ts"], denials: { "src/x.ts": 2 }, pendingAck: [] });
   });
 
   test("an unknown session id loads empty state rather than throwing", async () => {
     const state = await loadSessionState(root, "never-seen");
-    expect(state).toEqual({ touched: [], denials: {} });
+    expect(state).toEqual({ touched: [], denials: {}, pendingAck: [] });
+  });
+
+  test("N8: pendingAck round-trips through save/load", async () => {
+    await saveSessionState(root, "session-ack", { touched: [], denials: {}, pendingAck: ["src/x.ts"] });
+    const state = await loadSessionState(root, "session-ack");
+    expect(state.pendingAck).toEqual(["src/x.ts"]);
   });
 });
