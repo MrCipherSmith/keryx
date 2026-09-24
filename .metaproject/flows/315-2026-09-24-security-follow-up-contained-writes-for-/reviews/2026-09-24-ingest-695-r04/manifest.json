@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-09-24-ingest-695-r03",
+  "reviewId": "2026-09-24-ingest-695-r04",
   "mode": "ingest",
-  "status": "closed",
+  "status": "draft",
   "target": {
     "kind": "pr",
     "ref": "695",
-    "head": "5500dd4bf6980a80b1f37ba13a01a281f1edec66"
+    "head": "adb264a1573f6d6acbb9c2da8fec057c30ada90b"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r03/scope.md",
-    "coverage": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r03/coverage.md",
-    "report": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r03/report.md",
-    "findings": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r03/findings.json",
-    "learning": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r03/learning.md",
-    "decisions": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r03/decisions.md"
+    "scope": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r04/scope.md",
+    "coverage": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r04/coverage.md",
+    "report": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r04/report.md",
+    "findings": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r04/findings.json",
+    "learning": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r04/learning.md",
+    "decisions": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r04/decisions.md"
   },
   "coverage": [
     {
@@ -25,13 +25,13 @@
   ],
   "filter_stats": {
     "schema_version": 1,
-    "total": 5,
+    "total": 0,
     "dropped_prefilter": null,
     "dropped_low_confidence": null,
     "dropped_refuted": 0,
     "dropped_scope_b": null,
     "dropped_findings_cap": 0,
-    "retained": 5,
+    "retained": 0,
     "dismissed_by_round": null,
     "by_reason": {},
     "not_measured": [
@@ -53,35 +53,8 @@
       }
     ]
   },
-  "repairs": [
-    {
-      "finding": "R3-F1",
-      "field": "problem",
-      "source": "the finding's own title"
-    },
-    {
-      "finding": "R3-F2",
-      "field": "problem",
-      "source": "the finding's own title"
-    },
-    {
-      "finding": "R3-F3",
-      "field": "problem",
-      "source": "the finding's own title"
-    },
-    {
-      "finding": "R3-F4",
-      "field": "problem",
-      "source": "the finding's own title"
-    },
-    {
-      "finding": "R3-F5",
-      "field": "problem",
-      "source": "the finding's own title"
-    }
-  ],
-  "createdAt": "2026-09-24T19:41:54.742Z",
-  "updatedAt": "2026-09-24T19:43:05.675Z",
+  "createdAt": "2026-09-24T19:51:22.683Z",
+  "updatedAt": "2026-09-24T19:51:22.683Z",
   "flow": {
     "id": "315",
     "path": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-"

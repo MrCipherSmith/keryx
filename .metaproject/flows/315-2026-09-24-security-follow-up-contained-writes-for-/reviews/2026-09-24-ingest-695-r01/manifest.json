@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-24-ingest-695-r01",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "695",
-    "head": "64e862a2c1ab58126219b1c06ee2a3932a5ec1b4"
+    "head": "64e862a2"
   },
   "artifacts": {
     "scope": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-/reviews/2026-09-24-ingest-695-r01/scope.md",
@@ -100,8 +100,8 @@
       "source": "the finding's own title"
     }
   ],
-  "createdAt": "2026-09-24T18:38:45.575Z",
-  "updatedAt": "2026-09-24T18:38:45.575Z",
+  "createdAt": "2026-09-24T19:50:58.575Z",
+  "updatedAt": "2026-09-24T19:51:09.267Z",
   "flow": {
     "id": "315",
     "path": ".metaproject/flows/315-2026-09-24-security-follow-up-contained-writes-for-"
