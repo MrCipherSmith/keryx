@@ -23,6 +23,7 @@ import { checkStablePackGate } from "../gdskills/governance/eval";
 import { agentExportSupport, defaultAgentSupportLookup, type AgentSupportLookup } from "./export";
 import { PROMPT_DEFENSE_BASELINE } from "./baseline";
 import { loadAgentCatalog, type AgentCatalogError } from "./catalog";
+import { generateStackAgentPair, type StackPackForAgentGeneration } from "./generate";
 import { isAgentPolicyProfile } from "./policy";
 import { validateAgentDefinition } from "./schema";
 import { isAgentToolName, type AgentToolName } from "./tools";
@@ -64,6 +65,7 @@ export type AgentVerifyProblemReason =
   | "invalid-source-ref"
   | "stack-pack-missing"
   | "stack-pack-not-gate-cleared"
+  | "generated-drift"
   | "baseline-in-body"
   | "no-export-support"
   | "catalog-error"
@@ -116,6 +118,22 @@ export interface VerifyAgentsOptions {
    * other.
    */
   readonly stackPackGateCleared?: (sourceRef: string) => { readonly cleared: boolean; readonly reason?: string };
+  /**
+   * Flow 314, W4 T10 (W2 §"Initial catalogue": "the pair is re-generated
+   * (not hand-edited) if the pack changes — a hand edit to a generated
+   * definition is flagged by `keryx agents verify`"). Loads the
+   * `StackPackForAgentGeneration`-shaped subset of a `generated` origin's
+   * `sourceRef` pack's `pack.json`, for regenerating and diffing against a
+   * BUNDLED agent's on-disk content (never a `project`-source override — a
+   * project definition intentionally forking a bundled one is not drift).
+   * Returns `undefined` when the pack cannot be positively read/parsed with
+   * a usable `agentProfile` — the drift check is then skipped for that
+   * agent rather than crashing or inventing a `generated-drift` finding
+   * (the pack's existence/gate status is already covered by
+   * `stackPackExists`/`stackPackGateCleared` above). Default: read
+   * `<bundledRoot-or-default>/../stacks/<sourceRef>/pack.json`.
+   */
+  readonly loadStackPackForGeneration?: (sourceRef: string) => StackPackForAgentGeneration | undefined;
   /**
    * Confirms a `skills[]` entry resolves in the skill catalogue. Default:
    * `BUNDLED_GDSKILLS` names plus every directory under
@@ -223,6 +241,94 @@ function defaultStackPackGateCleared(
   };
 }
 
+interface StackPackAgentProfileJsonShape {
+  readonly displayName?: unknown;
+  readonly auditFocus?: unknown;
+  readonly buildCommands?: unknown;
+  readonly fixGuardrails?: unknown;
+}
+
+interface StackPackForGenerationJsonShape {
+  readonly id?: unknown;
+  readonly skills?: { readonly review?: unknown; readonly "build-fix"?: unknown };
+  readonly agentProfile?: StackPackAgentProfileJsonShape;
+}
+
+function isStringArray(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+/**
+ * Validate a parsed `pack.json` document carries everything
+ * `generateStackAgentPair` (T10, `./generate.ts`) needs, narrowing it to
+ * {@link StackPackForAgentGeneration}. Returns `undefined` for anything
+ * short of that shape — never guesses a default for a missing field, since a
+ * guessed field would make the regenerated content diverge from what a real
+ * `keryx agents generate` run would produce and falsely report drift.
+ */
+function asStackPackForAgentGeneration(raw: unknown): StackPackForAgentGeneration | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const pack = raw as StackPackForGenerationJsonShape;
+  if (typeof pack.id !== "string" || pack.id.length === 0) return undefined;
+  const profile = pack.agentProfile;
+  if (typeof profile !== "object" || profile === null) return undefined;
+  if (
+    typeof profile.displayName !== "string" ||
+    !isStringArray(profile.auditFocus) ||
+    !isStringArray(profile.buildCommands) ||
+    !isStringArray(profile.fixGuardrails)
+  ) {
+    return undefined;
+  }
+  const review = pack.skills?.review;
+  const buildFix = pack.skills?.["build-fix"];
+  return {
+    id: pack.id,
+    skills: {
+      ...(isStringArray(review) ? { review } : {}),
+      ...(isStringArray(buildFix) ? { "build-fix": buildFix } : {}),
+    },
+    agentProfile: {
+      displayName: profile.displayName,
+      auditFocus: profile.auditFocus,
+      buildCommands: profile.buildCommands,
+      fixGuardrails: profile.fixGuardrails,
+    },
+  };
+}
+
+/**
+ * Default `loadStackPackForGeneration` resolver: a real (non-symlink)
+ * directory at `<stacksRoot>/<sourceRef>` whose `pack.json` parses and
+ * carries a usable `agentProfile`. Mirrors `defaultStackPackGateCleared`'s
+ * own path-safety checks (id shape already enforced by `verifyOne` before
+ * this is ever called). Never throws: any read/parse/shape failure yields
+ * `undefined`, which `verifyOne` treats as "drift unchecked", not a crash.
+ */
+function defaultLoadStackPackForGeneration(
+  bundledAgentsRoot: string,
+): (sourceRef: string) => StackPackForAgentGeneration | undefined {
+  const stacksRoot = path.join(path.dirname(bundledAgentsRoot), "stacks");
+  return (sourceRef: string): StackPackForAgentGeneration | undefined => {
+    if (!STACK_SOURCE_REF_RE.test(sourceRef)) return undefined;
+    const packDir = path.join(stacksRoot, sourceRef);
+    const relative = path.relative(stacksRoot, packDir);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
+    try {
+      const stats = lstatSync(packDir);
+      if (!stats.isDirectory() || stats.isSymbolicLink()) return undefined;
+    } catch {
+      return undefined;
+    }
+    try {
+      const raw = JSON.parse(readFileSync(path.join(packDir, "pack.json"), "utf8")) as unknown;
+      return asStackPackForAgentGeneration(raw);
+    } catch {
+      return undefined;
+    }
+  };
+}
+
 /**
  * Default skill resolver: `BUNDLED_GDSKILLS` names, plus every skill
  * directory under the project's installed `.metaproject/skills/gdskills`
@@ -290,6 +396,7 @@ function verifyOne(
   options: {
     readonly stackPackExists: (sourceRef: string) => boolean;
     readonly stackPackGateCleared: (sourceRef: string) => { readonly cleared: boolean; readonly reason?: string };
+    readonly loadStackPackForGeneration: (sourceRef: string) => StackPackForAgentGeneration | undefined;
     readonly skillExists: (skillId: string) => boolean;
     readonly supportLookup?: AgentSupportLookup;
   },
@@ -383,6 +490,29 @@ function verifyOne(
             detail: `origin.sourceRef "${origin.sourceRef}" is not a gate-cleared stack pack${gate.reason !== undefined ? `: ${gate.reason}` : ""}`,
           });
         }
+
+        // Flow 314, W4 T10 (W2 §"Initial catalogue": a hand edit to a
+        // generated definition is flagged by `keryx agents verify`). Only
+        // for a BUNDLED-source definition — a `project`-source override of a
+        // bundled generated name is an intentional fork, not drift, and this
+        // module never treats it as one. Independent of gate-cleared status
+        // above: a pack that fell out of gate can still have its shipped
+        // agent files checked for drift against its own current pack.json.
+        if (loaded.source.kind === "bundled") {
+          const sourcePack = options.loadStackPackForGeneration(origin.sourceRef);
+          if (sourcePack !== undefined) {
+            const pair = generateStackAgentPair(sourcePack);
+            const expected = [pair.auditor, pair.fixer].find((file) => file.name === definition.name);
+            if (expected !== undefined && expected.content !== loaded.raw) {
+              problems.push({
+                reason: "generated-drift",
+                detail:
+                  `bundled agent "${definition.name}" no longer matches what "keryx agents generate --stack ${origin.sourceRef}" ` +
+                  `would produce from its current pack.json — regenerate rather than hand-editing it`,
+              });
+            }
+          }
+        }
       }
     }
   }
@@ -415,6 +545,7 @@ export function verifyAgents(projectRoot: string, options: VerifyAgentsOptions =
   const bundledAgentsRoot = options.bundledRoot ?? path.join(defaultBundledRoot(), "agents");
   const stackPackExists = options.stackPackExists ?? defaultStackPackExists(bundledAgentsRoot);
   const stackPackGateCleared = options.stackPackGateCleared ?? defaultStackPackGateCleared(bundledAgentsRoot);
+  const loadStackPackForGeneration = options.loadStackPackForGeneration ?? defaultLoadStackPackForGeneration(bundledAgentsRoot);
   const skillExists = options.skillExists ?? defaultSkillExists(projectRoot, bundledAgentsRoot);
   const supportLookup = options.supportLookup ?? defaultAgentSupportLookup;
 
@@ -424,7 +555,7 @@ export function verifyAgents(projectRoot: string, options: VerifyAgentsOptions =
   }
 
   const agents: AgentVerifyResult[] = candidates.map((loaded) =>
-    verifyOne(loaded, { stackPackExists, stackPackGateCleared, skillExists, supportLookup }),
+    verifyOne(loaded, { stackPackExists, stackPackGateCleared, loadStackPackForGeneration, skillExists, supportLookup }),
   );
 
   if (options.name !== undefined && candidates.length === 0) {

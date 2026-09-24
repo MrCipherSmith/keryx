@@ -1,5 +1,5 @@
 // Tests for `keryx agents list|show|export|verify` (flow 310, W2-AC8).
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -176,14 +176,38 @@ describe("keryx agents export", () => {
 });
 
 describe("keryx agents verify", () => {
-  test("the real bundled catalog verifies ok", async () => {
+  // Flow 314 W4 T10: eight generated per-stack agents now ship, gated on
+  // stack packs that are currently `stability: "experimental"` (a later
+  // task flips them to "stable" once W1's gates pass). Every one of those
+  // eight legitimately reports `stack-pack-not-gate-cleared` on the real,
+  // un-stubbed CLI path — the CLI has no seam to inject
+  // `stackPackGateCleared` the way `verify.ts`'s own tests do, so this test
+  // asserts the real-tree output is clean of every OTHER problem instead of
+  // asserting `ok: true` outright.
+  const EXPECTED_UNGATED_AGENTS = [
+    "go-build-fixer",
+    "go-code-auditor",
+    "python-build-fixer",
+    "python-code-auditor",
+    "react-build-fixer",
+    "react-code-auditor",
+    "ts-js-node-build-fixer",
+    "ts-js-node-code-auditor",
+  ].sort();
+
+  test("the real bundled catalog verifies ok except the gated per-stack agents, which fail only on stack-pack-not-gate-cleared", async () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("verify", ["--json"], { cwd: REPO_ROOT, log, error });
-    const report = JSON.parse(lines.join("\n")) as { ok: boolean; agents: Array<{ problems: unknown[] }> };
-    expect(report.ok).toBe(true);
-    expect(report.agents.length).toBeGreaterThanOrEqual(10);
-    for (const agent of report.agents) expect(agent.problems).toEqual([]);
-    expect(process.exitCode).not.toBe(1);
+    const report = JSON.parse(lines.join("\n")) as {
+      ok: boolean;
+      agents: Array<{ name: string; problems: Array<{ reason: string }> }>;
+    };
+    expect(report.agents.length).toBeGreaterThanOrEqual(18);
+    const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
+    for (const agent of withProblems) {
+      expect(agent.problems.map((p) => p.reason)).toEqual(["stack-pack-not-gate-cleared"]);
+    }
+    expect(withProblems.map((agent) => agent.name).sort()).toEqual(EXPECTED_UNGATED_AGENTS);
   });
 
   test("narrows to one agent by name", async () => {
@@ -233,6 +257,109 @@ describe("keryx agents verify", () => {
   test("an unknown flag is refused rather than ignored", async () => {
     const { errors, log, error } = collect();
     await agentsCatalogCommand("verify", ["--nope"], { cwd: REPO_ROOT, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("Unknown flag");
+  });
+});
+
+describe("keryx agents generate", () => {
+  // `generate` always resolves the bundled agents/stacks tree via
+  // `defaultBundledRoot()` (the same real-tree resolution every other
+  // subcommand's bundled reads use) — it is not `cwd`-relocatable the way
+  // `.metaproject/agents` project reads are. Tests below either use
+  // `--check` (never writes) or carefully restore any file they touch.
+  const REAL_BUNDLED_AGENTS_DIR = path.join(REPO_ROOT, "src", "gdskills", "bundled", "agents");
+
+  test("--check reports no drift for a real, already-generated stack pack", async () => {
+    const { lines, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "go", "--check", "--json"], { cwd: REPO_ROOT, log, error });
+    const doc = JSON.parse(lines.join("\n")) as {
+      stack: string;
+      check: boolean;
+      files: Array<{ fileName: string; changed: boolean; existed: boolean }>;
+    };
+    expect(doc.stack).toBe("go");
+    expect(doc.files).toHaveLength(2);
+    expect(doc.files.map((f) => f.fileName).sort()).toEqual(["go-build-fixer.md", "go-code-auditor.md"]);
+    for (const file of doc.files) {
+      expect(file.existed).toBe(true);
+      expect(file.changed).toBe(false);
+    }
+    expect(process.exitCode).not.toBe(1);
+  });
+
+  test("--check exits 1 and reports drift when a bundled generated file was hand-edited, without writing", async () => {
+    const filePath = path.join(REAL_BUNDLED_AGENTS_DIR, "go-code-auditor.md");
+    const original = readFileSync(filePath, "utf8");
+    try {
+      writeFileSync(filePath, `${original}\n<!-- hand edit -->\n`, "utf8");
+      const { lines, log, error } = collect();
+      await agentsCatalogCommand("generate", ["--stack", "go", "--check", "--json"], { cwd: REPO_ROOT, log, error });
+      const doc = JSON.parse(lines.join("\n")) as { files: Array<{ fileName: string; changed: boolean }> };
+      const auditor = doc.files.find((f) => f.fileName === "go-code-auditor.md");
+      expect(auditor?.changed).toBe(true);
+      expect(process.exitCode).toBe(1);
+      // --check never writes — the hand edit must still be on disk.
+      expect(readFileSync(filePath, "utf8")).toBe(`${original}\n<!-- hand edit -->\n`);
+    } finally {
+      writeFileSync(filePath, original, "utf8");
+      process.exitCode = 0;
+    }
+  });
+
+  test("writing (no --check) restores a hand-edited file back to the generated content", async () => {
+    const filePath = path.join(REAL_BUNDLED_AGENTS_DIR, "go-build-fixer.md");
+    const original = readFileSync(filePath, "utf8");
+    try {
+      writeFileSync(filePath, `${original}\n<!-- hand edit -->\n`, "utf8");
+      const { lines, log, error } = collect();
+      await agentsCatalogCommand("generate", ["--stack", "go", "--json"], { cwd: REPO_ROOT, log, error });
+      const doc = JSON.parse(lines.join("\n")) as { files: Array<{ fileName: string; changed: boolean }> };
+      const fixer = doc.files.find((f) => f.fileName === "go-build-fixer.md");
+      expect(fixer?.changed).toBe(true);
+      expect(readFileSync(filePath, "utf8")).toBe(original);
+    } finally {
+      writeFileSync(filePath, original, "utf8");
+    }
+  });
+
+  test("an invalid --stack id is refused", async () => {
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "Not-Valid!"], { cwd: REPO_ROOT, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("--stack");
+  });
+
+  test("no --stack at all is refused", async () => {
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", [], { cwd: REPO_ROOT, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("--stack");
+  });
+
+  test("a --stack naming a pack that does not exist is refused", async () => {
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "no-such-pack"], { cwd: REPO_ROOT, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("no-such-pack");
+  });
+
+  test("a --stack pack with no agentProfile is refused (e.g. mobx, which is deliberately not gated for generation)", async () => {
+    // mobx is a real bundled stack directory with no `agentProfile` block
+    // (W2 §"Initial catalogue": it extends react rather than getting its
+    // own generated pair) — a real, on-disk negative case rather than a
+    // synthetic one.
+    const mobxPackPath = path.join(REPO_ROOT, "src", "gdskills", "bundled", "stacks", "mobx", "pack.json");
+    if (!existsSync(mobxPackPath)) return; // skip if this repo's stack layout ever changes
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "mobx"], { cwd: REPO_ROOT, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("agentProfile");
+  });
+
+  test("an unknown flag is refused rather than ignored", async () => {
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "go", "--bogus"], { cwd: REPO_ROOT, log, error });
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("Unknown flag");
   });

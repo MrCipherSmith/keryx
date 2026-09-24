@@ -10,6 +10,8 @@
 // or verification logic itself (D-2). `export` is the one subcommand that
 // writes a file; `list`/`show`/`verify` are read-only.
 
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import {
   compileAgentDefinition,
   loadAgentCatalog,
@@ -22,7 +24,10 @@ import {
   verifyAgents,
   type AgentVerifyResult,
   type VerifyAgentsReport,
+  generateStackAgentPair,
+  type StackPackForAgentGeneration,
 } from "../agents/service";
+import { defaultBundledRoot } from "../gdskills/bundled-eval";
 import { optionValue } from "../lib/args";
 import { helpOptions, helpTitle, helpUsage } from "../lib/ui";
 
@@ -54,12 +59,13 @@ function isExportRuntime(value: string | undefined): value is AgentExportRuntime
   return value !== undefined && (AGENT_EXPORT_RUNTIMES as readonly string[]).includes(value);
 }
 
-/** `keryx agents list|show|export|verify` dispatcher, called from `agents.ts`. */
+/** `keryx agents list|show|export|verify|generate` dispatcher, called from `agents.ts`. */
 export async function agentsCatalogCommand(subcommand: string, args: string[], deps: AgentsCatalogDeps = {}): Promise<void> {
   if (subcommand === "list") return listCommand(args, deps);
   if (subcommand === "show") return showCommand(args, deps);
   if (subcommand === "export") return exportCommand(args, deps);
   if (subcommand === "verify") return verifyCommand(args, deps);
+  if (subcommand === "generate") return generateCommand(args, deps);
   throw new Error(`agentsCatalogCommand: unknown subcommand "${subcommand}"`);
 }
 
@@ -365,6 +371,147 @@ function printVerifyHelp(): void {
   helpOptions([{ flag: "--json", desc: "Emit the full verification report as JSON." }]);
 }
 
+// ---------------------------------------------------------------------------
+// generate
+// ---------------------------------------------------------------------------
+
+const STACK_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+
+interface GenerateFileOutcome {
+  readonly fileName: string;
+  readonly name: string;
+  readonly changed: boolean;
+  readonly existed: boolean;
+}
+
+/** Same narrowing `verify.ts`'s `defaultLoadStackPackForGeneration` uses — kept local rather than imported (that resolver is `verify.ts`-internal, not exported). */
+function readStackPackForGeneration(packJsonPath: string): StackPackForAgentGeneration | undefined {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(packJsonPath, "utf8"));
+  } catch {
+    return undefined;
+  }
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const pack = raw as {
+    id?: unknown;
+    skills?: { review?: unknown; "build-fix"?: unknown };
+    agentProfile?: { displayName?: unknown; auditFocus?: unknown; buildCommands?: unknown; fixGuardrails?: unknown };
+  };
+  if (typeof pack.id !== "string" || pack.id.length === 0) return undefined;
+  const profile = pack.agentProfile;
+  const isStringArray = (v: unknown): v is readonly string[] => Array.isArray(v) && v.every((i) => typeof i === "string");
+  if (
+    typeof profile !== "object" ||
+    profile === null ||
+    typeof profile.displayName !== "string" ||
+    !isStringArray(profile.auditFocus) ||
+    !isStringArray(profile.buildCommands) ||
+    !isStringArray(profile.fixGuardrails)
+  ) {
+    return undefined;
+  }
+  const review = pack.skills?.review;
+  const buildFix = pack.skills?.["build-fix"];
+  return {
+    id: pack.id,
+    skills: {
+      ...(isStringArray(review) ? { review } : {}),
+      ...(isStringArray(buildFix) ? { "build-fix": buildFix } : {}),
+    },
+    agentProfile: {
+      displayName: profile.displayName,
+      auditFocus: profile.auditFocus,
+      buildCommands: profile.buildCommands,
+      fixGuardrails: profile.fixGuardrails,
+    },
+  };
+}
+
+function generateCommand(args: string[], depsIn: AgentsCatalogDeps): void {
+  const { log, error } = resolveDeps(depsIn);
+  if (args.includes("--help") || args.includes("-h")) {
+    printGenerateHelp();
+    return;
+  }
+  const bad = unknownFlags(args, ["--stack", "--check", "--json"]);
+  if (bad.length > 0) {
+    error(`Unknown flag(s): ${bad.join(", ")}`);
+    process.exitCode = 1;
+    return;
+  }
+  const json = args.includes("--json");
+  const check = args.includes("--check");
+  const stackId = optionValue(args, "--stack");
+
+  if (stackId === undefined || !STACK_ID_PATTERN.test(stackId)) {
+    error(
+      `Provide a valid --stack id (${STACK_ID_PATTERN.source}): keryx agents generate --stack <id> [--check] [--json]`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const bundledAgentsRoot = path.join(defaultBundledRoot(), "agents");
+  const stacksRoot = path.join(bundledAgentsRoot, "..", "stacks");
+  const packDir = path.join(stacksRoot, stackId);
+  const packJsonPath = path.join(packDir, "pack.json");
+
+  if (!existsSync(packJsonPath)) {
+    error(`No stack pack "${stackId}" found at ${packJsonPath}.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const pack = readStackPackForGeneration(packJsonPath);
+  if (pack === undefined) {
+    error(`Stack pack "${stackId}" has no usable agentProfile in ${packJsonPath} — cannot generate an agent pair.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const pair = generateStackAgentPair(pack);
+  const outcomes: GenerateFileOutcome[] = [];
+
+  for (const file of [pair.auditor, pair.fixer]) {
+    const filePath = path.join(bundledAgentsRoot, file.fileName);
+    const existed = existsSync(filePath);
+    const previous = existed ? readFileSync(filePath, "utf8") : undefined;
+    const changed = previous !== file.content;
+
+    if (!check && changed) {
+      writeFileSync(filePath, file.content, "utf8");
+    }
+    outcomes.push({ fileName: file.fileName, name: file.name, changed, existed });
+  }
+
+  if (json) {
+    log(JSON.stringify({ stack: stackId, check, files: outcomes }, null, 2));
+  } else {
+    log(`# agents generate --stack ${stackId}${check ? " --check" : ""}`);
+    log("");
+    for (const outcome of outcomes) {
+      const state = !outcome.existed ? "new" : outcome.changed ? "drifted" : "unchanged";
+      const action = check ? state : outcome.changed ? (outcome.existed ? "updated" : "written") : "unchanged";
+      log(`  ${outcome.fileName}  ${action}`);
+    }
+  }
+
+  if (check && outcomes.some((o) => o.changed)) {
+    process.exitCode = 1;
+  }
+}
+
+function printGenerateHelp(): void {
+  helpTitle("keryx agents generate", "regenerate a stack pack's <id>-code-auditor/<id>-build-fixer agent pair from its pack.json");
+  helpUsage(["keryx agents generate --stack <id> [--check] [--json]"]);
+  helpOptions([
+    { flag: "--stack", desc: "Stack pack id (its directory name under the bundled stacks tree)." },
+    { flag: "--check", desc: "Report drift without writing; exits 1 if either generated file differs from what is on disk." },
+    { flag: "--json", desc: "Emit the per-file outcome as JSON." },
+  ]);
+}
+
 // Re-exported for CLI help composition in `agents.ts`.
-export { printListHelp, printShowHelp, printExportHelp, printVerifyHelp };
+export { printListHelp, printShowHelp, printExportHelp, printVerifyHelp, printGenerateHelp };
 export type { AgentVerifyResult };

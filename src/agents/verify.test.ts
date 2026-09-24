@@ -2,10 +2,11 @@
 // temp-dir pattern (bundledRoot injectable) plus injected `stackPackExists`/
 // `skillExists` resolvers so AC5/AC6's fail-closed behavior is exercised
 // without touching the real bundled catalog on disk.
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { generateStackAgentPair } from "./generate";
 import { verifyAgents } from "./verify";
 
 let root: string;
@@ -351,13 +352,142 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
     expect(report.agents.some((a) => a.name === "incomplete")).toBe(false);
   });
 
-  test("every bundled shipped agent verifies ok against the real skill/bundled trees", () => {
-    const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {});
+  test("every bundled shipped agent verifies ok against the real skill/bundled trees, with the per-stack packs' gate stubbed cleared", () => {
+    // Flow 314 W4 T10: the eight generated per-stack agents (T10) resolve
+    // their `origin.sourceRef` against real stack packs that are currently
+    // `stability: "experimental"` (W1's gates flip them to "stable" in a
+    // later task) — `stackPackGateCleared` is stubbed here exactly as the
+    // dispatch note directs, so this guard still proves everything OTHER
+    // than pack gate status (schema, tools, skills, drift) is clean.
+    const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {
+      stackPackGateCleared: () => ({ cleared: true }),
+    });
     expect(report.catalogErrors).toEqual([]);
     for (const agent of report.agents) {
       expect(agent.problems).toEqual([]);
     }
-    expect(report.agents.length).toBeGreaterThanOrEqual(10);
+    expect(report.agents.length).toBeGreaterThanOrEqual(18);
     expect(report.ok).toBe(true);
+  });
+
+  test("every bundled shipped agent against the real trees with NO stub: only stack-pack-not-gate-cleared appears, for exactly the 8 generated per-stack agents", () => {
+    const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {});
+    expect(report.catalogErrors).toEqual([]);
+    const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
+    for (const agent of withProblems) {
+      expect(agent.problems.map((p) => p.reason)).toEqual(["stack-pack-not-gate-cleared"]);
+    }
+    expect(withProblems.map((agent) => agent.name).sort()).toEqual(
+      [
+        "go-build-fixer",
+        "go-code-auditor",
+        "python-build-fixer",
+        "python-code-auditor",
+        "react-build-fixer",
+        "react-code-auditor",
+        "ts-js-node-build-fixer",
+        "ts-js-node-code-auditor",
+      ].sort(),
+    );
+  });
+
+  // Flow 314 W4 T10 (W2 §"Initial catalogue": "a hand edit to a generated
+  // definition is flagged by keryx agents verify").
+  describe("generated-drift", () => {
+    function reviewPack(id: string): Record<string, unknown> {
+      return {
+        id,
+        family: "language",
+        modules: [],
+        stability: "stable",
+        skills: { review: ["r-skill"], "build-fix": ["bf-skill"] },
+        agentProfile: {
+          displayName: "Fixture",
+          auditFocus: ["focus one"],
+          buildCommands: ["cmd one"],
+          fixGuardrails: ["never do X"],
+        },
+      };
+    }
+
+    function writePack(stacksRoot: string, id: string): void {
+      mkdirSync(path.join(stacksRoot, id, "governance"), { recursive: true });
+      writeFileSync(path.join(stacksRoot, id, "pack.json"), JSON.stringify(reviewPack(id)), "utf8");
+    }
+
+    test("a bundled generated agent whose content matches a fresh regeneration has no generated-drift problem", () => {
+      const stacksRoot = path.join(path.dirname(bundledRoot), "stacks");
+      writePack(stacksRoot, "fixture-drift");
+      const pack = JSON.parse(readFileSync(path.join(stacksRoot, "fixture-drift", "pack.json"), "utf8"));
+      const pair = generateStackAgentPair(pack);
+      writeAgent(bundledRoot, pair.auditor.name, pair.auditor.content);
+
+      const report = verifyAgents(projectRoot, {
+        bundledRoot,
+        skillExists: ALWAYS_SKILL_EXISTS,
+        stackPackGateCleared: () => ({ cleared: true }),
+      });
+      const agent = report.agents.find((a) => a.name === pair.auditor.name);
+      expect(agent?.problems.some((p) => p.reason === "generated-drift")).toBe(false);
+    });
+
+    test("a hand-edited bundled generated agent fails with generated-drift, naming the regenerate command", () => {
+      const stacksRoot = path.join(path.dirname(bundledRoot), "stacks");
+      writePack(stacksRoot, "fixture-drift");
+      const pack = JSON.parse(readFileSync(path.join(stacksRoot, "fixture-drift", "pack.json"), "utf8"));
+      const pair = generateStackAgentPair(pack);
+      const handEdited = pair.auditor.content.replace("Fixture Lang", "Fixture Lang").replace("focus one", "a hand-added focus item");
+      writeAgent(bundledRoot, pair.auditor.name, handEdited);
+
+      const report = verifyAgents(projectRoot, {
+        bundledRoot,
+        skillExists: ALWAYS_SKILL_EXISTS,
+        stackPackGateCleared: () => ({ cleared: true }),
+      });
+      const agent = report.agents.find((a) => a.name === pair.auditor.name);
+      expect(report.ok).toBe(false);
+      expect(
+        agent?.problems.some(
+          (p) => p.reason === "generated-drift" && p.detail.includes("keryx agents generate --stack fixture-drift"),
+        ),
+      ).toBe(true);
+    });
+
+    test("a project-source override of a generated name is never flagged as drift", () => {
+      const stacksRoot = path.join(path.dirname(bundledRoot), "stacks");
+      writePack(stacksRoot, "fixture-drift");
+      const pack = JSON.parse(readFileSync(path.join(stacksRoot, "fixture-drift", "pack.json"), "utf8"));
+      const pair = generateStackAgentPair(pack);
+      const forked = pair.auditor.content.replace("focus one", "a deliberately forked focus item");
+      writeAgent(path.join(projectRoot, ".metaproject", "agents"), pair.auditor.name, forked);
+
+      const report = verifyAgents(projectRoot, {
+        bundledRoot,
+        skillExists: ALWAYS_SKILL_EXISTS,
+        stackPackGateCleared: () => ({ cleared: true }),
+      });
+      const agent = report.agents.find((a) => a.name === pair.auditor.name);
+      expect(agent?.source?.kind).toBe("project");
+      expect(agent?.problems.some((p) => p.reason === "generated-drift")).toBe(false);
+    });
+
+    test("an unparseable pack.json skips the drift check rather than crashing or reporting drift", () => {
+      const stacksRoot = path.join(path.dirname(bundledRoot), "stacks");
+      mkdirSync(path.join(stacksRoot, "fixture-broken", "governance"), { recursive: true });
+      writeFileSync(path.join(stacksRoot, "fixture-broken", "pack.json"), "{ not json", "utf8");
+      writeAgent(
+        bundledRoot,
+        "unmatchable-agent",
+        agentMarkdown("unmatchable-agent", {}, "\norigin:\n  kind: generated\n  sourceRef: fixture-broken"),
+      );
+      const report = verifyAgents(projectRoot, {
+        bundledRoot,
+        skillExists: ALWAYS_SKILL_EXISTS,
+        stackPackExists: (ref) => ref === "fixture-broken",
+        stackPackGateCleared: () => ({ cleared: true }),
+      });
+      const agent = report.agents.find((a) => a.name === "unmatchable-agent");
+      expect(agent?.problems.some((p) => p.reason === "generated-drift")).toBe(false);
+    });
   });
 });
