@@ -123,3 +123,22 @@
 - 2026-09-24T19:28:40.798Z - task-done: T16: Fix r02 lane y: install.ts raw unlink/cp into a dedicated allowlisted module; ratchet catches ./fs and .ts specifiers (R2-F3, R2-F4)
 - 2026-09-24T19:32:14.890Z - task-done: T15: Fix r02 lane x: managed-git-hook accepts in-project targets, warn+skip otherwise, named dangling-link refusal, realpath hooksRoot; managed-hook.ts (trigger) routing (R2-F2, R2-F6, R2-F5)
 - 2026-09-24 - Fix attempt 2 committed: T17 (R2-F1 sweep domain + mayCarryReviewerText scoping), T16 (R2-F3 guarded-fs-ops.ts sole allowlisted gdskills module; R2-F4 ./fs and .ts specifiers), T15 (R2-F2 in-project hook symlinks accepted, escapes warn+skip via installManagedHookOrWarn/removeManagedHookOrWarn, dangling link named refusal; R2-F6 hooksRoot realpath; R2-F5 managed-hook.ts (trigger) uses resolveContainedHookPath). tsc clean, ratchet 28/0. Follow-up note: keryx trigger install now throws on an escaping hook link (no warn wrapper in trigger.ts).
+- 2026-09-24T19:32:21.918Z - task-attempt: T9: started (attempt 5) — round 3 narrow verification (opus) of fix attempt 2
+- 2026-09-24T19:41:54.840Z - task-attempt: T9: started (attempt 6) — round 3 (r03 @5500dd4b): 0 blocker/major/minor, 5 info; CI green; clean
+- 2026-09-24 - Review round 3: opus narrow verification at 5500dd4b, ingested as 2026-09-24-ingest-695-r03.
+  - Result: 0 blocker, 0 major, 0 minor, 5 info. R2-F1 through R2-F6 are resolved.
+  - CI green at 5500dd4b. The review loop is clean at the minor threshold.
+
+## Follow-up scope (info, not acted on in flow 315)
+- R3-F1 (info): the managed-git-hook project-root container also admits .git/config and tracked files as hook link targets. The user controls their own repo; tightening this to a hooks/scripts allowlist is a hardening idea.
+- R3-F2 (info): a hook that is a symlink to a directory hits EISDIR. It should map to a named refusal.
+- R3-F3 (info): `keryx trigger install` aborts on an escaping hook link. There is no warn-and-skip wrapper in trigger.ts, unlike init/update.
+- R3-F4 (info): ratchet gaps.
+  - src/lib/managed-hook.ts is not covered.
+  - src/gdskills is not in COVERED_DIRS, so the guarded-fs-ops allowlist entry is a no-op; add src/gdskills.
+  - .js specifiers and namespace imports of lib/fs are not caught.
+- R3-F5 (info): guarded-fs-ops copyDirectoryContained naming overclaims. A nested directory-symlink cycle in the source tree is a DoS vector.
+- Also carried:
+  - R2-F7 (info, no action).
+  - W3 out-of-scope items: host observers, scheduled learn prune, observation-digest HMAC, graduation apply for skill/rule, KERYX_LEARNING values, R10-F3, R10-F4.
+  - W4 R3-F18 and the W4 r05-r07 info items.
