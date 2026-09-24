@@ -41,3 +41,5 @@
 - 2026-09-24T00:19:04.708Z - task-added: T12: Re-planned fix for round 3: single decision-codec source on the adapter; injectable owner on installer wrappers with real-wrapper refusal tests
 - 2026-09-24T00:19:04.786Z - task-attempt: T12: started (attempt 1) — 305-T12 sonnet
 - 2026-09-24T00:34:39.688Z - task-done: T12: Re-planned fix for round 3: single decision-codec source on the adapter; injectable owner on installer wrappers with real-wrapper refusal tests
+- 2026-09-24T00:44:46.572Z - task-attempt: T8: started (attempt 5) — verification round after re-plan: 0 findings; CI all green on c36c788a
+- 2026-09-24T00:44:56Z - Verification round after re-plan (opus, narrow): 0 findings; mutations M1-M2 and G5-G10 killed; ctx hook byte parity. CI 19 checks green on c36c788a. Review loop closed at threshold minor. Remaining info (not fixed, stated for the report): R3 info — the migrates-legacy never-create/retype check seeds only the slot's own type (a migrating surface deleting another surface's hooks object is caught by the owner permutation/coexistence tests instead).

@@ -9,7 +9,7 @@
   "title": "W5-a: one harness adapter registry for the ctx guard, orient injector and security hooks",
   "status": "in-progress",
   "createdAt": "2026-09-23T21:26:30.854Z",
-  "updatedAt": "2026-09-24T00:34:39.688Z",
+  "updatedAt": "2026-09-24T00:44:46.572Z",
   "source": {
     "type": "description",
     "ref": null
@@ -161,7 +161,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 4,
+        "count": 5,
         "log": [
           {
             "at": "2026-09-23T23:08:19.167Z",
@@ -182,6 +182,11 @@
             "at": "2026-09-24T00:19:04.627Z",
             "outcome": "failed",
             "detail": "round 3: 0 blocker/major, 2 minor (R3-F1 two codec sources, R3-F2 wrapper propagation untested); CI 18/18 green; attempt budget (3) reached -> re-plan"
+          },
+          {
+            "at": "2026-09-24T00:44:46.572Z",
+            "outcome": "started",
+            "detail": "verification round after re-plan: 0 findings; CI all green on c36c788a"
           }
         ]
       },
@@ -442,6 +447,11 @@
       "at": "2026-09-24T00:34:39.688Z",
       "event": "task-done",
       "detail": "T12: Re-planned fix for round 3: single decision-codec source on the adapter; injectable owner on installer wrappers with real-wrapper refusal tests"
+    },
+    {
+      "at": "2026-09-24T00:44:46.572Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 5) — verification round after re-plan: 0 findings; CI all green on c36c788a"
     }
   ]
 }
