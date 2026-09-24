@@ -5,9 +5,18 @@
 // mkdir/writeFile/chmod for the ".git/hooks by design" reason silently
 // exempted every OTHER raw write either command might grow too, with the
 // ratchet none the wiser (a mutation test confirmed this: 3 of 3 reintroduced
-// raw writes in init.ts went uncaught). One shared module carries the one
-// legitimate raw-write reason and the one allowlist entry; both commands now
+// raw writes in init.ts went uncaught). This module carries the one
+// legitimate raw-write reason and the one allowlist entry; both commands
 // import this instead of keeping their own copy.
+//
+// R2-F5: this is NOT the one and only place that writes a managed git hook
+// block — src/lib/managed-hook.ts (used by `keryx trigger install`, for
+// hooks this module's narrower "post-commit" | "pre-push" type doesn't cover,
+// e.g. post-merge/post-checkout) is a second writer with the same on-disk
+// block convention. It used to have no containment check of its own; it now
+// reuses `resolveContainedHookPath` below instead of re-deriving one, so the
+// escape check itself has exactly one implementation even though there are
+// two callers of it.
 //
 // R1-F6: the old per-command comment claimed "resolveGitHooksRoot's own
 // symlink check" as the reason a symlinked hooks dir or hook file could not
@@ -53,31 +62,56 @@ function escapeRegExp(value: string): string {
 
 /**
  * Confirm `target` — already known to exist as a symlink — resolves, via its
- * full symlink chain, to somewhere inside `containerReal` (an already
- * `realpath`d directory). Mirrors the same escape check
- * `contained-write.ts`'s `assertContained` runs, applied to a fixed pair of
- * paths instead of an arbitrary `root`/`rel`.
+ * full symlink chain, to somewhere inside AT LEAST ONE of `containersReal`
+ * (already `realpath`d directories). Mirrors the same escape check
+ * `contained-write.ts`'s `assertContained` runs, applied to a fixed set of
+ * candidate roots instead of an arbitrary `root`/`rel`.
+ *
+ * R2-F2: a dangling symlink (its target does not exist) used to surface as a
+ * raw ENOENT out of `realpath`, which propagated out of `initCommand`/
+ * `refreshServiceFiles` as an unlabeled crash. It is mapped to the same named
+ * `ManagedGitHookEscapeError` here instead, so every caller has exactly one
+ * error type to catch for "this hook could not be safely reached."
  */
-async function assertResolvesInside(target: string, containerReal: string, label: string): Promise<void> {
-  const real = await realpath(target);
-  const rel = path.relative(containerReal, real);
-  const escapes = rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
-  if (escapes) {
+async function assertResolvesInside(target: string, containersReal: readonly string[], label: string): Promise<void> {
+  let real: string;
+  try {
+    real = await realpath(target);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
+      throw new ManagedGitHookEscapeError(`${label} (${target}) is a dangling symlink — refusing to write through it`);
+    }
+    throw err;
+  }
+  const insideAny = containersReal.some((containerReal) => {
+    const rel = path.relative(containerReal, real);
+    return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+  });
+  if (!insideAny) {
     throw new ManagedGitHookEscapeError(
-      `${label} (${target}) resolves outside the git common dir (${containerReal}) — refusing to write through it`,
+      `${label} (${target}) resolves outside the git common dir and the project root (${containersReal.join(", ")}) — refusing to write through it`,
     );
   }
 }
 
 /**
  * Resolve the git hooks root and the path `hookName` would live at, and
- * confirm neither escapes the git common dir through a symlink (R1-F6).
- * Returns `null` when there is no git hooks root at all — mirrors
- * `resolveGitHooksRoot`'s own no-op contract, so a caller outside a git repo
- * (or one `git rev-parse`/`stat` genuinely cannot resolve) keeps behaving
- * exactly as before. Throws `ManagedGitHookEscapeError` on an escape.
+ * confirm neither escapes the git common dir OR the project root through a
+ * symlink (R1-F6, widened by R2-F2). Returns `null` when there is no git
+ * hooks root at all — mirrors `resolveGitHooksRoot`'s own no-op contract, so
+ * a caller outside a git repo (or one `git rev-parse`/`stat` genuinely cannot
+ * resolve) keeps behaving exactly as before. Throws `ManagedGitHookEscapeError`
+ * on an escape or a dangling link — callers decide whether that means "abort"
+ * or "skip this hook and warn" (see `installManagedHookOrWarn` below).
+ *
+ * R2-F2: `.git/hooks/<hook> -> ../../scripts/<hook>`, a tracked script inside
+ * the project, is a common and legitimate setup. It is outside the git common
+ * dir by construction (scripts live in the working tree, not `.git`), so
+ * accepting only the common-dir container made init/update abort on it. A
+ * target resolving inside the PROJECT root is accepted too; anything else
+ * still refuses.
  */
-async function resolveContainedHookPath(
+export async function resolveContainedHookPath(
   projectRoot: string,
   hookName: string,
 ): Promise<{ hooksRoot: string; hookPath: string } | null> {
@@ -89,21 +123,27 @@ async function resolveContainedHookPath(
   // The git common dir resolveGitHooksRoot derived hooksRoot from — hooksRoot
   // is always literally `<commonDir>/hooks`, so its parent is that dir.
   const commonDirReal = await realpath(path.dirname(hooksRoot)).catch(() => path.dirname(hooksRoot));
+  const projectRootReal = await realpath(projectRoot).catch(() => projectRoot);
+  const acceptedContainers = [commonDirReal, projectRootReal];
 
   // `lstat` first, never `stat`: a symlinked hooks directory must be judged
   // (and, if it escapes, refused) WITHOUT ever being entered — `mkdir`'d,
   // `readdir`'d, or written into — below.
   const hooksRootStat = await lstat(hooksRoot).catch(() => null);
-  let hooksRootReal = hooksRoot;
+  // R2-F6: always realpath hooksRoot, not only when it is itself a symlink —
+  // an ancestor directory can be a symlink (e.g. `projectRoot` handed in
+  // through a symlinked path such as /var vs /private/var) without hooksRoot
+  // itself being one, which would otherwise leave `hooksRootReal` out of sync
+  // with what `realpath` actually resolves for the hook-file check below.
+  const hooksRootReal = await realpath(hooksRoot).catch(() => hooksRoot);
   if (hooksRootStat?.isSymbolicLink()) {
-    await assertResolvesInside(hooksRoot, commonDirReal, "the git hooks directory");
-    hooksRootReal = await realpath(hooksRoot);
+    await assertResolvesInside(hooksRoot, acceptedContainers, "the git hooks directory");
   }
 
   const hookPath = path.join(hooksRoot, hookName);
   const hookStat = await lstat(hookPath).catch(() => null);
   if (hookStat?.isSymbolicLink()) {
-    await assertResolvesInside(hookPath, hooksRootReal, "the git hook file");
+    await assertResolvesInside(hookPath, [hooksRootReal, projectRootReal], "the git hook file");
   }
 
   return { hooksRoot, hookPath };
@@ -178,4 +218,49 @@ export async function removeManagedHook(
   const next = `${existing.replace(blockPattern, "\n").trimEnd()}\n`;
   await writeFile(hookPath, next, "utf8");
   await chmod(hookPath, 0o755);
+}
+
+/**
+ * R2-F2: `installManagedHook` throws `ManagedGitHookEscapeError` fail-closed —
+ * exactly right for "never write through an escaping link", wrong for `keryx
+ * init`/`keryx update` to let bubble out uncaught. A single unreachable hook
+ * (a dangling link, or a genuine escape outside both the git common dir and
+ * the project root) used to abort the WHOLE command. This wraps the call: on
+ * that one named error it returns a human-readable warning string instead of
+ * throwing, so the caller can skip just that hook and keep going — the same
+ * "warn and skip" posture `checkInstallDestination` already uses elsewhere in
+ * this codebase. Any OTHER error (a real I/O failure) still throws.
+ */
+export async function installManagedHookOrWarn(
+  projectRoot: string,
+  hookName: "post-commit" | "pre-push",
+  blockId: string,
+  content: string,
+): Promise<string | null> {
+  try {
+    await installManagedHook(projectRoot, hookName, blockId, content);
+    return null;
+  } catch (err) {
+    if (err instanceof ManagedGitHookEscapeError) {
+      return `Skipped the "${blockId}" ${hookName} hook: ${err.message}`;
+    }
+    throw err;
+  }
+}
+
+/** `removeManagedHook`'s counterpart to {@link installManagedHookOrWarn} — same warn-and-skip posture on an escape/dangling link. */
+export async function removeManagedHookOrWarn(
+  projectRoot: string,
+  hookName: "post-commit" | "pre-push",
+  blockId: string,
+): Promise<string | null> {
+  try {
+    await removeManagedHook(projectRoot, hookName, blockId);
+    return null;
+  } catch (err) {
+    if (err instanceof ManagedGitHookEscapeError) {
+      return `Skipped removing the "${blockId}" ${hookName} hook: ${err.message}`;
+    }
+    throw err;
+  }
 }

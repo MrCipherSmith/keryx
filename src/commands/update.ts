@@ -4,7 +4,7 @@ import { access, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdirContained, writeContained } from "../lib/contained-write";
-import { installManagedHook, removeManagedHook } from "../lib/managed-git-hook";
+import { installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
 
 // R1-F20: `writeTextIfChanged`/`writeTextIfMissing`/`copyFileIfChanged`/the
 // module-directory scaffolders below all receive an absolute path already
@@ -276,9 +276,12 @@ export async function updateCommand(args: string[] = []): Promise<void> {
       note(notice);
     }
   }
-  if (summary.gdskillsWarnings.length > 0) {
+  if (summary.gdskillsWarnings.length > 0 || summary.hookWarnings.length > 0) {
     heading("Warnings");
     for (const warning of summary.gdskillsWarnings) {
+      note(warning);
+    }
+    for (const warning of summary.hookWarnings) {
       note(warning);
     }
   }
@@ -322,6 +325,13 @@ type RefreshSummary = {
    * `keryx update`, and none of it is a warning.
    */
   gdskillsNotices: string[];
+  /**
+   * R2-F2: "skipped this hook, here's why" messages from the git-hook
+   * installers below (a symlinked hook that escapes both the git common dir
+   * and the project root, or a dangling link) — surfaced under the same
+   * "Warnings" heading as gdskillsWarnings instead of aborting the update.
+   */
+  hookWarnings: string[];
   backfilledTasks: boolean;
   recoveredManifest: boolean;
 };
@@ -391,6 +401,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const enableMemory = moduleEnabled(manifest, "memory");
   const enableSecurity = moduleEnabled(manifest, "security");
   const enableSac = moduleEnabled(manifest, "sac");
+  const hookWarnings: string[] = [];
 
   // Task Manager backfill: projects initialized before the tasks module have a
   // bare `tasks: { enabled: false }` stub. `update` enables and scaffolds it
@@ -499,7 +510,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "gdgraph", "SKILL.md"), renderGdgraphSkillReadme());
     await seedAssetsLock(metaprojectRoot);
     if (manifest.modules?.gdgraph?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -515,7 +527,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfChanged(path.join(metaprojectRoot, "modules", "gdwiki.md"), renderGdwikiManifest());
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "gdwiki", "SKILL.md"), renderGdwikiSkillReadme());
     if (manifest.modules?.gdgraph?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -531,7 +544,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     gdskillsWarnings = gdskillsInstallResult.warnings;
     gdskillsNotices = gdskillsInstallResult.notices;
     if (manifest.modules?.gdskills?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -541,7 +555,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfChanged(path.join(metaprojectRoot, "core", "health", "README.md"), renderHealthCoreReadme());
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "health", "SKILL.md"), renderHealthSkillReadme());
     if (manifest.modules?.health?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -561,20 +576,23 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       await writeTextIfMissing(path.join(metaprojectRoot, "wiki", "testing", "conventions.md"), renderTestingWikiConventions());
     }
     if (manifest.modules?.testing?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
     if (manifest.modules?.testing?.hooks?.prePush) {
-      await installManagedHook(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
   if (await shouldInstallDashboardPostCommitHook(projectRoot, manifest)) {
-    await installManagedHook(
+    const warning = await installManagedHookOrWarn(
       projectRoot,
       "post-commit",
       "metaproject-dashboard-post-commit",
       renderMetaprojectDashboardPostCommitHook(),
     );
+    if (warning) hookWarnings.push(warning);
   }
 
   if (enableMemory) {
@@ -602,7 +620,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     // Refresh the security hooks only when the manifest already records them;
     // both installers are merge-safe and never touch data/security or user content.
     if (manifest.modules?.security?.hooks?.prePush) {
-      await installManagedHook(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+      if (warning) hookWarnings.push(warning);
     }
     if (manifest.modules?.security?.hooks?.agent) {
       await installSecurityAgentHooks(projectRoot);
@@ -623,7 +642,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     !manifest.modules?.security?.hooks?.prePush &&
     (await prePushHasSecurityBlock(projectRoot))
   ) {
-    await removeManagedHook(projectRoot, "pre-push", "security-pre-push");
+    const warning = await removeManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push");
+    if (warning) hookWarnings.push(warning);
   }
 
   if (!manifestState.exists || !manifestState.valid) {
@@ -666,6 +686,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     gdskillsProfile,
     gdskillsWarnings,
     gdskillsNotices,
+    hookWarnings,
     backfilledTasks: backfillTasks,
     recoveredManifest,
   };

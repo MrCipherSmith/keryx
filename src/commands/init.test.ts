@@ -444,3 +444,75 @@ test("memory index output is ignored and reproducible after init", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// R2-F2 regression coverage: `keryx init`/`keryx update` used to ABORT
+// outright when a `.git/hooks` file resolved outside the git common dir
+// through a symlink — even for a legitimate, common setup (a hook symlinked
+// to an in-project, repo-tracked script) or a dangling link. Both now leave
+// `initCommand` completing normally: the first because it's an accepted
+// target (inside the project root), the second because the refusal is a
+// warning, not an uncaught throw.
+const GDGRAPH_ONLY_INIT_ARGS = [
+  "--yes",
+  "--no-gdctx",
+  "--no-gdwiki",
+  "--no-gdskills",
+  "--no-health",
+  "--no-testing",
+  "--no-memory",
+  "--no-tasks",
+  "--no-security",
+];
+
+test("keryx init succeeds, and writes the hook block, when .git/hooks/post-commit links to an in-project tracked script", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-hook-inproject-link-"));
+  try {
+    Bun.spawnSync(["git", "init", "-q"], { cwd: root, stdout: "ignore", stderr: "ignore" });
+    const scriptDir = path.join(root, "scripts");
+    await mkdir(scriptDir, { recursive: true });
+    const scriptPath = path.join(scriptDir, "post-commit");
+    await writeFile(scriptPath, "#!/usr/bin/env sh\necho tracked\n", "utf8");
+    await symlink(path.join("..", "..", "scripts", "post-commit"), path.join(root, ".git", "hooks", "post-commit"));
+
+    const { logs, restore } = captureInitConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await initCommand(GDGRAPH_ONLY_INIT_ARGS);
+      });
+    } finally {
+      restore();
+    }
+
+    expect(logs.some((line) => line.includes("resolves outside") || line.includes("Escape"))).toBe(false);
+    const written = await readFile(scriptPath, "utf8");
+    expect(written).toContain("# keryx:gdgraph-post-commit:begin");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("keryx init warns and completes when .git/hooks/post-commit is a dangling symlink", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-hook-dangling-link-"));
+  try {
+    Bun.spawnSync(["git", "init", "-q"], { cwd: root, stdout: "ignore", stderr: "ignore" });
+    await symlink(path.join(root, "does-not-exist"), path.join(root, ".git", "hooks", "post-commit"));
+
+    const { logs, restore } = captureInitConsoleLog();
+    let threw = false;
+    try {
+      await withCwd(root, async () => {
+        await initCommand(GDGRAPH_ONLY_INIT_ARGS);
+      });
+    } catch {
+      threw = true;
+    } finally {
+      restore();
+    }
+
+    expect(threw).toBe(false);
+    expect(logs.some((line) => line.includes("Warnings"))).toBe(true);
+    expect(logs.some((line) => line.includes("dangling symlink"))).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

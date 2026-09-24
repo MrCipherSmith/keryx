@@ -14,21 +14,28 @@
 // `src/sync/hooks.ts`'s installer outright — which is the literal thing AC5
 // forbids ("extends... instead of replacing it").
 //
-// `update.ts`/`init.ts` keep their own local copies for now: refactoring those
-// two (already-shipped, unrelated call sites) to import from here instead is a
-// reasonable follow-up, left undone on purpose to keep this dispatch's diff
-// scoped to flow 286 T8-T10 — the same call this codebase already makes
-// elsewhere (see `src/trigger/run.ts`'s own note on the lock-scope gap it
-// left open). What matters for AC5 is that the ON-DISK CONVENTION is
-// identical, which it is: same marker format, same function-form-replace
-// safety fix, same file layout — so a hook file this module writes into and
-// one `update.ts`/`init.ts` also writes into coexist exactly as if they were
-// the same code, because for every property that matters here, they are.
+// `update.ts`/`init.ts` were later refactored (R1-F3) onto one shared writer
+// in `src/lib/managed-git-hook.ts` instead of their own local copies; this
+// module's own on-disk WRITE logic (the block-marker regex, the
+// function-form `replace`) is still a separate copy — its `hookName` type
+// (`TriggerEventName`: post-merge/post-commit/post-checkout) and its
+// `boolean` "did it write" return contract both differ from
+// `managed-git-hook.ts`'s narrower `"post-commit" | "pre-push"` / `void`
+// pair, so merging the two write paths outright is a larger change than this
+// module needs. What it DID need, and lacked (R2-F5): `managed-git-hook.ts`'s
+// symlink-containment check (R1-F6) — `resolveGitHooksRoot` alone never
+// rejected a `.git/hooks` (or a hook file under it) that is itself a symlink
+// resolving outside the project. That check — `resolveContainedHookPath` — is
+// now reused here directly, so the ONE escape check has exactly one
+// implementation even though there remain two hook-block WRITERS.
 
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "./fs";
 import { resolveGitHooksRoot } from "./git-hooks";
+import { ManagedGitHookEscapeError, resolveContainedHookPath } from "./managed-git-hook";
+
+export { ManagedGitHookEscapeError };
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -47,7 +54,11 @@ function blockPatternFor(blockId: string): RegExp {
  * one a DIFFERENT installer wrote under the same `# keryx:<id>:begin/end`
  * convention (e.g. `src/sync/hooks.ts`'s `keryx-sync` block), or hand-authored
  * content — is preserved byte-for-byte. Returns `false` (nothing written) only
- * when there is no `.git` hooks directory to write into at all.
+ * when there is no `.git` hooks directory to write into at all. R2-F5: reuses
+ * `managed-git-hook.ts`'s `resolveContainedHookPath` for the symlink-escape
+ * check (R1-F6) — throws `ManagedGitHookEscapeError` (re-exported from this
+ * module) on an escaping or dangling hooks dir/hook file, same as
+ * `installManagedHook` in `src/lib/managed-git-hook.ts`.
  */
 export async function installManagedHook(
   projectRoot: string,
@@ -55,10 +66,10 @@ export async function installManagedHook(
   blockId: string,
   content: string,
 ): Promise<boolean> {
-  const hooksRoot = await resolveGitHooksRoot(projectRoot);
-  if (!hooksRoot) return false;
+  const resolved = await resolveContainedHookPath(projectRoot, hookName);
+  if (!resolved) return false;
+  const { hooksRoot, hookPath } = resolved;
   await mkdir(hooksRoot, { recursive: true });
-  const hookPath = path.join(hooksRoot, hookName);
   const managedBlock = `# keryx:${blockId}:begin\n${content.trim()}\n# keryx:${blockId}:end`;
   const existing = (await pathExists(hookPath)) ? await readFile(hookPath, "utf8") : "#!/usr/bin/env sh\n";
   const pattern = blockPatternFor(blockId);
@@ -80,12 +91,13 @@ export async function installManagedHook(
 /**
  * Strip a single managed block, identified by `blockId`, from `hookName`,
  * preserving every other block and any hand-authored content. No-op
- * (`false`) when the hook file, or that block inside it, is absent.
+ * (`false`) when the hook file, or that block inside it, is absent. R2-F5:
+ * same containment check as {@link installManagedHook}.
  */
 export async function removeManagedHook(projectRoot: string, hookName: string, blockId: string): Promise<boolean> {
-  const hooksRoot = await resolveGitHooksRoot(projectRoot);
-  if (!hooksRoot) return false;
-  const hookPath = path.join(hooksRoot, hookName);
+  const resolved = await resolveContainedHookPath(projectRoot, hookName);
+  if (!resolved) return false;
+  const { hookPath } = resolved;
   if (!(await pathExists(hookPath))) return false;
   const existing = await readFile(hookPath, "utf8");
   const start = `# keryx:${blockId}:begin`;

@@ -102,6 +102,56 @@ test("installManagedHook no-ops (no throw) when there is no git repository at al
   }
 });
 
+// R2-F2: `.git/hooks/<hook> -> ../../scripts/<hook>`, a tracked script inside
+// the project, is a common and legitimate setup. Before this fix, only the
+// git common dir was an accepted resolution target, so this aborted with
+// ManagedGitHookEscapeError even though nothing was written outside the
+// project.
+test("installManagedHook accepts a hook file symlinked to an in-project tracked script", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-managed-hook-inproject-link");
+  try {
+    await initRepo(root);
+    const scriptDir = path.join(root, "scripts");
+    await mkdir(scriptDir, { recursive: true });
+    const scriptPath = path.join(scriptDir, "post-commit");
+    await writeFile(scriptPath, "#!/usr/bin/env sh\necho tracked\n", "utf8");
+    await symlink(path.join("..", "..", "scripts", "post-commit"), path.join(root, ".git", "hooks", "post-commit"));
+
+    await installManagedHook(root, "post-commit", "test-block", "echo hi");
+    const written = await readFile(scriptPath, "utf8");
+    expect(written).toContain("# keryx:test-block:begin");
+    expect(written).toContain("echo hi");
+    expect((await lstat(path.join(root, ".git", "hooks", "post-commit"))).isSymbolicLink()).toBe(true);
+
+    await removeManagedHook(root, "post-commit", "test-block");
+    expect(await readFile(scriptPath, "utf8")).not.toContain("keryx:test-block");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// R2-F2: a dangling hook-file symlink used to surface as a raw ENOENT out of
+// `realpath`, uncaught — a crash with no named reason. It is now the same
+// `ManagedGitHookEscapeError` every other refusal in this module throws.
+test("installManagedHook refuses a dangling hook-file symlink with a named error, not a raw ENOENT", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-managed-hook-dangling-link");
+  try {
+    await initRepo(root);
+    await symlink(path.join(root, "does-not-exist"), path.join(root, ".git", "hooks", "post-commit"));
+
+    let caught: unknown;
+    try {
+      await installManagedHook(root, "post-commit", "test-block", "echo hi");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ManagedGitHookEscapeError);
+    expect((caught as Error).message).toContain("dangling symlink");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("a legitimate linked worktree's hooks directory (resolves inside the common dir) still works", async () => {
   const root = uniqueTestRoot(tmpdir(), "keryx-managed-hook-worktree-root");
   const linked = uniqueTestRoot(tmpdir(), "keryx-managed-hook-worktree-linked");

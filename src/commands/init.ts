@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { optionValue } from "../lib/args";
 import { mkdirContained, removeContained, writeContained } from "../lib/contained-write";
-import { installManagedHook, removeManagedHook } from "../lib/managed-git-hook";
+import { installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
 import { moduleCommands } from "./module-commands";
 import { registerInitializedProject } from "./projects";
 import { sanitizeForDisplay } from "../lib/project-registry";
@@ -595,12 +595,17 @@ export async function initCommand(args: string[]): Promise<void> {
   });
   const agentRuleSources = syncedAgentRules.map((rule) => rule.source);
 
+  // R2-F2: collects "skipped this hook, here's why" messages from the
+  // installers below, surfaced under the same "Warnings" heading as
+  // gdskillsWarnings rather than aborting the run.
+  const hookWarnings: string[] = [];
+
   if (enableGdgraph) {
     await createGdgraphStructure(metaprojectRoot);
     await installGdgraphCoreScripts(metaprojectRoot);
     await seedAssetsLock(metaprojectRoot);
     if (enableGdgraphHook) {
-      await installGdgraphPostCommitHook(projectRoot);
+      await installGdgraphPostCommitHook(projectRoot, hookWarnings);
     }
   }
 
@@ -611,7 +616,7 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableGdwiki) {
     await createGdwikiStructure(metaprojectRoot);
     if (enableGdgraphHook) {
-      await installGdwikiPostCommitHook(projectRoot);
+      await installGdwikiPostCommitHook(projectRoot, hookWarnings);
     }
   }
 
@@ -622,27 +627,27 @@ export async function initCommand(args: string[]): Promise<void> {
     gdskillsWarnings = gdskillsInstallResult.warnings;
     gdskillsNotices = gdskillsInstallResult.notices;
     if (enableGdskillsHook) {
-      await installGdskillsPostCommitHook(projectRoot);
+      await installGdskillsPostCommitHook(projectRoot, hookWarnings);
     }
   }
 
   if (enableHealth) {
     await createHealthStructure(metaprojectRoot);
     if (enableHealthHook) {
-      await installHealthPostCommitHook(projectRoot);
+      await installHealthPostCommitHook(projectRoot, hookWarnings);
     }
   }
 
   if (enableTesting) {
     await createTestingStructure(metaprojectRoot, enableGdwiki);
     if (enableTestingPostCommitHook) {
-      await installTestingPostCommitHook(projectRoot);
+      await installTestingPostCommitHook(projectRoot, hookWarnings);
     }
     if (enableGdgraphHook || enableGdskillsHook || enableHealthHook || enableTestingPostCommitHook) {
-      await installMetaprojectDashboardPostCommitHook(projectRoot);
+      await installMetaprojectDashboardPostCommitHook(projectRoot, hookWarnings);
     }
     if (enableTestingPrePushHook) {
-      await installTestingPrePushHook(projectRoot);
+      await installTestingPrePushHook(projectRoot, hookWarnings);
     }
     await analyzeTestingProject(projectRoot);
   }
@@ -658,7 +663,7 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableSecurity) {
     await createSecurityStructure(metaprojectRoot);
     if (enableSecurityPrePushHook) {
-      await installSecurityPrePushHook(projectRoot);
+      await installSecurityPrePushHook(projectRoot, hookWarnings);
     }
     if (enableSecurityAgentHook) {
       await installSecurityAgentHooks(projectRoot);
@@ -691,7 +696,8 @@ export async function initCommand(args: string[]): Promise<void> {
     Boolean(existingSecurityHooks?.prePush) ||
     (await prePushHasSecurityBlock(projectRoot));
   if (!enableSecurityPrePushHook && securityPrePushPreviouslyInstalled) {
-    await removeManagedHook(projectRoot, "pre-push", "security-pre-push");
+    const warning = await removeManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push");
+    if (warning) hookWarnings.push(warning);
   }
 
   const manifest = buildManifest({
@@ -1139,9 +1145,12 @@ export async function initCommand(args: string[]): Promise<void> {
       note(notice);
     }
   }
-  if (gdskillsWarnings.length > 0) {
+  if (gdskillsWarnings.length > 0 || hookWarnings.length > 0) {
     heading("Warnings");
     for (const warning of gdskillsWarnings) {
+      note(warning);
+    }
+    for (const warning of hookWarnings) {
       note(warning);
     }
   }
@@ -1547,36 +1556,53 @@ async function installGdgraphCoreScripts(root: string): Promise<void> {
   );
 }
 
-async function installGdgraphPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+// R2-F2: each of these pushes onto `warnings` (rather than throwing) when the
+// hook file can't be safely reached — e.g. a symlink escaping both the git
+// common dir and the project root, or a dangling link — so one unreachable
+// hook no longer aborts the whole `keryx init` run.
+async function installGdgraphPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+  if (warning) warnings.push(warning);
 }
 
-async function installGdwikiPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+async function installGdwikiPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+  if (warning) warnings.push(warning);
 }
 
-async function installGdskillsPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
+async function installGdskillsPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
+  if (warning) warnings.push(warning);
 }
 
-async function installHealthPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
+async function installHealthPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
+  if (warning) warnings.push(warning);
 }
 
-async function installTestingPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
+async function installTestingPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
+  if (warning) warnings.push(warning);
 }
 
-async function installMetaprojectDashboardPostCommitHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "post-commit", "metaproject-dashboard-post-commit", renderMetaprojectDashboardPostCommitHook());
+async function installMetaprojectDashboardPostCommitHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(
+    projectRoot,
+    "post-commit",
+    "metaproject-dashboard-post-commit",
+    renderMetaprojectDashboardPostCommitHook(),
+  );
+  if (warning) warnings.push(warning);
 }
 
-async function installTestingPrePushHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
+async function installTestingPrePushHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
+  if (warning) warnings.push(warning);
 }
 
-async function installSecurityPrePushHook(projectRoot: string): Promise<void> {
-  await installManagedHook(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+async function installSecurityPrePushHook(projectRoot: string, warnings: string[]): Promise<void> {
+  const warning = await installManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+  if (warning) warnings.push(warning);
 }
 
 // R1-F3/R1-F6: `installManagedHook`/`removeManagedHook` used to be a local,
