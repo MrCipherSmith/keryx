@@ -358,6 +358,33 @@ function nextStepsFor(target: GraduationTarget, proposalId: string, suggestedNam
   return [`keryx learn graduate apply ${proposalId}`];
 }
 
+/** Shared by `runGraduate`'s new-cluster path and its R10-F1 already-proposed re-gate/rewrite path — the exact same suggestedName/summary/nextSteps computation, so both agree by construction. */
+function buildProposalFile(
+  target: GraduationTarget,
+  proposalId: string,
+  memberIds: readonly string[],
+  cluster: readonly LearnedPattern[],
+  configuredLogins: readonly string[],
+): GraduationProposalFile {
+  const domain = (cluster[0] as LearnedPattern).domain;
+  const suggestedName = suggestedNameFor(cluster, domain, configuredLogins);
+  const keywords = topKeywords(cluster, 5, configuredLogins);
+  const query = keywords.length > 0 ? keywords.join(" ") : domain;
+  const summary = `${cluster.length} accepted "${domain}" pattern(s) sharing: ${keywords.join(", ") || "(no shared keywords — singleton cluster)"}.`;
+  const nextSteps = nextStepsFor(target, proposalId, suggestedName, query);
+
+  return {
+    schemaVersion: 1,
+    proposalId,
+    target,
+    members: memberIds,
+    domain,
+    suggestedName,
+    summary,
+    nextSteps,
+  };
+}
+
 function proposalPathFor(root: string, proposalId: string): string {
   return path.join(graduationDir(root), `${proposalId}.json`);
 }
@@ -436,6 +463,41 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
     assertInsideLearningRoot(jsonPath, [learningDataDir(root)]);
 
     if (await pathExists(jsonPath)) {
+      // R10-F1 (review round 10, PR #691, minor): a proposal already on disk
+      // used to be treated as fully idempotent — skipped before its members
+      // were ever re-gated. A skill/rule/agent proposal written while no
+      // login was configured could keep a login-derived `suggestedName`/
+      // `summary`/`nextSteps` sitting on disk indefinitely, even after that
+      // login was later configured and every OTHER rerun path (new clusters,
+      // `applyGraduation`'s own recompute) started filtering it out. Every
+      // rerun now re-gates an already-proposed cluster's members against the
+      // CURRENT configured logins — the same defense-in-depth check the
+      // new-cluster path below already runs — and, when logins are
+      // configured at all, recomputes and rewrites the stored proposal +
+      // its `.md` summary from the CURRENT members/logins (mirroring
+      // `applyGraduation`'s own member recompute, R9-F1/R9-F2), so a login
+      // configured after the fact cannot linger in a stale artifact. A run
+      // with no configured logins at all changes nothing (the pre-existing,
+      // fully idempotent no-op behavior).
+      if (configuredLogins.length > 0) {
+        if (
+          cluster.some(
+            (record) => gateReviewerText({ provenance: record.provenance, trigger: record.trigger, action: record.action }, configuredLogins).refused,
+          )
+        ) {
+          refused.push({ memberIds, categories: ["attribution"] });
+          continue;
+        }
+
+        const rewritten = buildProposalFile(target, proposalId, memberIds, cluster, configuredLogins);
+        await withFileLock(projectLockPath(root), async () => {
+          await writeFileAtomic(jsonPath, `${JSON.stringify(rewritten, null, 2)}\n`);
+          const summaryPath = proposalSummaryPathFor(root, proposalId);
+          assertInsideLearningRoot(summaryPath, [learningDataDir(root)]);
+          await writeFileAtomic(summaryPath, renderSummaryMarkdown(rewritten));
+        });
+      }
+
       alreadyProposed.push(proposalId);
       continue;
     }
@@ -466,23 +528,7 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
       continue;
     }
 
-    const domain = (cluster[0] as LearnedPattern).domain;
-    const suggestedName = suggestedNameFor(cluster, domain, configuredLogins);
-    const keywords = topKeywords(cluster, 5, configuredLogins);
-    const query = keywords.length > 0 ? keywords.join(" ") : domain;
-    const summary = `${cluster.length} accepted "${domain}" pattern(s) sharing: ${keywords.join(", ") || "(no shared keywords — singleton cluster)"}.`;
-    const nextSteps = nextStepsFor(target, proposalId, suggestedName, query);
-
-    const proposal: GraduationProposalFile = {
-      schemaVersion: 1,
-      proposalId,
-      target,
-      members: memberIds,
-      domain,
-      suggestedName,
-      summary,
-      nextSteps,
-    };
+    const proposal = buildProposalFile(target, proposalId, memberIds, cluster, configuredLogins);
 
     const lockPath = projectLockPath(root);
     await withFileLock(lockPath, async () => {
@@ -580,47 +626,61 @@ interface AgentCandidateBuild {
   readonly memberEntries: readonly MemberAttributionEntry[];
 }
 
+interface RecomputedProposalText {
+  readonly memberEntries: readonly MemberAttributionEntry[];
+  readonly renderedMembers: readonly string[];
+  readonly keywords: readonly string[];
+  readonly suggestedName: string;
+  readonly summary: string;
+}
+
 /**
- * R9-F1/R9-F2 (review round 9, PR #691): the candidate's `name`/`description`
- * are RECOMPUTED here from `memberEntries` and `configuredLogins` — the
- * logins configured NOW, at apply time — rather than trusted from
- * `proposal.suggestedName`/`proposal.summary`, which were filtered against
- * whichever logins were configured when `runGraduate` ran. A login
- * configured afterward (before this apply) would otherwise leave a stale,
- * unfiltered token sitting in those persisted strings with no way to catch
- * it short of re-checking already-derived text (which is what the removed
- * `extraTokens` re-check did, and which could not tell a stale login token
- * apart from an ordinary keyword or the fixed `learned-<domain>` fallback
- * that only coincidentally shared a substring with a login — R9-F1/R9-F2).
- * Recomputing with the exact same `topKeywords`/`suggestedNameFor` rule
- * `runGraduate` uses (scoped to `mayCarryReviewerText` per member) keeps
+ * R9-F1/R9-F2 (review round 9, PR #691), extended by R10-F1 (review round
+ * 10, PR #691, minor): every apply-time consumer of a proposal's
+ * `suggestedName`/`summary`/next-step text — the agent candidate built below
+ * AND (R10-F1) the message `applyGraduation` throws for a skill/rule target —
+ * recomputes that text from the member records and the CURRENT configured
+ * logins, never trusting `proposal.suggestedName`/`proposal.summary`/
+ * `proposal.nextSteps` as stored (those were filtered against whichever
+ * logins were configured when `runGraduate` ran, and a skill/rule target's
+ * `nextSteps` used to be echoed straight from disk with no re-gate at all —
+ * R10-F1). Recomputing with the exact same `topKeywords`/`suggestedNameFor`
+ * rule `runGraduate` uses (scoped to `mayCarryReviewerText` per member) keeps
  * proposal-time and apply-time in agreement by construction, with nothing
- * stale left to re-check. When the recomputed name differs from
- * `proposal.suggestedName` (the login-derived token that changed it was
- * configured after `runGraduate` ran), the agent is written under the
- * recomputed name, not the stale one.
+ * stale left to re-check.
  */
+async function recomputeProposalText(
+  root: string,
+  proposal: GraduationProposalFile,
+  storeOptions: StoreEnvOptions,
+  configuredLogins: readonly string[],
+): Promise<RecomputedProposalText> {
+  const renderedMembers: string[] = [];
+  const memberEntries: MemberAttributionEntry[] = [];
+  for (const id of proposal.members) {
+    const record = await readMember(root, id, storeOptions);
+    if (record !== undefined) {
+      renderedMembers.push(`- ${record.trigger} -> ${record.action} (source: ${id})`);
+      memberEntries.push({ provenance: record.provenance, trigger: record.trigger, action: record.action });
+    } else {
+      renderedMembers.push(`- (source record "${id}" not found)`);
+    }
+  }
+
+  const keywords = topKeywords(memberEntries, 5, configuredLogins);
+  const suggestedName = suggestedNameFor(memberEntries, proposal.domain, configuredLogins);
+  const summary = `${proposal.members.length} accepted "${proposal.domain}" pattern(s) sharing: ${keywords.join(", ") || "(no shared keywords — singleton cluster)"}.`;
+
+  return { memberEntries, renderedMembers, keywords, suggestedName, summary };
+}
+
 async function buildAgentCandidate(
   root: string,
   proposal: GraduationProposalFile,
   storeOptions: StoreEnvOptions,
   configuredLogins: readonly string[],
 ): Promise<AgentCandidateBuild> {
-  const members: string[] = [];
-  const memberEntries: MemberAttributionEntry[] = [];
-  for (const id of proposal.members) {
-    const record = await readMember(root, id, storeOptions);
-    if (record !== undefined) {
-      members.push(`- ${record.trigger} -> ${record.action} (source: ${id})`);
-      memberEntries.push({ provenance: record.provenance, trigger: record.trigger, action: record.action });
-    } else {
-      members.push(`- (source record "${id}" not found)`);
-    }
-  }
-
-  const recomputedKeywords = topKeywords(memberEntries, 5, configuredLogins);
-  const recomputedName = suggestedNameFor(memberEntries, proposal.domain, configuredLogins);
-  const summary = `${proposal.members.length} accepted "${proposal.domain}" pattern(s) sharing: ${recomputedKeywords.join(", ") || "(no shared keywords — singleton cluster)"}.`;
+  const { memberEntries, renderedMembers, suggestedName: recomputedName, summary } = await recomputeProposalText(root, proposal, storeOptions, configuredLogins);
 
   const description = summary.length > 0 && summary.length <= 1024 ? summary : summary.slice(0, 1024);
   const role =
@@ -640,7 +700,7 @@ async function buildAgentCandidate(
       output_contract: "subagent-result",
       isolation: "none",
       origin: { kind: "learned", sourceRef: proposal.members[0] as string },
-      body: `## Guidance graduated from learned patterns\n\n${members.join("\n")}\n`,
+      body: `## Guidance graduated from learned patterns\n\n${renderedMembers.join("\n")}\n`,
     },
     memberEntries,
   };
@@ -673,21 +733,14 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
   const storeOptions = storeOptionsOf(opts);
   const proposal = await readProposal(root, proposalId);
 
-  if (proposal.target !== "agent") {
-    throw new LearningGraduateError(
-      "graduate-apply-agent-only",
-      `proposal "${proposalId}" targets "${proposal.target}", not "agent"; graduate apply only writes agent candidates. ` +
-        `Next step: ${proposal.nextSteps.join(" ")}`,
-    );
-  }
-
   // R3-F3: a malformed config surfaces as `LearningGraduateConfigError` from
   // `configuredReviewLogins` — converted here into the named
   // `review-learning-config-invalid` reason rather than an un-reasoned
-  // throw escaping `applyGraduation`. Loaded BEFORE `buildAgentCandidate`
-  // (R9-F1/R9-F2): the candidate's name/summary are recomputed from these
-  // CURRENT logins, not trusted from the proposal's own stored values — see
-  // `buildAgentCandidate`'s doc comment.
+  // throw escaping `applyGraduation`. Loaded BEFORE the target check
+  // (R10-F1, moved earlier than before): both the skill/rule refusal
+  // message below AND `buildAgentCandidate` (R9-F1/R9-F2) recompute their
+  // text from these CURRENT logins, never trusted from the proposal's own
+  // stored values.
   let configuredLogins: string[];
   try {
     configuredLogins = await configuredReviewLogins(root);
@@ -699,6 +752,37 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
       );
     }
     throw error;
+  }
+
+  if (proposal.target !== "agent") {
+    // R10-F1 (review round 10, PR #691, minor): this used to print
+    // `proposal.nextSteps` verbatim — text computed and stored at
+    // `runGraduate` time, filtered against whichever logins were configured
+    // back then. A login configured afterward could sit in that stored
+    // `nextSteps` (built from `proposal.suggestedName`/a keyword `query`)
+    // indefinitely, printed straight to the terminal on every apply attempt.
+    // The next-step text is now recomputed from the member records and the
+    // CURRENT configured logins (`recomputeProposalText`, the same recompute
+    // `buildAgentCandidate` already does for the agent path below), and the
+    // member-text gate below refuses outright rather than printing anything
+    // when a member's own trigger/action still carries a configured login.
+    const { memberEntries, suggestedName, keywords } = await recomputeProposalText(root, proposal, storeOptions, configuredLogins);
+    if (
+      configuredLogins.length > 0 &&
+      memberEntries.some((entry) => gateReviewerText({ provenance: entry.provenance, trigger: entry.trigger, action: entry.action }, configuredLogins).refused)
+    ) {
+      throw new LearningGraduateError(
+        "learning-text-refused",
+        `proposal "${proposalId}" refused: contains a configured reviewer login`,
+      );
+    }
+    const query = keywords.length > 0 ? keywords.join(" ") : proposal.domain;
+    const nextSteps = nextStepsFor(proposal.target, proposalId, suggestedName, query);
+    throw new LearningGraduateError(
+      "graduate-apply-agent-only",
+      `proposal "${proposalId}" targets "${proposal.target}", not "agent"; graduate apply only writes agent candidates. ` +
+        `Next step: ${nextSteps.join(" ")}`,
+    );
   }
 
   const { definition: candidate, memberEntries } = await buildAgentCandidate(root, proposal, storeOptions, configuredLogins);

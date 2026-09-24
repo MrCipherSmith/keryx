@@ -523,6 +523,121 @@ describe("runExtract — model extractor capability gate", () => {
       expect(records).toEqual([]);
     });
   });
+
+  // R10-F2 (review round 10, PR #691, minor): `gateReviewerText`'s login
+  // check only ever inspected `trigger`/`action`. A model-backed extractor
+  // picks its OWN `extractor` label and supplies its own evidence
+  // `sourceRef`s, and both used to be persisted verbatim, unguarded — a
+  // model-backed draft could smuggle a configured login into a stored
+  // record's `provenance.extractor` or `evidence[].sourceRef` even when its
+  // `trigger`/`action` were perfectly clean. Every model-backed draft is now
+  // recorded under the fixed label `"model-backed"` (never the extractor's
+  // own free-text label), and every evidence `sourceRef` is shape-checked
+  // and login-gated before it reaches the store.
+  test("R10-F2: a model-backed draft's self-declared extractor label naming a configured login is never persisted", async () => {
+    await withProjectRoot(async (root) => {
+      writeReviewLearningConfig(root, ["alice"]);
+      const dir = path.join(root, ".metaproject");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "learning.config.json"), JSON.stringify({ schemaVersion: 1, capabilities: { modelExtractor: true } }));
+
+      const loginLabelExtractor: ModelExtractor = {
+        id: "fake",
+        extract: async () => [
+          {
+            domain: "other",
+            trigger: "When a model-backed pattern like this one is observed in this project",
+            action: "Treat it as a soft, uncorroborated signal worth a human's second look before acting.",
+            evidence: [
+              {
+                kind: "reinforcement",
+                sourceType: "observation",
+                sourceRef: ".metaproject/data/learning/observations/2026-09-24.jsonl#L1",
+                observedAt: NOW.toISOString(),
+              },
+            ],
+            extractor: "alice-model-v2",
+          },
+        ],
+      };
+
+      const report = await runExtract(root, { now: NOW, modelExtractor: loginLabelExtractor });
+      expect(report.created.length).toBe(1);
+      const records = await listPatterns(root, { domain: "other" });
+      expect(records.length).toBe(1);
+      expect(records[0]?.provenance.extractor).toBe("model-backed");
+      expect(records[0]?.provenance.extractor.toLowerCase()).not.toContain("alice");
+    });
+  });
+
+  test("R10-F2: a model-backed draft's evidence sourceRef naming a configured login is refused and never persisted", async () => {
+    await withProjectRoot(async (root) => {
+      writeReviewLearningConfig(root, ["alice"]);
+      const dir = path.join(root, ".metaproject");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "learning.config.json"), JSON.stringify({ schemaVersion: 1, capabilities: { modelExtractor: true } }));
+
+      const loginSourceRefExtractor: ModelExtractor = {
+        id: "fake",
+        extract: async () => [
+          {
+            domain: "other",
+            trigger: "When a model-backed pattern like this one is observed in this project",
+            action: "Treat it as a soft, uncorroborated signal worth a human's second look before acting.",
+            evidence: [
+              {
+                kind: "reinforcement",
+                sourceType: "observation",
+                sourceRef: "src/reviewers/alice.md",
+                observedAt: NOW.toISOString(),
+              },
+            ],
+            extractor: "model-summarizer",
+          },
+        ],
+      };
+
+      const report = await runExtract(root, { now: NOW, modelExtractor: loginSourceRefExtractor });
+      expect(report.created).toEqual([]);
+      expect(report.refused.length).toBeGreaterThanOrEqual(1);
+      const records = await listPatterns(root, { domain: "other" });
+      expect(records).toEqual([]);
+    });
+  });
+
+  test("R10-F2: a model-backed draft's implausibly-shaped evidence sourceRef is refused and never persisted", async () => {
+    await withProjectRoot(async (root) => {
+      const dir = path.join(root, ".metaproject");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "learning.config.json"), JSON.stringify({ schemaVersion: 1, capabilities: { modelExtractor: true } }));
+
+      const badShapeExtractor: ModelExtractor = {
+        id: "fake",
+        extract: async () => [
+          {
+            domain: "other",
+            trigger: "When a model-backed pattern like this one is observed in this project",
+            action: "Treat it as a soft, uncorroborated signal worth a human's second look before acting.",
+            evidence: [
+              {
+                kind: "reinforcement",
+                sourceType: "observation",
+                sourceRef: "not a path, just quoted review prose here",
+                observedAt: NOW.toISOString(),
+              },
+            ],
+            extractor: "model-summarizer",
+          },
+        ],
+      };
+
+      const report = await runExtract(root, { now: NOW, modelExtractor: badShapeExtractor });
+      expect(report.created).toEqual([]);
+      expect(report.refused.some((r) => r.categories.includes("evidence-source-ref"))).toBe(true);
+      const records = await listPatterns(root, { domain: "other" });
+      expect(records).toEqual([]);
+    });
+  });
 });
 
 describe("runExtract — never produces status accepted", () => {

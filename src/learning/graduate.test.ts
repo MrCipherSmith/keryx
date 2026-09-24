@@ -1023,6 +1023,161 @@ describe("applyGraduation: R7-F1 removed final summary/suggestedName token gate"
 // the pipeline now use the same `mayCarryReviewerText` predicate.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// R10-F1 (review round 10, PR #691, minor): an already-proposed (idempotent)
+// cluster used to be skipped BEFORE any login gate ran at all, so a proposal
+// written while no login was configured kept a login-derived
+// suggestedName/summary/nextSteps sitting on disk (and printed verbatim by
+// applyGraduation for a skill/rule target) even after that login was
+// configured. Fixed two ways: `runGraduate` now re-gates and recomputes an
+// already-proposed cluster's stored proposal on every rerun once a login is
+// configured, and `applyGraduation`'s skill/rule refusal message now
+// recomputes `nextSteps` from the member records + current logins instead of
+// echoing `proposal.nextSteps` from disk.
+// ---------------------------------------------------------------------------
+
+describe("runGraduate: a login configured AFTER an already-written proposal is scrubbed from it on rerun (R10-F1)", () => {
+  test("rerunning graduate after configuring the login rewrites the proposal file without it", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const rows: readonly [string, string, string][] = [
+        ["review-conventions.early-returns-aaaaaaaa", "prefer early returns alice-style", "Prefer early returns alice-style over nested conditionals"],
+        ["review-conventions.early-returns-bbbbbbbb", "prefer early returns alice-style always", "Prefer early returns alice-style to reduce nesting"],
+        ["review-conventions.early-returns-cccccccc", "use early returns alice-style", "Use early returns alice-style instead of nested if blocks"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+
+      // First run: no login configured yet — the glued 'alice' keyword
+      // survives into the proposal's suggestedName/summary, same as R6-F1's
+      // "before" setup.
+      const first = await runGraduate(root, { now: NOW, env });
+      const firstProposal = first.proposals.find((p) => p.target === "agent");
+      expect(firstProposal).toBeDefined();
+      expect(firstProposal!.suggestedName.toLowerCase()).toContain("alice");
+
+      // The login is configured only AFTER the first run.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      const second = await runGraduate(root, { now: NOW, env });
+      expect(second.proposals).toEqual([]);
+      expect(second.alreadyProposed).toEqual([firstProposal!.proposalId]);
+
+      const proposalJsonPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.json`);
+      const proposalMdPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.md`);
+      const rewrittenJson = readFileSync(proposalJsonPath, "utf8");
+      const rewrittenMd = readFileSync(proposalMdPath, "utf8");
+      expect(rewrittenJson.toLowerCase()).not.toContain("alice");
+      expect(rewrittenMd.toLowerCase()).not.toContain("alice");
+
+      const rewrittenProposal = JSON.parse(rewrittenJson) as { suggestedName: string; summary: string };
+      expect(rewrittenProposal.suggestedName.toLowerCase()).not.toContain("alice");
+      expect(rewrittenProposal.summary.toLowerCase()).not.toContain("alice");
+
+      // Applying the rewritten proposal writes an agent whose name/description
+      // never carry the login either (the raw member body text is a
+      // separate, documented concern — R4-F1/R6-F1 already cover it via the
+      // per-member `gateReviewerText` refusal, not scrubbing).
+      const result = await applyGraduation(root, firstProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+      const agentMd = readFileSync(result.path, "utf8");
+      const nameLine = agentMd.split("\n").find((line) => line.startsWith("name:"));
+      const descriptionLine = agentMd.split("\n").find((line) => line.startsWith("description:"));
+      expect(nameLine?.toLowerCase()).not.toContain("alice");
+      expect(descriptionLine?.toLowerCase()).not.toContain("alice");
+    });
+  });
+
+  test("a login glued to a member's raw trigger/action (not just a keyword) refuses the already-proposed cluster instead of rewriting it", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const memberId = REVIEWER_COMMENT_CLUSTER[0]![0];
+      const rows: readonly [string, string, string][] = [
+        [memberId, REVIEWER_COMMENT_CLUSTER[0]![1], `@bob prefers ${REVIEWER_COMMENT_CLUSTER[0]![2]}`],
+        [REVIEWER_COMMENT_CLUSTER[1]![0], REVIEWER_COMMENT_CLUSTER[1]![1], REVIEWER_COMMENT_CLUSTER[1]![2]],
+        [REVIEWER_COMMENT_CLUSTER[2]![0], REVIEWER_COMMENT_CLUSTER[2]![1], REVIEWER_COMMENT_CLUSTER[2]![2]],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+
+      // No login configured yet: the genuine "@bob" mention is not gated at
+      // all, so the first run succeeds and writes a proposal normally.
+      const first = await runGraduate(root, { now: NOW, env });
+      const firstProposal = first.proposals.find((p) => p.target === "agent");
+      expect(firstProposal).toBeDefined();
+
+      // The login is configured only AFTER the first run — the same
+      // "configured after the fact" shape R6-F2's test uses, but here
+      // against an ALREADY-PROPOSED cluster rather than a brand-new one.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["bob"] }),
+      );
+
+      const second = await runGraduate(root, { now: NOW, env });
+      expect(second.proposals).toEqual([]);
+      expect(second.alreadyProposed).toEqual([]);
+      expect(second.refused.some((r) => r.categories.includes("attribution") && r.memberIds.includes(memberId))).toBe(true);
+    });
+  });
+});
+
+describe("applyGraduation: a login configured AFTER an already-written skill/rule proposal never appears in the printed next-step message (R10-F1)", () => {
+  test("configuring the login after runGraduate: the graduate-apply-agent-only message's next step never contains it", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      // R10-F1's login-filtering recompute only applies to a member whose
+      // signal `mayCarryReviewerText` (reviewer-comment or model-backed) —
+      // an ordinary keyword from any other signal is genuine content, never
+      // an attribution leak (R9-F2). Domain "testing" (not
+      // "review-conventions") keeps `classify` at "skill" for this
+      // 2-member cluster, while the `reviewer-comment` provenance is what
+      // makes the login-derived keyword actually filterable.
+      const rows: readonly [string, string, string][] = [
+        ["testing.rerun-failing-alice-dddddddd", "run the failing test alice-style again before merging the change", "confirm the fix locally before pushing"],
+        ["testing.rerun-failing-alice-eeeeeeee", "rerun the failing test alice-style once more before merging the change", "watch the same test go green twice"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "testing", 0.5), { env, capability });
+      }
+
+      const report = await runGraduate(root, { now: NOW, env });
+      const skillProposal = report.proposals.find((p) => p.target === "skill");
+      expect(skillProposal).toBeDefined();
+      expect(skillProposal!.suggestedName.toLowerCase()).toContain("alice");
+
+      // The login is configured only AFTER runGraduate, so runGraduate's own
+      // rewrite pass (exercised by the describe block above) never ran for
+      // this proposal — applyGraduation's own recompute is what is exercised
+      // here.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      try {
+        await applyGraduation(root, skillProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW });
+        throw new Error("expected applyGraduation to throw");
+      } catch (error) {
+        expect(error).toBeInstanceOf(LearningGraduateError);
+        expect((error as LearningGraduateError).reason).toBe("graduate-apply-agent-only");
+        expect((error as LearningGraduateError).message.toLowerCase()).not.toContain("alice");
+        expect((error as LearningGraduateError).message).toContain("keryx skills scout");
+      }
+    });
+  });
+});
+
 describe("runGraduate/applyGraduation: a reverted-edit member is never login-gated, at either stage (R7-F2)", () => {
   test("login 'edit' does not refuse proposing OR applying a reverted-edit cluster", async () => {
     await withProjectRoot(async (root, env) => {
