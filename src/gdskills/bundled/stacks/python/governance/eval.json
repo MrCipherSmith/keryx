@@ -3,6 +3,624 @@
   "reports": [
     {
       "schemaVersion": "1.0.0",
+      "skillId": "python/python-build-fix",
+      "strictness": "high",
+      "trials": 5,
+      "triggerAccuracy": {
+        "truePositive": 6,
+        "falsePositive": 0,
+        "positives": 6,
+        "negatives": 6
+      },
+      "evidence": "authored",
+      "scenarios": [
+        {
+          "id": "trigger-positive-1",
+          "kind": "trigger-positive",
+          "prompt": "Fix this ModuleNotFoundError: No module named 'mypkg.util'",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-2",
+          "kind": "trigger-positive",
+          "prompt": "Our editable pip install is broken, the package won't import",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-3",
+          "kind": "trigger-positive",
+          "prompt": "mypy is failing with a type error I don't understand, please fix it",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-4",
+          "kind": "trigger-positive",
+          "prompt": "ruff check is failing on our CI, fix the violations",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-5",
+          "kind": "trigger-positive",
+          "prompt": "pip is reporting a dependency resolver conflict between two packages",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-6",
+          "kind": "trigger-positive",
+          "prompt": "pytest collection is erroring out before any tests even run",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-1",
+          "kind": "trigger-negative",
+          "prompt": "Implement a new feature that uses asyncio.TaskGroup",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-2",
+          "kind": "trigger-negative",
+          "prompt": "Write pytest tests for the new widgets module",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-3",
+          "kind": "trigger-negative",
+          "prompt": "Review this Python diff for security issues",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-4",
+          "kind": "trigger-negative",
+          "prompt": "Fix the TypeScript build failure in our Node service",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-5",
+          "kind": "trigger-negative",
+          "prompt": "Run a full test-generation pass over this untested module",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-6",
+          "kind": "trigger-negative",
+          "prompt": "Review this code for architecture violations",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "module-not-found-diagnosis",
+          "kind": "behavior",
+          "prompt": "Our Python project fails with `ModuleNotFoundError: No module named 'mypkg.util'` when running pytest. How do you diagnose and fix this?",
+          "strictness": "high",
+          "trials": 5,
+          "passes": 5,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "I'll walk through diagnosing this. First, let me look at the actual project state.\n\n## Step 1: Reproduce and classify\n\n```bash\npytest -x -q\n```\n\nGet the *first* traceback — not the summary at the bottom. The key question is: **who** is importing `mypkg.util`, and is it a test file, a `conftest.py`, or `mypkg` itself?\n\n```bash\n# The full traceback tells you the import chain\npytest -x -q 2>&1 | head -40\n```\n\nThis matters because the fix differs:\n- If a **test file** imports `mypkg.util` → either the module doesn't exist or the package isn't installed/linked.\n- If **`mypkg/__init__.py`** imports `mypkg.util` → a packaging/discovery problem (the file exists but isn't on the import path).\n- If **`conftest.py`** imports it → same, but the path setup is usually the culprit.\n\n## Step 2: Root cause\n\nThe name says `mypkg.util`, so the failure is about the `mypkg` package's own structure or installation — not a third-party dependency. Two dominant causes:\n\n**A. The file genuinely doesn't exist or has the wrong name.**\n\n```bash\nls src/mypkg/          # src-layout\nls mypkg/              # flat layout\nfind . -name 'util*.py' -not -path '*/.*'\n```\n\nWatch for: `utils.py` vs `util.py` (singular/plural typo), a missing `util.py`, or `util/` directory without an `__init__.py`.\n\n**B. The file exists but isn't on the import path** — the packaging/discovery bug.\n\n```bash\npython -c \"import mypkg; print(mypkg.__file__)\"\npython -c \"import mypkg.util\"\npip show mypkg        # or: uv pip show mypkg\n```\n\nIf `mypkg` imports from a *different* directory than where `util.py` lives, package discovery in `pyproject.toml` is excluding it. Check the build config:\n\n```toml\n# src-layout — the include must cover the submodule\n[tool.setuptools.packages.find]\nwhere = [\"src\"]\ninclude = [\"mypkg*\"]      # <-- a bare \"mypkg\" can miss subpackages\n\n# or hatch\n[tool.hatch.build.targets.wheel]\npackages = [\"src/mypkg\"]\n```\n\nAlso confirm the editable install is actually linked:\n\n```bash\npip install -e .    # re-run; watch for discovery warnings\n```\n\n**Circular import is the third possibility** — `mypkg.util` imports something from a sibling that imports `mypkg.util` back. The traceback will show the cycle looping. That needs a restructure (move the shared symbol to a lower-level module), *not* a `try/except ImportError`.\n\n## Step 3: Minimal fix\n\n| Diagnosis | Fix |\n|---|---|\n| `util.py` missing | create it, or fix the import to the real module name (`utils`) |\n| Package discovery excludes it | add `mypkg*` to the find `include` / fix the packages list, re-run `pip install -e .` |\n| Wrong environment | activate the right venv / use `uv run pytest` |\n| Circular import | move the shared symbol down a level |\n\n## Step 4: Verify\n\n```bash\npython -c \"import mypkg.util\"     # import works in isolation\npytest -x -q                       # original failure gone\nruff check . && mypy . && pytest -x -q   # nothing regressed\n```\n\n## Step 5: What I need from you\n\nRun these three and paste the output — that pins it down exactly:\n\n```bash\npytest -x -q 2>&1 | head -40\npython -c \"import mypkg; print(mypkg.__file__)\"\nsed -n '/\\[tool.setuptools.packages.find\\]/,/^\\[/p;/\\[tool.hatch.build/,/^\\[/p' pyproject.toml\n```\n\n**What I will *not* do:** add a `pyproject.toml` `[tool.pytest.ini_options]` `pythonpath` hack, or a `try/except ImportError: pass` around the import, or `pytest.mark.skip`. Those make the collection error disappear while leaving the package genuinely broken — a `pytest`-only path patch means `python -c \"import mypkg.util\"` still fails in production.\n\nThe `pip show` / `mypkg.__file__` output is the deciding evidence: if both agree with where `util.py` lives, it's a circular import or a typo; if they disagree, it's package discovery.",
+              "outputSha256": "fe49aaa40fa40bc787a42f14a051d746f6e30c3100ef6c8c492f10cffbd1e15c",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Identifies concrete root causes (module missing/typo, package discovery/path misconfiguration, wrong environment, circular import) and matches fixes (create/fix module, correct include/packaging config and reinstall, activate env, restructure). Explicitly distinguishes symptom from cause and warns against try/except hiding. No fail criteria met."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Diagnosing `ModuleNotFoundError: No module named 'mypkg.util'`\n\nThe key insight: `mypkg` itself imports fine (otherwise the error would say `No module named 'mypkg'`), but the submodule `mypkg.util` doesn't resolve. That narrows the cause considerably. Here's the diagnosis path.\n\n## Step 1: Reproduce and classify\n\nConfirm the exact failure — is it pytest *collection* failing (a `conftest.py` or test file imports `mypkg.util`) or a test running and failing at import time?\n\n```bash\npytest -x -q 2>&1 | head -40\n```\n\nLook at the first traceback: which file line triggers the import, and is it the test file, `conftest.py`, or a source module?\n\n## Step 2: Ask the discriminating questions\n\nBecause `mypkg` resolves but `mypkg.util` doesn't, the cause is almost always one of these — check in this order:\n\n**a) Does the file actually exist, at the right path?**\n\n```bash\npython -c \"import mypkg; print(mypkg.__file__)\"   # where is mypkg resolved from?\nls -la $(python -c \"import mypkg, os; print(os.path.dirname(mypkg.__file__))\")\n```\n\n- If a `util.py` (or `util/` package) is missing entirely → it was never created, or was deleted/renamed.\n- If `util.py` exists on disk but not in the resolved directory → you have **two copies** of `mypkg` (a stale installed copy shadowing your source tree). This is the most common cause and the trap below.\n\n**b) Is it a stale/mismatched install shadowing the source?** With a `src/` layout:\n\n```\nsrc/mypkg/__init__.py\nsrc/mypkg/util.py\n```\n\nIf `mypkg.__file__` points at `site-packages/mypkg/__init__.py` rather than `src/mypkg/...`, you're importing an **installed** copy that predates `util.py`. Reinstall:\n\n```bash\npip install -e .    # or: uv pip install -e . / poetry install\n```\n\nBut first verify the editable install *actually links your src tree* — see (d).\n\n**c) Is the import path in the code correct?** Check what's actually imported.\n\n- `from mypkg.util import helper` needs `mypkg/util.py` **or** `mypkg/util/__init__.py`.\n- `from mypkg.util.sub import helper` needs `mypkg/util/sub.py`.\n- A typo (`mypkg.utils`, `mypkg.untils`) is worth ruling out — read the traceback line, don't assume.\n\n**d) Does packaging config actually include `util`?** If you use setuptools:\n\n```toml\n[tool.setuptools.packages.find]\nwhere = [\"src\"]\ninclude = [\"mypkg*\"]        # ← if this is missing/wrong, submodules get skipped\n```\n\nor hatch:\n\n```toml\n[tool.hatch.build.targets.wheel]\npackages = [\"src/mypkg\"]\n```\n\nA too-narrow `include`, a missing `__init__.py` in a subdirectory (making it a namespace package that doesn't ship), or the wrong `where` will produce exactly this symptom: top package installs, a submodule doesn't.\n\n**e) Circular import?** `mypkg/__init__.py` imports `mypkg.util`, and `mypkg/util.py` imports back into `mypkg` — you can get a confusing `ModuleNotFoundError`-flavored traceback. If the traceback shows a `__init__.py` frame, suspect this. Fix by moving the shared symbol or importing inside the function — **do not** wrap in `try/except ImportError`.\n\n## Step 3: Apply the smallest fix\n\nBased on Step 2, the fix is one of:\n\n- **(a) file missing** → restore/create `util.py` (or `util/__init__.py`).\n- **(b) shadowed install** → `pip install -e .`; if the install is stale-but-broken, `pip uninstall mypkg` then reinstall editable.\n- **(c)** → correct the import path or add the missing submodule file.\n- **(d)** → widen the package-discovery config so `mypkg.util` is included, then reinstall.\n- **(e)** → restructure the circular import.\n\n## Step 4: Verify\n\n```bash\npython -c \"import mypkg.util; print(mypkg.util.__file__)\"   # resolves into your source tree\nruff check .\nmypy .\npytest -x -q\n```\n\nAll must exit 0. Run full `pytest` even though the original failure was an import error — collections that now import can surface runtime failures.\n\n## Step 5: Report\n\n```\nFixed: ModuleNotFoundError: No module named 'mypkg.util'\n  Root cause: pyproject.toml's [tool.setuptools.packages.find].include\n    was [\"mypkg\"] (not \"mypkg*\"), so src/mypkg/util.py was never\n    linked by the editable install; mypkg resolved from a stale\n    site-packages copy in which util.py didn't exist.\n  Fix: include = [\"mypkg*\"], then pip install -e .\n  Verified: import mypkg.util resolves to src/mypkg/util.py;\n    ruff check, mypy, pytest -x -q all green\n```\n\n## Guardrails\n\n- **Don't** `pip install mypkg` from a non-editable source or `--no-deps` to \"fix\" it — that just re-hides the packaging bug.\n- **Don't** wrap the import in `try/except ImportError: pass`.\n- **Don't** add `# type: ignore` — this is a runtime import failure, not a typing issue.\n- The most deceptive case is (b)+(d) together: the file exists in your working tree, so it *looks* fine, but the interpreter is importing a different, stale copy. Always confirm where `mypkg.__file__` actually points before touching any code.",
+              "outputSha256": "4b2b959912dad01785309ce20455001cb134853447add9b536acb05a11e00b77",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer identifies concrete root causes (missing submodule/file, stale install shadowing src layout, wrong import path, packaging config excluding submodule, circular import) and matches fixes to each (reinstall editable, restore file, correct import/packaging config, restructure circular import). It distinguishes root cause from symptom in diagnosis and reporting, and explicitly warns against try/except ImportError suppression without committing it."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Diagnosing `ModuleNotFoundError: No module named 'mypkg.util'` under pytest\n\nThe error name tells you *what* is missing (`mypkg.util`) but not *why*. Work from cheapest-to-check to most-invasive.\n\n## 1. Confirm the environment and install state\n\nThe single most common cause: the project isn't actually installed in the environment pytest is running in.\n\n```bash\n# Which python/pytest is actually running?\nwhich pytest\npython -c \"import sys; print(sys.executable)\"\n\n# Is the package importable at all, outside pytest?\npython -c \"import mypkg; print(mypkg.__file__)\"\n\n# Is it installed as an editable/regular install?\npip show mypkg          # or: uv pip show mypkg / poetry show mypkg\n```\n\nIf `import mypkg` fails outside pytest too, this is an **install/packaging** problem, not a pytest problem. If `mypkg` imports fine but `mypkg.util` doesn't, jump to step 3 (it's a submodule/layout problem).\n\n## 2. Install the project (most likely fix)\n\nIf `pip show mypkg` reports nothing, the project was never installed — pytest is running from a `rootdir` where `src/` isn't on `sys.path`.\n\n```bash\n# Pick whichever matches the project:\npip install -e .\nuv pip install -e .\npoetry install\n```\n\nThen re-run `pytest`. Under a `src/` layout this is *required* — the package directory is deliberately not importable without an install.\n\n## 3. Check the file actually exists and the layout is right\n\n`No module named 'mypkg.util'` with `mypkg` importing fine almost always means one of:\n\n**(a) The file is in the wrong place.** Package discovery is only picking up some submodules.\n\n```\nsrc/mypkg/__init__.py\nsrc/mypkg/cli.py\nutil.py                 # <-- wrong: outside the package dir\n```\n\nMove it to `src/mypkg/util.py`.\n\n**(b) A missing `__init__.py`.** If `src/mypkg/util/` is a directory without `__init__.py`, it's not a subpackage:\n\n```bash\ntouch src/mypkg/util/__init__.py\n```\n\n**(c) The build config excludes it.** This is the classic silent failure — the file *is* at `src/mypkg/util.py` but the packaging config never links it. Verify with:\n\n```bash\npython -c \"import mypkg.util; print('ok')\"   # fails => discovery problem\n```\n\nCheck the discovery config in `pyproject.toml`:\n\n```toml\n# setuptools\n[tool.setuptools.packages.find]\nwhere = [\"src\"]\ninclude = [\"mypkg*\"]        # must match mypkg AND mypkg.util\n\n# or hatch\n[tool.hatch.build.targets.wheel]\npackages = [\"src/mypkg\"]\n```\n\nAn `include` pattern like `[\"mypkg\"]` (exact) instead of `[\"mypkg*\"]` links the top package but not its submodules — exactly this symptom. Fix the pattern, then **reinstall** (`pip install -e .`) so the editable link picks up the change.\n\n## 4. Rule out a name collision / shadowing\n\nIf `src/mypkg/util.py` exists and is installed but still not found, something is shadowing it:\n\n```bash\npython -c \"import mypkg; print(mypkg.__path__)\"\npython -c \"import mypkg.util; print(mypkg.util.__file__)\"\n```\n\n- A second `mypkg/` elsewhere on `sys.path` (a stale build artifact under `build/`, or a sibling checkout) can win the import and not contain `util`.\n- A `util.py` in the project root tracked as first-party code can shadow things at test-collection time.\n\nClear stale artifacts (`rm -rf build/ dist/ *.egg-info`), reinstall, retest.\n\n## 5. Confirm it's not pytest-specific\n\npytest adds `rootdir` and test-file directories to `sys.path`, which can mask or create import issues. Compare:\n\n```bash\npython -c \"import mypkg.util; print('imports fine -> pytest-path issue')\"\npytest -x -q\n```\n\nIf it imports fine outside pytest but not under it, the problem is pytest's `rootdir`/`sys.path` handling (a `conftest.py` that changes `sys.path`, or `importmode`/`rootdir` config), not the package.\n\n## 6. Circular import (only if the above are all clean)\n\nIf `mypkg.util` *does* exist and is installed yet importing it raises this error at runtime, you likely have a cycle: `mypkg/__init__.py` imports `mypkg.util` which imports back into `mypkg`. Fix by moving the shared symbol or doing a function-local import — not by wrapping in `try/except ImportError`.\n\n---\n\n## What I'd check first\n\nRanked by probability for a fresh checkout:\n\n1. `pip show mypkg` → nothing? → `pip install -e .`, done. (**most common**)\n2. Installed but `mypkg.util` missing → packaging `include` pattern or missing `__init__.py` → fix config, reinstall.\n3. Both clean → shadowing / stale `build/` artifact → clean and reinstall.\n\nAvoid the anti-patterns: don't add a `conftest.py` `sys.path.append` hack to \"fix\" this (it hides a broken install), and don't `pytest.mark.skip` the failing test file — a collection error means those tests never run at all.\n\nOnce fixed, verify all of:\n\n```bash\npip show mypkg                     # shows the project, editable\npython -c \"import mypkg.util\"      # no error\nruff check . && ruff format --check .\nmypy .                             # or pyright\npytest -x -q                       # green\n```\n\nand confirm `git status` shows only the config/layout file you actually changed.",
+              "outputSha256": "2cecadd01403cd0442c4c5b5ec511c66c3349204ae85e12c0ca192e6697989bd",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Identifies concrete root causes (package not installed/wrong env, src-layout import path/packaging discovery, missing __init__.py, shadowing, circular import), matches fixes (pip install -e ., correcting include patterns/layout, restructuring cycle), and distinguishes root cause from symptom. Explicitly warns against try/except ImportError suppression rather than using it."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Diagnosing `ModuleNotFoundError: No module named 'mypkg.util'`\n\nI'd work through this systematically rather than guessing. The key insight is that this is a **pytest-time** import error, which narrows the likely causes considerably.\n\n## Step 1: Confirm exactly what's failing to import\n\nIs it the test file, `conftest.py`, or the source code under test? The traceback tells you:\n\n```bash\npytest -x -q 2>&1 | head -40\n```\n\n- If the traceback's last frame is a **test file** importing `mypkg.util` → the test's import path is wrong, or `mypkg` isn't installed/importable at all.\n- If it's **`mypkg/__init__.py`** or `mypkg/parsers.py` importing `mypkg.util` → a real intra-package import problem (likely the module doesn't exist, or is in the wrong place).\n- If it's **`conftest.py`** → same import-path diagnosis as a test file.\n\n## Step 2: Check whether `mypkg.util` actually exists on disk\n\nThis is the single most common root cause and it's cheap to rule out:\n\n```bash\nfind . -name \"util*.py\" -path \"*mypkg*\"\nls src/mypkg/ 2>/dev/null || ls mypkg/\n```\n\nThree outcomes:\n\n1. **`util.py` exists but in the wrong location** (e.g. `src/mypkg/util.py` while you're running from the repo root without an editable install) → this is a **layout/install** problem, go to Step 3.\n2. **`util.py` doesn't exist at all, but `utils.py` does** → a typo in the import statement; fix the import.\n3. **`util.py` exists correctly and the layout looks right** → go to Step 3 anyway.\n\n## Step 3: Determine whether `mypkg` is importable at all\n\nRun this from the exact directory pytest runs from:\n\n```bash\npython -c \"import mypkg; print(mypkg.__file__)\"\npython -c \"import mypkg.util; print(mypkg.util.__file__)\"\n```\n\nThis distinguishes the two fundamentally different failures:\n\n- **`import mypkg` fails too** → the whole package isn't on the path. It's not a `util`-specific problem.\n- **`import mypkg` succeeds but `import mypkg.util` fails** → the package is found, but `util` isn't part of what got installed. This is the submodule-discovery case.\n\n## Step 4: Fix based on which of the two it is\n\n### Case A — `mypkg` isn't importable at all\n\nThe project almost certainly uses a `src/` layout (`src/mypkg/...`), which is **not** importable from the repo root unless the package is installed. The fix is an editable install, run with the project's own tool:\n\n```bash\nuv pip install -e .    # or: pip install -e .  /  poetry install\n```\n\nThen re-check Step 3. If the editable install *itself* fails or succeeds but `mypkg` still isn't importable, the bug is in the packaging config — check `[build-system]` and the package-discovery section actually point at the real directory:\n\n```toml\n# pyproject.toml — common failure: discovery misses the package\n[tool.setuptools.packages.find]\nwhere = [\"src\"]\ninclude = [\"mypkg*\"]\n\n# or for hatchling\n[tool.hatch.build.targets.wheel]\npackages = [\"src/mypkg\"]\n```\n\nA classic variant: `src/mypkg/util.py` exists but `src/mypkg/__init__.py` is missing, so `mypkg` isn't recognized as a package and its submodules never get discovered. Add the `__init__.py`.\n\n### Case B — `mypkg` imports but `mypkg.util` doesn't\n\nThis is submodule discovery. Either:\n\n- `util.py` exists but isn't in the installed package's directory structure — e.g. it lives at `src/mypkg/util.py` but the discovery config in Step 4A only includes a narrower subpath. Fix the `include`/`packages` config.\n- `util` is a **subpackage** and is missing its own `__init__.py` (e.g. `src/mypkg/util/` with no `__init__.py`). Add it.\n- The `src/` layout is missing entirely — maybe `util.py` sits at repo root, outside the package dir. Move it into `src/mypkg/`.\n\nAfter any config change, re-run the editable install so the new layout takes effect:\n\n```bash\nuv pip install -e .   # re-install to pick up discovery changes\n```\n\n## Step 5: Rule out the import-path typo case\n\nIf Step 2 found the module under a slightly different name (`utils.py` vs `util.py`, or `mypkg.utilities`), just fix the import statement — but be consistent: grep for both spellings so you don't leave a broken import behind:\n\n```bash\ngrep -rn \"mypkg.util\\b\" .        # check every call site agrees\n```\n\n## Step 6: Verify\n\n```bash\npython -c \"import mypkg.util; print(mypkg.util.__file__)\"   # must resolve to src/mypkg/util.py\npytest -x -q\nruff check .\nmypy .\n```\n\nAll must exit 0. Then confirm nothing unrelated got touched:\n\n```bash\ngit status\n```\n\n---\n\n## What I would *not* do\n\n- **Not** add `try/except ImportError: pass` around the import — that hides a real missing-module problem.\n- **Not** add a `conftest.py` that does `sys.path.insert(0, \"src\")` as a workaround — if the project is meant to be installed, patch the packaging config; a manual `sys.path` hack makes the editable install's real brokenness invisible and breaks for anyone else running the suite.\n- **Not** pin a dependency or downgrade anything — this is a layout/discovery problem, not a version conflict.\n- **Not** skip or xfail the test — a collection error means the test never runs, so skipping turns a build failure into permanent silent coverage loss.\n\nIf after Step 4 the editable install succeeds *and* `mypkg.util` resolves but pytest still can't import it, the remaining suspect is a **circular import** (`mypkg.__init__` importing something that imports `mypkg.util`) — in that case the traceback will show a partially-initialized module, and the fix is to move the shared symbol or do the import inside the function, not to reorder imports until it stops complaining.",
+              "outputSha256": "3c238da764143aa4d86600b54aeb07e489a16ecc57e1795f70f12b7e59ebd73e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Diagnoses concrete root causes (package not installed, src layout not editable-installed, wrong packaging discovery, typo in import, circular import) and applies matched fixes (pip install -e ., fix pyproject discovery, correct import path, restructure circular import). Distinguishes root cause from symptom and explicitly warns against try/except ImportError hiding the failure."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Diagnosing `ModuleNotFoundError: No module named 'mypkg.util'`\n\nThis is a classic **import/packaging error**, not a test error. Let's follow the workflow: reproduce → classify → root cause → fix → verify.\n\n## Step 1: Reproduce and see the full traceback\n\n```bash\npytest -x -q\n```\n\nRead the **first** error, not later ones. Key questions from the traceback:\n\n- **Which file** raised it? (`conftest.py`? a test file? `mypkg/__init__.py`?)\n- **What line** triggered the import? (`from mypkg.util import foo`?)\n\nSave the exact traceback — it tells you whether the missing module is imported by the test file, a `conftest.py`, or by `mypkg` itself.\n\n## Step 2: Determine which failure class this is\n\n`ModuleNotFoundError` for a package that *should* be local has three common causes. Rule them out in order:\n\n### A. Is the environment wrong?\n\n```bash\nwhich python\nwhich pytest\npython -c \"import sys; print(sys.path)\"\npip show mypkg          # or: uv pip show mypkg / poetry show mypkg\n```\n\nIf `pip show mypkg` returns nothing, the package was never installed into the active environment. If it shows a path that isn't your project, you're running pytest from the wrong env or without the project installed.\n\n### B. Does `mypkg/util.py` actually exist, and is `mypkg` a real package?\n\n```bash\nls src/mypkg/           # or: ls mypkg/\nls src/mypkg/util.py    # does the file exist?\nls src/mypkg/__init__.py  # is there an __init__.py?\n```\n\nThree sub-cases:\n\n1. **`util.py` is missing** — a genuine typo or a file never created. This is not a build failure; it's a missing module. Say so explicitly rather than papering over it.\n2. **`util` is a directory** (`mypkg/util/`) with no `__init__.py` — under a `src/` layout this may not be discovered as a package. Add `__init__.py`, or check the packaging config.\n3. **`util.py` exists and `__init__.py` exists** — the file is there but not importable. Go to (C).\n\n### C. Is the package actually installed / discoverable?\n\nThis is where editable installs and `src/` layouts bite. Check `pyproject.toml`:\n\n```toml\n[build-system]\nrequires = [\"setuptools>=61\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[tool.setuptools.packages.find]\nwhere = [\"src\"]\ninclude = [\"mypkg*\"]        # <-- the usual culprit\n```\n\nIf `include` doesn't cover `mypkg` (or `where` points at the wrong root), `pip install -e .` will complete **without error** but won't link `mypkg` — producing exactly this `ModuleNotFoundError` at test time.\n\nFix the config, then reinstall:\n\n```bash\npip install -e .           # or: uv sync / poetry install\npip show mypkg             # confirm it now resolves to your source tree\n```\n\n### D. Is it a circular import or a stale install?\n\n- **Stale install**: after editing `pyproject.toml` or moving files, an old editable install can still hold the previous layout. Reinstall (`pip install -e . --force-reinstall --no-deps`) — the `--no-deps` is fine *here* because we're only relinking the local package, not resolving dependencies.\n- **Circular import**: if the traceback shows `mypkg/__init__.py` importing `mypkg.util` which imports back into `mypkg`, the fix is to restructure (move the shared symbol, or import inside the function) — **don't** wrap it in `try/except ImportError`.\n\n## Step 3: Apply the smallest fix\n\nBased on which case above matches:\n\n| Diagnosis | Fix |\n|---|---|\n| Package not installed / wrong env | `pip install -e .` in the correct venv |\n| `util.py` missing | Create the module (or fix the import path if the symbol lives elsewhere) |\n| `mypkg` excluded from package discovery | Fix `[tool.setuptools.packages.find].include` (or the equivalent for hatch/poetry), reinstall |\n| Missing `__init__.py` in a package dir | Add it |\n| Circular import | Restructure — do not blanket-suppress |\n\nTouch only the file(s) the diagnosis implicates. No unrelated refactoring.\n\n## Step 4: Verify\n\n```bash\nruff check .\nruff format --check .\nmypy .          # or pyright\npytest -x -q\n```\n\nAll must exit 0. Run pytest even if the fix only touched packaging — the missing module usually hid a test that now runs for the first time.\n\n## Step 5: Report\n\n```\nFixed: ModuleNotFoundError: No module named 'mypkg.util'\n  Root cause: pyproject.toml's [tool.setuptools.packages.find] used\n    where = [\"src\"] but include = [\"mypkg\"] (exact name), so mypkg.util\n    was never linked by the editable install — the submodule wasn't found.\n  Fix: changed include to [\"mypkg*\"] and reinstalled with `pip install -e .`\n  Verified: ruff check, mypy, pytest -x -q all green\n```\n\n## Anti-patterns to avoid here\n\n- **`try/except ImportError: pass`** around the import — hides a missing dependency instead of fixing it.\n- **`sys.path.insert(0, \"src\")` in `conftest.py`** — a workaround that masks the packaging bug and diverges from how the package is imported at runtime. Fix the install instead.\n- **`pytest.mark.skip` on the affected test** — a collection error means the test never runs; skipping enshrines the breakage.\n- **Pinning an older version of a dependency** — this is an import of a *local* module, not a version conflict; a pin won't help.\n\nThe fast path: run `pip show mypkg` and `ls src/mypkg/`. Nine times out of ten the answer is one of \"not installed\", \"file missing\", or \"package discovery excludes it\" — and the traceback's first frame tells you which.",
+              "outputSha256": "1b8184a764337475224046aa28636f114876103114dec404b64174f9e1f8b512",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Diagnoses concrete root causes (wrong env/not installed, src-layout packaging exclude in pyproject, missing file, circular import), matches fixes (pip install -e ., fix packages.find include, add __init__.py, restructure circular import), and distinguishes root cause from symptom in the report. Explicitly warns against try/except ImportError rather than recommending it."
+              },
+              "passed": true
+            }
+          ]
+        },
+        {
+          "id": "mypy-error-no-blanket-suppress",
+          "kind": "behavior",
+          "prompt": "mypy reports a type error on a function I touched. Fix it.",
+          "strictness": "high",
+          "trials": 5,
+          "passes": 0,
+          "passRate": 0,
+          "passAtK": 0,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "I'll help fix the mypy error. Let me start by finding and reproducing it.\n\nFirst, I need to see the actual error. Could you run this and share the output — or let me know if you'd like me to run it myself?\n\n```bash\nmypy .\n```\n\nActually, let me look at what's there so I can diagnose properly.\n\n<｜｜DSML｜｜ calls>\n<｜｜DSML｜｜ invoke name=\"bash\">\n<｜｜DSML｜｜ parameter name=\"command\" string=\"true\">cat pyproject.toml 2>/dev/null | head -80</｜｜DSML｜｜ parameter>\n<｜｜DSML｜｜ parameter name=\"description\" string=\"true\">Inspect pyproject.toml for mypy config</｜｜DSML｜｜ parameter>\n</｜｜DSML｜｜ invoke>\n</｜｜DSML｜｜ calls>",
+              "outputSha256": "3ec908ab3b06e7fefb2f95455b79b3b09d9314879df3b23f10483fadbe10f1ac",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "The answer does not name any specific mismatch, does not change any annotation or call site, and never actually fixes the error. It only asks for the error output and inspects config, so none of the pass criteria (naming the mismatch, changing real code) are met."
+              },
+              "passed": false
+            },
+            {
+              "output": "I'll help fix the mypy error. Let me start by reproducing it to see the actual failure.\n\nI don't have the project in front of me yet — to do this properly I need to see the real error and the code. Could you share:\n\n1. **The mypy output** — the full error line, including the file, line number, and the exact message. Something like `src/mypkg/foo.py:42: error: Argument 1 to \"process\" has incompatible type \"str\"; expected \"int\"`.\n2. **The function you touched** — the signature and the relevant body, plus the call site mypy is complaining about (or the code that produces the offending value).\n3. **How the project runs mypy** — the command (`mypy .`, `mypy src/`, etc.) and whether it's configured in `pyproject.toml`/`mypy.ini`. If you can paste that config too, great.\n\nOnce I have the actual error, here's the path I'll take:\n\n**Step 1 — Classify.** Read the exact type mismatch mypy reports. The important distinction: is the *function signature* wrong (it declares a type that doesn't match what it actually does), or is the *call site / value* wrong (something upstream is producing a `str` where an `int` is genuinely expected)?\n\n**Step 2 — Find the real cause.** Fix whichever side is actually wrong given the function's true contract — not whichever silences the error fastest. If the function should only ever receive an `int`, the fix is at the call site (validate/convert the input). If the function legitimately handles strings and the annotation is stale, fix the annotation.\n\n**Step 3 — Smallest fix.** Change only what the type error requires. No refactor beyond that.\n\n**Step 4 — Verify.** Re-run the project's mypy command, plus `ruff check .`, `ruff format --check .`, and `pytest -x -q` — a signature change can break runtime behavior that mypy won't catch.\n\nOne thing I want to be explicit about up front: I won't reach for `# type: ignore` to make the message go away. If the real fix turns out to be bigger than this change should be (e.g., a genuinely mismatched interface used in many places), I'll tell you that and recommend the proper fix rather than silently suppressing it. If a suppression is ever the right call, it'll come with an inline reason explaining what's being suppressed and why.\n\nPaste the error and the code and I'll get to work.",
+              "outputSha256": "015a08a7de53a38c3e2f94016643cf2d7535b976553f75ea0c71994e441f430f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "The answer does not actually fix anything: it asks for the error and code, then describes a generic plan. It names no specific signature, annotation, or call site, and changes no code. Pass criteria 1 and 2 require identifying the exact mismatch and editing the code, which this does not do."
+              },
+              "passed": false
+            },
+            {
+              "output": "I'll start by getting the exact error, then trace it to the real cause before touching anything.\n\n**Before I can give you the fix, I need two things from you:**\n\n1. The exact `mypy` output (the full error line, including the file, line, and error code — e.g. `error: Argument 1 to \"foo\" has incompatible type \"str\"; expected \"int\"  [arg-type]`).\n2. The function in question, or at least its signature and the call that's flagged.\n\nThat said, let me lay out how I'll handle it, because \"fix the type error on a function I touched\" can mean two very different things, and only one of them is a real fix.\n\n### Step 1: Reproduce\n\nI'll run the project's own configured command (usually `mypy .` or `uv run mypy .`) and read the **first** error, since later errors are often downstream of it.\n\n### Step 2: Find the root cause — is the *annotation* wrong, or the *code*?\n\nThis is the fork that matters. The error is a *disagreement* between an annotation and reality; exactly one of them is wrong:\n\n- **The annotation is wrong** — most common when you just touched the function. You changed the behavior (now returns `int | None` instead of `int`, now accepts a `Sequence` instead of a `list`) but the signature still claims the old contract. Fix: update the annotation to match the real contract.\n- **The code is wrong** — the annotation correctly describes the contract, and your change violated it. E.g. the function is annotated `-> str` and your new branch can return `None`. Fix: fix the code (handle the case), *not* loosen the annotation. Loosening the return type here is how `None` leaks to callers that never expected it.\n\nI'll decide which by reading the function body and its call sites — not by picking whichever silences mypy fastest.\n\n### Step 3: Apply the smallest fix\n\n- If the annotation was stale, update it and **follow the consequences**: widening a return type to include `None` means every caller that doesn't handle `None` is now a real bug, and mypy will tell you which ones. Those are in scope, because your change caused them.\n- If the code was wrong, fix the code path.\n\n**What I will not do:** add `# type: ignore` to make it go away. If the correct fix is genuinely larger than this task allows, I'll tell you that explicitly and leave the error visible rather than suppress it — a suppressed type hole is silent and permanent.\n\n### Step 4: Verify\n\n`mypy` clean, plus `ruff check .`, `ruff format --check .`, and `pytest -x -q`, since a signature change can break runtime behavior the type-checker won't catch. Then I'll confirm `git status` shows only the files I actually diagnosed.\n\n### Step 5: Report\n\nI'll name the **root cause** (which of annotation-vs-code was wrong and why), not just \"fixed the type error.\"\n\n---\n\nPaste the mypy output and the function, and I'll take it from there. If it's faster, tell me the run prefix (`uv run`, `poetry run`) and I'll invoke the tools directly.",
+              "outputSha256": "cdf386c097a387621047f21d7ac6d115706cf7b71bce79be4c78b16f2109e717",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "The answer never names mypy's actual mismatch or changes any code; it only asks for the error output and function. Pass criteria 1 and 2 require naming the specific mismatch and applying a real code fix, which is absent. It does correctly warn against # type: ignore, but that alone does not satisfy the rubric."
+              },
+              "passed": false
+            },
+            {
+              "output": "I'll need to see the actual error and code to fix the real cause rather than suppress it. Please share:\n\n1. **The mypy output** (or pyright), including the file, line, and the full error message.\n2. **The function itself** — its signature and body (or at least the lines mypy flags).\n3. **The call sites**, if the error is about an argument mismatch.\n4. **The project's mypy invocation** (e.g. `uv run mypy .`, `poetry run mypy src/`, or from config) so I verify with the same command.\n\nOnce I have those I'll:\n\n- read the exact mismatch mypy reports,\n- decide **which side is actually wrong** — the function's declared contract or the call site — based on what the function really does,\n- apply the smallest fix (fix the signature, narrow a type, add a proper `cast`, or fix the caller) — **not** a blanket `# type: ignore`,\n- re-run `mypy` plus the project's `ruff`/`pytest` to confirm nothing regressed.\n\nIf you can just paste the mypy error and the function, I'll take it from there.",
+              "outputSha256": "52608a584a21919716c9a61d67254ae3265d11b3c1e80ce7d8f03619c12f5e51",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "The answer requests the error and code but never names mypy's exact mismatch, never changes any annotation or call site, and provides no actual fix. It only describes a process, so pass criteria 1 and 2 are unmet."
+              },
+              "passed": false
+            },
+            {
+              "output": "I can help with that, but I need the actual error to fix the real cause rather than guess. Please share:\n\n1. **The full mypy output** — including the file path, line number, error code (e.g. `[arg-type]`, `[assignment]`, `[return-value]`), and the exact message.\n2. **The function itself** (or the surrounding code), plus the call site mypy is pointing at.\n\nOnce I see the mismatch I'll:\n\n- Read the exact type mypy reports and decide whether the **signature** or the **call site** is wrong given the function's real contract — not whichever silences the error fastest.\n- Fix that one thing, with no `# type: ignore` added to blanket-suppress the problem.\n- Re-run the project's own commands (`ruff check .`, `ruff format --check .`, `mypy .`/`pyright`, and `pytest -x -q`) to confirm everything is green, and report the root cause — not just the symptom.\n\nPaste the mypy output and the relevant code and I'll take it from there.",
+              "outputSha256": "cf763bc00bd436f1cfa892eb6256bfaf8e741dfab5dd7e7f573a013c55d55e71",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "The answer does not fix anything — it asks for more information and only describes the intended approach. Pass criteria 1 and 2 require naming the exact mismatch and changing the actual code; neither is done, so not all criteria hold."
+              },
+              "passed": false
+            }
+          ]
+        }
+      ],
+      "verdict": "fail",
+      "scope": "bundled",
+      "skillDigest": "63f4d930efdea4cb15afdedd257a33d0824f17f9e631af5b8d47133f60c11a50",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-24.1",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T19:52:54.468Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
+    },
+    {
+      "schemaVersion": "1.0.0",
+      "skillId": "python/python-code-review",
+      "strictness": "high",
+      "trials": 5,
+      "triggerAccuracy": {
+        "truePositive": 6,
+        "falsePositive": 0,
+        "positives": 6,
+        "negatives": 6
+      },
+      "evidence": "authored",
+      "scenarios": [
+        {
+          "id": "trigger-positive-1",
+          "kind": "trigger-positive",
+          "prompt": "Review this Python diff for mutable default argument bugs",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-2",
+          "kind": "trigger-positive",
+          "prompt": "Check this pull request for broad except clauses swallowing errors",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-3",
+          "kind": "trigger-positive",
+          "prompt": "Audit this Python module for resource leaks and unclosed files",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-4",
+          "kind": "trigger-positive",
+          "prompt": "Review this async Python code for blocking calls inside async def",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-5",
+          "kind": "trigger-positive",
+          "prompt": "Check this Python code review for typing holes like Any or missing Optional",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-6",
+          "kind": "trigger-positive",
+          "prompt": "Review this Django ORM code for N+1 query issues",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-1",
+          "kind": "trigger-negative",
+          "prompt": "Implement a new Python feature that fetches user data",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-2",
+          "kind": "trigger-negative",
+          "prompt": "Write pytest tests for this module",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-3",
+          "kind": "trigger-negative",
+          "prompt": "Fix the mypy type errors so the build passes",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-4",
+          "kind": "trigger-negative",
+          "prompt": "Review this TypeScript React component for MobX store misuse",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-5",
+          "kind": "trigger-negative",
+          "prompt": "Run review-security-code on our whole repository for OWASP issues",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-6",
+          "kind": "trigger-negative",
+          "prompt": "Fix this ModuleNotFoundError in our Python package",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "mutable-default-finding",
+          "kind": "behavior",
+          "prompt": "Review this Python function for bugs:\n\ndef add_item(item, items=[]):\n    items.append(item)\n    return items",
+          "strictness": "high",
+          "trials": 5,
+          "passes": 5,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "**python-code-review: 1 finding**\n\n```\n[mutable-default] (no file given) — `def add_item(item, items=[]):` uses a\n  mutable default argument. The list is created once at function-definition\n  time and shared across every call that omits `items`, so items accumulate:\n\n    add_item(\"a\")   # [\"a\"]\n    add_item(\"b\")   # [\"a\", \"b\"]  <-- caller expected [\"b\"]\n\n  Fix: default to `None` and build the list inside the call.\n\n    def add_item(item, items=None):\n        if items is None:\n            items = []\n        items.append(item)\n        return items\n```\n\n## Why this is a real bug, not a style point\n\nThe default value expression is evaluated **once**, when the `def` statement\nexecutes — not per call. That single list object is then bound to\n`items` on every invocation where the caller omits the argument, and\n`.append` mutates it in place. The result is state that leaks between\notherwise-independent calls, and it persists for the lifetime of the process.\n\nTwo details worth noting:\n\n- **Mutating versus rebinding.** The bug is specifically the in-place\n  `.append`. A function that only *read* the default (e.g. `return items + [item]`)\n  would be harmless, because that rebinds rather than mutates. Mutable\n  defaults are only dangerous when the body mutates them — here it does.\n- **The `None` sentinel also disambiguates.** With `items=None`, a caller\n  passing `items=[]` explicitly gets a fresh list per call, whereas with the\n  original signature `add_item(x, [])` happens to work but `add_item(x)`\n  shares state — a subtle asymmetry that makes the bug easy to miss in tests.\n\n## Categories checked, no findings\n\nI reviewed the three lines against the other six categories from the\nworkflow and found nothing else:\n\n- **Exception handling** — no `except` clauses.\n- **Resource management** — no files, sockets, or connections opened.\n- **Async correctness** — not `async`.\n- **Typing** — no hints are present at all, so there is nothing mismatched;\n  adding hints is a reasonable follow-up (`item: T, items: list[T] | None = None -> list[T]`)\n  but it would not have caught this bug, which is why the mutable default\n  finding stands on its own.\n- **Data access** — no queries.\n- **Security** — no sinks.\n\n## Scope note\n\nThe review is limited to the single function submitted — no file path, module\ncontext, or call sites were provided, so I could not confirm how `add_item`\nis actually used. That matters here only in one direction: the finding is a\ncorrectness defect regardless of call sites, but the fix's exact shape (return\na new list versus return `None` and mutate a caller-owned list) may depend on\nwhat callers expect. The `None`-sentinel fix above preserves the current\nreturn-a-list signature, which is the conservative choice.\n\nNo files were modified.",
+              "outputSha256": "25ee0c8c28dbd5c2dd62c0b97ae373453aabc876f218ccabe00cf13f4b5ed580",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Identifies items=[] as a mutable default created once at definition and shared/mutated across calls, shows the accumulation example, gives the standard None-sentinel fix creating a new list inside the body, frames it as a specific finding on this function, and does not edit the code."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Review: `add_item`\n\n**1 finding.**\n\n```\npython-code-review: 1 finding\n  [correctness] — `items=[]` is a mutable default argument, shared across\n    every call that omits `items`\n```\n\n## What's wrong\n\n`def add_item(item, items=[])` creates the list **once**, at function\ndefinition time. That single list object is bound to the default and reused\non every call that doesn't pass `items` explicitly. `items.append(item)`\nthen mutates that shared object, so state leaks across calls:\n\n```python\nadd_item(1)   # [1]\nadd_item(2)   # [1, 2]  -- not [2]\nadd_item(3)   # [1, 2, 3]\n```\n\nEach caller expecting a fresh list gets the accumulated results of every\nprior call in the process. This is a correctness bug, not a style point —\nit silently corrupts results and is notoriously hard to trace because the\nfunction signature *looks* like it has a default, not persistent state.\n\n## Fix\n\nUse `None` as the sentinel and create the list inside the body:\n\n```python\ndef add_item(item, items=None):\n    if items is None:\n        items = []\n    items.append(item)\n    return items\n```\n\nThis preserves the intended \"start empty if not given a list\" behavior\nwhile giving each call its own list. (`list | None` also clears the typing\ngap this version has — the parameter currently carries no annotation.)\n\n## Note on callers\n\nIf any existing call site *relies* on the current accumulation (i.e. calls\n`add_item(x)` repeatedly and expects the running list), the fix will change\nits behavior. Those callers should pass an explicit shared `items` list\ninstead, which makes the intent visible at the call site.\n\nNo other categories triggered — no exception handling, I/O, async, or\nsecurity surface in this snippet.",
+              "outputSha256": "ebcb683dd32eeb7d539948faf6e968c3a0277d90310f2eaf751b30b994b7be55",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Identifies items=[] as a mutable default created once and shared/mutated across calls (with example), gives the standard None-sentinel fix creating a new list in the body, and reports it as a specific correctness finding without modifying the original code."
+              },
+              "passed": true
+            },
+            {
+              "output": "# python-code-review: 1 finding\n\n**File:** (unspecified — function as shown)\n\n```\npython-code-review: 1 finding\n  [correctness] — `def add_item(item, items=[]):` mutable default argument\n```\n\n## Finding\n\n**Category:** Correctness (mutable default argument)\n**Severity:** High\n\n`items=[]` is evaluated **once**, at function-definition time, and that same\nlist object is reused across every call that omits `items`. So this:\n\n```python\ndef add_item(item, items=[]):\n    items.append(item)\n    return items\n\nadd_item(\"a\")   # ['a']\nadd_item(\"b\")   # ['a', 'b']  <- state leaked from the first call\nadd_item(\"c\")   # ['a', 'b', 'c']\n```\n\nThe caller never passed a list, yet every call mutates and returns the same\nshared object. In a web/request context this is worse than surprising — it's\ncross-request shared state, a real correctness and potential data-leak bug.\n\n## Safe alternative\n\nUse `None` as the sentinel and create a fresh list inside the body:\n\n```python\ndef add_item(item, items=None):\n    if items is None:\n        items = []\n    items.append(item)\n    return items\n```\n\n(`add_item(\"a\")`, `add_item(\"b\")` now each return a single-element list.)\n\nIf the project targets Python 3.5+, `typing`/`collections.abc`-style hints\nare optional here, but note the param can be `None` internally — if you add\nhints, the *public* contract is `items: list | None = None`.\n\n## Not flagged\n\n- No resource, async, typing-hole, N+1, or security issue in the code shown.\n- Kept this to the one real defect; the `.append`-and-return style is a\n  design choice, not a bug, so it's not a finding.\n\n## Verification\n\n- The (single, in-scope) function was checked against the mutable-default\n  category; the other six categories have no applicable surface in a\n  three-line function with no I/O, no `except`, no `async`, and no queries.\n- No file under review was modified — this is a report only.",
+              "outputSha256": "d8e171baec79e278d4cfaa0295c858493f28abbb346be192f4937394154131e9",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Identifies items=[] as a mutable default evaluated once and shared/mutated across calls that omit items, gives the standard None-sentinel fix creating a fresh list inside the body, and presents it as a specific finding without editing the code. No fail criterion holds."
+              },
+              "passed": true
+            },
+            {
+              "output": "`python-code-review`: 1 finding\n\n```\n[correctness] <file>:1 — `items=[]` is a mutable default shared across calls\n```\n\n## The bug\n\nDefault arguments are evaluated **once**, when the `def` statement runs, not on each call. So every call that omits `items` gets the *same* list object — and since the function mutates it, that list accumulates state across calls:\n\n```python\n>>> add_item(\"a\")\n['a']\n>>> add_item(\"b\")\n['a', 'b']      # ← expected ['b']\n```\n\nThe list also persists after the call returns, so two unrelated callers passing no argument share hidden state. In a long-running process (web handler, worker) this is a genuine correctness bug and a classic source of cross-request leakage.\n\n## The fix\n\nUse a `None` sentinel and build a fresh list inside the function:\n\n```python\ndef add_item(item, items=None):\n    if items is None:\n        items = []\n    items.append(item)\n    return items\n```\n\nTwo notes on the fix:\n\n- **Keep the sentinel, don't switch to `items=()`** — a tuple default is immutable so it avoids the shared-state bug, but `items.append` would then raise `AttributeError` on the default path. `None` is the correct idiom here.\n- If callers are meant to mutate the caller's own list, the signature above still does that when they pass one; the sentinel only covers the omitted case. If instead the function should *never* mutate the caller's argument, change it to `return items + [item]` and drop the sentinel entirely.\n\n## Typing (minor)\n\nThe signature has no hints and the return type is ambiguous between \"the list I passed in\" and \"a new list\". Once the behavior above is settled, make it explicit, e.g. `def add_item(item: T, items: list[T] | None = None) -> list[T]:`.\n\n## Not flagged\n\n- No resource, async, exception-handling, or security issues — the function does no I/O and can't be reached with untrusted data on its own.\n\nNo files were modified.",
+              "outputSha256": "e4946321d420f59678a61b1a64ca21c9fa8fccbaa6becd28fda802ececdde40d",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Identifies items=[] as a mutable default evaluated once at def-time, shared and accumulating state across calls (with demo output), gives the standard None-sentinel fix creating a fresh list inside the body, presents it as a specific finding, and modifies no files."
+              },
+              "passed": true
+            },
+            {
+              "output": "## Finding: mutable default argument\n\n`add_item` — likely line 1, signature.\n\n**Problem:** `items=[]` creates a single list at function-definition time. That same list object is reused on every call that omits `items`, so the function silently accumulates state across unrelated calls.\n\n```python\n>>> add_item(\"a\")\n['a']\n>>> add_item(\"b\")\n['a', 'b']   # expected ['b']\n```\n\nThis is almost always a bug (unless intentional memoization, which this isn't). It also bites harder if the list ends up shared across requests/threads.\n\n**Fix:** use a sentinel and create a fresh list per call:\n\n```python\ndef add_item(item, items=None):\n    if items is None:\n        items = []\n    items.append(item)\n    return items\n```\n\nOr, if the intent is purely functional, take an iterable and return a new list without mutating the caller's:\n\n```python\ndef add_item(item, items=()):\n    return [*items, item]\n```\n\n---\n\nNote: I only checked the snippet you posted. I did not see its call sites — if every caller always passes `items` explicitly, the bug never triggers in practice, but the default is still a latent trap and should be fixed.",
+              "outputSha256": "528ea37cee096349151553b5ad4f9db8c03bd4ae100c886ec4b662fc2efb76a2",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Identifies items=[] as a mutable default created once at definition time, shared/accumulating across calls that omit items (with example), gives the standard None-sentinel fix creating a fresh list inside the body, presents it as a specific finding on this function, and does not modify the original code."
+              },
+              "passed": true
+            }
+          ]
+        },
+        {
+          "id": "broad-except-finding",
+          "kind": "behavior",
+          "prompt": "Review this Python code:\n\ntry:\n    process(data)\nexcept Exception:\n    pass",
+          "strictness": "high",
+          "trials": 5,
+          "passes": 5,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# python-code-review: 1 finding\n\n```\npython-code-review: 1 finding\n  [exception] <file>:2 — `except Exception: pass` silently swallows every\n    failure from `process(data)`, including real errors the caller needed to\n    see. `pass` means no log, no re-raise, no signal to any caller or\n    monitor. Replace with either a specific exception you can actually\n    handle, or re-raise after logging.\n```\n\n## Detail\n\n**Category:** Exception handling (swallowed error)\n\n**What's wrong**\n\n`except Exception: pass` is the broadest possible catch paired with the\nmost complete possible suppression. It hides:\n\n- A real bug in `process()` (e.g. `AttributeError`, `TypeError`) that would\n  otherwise surface immediately.\n- Environment failures (missing file, connection refused) that the caller\n  must react to.\n- `asyncio.CancelledError` in some Python versions / on some runtimes\n  (pre-3.8 it inherited from `Exception`; on 3.8+ it inherits from\n  `BaseException`, so this specific catch is *less* dangerous than it used\n  to be — but bare `except:` would still catch it, and that is worth\n  calling out if the pattern appears elsewhere).\n\nThere is no line number because the snippet has none — this is the review\nof the pattern as given.\n\n**Fix**\n\nPick the shape that matches the actual intent:\n\n```python\n# 1. Expected, recoverable failure — catch only that class:\ntry:\n    process(data)\nexcept KnownRecoverableError as exc:\n    logger.warning(\"process(%r) failed: %s\", data, exc)\n    # decide: return default, continue, re-raise, etc.\n\n# 2. Unexpected failure you want to log but still propagate:\ntry:\n    process(data)\nexcept Exception:\n    logger.exception(\"process(%r) failed\", data)\n    raise   # do not swallow\n\n# 3. Best-effort side effect where failure truly must not abort:\ntry:\n    process(data)\nexcept Exception:\n    logger.exception(\"best-effort process(%r) failed; continuing\", data)\n```\n\nUse `logger.exception(...)` (not `logger.error`) inside an `except` block\nso the traceback is captured — otherwise a log line with no stack is nearly\nas useless as `pass`.\n\n## What this review did **not** check\n\nThe snippet is a bare pattern with no module context, so the following\ncategories from the skill's checklist could not be evaluated:\n\n- Resource lifetime (no `open`/connection/lock visible).\n- Async correctness (no `async def`/`await`/`create_task` visible).\n- Typing (`process` and `data` have no visible signature).\n- Data access / N+1 (no ORM calls visible).\n- Project-linter overlap (no `pyproject.toml`, no `ruff`/`mypy` config read).\n\nIf you can paste the enclosing function or the diff, I can run the full\nseven-category pass and cite real line numbers.\n\n## Verification\n\n- [x] The provided snippet was checked against the exception-handling\n      category; the other six categories have no surface in this snippet\n      (noted above rather than claimed as clean).\n- [x] No duplicate of a project linter is claimed (no project config was\n      available).\n- [x] The finding names the problem and the specific fix, with runnable\n      replacement code.\n- [x] No file was modified.",
+              "outputSha256": "9f98e4202efb3ddd63528f4e2ab9728599ae6fb2eb6a59a941c41961c2d6841d",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Identifies `except Exception: pass` as silently swallowing every failure (no log, no re-raise, no signal to caller/monitor), explains consequences (real bugs and environment failures go unnoticed), and gives concrete fixes: catch a specific exception, log, or re-raise. Satisfies all pass criteria; no fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Python code review: 1 finding\n\n**[error-handling] — bare `except Exception: pass` swallows every failure silently**\n\n```python\ntry:\n    process(data)\nexcept Exception:\n    pass\n```\n\n## What's wrong\n\nThe `except Exception` catches **every** non-`BaseException` error from\n`process(data)` — including ones the caller almost certainly needs to see —\nand the `pass` discards it with no log, no re-raise, no fallback. After this\nblock runs, `process(data)` has either succeeded or failed and there is no\nway to tell which. Failures disappear entirely: no traceback, no counter, no\nlog line for monitoring to key off.\n\nThis is the canonical silent-swallow bug and it is the highest-severity\ncategory this skill checks.\n\nConcretely, it also catches things you rarely want caught here:\n\n- `AttributeError`/`TypeError` from a bug in `process` or in `data`'s shape —\n  a real bug now looks like a successful no-op.\n- `KeyError`/`ValueError` from malformed input — the caller gets no signal\n  that `data` was rejected.\n\n## Safe alternative\n\n**Do not catch at all if you can't handle the error:**\n```python\nprocess(data)\n```\n\n**If a specific, expected failure should be tolerated**, catch only that type\nand be explicit about the intent:\n```python\ntry:\n    process(data)\nexcept DataNotReady:\n    log.debug(\"process skipped: data not ready yet\")\n```\nor, if the original must be recorded for diagnosis:\n```python\ntry:\n    process(data)\nexcept DataNotReady as exc:\n    log.warning(\"process skipped\", exc_info=exc)\n```\n\n**If the caller genuinely should recover**, catch the narrow type and return\na defined fallback value rather than falling off the end of the block.\n\nRelated: bare `except:` (no class) is strictly worse — it also catches\n`KeyboardInterrupt`, `SystemExit`, and `asyncio.CancelledError`.\n\n---\n\n### Note on scope\nOne finding only. The snippet is too short to assess the other Step 2\ncategories (mutable defaults, resource lifetime, async, typing, data access,\nsecurity sinks) — no function signature, call site, or surrounding module was\nprovided. If you can share the enclosing function and `process`'s definition,\nI'll re-run the full checklist against it.\n\nNo files were modified — this review is read-only.",
+              "outputSha256": "776f1e95da5c0749b7a8afee2773ab167aaea32be846b2acbdafa4a42cb9697c",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Identifies the bare except Exception: pass as swallowing every error with no log/re-raise/specific catch, explains that the caller and monitoring never see failures so real bugs look like successful no-ops, and gives concrete remedies (propagate, catch a specific type, log with exc_info). No fail criteria met."
+              },
+              "passed": true
+            },
+            {
+              "output": "# python-code-review: 1 finding\n\n```\n[error-handling] <file>:3 — bare `except Exception: pass` silently swallows\n  every failure from `process(data)`, including programming errors (TypeError,\n  AttributeError), unexpected I/O failures, and — in Python 3.8+ —\n  `asyncio.CancelledError` if this is reached from async context. The caller\n  and any monitoring keyed off exceptions see success regardless of what\n  actually happened.\n```\n\n## What's wrong\n\n- **No exception is visible to anyone.** The original exception, its\n  traceback, and the fact that `process` failed at all are all discarded.\n  If `process` is supposed to be best-effort, that intent isn't expressed\n  anywhere a reader or a metrics system can see.\n- **Over-broad catch.** `except Exception` catches bugs (`TypeError`,\n  `AttributeError`, `KeyError`) that indicate the program is wrong, not that\n  the operation is allowed to fail. Swallowing those turns a loud crash into\n  silent wrong behavior.\n- **`CancelledError` risk.** In Python 3.8+ `asyncio.CancelledError`\n  subclasses `BaseException`, so it is *not* caught by `except Exception`\n  — good. But if this block is ever rewritten to bare `except:`, it will\n  swallow cancellation and break structured concurrency. Worth noting for\n  the rewrite below: don't \"fix\" it into a bare `except:`.\n\n## Safe alternatives (pick one, depending on intent)\n\n**Best-effort but observable** — catch only what you expect, log the rest\npropagates:\n\n```python\ntry:\n    process(data)\nexcept (ValueError, IOError) as exc:   # narrow to what process actually raises\n    logger.warning(\"process skipped for data=%r: %s\", data, exc)\n```\n\n**Best-effort, swallow but record** — if failure truly is acceptable, at\nleast make it visible:\n\n```python\ntry:\n    process(data)\nexcept Exception:\n    logger.exception(\"process failed for data=%r\", data)   # full traceback\n```\n\n**No recovery intended** — just let it propagate:\n\n```python\nprocess(data)\n```\n\nThe choice depends on what `process` is documented to raise and whether the\ncaller can proceed without it. As written, the code asserts \"any failure at\nall is fine and uninteresting,\" which is almost never the intended contract.\n\n## Verification\n\n- Scoped to the single snippet provided (no file path given; `<file>:3` is\n  the `pass` line — substitute the real path when filing).\n- Checked against all seven Step 2 categories: only **exception handling**\n  applies to this snippet. No mutable defaults, resources, async, typing,\n  data-access, or security sinks present.\n- Cannot confirm whether the project's `ruff` (`BLE001`/`E722`) or `mypy`\n  already enforce a narrower rule without seeing `pyproject.toml`; if\n  `ruff` with `BLE001` is enabled and passing, this finding is already\n  caught by CI and can be deprioritized — but it should still be fixed,\n  since the swallow is the actual bug, not just a lint violation.\n- Read-only: no files modified.",
+              "outputSha256": "ddad8f96e2cbdfe15cfa4a6c7f2173cdd705cc8e88a007fc60a13726e33996ba",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Flags `except Exception: pass` as swallowing every failure from process(data) including programming errors, notes caller/monitoring see success so real bugs (TypeError, AttributeError) go unnoticed, and gives concrete alternatives (narrow catch + log, logger.exception, or propagate). Also explicitly warns not to rewrite into bare except."
+              },
+              "passed": true
+            },
+            {
+              "output": "# python-code-review: 1 finding\n\n```\npython-code-review: 1 finding\n  [exception] <file>:2 — `except Exception: pass` swallows every failure; narrow it and handle or propagate\n```\n\n## Detail\n\n**Category:** exception handling (bare/broad swallow)\n\n**What's wrong:** `except Exception: pass` catches *every* non-system\nexception `process(data)` can raise and then does nothing with it. This is\nthe worst case of the broad-except pattern:\n\n- **The failure vanishes silently.** No log, no re-raise, no sentinel\n  return — the caller keeps running as if `process(data)` succeeded. Any\n  downstream logic that depends on the side effects of `process` now runs\n  against partial/absent state, and nothing in monitoring is keyed off an\n  exception that never propagates.\n- **It catches far more than intended.** `Exception` includes `KeyError`,\n  `TypeError`, `AttributeError`, `ValueError`, and every `OSError` — bugs\n  in the code itself, not just the \"expected\" failure the author had in\n  mind. Masking a `TypeError` here means a real defect ships and stays\n  invisible.\n- **(If this sits in async code)** an `except Exception` also needs care\n  around `asyncio.CancelledError`, which is `BaseException` on 3.8+ and so\n  is *not* caught here — but any code that widens to bare `except:` would\n  swallow cancellation and break task teardown. Worth confirming the\n  surrounding function is sync.\n\n**Safe alternative** — pick whichever matches intent:\n\n1. **Catch the specific expected error** and decide the fallback:\n   ```python\n   try:\n       process(data)\n   except SomeSpecificError as exc:   # the one failure you actually expect\n       logger.warning(\"process failed for %r: %s\", data, exc)\n       # explicit fallback / return value here\n   ```\n2. **Handle it, don't hide it** — if the caller must know, propagate:\n   ```python\n   try:\n       process(data)\n   except SomeSpecificError:\n       raise                 # or wrap with `raise CleanError(...) from exc`\n   ```\n3. **If it genuinely must be swallowed**, make the intent explicit and\n   observable — log it and leave a comment naming *why* it's safe:\n   ```python\n   try:\n       process(data)\n   except SomeSpecificError as exc:\n       logger.warning(\"ignoring process failure: %s\", exc)  # best-effort, ok to skip\n   ```\n\nThe key change is narrowing the exception type to what's actually expected,\nplus making the swallow loud (log) rather than silent. A bare `except\nException: pass` with no comment is indistinguishable from a bug.\n\n## Verification\n\n- Scope: the single snippet shown (no file path / no project config was\n  provided, so the finding is reported against `<file>:2`).\n- Checked the remaining Step 2 categories (mutable defaults, resource\n  management, async, typing, data access, security) — none present in the\n  shown code.\n- No file was modified.\n- Note: if this snippet is *test scaffolding* or an intentional\n  best-effort block, say so — but the code as written advertises no such\n  intent, and the fix (narrow + log) is still the right call.",
+              "outputSha256": "39d77342e45b1f0a01b157a7c00d65a132ee59d718ebc477ad4a6b7a0deafe7f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Identifies except Exception: pass as silently swallowing the error (no log/re-raise/sentinel), explains the caller and monitoring never see the failure so real bugs (TypeError etc.) go unnoticed, and gives concrete fixes: catch a specific type, propagate, or log. No dismissive/acceptable framing."
+              },
+              "passed": true
+            },
+            {
+              "output": "# python-code-review: 1 finding\n\n```\npython-code-review: 1 finding\n  [exception] <file>:2 — bare `except Exception: pass` silently swallows\n    every failure from `process(data)`, including programming errors\n    (TypeError, AttributeError) and non-Process exceptions. Narrow the\n    catch to the concrete expected exception(s) and handle them; if the\n    failure is genuinely expected and ignore-able, log it.\n```\n\n## Detail\n\n**`<file>:2` — exception handling**\n\nThe block catches `Exception` and does nothing. Concretely:\n\n1. **The catch is too broad.** `except Exception` catches everything\n   *except* `BaseException` — so it swallows `TypeError`, `AttributeError`,\n   `KeyError`, and any bug in `process()` just as readily as the error it was\n   presumably meant to handle. The caller has no way to distinguish\n   \"expected, ignorable failure\" from \"the function is broken.\"\n\n2. **`pass` discards the failure entirely.** No log, no re-raise, no\n   counter — the error leaves no trace anywhere. If `process(data)` starts\n   failing in production, nothing surfaces it.\n\n3. **Suspected bug in `random` usage / of the intended exception is\n   unknown.** Since I can't see the call site, the fix depends on intent:\n   - If only a specific failure is expected:\n     ```python\n     try:\n         process(data)\n     except ValueError as exc:   # the concrete expected error\n         logger.warning(\"skipping bad record: %s\", exc)\n     ```\n   - If the failure is truly best-effort but should still be visible:\n     ```python\n     except Exception:\n         logger.exception(\"process() failed for data=%r\", data)\n         # and either continue or re-raise, deliberately\n     ```\n   - If the caller needs to know, don't catch at all.\n\n**Not flagged:** the bare `except Exception` here does *not* catch\n`KeyboardInterrupt`/`SystemExit` (those derive from `BaseException`), so\nthat particular hazard is not present — the problem is breadth and\nsilence, not catching-control-flow.\n\n## Context needed\n\nI reviewed only the snippet shown; `process`'s own definition, the call\nsite, and whether an exception is genuinely expected here were not in\nscope. Point me at the file and I'll confirm the concrete exception to\ncatch and give an exact line-level fix.\n\n**No files were modified.** This skill is read-only.",
+              "outputSha256": "f72dcceb9834fbbdc39233b5e09d228de6698bb79e219e218c20fd389e3485c4",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Identifies the bare `except Exception: pass` swallows all errors (including TypeError/AttributeError bugs) with no log or re-raise; explains callers and monitoring never see the failure so production bugs go unnoticed; gives concrete fix options (narrow to specific exception and handle, log, or don't catch). Meets all pass criteria, no fail criterion."
+              },
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "927a6b9170b3a15e60ff167c671125b58ffbf33809e77bd8a5a7a89dd70a0bbe",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-24.1",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T19:53:34.872Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
+    },
+    {
+      "schemaVersion": "1.0.0",
       "skillId": "python/python-implementation",
       "strictness": "high",
       "trials": 5,
@@ -192,8 +810,70 @@
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex+not-contains",
-          "status": "ran"
+          "grader": "regex+judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# Implementing `fetch_all(urls)`\n\nBefore writing code, I need to see the project's own tooling and conventions. Since I don't have repo access here, I'll state the defaults I'm assuming and flag what to change if they differ.\n\n## Step 1: Discover project conventions\n\nI'll assume (adjust if wrong):\n\n- **Python 3.12+** (`requires-python >= \"3.12\"`) — enables `TaskGroup` and `except*`.\n- **HTTP client:** `httpx` (async-native). If the project uses `aiohttp`, swap `httpx.AsyncClient` for `aiohttp.ClientSession`.\n- **Layout:** `src/mypkg/` with `ruff` + `mypy` configured.\n- **Typing style:** PEP 604 (`X | None`) — the modern default for a 3.12+ project.\n\n> If the repo actually declares `requires-python = \">=3.10\"` or uses `aiohttp`, tell me and I'll adjust — `TaskGroup` and the client are the two version-sensitive choices.\n\n## Step 2: Design\n\n- **Concurrency primitive:** `asyncio.TaskGroup` (3.11+) — the current best practice. It guarantees all tasks are awaited before exit, propagates the *first* exception via `ExceptionGroup`, and cancels siblings on failure. Do **not** use `asyncio.gather` for this: it can leave tasks running after an exception and makes partial-failure semantics murky.\n- **Client sharing:** one `AsyncClient` for all requests — connection pooling, one DNS/TLS setup. Never create a client per URL.\n- **Return shape:** `dict[str, Response]` keyed by URL — preserves the input→output mapping that a bare `list` would lose.\n\n## Step 3: Implement\n\n```python\n\"\"\"Concurrent URL fetching helpers.\"\"\"\n\nfrom __future__ import annotations\n\nimport asyncio\nimport logging\n\nimport httpx\n\nlogger = logging.getLogger(__name__)\n\n\nasync def _fetch_one(client: httpx.AsyncClient, url: str) -> httpx.Response:\n    \"\"\"Fetch a single URL, returning the response (not raising on 4xx/5xx).\"\"\"\n    logger.debug(\"fetching %s\", url)\n    resp = await client.get(url)\n    logger.debug(\"fetched %s -> %d\", url, resp.status_code)\n    return resp\n\n\nasync def fetch_all(\n    urls: list[str],\n    *,\n    timeout: float = 30.0,\n) -> dict[str, httpx.Response]:\n    \"\"\"Fetch all URLs concurrently.\n\n    Returns a mapping of URL -> response. Raises the first exception\n    encountered (as part of an ExceptionGroup) if any request fails;\n    remaining in-flight requests are cancelled before this returns.\n    \"\"\"\n    if not urls:\n        return {}\n\n    results: dict[str, httpx.Response] = {}\n\n    async with (\n        httpx.AsyncClient(timeout=timeout) as client,\n        asyncio.TaskGroup() as tg,\n    ):\n        tasks = {\n            url: tg.create_task(_fetch_one(client, url), name=f\"fetch:{url}\")\n            for url in urls\n        }\n\n    # Reached only if every task succeeded (TaskGroup re-raises otherwise).\n    for url, task in tasks.items():\n        results[url] = task.result()\n    return results\n```\n\n### Why these choices\n\n| Decision | Rationale |\n|---|---|\n| `asyncio.TaskGroup` | Guarantees all tasks finish (or are cancelled) before the `async with` exits; aggregates errors as `ExceptionGroup`. This is the \"grouping concurrent calls\" best practice the prompt asked about. |\n| One `httpx.AsyncClient` | Connection pooling + single timeout config; `async with` guarantees a clean shutdown even on error. |\n| Task naming (`name=f\"fetch:{url}\"`) | Shows up in tracebacks and `asyncio`'s task listing — invaluable when one URL hangs. |\n| `timeout` keyword-only | Prevents callers passing it positionally by accident; discoverable in the signature. |\n| `_fetch_one` helper | Error handling / logging lives in one place; easy to add retries or header injection later. |\n| `resp.status_code` not raised | `httpx` doesn't raise on 4xx/5xx by default — the caller decides what's an error. If you want failures to propagate, call `resp.raise_for_status()` inside `_fetch_one`. |\n| `logger.debug(\"... %s\", url)` | Lazy `%s` interpolation — no f-string formatting cost when the level is disabled (per `rules/coding-style`). |\n\n### ⚠️ One honest caveat about `dict[str, ...]`\n\nIf the same URL appears twice in `urls`, the dict collapses the duplicate. If callers may pass duplicates and need one result *per input position*, change the return type to `list[httpx.Response]` and let the caller zip with `urls` — or key by `(index, url)`. I chose the dict because it's the more common call shape (`fetch_all(known_urls)`); flag it if your callers need positional semantics.\n\n## Step 4: Verify\n\n```bash\nuv run ruff check .\nuv run ruff format --check .\nuv run mypy .\nuv run pytest -x -q\n```\n\n(Drop the `uv run` prefix if the project uses plain `pip`/`poetry`.)\n\nNote that `httpx` isn't in the standard library — confirm it's already a dependency in `pyproject.toml`. If the project uses `aiohttp` instead, the only changed lines are the client type and the `session.get(...)` call; the `TaskGroup` structure is identical.\n\n## Step 5: Report\n\n```\nImplemented: src/mypkg/fetch.py\n  - added `fetch_all(urls, *, timeout=30.0) -> dict[str, httpx.Response]`\n    grouped with `asyncio.TaskGroup` over one shared `httpx.AsyncClient`\n  - ruff / mypy / pytest: to be run in-repo (see Step 4)\n\nOpen question: duplicate URLs in the input collapse to one dict entry —\nconfirm whether callers need positional results instead.\n```\n\nTwo things worth a follow-up handoff: if this function needs test coverage, use the `python-testing` skill (mock `httpx.MockTransport`, not the network). If the project actually runs on 3.10/3.11, the `TaskGroup` + `dict[str, ...]` syntax both need downgrading — tell me the `requires-python` value and I'll produce that variant.",
+              "outputSha256": "15a0ebdccfc31c9f5fda9ba3bc1cdf593c90e477bddefebfc94f8d76af5ee1d8",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Implements fetch_all using async httpx.AsyncClient (no blocking requests.get in the coroutine) and groups concurrent fetches with asyncio.TaskGroup via tg.create_task, returning aggregated dict of results after group completes. All pass criteria hold; no fail criteria triggered."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Implementing `fetch_all(urls)`\n\n## Step 1: Discover the project's tooling\n\nBefore writing anything, I'd check the repo. Since none was provided, I'll state my assumptions and make them explicit so you can correct them:\n\n- **Layout:** `src/<package>/` (modern)\n- **Tools:** `ruff` + `mypy` + `pytest` (most common modern default)\n- **`requires-python`:** `>=3.12` (so `TaskGroup` and PEP 695 syntax are safe)\n- **HTTP client:** `httpx` (supports async natively); if the project uses `aiohttp`, swap the transport but keep the `TaskGroup` structure unchanged.\n\nIf your project actually pins 3.10/3.11, tell me — `asyncio.TaskGroup` is 3.11+, so on 3.10 you'd fall back to `asyncio.gather(..., return_exceptions=True)`.\n\n## Step 2/3: The implementation\n\n`src/mypkg/fetch.py`:\n\n```python\n\"\"\"Concurrent HTTP fetching helpers.\"\"\"\n\nfrom __future__ import annotations\n\nimport asyncio\nimport logging\nfrom dataclasses import dataclass\n\nimport httpx\n\nlogger = logging.getLogger(__name__)\n\nDEFAULT_TIMEOUT = httpx.Timeout(10.0)\n\n\n@dataclass(frozen=True, slots=True)\nclass FetchResult:\n    \"\"\"Outcome of a single URL fetch.\n\n    ``error`` is ``None`` on success; ``status_code``/``body`` are only\n    meaningful when ``error`` is ``None``.\n    \"\"\"\n\n    url: str\n    status_code: int | None = None\n    body: str | None = None\n    error: Exception | None = None\n\n    @property\n    def ok(self) -> bool:\n        return self.error is None and self.status_code is not None and self.status_code < 400\n\n\nasync def _fetch_one(client: httpx.AsyncClient, url: str) -> FetchResult:\n    \"\"\"Fetch a single URL, converting transport/HTTP failures to a result.\"\"\"\n    try:\n        response = await client.get(url)\n    except httpx.HTTPError as exc:\n        logger.warning(\"fetch failed for %s: %s\", url, exc)\n        return FetchResult(url=url, error=exc)\n\n    return FetchResult(url=url, status_code=response.status_code, body=response.text)\n\n\nasync def fetch_all(\n    urls: list[str],\n    *,\n    timeout: float = 10.0,\n    max_connections: int = 20,\n) -> list[FetchResult]:\n    \"\"\"Fetch every URL concurrently and return results in input order.\n\n    Each URL's failure is captured in its :class:`FetchResult` rather than\n    aborting the whole batch. Results are returned in the same order as\n    ``urls``. Cancellation of the calling task still propagates.\n    \"\"\"\n    if not urls:\n        return []\n\n    limits = httpx.Limits(max_connections=max_connections)\n    timeout_cfg = httpx.Timeout(timeout)\n\n    async with httpx.AsyncClient(limits=limits, timeout=timeout_cfg) as client:\n        async with asyncio.TaskGroup() as tg:\n            tasks = [tg.create_task(_fetch_one(client, url), name=f\"fetch:{url}\") for url in urls]\n\n    # TaskGroup guarantees all tasks completed here (or the block raised).\n    return [task.result() for task in tasks]\n```\n\n### Why this shape\n\n- **`asyncio.TaskGroup`** is the current best practice over `asyncio.gather`:\n  if any task raises an unhandled exception, all siblings are cancelled and\n  the whole group raises an `ExceptionGroup` — no silent \"some failed, some\n  didn't\" state. `gather` would require `return_exceptions=True` and manual\n  post-processing to approximate this.\n- **`_fetch_one` swallows per-URL errors into `FetchResult`.** That's a\n  deliberate design choice: `TaskGroup` is *too* good at one failing task\n  cancelling everything, so we keep real failures inside the `TaskGroup`\n  boundary and let only genuine cancellation / bugs propagate. If you'd\n  rather the whole batch fail fast on the first error, delete the\n  `try/except` in `_fetch_one` and let `TaskGroup` cancel the rest.\n- **One shared `AsyncClient`** across all requests — connection pooling,\n  single TLS session pool, and a bounded `max_connections`.\n- **Results in input order.** `tasks` is built in `urls` order, so\n  `task.result()` lines up 1:1 with the input without any index bookkeeping.\n- **`asyncio.CancelledError` is not caught.** `httpx.HTTPError` does not\n  cover it, so cancellation from the caller propagates cleanly through\n  `TaskGroup`'s cleanup.\n- **No blocking calls** — everything runs on the event loop.\n\n## Step 4: Verify\n\n```bash\nuv run ruff check .\nuv run ruff format --check .\nuv run mypy .\nuv run pytest -x -q\n```\n\n## Step 5: Report\n\n```\nImplemented: src/mypkg/fetch.py\n  - added FetchResult dataclass + _fetch_one() + fetch_all()\n  - uses asyncio.TaskGroup, shared httpx.AsyncClient, bounded connections\n  - planned: pytest suite (hand off to python-testing)\n```\n\n## Two things I need from you to make this exact\n\n1. **HTTP client** — is it `httpx`, `aiohttp`, or the project's own wrapper? (Swap `client.get(...)` for `session.get(...)` + `async with session.get(...)` for aiohttp, and the rest is unchanged.)\n2. **Failure semantics** — should one failing URL (a) be captured in its own `FetchResult` (current), or (b) cancel the whole batch? The current impl is (a); (b) is a three-line change.\n\nIf your `requires-python` is 3.10 or 3.11 rather than 3.12, also drop `slots=True` doesn't matter, but `TaskGroup` needs 3.11+, and on 3.10 you'd replace the `TaskGroup` block with:\n\n```python\nresults = await asyncio.gather(*(_fetch_one(client, u) for u in urls), return_exceptions=True)\n# then convert any bare Exception entries into FetchResult(url=..., error=...)\n```\n\nTell me which and I'll finalize.",
+              "outputSha256": "921ca4046fea07974a3173adf150b4459e8c9405d2cc7700ccc0da96442b5104",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Uses httpx.AsyncClient for async fetches, groups tasks via asyncio.TaskGroup, returns aggregated list of all results in input order. No blocking requests.get inside the coroutine; blocking is only mentioned as a contrast/note."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Implementing `fetch_all(urls)`\n\nThis is a self-contained implementation, so the discovery step collapses to picking the stack: `httpx` (async client, no deprecated `aiohttp` loop plumbing) + `asyncio.TaskGroup` (3.11+) for structured concurrency. If your project pins `requires-python < 3.11`, swap `TaskGroup` for `asyncio.gather(..., return_exceptions=True)` — the TaskGroup version will `SyntaxError` there.\n\n## The function\n\n```python\nfrom __future__ import annotations\n\nimport logging\nfrom dataclasses import dataclass\n\nimport httpx\n\nlogger = logging.getLogger(__name__)\n\n\n@dataclass(frozen=True, slots=True)\nclass FetchResult:\n    url: str\n    status: int\n    body: str\n\n\n@dataclass(frozen=True, slots=True)\nclass FetchFailure:\n    url: str\n    error: Exception\n\n\nasync def fetch_all(\n    urls: list[str],\n    *,\n    timeout: float = 10.0,\n    client: httpx.AsyncClient | None = None,\n) -> list[FetchResult | FetchFailure]:\n    \"\"\"Fetch every URL concurrently, returning per-URL results in input order.\n\n    A failure on one URL does not cancel the others; it is returned as a\n    FetchFailure alongside the successful FetchResults.\n    \"\"\"\n    owned_client = client is None\n    client = client or httpx.AsyncClient(timeout=timeout)\n\n    async def one(url: str) -> FetchResult | FetchFailure:\n        try:\n            resp = await client.get(url)\n            resp.raise_for_status()\n            return FetchResult(url=url, status=resp.status_code, body=resp.text)\n        except httpx.HTTPError as exc:\n            logger.warning(\"fetch failed url=%s error=%s\", url, exc)\n            return FetchFailure(url=url, error=exc)\n\n    try:\n        async with asyncio.TaskGroup() as tg:\n            tasks = [tg.create_task(one(url)) for url in urls]\n    finally:\n        if owned_client:\n            await client.aclose()\n\n    return [t.result() for t in tasks]\n```\n\n`asyncio` import elided above; add `import asyncio`.\n\n## Why these choices\n\n**`asyncio.TaskGroup` over `asyncio.gather`.** `gather` has two bad modes: default (`return_exceptions=False`) cancels nothing but abandons sibling tasks on first failure, and `return_exceptions=True` gives you a `list[Any]` the type checker can't narrow. `TaskGroup` gives structured concurrency — if any task raises an uncaught exception, siblings are cancelled and the exception is re-raised as an `ExceptionGroup`. Here we catch `httpx.HTTPError` *inside* `one()`, so the group never sees a failure and all URLs are attempted; the per-URL error becomes data instead.\n\n**One `AsyncClient` shared across all calls.** Creating a client per URL misses connection-pool reuse and pays TLS setup N times. The `client` parameter lets a caller supply a long-lived client (the right pattern for a service that fetches repeatedly); when absent, we own and close one so the function is safe to call standalone.\n\n**Input order preserved.** `TaskGroup` gives no ordering guarantee, but `tasks` is built in input order, so the final list comprehension restores it. Callers get `results[i]` matching `urls[i]`.\n\n**Return failures as values, not exceptions.** A batch fetch that raises on the first 404 is usually the wrong contract for a caller fetching many URLs. The discriminated union `FetchResult | FetchFailure` forces the caller to handle both — better than returning `None` on failure and pushing the null-check to the caller.\n\n**`raise_for_status()` inside the try.** 4xx/5xx are `httpx.HTTPStatusError`, an `httpx.HTTPError`, so they flow into the same handler. If you want non-2xx responses returned as successful `FetchResult`s, drop the `raise_for_status()` line.\n\n## Usage\n\n```python\nresults = await fetch_all([\"https://example.com\", \"https://httpbin.org/get\"])\nfor r in results:\n    match r:\n        case FetchResult(status=s, body=b):\n            print(f\"{r.url}: {s} ({len(b)} bytes)\")\n        case FetchFailure(error=e):\n            print(f\"{r.url}: FAILED {e}\")\n```\n\n## Verify\n\n```bash\nruff check .\nruff format --check .\nmypy .            # needs httpx stubs; httpx ships py.typed\npytest -x -q\n```\n\n## Notes / caveats\n\n- **Concurrency is unbounded.** 10,000 URLs → 10,000 concurrent connections. If URLs are user-supplied, add a semaphore: `sem = asyncio.Semaphore(50)` and `async with sem:` around `client.get(...)`.\n- **No retry/backoff.** Transient failures surface as `FetchFailure`. If you need retries, add them inside `one()` (e.g. `tenacity.retry` with exponential jitter) rather than around `fetch_all`.\n- **`slots=True` requires 3.10+**; `TaskGroup` requires 3.11+; `X | Y` in annotations at runtime requires `from __future__ import annotations` on < 3.10. Check `requires-python` before lifting this into a project pinning an older version.",
+              "outputSha256": "db72a9cce7adee2a42b813205d40fe8b03ed70342de0eb1b9902571324aa8fd8",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Uses httpx.AsyncClient (async HTTP) with await client.get, groups fetches in asyncio.TaskGroup via create_task, and returns aggregated results after the group completes. No blocking requests.get inside the coroutine."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Implementing `fetch_all(urls)`\n\nBefore writing code, let me be explicit about what I'd need to discover from your repo (Step 1 of the workflow) — I can't see it here, so I'll flag the assumptions I'm making and show the two things that will change based on your answers.\n\n## Assumptions I'm making\n\n- Python **3.11+** (`asyncio.TaskGroup` is 3.11+, so `requires-python` must allow it).\n- HTTP client: `httpx` (async-native). If you use `aiohttp` instead, only the client construction changes — the `TaskGroup` grouping is identical.\n- Return type: a list of results in the **same order as `urls`**, even though they complete concurrently.\n\n## Implementation\n\n```python\nimport asyncio\nimport logging\nfrom dataclasses import dataclass\n\nimport httpx\n\nlogger = logging.getLogger(__name__)\n\n\n@dataclass(slots=True)\nclass FetchResult:\n    \"\"\"Outcome of fetching a single URL.\"\"\"\n\n    url: str\n    status_code: int | None = None\n    text: str | None = None\n    error: str | None = None\n\n    @property\n    def ok(self) -> bool:\n        return self.error is None\n\n\nasync def _fetch_one(\n    client: httpx.AsyncClient, url: str, *, timeout: float\n) -> FetchResult:\n    \"\"\"Fetch a single URL, converting failures into a FetchResult.\"\"\"\n    try:\n        response = await client.get(url, timeout=timeout)\n        response.raise_for_status()\n    except httpx.HTTPError as exc:\n        logger.warning(\"fetch failed for %s: %s\", url, exc)\n        return FetchResult(url=url, error=str(exc))\n    return FetchResult(url=url, status_code=response.status_code, text=response.text)\n\n\nasync def fetch_all(\n    urls: list[str], *, timeout: float = 10.0, max_concurrency: int = 20\n) -> list[FetchResult]:\n    \"\"\"Fetch every URL concurrently, preserving input order.\n\n    Failures are captured per-URL rather than aborting the batch; inspect\n    ``FetchResult.error`` to distinguish them.\n    \"\"\"\n    results: list[FetchResult] = [FetchResult(url=url) for url in urls]\n    semaphore = asyncio.Semaphore(max_concurrency)\n\n    async def _bounded(index: int, url: str) -> None:\n        async with semaphore:\n            results[index] = await _fetch_one(client, url, timeout=timeout)\n\n    # One connection pool for the whole batch; reused across requests.\n    async with httpx.AsyncClient() as client:\n        async with asyncio.TaskGroup() as tg:\n            for index, url in enumerate(urls):\n                tg.create_task(_bounded(index, url))\n\n    return results\n```\n\n## The two decisions that matter here\n\n**1. `TaskGroup` over `asyncio.gather`.** `TaskGroup` is the current best practice for grouping concurrent calls: if any task raises, the group cancels its siblings and re-raises as an `ExceptionGroup`, so a task never silently outlives its caller. `gather` with `return_exceptions=False` gives you neither guaranteed cancellation of siblings nor that guarantee on the way out. I kept failures *inside* `_fetch_one` (returning a `FetchResult`) so an unreachable URL doesn't abort the whole batch — but if you'd rather fail the whole batch, drop the `try/except` and let `TaskGroup` raise the `ExceptionGroup`.\n\n**2. Bounded concurrency via `Semaphore`.** `TaskGroup` will happily spawn N tasks and open N sockets; the semaphore caps in-flight requests so a 1000-URL list doesn't exhaust file descriptors or hammer a server.\n\n## Where this needs to adapt to your repo\n\n- **Order guarantee:** I write into a pre-sized `results` list by index. If you don't need order, return `[task.result() for task in ...]` or collect via a queue instead.\n- **Client lifecycle:** I create one `AsyncClient` per call. If `fetch_all` is called in a long-lived process, you likely want the client injected as a parameter (`client: httpx.AsyncClient`) so connection pooling is shared — that also makes it trivial to test with `httpx.MockTransport`.\n- **Return type:** if your codebase already has a `Response`/`FetchOutcome` type, use that instead of my `FetchResult` dataclass.\n\n## Verify before shipping\n\nRun against your project's own tooling (`uv run …` / `poetry run …` per Step 1):\n\n```bash\nruff check . && ruff format --check .\nmypy .\npytest -x -q\n```\n\n**What I could not check:** your `requires-python`, whether the project already standardizes on `httpx` vs. `aiohttp`, your docstring style (I used Google-ish), and whether order-preservation is actually required. If you paste your `pyproject.toml` and one neighboring module, I'll align the imports, docstrings, and typing convention (`X | None` vs. `Optional[X]`) to match exactly.",
+              "outputSha256": "a4c632d980d14f42014d4b6170b9ab125b527a952d61c95fcd46b3090ff8c82a",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Uses httpx.AsyncClient (async client, no blocking requests.get), groups fetches via asyncio.TaskGroup with tg.create_task, and returns aggregated results for all URLs in input order after the group completes. Meets all pass criteria; no fail criteria triggered."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Implementing `fetch_all(urls)`\n\nSince this is a greenfield request with no existing repo context provided, I'll note the assumptions I'm making per Step 1 of the workflow and flag them so you can adjust.\n\n## Step 1: Discovery assumptions\n\nSince no project files were supplied, I'm assuming:\n- **Dependency manager**: `httpx` as the async HTTP client (the modern default over `aiohttp` for new code — simpler API, `async with` first-class, same team as `starlette`/`httpcore`). If your project already uses `aiohttp`, say so and I'll swap the client.\n- **Python**: `requires-python = \">=3.11\"` (needed for `asyncio.TaskGroup`, which landed in 3.11).\n- **Layout**: `src/<package>/` is a reasonable default; place the module wherever your package lives.\n- **Typing convention**: PEP 604 (`X | None`) — the modern default.\n\n## Step 2: Design\n\n- Concurrency grouping: `asyncio.TaskGroup` (3.11+), **not** `asyncio.gather`. TaskGroup gives structured concurrency: if one task raises, siblings are cancelled and the exception propagates as an `ExceptionGroup`, so you never leak in-flight requests.\n- One shared `httpx.AsyncClient` across all requests → connection pooling + shared config, and closed deterministically via `async with`.\n- Return a `dict[str, Response]` keyed by URL rather than a bare list, so callers don't have to re-pair URLs with results by position.\n\n## Step 3: Implementation\n\n```python\n# src/mypkg/fetch.py\n\"\"\"Concurrent URL fetching.\"\"\"\n\nfrom __future__ import annotations\n\nimport asyncio\nimport logging\n\nimport httpx\n\nlogger = logging.getLogger(__name__)\n\n\nasync def fetch_all(\n    urls: list[str],\n    *,\n    timeout: float = 10.0,\n    headers: dict[str, str] | None = None,\n) -> dict[str, httpx.Response]:\n    \"\"\"Fetch every URL in `urls` concurrently.\n\n    Returns a mapping of the original URL string to its response. If any\n    request fails, the remaining in-flight requests are cancelled and the\n    underlying exceptions are raised together as an ExceptionGroup.\n    \"\"\"\n    results: dict[str, httpx.Response] = {}\n\n    async with httpx.AsyncClient(\n        timeout=timeout,\n        headers=headers,\n        follow_redirects=True,\n    ) as client:\n\n        async def _fetch_one(url: str) -> None:\n            logger.debug(\"GET %s\", url)\n            response = await client.get(url)\n            response.raise_for_status()\n            results[url] = response\n\n        async with asyncio.TaskGroup() as tg:\n            for url in urls:\n                tg.create_task(_fetch_one(url), name=f\"fetch:{url}\")\n\n    return results\n```\n\n### Why each choice\n\n| Choice | Reason |\n|---|---|\n| `asyncio.TaskGroup` over `asyncio.gather` | Structured concurrency: on first failure, remaining tasks are cancelled automatically; no orphaned requests. Failures surface as `ExceptionGroup`, which you can inspect with `except*`. |\n| One `AsyncClient` for all requests | Reuses TCP connections to the same host, applies config (timeout/headers/redirect) uniformly. |\n| `client.get` instead of `httpx.get` | `httpx.get` is blocking *and* opens/closes a client per call — the async path must go through the client instance. |\n| `name=f\"fetch:{url}\"` on the task | Shows up in `asyncio` debug traces and in `ExceptionGroup` messages, so a failure tells you which URL died. |\n| `logger.debug(\"GET %s\", url)` | Lazy `%s` interpolation — no string building if the level is filtered. |\n| No `except` at all | `TaskGroup` + `raise_for_status()` already give the caller structured error info; catching here would hide it. |\n| `results` dict written from tasks | Safe: all writes happen on the event loop thread, and the dict is only read after the TaskGroup block exits. |\n\n### Calling it\n\n```python\nimport asyncio\n\nasync def main() -> None:\n    try:\n        responses = await fetch_all(\n            [\"https://example.com\", \"https://httpbin.org/json\"],\n        )\n    except* httpx.HTTPStatusError as eg:\n        for exc in eg.exceptions:\n            print(f\"HTTP error: {exc.request.url} -> {exc.response.status_code}\")\n    else:\n        for url, resp in responses.items():\n            print(url, resp.status_code, len(resp.content))\n\nasyncio.run(main())\n```\n\nNote the `except*` — the 3.11+ syntax for catching exceptions out of a TaskGroup/ExceptionGroup.\n\n## Step 4: Verify (adjust to your tooling)\n\n```bash\nuv run ruff check .\nuv run ruff format --check .\nuv run mypy .\nuv run pytest -x -q\n```\n\nIf you tell me your actual `pyproject.toml`, I'll recheck the `requires-python` floor (TaskGroup needs 3.11+; if you're on 3.10 I'd fall back to `asyncio.gather` with `return_exceptions=False` plus an explicit `try/finally` to cancel siblings, which is messier).\n\n## Red flags I deliberately avoided\n\n- ❌ `asyncio.gather` — loses structured cancellation.\n- ❌ `except Exception:` around the whole thing — hides bugs and turns real failures into `None` values.\n- ❌ Opening a fresh `AsyncClient` (or calling `httpx.get`) per URL — kills pooling and blocks the loop.\n- ❌ `print(...)` for logging — not configurable, not redirectable.",
+              "outputSha256": "bc6ffaf9a91fff1a05f69743097f07268f1f6b8143b53ea5de97bf479cd8b59f",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Uses asyncio.TaskGroup with tg.create_task for concurrent fetches (structured concurrency), httpx.AsyncClient with await client.get for async fetching, and returns aggregated results dict after the group completes. No blocking requests.get inside the coroutine."
+              },
+              "passed": true
+            }
+          ]
         },
         {
           "id": "resource-with-block",
@@ -201,19 +881,85 @@
           "prompt": "Write a Python function that opens a file, reads its JSON contents, and returns the parsed data.",
           "strictness": "high",
           "trials": 5,
-          "passes": 1,
-          "passRate": 0.2,
+          "passes": 3,
+          "passRate": 0.6,
           "passAtK": 1,
-          "grader": "regex",
-          "status": "ran"
+          "grader": "regex+judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# Reading JSON from a file\n\nBefore writing code, let me be explicit about the design decisions, since \"return the parsed data\" hides a few real choices.\n\n## The function\n\n```python\nimport json\nfrom pathlib import Path\nfrom typing import Any\n\n\ndef read_json(path: str | Path) -> Any:\n    \"\"\"Read and parse a JSON file.\n\n    Args:\n        path: Path to the JSON file.\n\n    Returns:\n        The parsed JSON value (dict, list, str, int, float, bool, or None).\n\n    Raises:\n        FileNotFoundError: The path does not exist.\n        IsADirectoryError: The path is a directory.\n        json.JSONDecodeError: The file does not contain valid JSON, or is\n            empty.\n        UnicodeDecodeError: The file is not valid UTF-8.\n        OSError: Any other I/O failure.\n    \"\"\"\n    text = Path(path).read_text(encoding=\"utf-8\")\n    return json.loads(text)\n```\n\nThat is the whole thing. Two lines of body, and every failure mode surfaces as a specific exception type. The rest of this answer is why it looks like that.\n\n## Design decisions worth spelling out\n\n**`pathlib.Path`, not `open(path)`.** `Path.read_text` closes the file for you, so there is no `with` block to forget and no leaked file handle if parsing fails. The alternative — `with open(path, encoding=\"utf-8\") as f: return json.load(f)` — is equally correct and marginally faster for large files, because `json.load` streams from the file object instead of materializing a `str` first. I chose `read_text` because the no-`with` shape is harder to get wrong when this snippet gets copied.\n\n**`encoding=\"utf-8\"` is not optional.** `open` falls back to the platform locale encoding (`cp1252` on Windows, often `ascii` in minimal containers). A JSON file with a `é` or an emoji then decodes differently depending on where it runs. JSON is defined as UTF-8 (RFC 8259), so pin it.\n\n**`Any` as the return, and that is the honest answer.** `json.loads` returns one of six types depending on the file, and you cannot narrow it without seeing the data. Do **not** write `-> dict[str, Any]` unless the caller actually guarantees a top-level object — that annotation lies when someone passes a file containing `[1, 2, 3]`, and the type checker will believe you right up until the first `KeyError`. If your callers always feed it objects, validate:\n\n```python\ndef read_json_object(path: str | Path) -> dict[str, Any]:\n    \"\"\"Like read_json, but require a top-level JSON object.\"\"\"\n    data = read_json(path)\n    if not isinstance(data, dict):\n        raise ValueError(f\"expected a JSON object at the top level, got {type(data).__name__}\")\n    return data\n```\n\nThis is the shape I would reach for in most real code: the strict variant is where the `Any` gets paid down, at the boundary, once.\n\n**No try/except in the function.** It is tempting to wrap everything and re-raise `RuntimeError(\"could not read config\")`. Resist it. The specific exceptions above are what callers branch on — you cannot tell \"file is missing, use defaults\" from \"file is corrupt, alert someone\" if both arrive as one opaque error. If you *do* need to add context, chain it:\n\n```python\ntry:\n    return json.loads(Path(path).read_text(encoding=\"utf-8\"))\nexcept json.JSONDecodeError as exc:\n    raise ValueError(f\"{path} is not valid JSON\") from exc\n```\n\n`from exc` preserves the original traceback under the new error. Dropping it (`raise ValueError(...)` inside an `except`) still sets `__context__` but reads as \"this happened while handling that\" rather than \"this is that, relabeled\" — use `from` when the new error *is* the meaningful one.\n\n## Things this function deliberately does not do\n\n- **Detect a UTF-8 BOM.** Files written by some Windows tools start with `\\ufeff`, which `json.loads` rejects. If you hit that, decode with `encoding=\"utf-8-sig\"` — it strips a BOM when present and is otherwise identical to `utf-8`.\n- **Handle a missing file gracefully.** Returning `{}` for a nonexistent config sounds convenient until a typo'd path silently disables a feature. Let `FileNotFoundError` out, or catch it at the call site where you know the default:\n\n  ```python\n  try:\n      config = read_json_object(path)\n  except FileNotFoundError:\n      config = DEFAULTS\n  ```\n\n- **Guard against huge or adversarial files.** `read_text` puts the entire file in memory. For untrusted input, cap the size (`path.stat().st_size`) before reading, since a multi-gigabyte file is a trivial denial of service.\n\n## Scope note\n\nIf the parsed data immediately becomes a dataclass — `Config(**data)` or similar — that validation is a separate concern from parsing and deserves its own layer (a `Config.from_json` classmethod, or a schema library), rather than being folded into the reader. Keeping `read_json` returning `Any` and doing the narrowing once, at the boundary, keeps the two concerns from tangling.",
+              "outputSha256": "04a06a8734f730fa9503c968647b540458b3cfe7bf3ef57291251d48b5e004c1",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "fail",
+                "reason": "Pass criterion 1 requires opening the file with a `with open(...)` context manager. The answer deliberately avoids that, using Path.read_text, and even says 'there is no `with` block to forget.' It does not open with a `with` block, so criterion 1 fails."
+              },
+              "passed": false
+            },
+            {
+              "output": "# `load_json` — implementation\n\n## Step 1: Project tooling discovery\n\nI don't have access to your repo, so I can't run the discovery step. Before using this verbatim, check `pyproject.toml` for:\n\n- `requires-python` (affects whether `X | None` / PEP 695 generics are available)\n- dependency manager (`uv` / `poetry` / `pip`) — determines command prefix below\n- `[tool.ruff]`, `[tool.mypy]` / `[tool.pyright]` config\n- `src/` vs flat layout, and neighboring modules' docstring + typing style\n\nThe code below targets **Python 3.12+** with PEP 604 unions and no `from __future__ import annotations`; adjust to match your project.\n\n## Step 3: Implementation\n\n```python\n\"\"\"JSON file loading helpers.\"\"\"\n\nimport json\nfrom pathlib import Path\nfrom typing import Any\n\n\nclass JsonLoadError(Exception):\n    \"\"\"Raised when a file cannot be read or does not contain valid JSON.\"\"\"\n\n\ndef load_json(path: str | Path) -> Any:\n    \"\"\"Read *path* and return its parsed JSON contents.\n\n    Args:\n        path: Path to a UTF-8 encoded JSON file.\n\n    Returns:\n        The parsed JSON value (dict, list, str, int, float, bool, or None).\n\n    Raises:\n        JsonLoadError: If the file cannot be read or contains invalid JSON.\n    \"\"\"\n    try:\n        with Path(path).open(\"r\", encoding=\"utf-8\") as fh:\n            return json.load(fh)\n    except OSError as exc:\n        raise JsonLoadError(f\"could not read {path!r}\") from exc\n    except json.JSONDecodeError as exc:\n        raise JsonLoadError(f\"invalid JSON in {path!r}: {exc}\") from exc\n```\n\n### A typed variant (when the schema is known)\n\nIf the JSON always has a fixed shape, prefer modeling it — `TypedDict` when callers need a real `dict` (e.g. passed back to `json.dumps`), `@dataclass` when it's just your own data:\n\n```python\nfrom typing import TypedDict\n\n\nclass Config(TypedDict):\n    name: str\n    retries: int\n    verbose: bool\n\n\ndef load_config(path: str | Path) -> Config:\n    data = load_json(path)\n    if not isinstance(data, dict):\n        raise JsonLoadError(f\"expected a JSON object in {path!r}\")\n    # Validate fields here (or with pydantic / a schema) rather than trusting\n    # the file. Returning `data` directly would be an unchecked cast.\n    return Config(\n        name=str(data[\"name\"]),\n        retries=int(data[\"retries\"]),\n        verbose=bool(data[\"verbose\"]),\n    )\n```\n\n> **Note:** For anything beyond a throwaway script, validate against a schema (pydantic, `msgspec`, `jsonschema`) instead of hand-rolled field extraction. Add that as a dependency only if the project already uses it — check `pyproject.toml`.\n\n### What each choice does\n\n| Choice | Why |\n|---|---|\n| `with Path(path).open(...)` | Closes the file on every exit path, including exceptions raised mid-read. A bare `fh = open(...)` + `fh.close()` leaks the handle if `json.load` raises. |\n| `encoding=\"utf-8\"` | The OS default is locale-dependent (`cp1252`, `latin-1`, …) and will silently mangle non-ASCII JSON on some machines. |\n| `raise ... from exc` | Preserves the original `OSError`/`JSONDecodeError` in `__cause__` — visible in tracebacks, recoverable by callers. A bare `raise NewError(...)` loses the context. |\n| Dedicated `JsonLoadError` | Callers can `except JsonLoadError` without also swallowing unrelated `OSError`s from elsewhere. Catch the specific type, not `Exception`. |\n| `path: str \\| Path` then `Path(path)` | Callers can pass either; normalizing once at the top is cheap and lets the rest of the body assume `Path`. |\n\n## Step 4: Verify\n\nRun the project's own commands (prefix with `uv run` / `poetry run` as discovered in Step 1):\n\n```bash\nruff check .\nruff format --check .\nmypy .\npytest -x -q\n```\n\n## Step 5: Report\n\n```\nImplemented: <pkg>/json_io.py\n  - added JsonLoadError + load_json(path) -> Any\n  - (optional) load_config(path) -> Config via TypedDict\n  - ruff/mypy/pytest: <fill in after running>\n```\n\n## Red flags for this specific task\n\n- **Don't** catch `Exception` around the whole body \"so nothing crashes\" — that would mask a bug in your own parsing/validation code as a recoverable file error.\n- **Don't** return `data` from a typed loader without validating it — `# type: ignore` / an unchecked `cast` is the wrong fix when the input is untrusted.\n- **Don't** use `json.loads(fh.read())` — `json.load(fh)` streams and is the idiomatic form.\n\nWant me to adapt this to your actual `pyproject.toml` (e.g. add a pydantic `BaseModel` version, or use `orjson` if it's already a dependency)? Paste the relevant config and I'll match it.",
+              "outputSha256": "9c7c22e28b71abdc1c587a350bc938a4e5aae614c9b931e9a13746468f8d1abc",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "load_json uses `with Path(path).open(...)` and `return json.load(fh)`, so the handle closes even if json.load raises. With block, standard json module, returns parsed data; no manual-close leak. Extra scaffolding doesn't negate the core implementation."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Reading JSON from a file\n\nBefore writing this, a note on approach: the skill's workflow says to discover the project's tooling first (is it `uv`/`poetry`/`pip`, `mypy`/`pyright`, what's `requires-python`?). I don't have that context here, so I'll write a self-contained, modern-Python (3.12+) implementation and flag the two spots you'd normally check against your `pyproject.toml`.\n\n## Implementation\n\n```python\n\"\"\"Minimal JSON-file reader.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom pathlib import Path\nfrom typing import Any\n\n\ndef read_json(path: str | Path) -> Any:\n    \"\"\"Read and parse a JSON file.\n\n    Args:\n        path: Path to the JSON file.\n\n    Returns:\n        The parsed JSON data (typically a dict or list).\n\n    Raises:\n        FileNotFoundError: If *path* does not exist.\n        json.JSONDecodeError: If the file contents are not valid JSON.\n    \"\"\"\n    with open(path, encoding=\"utf-8\") as f:\n        return json.load(f)\n```\n\n## Notes on the choices\n\n- **`with open(...)`** — the file is closed deterministically, including if `json.load` raises. Never call `.close()` manually here; an error before that line would leak the handle.\n- **`encoding=\"utf-8\"`** — explicit. Without it you get the platform default (`cp1252` on Windows), which silently corrupts non-ASCII data. `json.load` returns `str`, so the encoding matters.\n- **`path: str | Path`** — accepts both, so callers don't have to wrap. `open` handles `Path` natively. If your project pins `requires-python = \">=3.9\"` or uses `Optional`/`typing.Union` style, rewrite as `Union[str, Path]`.\n- **`-> Any`** — `json.load` genuinely returns an arbitrary JSON value. If your call site expects a specific shape and you'd rather validate at the boundary, that's a deliberate step up — see below.\n- **Exception contract** — documented, not swallowed. `FileNotFoundError` and `json.JSONDecodeError` propagate so the caller decides how to handle them. Don't add a broad `except Exception: return {}` — that turns \"file missing\" and \"file corrupt\" into silent empty results.\n\n## If the return type needs to be more than `Any`\n\nThe bare version is fine for a helper. Once a caller needs structure, promote it:\n\n```python\nfrom typing import TypedDict\n\n\nclass Config(TypedDict):\n    name: str\n    retries: int\n\n\ndef read_config(path: str | Path) -> Config:\n    with open(path, encoding=\"utf-8\") as f:\n        return json.load(f)  # type: ignore[no-any-return]  # shape enforced by callers/tests\n```\n\n`TypedDict` is the right tool when the value must *stay* a `dict` (round-tripping through JSON, passing to an API that expects one). Use a `@dataclass` instead if you're constructing a real object with behaviour. Either way, you're now asserting a shape the file might not actually have — if that matters, validate explicitly rather than leaning on the annotation.\n\n## Verifying\n\nAgainst the skill's checklist — I can't run these without the repo, but this is what you'd run:\n\n```bash\nruff check .\nruff format --check .\nmypy .          # or pyright\n```\n\nTwo things to check against *your* project before pasting this in:\n\n1. **Layout & run prefix** — if you have a `pyproject.toml`, the commands above likely need `uv run` / `poetry run` in front, and this module belongs in `src/<package>/`, not at the repo root.\n2. **`requires-python`** — if it's below 3.10, the `str | Path` syntax won't parse at runtime even with `from __future__ import annotations` in older cases; drop the future import and use `Union[str, Path]`.",
+              "outputSha256": "d0083b3830270c013492a2d785a686a77711f6d0796249760f016cd3e6b6df13",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "The core function uses `with open(path, encoding=\"utf-8\") as f: return json.load(f)`, satisfying all pass criteria: context manager, json.load parse/return, and guaranteed handle close even if parsing raises. The surrounding notes and TypedDict alternative don't violate any fail criteria; manual .close() is only warned against, not used."
+              },
+              "passed": true
+            },
+            {
+              "output": "# JSON File Reader\n\nBefore writing code, a quick note on the approach: below is a solid, modern implementation using the patterns from the skill. I don't have access to your project's `pyproject.toml`, so I've made the tooling-agnostic choices explicit — verify the `requires-python` (this uses PEP 604 `X | None` syntax, fine on 3.10+) and whether your project prefers `Optional[X]` over `| None`.\n\n## Implementation\n\n```python\nfrom __future__ import annotations\n\nimport json\nfrom pathlib import Path\nfrom typing import Any, TextIO\n\n\ndef read_json_file(path: str | Path) -> Any:\n    \"\"\"Read a file and return its parsed JSON contents.\n\n    Args:\n        path: Filesystem path to the JSON file to read.\n\n    Returns:\n        The parsed JSON value (dict, list, str, int, float, bool, or None),\n        exactly as ``json.load`` produces it.\n\n    Raises:\n        FileNotFoundError: If ``path`` does not exist.\n        PermissionError: If the file cannot be opened for reading.\n        IsADirectoryError: If ``path`` points at a directory.\n        UnicodeDecodeError: If the file is not valid UTF-8.\n        json.JSONDecodeError: If the file contents are not valid JSON.\n    \"\"\"\n    with open(path, \"r\", encoding=\"utf-8\") as fh:\n        return json.load(fh)\n```\n\nThe `with` block guarantees the file handle is closed even if `json.load` raises — this is the whole reason the skill's Step 3.2 mandates context managers over a manual `.close()` call.\n\n## Design notes\n\n**Path handling.** `path: str | Path` accepts both because `open()` accepts both. If you're on a codebase that consistently uses `Path` only, narrow it to `Path` and let callers convert at the boundary.\n\n**Encoding.** `encoding=\"utf-8\"` is explicit because the platform default is locale-dependent — JSON is UTF-8 by spec (RFC 8259), so this is not merely stylistic. On Windows the default would otherwise be cp1252 and you'd get the wrong decode on non-ASCII content.\n\n**Return type is `Any`.** This is unavoidable without a schema: `json.load` can return any JSON value. If callers always expect a specific shape, prefer one of these instead:\n\n```python\ndef read_json_object(path: str | Path) -> dict[str, Any]:\n    \"\"\"Like read_json_file, but asserts the document is a JSON object.\"\"\"\n    data = read_json_file(path)\n    if not isinstance(data, dict):\n        raise ValueError(\n            f\"expected a JSON object at {path}, got {type(data).__name__}\"\n        )\n    return data\n```\n\nor validate against a `TypedDict` / pydantic model if the project already uses one.\n\n**Exceptions are intentionally not caught.** `FileNotFoundError`, `json.JSONDecodeError`, etc. propagate to the caller. Swallowing them here would hide the failure at the wrong layer — the caller is the one that knows whether a missing file is fatal or expected. If your caller wants \"return `None` on missing\", do that mapping at the call site, not in this function.\n\n**Streaming variant (if files may be large).** `json.load` materializes the whole document; that is fine for typical config files but not for multi-GB inputs. There is no stdlib streaming JSON parser — for that case you'd reach for `ijson` rather than rolling your own.\n\n## Verify\n\nRun against your configured tooling (prefix with `uv run` / `poetry run` if that's what Step 1 turns up):\n\n```bash\nruff check .\nruff format --check .\nmypy .            # or: pyright\npytest -x -q\n```\n\nA minimal round-trip check:\n\n```python\nimport json, tempfile, pathlib\n\nwith tempfile.TemporaryDirectory() as d:\n    p = pathlib.Path(d) / \"x.json\"\n    p.write_text(json.dumps({\"a\": [1, 2, 3]}), encoding=\"utf-8\")\n    assert read_json_file(p) == {\"a\": [1, 2, 3]}\n```\n\nIf this feature warrants committed tests (round-trip, missing file, malformed JSON, non-object payload), that belongs in the test suite — hand off to `python-testing` rather than bolting test files onto this change.",
+              "outputSha256": "9a249fa6346def2e3b70e1dd18f4ba28154c8b10b1a70c6890d796b2d9267a42",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Uses `with open(path, \"r\", encoding=\"utf-8\") as fh:` and `return json.load(fh)`, returning parsed data. The context manager guarantees the handle closes even if json.load raises. No manual .close() pattern."
+              },
+              "passed": true
+            },
+            {
+              "output": "# `load_json_file` — implementation\n\nFollowing the skill's workflow: since no existing project context was given, I'll state the assumptions explicitly rather than inventing a project's tooling.\n\n## Assumptions (Step 1: project discovery)\n\nI can't read a `pyproject.toml` here, so I'm assuming:\n\n- **Python ≥ 3.10** (so PEP 604 `X | None` syntax is available).\n- **Standard library only** — no project-specific logging/config conventions to match.\n- **Tooling**: `ruff` + `mypy` + `pytest`, whichever the project uses.\n\nIf your project actually pins an older `requires-python` or uses `Optional[X]` style, adjust accordingly — the flag below covers the failure mode.\n\n## Implementation\n\n```python\nimport json\nfrom pathlib import Path\nfrom typing import Any\n\n\nclass JsonFileError(Exception):\n    \"\"\"Raised when a file cannot be read or does not contain valid JSON.\"\"\"\n\n\ndef load_json_file(path: str | Path) -> Any:\n    \"\"\"Read a UTF-8 JSON file and return the parsed data.\n\n    Args:\n        path: Path to the JSON file to read.\n\n    Returns:\n        The parsed JSON value (dict, list, str, int, float, bool, or None).\n\n    Raises:\n        JsonFileError: If the file cannot be read, or does not contain\n            valid JSON.\n    \"\"\"\n    path = Path(path)\n\n    try:\n        text = path.read_text(encoding=\"utf-8\")\n    except OSError as exc:\n        raise JsonFileError(f\"could not read file: {path}\") from exc\n\n    try:\n        return json.loads(text)\n    except json.JSONDecodeError as exc:\n        raise JsonFileError(f\"invalid JSON in {path}: {exc}\") from exc\n```\n\n## Notes on the choices\n\n**`Any` return — with a caveat.** `json.loads` returns a `dict[str, Any] | list[Any] | str | int | float | bool | None`. I return `Any` for convenience, but this is exactly the case the skill's Red Flags table warns about: `Any` disables the type checker for downstream callers. If you know the file's shape, prefer one of:\n\n```python\n# 1. TypedDict — the file is always an object with a known shape\nclass Config(TypedDict):\n    name: str\n    timeout: int\n\ndef load_config(path: str | Path) -> Config:\n    return json.loads(Path(path).read_text(encoding=\"utf-8\"))  # still Any at runtime\n\n# 2. Generic — the caller names the type, and is trusted to match the file\nfrom typing import TypeVar\n\nT = TypeVar(\"T\")\n\ndef load_json_as(path: str | Path) -> T:\n    ...\n```\n\nNeither of these validates at runtime — if you need that, add a `pydantic`/`msgspec` model or a `TypeGuard` rather than pretending `Any` is fine.\n\n**Exception chaining.** Both failure paths use `raise ... from exc` so the original `OSError`/`JSONDecodeError` is preserved in the traceback — a bare `raise JsonFileError(...)` inside `except` would still chain implicitly, but `from exc` is explicit and keeps the cause visible when the caller logs it.\n\n**A single wrapping exception type.** Callers now catch one thing (`JsonFileError`) instead of having to know about `FileNotFoundError`, `PermissionError`, `IsADirectoryError`, and `json.JSONDecodeError`. The original exception is still available via `__cause__` if a caller needs to distinguish. If you'd rather callers distinguish \"missing file\" from \"malformed file\", raise the original exceptions unchanged instead of wrapping them:\n\n```python\ndef load_json_file(path: str | Path) -> Any:\n    path = Path(path)\n    text = path.read_text(encoding=\"utf-8\")  # OSError propagates\n    return json.loads(text)                   # JSONDecodeError propagates\n```\n\n**`path.read_text()` vs. `with open(...)`.** `Path.read_text` opens and closes the file internally, so there's no unclosed-resource risk. If you need streaming (a huge file, or you're reading incrementally), use a `with` block:\n\n```python\nwith open(path, encoding=\"utf-8\") as fh:\n    return json.load(fh)\n```\n\n**Encoding.** Pinned to UTF-8 explicitly rather than relying on the platform default (`locale.getpreferredencoding()`), which differs across systems — this is the same reason the skill says to match the project's own conventions instead of assuming.\n\n## Verification\n\nSince I don't have a repo to run against, here's what to check locally:\n\n```bash\nruff check .\nruff format --check .\nmypy .\npytest -x -q\n```\n\nPrefix with `uv run` / `poetry run` if the project uses one of those.\n\nQuick manual smoke test:\n\n```python\nload_json_file(\"data.json\")            # -> parsed value\nload_json_file(\"missing.json\")         # -> JsonFileError: could not read file: ...\nload_json_file(\"bad.json\")             # -> JsonFileError: invalid JSON in ...\n```\n\nIf you share the `pyproject.toml` (or just `requires-python`, the dependency manager, and whether the repo uses `mypy` or `pyright`), I'll narrow the style — PEP 604 vs. `Optional`, docstring format, and the correct `ruff`/`pytest` invocation — to match it.",
+              "outputSha256": "11b0bc804ec06002c8e5f53cdb71ced767c23e6c0616a42d55c944ca1de67278",
+              "deterministic": [
+                true
+              ],
+              "judge": {
+                "verdict": "fail",
+                "reason": "The main implementation uses Path.read_text() plus json.loads, not a `with open(...)` block, and never returns via json.load inside a context manager. Criterion 1 requires `with open(...)`; the `with` block appears only as an alternative in a note. File closure is technically safe, but the required pattern is absent."
+              },
+              "passed": false
+            }
+          ]
         }
       ],
       "verdict": "fail",
       "scope": "bundled",
-      "skillDigest": "6489343424c4ee3fd5391f33737a8a269b2d95dd42c75a99fc409a915c0ff35e",
+      "skillDigest": "d5304160be27c9daa9fc1caabc23487e0bac68195f89d7d5fbd141cb04c35006",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-24.1",
       "runner": "deepseek",
       "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:54:29.810Z"
+      "recordedAt": "2026-09-24T19:54:38.598Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
     },
     {
       "schemaVersion": "1.0.0",
@@ -393,8 +1139,60 @@
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex+regex+not-contains",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "Put it directly in that test file — not in any `conftest.py`. `conftest.py` is for fixtures shared across multiple test modules; a fixture used by a single file belongs next to the tests that use it, where it's discoverable and doesn't pollute the namespace for unrelated modules. (Step 2 of the workflow: promote to a `conftest.py` only once a second test file needs the same fixture, then place it in the narrowest `conftest.py` covering every file that needs it.)\n\nFor scope, default to `function` (pytest's default) — don't widen to `module`/`session` just for a small speedup. A wider-scoped fixture that mutates state leaks that state between tests that assumed isolation, which produces order-dependent failures that are painful to debug. Only widen the scope if the fixture is genuinely expensive to set up *and* is stateless/read-only (e.g., a read-only connection or an immutable config object loaded once).\n\n```python\n# tests/test_widget.py\nimport pytest\n\n@pytest.fixture  # function scope — the default\ndef widget():\n    return Widget(name=\"test-widget\")\n\ndef test_widget_name(widget):\n    assert widget.name == \"test-widget\"\n```\n\nIf you later find a second test file needs `widget`, move it to a `conftest.py` in the directory that covers both files — not the suite root.",
+              "outputSha256": "fb8bc80fadb602f384fc879e906dd19ca19d284d770547f3677acef5af19de39",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer places the fixture directly in the single test file (not conftest), recommends default function scope with reasoning against widening, and states promotion to the narrowest covering conftest.py happens only once a second file needs it. No fail criteria triggered."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Single-file fixture: location and scope\n\n**Location: directly in that test file**, not in any `conftest.py`.\n\n`conftest.py` exists for fixtures shared *across* test files. A fixture only one file needs gains nothing from being there — it just widens its visible scope and makes it harder to find. Keep it local until a second test file needs the same fixture; at that point, promote it to the narrowest `conftest.py` that covers both files.\n\n**Scope: the pytest default (`function` scope)** unless you have a concrete reason to widen it.\n\nReasons *not* to widen:\n- \"It's slow to set up\" alone isn't enough — a `module`/`session` fixture that mutates state leaks that state into tests that assumed a fresh setup.\n- Convenience: a `function` default keeps each test isolated; that's the property you usually want to protect.\n\nReasons you *might* widen:\n- The resource is genuinely expensive and read-only (e.g., a loaded model, a read-only DB connection) *and* no test mutates it.\n- You are certain no test's behavior depends on a fresh instance.\n\n## Concrete shape\n\n```python\n# tests/test_reports.py\nimport pytest\n\n# Local fixture for one file: define it right here, default scope.\n@pytest.fixture\ndef populated_db(tmp_path):\n    db = make_db(tmp_path / \"reports.db\")\n    db.insert_report({\"id\": 1, \"title\": \"Q1\"})\n    db.insert_report({\"id\": 2, \"title\": \"Q2\"})\n    return db\n\n\ndef test_report_count(populated_db):\n    assert populated_db.count() == 2\n\n\n@pytest.mark.parametrize(\"report_id,expected\", [(1, \"Q1\"), (2, \"Q2\")])\ndef test_report_title(populated_db, report_id, expected):\n    assert populated_db.get(report_id).title == expected\n```\n\nIf later a `tests/billing/test_invoices.py` also needs `populated_db`, move it to `tests/conftest.py` — the narrowest file that covers both. Leave it out of the repo-root `conftest.py` unless the whole suite needs it.\n\n## Why this order\n\nDefine fixtures before test cases: you want the setup/teardown contract settled so each test reads as *arrange → act → assert* without re-deriving the fixture in your head. And put the fixture where its future readers are — next to the tests that use it.",
+              "outputSha256": "28c5b8448d3ab0ee98195556e00031849758072bf18fdd14ece9ab916ae9a8a9",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "States fixture belongs directly in the one test file, not conftest.py, since only one file uses it. Recommends default function scope, allowing widening only with concrete justification. Says to promote to narrowest conftest.py only once a second test file needs it, explicitly warning against root conftest."
+              },
+              "passed": true
+            },
+            {
+              "output": "A fixture used by only one test file belongs directly in that test file — not in any `conftest.py`.\n\n```python\n# tests/test_parser.py\nimport pytest\n\n@pytest.fixture\ndef sample_ast():\n    return Parser().parse(\"x = 1 + 2\")\n\ndef test_sample_ast_binds_assignment(sample_ast):\n    assert sample_ast.body[0].target == \"x\"\n```\n\n**Why not a `conftest.py`.** `conftest.py` fixtures are injected into every\ntest file at or below that directory. A root-level `conftest.py` leaks this\nfixture's name and setup cost into hundreds of unrelated tests. Promote it\nto the narrowest `conftest.py` that covers every file needing it only once\na **second** test file actually needs it.\n\n**Scope: leave it at the pytest default `function`.**\n\n```python\n@pytest.fixture              # implicitly scope=\"function\"\ndef sample_ast():\n    return Parser().parse(\"x = 1 + 2\")\n```\n\n- `function` gives each test its own fresh instance, so a test that mutates\n  the fixture value cannot corrupt the next test.\n- Widening to `module`/`session` for convenience is the common failure\n  mode: the fixture is instantiated once and all its state is shared. That\n  is only safe when the object is genuinely immutable for the test run\n  (e.g. a read-only config loaded from disk, or an expensive-to-build\n  artifact you are careful never to mutate).\n- If construction is expensive and you still want `function` scope, reach\n  for `scope=\"session\"` for the *source* and derive a fresh per-test object\n  from it, rather than widening the fixture the tests actually receive.\n\nOne consequence worth naming: because the fixture lives in the test file,\nyou do not need to import it — pytest discovers it by name in the module\nscope. Don't add `from tests.test_parser import sample_ast`; that re-runs\nthe fixture setup as a plain call and defeats teardown.",
+              "outputSha256": "6dcf324841dc6faf5fc1b68b5a5f8d449e0a3646296e5fd9fe2f75830dbf4ba5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the fixture belongs directly in the one test file, not in any conftest.py, since only that file uses it; recommends the default function scope and warns against widening to module/session without reason; and says promotion to the narrowest conftest.py happens only once a second test file needs it. No fail criteria met."
+              },
+              "passed": true
+            },
+            {
+              "output": "Define it directly in that test module, at default `function` scope.\n\n- **Location:** in the test file itself, not in any `conftest.py`. A fixture belongs in `conftest.py` only once a *second* test file needs it — and then in the narrowest `conftest.py` that covers every file needing it. A single-file fixture has no reason to be visible to the rest of the suite.\n- **Scope:** leave it at pytest's default `function` scope unless you have a concrete reason to widen it. `module`/`session` fixtures survive across tests and leak state into tests that assumed isolation.\n\nOnly widen scope (and only then consider promoting location) if the setup is genuinely expensive to rebuild and the fixture is provably side-effect-free across tests.",
+              "outputSha256": "0782be9b262c26caa7ae86e3e08f91c489af8cf3907f4a006d8888809cc6091b",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer says define the fixture directly in the one test module, not any conftest.py, since only one file uses it (criterion 1); recommends default function scope rather than module/session without a stated reason (criterion 2); and states conftest.py promotion — narrowest one covering all files needing it — happens only when a second test file needs it (criterion 3). No fail criterion holds."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Where the fixture lives\n\nPut it **directly in the test file that uses it** — not in any `conftest.py`.\n\n`conftest.py` exists to share fixtures across multiple test files. A fixture with exactly one consumer gains nothing from being discovered suite-wide, and putting it in a `conftest.py` (especially a root one) makes it *look* reusable and discoverable to future readers when it isn't. Promote it to the narrowest covering `conftest.py` only once a **second** test file needs the same fixture.\n\n```python\n# tests/test_parser.py\n\nimport pytest\nfrom mypkg.parser import parse\n\n@pytest.fixture\ndef sample_document():\n    doc = build_sample_document()\n    yield doc\n    doc.close()\n\ndef test_parse_extracts_title(sample_document):\n    assert parse(sample_document).title == \"Expected\"\n```\n\n# What scope\n\nDefault to **`function` scope** (pytest's built-in default — just omit `scope=`, as above). That gives every test a fresh instance, so state can't leak between tests that assume isolation.\n\nOnly widen the scope when the setup is genuinely expensive *and* the resource is immutable/non-mutating for the lifetime of the wider scope:\n\n| Scope | When it's justified |\n|---|---|\n| `function` (default) | Almost always — fresh per test, no leakage |\n| `module` | Setup is costly, and the object is read-only across the module's tests |\n| `session` | Truly global, expensive, immutable (e.g. a read-only DB schema, a compiled fixture artifact) |\n\nThe trap is choosing `session`/`module` \"for speed\" on a fixture that gets mutated by a test — one test's writes then silently change another test's starting state, producing order-dependent failures that are painful to debug.\n\n# Quick decision rule\n\n1. One consumer? → in the test file.\n2. One consumer *and* cheap to construct? → `function` scope (the default).\n3. One consumer but expensive/immutable? → wider scope, and document *why* on the fixture.\n4. Second file needs it? → move to the narrowest shared `conftest.py` at that point.\n\nOne note: if the \"variation\" you're after is just different *inputs* to the same test, that's `@pytest.mark.parametrize` on the test, not a `params=` fixture. Reserve parametrized fixtures for when the *setup/teardown logic itself* varies.",
+              "outputSha256": "70c6d24d4f06e2f866cb0d74a96d606eedc37b3524c89edd20da0a481a52ad55",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states fixture belongs directly in the test file, not conftest.py, because only one file uses it; recommends default function scope; and says promote to narrowest covering conftest.py only once a second test file needs it. No failure criteria met."
+              },
+              "passed": true
+            }
+          ]
         },
         {
           "id": "mock-external-not-internal",
@@ -402,421 +1200,75 @@
           "prompt": "Write a pytest test for a function that calls an internal helper in the same package and also calls an external HTTP API. What should be mocked?",
           "strictness": "high",
           "trials": 5,
-          "passes": 0,
-          "passRate": 0,
-          "passAtK": 0,
-          "grader": "regex+regex+not-contains",
-          "status": "ran"
-        }
-      ],
-      "verdict": "fail",
-      "scope": "bundled",
-      "skillDigest": "de31689fbaaa2edf36bb0ad1f0632ee973daea0a783389641e8d6e44a061cada",
-      "runner": "deepseek",
-      "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:53:56.737Z"
-    },
-    {
-      "schemaVersion": "1.0.0",
-      "skillId": "python/python-code-review",
-      "strictness": "high",
-      "trials": 5,
-      "triggerAccuracy": {
-        "truePositive": 6,
-        "falsePositive": 0,
-        "positives": 6,
-        "negatives": 6
-      },
-      "evidence": "authored",
-      "scenarios": [
-        {
-          "id": "trigger-positive-1",
-          "kind": "trigger-positive",
-          "prompt": "Review this Python diff for mutable default argument bugs",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-2",
-          "kind": "trigger-positive",
-          "prompt": "Check this pull request for broad except clauses swallowing errors",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-3",
-          "kind": "trigger-positive",
-          "prompt": "Audit this Python module for resource leaks and unclosed files",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-4",
-          "kind": "trigger-positive",
-          "prompt": "Review this async Python code for blocking calls inside async def",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-5",
-          "kind": "trigger-positive",
-          "prompt": "Check this Python code review for typing holes like Any or missing Optional",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-6",
-          "kind": "trigger-positive",
-          "prompt": "Review this Django ORM code for N+1 query issues",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-1",
-          "kind": "trigger-negative",
-          "prompt": "Implement a new Python feature that fetches user data",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-2",
-          "kind": "trigger-negative",
-          "prompt": "Write pytest tests for this module",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-3",
-          "kind": "trigger-negative",
-          "prompt": "Fix the mypy type errors so the build passes",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-4",
-          "kind": "trigger-negative",
-          "prompt": "Review this TypeScript React component for MobX store misuse",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-5",
-          "kind": "trigger-negative",
-          "prompt": "Run review-security-code on our whole repository for OWASP issues",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-6",
-          "kind": "trigger-negative",
-          "prompt": "Fix this ModuleNotFoundError in our Python package",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "mutable-default-finding",
-          "kind": "behavior",
-          "prompt": "Review this Python function for bugs:\n\ndef add_item(item, items=[]):\n    items.append(item)\n    return items",
-          "strictness": "high",
-          "trials": 5,
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex",
-          "status": "ran"
-        },
-        {
-          "id": "broad-except-finding",
-          "kind": "behavior",
-          "prompt": "Review this Python code:\n\ntry:\n    process(data)\nexcept Exception:\n    pass",
-          "strictness": "high",
-          "trials": 5,
-          "passes": 5,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "regex+not-contains",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# Mocking: internal helper vs. external HTTP API\n\nMock the **external HTTP API only**. Do not mock the internal helper.\n\nThis follows directly from the skill's Step 3 rule: *\"patch external dependencies, not internal modules under the same package.\"*\n\n## Why\n\n| Target | Mock? | Reason |\n|---|---|---|\n| External HTTP API | **Yes** | Real network calls are slow, flaky, and non-deterministic. It's genuinely outside your control. |\n| Internal helper (same package) | **No** | Mocking it makes the test assert that your own mocks agree with each other. The test stops verifying real integration. |\n\nIf the internal helper is hard to call for real, that's a signal about the code's design (tight coupling / hidden dependency), not an invitation to mock it away.\n\n## Sketch\n\n```python\nimport pytest\n\ndef test_process_calls_api(mocker):\n    # External dependency: patch at the point of USE, not the definition site.\n    # If the source module does `import requests` and calls `requests.get(...)`,\n    # patch \"mypkg.mod.requests.get\" -- not \"requests.get\".\n    mock_get = mocker.patch(\"mypkg.mod.requests.get\")\n    mock_get.return_value.json.return_value = {\"status\": \"ok\"}\n    mock_get.return_value.raise_for_status.return_value = None\n\n    from mypkg.mod import process\n\n    # The internal helper runs for real; only the network is faked.\n    result = process({\"id\": 1})\n\n    assert result == \"ok\"\n    mock_get.assert_called_once()\n```\n\n## Two things to get right\n\n1. **Patch at the point of use.** Where the source does `from requests import get` vs. `import requests`, the patch target differs (`mypkg.mod.get` vs. `mypkg.mod.requests.get`). Patch the name as the module-under-test looks it up.\n\n2. **Prefer `mocker.patch` (pytest-mock) or `monkeypatch`** over manual `unittest.mock.patch` context managers, for automatic cleanup and to match the project's existing convention (Step 1).\n\n## Caveat\n\nIf the internal helper *itself* makes the external HTTP call, you still patch the HTTP layer — just at whichever module ultimately resolves the HTTP client's name. The unit under test calls the helper for real; only the outbound request is intercepted.\n\n## If this is a red flag\n\nIf you find yourself wanting to mock the internal helper because the test won't otherwise pass cleanly, treat that as a design signal to surface — don't paper over it with a mock. A test whose internal collaborators are all mocked only checks that the mocks agree with each other, not that the code works.",
+              "outputSha256": "f1f5a8ec390448a0d2744873c60d697d3036eb10820c81302428b7a9c56ca170",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Mocks only the external HTTP call via mocker.patch at the point of use; explicitly leaves the internal helper unmocked so real integration is exercised, and explains that mocking it would only verify mocks agree with each other."
+              },
+              "passed": true
+            },
+            {
+              "output": "Mock only the external HTTP API. The internal helper in the same package should be exercised for real.\n\nConcretely:\n\n```python\n# mock at the point of use, not the definition site\nhttp_call = mocker.patch(\"mypkg.mod.requests.get\")\nhttp_call.return_value.status_code = 200\nhttp_call.return_value.json.return_value = {\"ok\": True}\n```\n\nRationale:\n\n- **External HTTP API** — a real call makes the test slow, flaky, and dependent on network/credentials/third-party uptime. Patch it. Patch where it's *used* (`mypkg.mod.<client>`) rather than where it's defined (e.g. `requests.get`) only when the module re-binds the name; otherwise `mocker.patch(\"requests.get\")` is fine, but the point-of-use form is the safer habit.\n- **Internal helper** — mocking it means the test only verifies that your mocks agree with each other; it stops validating the actual composition of helper output into the API request/endpoint/payload, which is usually the thing most likely to break. Let it run.\n\nThis is the mock-external-not-internal rule from the skill's Rules and Red Flags: *\"Mock external dependencies (network, filesystem, other services), not internal modules under the same package.\"*\n\nTwo practical notes:\n\n1. On top of storing fixtures in the narrowest `conftest.py`, keep the HTTP mock inside the test or module rather than the shared root conftest unless a second file needs it — the same scoping rule applies to mocks.\n2. If the internal helper is the reason the API call is hard to construct (e.g. it builds a messy payload), that's a signal to assert on the payload you sent (`http_call.assert_called_once_with(...)`) rather than a reason to mock the helper away. That assertion is what ties the internal-helper behavior to the mocked external boundary and keeps the test meaningful.",
+              "outputSha256": "e23dbda1f4f2695a598921a3383478cb9bb679cad60ec916f9bce679dd2a0c35",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Mocks only the external HTTP call at the point of use via mocker.patch('mypkg.mod.requests.get'), explicitly leaves the internal helper unmocked so real integration is exercised, and explains that mocking the helper would only verify mocks agreeing with each other rather than real composition. Does not mock the internal helper."
+              },
+              "passed": true
+            },
+            {
+              "output": "# What to Mock\n\n**Mock the external HTTP call. Do not mock the internal helper.**\n\nThe distinction is the one the skill makes explicit:\n\n> Mock external dependencies (network, filesystem, other services), not internal modules under the same package.\n\n## Why\n\n- **Internal helper (same package):** leave it real. The test should verify that your function *plus* its internal collaborator produce the right result. If you mock the helper too, the test only asserts that your mocks agree with each other — a change to the helper's behavior won't be caught, and the test stops describing any real integration.\n- **External HTTP API:** mock it. You don't control it, it's slow/flaky/needs creds, and tests must be hermetic. Patching it also lets you drive error paths (`500`, timeouts, malformed JSON) deterministically.\n\n## Patch at the point of use\n\nPatch where the name is looked up, not where the dependency is defined:\n\n```python\nimport pytest\n\ndef test_fetch_and_transform(mocker):\n    # mypkg.service imports requests; the HTTP call lives in mypkg.service\n    mock_get = mocker.patch(\"mypkg.service.requests.get\")\n    mock_get.return_value.json.return_value = {\"value\": 21}\n    mock_get.return_value.raise_for_status.return_value = None\n\n    result = fetch_and_transform(\"resource-1\")  # internal helper runs for real\n\n    assert result == {\"value\": 42}\n```\n\nIf the module does `from requests import get`, patch `\"mypkg.service.get\"` instead — patching `requests.get` would miss it.\n\n## Practical notes\n\n- **Prefer `pytest-mock`'s `mocker.patch`** (from the `mocker` fixture) so patches auto-unwind; `monkeypatch.setattr` is the dependency-free equivalent.\n- **Build the fake response once** if several tests need it — a small fixture returning a stub object with `.json()` / `.raise_for_status()` keeps each test to one assertion concept.\n- **Only reach for `requests-mock` / `responses` / `respx`** if the project already uses one; otherwise `mocker.patch` is enough and matches what neighboring tests likely do (check them first, per Step 1).\n- **Parametrize the error cases** rather than writing separate tests:\n\n```python\n@pytest.mark.parametrize(\n    \"status,exc\",\n    [(500, RuntimeError), (404, KeyError)],\n    ids=[\"server-error\", \"not-found\"],\n)\ndef test_http_failure(mocker, status, exc):\n    resp = mocker.patch(\"mypkg.service.requests.get\").return_value\n    resp.raise_for_status.side_effect = exc(f\"HTTP {status}\")\n    with pytest.raises(exc):\n        fetch_and_transform(\"resource-1\")\n```\n\nBottom line: fake the network boundary, exercise the helper.",
+              "outputSha256": "69893ab2128013e0729dd4363824caaf674eb4235ba2c31ceec4166c91d7ae72",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Mocks the external HTTP call at point of use (mocker.patch on module path) and explicitly leaves the internal helper unmocked so the real integration runs; explains mocks would only agree with each other and real behavior wouldn't be caught. No internal helper mocking occurs."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Mocking the external HTTP API Only\n\nGiven the two calls the function makes:\n\n| Call | Same package? | Mock it? |\n|---|---|---|\n| Internal helper | Yes | **No** — let it run |\n| External HTTP API | No | **Yes** |\n\n## Why\n\n- **Internal helper (same package):** mocking it means your test only verifies that your mock agrees with itself. The helper is part of the unit you're testing — its real behavior is part of what you want to exercise. If the helper is expensive or has side effects, that's a signal to refactor the test boundary, not to mock across it.\n- **External HTTP API:** network calls are slow, flaky, non-deterministic, and may cost money or require credentials. Mock at the call site so the test is fast, hermetic, and deterministic.\n\nThis matches the skill's rule: *\"Mock external dependencies (network, filesystem, other services), not internal modules under the same package.\"*\n\n## Patch at the point of use\n\nPatch the name as looked up **where the function under test sees it**, not where the dependency is defined:\n\n```python\n# src/mypkg/service.py\nfrom mypkg.helpers import transform\nimport httpx\n\ndef fetch_and_transform(user_id: str) -> dict:\n    raw = httpx.get(f\"https://api.example.com/users/{user_id}\").json()\n    return transform(raw)   # internal helper -- leave this alone\n```\n\n```python\n# tests/test_service.py\nimport pytest\nfrom mypkg import service\n\ndef test_fetch_and_transform(mocker):\n    # Mock the external HTTP call at the point of use in service.py\n    mock_resp = mocker.Mock()\n    mock_resp.json.return_value = {\"id\": \"u1\", \"name\": \"Ada\"}\n    mocker.patch.object(service.httpx, \"get\", return_value=mock_resp)\n\n    result = service.fetch_and_transform(\"u1\")\n\n    service.httpx.get.assert_called_once_with(\"https://api.example.com/users/u1\")\n    # transform() ran for real, so assert on its actual output shape\n    assert result[\"name\"] == \"Ada\"\n```\n\nKey points:\n\n- `mocker.patch.object(service.httpx, \"get\", ...)` — patching the *lookup* inside `service`, which is how the function actually resolves `httpx.get`. Patching `httpx.get` globally or `api_client.get` at its definition site would not intercept the call.\n- `transform` is **not** patched — the test exercises it for real and asserts on its output.\n- Assert both that the external call happened with the expected arguments *and* that the real internal helper produced the expected result.\n\n## Common mistake to avoid\n\n```python\n# BAD -- mocks both the external call AND the internal helper\nmocker.patch(\"mypkg.service.httpx.get\", ...)\nmocker.patch(\"mypkg.service.transform\", return_value={\"name\": \"Ada\"})\n```\n\nThis test passes regardless of whether `transform` works or is even called correctly — it only checks that two mocks agree.",
+              "outputSha256": "406fc5ce1cccc5eb6f4b42723da7b7654f2db832df3d746638be693d9c78e4d5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Mocks only the external HTTP call at the point of use (service.httpx.get), explicitly leaves internal helper transform unmocked so real integration is exercised, and explains that mocking it would only verify mocks agree with each other, not real code. Bad example only warns against double-mocking."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Mocking: internal helper vs. external HTTP API\n\n## Short answer\n\n**Mock the external HTTP API only. Call the internal helper for real.**\n\n## Why\n\n| Dependency | Mock? | Reason |\n|---|---|---|\n| Internal helper (same package) | **No** | Mocking it means your test asserts only that your *mock* agrees with your *mock*. You lose any integration coverage of the real helper, and a real bug in how the function calls the helper passes silently. |\n| External HTTP API | **Yes** | Non-deterministic, slow, may cost money, may not exist in CI, and is outside the unit under test's boundary. |\n\nThis is the rule from Step 3 of the skill:\n\n> **Mocks:** patch at the point of use, and only external dependencies — an internal collaborator mocked away stops the test verifying real integration.\n\nand from the Red Flags table:\n\n> *\"I'll mock the internal helper so the test is simpler\"* → Mock external dependencies, not internal ones.\n\n## Concrete example\n\nSuppose the module under test is `mypkg/orders.py`:\n\n```python\n# mypkg/orders.py\nimport httpx\nfrom mypkg.pricing import compute_total   # internal helper, same package\n\ndef submit_order(payload: dict) -> dict:\n    total = compute_total(payload[\"items\"])   # internal — call for real\n    resp = httpx.post(\"https://api.example.com/orders\",   # external — mock this\n                      json={**payload, \"total\": total})\n    resp.raise_for_status()\n    return resp.json()\n```\n\nThe test mocks `httpx.post` **at the point of use** (`mypkg.orders.httpx.post`), not at `httpx`'s definition site:\n\n```python\n# tests/test_orders.py\nfrom unittest.mock import MagicMock\nimport pytest\nfrom mypkg import orders\n\n\ndef test_submit_order_sends_computed_total(mocker):\n    # External boundary: patched at the point of use.\n    fake_resp = MagicMock()\n    fake_resp.json.return_value = {\"id\": \"ord_123\", \"status\": \"accepted\"}\n    fake_post = mocker.patch(\"mypkg.orders.httpx.post\",\n                             return_value=fake_resp)\n\n    # `compute_total` is internal — no patch. It runs for real.\n    result = orders.submit_order({\"items\": [{\"price\": 10, \"qty\": 2}]})\n\n    # Contract with the external service:\n    sent = fake_post.call_args.kwargs[\"json\"]\n    assert sent[\"total\"] == 20          # the real helper produced this\n    assert sent[\"items\"] == [{\"price\": 10, \"qty\": 2}]\n\n    # Return value plumbing:\n    assert result == {\"id\": \"ord_123\", \"status\": \"accepted\"}\n\n\ndef test_submit_order_raises_on_api_error(mocker):\n    fake_resp = MagicMock()\n    fake_resp.raise_for_status.side_effect = httpx.HTTPStatusError(\n        \"500\", request=MagicMock(), response=fake_resp)\n    mocker.patch(\"mypkg.orders.httpx.post\", return_value=fake_resp)\n\n    with pytest.raises(httpx.HTTPStatusError):\n        orders.submit_order({\"items\": [{\"price\": 1, \"qty\": 1}]})\n```\n\n## Two things people get wrong here\n\n1. **Patching at the wrong site.** `mocker.patch(\"httpx.post\")` patches the module globally; the function under test imports `httpx` and looks it up at call time, so it *happens* to work — but it leaks into every other test in the run. Patch `\"mypkg.orders.httpx.post\"` (point of use) so the boundary is local to the module.\n\n2. **Reaching for `monkeypatch` when `mocker.patch` fits.** `monkeypatch` is for environment variables, `sys.path`, and replacing attributes on an object you already hold. For swapping out a callable imported by the module under test, `mocker.patch` gives you `call_args`, `assert_called_once_with`, and automatic teardown for free.\n\n## What this leaves uncovered (and where to cover it)\n\nBecause you don't mock the internal helper, the *unit* test above does verify that the real `compute_total` runs. What it does **not** verify is `compute_total`'s own edge cases (empty items, negative qty, rounding). Those belong in a separate test module against `compute_total` directly — not bolted onto this test with more `parametrize` cases, because the param would vary the helper's behavior, not `submit_order`'s.\n\nRule of thumb: **one test file per unit; mock only what crosses the process boundary.**",
+              "outputSha256": "67012f146d4f11a720e907b0ee7d68e83aa3a57fe9c24f5646d002b2662fedb9",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Mocks only the external httpx.post at point of use (mypkg.orders.httpx.post), explicitly leaves internal compute_total unprompted/unmocked so real integration is exercised, and explains mocking the internal collaborator would only verify mocks agree with each other. No fail criteria met."
+              },
+              "passed": true
+            }
+          ]
         }
       ],
       "verdict": "pass",
       "scope": "bundled",
-      "skillDigest": "05da5c8f3e540f5585ad11fb7a21b928d69084b3fd1db2311bf2d97e33e4b1d2",
+      "skillDigest": "6475d6e9429a6ce21d099aea0109a87c5e10918a9f87495b4c249391f21f5680",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-24.1",
       "runner": "deepseek",
       "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:55:09.011Z"
-    },
-    {
-      "schemaVersion": "1.0.0",
-      "skillId": "python/python-build-fix",
-      "strictness": "high",
-      "trials": 5,
-      "triggerAccuracy": {
-        "truePositive": 6,
-        "falsePositive": 0,
-        "positives": 6,
-        "negatives": 6
-      },
-      "evidence": "authored",
-      "scenarios": [
-        {
-          "id": "trigger-positive-1",
-          "kind": "trigger-positive",
-          "prompt": "Fix this ModuleNotFoundError: No module named 'mypkg.util'",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-2",
-          "kind": "trigger-positive",
-          "prompt": "Our editable pip install is broken, the package won't import",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-3",
-          "kind": "trigger-positive",
-          "prompt": "mypy is failing with a type error I don't understand, please fix it",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-4",
-          "kind": "trigger-positive",
-          "prompt": "ruff check is failing on our CI, fix the violations",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-5",
-          "kind": "trigger-positive",
-          "prompt": "pip is reporting a dependency resolver conflict between two packages",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-6",
-          "kind": "trigger-positive",
-          "prompt": "pytest collection is erroring out before any tests even run",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-1",
-          "kind": "trigger-negative",
-          "prompt": "Implement a new feature that uses asyncio.TaskGroup",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-2",
-          "kind": "trigger-negative",
-          "prompt": "Write pytest tests for the new widgets module",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-3",
-          "kind": "trigger-negative",
-          "prompt": "Review this Python diff for security issues",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-4",
-          "kind": "trigger-negative",
-          "prompt": "Fix the TypeScript build failure in our Node service",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-5",
-          "kind": "trigger-negative",
-          "prompt": "Run a full test-generation pass over this untested module",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-6",
-          "kind": "trigger-negative",
-          "prompt": "Review this code for architecture violations",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "module-not-found-diagnosis",
-          "kind": "behavior",
-          "prompt": "Our Python project fails with `ModuleNotFoundError: No module named 'mypkg.util'` when running pytest. How do you diagnose and fix this?",
-          "strictness": "high",
-          "trials": 5,
-          "passes": 5,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "regex+not-contains",
-          "status": "ran"
-        },
-        {
-          "id": "mypy-error-no-blanket-suppress",
-          "kind": "behavior",
-          "prompt": "mypy reports a type error on a function I touched. Fix it.",
-          "strictness": "high",
-          "trials": 5,
-          "passes": 0,
-          "passRate": 0,
-          "passAtK": 0,
-          "grader": "regex+not-contains",
-          "status": "ran"
-        }
-      ],
-      "verdict": "fail",
-      "scope": "bundled",
-      "skillDigest": "d4e6d936888d8a843725a7d1cf6ede2215e50a6c70e5a78a0c4d04b8dde83eba",
-      "runner": "deepseek",
-      "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:55:19.404Z"
+      "recordedAt": "2026-09-24T19:55:16.343Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
     }
   ]
 }

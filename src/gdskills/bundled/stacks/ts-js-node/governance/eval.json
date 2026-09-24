@@ -3,7 +3,7 @@
   "reports": [
     {
       "schemaVersion": "1.0.0",
-      "skillId": "ts-js-node/nodejs-implementation",
+      "skillId": "ts-js-node/nodejs-build-fix",
       "strictness": "high",
       "trials": 5,
       "triggerAccuracy": {
@@ -17,7 +17,7 @@
         {
           "id": "trigger-positive-1",
           "kind": "trigger-positive",
-          "prompt": "Implement this Express route handler for creating an order, including request body validation",
+          "prompt": "Fix this tsc error: Type 'string | undefined' is not assignable to type 'string'",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -30,7 +30,7 @@
         {
           "id": "trigger-positive-2",
           "kind": "trigger-positive",
-          "prompt": "Add a new async function to this Node.js library that reads a config file and returns parsed settings",
+          "prompt": "Resolve this Node.js 'Cannot find module' error after adding a new import",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -43,7 +43,7 @@
         {
           "id": "trigger-positive-3",
           "kind": "trigger-positive",
-          "prompt": "Write a CLI command in our Node.js CLI tool that lists pending jobs from the queue",
+          "prompt": "Fix this require() of ES Module error in our Node service",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -56,7 +56,7 @@
         {
           "id": "trigger-positive-4",
           "kind": "trigger-positive",
-          "prompt": "Implement async handler with AbortSignal for this outbound fetch call so it doesn't hang",
+          "prompt": "The build fails with a moduleResolution nodenext error on this import",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -69,7 +69,7 @@
         {
           "id": "trigger-positive-5",
           "kind": "trigger-positive",
-          "prompt": "Add input validation to this Node.js API route before it reaches the service layer",
+          "prompt": "Fix this eslint no-floating-promises failure blocking CI",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -82,7 +82,7 @@
         {
           "id": "trigger-positive-6",
           "kind": "trigger-positive",
-          "prompt": "Build this Node.js order processing function that totals line items and applies discounts",
+          "prompt": "package.json exports map is breaking the build with ERR_PACKAGE_PATH_NOT_EXPORTED",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -95,7 +95,7 @@
         {
           "id": "trigger-negative-1",
           "kind": "trigger-negative",
-          "prompt": "Write pytest tests for this Django view",
+          "prompt": "go vet ./... is failing on this package, help resolve the compile error",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -108,7 +108,7 @@
         {
           "id": "trigger-negative-2",
           "kind": "trigger-negative",
-          "prompt": "Review this pull request for floating promises and unhandled rejections",
+          "prompt": "Write a CLI command in this Node.js project that lists pending jobs from the queue",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -121,7 +121,7 @@
         {
           "id": "trigger-negative-3",
           "kind": "trigger-negative",
-          "prompt": "Migrate this package from CommonJS to ESM",
+          "prompt": "Upgrade this codebase from React 18 to React 19 and fix the deprecated lifecycle warnings",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -134,7 +134,7 @@
         {
           "id": "trigger-negative-4",
           "kind": "trigger-negative",
-          "prompt": "Fix this tsc type error about incompatible generic instantiation",
+          "prompt": "Review this diff for floating promises and unhandled rejections",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -147,7 +147,7 @@
         {
           "id": "trigger-negative-5",
           "kind": "trigger-negative",
-          "prompt": "Implement a new React component that renders the order list with pagination",
+          "prompt": "Write vitest tests to cover this new order calculation function",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -160,7 +160,7 @@
         {
           "id": "trigger-negative-6",
           "kind": "trigger-negative",
-          "prompt": "Add fake timers to this Vitest test for the debounce function",
+          "prompt": "Fix this mypy type error in the Python data pipeline",
           "strictness": "high",
           "trials": 1,
           "passes": 1,
@@ -171,237 +171,144 @@
           "deterministic": true
         },
         {
-          "id": "validate-and-abort-signal",
+          "id": "no-ts-ignore-suppression",
           "kind": "behavior",
-          "prompt": "Implement a Node.js function `fetchOrder(id: string)` that calls an internal orders API over fetch and should not hang forever if the API is slow.",
+          "prompt": "tsc reports: Property 'total' does not exist on type 'OrderDraft'. What's the right way to fix this?",
           "strictness": "high",
           "trials": 5,
-          "passes": 5,
-          "passRate": 1,
+          "passes": 4,
+          "passRate": 0.8,
           "passAtK": 1,
-          "grader": "regex",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# Fixing `Property 'total' does not exist on type 'OrderDraft'`\n\nI can't give you the *exact* one-line fix without seeing the code, but I can tell you the right way to approach this so you don't end up papering over a real bug. The key point: **`tsc` is almost certainly correct here** — you're referencing `orderDraft.total` somewhere, but `OrderDraft` (its `.d.ts`/declaration) doesn't declare `total`. Your job is to figure out *which side is wrong*, not to silence it.\n\n## Step 1: Locate the error\n\n```bash\nnpx tsc --noEmit\n```\n\nNote the file:line and the surrounding expression (e.g. `order.total`, `draft.total`). Then find the `OrderDraft` declaration:\n\n```bash\n# wherever OrderDraft is declared\ngrep -rn \"interface OrderDraft\\|type OrderDraft\" src\n```\n\n## Step 2: Classify — which side is wrong?\n\nThere are exactly three honest outcomes:\n\n| Situation | Correct fix |\n|---|---|\n| **The property genuinely belongs on `OrderDraft`** — it's set on every construction path but missing from the type | Add it to the `OrderDraft` definition |\n| **The property exists at runtime but the type is derived/wrong** — e.g. `OrderDraft` is inferred from a function that omits it, or you're using a stale/partial type | Fix the source of the type (the function signature / the actual interface), not the use site |\n| **You're using the wrong type** — `total` is computed from `OrderDraft` but `OrderDraft` was never meant to hold it | Compute `total` at the use site, or use the correct type (`Order` vs `OrderDraft`) |\n\n## Step 3: The likely correct fixes\n\n**Case A — `OrderDraft` should have `total`.** Add it to the declaration, with a real type (not `any`):\n\n```ts\ninterface OrderDraft {\n  items: OrderItem[];\n  total: number; // ← add with the actual domain type\n}\n```\n\nIf the value is always computed from `items`, consider whether it belongs on the draft at all — a derived field is often better as a getter/selector than stored state.\n\n**Case B — you're on the wrong type.** If `total` only exists on the finalized order:\n\n```ts\n// was: draft.total\nconst total = calculateTotal(draft.items);   // compute from the draft\n// or narrow/convert to the type that actually has it\n```\n\n**Case C — the type is inferred and dropped the property.** If `OrderDraft` comes from `ReturnType<...>` / a `.d.ts` that drifted, fix the *producer* so the property is actually in the type, rather than adding it to the consumer.\n\n## Step 4: Verify\n\n```bash\nnpx tsc --noEmit   # must exit 0\n```\n\n## What NOT to do\n\nThese all make the error disappear without fixing anything:\n\n- ❌ `// @ts-ignore` or `// @ts-expect-error` above the line\n- ❌ `(order as any).total`\n- ❌ `(order as Order & { total: number }).total`\n- ❌ Loosening `strict` / adding `total?: any` to the interface just to clear the message\n- ❌ Declaring `total` optional (`total?: number`) when every code path actually guarantees it — that just moves the error to the next caller\n\nIf you paste the `OrderDraft` declaration and the line that references `.total`, I can tell you which of the three cases applies and give you the exact edit.",
+              "outputSha256": "c6d8ef7e2e8e765f2191df20bbff7a0b1b5d5eb4901f9e30a23ede7b13fccfd5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer treats the tsc error as a genuine mismatch, offering fixes that add a correctly-typed total to OrderDraft or compute/read the right property. Suppression tactics are only listed as anti-patterns to avoid, satisfying all pass criteria and no fail criteria."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Fixing `Property 'total' does not exist on type 'OrderDraft'`\n\nThe right fix depends on *why* `total` is missing — so let's find the root cause before touching anything. Three real possibilities, and they get different fixes.\n\n## Step 1: Look at where `total` is read and where `OrderDraft` is defined\n\n```bash\nrg \"\\.total\" src -n\nrg \"interface OrderDraft|type OrderDraft\" src -n\n```\n\nThen read the `OrderDraft` declaration and the line that errors. The error says `total` is not a member — so either the property is genuinely absent, or it exists under a different name/shape.\n\n## Step 2: Classify the mismatch\n\n**Case A — `total` is a legit field that's just missing from the type.**\nThe value exists at runtime but the type forgot to declare it. Fix the *type*:\n\n```ts\ninterface OrderDraft {\n  items: OrderItem[];\n  subtotal: number;\n  total: number;      // <- add the missing member\n}\n```\n\n**Case B — the value is *computed*, not stored.**\nIf `total` is meant to be derived from `items` (`sum(item.price * item.qty)`), then it was never a field on the draft — add a helper and call it, don't stuff it into the type:\n\n```ts\nfunction orderTotal(draft: OrderDraft): number {\n  return draft.items.reduce((s, i) => s + i.price * i.qty, 0);\n}\n\nconst due = orderTotal(draft);   // instead of draft.total\n```\n\n**Case C — the value lives on a *different* object.**\ne.g. `total` is on `OrderDraft` but you're holding an `Order` (or vice versa), or the field is actually named `subtotal`/`amount`. Fix the *reference*:\n\n```ts\n- const due = draft.total;\n+ const due = order.total;   // if you're actually holding the finalized order\n```\n\nOr fix the name if the type is right and the call site is wrong.\n\n## What NOT to do\n\n```ts\n// ❌ all of these make the checker stop complaining without fixing anything\nconst due = (draft as any).total;\n// @ts-ignore\nconst due = draft.total;\ninterface OrderDraft { total?: number }   // optional just to silence it = lying about the shape\n```\n\nOptional-member and cast \"fixes\" hide the real question — either the field exists (Case A: declare it), or it doesn't (Case B: compute it), or you're on the wrong object (Case C: fix the reference). The compiler is telling the truth here.\n\n## How to know which case you're in\n\nRun:\n```bash\ngit log -p -- <file-with-OrderDraft> | head -80\n```\nIf `total` was recently renamed or moved, it's Case C. If it was never a field and callers assume it's derived, it's Case B. If a recent commit added a `total: number` to a *sibling* type but not this one, it's Case A.\n\n## Verify\n\n```bash\nnpx tsc --noEmit   # exits 0\ngit diff           # confirm the change touches only the type def OR the call site, not both\n```\n\nTell me the declaration of `OrderDraft` and the erroring line (file:line) and I'll point at the exact fix. If you can paste `rg \"OrderDraft\" -n src`, I can usually tell you in one pass which of the three it is.",
+              "outputSha256": "31e5ca73b07de4618e833b247163f772dc60ab6321c65783d34b6184521caef2",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer treats error as genuine mismatch: Case A adds total to OrderDraft interface, Case C corrects the wrong property reference. Explicitly warns against @ts-ignore, as-any casts, and silencing, treating compiler as truthful. No fail criteria met."
+              },
+              "passed": true
+            },
+            {
+              "output": "I can't tell you the right fix yet — that depends entirely on *why* `total` is missing, and there are genuinely different correct fixes for different root causes. Let me work through it.\n\n## First: what's the actual error context?\n\nRun and paste:\n\n```bash\nnpx tsc --noEmit\n```\n\nI need the full error line — file:line and the type trace, not just the message. The message \"Property 'total' does not exist on type 'OrderDraft'\" is the *symptom*; the trace usually shows you where the type came from.\n\n## The four realistic root causes\n\nDepending on your code, the correct fix differs:\n\n**1. `OrderDraft` genuinely never had `total` — you're using a stale property name.**\nSomeone renamed it (e.g. `total` → `totalCents`, or `total` → `subtotal`). The fix is to update the *call site* to the real property name. Do not add `total` to the type.\n\n**2. `OrderDraft` is a narrower draft shape and `total` only exists on the finalized type.**\ne.g. you have `OrderDraft` (pre-pricing) and `Order` (post-pricing). The fix is a type guard / narrowing so TypeScript knows you're past the point where `total` exists — not a cast.\n\n**3. You're assigning/returning an `Order` where `OrderDraft` is declared, and the type is just too narrow.**\nThe fix is to widen the declared type (or the interface) to include `total` — but only if `total` is a genuine invariant of drafts.\n\n**4. `total` was meant to be computed, not stored.**\nThe fix is a getter/derived value, and possibly no type change at all.\n\n## What I need from you\n\nPaste:\n\n- The exact `tsc` output (with the type trace).\n- The `OrderDraft` definition (interface/type/class — whichever it is).\n- The line where the error fires.\n- Where `OrderDraft` values come from (a factory? a fetch? a literal?).\n\nWith those I can tell you which of the four it is and give you the smallest correct fix. I won't guess, because the tempting shortcut — adding `total?: number` to `OrderDraft` or casting to `any` — would make the error go away while silently breaking the invariant that the type was there to enforce. That's exactly the kind of \"fix\" that turns one compile error into three runtime bugs.\n\nPaste the four things and I'll take it from there.",
+              "outputSha256": "1f95ca2f457f71b3373d76b2ad2275042d23fa45c4d4a92ed1835f6139a110d6",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "The answer refuses to give the fix, only enumerating possible root causes and asking for more info. It does not actually add a total property or correct a wrong property name in code, so criterion 1 is unmet. A correct answer must resolve the mismatch, not defer it."
+              },
+              "passed": false
+            },
+            {
+              "output": "# Fixing `Property 'total' does not exist on type 'OrderDraft'`\n\nThe right fix depends on **what `total` is supposed to be** — and the answer is almost never \"add `total` to `OrderDraft`.\" Let me walk through how to decide between the two real fixes.\n\n## First: read the error's actual type\n\nBefore changing anything, look at how `OrderDraft` is declared and where `total` is being accessed. Run `npx tsc --noEmit` and trace the value at the error site back to its declaration. You'll land in one of two worlds:\n\n## Case A — the code is reading from the wrong type\n\nIf `total` is computed (order total = sum of line items), it does **not** belong on `OrderDraft` at all. `OrderDraft` is a draft — a collection of items — and `total` is a *derived* value.\n\n**Wrong fix (what people reach for):**\n```ts\ninterface OrderDraft {\n  items: OrderItem[];\n  total: number; // ❌ now every construction site must keep this in sync\n}\n```\n\nThis is a red flag: you've turned a derived value into redundant state that can drift out of sync with `items`.\n\n**Right fix — derive it where it's read:**\n```ts\n// src/lib/order.ts\nfunction orderTotal(draft: OrderDraft): number {\n  return draft.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);\n}\n```\n\nThen change the call site from `draft.total` to `orderTotal(draft)`.\n\n## Case B — the code is accessing a finalized order as a draft\n\nIf `total` genuinely exists on a *different* type (say `Order`, produced once a draft is finalized), the bug is that the caller is holding an `OrderDraft` when it should have an `Order`:\n\n```ts\n// Before (broken)\nfunction checkout(draft: OrderDraft) {\n  return charge(draft.total); // ❌\n}\n\n// After (fixed at the boundary)\nfunction checkout(order: Order) {\n  return charge(order.total);\n}\n```\n\nThe fix is at the *call site* that produced the `OrderDraft`, not in `OrderDraft`'s declaration.\n\n## Case C — `total` really does belong on `OrderDraft`\n\nRare, but possible if `OrderDraft` is a persisted record where `total` is captured at creation time (e.g. priced before promo codes are applied). Then add it — **with the correct type and at every construction site**, not just the interface:\n\n```ts\ninterface OrderDraft {\n  items: OrderItem[];\n  total: number; // captured at draft creation, in minor currency units\n}\n\nfunction createDraft(items: OrderItem[]): OrderDraft {\n  return { items, total: computeTotal(items) };\n}\n```\n\nDo this only if you can point to a real field that already exists at runtime. If you're adding it *only* to make `tsc` stop complaining, you're in Case A or B.\n\n## What NOT to do\n\nResist all of these — they hide the mismatch instead of fixing it:\n\n- `(draft as any).total`\n- `// @ts-ignore` above the line\n- Adding `total: number` to `OrderDraft` when nothing populates it (you'll get `undefined` at runtime and a fresh error at construction sites)\n\n## Verify\n\n```bash\nnpx tsc --noEmit   # must exit 0\n```\n\nConfirm:\n- No `any` casts, `@ts-ignore`, or `@ts-expect-error` added.\n- No unrelated `tsconfig.json` loosening.\n- The failure didn't just move to a construction site you haven't handled yet.\n\nIf you paste the `OrderDraft`/related type declarations and the line where `total` is accessed, I can tell you which case you're in and write the exact fix.",
+              "outputSha256": "fc3cdabf5cbd45009d1e3fe62b3a9373055a58a7caf46064e7c4956979d750ea",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer treats the error as a genuine mismatch and offers proper type-contract fixes: adds total to OrderDraft when appropriate, or corrects wrong-property/type access at call sites. It explicitly warns against @ts-ignore, @ts-expect-error, and any casts rather than recommending them."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Fixing `Property 'total' does not exist on type 'OrderDraft'`\n\nThere's no single \"right\" fix without knowing *why* `total` is being accessed — but there is a right **method**. The wrong fix is to cast to `any`, add `@ts-ignore`, or tack `total?: number` onto `OrderDraft` just to silence the error. `tsc` is very likely telling you the truth: something is reaching for a property that this type doesn't actually own.\n\n## Step 1: Read the actual types\n\nLook at the declaration of `OrderDraft` and at the exact line accessing `.total`:\n\n```ts\ninterface OrderDraft {\n  id: string;\n  lines: OrderLine[];\n  // ...does this have total? Should it?\n}\n```\n\n```ts\nconst draft: OrderDraft = ...;\ndraft.total; // ← error here\n```\n\nThen ask: **is `total` a property of a draft, or is it a computed value?** That question decides the fix.\n\n## Step 2: Pick the fix that matches the intent\n\n- **`total` is genuinely part of the draft's data** (persisted, stored). Add it to the interface — and to everywhere drafts are constructed:\n  ```ts\n  interface OrderDraft {\n    id: string;\n    lines: OrderLine[];\n    total: number;\n  }\n  ```\n  If any existing construction site doesn't set it, `tsc` will now tell you exactly where — fix those too.\n\n- **`total` is derived** (sum of `lines`) and shouldn't be stored on the draft. Don't add it to the interface. Compute it where it's needed:\n  ```ts\n  function draftTotal(draft: OrderDraft): number {\n    return draft.lines.reduce((sum, l) => sum + l.price * l.qty, 0);\n  }\n  ```\n\n- **You're calling `total` on the wrong value** — e.g. `draft` here is actually an `Order` (which has `total`) but got typed as `OrderDraft` somewhere upstream. Fix the type at the source, not at the call site.\n\n- **`OrderDraft` is a union and only one branch has `total`.** Narrow before access instead of casting:\n  ```ts\n  if (isCompletedDraft(draft)) {\n    draft.total; // narrowed\n  }\n  ```\n\n## Step 3: Verify\n\n```bash\nnpx tsc --noEmit   # exits 0\n```\n\nConfirm the fix touched only the files the root cause required, and that you added no `any`, `@ts-ignore`, or `total?:` optional-band-aid.\n\n---\n\nI can give you the exact one-line diff if you paste:\n\n1. The `OrderDraft` definition, and\n2. The line (and surrounding 3–5 lines) where `.total` is accessed.\n\nThose two snippets are normally enough to pick between the four cases above.",
+              "outputSha256": "9f4b73da5b05f344aa9657eb52126312db300676ae49a4b7c6da9e836a0b6e20",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Treats the error as a real type mismatch. Offers legitimate fixes: adding total to OrderDraft, computing it if derived, fixing the wrong property/type at source, or narrowing. Explicitly warns against any/@ts-ignore/optional band-aid without recommending them."
+              },
+              "passed": true
+            }
+          ]
         },
         {
-          "id": "unknown-over-any",
+          "id": "reproduce-before-fix",
           "kind": "behavior",
-          "prompt": "I'm implementing a Node.js handler that parses an untrusted JSON request body before passing it to business logic. What type should the parsed body have before I validate it?",
+          "prompt": "The Node.js build is failing but I haven't run anything yet. What's the first step to fix it?",
           "strictness": "high",
           "trials": 5,
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "contains+not-contains",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "Run the build and capture the actual failure first:\n\n```bash\nnpx tsc --noEmit\nnpx eslint .\nnpm test\n```\n\nOr, if the project defines its own scripts, use those — they may wrap these commands with project-specific flags (path mapping, project references):\n\n```bash\nnpm run build\nnpm run lint\nnpm test\n```\n\nThe key point is: **reproduce the failure and capture the exact error message plus `file:line` before changing anything.** Don't guess at the cause from the symptom — the exact message (and which command produced it) determines whether this is a type error, a module resolution error, an ESM/CJS interop error, a lint violation, or a real test failure, and each of those needs a different fix.\n\nOnce you paste the actual output here, I can classify it and walk through the root-cause fix.",
+              "outputSha256": "0caa676f25a093775f0599832fbe8db1e16d970d846f3e795d03faec0a84ed35",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer names running tsc/eslint/test and the project's own build/lint/test scripts as the first step before any fix, and explicitly states the goal of capturing the exact error message and file:line before changing code. No fix is proposed first and no tsconfig loosening is suggested."
+              },
+              "passed": true
+            },
+            {
+              "output": "Reproduce it first — don't guess at the cause from memory. Run the project's own scripts so you're testing what CI tests:\n\n```bash\nnpm run build   # or npx tsc --noEmit if there's no build script\nnpm run lint\nnpm test\n```\n\nUse the `package.json` scripts if they differ from the raw commands — they may wrap `tsc`/`eslint` with project-specific flags (path mapping, project references), and those flags can change what actually fails.\n\nThen capture **three things** from the output before touching any code:\n\n1. The exact error message (copy it verbatim)\n2. The file:line it points to\n3. The failure class — `tsc` type error vs. module resolution error vs. lint rule violation vs. test failure\n\nThat last one routes everything after it, because each class has a different root cause:\n\n- **Type error** → read the actual inferred type at the error site before changing anything; the checker is usually telling the truth about a real mismatch.\n- **Module resolution** (`Cannot find module`, `require() of ES Module`, `Unknown file extension`) → check `package.json` `\"type\"`, `tsconfig.json` `moduleResolution`, and whether the import crosses an ESM/CJS boundary.\n- **Lint** → read the *rule name*, not just the message; some rules need a structural change (e.g. `no-floating-promises` wants an `await`).\n- **Test failure** → figure out whether the test asserts stale behavior or the source regressed, before editing either.\n\nTwo constraints worth stating up front, because the temptation arrives fast on a red build: the fix can't be `@ts-ignore`, an `any` cast, or an `eslint-disable`. Those make the checker stop complaining without fixing the mismatch — which is the opposite of the goal here.\n\nOnce you have the error output, paste it and I'll help you work from the actual failure rather than a guess.",
+              "outputSha256": "4f289b92170c01f356c9c4267a44065c4a9b1eb6fb43ac09239ac0c366824aad",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer's first step is running the project's build/lint/test scripts (npm run build, npx tsc --noEmit, npm run lint, npm test) before any fix, and it explicitly states the goal of capturing the exact error message and file:line before touching code. No fix or tsconfig loosening is proposed first."
+              },
+              "passed": true
+            },
+            {
+              "output": "Run the project's own build/check commands to see the actual failure before changing anything.\n\nStart with whatever `package.json` defines, then fall back to the direct commands:\n\n```bash\nnpm run build   # or: npx tsc --noEmit\nnpm run lint    # or: npx eslint .\nnpm test\n```\n\nThis skill is most useful once you have a concrete error, so capture these details:\n\n- The **exact error message** and the **file:line** it points to\n- Which command produced it (`tsc`, `eslint`, or the test runner)\n\nThe class of failure determines the diagnosis path:\n\n- **Type error** — `tsc` is usually reporting a real mismatch, so trace the inferred type before touching the code.\n- **Module resolution error** (`Cannot find module`, ESM/CJS interop) — check `package.json` `\"type\"`, `tsconfig.json` `moduleResolution`, and the target package's `exports` map.\n- **Lint error** — read the specific rule, not just its name.\n- **Test failure** — first decide whether the test or the source is wrong.\n\nOnce you have the output, paste it here and I'll work through the root-cause fix. One thing to keep in mind from the start: the fix should make the failure genuinely go away, not silence it with `@ts-ignore`, an `any` cast, or an `eslint-disable` — those hide the signal the build is trying to give you.",
+              "outputSha256": "22285727c8891d3af7efdcd766d90b0b96b308826fa9a50329de9c7b5bffb5c0",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer names running the project's build/check/test commands (npm run build, npx tsc --noEmit, eslint, test) as the first step before any fix, and explicitly states capturing the exact error message and file:line as the goal. No fix is proposed before reproducing, and no tsconfig loosening recommended."
+              },
+              "passed": true
+            },
+            {
+              "output": "Run the project's own build/lint/test commands to reproduce the failure and capture the exact error, before changing anything.\n\nStart with whatever `package.json` scripts wrap these, so you get the project's real flags (path mapping, project references, etc.):\n\n```bash\nnpm run build   # or: npx tsc --noEmit\nnpm run lint    # or: npx eslint .\nnpm test\n```\n\nThen, for the first failure:\n\n1. **Capture the exact error** — the full message and the `file:line` it points at. Don't infer the cause from the symptom yet.\n2. **Classify it** — `tsc` type error, module-resolution error, lint rule violation, or test failure. The category determines the fix.\n3. **Find the root cause before editing** — for a type error, trace the value back to its declaration to see the actual inferred type; for module resolution, check `\"type\"` in `package.json` and `moduleResolution` in `tsconfig.json`; for lint, read what the specific rule enforces; for a test failure, decide whether the test or the source is wrong.\n\nReproducing first matters because fixing \"the build\" without seeing the actual error tends to produce guesses — and the tempting shortcuts (`@ts-ignore`, an `any` cast, an `eslint-disable`, loosening `tsconfig`) hide the real mismatch instead of resolving it.\n\nIf you paste the output of those commands, I can walk through classifying it and finding the minimal root-cause fix.",
+              "outputSha256": "485e3f1837e33e8102ad6e3bf3712246ae333b2ad8c1a43504e16693ed531d25",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explicitly names running the project's build/lint/test scripts first, states the goal of capturing the exact error and file:line before editing code, and warns against loosening tsconfig as a shortcut rather than proposing it."
+              },
+              "passed": true
+            },
+            {
+              "output": "Run the project's own build/lint/test scripts to capture the exact failure — don't guess at the cause from a vague \"build is failing\" report.\n\n```bash\ncat package.json          # see what \"build\", \"lint\", \"test\" actually run\nnpm run build             # or: npx tsc --noEmit\nnpm run lint              # or: npx eslint .\nnpm test\n```\n\nThen capture the **exact** error text and `file:line` from the first failure. The classification step (type error vs. module-resolution error vs. lint vs. test) depends entirely on that output — the fix path is very different for each.\n\nA couple of things that will save you time:\n\n- **Start with `tsc --noEmit`** if there is a build script. Type errors typically cascade, so the *first* error in the output is usually the real one and the rest are downstream noise.\n- **Distrust the summary line.** `Build failed` / `1 problem` tells you nothing; the rule name, error code (`TS2345`, `TS2307`, etc.), and the file path do.\n- **Don't fix anything yet.** Just get one clean reproduction with a copy-pasteable error.\n\nPaste the raw output here and I'll classify it and walk through the root-cause fix.",
+              "outputSha256": "4520d25e3527019f36a37c03b356b985db9ec6c98f134354b15b312632f839a3",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer names running npm run build/tsc --noEmit/lint/test as the first step before any fix, and states the goal of capturing the exact error text and file:line. No fix is proposed beforehand and no loosening of tsconfig is recommended."
+              },
+              "passed": true
+            }
+          ]
         }
       ],
       "verdict": "pass",
       "scope": "bundled",
-      "skillDigest": "cac040485a3928a336d814ebae4732dcb5257afdbb5487d1290763f2687ea56c",
+      "skillDigest": "45f34cea9a610e1c28a4f980cd370a091f5bc508e4accd25c45e4d958e039a63",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-24.1",
       "runner": "deepseek",
       "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:51:10.706Z"
-    },
-    {
-      "schemaVersion": "1.0.0",
-      "skillId": "ts-js-node/nodejs-testing",
-      "strictness": "high",
-      "trials": 5,
-      "triggerAccuracy": {
-        "truePositive": 6,
-        "falsePositive": 0,
-        "positives": 6,
-        "negatives": 6
-      },
-      "evidence": "authored",
-      "scenarios": [
-        {
-          "id": "trigger-positive-1",
-          "kind": "trigger-positive",
-          "prompt": "Write Vitest tests for this order calculation function in our TypeScript service",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-2",
-          "kind": "trigger-positive",
-          "prompt": "Add node:test coverage for the new CLI command in this Node project",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-3",
-          "kind": "trigger-positive",
-          "prompt": "Fix this failing Jest test that's timing out on the debounce logic",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-4",
-          "kind": "trigger-positive",
-          "prompt": "Mock the fetch call in this node:test file so it doesn't hit the real API",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-5",
-          "kind": "trigger-positive",
-          "prompt": "Add fake timers to this test for the setInterval-based polling function",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-6",
-          "kind": "trigger-positive",
-          "prompt": "Extend the test suite for this Node library's exported parseConfig function",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-1",
-          "kind": "trigger-negative",
-          "prompt": "Write pytest fixtures for this Flask view function",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-2",
-          "kind": "trigger-negative",
-          "prompt": "Implement the new order creation handler in this Express service",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-3",
-          "kind": "trigger-negative",
-          "prompt": "Review this diff for resource cleanup and dependency risk",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-4",
-          "kind": "trigger-negative",
-          "prompt": "Migrate this test suite's imports from CommonJS to ESM",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-5",
-          "kind": "trigger-negative",
-          "prompt": "Fix this tsc type error in the test helper module",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-6",
-          "kind": "trigger-negative",
-          "prompt": "Write Playwright end-to-end tests for the checkout page in this React app",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "discover-runner-first",
-          "kind": "behavior",
-          "prompt": "This Node.js TypeScript repo's test setup isn't described here. Write a test for a function `sumOrderTotals(orders)`. What should you check before writing the test file?",
-          "strictness": "high",
-          "trials": 5,
-          "passes": 5,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "regex",
-          "status": "ran"
-        },
-        {
-          "id": "mock-boundary-not-internal",
-          "kind": "behavior",
-          "prompt": "I'm writing a test for a function that calls an internal helper `formatOrder` and also calls out to a network client `httpClient.get`. What should I mock?",
-          "strictness": "high",
-          "trials": 5,
-          "passes": 0,
-          "passRate": 0,
-          "passAtK": 0,
-          "grader": "regex+regex+not-contains",
-          "status": "ran"
-        }
-      ],
-      "verdict": "fail",
-      "scope": "bundled",
-      "skillDigest": "75900595297b045759ff2f2d907518d5c6bd67dd3522b35372b67292d5b7f6aa",
-      "runner": "deepseek",
-      "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:50:46.996Z"
+      "recordedAt": "2026-09-24T19:45:37.308Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
     },
     {
       "schemaVersion": "1.0.0",
@@ -581,8 +488,60 @@
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# Review: `handleOrder`\n\nReviewed: the snippet as provided (single function, no surrounding file/line context given).\n\n## Blocking (1)\n\n**Floating promise with no error handling reachable from a request handler.**\n`processOrder(req.body)` returns a `Promise` and is neither awaited, returned, `void`-ed, nor caught. Two problems compound here:\n\n1. **Unhandled rejection.** If `processOrder` rejects, nothing observes it. In modern Node (v15+) the default is to **terminate the process** on an unhandled rejection. A single bad `req.body` can crash the server — a user-triggerable DoS.\n2. **Silent contract mismatch.** The handler responds `202 Accepted` before the work is confirmed started. That's fine *intentionally* (queue-and-ack), but only if the rejection is actually handled. As written, a 202 is sent even when the order immediately fails.\n\n**Fix direction** (not a patch — this skill is read-only):\n\n- If fire-and-forget is intended, make it explicit and handle failure:\n  `void processOrder(req.body).catch(err => logger.error({ err }, \"processOrder failed\"));`\n  The `void` signals intent; the `.catch` prevents the unhandled rejection.\n- If the caller should know, `await` it in a `try/catch` and return `500` (or `await` and let the framework's error middleware handle it).\n\n## Should fix (1)\n\n**`req`/`res` are untyped.** In a TypeScript codebase, both parameters are implicitly `any` (or the file has `noImplicitAny` off), so `req.body` is unchecked — a malformed or oversized body flows straight into `processOrder` with no validation at the boundary. This is a type leak *and* it widens the blast radius of the Blocking finding above. Type the handler (e.g. `Request`, `Response`, or a project type) and validate `req.body` before passing it on.\n\n## Notes\n\n- The snippet omits surrounding context (file, line numbers, whether `processOrder` is wrapped in a queue). If `processOrder` enqueues to a durable worker and *can't* reject, the severity of the Blocking finding drops — but that has to be shown, not assumed. Confirm `processOrder`'s contract before deciding.\n\n## What I could not check\n\nNo file was modified — this is findings only. I could not assess: resource cleanup inside `processOrder`, event-loop blocking there, or new dependencies, since only this function was provided. Those belong to the files that define and call `processOrder`.",
+              "outputSha256": "a0615ee640705f62c6199e5369d5ff452d4019d5fb57a84ad7055ee9a546bfea",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explicitly identifies processOrder(req.body) as a floating promise neither awaited, returned, void-ed, nor caught, and explains that a rejection becomes an unhandled rejection that can terminate the process/crash the server. It reports findings only, offering fix direction without editing the handler, so no fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Review: `handleOrder`\n\nReviewed: the `handleOrder` function as shown (1 snippet, no surrounding file context available).\n\n## Blocking (1)\n\n- **`processOrder(req.body)` -- floating promise on a request path.** `processOrder` returns a `Promise`, but the call has no `await`, no `return`, and no `void`/`.catch()`. Two consequences:\n  1. If `processOrder` rejects, that becomes an **unhandled rejection**, which can crash the Node process (default behavior on modern Node) or silently swallow the failure depending on version/config/flags.\n  2. The `202 Accepted` is sent before you know the request body was even *accepted into the queue* -- there is no backpressure or dedupe signal. Combined with the point above, the client gets a success response for work that then blows up invisibly.\n\n  Fix direction: attach a handler so the rejection is observed and logged, e.g. `void processOrder(req.body).catch(err => logger.error(...))` -- or `await` it if the endpoint should actually reflect the outcome (202 implies it should not, so the `.catch()` form is the right shape here).\n\n## Should fix (2)\n\n- **`req.body` is passed unvalidated into `processOrder`.** Nothing here shows a schema check before the body reaches the async worker. If `processOrder` assumes a shape that isn't enforced at the boundary, a malformed body becomes a rejection that (per the blocking finding) is unhandled. Validate at the edge and return `400` before enqueuing. *(Severity depends on whether `processOrder` validates internally -- flagging because the snippet gives no evidence either way; see `rules/security.mdc`.)*\n\n- **Error visibility / observability gap.** Even after adding `.catch()`, a 202-then-fail endpoint needs the failure to be *traceable back to the request* (correlation id, request id in the log). Without it, the \"async\" design makes production failures effectively unfindable. This is a design-level note, not a line-level fix.\n\n## Note (1)\n\n- No `return` / early-exit consistency issue visible, and `res.status(202).send()` is fine on its own -- nothing to flag there. If the project's ESLint config enables `@typescript-eslint/no-floating-promises` (check before claiming this is \"already caught in CI\"), the blocking finding may be lint-enforced; even so it's blocking here because the snippet shows no `void`/`.catch()` bypassing it.\n\n## Verdict\n\n**Do not merge as-is.** The floating promise is a real blocking finding for a request-handling path, not a style nit.\n\n---\n\nCaveat on scope: this is a 4-line snippet, not a diff, so I could not check the other focus areas (resource cleanup, sync-blocking calls, `any` leaks, dependency changes) -- there's no surrounding file, no `processOrder` body, and no `package.json` change to inspect. If you paste the actual diff or the `processOrder` implementation, I can extend the review. As run, **no source files were modified** -- this is findings only.",
+              "outputSha256": "1a43fd28536d523abf13b253a78b6faba8e98070708ff90c7174726046e403dc",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Explicitly flags processOrder(req.body) as a floating promise with no await/return/void/.catch(), and explains the consequence: rejection becomes an unhandled rejection that can crash the process and mis-report 202 success to the client. Reports only, no edits to the handler."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Review: `handleOrder`\n\nReviewed: the `handleOrder` snippet as provided (single function, no file path given — see note at end).\n\n## Blocking (1)\n\n**`handleOrder`, line 2 — floating promise on `processOrder(req.body)`.**\n\n`processOrder` is async, but the call is a bare statement: no `await`, no `return`, no `void`, no `.catch()`. Two problems compound:\n\n1. **Unhandled rejection.** If `processOrder` throws (bad input, downstream DB/HTTP failure), the rejection is not attached to any handler. Under Node's default `--unhandled-rejections=throw` behavior (the default since Node 15), this **crashes the process**. In a server handling requests, any single malformed `req.body` that makes `processOrder` throw becomes a remote denial-of-service vector — attacker-controlled input reaching a path that kills the process is exactly the Blocking bar.\n\n2. **`req.body` is consumed after the response is sent, with no validation shown.** You send `202 Accepted` before `processOrder` has done anything. If `req.body` is `undefined` (no body-parser middleware, or a request without a body), `processOrder` throws synchronously inside the async function → same unhandled rejection. The handler also never checks that the body is well-formed before claiming the order is accepted.\n\n**Fix direction:** either\n```ts\nasync function handleOrder(req, res) {\n  try {\n    await processOrder(req.body);\n    res.status(202).send();\n  } catch (err) {\n    res.status(500).send(); // or map to a domain error\n  }\n}\n```\nif the client should wait for acceptance, or — if fire-and-forget is genuinely intended —\n\n```ts\nfunction handleOrder(req, res) {\n  void processOrder(req.body).catch(err => log.error({ err }, 'processOrder failed'));\n  res.status(202).send();\n}\n```\nThe `void` marks the discard intentionally and the `.catch()` is what keeps a rejection from becoming unhandled. Note the second form still commits to \"accepted\" before knowing the order is valid — validate `req.body` first regardless.\n\n## Should fix (1)\n\n**Line 2 — no request validation before dispatch.** Not strictly one of the six focus areas, but it is what makes the floating-promise finding reachable: nothing checks that `req.body` has the shape `processOrder` expects. A `400` on missing/malformed fields turns the crash-on-bad-input path into a normal client error instead of a process event.\n\n## Note (2)\n\n- Line 1: `req`/`res` are untyped (implicit `any` in a TS file). If this is a `.ts` file, typed `Request`/`Response` from the framework in use would surface the missing-body case at compile time. Style-level, likely lint-catchable.\n- Line 3: `res.status(202).send()` — confirm 202 is intended over 200/201; not a correctness issue, just worth being deliberate about.\n\n## What I did not flag\n\n- No resource-cleanup finding: no handle, timer, listener, or child process is opened in the visible snippet. If `processOrder` opens a connection internally, that is out of view here.\n- No sync-blocking finding: no `fs`/`crypto`/`zlib` call is visible.\n\n## Caveat\n\nSeverity is judged on the snippet alone. The two things that would change this review are outside it: (a) whether this handler runs in a long-lived server process (if `processOrder` rejection crashing the process matters — it does in a server), and (b) what `processOrder` does with `req.body` (validate-then-dispatch vs. trust-the-input). If `processOrder` already validates and cannot throw on a bad body, the Blocking finding downgrades to Should-fix (unhandled rejection still possible on internal failures, just not attacker-triggerable). Confirm those two and I'll re-rate.",
+              "outputSha256": "0113aac27a6908b0700ca5d2cda110edc0a9614b91112ccbcd6366b6c2ef5710",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explicitly names the processOrder(req.body) call as a floating promise (no await/return/void/.catch) and explains the consequence: unhandled rejection crashing the process / mis-signaling 202 to the client. Read-only review, no handler rewrite—the code blocks are labeled 'Fix direction' suggestions, not applied edits."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Review: `handleOrder`\n\n```\nReviewed: 1 function (handleOrder) -- diff fragment, not a full file set\n\nBlocking (1):\n- `processOrder(req.body)` is called with no `await`, no `return`, no\n  `void`, and no `.catch()`. `processOrder` is async, so it returns a\n  promise that nothing is attached to. Any rejection inside it (validation\n  failure, DB error, downstream HTTP failure) becomes an unhandled\n  rejection. On modern Node this terminates the process by default\n  (`--unhandled-rejections=throw`). The request also receives `202` even\n  when the order immediately fails, so the caller has no way to observe\n  the failure. See `rules/security.mdc` (unhandled-rejection / process\n  availability risk).\n\nShould fix (2):\n- `req.body` is passed to `processOrder` without any visible shape\n  validation at this boundary. If `processOrder` assumes specific fields\n  (e.g. `body.items`, `body.userId`), a malformed body now surfaces as an\n  internal rejection rather than a `400`. Not in the six focus areas\n  proper, but it is the difference between \"rejects loudly and safely\" and\n  \"rejects unpredictably\" once the floating-promise issue above is fixed.\n- No `try-catch` around the awaited call path. Once the floating-promise\n  bug is fixed by awaiting, an unhandled rejection becomes an unhandled\n  *thrown* error inside the handler unless a catch converts it to a `500`.\n\nNote (1):\n- `res.status(202).send()` fires before `processOrder` has done anything.\n  If the design is \"accept and process asynchronously\", that is\n  intentional -- but then the fire-and-forget needs an explicit\n  `void processOrder(...).catch(err => logger.error(...))` with a comment,\n  which is the one case where not awaiting is correct (see Rules). The\n  current code has neither the `void` nor the `.catch()`, so it reads as\n  an accident, not a decision.\n```\n\n## Fix directions (not patches)\n\nThe minimal correct form depends on intent:\n\n**If the handler should wait for the result** (return `200`/`500`\nsynchronously):\n\n```ts\nasync function handleOrder(req, res) {\n  try {\n    await processOrder(req.body);\n    res.status(202).send();\n  } catch (err) {\n    res.status(500).send();\n  }\n}\n```\n\n**If the handler is genuinely fire-and-forget** (return `202` immediately,\nlog failures):\n\n```ts\nfunction handleOrder(req, res) {\n  void processOrder(req.body).catch((err) => {\n    logger.error({ err, body: req.body }, 'processOrder failed');\n  });\n  res.status(202).send();\n}\n```\n\nThe `void` + `.catch()` is the explicit form the Rules section calls out --\nit is the only way to make the floating promise a deliberate choice rather\nthan a silent crash risk.\n\n## Notes on the review\n\n- Scope was a single function, so I checked the four directly-applicable\n  focus areas (floating promises, unhandled rejections, resource cleanup\n  visibility, `any` leaks -- none visible in this fragment). Event-loop\n  blocking and dependency risk cannot be judged without seeing\n  `processOrder` and the package manifest.\n- If `processOrder` opens DB connections, file handles, or child\n  processes, re-run this check against its body -- a floating promise is\n  much worse when the leaked promise is also holding a resource.\n- No source was modified; this is a findings-only report.",
+              "outputSha256": "81fe3b78570d5efceca47826ea255f9f190b9dc3d97886476170ac07d1a16b9f",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Explicitly identifies processOrder(req.body) as missing await/return/void/.catch(), calls it a floating promise/unhandled rejection, and explains consequences (process termination, 202 mis-reported to client). It reports findings only and notes no source was modified, though fix-direction snippets are illustrative."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Review: `handleOrder`\n\n```ts\nfunction handleOrder(req, res) {\n  processOrder(req.body);\n  res.status(202).send();\n}\n```\n\n**Reviewed:** the snippet as given (single function, no file path supplied — line refs below assume line 2 is the `processOrder` call).\n\n## Blocking (1)\n\n- **Floating promise — `processOrder(req.body)` has no `await`, `void`, or `.catch()`.** `processOrder` is async, so it returns a `Promise`, and nothing observes it. If it rejects, that becomes an **unhandled rejection**. In modern Node this crashes the process by default (`--unhandled-rejections=throw`), and in any case the caller gets a `202` that means \"accepted / will process\" even when processing failed immediately. This is exactly the failure mode this review is meant to catch.\n\n  Fix direction: either\n  - `await processOrder(req.body); res.status(202).send();` — but note the response is only sent after processing starts, which changes semantics, or\n  - keep the fire-and-forget intent *explicitly*: `void processOrder(req.body).catch(err => { /* log */ });` so the `202` contract is honored and rejections are handled rather than floating.\n\nNeither the bare call as written is acceptable: an unobserved async call with no error path is the issue, regardless of which fix direction the author picks.\n\n## Should fix (2)\n\n- **No `try/catch` around the handler — a synchronous throw before `res.status(202)` sends nothing, and the request hangs.** In Express (this looks like Express given `req`/`res`), an error thrown synchronously in a non-async handler must be forwarded to `next(err)`; this handler never does. If `processOrder` is made `await`-ed, the throw becomes a rejection that Express ≤4 does **not** catch for you — it must be wrapped or forwarded. Fix direction: wrap in `try/catch` and call `next(err)`, or use an async-handler wrapper.\n- **No input validation on `req.body` before it reaches `processOrder`.** An order handler taking raw request body without checking shape/type is a correctness and, depending on what `processOrder` does, a security concern (prototype pollution, injection downstream). Fix direction: validate/parse `req.body` against an expected schema before passing it on.\n\n## Note (1)\n\n- **No response once processing has *completed*.** A `202` is a correct \"accepted, not yet done\" status, but there is no described mechanism (job id, status endpoint, callback) for the client to learn the outcome. Worth confirming this is intentional; otherwise the fire-and-forget model is a design gap, not just a code-style one.\n\n## Not flagged\n\n- No sync-blocking calls (`readFileSync`, `execSync`, etc.) visible in the snippet.\n- No resource handles opened, so no cleanup finding from this snippet — but if `processOrder` opens a DB connection, file handle, or timer, its own cleanup on the error path should be reviewed separately; it is outside this diff.\n\n## Limits of this review\n\nI only have the snippet and the single fact that `processOrder` is async. I did **not** see:\n\n- `processOrder`'s body — so I cannot confirm whether it opens resources needing cleanup, swallows its own errors internally (which would change the severity here), or resolves without doing anything on certain inputs.\n- The surrounding module, calling middleware, and whether an async-handler wrapper or global error handler already exists upstream (that would downgrade the \"Should fix\" try/catch finding to a Note).\n- The Express (or other framework) version, which determines default unhandled-rejection behavior.\n\nIf any of those change the picture, re-check the two \"Should fix\" findings — the **Blocking** finding stands regardless, since a bare unobserved promise has no error path in any of these cases.\n\nNo files were modified during this review.",
+              "outputSha256": "3e9200c953f8002ec8d92a2a095c6f96f8fd17b6fddf2e9334a18948b9dcb757",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Explicitly identifies processOrder(req.body) as an unawaited floating promise lacking await/void/.catch(), and explains that a rejection becomes an unhandled rejection that crashes the process or mis-reports via the 202 response. It only reports/suggests fixes and modifies no files, so read-only is honored."
+              },
+              "passed": true
+            }
+          ]
         },
         {
           "id": "read-only-no-edits",
@@ -593,217 +552,72 @@
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex+regex+not-contains",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "No — I don't fix it myself. This skill is explicitly read-only: it judges the diff and reports findings, it never edits or authors source. Fixing the call myself would bypass the author's own review of the change, and the Red Flags table calls that exact rationalization out (\"This is just a review, I'll fix the obvious floating promise myself\" — why it is wrong: fixing code during a review bypasses the author's own review of the change).\n\nWhat I do instead:\n\n1. **Read enough context** to confirm the path is actually a request handler (a hot path serving requests), not, say, a one-shot script entrypoint or module-load-time constant where `readFileSync` is fine.\n2. **Classify the severity**: a synchronous `fs.readFileSync` on a request-handling path is a **Blocking** finding — sync I/O blocks the event loop for the duration of the read, stalling every other in-flight request. (The same call at server startup would be a non-finding or a Note.)\n3. **Report it** with file, line, and a one-line fix direction — not a patch:\n\n```\nBlocking (1):\n- src/routes/config.ts:18 -- `fs.readFileSync(path)` inside the GET\n  /config handler blocks the event loop on every request. Switch to\n  `await fs.promises.readFile(path)` (or read once at startup and cache).\n```\n\n4. **Cross-check** the surrounding code against `rules/security.mdc` while I'm there — e.g. if the path is built from `req.query`/`req.params`, that's a path-traversal concern in addition to the blocking one, and it may raise the severity.\n\n5. **Note the read-only constraint in the verification step**: I don't consider the review done until `git status` shows zero changes from my run — confirming I only produced findings.\n\nSo the deliverable is a finding, not a commit. Point me at the diff (or the changed files) and I'll run the full six-area pass — floating promises, unhandled rejections, `any` leaks, event-loop blocking, resource cleanup, and dependency risk — and group what I find by severity.",
+              "outputSha256": "50b7740fca538b430bb7be5198e7f14bacf43e1267aa400151ac2baea3c58125",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "States skill is read-only and reviewer shouldn't edit code, only report. Flags fs.readFileSync inside the Express handler as Blocking (event-loop blocking). Names await fs.promises.readFile as fix direction without claiming to have applied it."
+              },
+              "passed": true
+            },
+            {
+              "output": "No — not in the review. This skill is read-only: it reports findings and never edits or authors source. Fixing the call yourself would bypass the author's own review of the change. The right output is a Blocking finding citing the file and line, with a one-line fix direction.\n\n**Finding**\n\n```\nBlocking (1):\n- <file>:<line> -- synchronous fs.readFileSync() on a request-handling path.\n  Blocks the event loop for the duration of the read, stalling all concurrent\n  requests. Use the async variant (fs.promises.readFile / fs.readFile with\n  await), or read once at startup and cache if the content is static.\n```\n\n**Why it's Blocking, not a Note**\n\n`readFileSync` inside an Express handler runs on the single event-loop thread and blocks it for the whole read — every other in-flight request waits. That's the event-loop-blocking case in Step 2, and it's reachable on every request, so it lands in the Blocking tier.\n\n**Before finalizing, confirm two things**\n\n1. **Reachability** — is this handler actually on a request path, or in a startup/one-shot script? If it runs once at boot, downgrade to Note; if it runs per-request, Blocking stands.\n2. **Bypass check** — if there's an eslint rule covering sync calls in handlers and the diff has a `// eslint-disable` over it, mention that the disable is what lets it through. Don't re-flag something CI already enforces otherwise.\n\nIf you want, paste the diff and I'll run the full six-area pass (floating promises, unhandled rejections, `any` leaks, blocking calls, resource cleanup, dependency risk) and produce the severity-grouped report.",
+              "outputSha256": "805b7ab3a16cd5d5d7686d50eeb6c91daadfeb50f4181b785f64f42e2abe48a4",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "States the review is read-only and the reviewer should not edit code, reports fs.readFileSync in the Express handler as an event-loop-blocking (Blocking) finding, and names fs/promises/await readFile as the fix direction without claiming to have applied it. No fail criteria met."
+              },
+              "passed": true
+            },
+            {
+              "output": "No — I should not fix it myself. This skill is read-only: per the Rules section, it \"only produces findings\" and must never edit source files, and the Red Flags table explicitly calls out \"this is just a review, I'll fix the obvious floating promise myself\" as a wrong rationalization. A reviewer fixing the code bypasses the author's own review of the change.\n\nHere's how I'd handle the diff instead:\n\n## What I'd check\n\nThe `fs.readFileSync` call inside an Express request handler is a **Blocking**-severity finding on the event-loop-blocking axis. Reading a file synchronously on a request-handling path stalls the entire event loop for every other in-flight request until the read completes.\n\nBefore finalizing severity, I'd confirm from surrounding context:\n\n- **Is it actually on a hot/request path?** Confirm it's in the handler body (or something the handler awaits synchronously), not in module-load/startup code, which is a legitimate place for sync reads.\n- **Size and frequency.** A tiny config read behind a cache is a Note; a per-request read of a user-influenced file is Blocking.\n- **Also check the same call against the other focus areas** — e.g., is the file path derived from user input (path traversal, `rules/security.mdc`), and is the handle closed if it were switched to async?\n\n## How I'd report it (not fix it)\n\n```\nReviewed: src/routes/invoices.ts (1 file)\n\nBlocking (1):\n- src/routes/invoices.ts:31 -- `fs.readFileSync(templatePath, 'utf8')` runs\n  inside the POST /invoices handler, blocking the event loop per request.\n  Use `await fs.promises.readFile(...)` (or cache the template at startup).\n```\n\nNote the fix direction is a one-liner aimed at the author — I don't write the patch. If I want the change made, I hand the finding to the author or a separate (non-review) step, and I leave `git status` clean.\n\nSo: **report the finding, don't apply it.**",
+              "outputSha256": "cd54e44a794f97a088f1f4a58fdd4981da1e26025a240e0df74372b2918bb6fe",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explicitly says the review is read-only, must not edit code, and only reports findings; names fs.readFileSync in the Express handler as a blocking event-loop issue to flag; points to await fs.promises.readFile as the fix direction for the author while explicitly not applying it."
+              },
+              "passed": true
+            },
+            {
+              "output": "No — I should not fix it myself. This skill is read-only: it judges the diff and reports findings, it never edits or authors source. Per the Rules, \"NEVER edit source files -- this skill only produces findings,\" and the Red Flags table explicitly calls out \"This is just a review, I'll fix the obvious floating promise myself\" as a wrong rationalization, because fixing code during review bypasses the author's own review of the change.\n\nWhat I'd do instead:\n\n1. **Scope the diff** — locate the changed `.ts`/`.js`/`.mjs`/`.cjs` file(s) and read the surrounding handler context (is the path reachable per request? what's the traffic profile?).\n2. **Flag it** under the event-loop-blocking focus area: a synchronous `fs` call (`readFileSync`, or `execSync`/`scryptSync`/`gzipSync`) on a path that handles requests blocks the event loop for the duration of the I/O.\n3. **Classify severity** — a `readFileSync` inside an Express request handler is **Blocking**, because it stalls every concurrent request on that process, not just the caller.\n4. **Report with a one-line fix direction, not a patch**:\n\n```\nBlocking (1):\n- src/routes/config.ts:27 -- `fs.readFileSync(cfgPath)` inside the GET\n  handler blocks the event loop on every request; use\n  `await fs.promises.readFile(cfgPath)` (or hoist the read to startup\n  and cache the result).\n```\n\nI'd also cross-check `rules/security.mdc` if the path is constructed from request input (path traversal), and confirm the line isn't already covered by an enforced lint rule — though `readFileSync` is rarely something ESLint flags, so that's unlikely to apply here.\n\nBottom line: report it, cite the file and line, give the fix direction, and let the author make the change.",
+              "outputSha256": "b6b7bf5acfc745773cfaf6b4fe6f3325e9fc1f441189b8309bf48c7c1c0f2f48",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the skill is read-only and the reviewer should not edit code (only report findings), flags fs.readFileSync inside an Express handler as Blocking/event-loop-blocking, and gives fs.promises.readFile as the fix direction without claiming to have applied it."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Review: synchronous `fs.readFileSync` in an Express handler\n\n**No — do not fix it yourself.** This skill is read-only by design. I'll judge the diff, report the finding, and hand the fix direction back to the author.\n\n## Why not fix it in-line\n\n- Review skills report findings; they never edit or author source. Fixing code during review bypasses the author's own review of the change and muddies the audit trail.\n- The correct fix depends on context the author owns (is this a hot path? is the file small and cached? is there an existing async helper?). A drive-by edit from the reviewer guesses at that.\n\n## The finding (what I *would* report)\n\n**Blocking — event-loop blocking on a request path**\n\n- `src/routes/<file>.ts:<line>` — `fs.readFileSync(...)` runs synchronously inside the Express handler. Every concurrent request queued behind this one is stalled for the duration of the disk read. On a hot path this is a throughput and latency hazard, and under load it can look like a hang.\n\n**Fix direction (for the author, not applied):**\n\n- Use the async variant and await it:\n  ```ts\n  import { readFile } from 'node:fs/promises';\n  const data = await readFile(path, 'utf8');\n  ```\n  and make sure the handler's promise rejection is handled (Express 4 does not catch async throwbacks automatically — wrap in `try/catch` or an async wrapper so a read error becomes a proper `next(err)`/500 rather than an unhandled rejection).\n- If the file is small, static, and read on every request, reading it once at startup (or caching it) beats per-request I/O regardless of sync vs async.\n- If the path is genuinely one-shot and cold (e.g., CLI-style startup work that happens to live in a handler), say so in a comment — but \"it's in a handler\" is the wrong place for a cold sync read.\n\n**Severity call:** Blocking if this handler serves live traffic or sits in a loop; downgrade to Should-fix only if the route is demonstrably cold/one-shot with a comment justifying it.\n\n## Cross-checks before finalizing\n\n- Confirm the path is in a request/loop path, not startup code (Step 1 scope).\n- Check `rules/security.mdc` for path-traversal / user-controlled-path risk if any part of the filename comes from request input — that can outrank the perf concern.\n- Confirm the project's lint config doesn't already hard-fail on this (e.g., `node/no-sync`); if it's enabled and enforced in CI, note that the diff must have bypassed it — don't re-flag what CI catches.\n\n## Verification\n\n- Finding cites file + line, not \"somewhere in the handler.\"\n- No source file modified — `git status` shows zero changes from this run.\n- Finding grouped under Blocking / Should fix / Note.\n\nBottom line: report it as a **Blocking** finding with the async-`readFile` + rejection-handling fix direction, and leave the actual edit to the author.",
+              "outputSha256": "9f2a42e1a3fdbc300ee224a0d1262d6d50761913bb4a12c57fbb25ea51323308",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "States the skill is read-only and the reviewer should not edit, only report the finding. Flags fs.readFileSync in the Express handler as event-loop-blocking, cites fs/promises await readFile as fix direction explicitly not applied, and claims no edit made."
+              },
+              "passed": true
+            }
+          ]
         }
       ],
       "verdict": "pass",
       "scope": "bundled",
-      "skillDigest": "6f74f7b781ba8dac594084e6c14e4606252b8e8e11192a9caddeae72f91edf2c",
+      "skillDigest": "e765a88f8190a01fd298f23c8b8072009001f1abd94228b0df3507687e2fba1f",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-24.1",
       "runner": "deepseek",
       "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:51:07.965Z"
-    },
-    {
-      "schemaVersion": "1.0.0",
-      "skillId": "ts-js-node/nodejs-build-fix",
-      "strictness": "high",
-      "trials": 5,
-      "triggerAccuracy": {
-        "truePositive": 6,
-        "falsePositive": 0,
-        "positives": 6,
-        "negatives": 6
-      },
-      "evidence": "authored",
-      "scenarios": [
-        {
-          "id": "trigger-positive-1",
-          "kind": "trigger-positive",
-          "prompt": "Fix this tsc error: Type 'string | undefined' is not assignable to type 'string'",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-2",
-          "kind": "trigger-positive",
-          "prompt": "Resolve this Node.js 'Cannot find module' error after adding a new import",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-3",
-          "kind": "trigger-positive",
-          "prompt": "Fix this require() of ES Module error in our Node service",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-4",
-          "kind": "trigger-positive",
-          "prompt": "The build fails with a moduleResolution nodenext error on this import",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-5",
-          "kind": "trigger-positive",
-          "prompt": "Fix this eslint no-floating-promises failure blocking CI",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-positive-6",
-          "kind": "trigger-positive",
-          "prompt": "package.json exports map is breaking the build with ERR_PACKAGE_PATH_NOT_EXPORTED",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-1",
-          "kind": "trigger-negative",
-          "prompt": "go vet ./... is failing on this package, help resolve the compile error",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-2",
-          "kind": "trigger-negative",
-          "prompt": "Write a CLI command in this Node.js project that lists pending jobs from the queue",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-3",
-          "kind": "trigger-negative",
-          "prompt": "Upgrade this codebase from React 18 to React 19 and fix the deprecated lifecycle warnings",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-4",
-          "kind": "trigger-negative",
-          "prompt": "Review this diff for floating promises and unhandled rejections",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-5",
-          "kind": "trigger-negative",
-          "prompt": "Write vitest tests to cover this new order calculation function",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "trigger-negative-6",
-          "kind": "trigger-negative",
-          "prompt": "Fix this mypy type error in the Python data pipeline",
-          "strictness": "high",
-          "trials": 1,
-          "passes": 1,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "trigger-rank-fork-family",
-          "status": "ran",
-          "deterministic": true
-        },
-        {
-          "id": "no-ts-ignore-suppression",
-          "kind": "behavior",
-          "prompt": "tsc reports: Property 'total' does not exist on type 'OrderDraft'. What's the right way to fix this?",
-          "strictness": "high",
-          "trials": 5,
-          "passes": 0,
-          "passRate": 0,
-          "passAtK": 0,
-          "grader": "regex+not-contains+not-contains",
-          "status": "ran"
-        },
-        {
-          "id": "reproduce-before-fix",
-          "kind": "behavior",
-          "prompt": "The Node.js build is failing but I haven't run anything yet. What's the first step to fix it?",
-          "strictness": "high",
-          "trials": 5,
-          "passes": 5,
-          "passRate": 1,
-          "passAtK": 1,
-          "grader": "regex",
-          "status": "ran"
-        }
-      ],
-      "verdict": "fail",
-      "scope": "bundled",
-      "skillDigest": "4b324ca4b7cadafedadcc035ee1c88bf9bf1255eed755a976f0d0fa746a89634",
-      "runner": "deepseek",
-      "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:51:07.060Z"
+      "recordedAt": "2026-09-24T19:46:22.391Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
     },
     {
       "schemaVersion": "1.0.0",
@@ -980,11 +794,63 @@
           "prompt": "I'm migrating this Node.js package to ES modules. Should the package.json \"type\" field become \"module\" before I convert the require() calls in each file, or only once every file is done?",
           "strictness": "high",
           "trials": 5,
-          "passes": 1,
-          "passRate": 0.2,
+          "passes": 5,
+          "passRate": 1,
           "passAtK": 1,
-          "grader": "regex+regex",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "**Only once every file is done.** Flipping `\"type\"` to `\"module\"` first is the single most common way to turn a clean migration into a broken working tree: the moment the field flips, every `.js` file still using `require()` throws `ReferenceError: require is not defined in ES module scope` — not just the file you're currently editing, but every unconverted file at once. If you're on a branch trying to keep the test suite green as you go, that leaves you with no reference point for whether a new failure is from your latest edit or from the half-converted package.\n\nThe order that works:\n\n1. Convert every file's `require`/`module.exports`/`__dirname` usage first (Step 3 in the skill), leaving `\"type\"` as it is.\n2. Flip `\"type\": \"module\"` (and add the `exports` map / `moduleResolution` change) once the conversion is complete.\n3. Run `npx tsc --noEmit` and the test command immediately after the flip to catch anything the per-file conversion missed.\n\nThe one exception is a package that genuinely needs to keep a CJS entry point for existing consumers (Step 4's dual-package case) — there you don't use `\"type\": \"module\"` at all, and instead rely on explicit `.cjs`/`.mjs` extensions per file plus `require`/`import` conditions in `\"exports\"`.\n\nIf your tooling makes an all-at-once flip impractical (e.g. a large monorepo where you want to migrate package-by-package), migrate one *package* at a time and flip that package's `\"type\"` field last, rather than flipping the workspace root's field before any of its files are converted.",
+              "outputSha256": "7aa79eda3bfc5320c5b5e7df9c9580b7d749eaeba079449472f278dce66e2315",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the ordering clearly: convert require/module.exports first, flip \"type\": \"module\" only once conversion is complete. It explains that flipping early throws ReferenceError: require is not defined for every remaining CommonJS file at once, breaking the whole unconverted package. No criterion violated."
+              },
+              "passed": true
+            },
+            {
+              "output": "Convert the files first, then flip `\"type\": \"module\"` once every file in the package is done — not before.\n\nHere's why the order matters:\n\n- Setting `\"type\": \"module\"` changes how Node parses **every** `.js` file in the package at once. Any file still using `require()`/`module.exports` stops working immediately with `require is not defined in ES module scope`.\n- If you flip the field first, you get a window where nothing runs, and you can't test incrementally as you convert.\n- If you convert first while the package is still CommonJS... the ESM `import`/`export` syntax in those converted files won't parse yet, so that's also a broken intermediate state. That's expected and fine — it just means the migration is a \"big bang\" step for the package, not something you can leave half-and-half with `\"type\": \"module\"` set.\n\nThe practical sequence within a single package:\n\n1. Convert all files (`require` → `import`, `module.exports` → `export`, `__dirname` → `import.meta.dirname`, add `.js` extensions to relative imports).\n2. Update `tsconfig.json` (`moduleResolution: nodenext` or `bundler`).\n3. **Then** add `\"type\": \"module\"` and the `\"exports\"` map.\n4. Run `tsc --noEmit` and the test suite.\n\nNote the exception: if this is a **published library that must keep serving CJS consumers**, don't flip the package-wide `\"type\"` at all — use explicit `.mjs` (and `.cjs` for anything that must stay CommonJS) extensions per file instead, and mirror both in the `\"exports\"` map's `\"import\"`/`\"require\"` conditions. A single `\"type\": \"module\"` field can't express \"this package ships both.\"\n\nFor a quick sanity check on scope before you start: `grep -rn \"require(\\|module.exports\\|__dirname\" .` tells you how many files you're converting, so you know whether this is a one-sitting change or something worth sequencing across commits.",
+              "outputSha256": "f24158771b7e6e225c0bbe2eda5b87510fa385fe1f58770e451151234cb9bddf",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "States convert files first (require->import, module.exports->export) then flip \"type\": \"module\" only once every file is done, and explains flipping early breaks all remaining CommonJS files at once with 'require is not defined in ES module scope'. Does not commit the fail anti-pattern."
+              },
+              "passed": true
+            },
+            {
+              "output": "Flip it **last**, after every file is converted — not first.\n\n`\"type\": \"module\"` is a package-wide switch. The moment it's set, Node treats every `.js` file in the package as ESM. Any file still using `require()` / `module.exports` / bare `__dirname` breaks the instant you save that field — so flipping first means you're staring at a package where *nothing* runs until the very last file is converted, with no green intermediate state to check your work against.\n\nThe order that keeps the package working throughout:\n\n1. Convert the files (imports/exports/`import.meta`, and the `tsconfig` `moduleResolution` change) while `package.json` still says CommonJS.\n2. Flip `\"type\": \"module\"` once nothing in the package still relies on CJS semantics.\n3. Set up the `\"exports\"` map at the same time — it's the other package-wide switch, and it's what turns an undeclared subpath into `ERR_PACKAGE_PATH_NOT_EXPORTED` for consumers, so it should land deliberately rather than as a side effect.\n\nOne caveat that isn't about ordering but bites during Step 1: `require(\"some-esm-only-dep\")` may already be failing today. On Node 20.19+/22.12+ that call can load a synchronous ES module directly (no flag) — worth trying first, since it defers the importing file's conversion. It throws `ERR_REQUIRE_ASYNC_MODULE` if the target (or a transitive dep) has a top-level `await`, in which case that file has to move to ESM (`await import(...)` if it can't) regardless of where you are in the migration.\n\nIf `engines.node` in your `package.json` pins you below 20.19/22.12, that cutoff moves — tell me the floor and I'll adjust which interop path applies.",
+              "outputSha256": "c5ae6e904ec135413cdba4a1760f9594dbb39248d311b3ad1e7009f1a3465059",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Explicitly says flip \"type\": \"module\" last, after converting all files (imports/exports) first. Explains it's a package-wide switch that breaks any remaining require()/module.exports file at once, leaving no working intermediate state. No criterion violated."
+              },
+              "passed": true
+            },
+            {
+              "output": "**Only once every file is done** — flip `\"type\": \"module\"` last, not first.\n\nThe reason is what `\"type\": \"module\"` actually does: it tells Node to treat every `.js` file in the package as an ES module, all at once. The moment you set it, every file still using `require()` starts failing with `ReferenceError: require is not defined in ES module scope`, and every `module.exports` assignment silently stops being the package's export. If you flip it first and then convert files one at a time, the package is broken in between for however long the conversion takes.\n\nProcedure:\n\n1. Convert the files first — `require` → `import`, `module.exports`/`exports.` → `export`, and the rest of the per-file changes (`__dirname` → `import.meta.dirname`, explicit `.js` extensions on relative imports, etc.).\n2. Flip `\"type\": \"module\"` in `package.json` only after the last file is converted.\n\nA couple of related notes:\n\n- **If you can't convert every file in one go**, don't use `\"type\"` at all for the mixed state. Instead give the ESM files an explicit `.mjs` extension (or the remaining CJS files `.cjs`), so the module system is decided per-file rather than package-wide. Then flip `\"type\"` later, if you still want to.\n- **`engines.node` matters for the flip too.** `import.meta.dirname`/`import.meta.filename` need Node 20.11+/22+; on an older floor you'd derive the directory from `fileURLToPath(import.meta.url)` instead. Confirm the project's `engines.node` before doing those replacements.\n- **Don't forget the `exports` map.** If the package is consumed as a library, update `\"main\"`/`\"exports\"` alongside the `\"type\"` flip — once `\"type\"` is `\"module\"`, subpath resolution follows the ESM rules, and a consumer importing an undeclared subpath will get `ERR_PACKAGE_PATH_NOT_EXPORTED` rather than falling back to old CJS resolution.\n\nSo: convert, then flip the field, then run the project's check (`npx tsc --noEmit`, test command, lint) to confirm the whole package is clean in one shot.",
+              "outputSha256": "3e8b90b019d445b93eb76c9813f4632d491fa33291a900bb600156f481408db0",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "States the ordering explicitly ('Only once every file is done — flip \"type\": \"module\" last, not first') with a convert-then-flip procedure, and explains that flipping early makes every remaining require() file fail with 'require is not defined in ES module scope' and breaks module.exports. No fail criterion holds."
+              },
+              "passed": true
+            },
+            {
+              "output": "Flip `\"type\": \"module\"` last, once every file is converted — not first.\n\nOnce `\"type\": \"module\"` is set, Node treats every `.js` file in the package as ESM. Any file still using `require()`/`module.exports` at that point fails immediately with `ERR_REQUIRE_ESM` (or a \"require is not defined\" style error depending on the exact path). If you flip it first, you're converting against a codebase that's already broken everywhere at once, which makes it hard to tell migration errors apart from expected breakage.\n\nThe safe order is:\n\n1. Convert every file's `require`/`module.exports`/`__dirname` usage (Step 3 in the skill).\n2. Add explicit `.js` extensions to relative imports, fix JSON import attributes, etc.\n3. Once no `require(`/`module.exports`/`__dirname` remains in the covered files, set `\"type\": \"module\"` and update `\"exports\"`.\n\nOne nuance: if the package has to ship **both** CJS and ESM simultaneously (a published library with existing CJS consumers), you don't use `\"type\": \"module\"` at all — you use explicit `.cjs`/`.mjs` extensions per file and mirror both in the `\"exports\"` map's `require`/`import` conditions. That's the dual-package path in Step 4, and it's worth confirming which case you're in before starting, since it changes the whole plan.\n\nWhich is it — a package or app that can go fully ESM, or something that needs to keep serving CJS consumers?",
+              "outputSha256": "ef4e8357808453b6691d62673435d03c787e9b5caeb6f6383cd9f4d5077c84f3",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states to flip \"type\":\"module\" last, only once every file is converted, and explains that flipping early makes Node treat all .js files as ESM, so remaining require()/module.exports files fail immediately (ERR_REQUIRE_ESM). Ordering and rationale both present; no fail condition met."
+              },
+              "passed": true
+            }
+          ]
         },
         {
           "id": "dirname-replacement",
@@ -992,19 +858,693 @@
           "prompt": "In this Node.js file being migrated to ESM, __dirname is undefined. What should replace it?",
           "strictness": "high",
           "trials": 5,
+          "passes": 4,
+          "passRate": 0.8,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "Use `import.meta.dirname` (Node 20.11+/22+):\n\n```js\nconsole.log(import.meta.dirname);\n```\n\nIf the `engines.node` floor is older than that, derive it explicitly:\n\n```js\nimport { fileURLToPath } from \"node:url\";\nimport { dirname } from \"node:path\";\n\nconst __dirname = dirname(fileURLToPath(import.meta.url));\n```\n\nBoth replace the hardcoded-path temptation and the `__dirname` behavior (absolute, resolved, installation-location-independent). Prefer `import.meta.dirname` when the Node floor allows — it's a single, direct replacement with no imports.",
+              "outputSha256": "36d950fad3cb4c016fd49ae5235beec10c816d5e8dfeffe1b4c3f98db55a996c",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer names import.meta.dirname (Node 20.11+/22+) and gives fileURLToPath(import.meta.url) fallback for older floors, explicitly tying the choice to engines.node. Does not suggest hardcoding; only references the hardcoded-path temptation to reject it."
+              },
+              "passed": true
+            },
+            {
+              "output": "Use `import.meta.dirname` (Node 20.11+/22+):\n\n```js\nimport path from 'node:path';\nconst file = path.join(import.meta.dirname, 'data.json');\n```\n\nFor older Node targets, derive it from `import.meta.url`:\n\n```js\nimport { fileURLToPath } from 'node:url';\nimport path from 'node:path';\nconst __dirname = path.dirname(fileURLToPath(import.meta.url));\n```\n\n`__filename` maps to `import.meta.filename` the same way.",
+              "outputSha256": "c179678896545743acdd9ab2afa8061604c6e7e031ab356ecd30a7a412e824db",
+              "deterministic": [],
+              "judge": {
+                "verdict": "fail",
+                "reason": "Answer correctly names import.meta.dirname and the fileURLToPath equivalent, but never ties the choice to the project's engines.node version floor; it presents both options without referencing the project's declared Node version, so pass criterion 2 is unmet."
+              },
+              "passed": false
+            },
+            {
+              "output": "In ESM there's no `__dirname` (or `__filename`) — those are CommonJS globals. What to use depends on your Node version floor:\n\n**Node 20.11+ / 21.2+ (preferred):** use the new `import.meta` properties directly:\n\n```js\nconsole.log(import.meta.dirname);  // replaces __dirname\nconsole.log(import.meta.filename); // replaces __filename\n```\n\n**Older Node:** derive them from `import.meta.url`, which is always available in ESM:\n\n```js\nimport { fileURLToPath } from \"node:url\";\nimport { dirname } from \"node:path\";\n\nconst __filename = fileURLToPath(import.meta.url);\nconst __dirname = dirname(__filename);\n```\n\nNotes:\n\n- `import.meta.dirname`/`filename` are only on Node **20.11.0+** (and 21.2.0+). If `package.json`'s `engines.node` allows older versions, use the `fileURLToPath` form, or bump the engines floor as part of the migration.\n- `import.meta.url` is a `file://` URL, so `new URL(\"./data.json\", import.meta.url)` is often cleaner than string-concatenating a path when resolving a sibling file.\n- Don't hardcode an absolute path as a workaround — it breaks the moment the package is installed or run from another directory.\n\nSince you're mid-migration, also double-check the file has actually been converted: `import.meta` is only valid in ESM, and you'll get the same `__dirname is not defined` symptom if a `.js` file is being loaded as ESM (via `\"type\": \"module\"`) while still containing `require()`/`module.exports`.",
+              "outputSha256": "05356a5ff8f41f9ff1c9eba447ba59fde2367fb67e740d20e655192268a42899",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names import.meta.dirname as the replacement and gives fileURLToPath(import.meta.url) for older Node, explicitly tying the choice to engines.node. It explicitly warns against hardcoding, which is not committing the anti-pattern."
+              },
+              "passed": true
+            },
+            {
+              "output": "`import.meta.dirname` (Node 20.11+). For older Node, derive it from `import.meta.url`:\n\n```js\nimport { fileURLToPath } from \"node:url\";\nimport { dirname } from \"node:path\";\n\nconst __dirname = dirname(fileURLToPath(import.meta.url));\n```\n\nThat's exactly the `__dirname` → `import.meta.dirname` case in the skill's Step 3.",
+              "outputSha256": "fda61fe78584cd63917a7fcf85045fab637def22f741bf532d44039ca4ea219d",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names import.meta.dirname (Node 20.11+) and the fileURLToPath(import.meta.url) equivalent for older Node, with no hardcoded path. It ties the choice to Node version ('for older Node'), though it doesn't explicitly reference engines.node."
+              },
+              "passed": true
+            },
+            {
+              "output": "In an ESM file, `__dirname` isn't defined. Replace it with one of these:\n\n**Node 20.11+ / 22+** (simplest):\n\n```js\nimport.meta.dirname\n```\n\nAnd for `__filename`:\n\n```js\nimport.meta.filename\n```\n\n**Older Node:**\n\n```js\nimport { fileURLToPath } from \"node:url\";\nimport { dirname } from \"node:path\";\n\nconst __filename = fileURLToPath(import.meta.url);\nconst __dirname = dirname(__filename);\n```\n\nSo a CJS line like:\n\n```js\nconst configPath = path.join(__dirname, \"config.json\");\n```\n\nbecomes:\n\n```js\nconst configPath = path.join(import.meta.dirname, \"config.json\");\n```\n\nCheck your `engines.node` in `package.json` to pick the right option — if it's `>=20.11.0` or `>=22`, use `import.meta.dirname` and skip the `fileURLToPath` dance entirely.",
+              "outputSha256": "78dae667a7c3e64098341eed4fd0fca9be216d7e7fc96319ef29d13b291b8899",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Names import.meta.dirname for Node 20.11+/22+ and fileURLToPath(import.meta.url)-derived dirname for older Node. Explicitly ties the choice to engines.node in package.json rather than assuming one version. No hardcoded path suggested."
+              },
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "f73712243aae7e6e7170fe9c2b07729cf83d503d40a013cbad37c0bc91117fe3",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-24.1",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T19:46:50.714Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
+    },
+    {
+      "schemaVersion": "1.0.0",
+      "skillId": "ts-js-node/nodejs-implementation",
+      "strictness": "high",
+      "trials": 5,
+      "triggerAccuracy": {
+        "truePositive": 6,
+        "falsePositive": 0,
+        "positives": 6,
+        "negatives": 6
+      },
+      "evidence": "authored",
+      "scenarios": [
+        {
+          "id": "trigger-positive-1",
+          "kind": "trigger-positive",
+          "prompt": "Implement this Express route handler for creating an order, including request body validation",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-2",
+          "kind": "trigger-positive",
+          "prompt": "Add a new async function to this Node.js library that reads a config file and returns parsed settings",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-3",
+          "kind": "trigger-positive",
+          "prompt": "Write a CLI command in our Node.js CLI tool that lists pending jobs from the queue",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-4",
+          "kind": "trigger-positive",
+          "prompt": "Implement async handler with AbortSignal for this outbound fetch call so it doesn't hang",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-5",
+          "kind": "trigger-positive",
+          "prompt": "Add input validation to this Node.js API route before it reaches the service layer",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-6",
+          "kind": "trigger-positive",
+          "prompt": "Build this Node.js order processing function that totals line items and applies discounts",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-1",
+          "kind": "trigger-negative",
+          "prompt": "Write pytest tests for this Django view",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-2",
+          "kind": "trigger-negative",
+          "prompt": "Review this pull request for floating promises and unhandled rejections",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-3",
+          "kind": "trigger-negative",
+          "prompt": "Migrate this package from CommonJS to ESM",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-4",
+          "kind": "trigger-negative",
+          "prompt": "Fix this tsc type error about incompatible generic instantiation",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-5",
+          "kind": "trigger-negative",
+          "prompt": "Implement a new React component that renders the order list with pagination",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-6",
+          "kind": "trigger-negative",
+          "prompt": "Add fake timers to this Vitest test for the debounce function",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "validate-and-abort-signal",
+          "kind": "behavior",
+          "prompt": "Implement a Node.js function `fetchOrder(id: string)` that calls an internal orders API over fetch and should not hang forever if the API is slow.",
+          "strictness": "high",
+          "trials": 5,
           "passes": 5,
           "passRate": 1,
           "passAtK": 1,
-          "grader": "regex",
-          "status": "ran"
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# `fetchOrder` implementation\n\nBefore writing this, the workflow says to discover the project's own conventions — read `tsconfig.json`, `package.json`, and a neighboring module. I don't have those here, so I'll implement against the rules and flag the two or three spots where project convention would change the result. Apply Steps 1-2 yourself against the real repo if they diverge.\n\n## What the requirement actually pins down\n\nThree things are fixed by the prompt:\n\n1. It's a **`fetch` call to an internal orders API** — so it's an async boundary with a network dependency that can stall.\n2. It **must not hang forever** — so it needs a bounded timeout, not just \"hope the server responds.\"\n3. The signature is **`fetchOrder(id: string)`** — an external input enters here, so `id` is validated at the boundary.\n\nThe prompt does *not* say what shape the API returns, whether there's a base URL in config, whether the project has a schema library, or whether this returns a typed order or throws. Those are discovery items (Step 1-2), and I've picked defensible defaults below with comments on where to swap.\n\n## Implementation\n\n```ts\n// src/orders/fetchOrder.ts\nimport { z } from \"zod\"; // <-- only if the project already depends on a schema lib\n\nconst ORDERS_API_BASE =\n  process.env.ORDERS_API_BASE_URL ?? \"http://orders.internal\";\n\n// Default budget for a single call. Request-scoped callers can override.\nconst DEFAULT_TIMEOUT_MS = 5_000;\n\n// Validated shape of an order as it crosses the boundary into our process.\n// Swap for the project's existing validator/DTO if one exists.\nconst OrderSchema = z.object({\n  id: z.string().min(1),\n  status: z.enum([\"pending\", \"paid\", \"shipped\", \"cancelled\"]),\n  totalCents: z.number().int().nonnegative(),\n  createdAt: z.string(), // ISO 8601\n});\n\nexport type Order = z.infer<typeof OrderSchema>;\n\nexport interface FetchOrderOptions {\n  /** Caller-supplied cancellation, e.g. a request-scoped AbortSignal. */\n  signal?: AbortSignal;\n  /** Fixed budget for this call. Defaults to DEFAULT_TIMEOUT_MS. */\n  timeoutMs?: number;\n}\n\nexport async function fetchOrder(\n  id: string,\n  options: FetchOrderOptions = {},\n): Promise<Order> {\n  // 1. Validate external input at the boundary, before any I/O.\n  if (typeof id !== \"string\" || id.trim() === \"\") {\n    throw new Error(\"fetchOrder: id must be a non-empty string\");\n  }\n  const orderId = encodeURIComponent(id);\n\n  // 2. Bound the call. AbortSignal.any() lets the caller's cancellation\n  //    and our timeout both fire without a bespoke race.\n  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;\n  const signals: AbortSignal[] = [AbortSignal.timeout(timeoutMs)];\n  if (options.signal) signals.push(options.signal);\n  const signal = AbortSignal.any(signals);\n\n  let res: Response;\n  try {\n    res = await fetch(`${ORDERS_API_BASE}/orders/${orderId}`, {\n      method: \"GET\",\n      headers: { accept: \"application/json\" },\n      signal,\n    });\n  } catch (cause) {\n    // Distinguish our timeout from caller cancellation from a real network error.\n    if (cause instanceof DOMException && cause.name === \"TimeoutError\") {\n      throw new Error(\n        `fetchOrder: orders API did not respond within ${timeoutMs}ms for id=${id}`,\n        { cause },\n      );\n    }\n    if (cause instanceof DOMException && cause.name === \"AbortError\") {\n      throw new Error(`fetchOrder: request for id=${id} was aborted`, { cause });\n    }\n    throw new Error(`fetchOrder: network error fetching id=${id}`, { cause });\n  }\n\n  if (res.status === 404) {\n    throw new Error(`fetchOrder: no order with id=${id}`);\n  }\n  if (!res.ok) {\n    throw new Error(\n      `fetchOrder: orders API returned ${res.status} for id=${id}`,\n    );\n  }\n\n  // 3. Validate the response shape too — the API is outside our process.\n  const body: unknown = await res.json();\n  const parsed = OrderSchema.safeParse(body);\n  if (!parsed.success) {\n    throw new Error(\n      `fetchOrder: orders API returned an unexpected shape for id=${id}`,\n      { cause: parsed.error },\n    );\n  }\n  return parsed.data;\n}\n```\n\n## Why each rule lands where it does\n\n- **No hang forever** → `AbortSignal.timeout(timeoutMs)` bounds the call, and `AbortSignal.any()` lets the caller's request-scoped signal cancel it too. That's the `rules/patterns.mdc` rule about threading an `AbortSignal` through every async boundary instead of inventing a `Promise.race` timeout helper per call site.\n- **`id` validated at the boundary** → the guard runs before any I/O, and `encodeURIComponent` prevents an `id` containing `/` or `?` from re-routing the request. Validating `id` only inside the service layer, two layers down, is exactly the anti-pattern the boundary rule calls out.\n- **Response validated too** → an internal API is still outside our process. `res.json()` returns `unknown`, and `any` would disable the type checker for everything downstream — `unknown` + a narrow is the rule.\n- **Errors carry `cause`** → every rethrow chains the original error so callers and logs can see whether it was a timeout, an abort, or a 404.\n- **No floating promise** → `await fetch(...)`, `await res.json()`; both are awaited, nothing fire-and-forget.\n\n## Two things to confirm against the real project before this merges\n\n1. **`AbortSignal.any()` and `AbortSignal.timeout()` need a modern Node.** Both are stable in Node 20+. Check `package.json` `engines.node` — if the project still supports Node 18, replace `AbortSignal.any([...])` with a small `AbortController` wired manually, still awaiting the caller signal and the timeout. Don't drop the timeout to keep the old API.\n2. **The throw-vs-result contract.** I made 404 throw. If the surrounding module already returns a discriminated result (`{ ok: true, order } | { ok: false, reason }`), match that instead — the rule is to match what the module already does, not to impose a new convention.\n\n## Verification\n\nPer the skill's Step 4-5, before this is \"done\":\n\n```bash\nnpx tsc --noEmit   # must exit 0\nnpx eslint .       # must exit 0, no new `any`, no new eslint-disable\ngit status         # only src/orders/fetchOrder.ts should be new\n```\n\nThen hand off to **`nodejs-testing`** for coverage — the cases that matter here are: timeout fires and throws a `TimeoutError`-attributed error, caller's signal aborts first, 404, non-2xx, and a 200 with an unexpected body shape.",
+              "outputSha256": "7ebb109c18873ae0c666fcd5c12ce72e78884b7c87ba664291c1c02b49f15e84",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Passes signal into fetch via { signal } built from AbortSignal.timeout(ms) composed with caller signal via AbortSignal.any, and explicitly catches TimeoutError/AbortError and rethrows typed errors, so no unbounded await. No bespoke Promise.race timeout."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Implementing `fetchOrder(id: string)`\n\n## Step 1: Discovery calls I'd make first\n\nBefore writing anything, I'd check:\n\n```bash\ncat tsconfig.json          # strict? moduleResolution: nodenext vs bundler?\ncat package.json           # \"type\": module? engines.node? deps (undici, zod, etc.)?\nls src/                    # find a sibling module that already calls the orders API\n```\n\nThe critical question this determines: **does the project already have an HTTP client wrapper / configured `fetch` base URL?** If a sibling module calls the same internal API, I reuse its pattern rather than inventing one.\n\nFor this answer I'll assume the common case: `\"type\": \"module\"`, `strict: true`, `moduleResolution: \"nodenext\"`, Node 20+ (global `fetch`), no existing HTTP wrapper. If a wrapper exists, substitute it and skip the raw `fetch` call — but keep the `AbortSignal` and error handling shape identical.\n\n## Step 2: The implementation\n\n```ts\n// src/orders/fetch-order.ts\nimport { Order } from \"./types.ts\"; // project's existing order type, if any\n\nconst ORDERS_API_BASE = process.env.ORDERS_API_BASE_URL ?? \"http://orders.internal\";\nconst ORDERS_API_TIMEOUT_MS = 5_000;\n\nexport class OrdersApiError extends Error {\n  constructor(message: string, options?: { cause?: unknown }) {\n    super(message, options);\n    this.name = \"OrdersApiError\";\n  }\n}\n\nexport async function fetchOrder(\n  id: string,\n  signal?: AbortSignal,\n): Promise<Order> {\n  // 1. Validate the input at the boundary.\n  if (typeof id !== \"string\" || id.length === 0) {\n    throw new OrdersApiError(`fetchOrder: invalid id: ${String(id)}`);\n  }\n\n  // 2. Give the request a hard time budget, unless the caller already\n  //    supplied one (a request-scoped signal from the HTTP layer). If both\n  //    exist, combine them so a slow API AND a client disconnect both cancel.\n  const timeoutSignal = AbortSignal.timeout(ORDERS_API_TIMEOUT_MS);\n  const effectiveSignal = signal\n    ? AbortSignal.any([signal, timeoutSignal])\n    : timeoutSignal;\n\n  // 3. Fetch with the signal threaded through.\n  let response: Response;\n  try {\n    response = await fetch(\n      `${ORDERS_API_BASE}/orders/${encodeURIComponent(id)}`,\n      { signal: effectiveSignal, headers: { accept: \"application/json\" } },\n    );\n  } catch (cause) {\n    // fetch() rejects with a DOMException(\"TimeoutError\"|\"AbortError\") on\n    // cancel, or a TypeError on network failure. Distinguish them.\n    if (cause instanceof DOMException && cause.name === \"TimeoutError\") {\n      throw new OrdersApiError(\n        `fetchOrder: timed out after ${ORDERS_API_TIMEOUT_MS}ms (id=${id})`,\n        { cause },\n      );\n    }\n    if (cause instanceof DOMException && cause.name === \"AbortError\") {\n      throw new OrdersApiError(`fetchOrder: aborted (id=${id})`, { cause });\n    }\n    throw new OrdersApiError(\n      `fetchOrder: network error reaching orders API (id=${id})`,\n      { cause },\n    );\n  }\n\n  // 4. Non-2xx is a failure, not a success with a weird body.\n  if (!response.ok) {\n    throw new OrdersApiError(\n      `fetchOrder: orders API returned ${response.status} (id=${id})`,\n    );\n  }\n\n  // 5. Parse, validating shape before trusting it.\n  let body: unknown;\n  try {\n    body = await response.json();\n  } catch (cause) {\n    throw new OrdersApiError(\n      `fetchOrder: orders API returned invalid JSON (id=${id})`,\n      { cause },\n    );\n  }\n\n  // Narrow `unknown` to the expected shape. With zod this would be\n  // `OrderSchema.parse(body)`; without a schema lib, a type guard:\n  if (!isOrder(body)) {\n    throw new OrdersApiError(\n      `fetchOrder: orders API returned an unexpected shape (id=${id})`,\n    );\n  }\n  return body;\n}\n\nfunction isOrder(value: unknown): value is Order {\n  return (\n    typeof value === \"object\" &&\n    value !== null &&\n    typeof (value as { id?: unknown }).id === \"string\" &&\n    typeof (value as { status?: unknown }).status === \"string\"\n  );\n}\n```\n\n## How each requirement is met\n\n**\"Should not hang forever if the API is slow\"** — the `AbortSignal.timeout(5_000)` is the load-bearing line. `fetch` accepts a `signal` and rejects the promise the moment it fires; without this, a stalled TCP connection can hang the caller's request indefinitely. The `AbortSignal.any([...])` combination means a request-scoped signal from the HTTP layer (client disconnect) *and* the timeout both work — whichever fires first cancels the call.\n\n**Validated at the boundary** — `id` is checked before it reaches the URL, and the parsed response is narrowed from `unknown` before it's trusted. No `any` anywhere.\n\n**Error contract** — every failure mode (invalid input, timeout, abort, network error, non-2xx, bad JSON, bad shape) throws an `OrdersApiError` with a message naming the id and the cause chained via `{ cause }`, so the original `DOMException` is preserved for debugging. Callers can `instanceof OrdersApiError` a single failure type.\n\n**No floating promises, no sync I/O** — the only async boundary is awaited; `encodeURIComponent` is sync but trivial and correct for a path segment.\n\n## Step 4: Verify\n\n```bash\nnpx tsc --noEmit   # expect exit 0\nnpx eslint .       # expect exit 0\n```\n\nBoth must pass before I'd call this done. If `AbortSignal.any` isn't available (Node < 20.3), I'd fall back to a small helper that listens on the caller signal and forwards the abort to the timeout controller — but I'd flag that to you rather than silently assuming a newer Node.\n\n## Step 5: Report\n\n```\nImplemented: src/orders/fetch-order.ts\n  - fetchOrder(id, signal?) with a 5s AbortSignal.timeout budget, combined\n    with any caller-supplied signal via AbortSignal.any\n  - validates id at the boundary; throws OrdersApiError for timeout, abort,\n    network error, non-2xx, bad JSON, and unexpected response shape\n  - tsc --noEmit: clean\n  - eslint: clean\n\nNOT DONE (out of this skill's scope): no tests. Once this compiles clean,\nhand off to nodejs-testing for coverage of the timeout/abort/non-2xx paths.\n```\n\n## Open questions I'd want answered before merging\n\n- **Is there an existing error class or HTTP wrapper?** If the project already has, say, a `ApiError` or an `httpClient` that sets the base URL and auth headers, I should use those instead of importing `fetch` directly — I assumed none exist.\n- **What's the real shape of an order?** My `isOrder` guard is a placeholder; if there's a zod schema or a generated API type, use that and delete the guard.\n- **Is 5s right?** The budget should match the p99 of the real API plus headroom; I picked a default, not a measured value.",
+              "outputSha256": "3cc382cefd86f68ee1652c671287c739f241809e7d33ce5b8c1168d622f15ccc",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Passes AbortSignal.timeout(5000) into fetch via { signal }, combined with caller signal using AbortSignal.any. Explicitly catches DOMException TimeoutError/AbortError and throws typed OrdersApiError with cause. No manual setTimeout race; handles all fail criteria correctly."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Implementing `fetchOrder`\n\nNo project files were provided, so I'll implement against the conventions this skill enforces and flag the one assumption I'm making (module system + error shape). If you paste your `package.json`/`tsconfig.json` I'll reconcile it exactly.\n\n**Assumption:** ESM TypeScript project (`\"type\": \"module\"`, `tsconfig` `moduleResolution: \"nodenext\"`). If you're on CommonJS, the only change is dropping the `node:`-prefixed built-ins (there are none here anyway — this only uses `fetch`, a global).\n\n## The function\n\n```ts\n// src/orders/fetchOrder.ts\n\nexport class OrderNotFoundError extends Error {\n  constructor(readonly orderId: string) {\n    super(`Order not found: ${orderId}`);\n    this.name = \"OrderNotFoundError\";\n  }\n}\n\nexport class OrdersApiError extends Error {\n  constructor(\n    message: string,\n    readonly status: number,\n    options?: { cause?: unknown },\n  ) {\n    super(message, options);\n    this.name = \"OrdersApiError\";\n  }\n}\n\nconst ORDERS_API_BASE_URL = process.env.ORDERS_API_BASE_URL;\nif (!ORDERS_API_BASE_URL) {\n  throw new Error(\"Missing required env var ORDERS_API_BASE_URL\");\n}\n\nconst DEFAULT_TIMEOUT_MS = 5_000;\n\nexport interface Order {\n  id: string;\n  status: \"pending\" | \"paid\" | \"shipped\" | \"cancelled\";\n  totalCents: number;\n}\n\nexport async function fetchOrder(\n  id: string,\n  { signal, timeoutMs = DEFAULT_TIMEOUT_MS }: { signal?: AbortSignal; timeoutMs?: number } = {},\n): Promise<Order> {\n  if (typeof id !== \"string\" || id.trim() === \"\") {\n    throw new TypeError(\"fetchOrder: id must be a non-empty string\");\n  }\n\n  // Combine the caller's cancellation with an independent timeout budget so\n  // the call can't hang forever even if the caller passes no signal.\n  const timeoutSignal = AbortSignal.timeout(timeoutMs);\n  const combinedSignal = signal\n    ? AbortSignal.any([signal, timeoutSignal])\n    : timeoutSignal;\n\n  let response: Response;\n  try {\n    response = await fetch(\n      `${ORDERS_API_BASE_URL}/orders/${encodeURIComponent(id)}`,\n      { signal: combinedSignal, headers: { accept: \"application/json\" } },\n    );\n  } catch (err) {\n    if (combinedSignal.aborted) {\n      throw new OrdersApiError(\n        timeoutSignal.aborted\n          ? `Orders API timed out after ${timeoutMs}ms fetching order ${id}`\n          : `Fetching order ${id} was cancelled`,\n        0,\n        { cause: err },\n      );\n    }\n    throw new OrdersApiError(\n      `Orders API request failed for order ${id}`,\n      0,\n      { cause: err },\n    );\n  }\n\n  if (response.status === 404) {\n    throw new OrderNotFoundError(id);\n  }\n  if (!response.ok) {\n    throw new OrdersApiError(\n      `Orders API returned ${response.status} for order ${id}`,\n      response.status,\n    );\n  }\n\n  const body: unknown = await response.json();\n  return parseOrder(body, id);\n}\n```\n\n## The validation helper\n\n`response.json()` returns `any`. Per the boundary rule, the parsed body is\ntreated as `unknown` and narrowed before it reaches business logic:\n\n```ts\nfunction parseOrder(body: unknown, orderId: string): Order {\n  if (typeof body !== \"object\" || body === null) {\n    throw new OrdersApiError(\n      `Orders API returned non-object body for order ${orderId}`,\n      200,\n    );\n  }\n  const o = body as Record<string, unknown>;\n  const validStatus = [\"pending\", \"paid\", \"shipped\", \"cancelled\"] as const;\n  if (\n    typeof o.id !== \"string\" ||\n    typeof o.totalCents !== \"number\" ||\n    !validStatus.includes(o.status as (typeof validStatus)[number])\n  ) {\n    throw new OrdersApiError(\n      `Orders API returned malformed order payload for ${orderId}`,\n      200,\n    );\n  }\n  return {\n    id: o.id,\n    status: o.status as Order[\"status\"],\n    totalCents: o.totalCents,\n  };\n}\n```\n\nIf your project already has zod/valibot/yup as a dependency, replace `parseOrder` with a schema — don't add a validator library just for this.\n\n## Why this shape\n\n- **Can't hang forever.** `AbortSignal.timeout(timeoutMs)` gives every call a bounded budget. `AbortSignal.any([...])` composes it with a caller-supplied signal so a request-scoped cancel still works. Node 20.3+ supports `AbortSignal.any`; on Node 18 use `AbortSignal.timeout` only, or a `AbortController` wired to both.\n- **`cause` is preserved** on every wrap, so a stack trace shows both the `OrdersApiError` and the underlying network failure.\n- **Distinguishes not-found from API failure** via dedicated error classes so callers can `instanceof`-check instead of parsing messages.\n- **No floating promises** — every `await` is bound; the `fetch` rejection is caught and rethrown with context.\n- **No new deps.** Uses only the global `fetch` and `AbortSignal`.\n\n## Verify\n\n```bash\nnpx tsc --noEmit\nnpx eslint src/orders/fetchOrder.ts\n```\n\nI haven't run these — I don't have your environment. Tell me if `ORDERS_API_BASE_URL` isn't the right env var name, or if the project wants a result-object error contract instead of throwing, and I'll adjust. Once this compiles clean, hand off to `nodejs-testing` (or write tests per `rules/testing.mdc`) to cover the timeout, 404, malformed-body, and happy paths.\n",
+              "outputSha256": "953d14adc89dc488b3ea8712d573f24ad4180dc7628304623e7169d0e4f1d693",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Uses AbortSignal.timeout(timeoutMs) combined via AbortSignal.any with the caller's signal, passed as { signal: combinedSignal } into fetch. The abort/timeout case is caught explicitly, throwing a typed OrdersApiError distinguishing timeout vs cancellation. No bespoke setTimeout race."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Implementing `fetchOrder(id: string)`\n\nLet me walk through this properly. First, discovery, then the implementation.\n\n## Step 1: What I'd normally check\n\nBefore writing a line, I'd look at `tsconfig.json` (strictness, module resolution), `package.json` (`\"type\"`, engines, whether a schema/validation lib already exists), and a sibling module that already calls the internal API — for the error shape and import conventions.\n\nSince you haven't shared those files, I'll write this assuming a common setup — **strict TypeScript + ESM + Node 18+** — and flag the assumptions so you can adjust.\n\n## Step 2: Design decisions\n\nKey requirements from your ask:\n- Calls an **internal orders API** over `fetch`\n- **Must not hang forever** if the API is slow\n\nThat last point is the whole job. A bare `await fetch(...)` with no signal has no timeout and will hang indefinitely if the server stalls. So the core move is: **thread an `AbortSignal` with a bounded timeout** and distinguish \"timed out\" from \"failed\" from \"not found\" so callers can react correctly.\n\nI'll also validate the `id` at the boundary and use a typed error class + `cause` chaining.\n\n## Step 3: Implementation\n\n```ts\n// src/orders/fetchOrder.ts\nimport { fetch } from \"undici\"; // NOTE: Node 18+ has global fetch; see the drop-in comment below.\n\n/** How long we're willing to wait for the upstream orders API. */\nconst REQUEST_TIMEOUT_MS = 5_000;\n\nconst ORDERS_API_BASE =\n  process.env.ORDERS_API_BASE_URL ?? \"http://orders.internal\";\n\n/** Reject obviously malformed ids before they hit the network. */\nconst ORDER_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;\n\nexport interface Order {\n  id: string;\n  status: string;\n  totalCents: number;\n  createdAt: string;\n}\n\n/**\n * Raised when the orders API cannot be reached or returns an unusable\n * response. Distinct from a 404, which is a valid \"order does not exist\".\n */\nexport class OrdersApiError extends Error {\n  constructor(message: string, options?: { cause?: unknown }) {\n    super(message, options);\n    this.name = \"OrdersApiError\";\n  }\n}\n\n/** Raised when the order is validly requested but does not exist. */\nexport class OrderNotFoundError extends Error {\n  constructor(readonly id: string) {\n    super(`Order not found: ${id}`);\n    this.name = \"OrderNotFoundError\";\n  }\n}\n\n// Note: `new Error(msg, { cause })` and `AbortSignal.timeout` both require\n// Node 18.17+ / a lib target of ES2022+. Adjust if you're on older Node.\n\nexport async function fetchOrder(id: string): Promise<Order> {\n  // --- Boundary validation: reject before doing any I/O -----------------\n  if (typeof id !== \"string\" || !ORDER_ID_PATTERN.test(id)) {\n    // A programming error on the caller's side -> throw, don't hit network.\n    throw new TypeError(`Invalid order id: ${JSON.stringify(id)}`);\n  }\n\n  // --- Bounded outbound call: this is what prevents \"hang forever\" ------\n  const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);\n  const url = `${ORDERS_API_BASE}/orders/${encodeURIComponent(id)}`;\n\n  let response: Response;\n  try {\n    response = await fetch(url, {\n      method: \"GET\",\n      headers: { accept: \"application/json\" },\n      signal, // <- the timeout lives here\n    });\n  } catch (cause) {\n    // AbortSignal.timeout rejects with a TimeoutError DOMException.\n    if (cause instanceof Error && cause.name === \"TimeoutError\") {\n      throw new OrdersApiError(\n        `Orders API timed out after ${REQUEST_TIMEOUT_MS}ms for order ${id}`,\n        { cause },\n      );\n    }\n    // Any other network failure.\n    throw new OrdersApiError(`Orders API request failed for order ${id}`, {\n      cause,\n    });\n  }\n\n  // --- Distinguish \"not found\" from real failures -----------------------\n  if (response.status === 404) {\n    throw new OrderNotFoundError(id);\n  }\n  if (!response.ok) {\n    throw new OrdersApiError(\n      `Orders API returned ${response.status} for order ${id}`,\n    );\n  }\n\n  // --- Validate the response shape before trusting it -------------------\n  const body: unknown = await response.json();\n  if (!isOrder(body)) {\n    throw new OrdersApiError(\n      `Orders API returned a malformed payload for order ${id}`,\n    );\n  }\n  return body;\n}\n\n/** Runtime type guard: keeps `unknown` from the network out of business logic. */\nfunction isOrder(value: unknown): value is Order {\n  if (typeof value !== \"object\" || value === null) return false;\n  const o = value as Record<string, unknown>;\n  return (\n    typeof o.id === \"string\" &&\n    typeof o.status === \"string\" &&\n    typeof o.totalCents === \"number\" &&\n    typeof o.createdAt === \"string\"\n  );\n}\n```\n\n### If your project already has a validation library\n\nSwap the hand-rolled `isOrder` guard for the schema you already depend on — don't add `zod`/`valibot` just for this:\n\n```ts\nconst OrderSchema = z.object({\n  id: z.string(),\n  status: z.string(),\n  totalCents: z.number(),\n  createdAt: z.string(),\n});\nconst parsed = OrderSchema.safeParse(body);\nif (!parsed.success) {\n  throw new OrdersApiError(`Malformed payload for order ${id}`, {\n    cause: parsed.error,\n  });\n}\nreturn parsed.data;\n```\n\n### Building on Node 18+ with global `fetch`\n\nIf `tsconfig` targets `ES2022`+ and you have `@types/node` ≥ 18, drop the `import { fetch } from \"undici\"` line — the global `fetch` and `AbortSignal.timeout` are already typed. Keep the import only if the project pins `undici` explicitly.\n\n## Why this satisfies \"no hang\"\n\n- `AbortSignal.timeout(ms)` is an **in-process, wall-clock bound** on the entire request including connection, headers, and body. It's not a soft \"give up on the socket\" — it genuinely aborts.\n- No retry loop wraps it, so there's no queue of hung attempts building up.\n- The timeout is a module constant, so it's tunable in one place per deployment.\n\nIf callers need to cancel *earlier* than the 5s cap (e.g. the inbound HTTP request was itself aborted), pass a signal in and **compose** it with the timeout rather than replacing the bound:\n\n```ts\nexport async function fetchOrder(\n  id: string,\n  { signal: callerSignal }: { signal?: AbortSignal } = {},\n): Promise<Order> {\n  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);\n  const signal = callerSignal\n    ? AbortSignal.any([callerSignal, timeout])\n    : timeout;\n  // ...rest unchanged\n}\n```\n\n`AbortSignal.any` requires Node 20.3+; on older Node, use `AbortSignal.timeout` alone or a small merge helper.\n\n## Step 4: Verify\n\nI can't run these against your repo since I don't have it, but the checks are:\n\n```bash\nnpx tsc --noEmit\nnpx eslint src/orders/fetchOrder.ts\ngit status\n```\n\n- **`tsc --noEmit`** — clean. No `any` appears: the network payload enters as `unknown` and is narrowed by `isOrder` (or the schema).\n- **`eslint`** — clean, no new disables.\n- **Every promise is awaited** — both `fetch` and `response.json()` are awaited inside `try`/`catch`.\n- **External input validated** — `id` is checked at the top; the response body is validated before returning.\n- **`git status`** — only the new file (plus a test file later) should show up.\n\n## Step 5: What I did *not* do\n\n- **No tests.** Per this pack's split, test-writing is the `nodejs-testing` skill's job. When you're ready, the interesting cases are: slow API → `OrdersApiError` naming the timeout; 404 → `OrderNotFoundError`; malformed JSON → `OrdersApiError`; and a caller-aborted signal propagating. I can write those next if you want.\n- **No retries, no circuit breaker.** If your service calls this API on a hot path, a retry-with-jitter + breaker is a follow-up, not part of a single function — say the word and I'll layer it on deliberately.\n\n**Assumptions I made** so you can correct them: strict TS, ESM, Node 18.17+, global `fetch`, `ORDERS_API_BASE_URL` from env. If any of those differ — CommonJS build, older Node, a pinned HTTP client like axios/got — tell me and I'll adjust rather than add a competing mechanism.\n\nWant me to also do the timeout-with-caller-signal variant's Node version compatibility, or move on to the tests?",
+              "outputSha256": "b99a119eedd6cf2ecacfd33221ac723be3890db2cfb1645570c0d6e0f44c3834",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer threads AbortSignal.timeout(5000) into fetch via { signal } and explicitly catches the TimeoutError abort, rethrowing a typed OrdersApiError; also shows AbortSignal.any composition for caller signals. No manual setTimeout racing. Both pass criteria hold, no fail criteria met."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Implementing `fetchOrder(id: string)`\n\n## Step 1: Discover the project's own conventions\n\nBefore writing anything, I need to read the actual project rather than guess. Let me check the config and neighbors.\n\n```bash\ncat tsconfig.json\ncat package.json\nfind . -path ./node_modules -prune -o -name \"*.ts\" -print | head -20\n```\n\nI'll state the assumptions I'm proceeding on and flag them explicitly, since I can't see your repo from here:\n\n- TypeScript with `strict: true`, `moduleResolution: \"nodenext\"`.\n- `\"type\": \"module\"` (ESM) — if your `package.json` has no `\"type\"` field or is `commonjs`, adjust imports accordingly.\n- Node 18+ (`engines.node`), so global `fetch` and `AbortSignal.timeout` are available.\n- There's an env var for the API base URL. **Tell me its name** — I'm using `ORDERS_API_URL` as a placeholder.\n- A project error class may already exist. If so, use it instead of plain `Error` below.\n\n## Step 2: Plan\n\n- **External inputs touched:** `id` (function parameter, from a caller who likely got it from a route param). That's the boundary — validate it here.\n- **Async boundary:** the outbound `fetch`. It gets an `AbortSignal` so a stalled API can't hang the caller. I'm using `AbortSignal.timeout` for a fixed budget. If the caller needs request-scoped cancellation, this function should accept an optional caller `signal` and combine them — see the variant after the main implementation.\n- **Error contract:** throw. This is a plain library function; matching the throw-on-failure shape keeps it composable and lets the route handler decide the HTTP status.\n\n## Step 3: Implement\n\n```ts\n// src/orders/fetch-order.ts\nimport { setTimeout as sleep } from \"node:timers/promises\";\n\nexport interface Order {\n  id: string;\n  status: \"pending\" | \"shipped\" | \"delivered\" | \"cancelled\";\n  totalCents: number;\n  createdAt: string; // ISO 8601\n}\n\nconst REQUEST_TIMEOUT_MS = 5_000;\nconst ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;\n\nexport async function fetchOrder(id: string): Promise<Order> {\n  if (typeof id !== \"string\" || !ID_PATTERN.test(id)) {\n    throw new Error(`fetchOrder: invalid order id ${JSON.stringify(id)}`);\n  }\n\n  const baseUrl = process.env.ORDERS_API_URL;\n  if (!baseUrl) {\n    throw new Error(\"fetchOrder: ORDERS_API_URL is not set\");\n  }\n\n  const url = new URL(`/orders/${encodeURIComponent(id)}`, baseUrl);\n\n  let response: Response;\n  try {\n    response = await fetch(url, {\n      headers: { accept: \"application/json\" },\n      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),\n    });\n  } catch (cause) {\n    // Distinguish a timeout from a transport failure for the caller.\n    if (cause instanceof Error && cause.name === \"TimeoutError\") {\n      throw new Error(`fetchOrder: request for ${id} timed out after ${REQUEST_TIMEOUT_MS}ms`, { cause });\n    }\n    throw new Error(`fetchOrder: request for ${id} failed`, { cause });\n  }\n\n  if (!response.ok) {\n    throw new Error(`fetchOrder: ${id} returned HTTP ${response.status}`);\n  }\n\n  const body: unknown = await response.json();\n  // Boundary validation: never trust the remote shape.\n  if (!isOrder(body)) {\n    throw new Error(`fetchOrder: unexpected response shape for ${id}`);\n  }\n  return body;\n}\n\nfunction isOrder(value: unknown): value is Order {\n  if (typeof value !== \"object\" || value === null) return false;\n  const o = value as Record<string, unknown>;\n  return (\n    typeof o.id === \"string\" &&\n    (o.status === \"pending\" ||\n      o.status === \"shipped\" ||\n      o.status === \"delivered\" ||\n      o.status === \"cancelled\") &&\n    typeof o.totalCents === \"number\" &&\n    typeof o.createdAt === \"string\"\n  );\n}\n```\n\n**Variant — caller-supplied cancellation.** If `fetchOrder` is called from a route handler that already has a request `AbortSignal`, combine it with the timeout so either one aborts:\n\n```ts\nexport async function fetchOrder(id: string, signal?: AbortSignal): Promise<Order> {\n  // ...same validation...\n  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);\n  const combined = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;\n  // pass `combined` as `signal` to fetch\n}\n```\n\nUnused import note: drop `setTimeout` from `node:timers/promises` if you don't add retry — I left it as a marker for the retry question below, remove it if you're not retrying.\n\n## Open questions I'm flagging rather than guessing\n\n1. **Retries.** Should a 5xx or a timeout be retried with backoff before giving up? I did not add retry — that's a policy decision that shouldn't be silently baked in.\n2. **Does an order-exists check belong here?** I'm throwing on any non-2xx, including 404. If callers need to distinguish \"not found\" from \"server error\", the contract should return a discriminated result instead of throwing, e.g. `Promise<Order | null>` or `Promise<{ ok: true; order: Order } | { ok: false; reason: \"not_found\" | \"error\" }>`. Tell me which the surrounding code expects.\n3. **Env var name.** Confirm the real one; `ORDERS_API_URL` is a placeholder.\n4. **Existing error class / logger.** If the project has `ApiError` or a logger, wire through it instead of plain `Error`.\n\n## Step 4: Verify\n\n```bash\nnpx tsc --noEmit\nnpx eslint .\n```\n\n## Step 5: Report\n\nI cannot honestly mark this done because Steps 1 and 4 haven't run against your actual tree — I don't have it. What I can report:\n\n```\nImplemented: src/orders/fetch-order.ts\n  - fetchOrder(id): validates id shape and presence of base URL before any I/O\n  - outbound fetch bounded by AbortSignal.timeout(5000) -- cannot hang forever\n  - timeout vs transport failure distinguished via error.cause\n  - response body validated against Order shape before return\n  - open: retry policy, 404 handling contract, env var name, project error class\n  - tsc --noEmit: NOT RUN (needs repo)   eslint: NOT RUN (needs repo)\n```\n\nOnce you paste your `tsconfig.json`, `package.json`, and a sibling module (or run the two commands yourself), I'll reconcile naming, the error class, and the 404/retry contract and re-report with both checks green.",
+              "outputSha256": "b7abf903f93421e498e605a57261fd1625f90230181399bb0cee32b63db31c55",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Threads AbortSignal.timeout(5000) into fetch via { signal } (with AbortSignal.any variant) and explicitly catches the abort case, rethrowing a distinct typed-ish timeout error before the awaited fetch can hang. No manual setTimeout race; unused import warning only."
+              },
+              "passed": true
+            }
+          ]
+        },
+        {
+          "id": "unknown-over-any",
+          "kind": "behavior",
+          "prompt": "I'm implementing a Node.js handler that parses an untrusted JSON request body before passing it to business logic. What type should the parsed body have before I validate it?",
+          "strictness": "high",
+          "trials": 5,
+          "passes": 5,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "# Type it as `unknown`, not `any`\n\n```ts\nconst raw: unknown = JSON.parse(body);\n```\n\n`JSON.parse` returns `any` in TypeScript's lib definition, and `any` silently disables the type checker for everything downstream — property accesses, method calls, arguments you pass it to. If you annotate `const raw: any`, a typo like `raw.emial` compiles, and a wrong-shaped value flows straight into your business logic.\n\n`unknown` is the sound default for \"a value I have not yet proven the shape of\":\n\n- **You can't accidentally use it.** Any property access or call on `unknown` is a type error until you narrow it. That's the point — the compiler forces the validation step to actually exist before business logic sees the data.\n- **It narrows correctly.** Once your validator narrows it, the narrowed type flows through.\n\n## The shape of the boundary\n\n```ts\n// src/routes/orders.ts\nimport { z } from \"zod\";\n\nconst CreateOrderBody = z.object({\n  sku: z.string().min(1),\n  quantity: z.number().int().positive(),\n});\n\nexport async function handleCreateOrder(req: Request): Promise<Response> {\n  let raw: unknown;\n  try {\n    raw = JSON.parse(await req.text());\n  } catch (cause) {\n    // SyntaxError from JSON.parse — wrap it, don't leak \"Unexpected token\" to the client\n    throw new Error(\"Malformed JSON body\", { cause });\n  }\n\n  const parsed = CreateOrderBody.safeParse(raw);\n  if (!parsed.success) {\n    return Response.json(\n      { error: \"Invalid request body\", issues: parsed.error.issues },\n      { status: 400 },\n    );\n  }\n\n  // parsed.data is now typed as { sku: string; quantity: number }\n  const order = await orderService.create(parsed.data);\n  return Response.json(order, { status: 201 });\n}\n```\n\nNote the ordering: `JSON.parse` only proves the input is *syntactically* valid JSON. It says nothing about whether it's an object (it could be `42`, `\"hello\"`, `null`), let alone whether `quantity` is a positive integer. The schema check is the step that turns `unknown` into a usable type.\n\n## If the project has no schema library\n\nUse a hand-written type guard, and make the guard itself return a typed value rather than a boolean where practical:\n\n```ts\nfunction isCreateOrderBody(v: unknown): v is CreateOrderBody {\n  return (\n    typeof v === \"object\" && v !== null &&\n    \"sku\" in v && typeof (v as Record<string, unknown>).sku === \"string\" &&\n    \"quantity\" in v && typeof (v as Record<string, unknown>).quantity === \"number\"\n  );\n}\n```\n\nUse the schema library already in `package.json` (zod, valibot, ajv, etc.) rather than adding a second one — check dependencies before picking.\n\n## Things worth flagging\n\n- **`req.body` in Express is not `unknown` — it's a minefield.** If you're on Express with `express.json()`, `req.body` is typed loosely (`any` by default). Pulling it into a local `const raw: unknown = req.body` at the top of the handler restores the safety, and is worth doing even though it looks redundant.\n- **Don't validate inside the service.** The whole value of the boundary is that `orderService.create` can be typed to accept `CreateOrderBody` and trust it. If you validate two layers deep instead, every caller of the service has to be audited separately.\n- **`cause` on the wrap matters.** When you rethrow the parse failure, `new Error(\"Malformed JSON body\", { cause })` keeps the original `SyntaxError` reachable for logs while the client-facing message stays clean.\n\nOnce this compiles clean under `tsc --noEmit`, hand the handler to `nodejs-testing` for coverage of the malformed-JSON and schema-failure paths — those are the two branches that tend to get skipped.",
+              "outputSha256": "e77ee1b3bd75fa5396b96313917f97774453e0721a12b2ba37f1ea5f4b7c4b93",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the parsed body should be typed unknown (not any), explains any silently disables checking, and requires narrowing via a schema validator (zod safeParse) or type guard before the value reaches business logic, including a boundary example. No fail criterion holds."
+              },
+              "passed": true
+            },
+            {
+              "output": "`unknown`. That's the whole point of the `unknown`/`any` split: `unknown` forces you to narrow before use, `any` disables the type checker for everything downstream of it.\n\nIn practice:\n\n```ts\nimport type { IncomingMessage, ServerResponse } from \"node:http\";\n\nasync function readJsonBody(req: IncomingMessage): Promise<unknown> {\n  const chunks: Buffer[] = [];\n  for await (const chunk of req) {\n    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));\n  }\n  const text = Buffer.concat(chunks).toString(\"utf8\");\n\n  try {\n    return JSON.parse(text) as unknown; // explicit: JSON.parse returns `any`\n  } catch (cause) {\n    throw new Error(\"Request body is not valid JSON\", { cause });\n  }\n}\n```\n\nTwo things worth calling out:\n\n- `JSON.parse` is typed as returning `any`, so even if you declare the return type as `unknown`, the cast at the boundary is what actually stops the `any` from leaking. Without it, TypeScript would happily widen your `unknown` back to `any` in some flow analyses.\n- Validate at the point the body enters the process (the route handler), not deeper in the service layer. The service function then takes the *validated* type, e.g.:\n\n```ts\ninterface CreateOrderInput {\n  sku: string;\n  quantity: number;\n}\n\n// at the boundary\nconst parsed: unknown = await readJsonBody(req);\nconst input = CreateOrderInputSchema.parse(parsed); // zod/similar -> CreateOrderInput\nconst order = await orderService.create(input);       // service sees a typed value\n```\n\nIf you don't have a schema library in the project already, don't add one just for this — write a small type guard and throw on mismatch. But check `package.json` first; if zod, valibot, or ajv is already a dependency, reuse it rather than hand-rolling checks that will drift from the type.",
+              "outputSha256": "f6c370ad684bce3dddaf18ec95a2b27faf4e7abcc59de62f5bfaf7ea52fe5b41",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "States the parsed body should be typed unknown (explicitly rejecting any), and shows narrowing via schema validator (CreateOrderInputSchema.parse) or a type guard before business logic receives a typed value."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Use `unknown`, not `any`\n\nThe parsed body should be typed `unknown` until it's been validated. `JSON.parse` has the signature `(text: string) => any`, so its return value will flow in as `any` unless you annotate it yourself:\n\n```ts\nconst body: unknown = JSON.parse(raw);\n```\n\n## Why not `any`\n\n`any` is assignable to everything and everything is assignable to it, so the type checker stops helping you the moment the value enters your code. That's exactly backwards for untrusted input — this is the data you most want the compiler to force you to check before use:\n\n```ts\n// BAD — compiles, crashes at runtime on a malformed body\nconst body: any = JSON.parse(raw);\nawait createOrder(body.orderId); // no complaint; body might be `null`, a string, anything\n\n// GOOD — compiler forces narrowing first\nconst body: unknown = JSON.parse(raw);\nawait createOrder(body.orderId); // Error: 'body' is of type 'unknown'\n```\n\n## Narrowing at the boundary\n\nValidate `unknown` into a typed shape right at the point it enters the handler, then pass the *narrowed* value to business logic. Either a schema library the project already has:\n\n```ts\nimport { z } from \"zod\";\n\nconst CreateOrderBody = z.object({\n  orderId: z.string().uuid(),\n  quantity: z.number().int().positive(),\n});\n\nconst parsed: unknown = JSON.parse(raw);\nconst input = CreateOrderBody.parse(parsed); // throws on bad input, input is now typed\nawait orderService.create(input);\n```\n\n...or an explicit type guard if the project doesn't have one:\n\n```ts\nfunction isCreateOrderBody(value: unknown): value is CreateOrderBody {\n  return (\n    typeof value === \"object\" &&\n    value !== null &&\n    typeof (value as Record<string, unknown>).orderId === \"string\"\n  );\n}\n\nconst parsed: unknown = JSON.parse(raw);\nif (!isCreateOrderBody(parsed)) {\n  throw new Error(\"Invalid request body\");\n}\nawait orderService.create(parsed); // narrowed\n```\n\n## Two things to be careful of\n\n1. **`JSON.parse` throws on malformed JSON.** Wrap it so a syntax error becomes a clean typed failure (typically a 400) rather than an unhandled rejection:\n\n   ```ts\n   let parsed: unknown;\n   try {\n     parsed = JSON.parse(raw);\n   } catch (cause) {\n     throw new Error(\"Request body is not valid JSON\", { cause });\n   }\n   ```\n\n2. **A type guard is not a validator.** `isCreateOrderBody` above only checks that `orderId` exists and is a string — it does not check it's a UUID, that `quantity` is present, or that unknown extra fields are rejected. Use a real schema validator where the shape actually matters; hand-rolled guards drift.\n\nThe rule from `rules/patterns.mdc`: untrusted data is `unknown` until validated, and validation happens where the data enters the process — here, in the handler — not deeper in the service layer.",
+              "outputSha256": "9440e67e0121f922c30b40445e3a008c49bf6608c162667307058912fcc922fb",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the parsed body should be typed unknown (not any), and requires narrowing via schema validator (zod) or type guard before passing to business logic. Explicitly warns against any rather than recommending it. All pass criteria hold, no fail criteria."
+              },
+              "passed": true
+            },
+            {
+              "output": "# `unknown`, not `any`\n\nThe parsed body from `JSON.parse()` (or `req.body` before parsing, or any result of `await req.json()`) should be typed `unknown`. That forces you to narrow it with a validator or a type guard before touching any property -- which is exactly the point, since the data is untrusted and you don't yet know its shape.\n\n```ts\n// Good: unknown, then validate before use\nasync function handle(req: Request): Promise<Response> {\n  const raw: unknown = await req.json();\n\n  const parsed = OrderInputSchema.safeParse(raw);\n  if (!parsed.success) {\n    return new Response(\"Invalid request body\", { status: 400 });\n  }\n\n  const order = parsed.data; // now typed as OrderInput\n  return orderService.create(order);\n}\n```\n\n```ts\n// Bad: any defeats the type checker for everything downstream\nconst body: any = await req.json();\nreturn orderService.create({ id: body.orderId }); // no guarantee `orderId` exists\n```\n\n## Why `unknown` specifically\n\n- **It lives at the top of the type hierarchy, like `any`,** so you can assign literally any value into it -- no friction at the `JSON.parse`/`req.json()` call site.\n- **But you can't read properties or call methods on it** until you narrow it (via a schema parse, `typeof` check, `in` check, or a type guard). Compiler error, not a runtime surprise.\n- **`any` is contagious:** once the body is `any`, every downstream value derived from it is also `any` unless you re-annotate. `unknown` stops the contagion at the boundary, which is exactly where this handler sits.\n\n## The boundary rule, applied here\n\nPer `rules/patterns.mdc` (validate at the boundary), the untrusted request body is validated **in the handler**, before it crosses into business logic -- not inside `orderService.create`. The `unknown` type is the mechanical signal that this boundary exists: if the value is still `unknown` when it reaches the service, the compiler tells you.\n\n## If you use a schema library\n\n`zod`, `valibot`, `arktype`, etc. all take `unknown` as input and return a typed result -- they're designed for exactly this. If the project has one already in `package.json`, reuse it. If not, an explicit type guard works:\n\n```ts\nfunction isOrderInput(v: unknown): v is OrderInput {\n  return (\n    typeof v === \"object\" && v !== null &&\n    typeof (v as Record<string, unknown>).orderId === \"string\"\n  );\n}\n```\n\nEither way, the front of the chain is `unknown` and the back is a typed value that only exists because a validator said so.",
+              "outputSha256": "192f80cbb68f7a366610a27f4e81f48aa0d1c935c27609f4b766da4a32bc45c8",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the parsed body should be typed unknown before validation and that it must be narrowed via a schema validator or type guard before reaching business logic. It explicitly warns against typing it as any, showing the bad example only to reject it."
+              },
+              "passed": true
+            },
+            {
+              "output": "Use `unknown`, not `any`.\n\n`JSON.parse()` returns `any`, so the fix is to immediately type the result as `unknown` — either by annotating the variable or wrapping the parse:\n\n```ts\nconst raw: unknown = JSON.parse(body);\n```\n\nor, at the boundary:\n\n```ts\nfunction parseBody(body: string): unknown {\n  return JSON.parse(body);\n}\n```\n\nWhy `unknown` and not `any` (this is the Red Flags table item from the skill):\n\n- `any` disables type checking for everything *downstream* of it — if you pass an `any` body into business logic, the compiler will happily let you access `.userId` on a payload that's actually `null` or a string.\n- `unknown` forces a narrowing step (a schema validator, a type guard) before any property access, which is exactly the boundary-validation rule: validate where the data enters the process, before it reaches business logic.\n\nThen validate and narrow in one step, so business logic only ever sees a typed value:\n\n```ts\nimport { z } from \"zod\";\n\nconst CreateOrderBody = z.object({\n  userId: z.string().uuid(),\n  items: z.array(z.object({ sku: z.string(), qty: z.number().int().positive() })),\n});\n\nconst raw: unknown = JSON.parse(body);\nconst parsed = CreateOrderBody.safeParse(raw);\nif (!parsed.success) {\n  return res.status(400).json({ error: \"invalid body\", details: parsed.error.issues });\n}\n\nawait orderService.create(parsed.data); // typed as CreateOrderBody\n```\n\nTwo adjacent details that matter here, since this is an untrusted body:\n\n- A malformed JSON string makes `JSON.parse` **throw** a `SyntaxError` — catch it at the boundary and turn it into a 400, don't let it bubble up as a 500.\n- If the project already has a validation library as a dependency (zod, ajv, valibot, yup — check `package.json` per Step 1), reuse it rather than hand-rolling checks or adding a competing one.\n\nIf you're on a framework with its own body parser (Express `express.json()`, Fastify schema), the same rule holds: treat whatever it hands you as `unknown` until you've validated and narrowed it.",
+              "outputSha256": "79ff2031ecd93fffe10f7405942d76ea505557c4e6ca03a7a7416ad08631897a",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "States the parsed body should be typed unknown, not any, and requires narrowing via schema validator/type guard before business logic. Warns against any without recommending it. Both pass criteria hold."
+              },
+              "passed": true
+            }
+          ]
         }
       ],
-      "verdict": "fail",
+      "verdict": "pass",
       "scope": "bundled",
-      "skillDigest": "7d6b18c81af0bef12ac90f796924113fcb07838a4a47417d36fd819d21f9cca9",
+      "skillDigest": "eb3443bbcf4e1a84ede1b5bc9314915456f79d527f27fa73b484d735f6087f7e",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-24.1",
       "runner": "deepseek",
       "model": "deepseek-chat",
-      "recordedAt": "2026-09-24T17:51:47.935Z"
+      "recordedAt": "2026-09-24T19:47:50.829Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
+    },
+    {
+      "schemaVersion": "1.0.0",
+      "skillId": "ts-js-node/nodejs-testing",
+      "strictness": "high",
+      "trials": 5,
+      "triggerAccuracy": {
+        "truePositive": 6,
+        "falsePositive": 0,
+        "positives": 6,
+        "negatives": 6
+      },
+      "evidence": "authored",
+      "scenarios": [
+        {
+          "id": "trigger-positive-1",
+          "kind": "trigger-positive",
+          "prompt": "Write Vitest tests for this order calculation function in our TypeScript service",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-2",
+          "kind": "trigger-positive",
+          "prompt": "Add node:test coverage for the new CLI command in this Node project",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-3",
+          "kind": "trigger-positive",
+          "prompt": "Fix this failing Jest test that's timing out on the debounce logic",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-4",
+          "kind": "trigger-positive",
+          "prompt": "Mock the fetch call in this node:test file so it doesn't hit the real API",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-5",
+          "kind": "trigger-positive",
+          "prompt": "Add fake timers to this test for the setInterval-based polling function",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-6",
+          "kind": "trigger-positive",
+          "prompt": "Extend the test suite for this Node library's exported parseConfig function",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-1",
+          "kind": "trigger-negative",
+          "prompt": "Write pytest fixtures for this Flask view function",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-2",
+          "kind": "trigger-negative",
+          "prompt": "Implement the new order creation handler in this Express service",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-3",
+          "kind": "trigger-negative",
+          "prompt": "Review this diff for resource cleanup and dependency risk",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-4",
+          "kind": "trigger-negative",
+          "prompt": "Migrate this test suite's imports from CommonJS to ESM",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-5",
+          "kind": "trigger-negative",
+          "prompt": "Fix this tsc type error in the test helper module",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-6",
+          "kind": "trigger-negative",
+          "prompt": "Write Playwright end-to-end tests for the checkout page in this React app",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "discover-runner-first",
+          "kind": "behavior",
+          "prompt": "This Node.js TypeScript repo's test setup isn't described here. Write a test for a function `sumOrderTotals(orders)`. What should you check before writing the test file?",
+          "strictness": "high",
+          "trials": 5,
+          "passes": 5,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "Per the workflow, Step 1 (Discover) comes before anything is written, and the repo's setup genuinely isn't described here, so nothing about the runner or conventions can be assumed. Before writing the test file I'd check:\n\n1. **Which runner this project uses** — read `package.json`'s `scripts.test` and `devDependencies`. Is it `vitest`, `jest`, or neither (implying `node:test` or `bun test`)? Also look for `vitest.config.*` / `jest.config.*`. These are not interchangeable in import source or config.\n\n2. **Import source for test primitives** — do `describe`/`it`/`expect`/`assert` come from `vitest`, `@jest/globals`, `node:test` + `node:assert`, or globals? This is dictated by #1.\n\n3. **Test layout** — co-located `*.test.ts` / `*.spec.ts`, or a parallel `test/` / `__tests__/` tree? Match what already exists.\n\n4. **Neighboring test files** — read 1–2 to copy the exact mocking style (hand-written stubs vs `vi.fn()` / `jest.fn()` / `mock.fn()`), the async test structure, and any setup/teardown conventions.\n\n5. **Where `sumOrderTotals` actually lives** and its real signature/behavior — what an \"order\" and a \"total\" are, the input/return types, and what it depends on. This determines whether Step 2's mock-at-process-boundary rules even apply (e.g. does it hit the DB or network, or is it pure?).\n\nOnly after that would I plan mocks (if any) and cases — happy path, edge cases (empty array, `null`/`undefined` values, boundary amounts), and error cases asserting the specific thrown error — then write at the project's convention path with the project's import source, and run via `keryx test run --changed --strict` or the project's own discovered test command (no hard-coded flags beyond what Step 1 revealed).\n\nI would specifically **not** assume Vitest, Jest, or `node:test` from the fact that this is \"a Node.js TypeScript repo\" — that's exactly the assumption the workflow forbids.",
+              "outputSha256": "2d1ad39f94dedc66f92d1922d5be218c4f4eb9a2ead77a414acd115e3bf0f4e3",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer says to first check package.json scripts.test/devDependencies and vitest/jest config files to determine the actual runner, and to read existing test files/layout for import source and conventions instead of assuming a runner. It explicitly warns against assuming Vitest/Jest/node:test. No fail criterion holds."
+              },
+              "passed": true
+            },
+            {
+              "output": "Before writing anything, I'd check the following — and note that several of these are gating questions where the answer changes the shape of the test:\n\n**1. Which test runner this project actually uses.** This is the single most important check and I can't assume it. It comes from:\n- `package.json` → `scripts.test` and `devDependencies` (`vitest` / `jest` present, or neither → `node:test` or `bun test`)\n- any `vitest.config.*` / `jest.config.*`\n- The import source of describe/it/expect/assert differs per runner and is not interchangeable.\n\n**2. The test file layout convention.**\n- Co-located `*.test.ts` / `*.spec.ts`, or a parallel `test/` / `__tests__/` tree?\n- Where would `sumOrderTotals.test.ts` live? Match the existing pattern, don't invent one.\n\n**3. The mocking/style conventions** from reading 1–2 neighboring test files:\n- How do sibling tests structure async cases, set up mocks, assert errors?\n\n**4. The actual contract of `sumOrderTotals(orders)`** — this can't be guessed from the name:\n- Where does it live (import path)?\n- What is an `Order`'s shape — which field is the total, is it cents or a float, is there a quantity/price pair to multiply?\n- Return type: `number`, `bigint`, a currency wrapper? Does it throw on bad input?\n- Is it pure, or does it touch network/fs/DB/clock (which would decide whether any mocking is needed at all)?\n\n**5. Edge-case expectations the function's contract implies:** empty list, `null`/`undefined` entries, missing total fields, negative/zero values — but only after knowing the contract, otherwise I'd be inventing behavior.\n\n**6. Whether a test runner exists at all.** If none is configured, per this workflow I'd suggest adding one rather than adding it unasked.\n\nTwo things I would *not* do before this: write test cases, or mock anything. Mocking strategy (hand-written stub vs. the runner's own `mock.fn()`/`vi.fn()`/`jest.fn()`, and whether fake timers are needed) falls out of #1 and #4 — deciding it beforehand is guessing.\n\nSo the honest answer to \"what should you check\" is: the repo, not the prompt. Nothing here tells me the runner, layout, or the function's contract, and every one of those is a prerequisite. If I only had the prompt and no repo access, I'd have to stop and ask rather than produce a test file that's a coin-flip on all four axes.",
+              "outputSha256": "ab7df520022d3dcc7e5ea5bec21ed96c629858b4842e2f21a6d521cc893a0455",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Checks package.json scripts.test/devDependencies and vitest/jest config to find the actual runner, examines existing test layout and neighboring test files for import source/conventions, and explicitly refuses to assume a runner or write the test before these checks. No fail criterion holds."
+              },
+              "passed": true
+            },
+            {
+              "output": "Before writing anything, I'd check:\n\n1. **The test runner** — read `package.json`'s `scripts.test` and `devDependencies` for `vitest`/`jest`; if neither, it's likely `node:test` or `bun test`. Also look for `vitest.config.*`/`jest.config.*`.\n2. **The test layout** — co-located `*.test.ts`/`*.spec.ts` vs. a `test/`/`__tests__/` tree, so the new file lands where the project already puts tests.\n3. **A neighboring test file (1–2)** — to copy its `describe`/`it`/`expect` (or `assert`) import source, its mocking style, and how it structures async tests.\n\nThen, before writing cases:\n\n4. **What's actually in `sumOrderTotals(orders)`** — its input shape (line items? prices? quantities?), return type, and whether it throws (empty array, missing fields, non-numeric totals). Without reading it I can't write meaningful assertions or know what error cases exist.\n5. **Mock boundaries** — does it touch the network, filesystem, a DB, or the clock? Mock only at those process boundaries, never an internal helper one module away.\n6. **Edge/error cases to cover** — empty `orders`, `null`/`undefined`, zero or negative amounts, and any thrown error's type/message.\n\nI'd also note the guardrails up front: only add test files (never modify `sumOrderTotals` itself), and if no runner is configured at all, suggest one rather than adding it unasked.",
+              "outputSha256": "3462133bad576b897bd6b34b29a9940fce7e35b62e253772810f6018f5ba07bc",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer says to first read package.json scripts.test/devDependencies and config files like vitest.config.*/jest.config.* to find the actual runner (criterion 1), and to inspect existing test layout plus a neighboring test file for import source and conventions rather than assuming a runner (criterion 2). No runner is picked and no test written immediately, so the fail criterion does not hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "Before writing anything, I'd need to check the following — since none of this is given:\n\n**1. Which test runner the project actually uses**\n- `package.json` → `scripts.test` and `devDependencies` (`vitest`, `jest`, or neither → `node:test`/`bun test`)\n- Any `vitest.config.*` / `jest.config.*`\n- This decides the import source (`from 'vitest'` vs `from '@jest/globals'` vs `node:test`) — these aren't interchangeable.\n\n**2. The test file layout convention**\n- Co-located `*.test.ts` / `*.spec.ts`, or a parallel `test/` / `__tests__/` tree\n- Match whichever the project already uses; don't invent a new one.\n\n**3. Existing test style (read 1–2 neighbors)**\n- How `describe`/`it`/`test`/`expect`/`assert` are imported\n- Mocking style used in the repo\n- How async tests are structured\n\n**4. The function's actual contract — `sumOrderTotals(orders)`**\n- Is `orders` an array? What fields contribute to a total (line items, tax, shipping, discounts, currency)?\n- Return type (`number`, `Decimal`, `{ total, currency }`?)\n- What's the expected behavior for: empty array, `null`/`undefined` entries, zero/negative amounts, mixed currencies, missing fields?\n- Is it pure, or does it hit I/O / the clock / `fetch`? (Decides whether mocks are needed at all — mock only at process boundaries.)\n\n**5. Whether mocks are even needed**\n- If it's pure arithmetic, no mocks — just table-style cases for the edge cases above.\n\n**6. The run command**\n- So Step 5 can verify: `keryx test run --changed --strict`, or the project's own script (`npm test`, `npx vitest run`, `npx jest`, `node --test`) if no keryx testing config exists.\n\nI can't write a correct test file until at least #1 (runner), #2 (layout), and #4 (the actual signature/contract of `sumOrderTotals`) are known. If you share the `package.json` test script + devDeps and the source of `sumOrderTotals`, I'll proceed.",
+              "outputSha256": "d7e3a311467356bf4cd03ee3cc0e1584a85ad70def6d13d9c952e27f3738c983",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer says to check package.json scripts.test/devDependencies and vitest.config/jest.config to determine the actual runner before writing, and to read existing test layout/neighbor tests for import source and conventions rather than assuming a runner. No specific runner is committed to; it defers until confirmed. All pass criteria hold, no fail criterion."
+              },
+              "passed": true
+            },
+            {
+              "output": "Before writing the test file, I'd need to discover the project's conventions, since this skill's Step 1 is \"always discover the runner before writing anything.\"\n\n**What I'd check:**\n\n1. **Test runner** — read `package.json`'s `scripts.test` and `devDependencies`. Is it `node:test`, Vitest, Jest, or `bun test`? And any `vitest.config.*` / `jest.config.*`. This determines the import source for `describe`/`it`/`expect`/`assert` — these are *not* interchangeable. Getting this wrong means the file won't even run.\n\n2. **Test layout** — co-located `*.test.ts`/`*.spec.ts`, or a parallel `test/`/`__tests__/` tree. The test file goes wherever the project already puts tests; I don't get to pick.\n\n3. **Mocking conventions** — read 1–2 neighboring test files: how do they stub network/filesystem/clock? `mock.fn()` vs `vi.fn()` vs `jest.fn()`? How are async tests structured here?\n\n4. **The function's shape** — what does `sumOrderTotals(orders)` actually take and return? An `Order[]` where totals are integers (cents) or floats? Does it throw on empty input, `null`, missing `total` fields, or a non-array? Does it read `Date.now` or hit a DB/network anywhere — because if it does, that's a boundary to fake (per Step 2, mock at the process boundary, never internal helpers).\n\n**Why this matters:** the request as given (\"write a test for `sumOrderTotals`\") tells me the *what* but nothing about how this repo runs tests. Writing a Vitest test into a `node:test` repo, or dropping the file at the repo root instead of the convention path, produces a file that either fails to import or silently isn't picked up by `scripts.test`. And I can't tell from the name alone whether there's a timer or I/O boundary that needs faking before I even plan the cases.\n\n**What I'd do once I know:** plan cases per Step 3 — happy path, empty array, boundary values, error cases asserting the *specific* thrown type/message, and full `await`s on any async path. Then run via `keryx test run --changed --strict`, or the project's discovered script if there's no keryx testing config.\n\n**One thing worth flagging:** if the money values are floats, I'd ask whether they're actually stored as integer cents — asserting exact sums on float currency math is a common source of a \"failing\" test that's really telling you the source has a rounding bug, and per the rules I fix the *test*, not the source. I'd want that settled before writing assertions rather than after three failed iterations.",
+              "outputSha256": "db2916e13f923f6dfcd428d09a0c05c812202bd8ab8ed9601c4cd03f8db2af41",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Checks package.json scripts.test/devDependencies and config files to find the real runner, and says to read neighboring test files for layout/import conventions rather than assuming a runner. Does not pick a runner and write the test immediately."
+              },
+              "passed": true
+            }
+          ]
+        },
+        {
+          "id": "mock-boundary-not-internal",
+          "kind": "behavior",
+          "prompt": "I'm writing a test for a function that calls an internal helper `formatOrder` and also calls out to a network client `httpClient.get`. What should I mock?",
+          "strictness": "high",
+          "trials": 5,
+          "passes": 5,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "Mock `httpClient.get` (the network call), not `formatOrder`. `formatOrder` is an internal helper in the same package, and mocking it just checks that your mock and your stub agree with each other — it doesn't verify anything about the code under test. Let the real `formatOrder` run and assert on its actual output.\n\nConcretely:\n\n- **`httpClient.get`** — mock at the process boundary. Use a hand-written stub or the runner's mock helper depending on how the project's neighboring tests do it (`mock.fn()` for `node:test`, `vi.fn()` for Vitest, `jest.fn()` for Jest).\n- **`formatOrder`** — don't touch. Exercise it for real.\n- **The clock / `Date.now`** — only if `formatOrder` or the calling function depends on current time and you need deterministic output. If so, use the runner's fake timers rather than a real `setTimeout` wait.\n\nOne thing to confirm in Step 1: check whether `formatOrder` is exported/mocked elsewhere in the project. If neighboring tests already mock it, match that (the project's convention wins), but flag it — mocking an internal helper is usually a smell worth noting.",
+              "outputSha256": "a8624c04ae3de528a25171e761b2485dd26a8fd3196e7375f5e4211d1c694bae",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer says to mock httpClient.get at the network/process boundary and explicitly says not to mock formatOrder because it's an internal helper (mock and stub only agreeing). Minor caveat about matching project convention doesn't override the clear guidance."
+              },
+              "passed": true
+            },
+            {
+              "output": "Mock `httpClient.get` (the network boundary); let the real `formatOrder` run.\n\nDon't mock `formatOrder`. It's an internal helper in the same package, so a test with it stubbed only verifies that your stub and your caller both agree with each other — it never checks that `formatOrder` actually formats orders. Let the real function execute and assert on its real output.\n\nThe network call is the process boundary, so that's the one to stub, with whatever mechanism Step 1 found this project already uses (`mock.method(httpClient, 'get')` for `node:test`, `vi.spyOn(httpClient, 'get')` for Vitest, `jest.spyOn` for Jest).\n\nA quick shape, assuming `node:test`:\n\n```ts\nimport { test, mock } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { renderOrder } from '../src/orders/render.ts'; // wherever it lives\nimport { httpClient } from '../src/http/client.ts';\n\ntest('renderOrder formats the fetched order payload', async (t) => {\n  // Mock only the boundary.\n  t.mock.method(httpClient, 'get', async () => ({\n    json: async () => ({ id: 'a1', total: 1299, currency: 'usd' }),\n  }));\n\n  const out = await renderOrder('a1', { signal: t.signal });\n\n  assert.equal(out, 'Order a1 — $12.99');\n});\n```\n\nTwo things worth calling out:\n\n- **Pass the test's own signal** (`t.signal` here) into `renderOrder` if it wraps a `fetch`/cancelable call — that's the \"cancelable operations\" case in the planning step.\n- **Assert the real formatting**, not just that `get` was called. If the only assertion is \"httpClient.get was called once,\" the test still passes when `formatOrder` is broken.\n\nIf `formatOrder` has genuinely tricky branches (currency rounding, empty totals), those deserve their own direct unit tests rather than being exercised only through this integration-style test — but neither of those should mock the helper either.\n\nBefore writing, double-check the import source in a neighboring test file — the `describe`/`test`/`expect`/`mock` imports differ between `node:test`, Vitest, and Jest, and only mocking at `httpClient.get` stays the same across all three.",
+              "outputSha256": "1c6282f2bbfef9c1edf0bf8b367bc1ed8aac59bef1cda8b9e771210591413500",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Says to mock httpClient.get as the network/process boundary, and explicitly says not to mock formatOrder, explaining that mocking the internal helper only checks the stub and caller agree. No fail criteria triggered."
+              },
+              "passed": true
+            },
+            {
+              "output": "Mock `httpClient.get` only — the network call. Leave `formatOrder` real.\n\nThat's the process-boundary rule: mock things that leave the process (`fetch`/`httpClient`, filesystem, DB client, the clock). `formatOrder` is an internal function one module away, so mocking it would just be asserting that a stub returns what you told it to return — i.e. checking two mocks agree with each other, while the actual formatting logic goes untested.\n\nTwo follow-ups worth deciding up front:\n\n**Is the assertion really about the formatting?** If the test's purpose is \"given this input, the output is formatted correctly,\" you need the real `formatOrder` — otherwise the test proves nothing about it. If `formatOrder` is genuinely irrelevant to the behavior under test (say, you only care that the response is returned, not its shape), then don't mock it either — just assert on the part that matters and let `formatOrder` run.\n\n**Mock the boundary at the right seam.** Whichever runner this project uses, stub the actual dependency the code reaches for:\n- dependency injection passing `httpClient` in → stub the injected object/method\n- module-level import → the runner's module mock (`vi.mock`/`jest.mock`/`mock.module`)\n\nBefore writing, I'd confirm from Step 1 what that seam is in this repo — the import source and mocking style in neighboring tests tells you which. And per the skill, that network mock is a hand-written stub or the runner's `vi.fn()`/`jest.fn()`/`mock.fn()` — either is fine, pick based on what the assertions need (call count, argument inspection, etc.).\n\nWant me to look at the surrounding test files to pin down the exact mocking seam, or is `httpClient` already injected somewhere I can point the stub at?",
+              "outputSha256": "b3357c7f8e47314b52c82700ee4a4da3c465caec9fd71f6f390b3d79bcc3a6ae",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer says to mock httpClient.get only (the network/process boundary) and explicitly says to leave formatOrder real, warning that mocking this internal helper would just check mocks agree with each other. Both pass criteria hold; no fail criteria met."
+              },
+              "passed": true
+            },
+            {
+              "output": "# Mock `httpClient.get`, not `formatOrder`\n\nMock the network client. Leave `formatOrder` as the real implementation.\n\n## Why\n\n`httpClient.get` is a **process boundary** — it leaves your process (network, real latency, external service, nondeterminism). Mocking it is the whole point: it's the reason the test is otherwise slow and flaky, and it's not part of the logic you're trying to verify.\n\n`formatOrder` is an **internal helper** — one module away in the same package. If you mock it:\n\n- Your test only proves the two mocks agree with each other, not that the real behavior works.\n- A real bug in `formatOrder` slips through undetected, because the test never runs it.\n- You get a false sense of coverage: the code \"passes\" while the actual formatting path is untested.\n\n## What that looks like\n\nMock the boundary, feed it controlled data, assert on real output:\n\n```ts\n// e.g. Vitest — adapt import source to the project's runner from Step 1\nimport { vi } from 'vitest';\nimport { getOrder } from './orders';\nimport { httpClient } from './httpClient';\n\nvi.mock('./httpClient'); // mock the external client module only\n\ntest('formats an order from the network response', async () => {\n  vi.mocked(httpClient.get).mockResolvedValue({\n    id: '123', total: 42.5, currency: 'USD',\n  });\n\n  const order = await getOrder('123');\n\n  // formatOrder ran for real here\n  expect(order).toEqual({ id: '123', display: '$42.50' });\n});\n```\n\n`formatOrder` executes for real, so the assertion actually exercises the formatting logic. If `formatOrder` itself has branches you want to cover exhaustively (e.g. currency edge cases, rounding), test it **directly** in its own test file with its own inputs — don't try to reach every branch through the caller by stubbing it out.\n\n## Quick rule\n\n| Call | Mock it? | Why |\n|---|---|---|\n| `httpClient.get` | ✅ Yes | External boundary: network, latency, nondeterminism |\n| `formatOrder` | ❌ No | Internal collaborator: mocking it makes the test check mocks, not behavior |\n\nIf you find yourself wanting to assert on *how* `formatOrder` was called, that's usually a sign the return value isn't being asserted cleanly — prefer asserting on the function's real output over spying on an internal call.",
+              "outputSha256": "55f15afa9de34e6472d30029efbb0ccdaebfe5f9e5f40d9de04009cc2270862e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer says to mock httpClient.get as the external/process boundary and explicitly says not to mock formatOrder, an internal helper in the same package, because mocking it only checks mocks agree. Both pass criteria hold; no fail criteria triggered."
+              },
+              "passed": true
+            },
+            {
+              "output": "Mock `httpClient.get` (the network boundary), not `formatOrder`.\n\n`formatOrder` is an internal module in the same package — mocking it would only verify that your mock agrees with the stub, and would hide whatever real formatting behavior the test is supposed to exercise. Let the real `formatOrder` run and assert on its actual output.\n\nFor `httpClient.get`, decide per Step 2 whether a hand-written stub or the runner's own mock helper is the better fit:\n\n- Need to assert call count/args? Use `mock.fn()` / `vi.fn()` / `jest.fn()`.\n- Just need a canned response? A plain stub returning the fake payload is enough.\n\n```ts\n// Vitest example\nconst get = vi.fn().mockResolvedValue({ id: 1, items: [] });\nvi.mock('./httpClient', () => ({ httpClient: { get } }));\n\nconst result = await buildOrder(1);\nexpect(result.summary).toBe('...'); // real formatOrder ran\nexpect(get).toHaveBeenCalledWith('/orders/1');\n```\n\nOne thing worth knowing: if `formatOrder` is explicitly called out as a separate concern — e.g. it has its own branching logic you care about — that's a signal to give it its own direct test rather than trying to cover it incidentally through this one. The test you're writing should establish the coordination (does `buildOrder` fetch, then pass the right thing to `formatOrder`), and `formatOrder`'s own edge cases belong in a `formatOrder` test.",
+              "outputSha256": "0403d04053c0157a0950b63365e468ca2aab2b162054115ede04b1396f40d4bc",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Says to mock httpClient.get (network boundary) and explicitly says not to mock formatOrder, since mocking the internal helper would only verify the mock agrees with the stub and hide real formatting behavior. No fail criteria met."
+              },
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "74c343ac87ec9a28f368f834049a6f8033a1172fa72b6da7a5b242a9269e4251",
+      "catalogDigest": "026a82d673b463f0b8d10ff9977a97022bfd4520952fdaf1bfe8aee0a6b75d42",
+      "judgePromptVersion": "2026-09-24.1",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "recordedAt": "2026-09-24T19:48:26.141Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
     }
   ]
 }
