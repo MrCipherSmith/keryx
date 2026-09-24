@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "309",
   "slug": "w1-stack-detection-install-profiles-and-",
   "title": "W1: stack detection, install profiles and catalog governance gates (scout, eval, stocktake)",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T04:09:00.843Z",
-  "updatedAt": "2026-09-24T04:09:00.843Z",
+  "updatedAt": "2026-09-24T04:13:42.534Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:29833a8937bdcf5d8b4fd4d351bc55c77b0ff7a43cf76046267d442a6f3aecaa",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,228 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by lane tasks T5-T8"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "each lane task T5-T8 ships its own targeted tests; verification in T9/T10"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Lane A: keryx stack detect (src/stack/, command, persistence, determinism)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Lane B: install manifest, plan/apply, install-state, doctor, uninstall",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Lane C: governance gates scout/eval/stocktake + authoring lint + metadata.origin",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Lane D: minimal python stack pack + stack-pack guard tests (paths/extends, scout record, eval-for-stable, export limits)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Verify: stack detect twice offline on fixture repo, identical output (Wave-2 exit)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Verify: scout/eval/stocktake run on the existing bundled catalog; record outputs in journal",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Docs: W1 spec status + CLI help for stack/skills commands",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-24T04:09:00.843Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T04:13:34.163Z",
+      "event": "task-added",
+      "detail": "T5: Lane A: keryx stack detect (src/stack/, command, persistence, determinism)"
+    },
+    {
+      "at": "2026-09-24T04:13:34.251Z",
+      "event": "task-added",
+      "detail": "T6: Lane B: install manifest, plan/apply, install-state, doctor, uninstall"
+    },
+    {
+      "at": "2026-09-24T04:13:34.341Z",
+      "event": "task-added",
+      "detail": "T7: Lane C: governance gates scout/eval/stocktake + authoring lint + metadata.origin"
+    },
+    {
+      "at": "2026-09-24T04:13:34.435Z",
+      "event": "task-added",
+      "detail": "T8: Lane D: minimal python stack pack + stack-pack guard tests (paths/extends, scout record, eval-for-stable, export limits)"
+    },
+    {
+      "at": "2026-09-24T04:13:34.528Z",
+      "event": "task-added",
+      "detail": "T9: Verify: stack detect twice offline on fixture repo, identical output (Wave-2 exit)"
+    },
+    {
+      "at": "2026-09-24T04:13:34.615Z",
+      "event": "task-added",
+      "detail": "T10: Verify: scout/eval/stocktake run on the existing bundled catalog; record outputs in journal"
+    },
+    {
+      "at": "2026-09-24T04:13:34.707Z",
+      "event": "task-added",
+      "detail": "T11: Docs: W1 spec status + CLI help for stack/skills commands"
+    },
+    {
+      "at": "2026-09-24T04:13:42.201Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T04:13:42.283Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T04:13:42.364Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T04:13:42.449Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T04:13:42.534Z",
+      "event": "started"
     }
   ]
 }
