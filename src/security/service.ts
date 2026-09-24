@@ -66,6 +66,40 @@ export { redactSensitiveText } from "./redact";
  */
 export const sourceForFileRead = sourceForFileReadInternal;
 
+// Re-exported here for the same reason: a caller of `keryx security
+// audit-harness` (`commands/security-audit-harness.ts`) needs the
+// audit-harness entry points but must not reach past this facade into
+// `security/audit-harness/index.ts` directly.
+export {
+  addBaselineEntry,
+  applyAuditProposal,
+  auditGate,
+  defaultBaselinePath,
+  runHarnessAudit,
+} from "./audit-harness";
+export type { AuditFinding, AuditReport, AuditSeverity } from "./audit-harness";
+
+// Re-exported here for the same reason: `commands/security-impact-evidence.ts`
+// needs both the impact-evidence config helpers and the impact-evidence
+// module's own public door, without reaching past this facade into
+// `security/config.ts` or `security/impact-evidence/index.ts` directly.
+export { resolveImpactEvidenceConfig, resolveImpactEvidenceConfigTrusted, verifyConfigChecksum } from "./config";
+// `loadSecurityConfig` is already bound above via the top-of-file import
+// (this module's own `analyze`/`createSecurityService` use it); re-exported
+// under that same binding rather than a second `from "./config"` re-export,
+// which would collide with it as a duplicate identifier.
+export { loadSecurityConfig };
+export {
+  appendLogRecord,
+  computeImpactEvidence,
+  createImpactEvidenceProvider,
+  hostDeliveryStatus,
+  normalizeRequestFiles,
+  readLogRecords,
+  renderEvidenceBlock,
+} from "./impact-evidence";
+export type { ImpactEvidenceLogRecord, ImpactEvidenceProfile, ImpactEvidenceRequest } from "./impact-evidence";
+
 export function validateSerializedOutput(
   content: string,
   exemptExfil?: ExfilExemption,

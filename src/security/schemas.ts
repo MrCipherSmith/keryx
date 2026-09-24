@@ -308,6 +308,18 @@ export const SECURITY_CONFIG_SCHEMA: JsonSchema = {
       },
     },
     configChecksum: { type: "string" },
+    // Flow 308 (W8, Lane B, T6): optional — absent is the ordinary
+    // "not configured" case (see `config.ts#mergeSecurityConfig`).
+    impactEvidence: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        enabled: { type: "boolean" },
+        strict: { type: "boolean" },
+        exemptGlobs: { type: "array", items: { type: "string" } },
+        dampenAfter: { type: "integer", minimum: 0 },
+      },
+    },
   },
 };
 

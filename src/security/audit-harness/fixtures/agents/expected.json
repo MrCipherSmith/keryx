@@ -1,0 +1,1 @@
+{ "checks": ["agent-missing-model-tier", "agent-unrestricted-tools"] }

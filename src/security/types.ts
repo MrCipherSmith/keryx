@@ -216,6 +216,18 @@ export type InjectionModelBackend = {
   minConfidence: number;
 };
 
+// Flow 308 (W8, Lane B, T6): the impact-evidence gate's own config block.
+// Deliberately OPTIONAL and top-level (sibling of `policies`, not nested
+// inside it) — see `config.ts#computeConfigChecksum` for why: a config file
+// written before this feature shipped has no `impactEvidence` key at all, and
+// its checksum must stay byte-identical to what it was before this landed.
+export type ImpactEvidenceConfig = {
+  enabled: boolean;
+  strict: boolean;
+  exemptGlobs: string[];
+  dampenAfter: number;
+};
+
 export type SecurityConfig = {
   schemaVersion: number;
   mode: SecurityMode;
@@ -229,6 +241,9 @@ export type SecurityConfig = {
     egress: PolicyConfig;
     artifactSafety: PolicyConfig;
   };
+  // Present only when the source config declares it (see `mergeSecurityConfig`
+  // in `config.ts`) — absence is what keeps an old config's checksum unchanged.
+  impactEvidence?: ImpactEvidenceConfig;
   backends: {
     rules: { enabled: boolean };
     entropy: { enabled: boolean };

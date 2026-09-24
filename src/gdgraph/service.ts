@@ -12,6 +12,12 @@ import { getCycles, getOrphans, loadGraph } from "./query";
 import { writeRepomap, type RepomapOptions, type RepomapResult } from "./repomap";
 import type { GraphData } from "./types";
 
+// Re-exported so a client (`commands/gdgraph.ts`) can build the shared
+// `--json` report through this facade rather than reaching past it into
+// `gdgraph/affected-report.ts` directly (`src/lib/import-policy.ts`'s
+// facade rule).
+export { buildAffectedReport, type AffectedReport, type AffectedReportOptions } from "./affected-report";
+
 export interface GdgraphService {
   build(cwd: string): Promise<{ nodes: number; edges: number; summaryPath: string }>;
   loadGraph(cwd: string): Promise<GraphData>;

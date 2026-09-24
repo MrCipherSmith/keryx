@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "308",
   "slug": "w8-harness-config-security-audit-and-det",
   "title": "W8: harness-config security audit and deterministic impact-evidence gate",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T00:56:54.436Z",
-  "updatedAt": "2026-09-24T00:56:54.436Z",
+  "updatedAt": "2026-09-24T03:03:18.913Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:719bc571f144a60920d9919526bb068689d873513e3ce234ba32f7dd45e62fd9",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,601 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5/T6/T7 lanes"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests ship inside T5/T6 lanes"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 7,
+        "log": [
+          {
+            "at": "2026-09-24T01:48:37.726Z",
+            "outcome": "started",
+            "detail": "review round 1 (opus) on PR #676"
+          },
+          {
+            "at": "2026-09-24T01:55:56.307Z",
+            "outcome": "failed",
+            "detail": "round 1: 2 blocker, 12 major, 10 minor, 3 info (F1-F27)"
+          },
+          {
+            "at": "2026-09-24T02:16:12.063Z",
+            "outcome": "started",
+            "detail": "review round 2 (opus)"
+          },
+          {
+            "at": "2026-09-24T02:22:10.383Z",
+            "outcome": "failed",
+            "detail": "round 2: 23/27 fixed; open 2 major (F11 absent checksum, F14 path normalization/root), 6 minor (N3-N8), 2 info (N9,N10)"
+          },
+          {
+            "at": "2026-09-24T02:38:25.404Z",
+            "outcome": "started",
+            "detail": "review round 3 (opus), last attempt"
+          },
+          {
+            "at": "2026-09-24T02:43:20.789Z",
+            "outcome": "failed",
+            "detail": "round 3: 9/10 fixed; open 3 minor (NEW-1 payload.cwd root, NEW-2 reason/log, NEW-3 kill switch order), 4 info"
+          },
+          {
+            "at": "2026-09-24T03:03:18.913Z",
+            "outcome": "started",
+            "detail": "narrow verification review of T17 (re-planned): 0 findings >= minor; 4 info"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Lane A: audit-harness engine, CLI handler, baseline, apply, labeled fixtures + tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:04:01.436Z",
+            "outcome": "started",
+            "detail": "308-T5 sonnet lane A"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Lane B: affected/related report builders, impact-evidence provider, config, CLI + tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:04:01.514Z",
+            "outcome": "started",
+            "detail": "308-T6 sonnet lane B"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Wire subcommands into security.ts, export isPassGate, docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:27:11.793Z",
+            "outcome": "started",
+            "detail": "308-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Run audit-harness on the labeled fixture set end to end; confirm --fix-proposals writes nothing",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Confirm impact-evidence importers equal gdgraph affected --json stdout byte for byte",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Confirm no diff under src/harness and src/integrations (AC17)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Generalize hook-surface discovery to every non-JSON registry surface; codex config.toml mcp_servers scan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:27:11.871Z",
+            "outcome": "started",
+            "detail": "308-T11"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Fix import-policy regressions: no core->client TOML import; route new CLI imports through owner facades",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:37:01.193Z",
+            "outcome": "started",
+            "detail": "308-T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Review round 1 fixes: audit-harness (F2-F10, F16, F20, F21, F23, F24, F27)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:56:48.994Z",
+            "outcome": "started",
+            "detail": "308-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Review round 1 fixes: impact-evidence (F1, F11-F15, F17-F19, F22, F25, F26)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:56:49.071Z",
+            "outcome": "started",
+            "detail": "308-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Review round 2 fixes: impact-evidence (F11, F14, N5, N8, N10)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T02:22:45.847Z",
+            "outcome": "started",
+            "detail": "308-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Review round 2 fixes: audit-harness (N3, N4, N6, N7, N9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T02:22:45.933Z",
+            "outcome": "started",
+            "detail": "308-T16"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Re-planned narrow fix: NEW-1 hook root anchoring, NEW-2 failure reason+log, NEW-3 kill switch before path deny (+I1-I3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T02:43:21.021Z",
+            "outcome": "started",
+            "detail": "308-T17"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-24T00:56:54.436Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T01:03:25.879Z",
+      "event": "task-added",
+      "detail": "T5: Lane A: audit-harness engine, CLI handler, baseline, apply, labeled fixtures + tests"
+    },
+    {
+      "at": "2026-09-24T01:03:25.957Z",
+      "event": "task-added",
+      "detail": "T6: Lane B: affected/related report builders, impact-evidence provider, config, CLI + tests"
+    },
+    {
+      "at": "2026-09-24T01:03:26.035Z",
+      "event": "task-added",
+      "detail": "T7: Wire subcommands into security.ts, export isPassGate, docs"
+    },
+    {
+      "at": "2026-09-24T01:03:31.878Z",
+      "event": "task-added",
+      "detail": "T8: Run audit-harness on the labeled fixture set end to end; confirm --fix-proposals writes nothing"
+    },
+    {
+      "at": "2026-09-24T01:03:31.957Z",
+      "event": "task-added",
+      "detail": "T9: Confirm impact-evidence importers equal gdgraph affected --json stdout byte for byte"
+    },
+    {
+      "at": "2026-09-24T01:03:32.035Z",
+      "event": "task-added",
+      "detail": "T10: Confirm no diff under src/harness and src/integrations (AC17)"
+    },
+    {
+      "at": "2026-09-24T01:03:32.118Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T01:03:32.196Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T01:03:32.282Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T01:03:32.367Z",
+      "event": "frozen",
+      "detail": "17 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T01:03:32.446Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-24T01:04:01.437Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 308-T5 sonnet lane A"
+    },
+    {
+      "at": "2026-09-24T01:04:01.514Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 308-T6 sonnet lane B"
+    },
+    {
+      "at": "2026-09-24T01:20:10.975Z",
+      "event": "task-done",
+      "detail": "T5: Lane A: audit-harness engine, CLI handler, baseline, apply, labeled fixtures + tests"
+    },
+    {
+      "at": "2026-09-24T01:20:29.379Z",
+      "event": "task-added",
+      "detail": "T11: Generalize hook-surface discovery to every non-JSON registry surface; codex config.toml mcp_servers scan"
+    },
+    {
+      "at": "2026-09-24T01:27:02.711Z",
+      "event": "task-done",
+      "detail": "T6: Lane B: affected/related report builders, impact-evidence provider, config, CLI + tests"
+    },
+    {
+      "at": "2026-09-24T01:27:11.793Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 308-T7"
+    },
+    {
+      "at": "2026-09-24T01:27:11.871Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 308-T11"
+    },
+    {
+      "at": "2026-09-24T01:28:04.099Z",
+      "event": "task-done",
+      "detail": "T9: Confirm impact-evidence importers equal gdgraph affected --json stdout byte for byte"
+    },
+    {
+      "at": "2026-09-24T01:32:38.699Z",
+      "event": "task-done",
+      "detail": "T7: Wire subcommands into security.ts, export isPassGate, docs"
+    },
+    {
+      "at": "2026-09-24T01:35:55.526Z",
+      "event": "task-done",
+      "detail": "T11: Generalize hook-surface discovery to every non-JSON registry surface; codex config.toml mcp_servers scan"
+    },
+    {
+      "at": "2026-09-24T01:37:01.104Z",
+      "event": "task-added",
+      "detail": "T12: Fix import-policy regressions: no core->client TOML import; route new CLI imports through owner facades"
+    },
+    {
+      "at": "2026-09-24T01:37:01.193Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 308-T12"
+    },
+    {
+      "at": "2026-09-24T01:47:18.797Z",
+      "event": "task-done",
+      "detail": "T12: Fix import-policy regressions: no core->client TOML import; route new CLI imports through owner facades"
+    },
+    {
+      "at": "2026-09-24T01:47:55.267Z",
+      "event": "task-done",
+      "detail": "T8: Run audit-harness on the labeled fixture set end to end; confirm --fix-proposals writes nothing"
+    },
+    {
+      "at": "2026-09-24T01:47:55.342Z",
+      "event": "task-done",
+      "detail": "T10: Confirm no diff under src/harness and src/integrations (AC17)"
+    },
+    {
+      "at": "2026-09-24T01:48:37.726Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1 (opus) on PR #676"
+    },
+    {
+      "at": "2026-09-24T01:55:56.307Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: 2 blocker, 12 major, 10 minor, 3 info (F1-F27)"
+    },
+    {
+      "at": "2026-09-24T01:55:56.388Z",
+      "event": "task-added",
+      "detail": "T13: Review round 1 fixes: audit-harness (F2-F10, F16, F20, F21, F23, F24, F27)"
+    },
+    {
+      "at": "2026-09-24T01:55:56.466Z",
+      "event": "task-added",
+      "detail": "T14: Review round 1 fixes: impact-evidence (F1, F11-F15, F17-F19, F22, F25, F26)"
+    },
+    {
+      "at": "2026-09-24T01:56:48.994Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 308-T13"
+    },
+    {
+      "at": "2026-09-24T01:56:49.071Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 308-T14"
+    },
+    {
+      "at": "2026-09-24T02:12:48.859Z",
+      "event": "task-done",
+      "detail": "T14: Review round 1 fixes: impact-evidence (F1, F11-F15, F17-F19, F22, F25, F26)"
+    },
+    {
+      "at": "2026-09-24T02:16:06.063Z",
+      "event": "task-done",
+      "detail": "T13: Review round 1 fixes: audit-harness (F2-F10, F16, F20, F21, F23, F24, F27)"
+    },
+    {
+      "at": "2026-09-24T02:16:12.063Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — review round 2 (opus)"
+    },
+    {
+      "at": "2026-09-24T02:22:10.383Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — round 2: 23/27 fixed; open 2 major (F11 absent checksum, F14 path normalization/root), 6 minor (N3-N8), 2 info (N9,N10)"
+    },
+    {
+      "at": "2026-09-24T02:22:10.541Z",
+      "event": "task-added",
+      "detail": "T15: Review round 2 fixes: impact-evidence (F11, F14, N5, N8, N10)"
+    },
+    {
+      "at": "2026-09-24T02:22:10.622Z",
+      "event": "task-added",
+      "detail": "T16: Review round 2 fixes: audit-harness (N3, N4, N6, N7, N9)"
+    },
+    {
+      "at": "2026-09-24T02:22:45.847Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 308-T15"
+    },
+    {
+      "at": "2026-09-24T02:22:45.933Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 308-T16"
+    },
+    {
+      "at": "2026-09-24T02:34:28.617Z",
+      "event": "task-done",
+      "detail": "T16: Review round 2 fixes: audit-harness (N3, N4, N6, N7, N9)"
+    },
+    {
+      "at": "2026-09-24T02:38:19.572Z",
+      "event": "task-done",
+      "detail": "T15: Review round 2 fixes: impact-evidence (F11, F14, N5, N8, N10)"
+    },
+    {
+      "at": "2026-09-24T02:38:25.404Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 5) — review round 3 (opus), last attempt"
+    },
+    {
+      "at": "2026-09-24T02:43:20.789Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 6) — round 3: 9/10 fixed; open 3 minor (NEW-1 payload.cwd root, NEW-2 reason/log, NEW-3 kill switch order), 4 info"
+    },
+    {
+      "at": "2026-09-24T02:43:20.944Z",
+      "event": "task-added",
+      "detail": "T17: Re-planned narrow fix: NEW-1 hook root anchoring, NEW-2 failure reason+log, NEW-3 kill switch before path deny (+I1-I3)"
+    },
+    {
+      "at": "2026-09-24T02:43:21.022Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 308-T17"
+    },
+    {
+      "at": "2026-09-24T03:00:27.401Z",
+      "event": "task-done",
+      "detail": "T17: Re-planned narrow fix: NEW-1 hook root anchoring, NEW-2 failure reason+log, NEW-3 kill switch before path deny (+I1-I3)"
+    },
+    {
+      "at": "2026-09-24T03:03:18.913Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 7) — narrow verification review of T17 (re-planned): 0 findings >= minor; 4 info"
     }
   ]
 }

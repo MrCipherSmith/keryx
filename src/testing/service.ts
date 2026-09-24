@@ -10,6 +10,13 @@ import { guardOutput, redactRaw, formatGuardWarning, prepareOutputForPersistence
 import { isTestingCapabilityEnabled } from "./capability";
 import { loadCoverageMap, selectByCoverageMap, coveredFilesInMap } from "./coverage-map";
 import { relatedByNamingAndDirectory as relatedNaming, resolveSmokeSet, staticChangedSelection } from "./selection";
+// Re-exported so a client (`commands/test.ts`) can build the shared `--json`
+// report through this facade rather than reaching past it into
+// `testing/related-report.ts` directly (`src/lib/import-policy.ts`'s
+// facade rule). `related-report.ts` itself imports only named functions
+// from this module (no top-level call), so this re-export closes a cycle
+// without either module needing the other's exports at load time.
+export { buildRelatedTestsReport, type RelatedTestsReport } from "./related-report";
 import type {
   CoverageMap,
   TestingConfig,

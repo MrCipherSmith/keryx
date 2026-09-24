@@ -55,4 +55,24 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+### Orchestrator findings (Phase 1)
+
+- Worktree `/Users/Goodea/goodea/keryx-ape-308-w8`, branch `flow/308-w8`, cut from `stack/wave0` (PR base).
+  Flow record base: `feat/agent-platform-expansion`.
+- Existing seams: `src/commands/security.ts` (switch l.91-129, `isPassGate` l.700 private, `exitCodeFor`
+  l.985, `handleScanMcp` l.384 + `readMcpBaseline`/`mcpBaselinePath`/`extractManifestAndBaseline` helpers);
+  `src/security/config.ts` (`stableStringify` l.364, `computeConfigChecksum` l.384, `verifyConfigChecksum`
+  l.388, `mergeSecurityConfig` l.247); `src/security/types.ts` `SecurityConfig` l.219, `DetectorMatch` l.259;
+  `src/security/detect/{secrets,injection,mcp}.ts`; `src/lib/command-risk.ts` (`isDestructiveCommand` l.246,
+  `touchesAgentCredentials` l.346); `src/gdskills/learn.ts` apply pattern (withFileLock, writeFileAtomic,
+  applied report, refuse double apply).
+- `runAffected` (`src/commands/gdgraph.ts` l.729) prints three JSON shapes (index-incomplete,
+  target-not-indexed with `removal`, success `{...affected, freshness}`) — the builder must reproduce all.
+- `runRelated` (`src/commands/test.ts`) has NO `--json` today; the spec assumed one. Lane B adds it.
+- Memory: `collectEntries(cwd)` (`src/memory/store.ts`), `MemoryEntry.scopes.files`, `caveat`.
+- Registry (W5-a): `SETTINGS_FILE_OWNERS` paths = .claude/settings.json, .codex/hooks.json,
+  .cursor/hooks.json, .windsurf/hooks.json, .agents/hooks.json, .mcp/security-hooks.json; the opencode
+  surface is a non-JSON plugin file. No adapter declares a `pre-tool-context` surface yet.
+- Import zones: security/gdgraph/testing/memory/integrations are core; security must not import
+  commands or harness. Profile names (`LocalProfileName` in src/harness/policy/profiles.ts) are
+  re-declared structurally in security, not imported.

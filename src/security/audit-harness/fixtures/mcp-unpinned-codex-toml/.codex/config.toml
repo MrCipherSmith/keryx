@@ -1,0 +1,7 @@
+[mcp_servers.some-mcp]
+command = "npx"
+args = ["-y", "some-mcp"]
+
+[mcp_servers.pinned-mcp]
+command = "npx"
+args = ["-y", "some-mcp@1.2.3"]
