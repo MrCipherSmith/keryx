@@ -9,7 +9,7 @@
   "title": "Agent catalog: Keryx-own names for the ten bundled agents",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:14:17.951Z",
-  "updatedAt": "2026-09-24T07:17:10.093Z",
+  "updatedAt": "2026-09-24T07:36:31.599Z",
   "source": {
     "type": "description",
     "ref": null
@@ -26,15 +26,22 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:17:33.384Z",
+            "outcome": "started",
+            "detail": "orchestrator collected context directly (ripgrep inventory + rename map)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
@@ -58,15 +65,22 @@
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:24:48.603Z",
+            "outcome": "started",
+            "detail": "running verification suite"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -76,8 +90,19 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T07:26:22.750Z",
+            "outcome": "started",
+            "detail": "opus review round r01 on PR #688"
+          },
+          {
+            "at": "2026-09-24T07:36:31.599Z",
+            "outcome": "started",
+            "detail": "r01 findings fixed (stray </content>, narrowed scope, version bumps, plan.md numbering); CI green; quick re-check clean"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -87,29 +112,43 @@
       "id": "T5",
       "title": "Rename batch A: architect, planner, code-explorer, tdd-guide, refactor-cleaner",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:17:37.718Z",
+            "outcome": "started",
+            "detail": "dispatch-311-T5-batchA"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Rename batch B: silent-failure-hunter, doc-updater, security-reviewer, performance-reviewer, e2e-runner",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:17:37.802Z",
+            "outcome": "started",
+            "detail": "dispatch-311-T6-batchB"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -140,6 +179,56 @@
     {
       "at": "2026-09-24T07:17:10.093Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-24T07:17:33.384Z",
+      "event": "task-attempt",
+      "detail": "T1: started (attempt 1) — orchestrator collected context directly (ripgrep inventory + rename map)"
+    },
+    {
+      "at": "2026-09-24T07:17:33.464Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T07:17:37.718Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — dispatch-311-T5-batchA"
+    },
+    {
+      "at": "2026-09-24T07:17:37.802Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — dispatch-311-T6-batchB"
+    },
+    {
+      "at": "2026-09-24T07:24:44.132Z",
+      "event": "task-done",
+      "detail": "T5: Rename batch A: architect, planner, code-explorer, tdd-guide, refactor-cleaner"
+    },
+    {
+      "at": "2026-09-24T07:24:44.213Z",
+      "event": "task-done",
+      "detail": "T6: Rename batch B: silent-failure-hunter, doc-updater, security-reviewer, performance-reviewer, e2e-runner"
+    },
+    {
+      "at": "2026-09-24T07:24:48.603Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — running verification suite"
+    },
+    {
+      "at": "2026-09-24T07:25:36.732Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T07:26:22.750Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — opus review round r01 on PR #688"
+    },
+    {
+      "at": "2026-09-24T07:36:31.599Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 2) — r01 findings fixed (stray </content>, narrowed scope, version bumps, plan.md numbering); CI green; quick re-check clean"
     }
   ]
 }
