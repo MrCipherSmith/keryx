@@ -91,6 +91,7 @@ nav:
   - Architecture: architecture.md
   - The agent harness: harness.md
   - Integrations: integrations.md
+  - Lifecycle hooks: hooks.md
   - Modules: modules.md
   - CLI reference: cli-reference.md
   - Commands by task: commands-by-task.md
