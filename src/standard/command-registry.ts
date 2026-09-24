@@ -1382,6 +1382,27 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // ---- stack --------------------------------------------------------------
+  {
+    module: "stack",
+    command: "stack detect",
+    summary: "Deterministic, offline detection of the repository's stack tags.",
+    intent: [
+      "определи стек",
+      "detect the stack",
+      "what stack is this",
+      "какой стек проекта",
+      "stack tags",
+    ],
+    args: [
+      { name: "cwd", type: "path", required: false, desc: "detect against this directory instead of the current one" },
+      { name: "json", type: "bool", required: false, desc: "print exactly the persisted stack.json document" },
+      { name: "no-write", type: "bool", required: false, desc: "detect and print without writing stack.json" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["writes .metaproject/data/stack/stack.json (skipped with --no-write)"],
+  },
   // Flow 295: `keryx schedule` (self-contained in ./schedule-descriptors.ts).
   ...SCHEDULE_DESCRIPTORS,
 ];

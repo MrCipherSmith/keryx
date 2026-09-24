@@ -78,11 +78,6 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
       "binds stdio as a JSON-RPC channel and runs until signalled, like serve-mcp and shell; it owns stdout as the protocol wire, so it has no machine-consumable result a descriptor could describe",
   },
   {
-    verb: "stack",
-    reason:
-      "flow 309 (W1 Lane A): brand-new verb, deterministic local detection only (writes .metaproject/data/stack/stack.json, no external side effect) — a descriptor is deferred to the W1 install-manifest lane (Lane B) that will actually consume stack.json, rather than exposed ahead of that wiring",
-  },
-  {
     verb: "__sandbox-net-forward",
     reason:
       "internal helper keryx starts inside an unattended sandbox to bridge a local port to the allowlist proxy's socket; it runs until the sandboxed command ends and is never an operation for an agent to call",

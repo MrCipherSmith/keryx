@@ -1,5 +1,5 @@
 # W1 — Stack-aware skills & rules catalog
-Version: 0.1.2
+Version: 0.2.0
 
 ## Summary
 
@@ -18,9 +18,11 @@ languages/frameworks Keryx has none for today, (3) an install
 profile→module→component model with plan/state/doctor/uninstall commands, (4)
 an authoring standard aligned to the public Agent Skills format, and (5)
 governance gates (scout, eval, stocktake) so catalog growth is checked rather
-than bulk-generated. No code in this workstream exists yet; every command,
-schema field, and file layout below is a target contract, not a running
-feature.
+than bulk-generated. Flow 309 (Wave 2) implemented (1) stack detection, (3)
+the install profile→module→component lifecycle (plan/apply/doctor/uninstall),
+and (5) the three governance gates; (2) stack pack content and (4) the
+authoring-standard lint remain planned — see "Implementation notes (flow 309)"
+below for what landed and what is still a target contract.
 
 ## Current state (with code paths)
 
@@ -405,16 +407,56 @@ history is inspectable without guessing from a git blame.
 
 | Command | Status | Purpose |
 |---|---|---|
-| `keryx stack detect [--cwd <dir>] [--json]` | planned | Deterministic stack detection, writes `.metaproject/data/stack/stack.json` |
-| `keryx skills install --profile <p> [--with/--without <component>] [--dry-run] [--json]` | extends existing `install --profile recommended` | Resolve profile→modules→components into an install plan/apply |
-| `keryx skills doctor [--target <id>]` | planned | Compare install-state to disk; report ok/drifted/missing/orphaned |
-| `keryx skills uninstall --target <id> [--module <id>]` | planned | Remove only Keryx-managed, recorded files |
-| `keryx skills scout <name-or-description> [--include-imports]` | planned | Pre-creation dedupe gate |
-| `keryx skills eval <skill-id> [--strictness ...] [--trials N]` | planned | Behavioral compliance eval, trigger-accuracy + pass-rate |
-| `keryx skills stocktake [--scope bundled\|all] [--quick]` | planned | Periodic keep/improve/update/retire/merge verdicts |
+| `keryx stack detect [--cwd <dir>] [--json] [--no-write]` | implemented (flow 309, Wave 2) | Deterministic stack detection, writes `.metaproject/data/stack/stack.json` |
+| `keryx skills install --profile <p> [--with/--without <component>] [--target <harness>] [--include-deprecated] [--dry-run] [--json] [--force]` | implemented (flow 309, Wave 2) | Resolve profile→modules→components into an install plan/apply |
+| `keryx skills doctor [--target <id>] [--json]` | implemented (flow 309, Wave 2) | Compare install-state to disk; report ok/drifted/missing/orphaned |
+| `keryx skills uninstall --target <id> [--module <id>] [--force] [--json]` | implemented (flow 309, Wave 2) | Remove only Keryx-managed, recorded files |
+| `keryx skills scout <name-or-description> [--include-imports] [--record <pack-dir>] [--candidate <dir>] [--scope bundled\|all] [--json]` | implemented (flow 309, Wave 2) | Pre-creation dedupe gate |
+| `keryx skills eval <skill-id> [--strictness ...] [--trials N] [--runner <provider>] [--model-grader] [--json]` | implemented (flow 309, Wave 2) | Behavioral compliance eval, trigger-accuracy + pass-rate |
+| `keryx skills stocktake [--scope bundled\|all] [--quick] [--json]` | implemented (flow 309, Wave 2) | Periodic keep/improve/update/retire/merge verdicts |
 | `keryx skills create <target> --module <module> --name <skill-name>` | existing (`src/commands/skills.ts`) | Unchanged; scout-log presence becomes a prerequisite guard for stack-pack skills |
 | `keryx skills verify <skill-or-target>` | existing | Unchanged freshness classification (`skill-lifecycle.mdc`) |
 | `keryx skills export/sync --runtime ...` | existing | Unchanged format translation; consumed by W5 harness installs |
+
+## Implementation notes (flow 309)
+
+- **Module locations.** Stack detection lives under `src/stack/` (CLI surface
+  `src/commands/stack.ts`). The install profile→module→component lifecycle
+  lives under `src/gdskills/manifest/` (plan, apply, state, doctor,
+  uninstall), fed by the bundled manifest data file
+  `src/gdskills/bundled/install-manifest.json`. The three governance gates
+  (scout, eval, stocktake) live under `src/gdskills/governance/`, dispatched
+  from `src/commands/skills-governance.ts`.
+- **`stack.json` determinism.** Re-running `keryx stack detect` on an
+  unchanged tree writes a byte-identical file: the persisted `detectedAt`
+  field is kept as-is whenever the content fingerprint (`inputsSha256`) is
+  unchanged, so a plan built from `stack.json` is reproducible across runs
+  that make no repository changes.
+- **Manifest-path trigger rule.** `keryx skills install --profile <p>` still
+  runs the pre-309 legacy copy (unchanged) when `<p>` is one of the four
+  legacy ids (`minimal|recommended|full|custom`) and no manifest-only flag is
+  present. Any manifest-only flag (`--with`, `--without`, `--target`,
+  `--include-deprecated`, `--dry-run`, `--json`, `--force`) or a non-legacy
+  profile id (e.g. `core`, `python`) instead routes to
+  `planInstall`/`applyInstall`.
+- **v1 install destinations.** The module→file destination table in
+  `src/gdskills/manifest/plan.ts` (`destinationFor`) resolves only for
+  `--target claude` and `--target keryx-shell`; every other `HarnessId` the
+  type permits, and every module `kind` other than `rule`/`skill`
+  (`agent-ref`, `hook-runtime`, `schema`, `doc`), has no destination yet and
+  fails the plan with a named error rather than installing silently.
+- **`eval` runner requirement.** `keryx skills eval` scenarios that need a
+  headless agent run report `status: "not-run"` with a reason when no runner
+  capability is configured (`--runner`), rather than failing or being
+  skipped silently — the eval's `verdict` reflects only scenarios that
+  actually ran.
+- **Stack-pack content is still deferred to Wave 4**, per this document's
+  original scope, with one exception: `src/gdskills/bundled/install-manifest.json`
+  registers a `python` profile and a `python-pack-module` component marked
+  `stability: experimental` that resolves to zero files today (the Python
+  pack itself is not authored yet) — installing the `python` profile
+  succeeds and installs the common modules only; `full` excludes
+  `python-pack-module` from its file count for the same reason.
 
 ## Data contracts
 
