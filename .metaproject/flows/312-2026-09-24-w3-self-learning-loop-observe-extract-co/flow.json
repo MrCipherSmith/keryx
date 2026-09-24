@@ -9,7 +9,7 @@
   "title": "W3: self-learning loop — observe, extract, consent-gated learned patterns, reviewer profiles, promote and graduate",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:32.725Z",
-  "updatedAt": "2026-09-24T13:16:37.242Z",
+  "updatedAt": "2026-09-24T13:32:40.845Z",
   "source": {
     "type": "description",
     "ref": null
@@ -647,6 +647,29 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T26",
+      "title": "Fix R6-F1..F4: attribution gate at the source (reviewer-comment text), login-equal keyword filter in graduate, comments",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T25"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T13:22:50.907Z",
+            "outcome": "started",
+            "detail": "312-T26 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -1067,6 +1090,21 @@
       "at": "2026-09-24T13:16:37.242Z",
       "event": "task-done",
       "detail": "T25: Re-plan login gate: boundary-only matching (drop substring fallback); graduate gates stripped member text only"
+    },
+    {
+      "at": "2026-09-24T13:22:50.766Z",
+      "event": "task-added",
+      "detail": "T26: Fix R6-F1..F4: attribution gate at the source (reviewer-comment text), login-equal keyword filter in graduate, comments"
+    },
+    {
+      "at": "2026-09-24T13:22:50.907Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — 312-T26 sonnet"
+    },
+    {
+      "at": "2026-09-24T13:32:40.845Z",
+      "event": "task-done",
+      "detail": "T26: Fix R6-F1..F4: attribution gate at the source (reviewer-comment text), login-equal keyword filter in graduate, comments"
     }
   ],
   "owner": {
