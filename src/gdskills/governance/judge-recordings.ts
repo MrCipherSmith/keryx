@@ -217,7 +217,15 @@ export function recordedJudge(file: JudgeRecordingFile, sampleIndex = 0): Judge 
         `no recorded sample ${sampleIndex} for ${request.scenarioId} (digest ${digest}); entry has ${entry.samples.length} sample(s); re-record with keryx skills judge-check <id> --judge ... --record --samples ${sampleIndex + 1}`,
       );
     }
-    const verdict: JudgeVerdict = { verdict: sample.verdict, reason: sample.reason };
-    return sample.error !== undefined ? { ...verdict, error: sample.error } : verdict;
+    // An error-carrying sample is a manufactured verdict (a parse failure),
+    // never a genuinely reasoned one — it can never replay as "pass", the
+    // same rule `regradeRecordedReport` and `judge-check` enforce on this
+    // exact combination. A hand-edited or otherwise malformed recording that
+    // pairs `error` with `verdict: "pass"` is corrected on replay rather than
+    // trusted.
+    if (sample.error !== undefined) {
+      return { verdict: "fail", reason: sample.reason.length > 0 ? sample.reason : "recorded sample carries an error", error: sample.error };
+    }
+    return { verdict: sample.verdict, reason: sample.reason };
   };
 }

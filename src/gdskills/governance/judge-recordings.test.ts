@@ -6,8 +6,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { JudgeRequest } from "./judge";
-import { judgeRequestDigest } from "./judge";
+import type { JudgeableScenario, JudgeRequest } from "./judge";
+import { gradeScenarioAnswer, judgeRequestDigest } from "./judge";
 import {
   JudgeRecordingFormatError,
   judgeRecordingPath,
@@ -277,6 +277,32 @@ describe("recordedJudge", () => {
       2,
     );
     await expect(judge(REQUEST)).rejects.toThrow(/no recorded sample 2 for s1/);
+  });
+
+  test("an error-carrying sample never replays as a pass, even when recorded with verdict: \"pass\"", async () => {
+    const digest = judgeRequestDigest(REQUEST);
+    const scenario: JudgeableScenario = {
+      id: REQUEST.scenarioId,
+      prompt: REQUEST.prompt,
+      expected_behavior: [REQUEST.expectation],
+    };
+    const judge = recordedJudge({
+      judgePromptVersion: "v1",
+      judge: "deepseek",
+      judgeModel: "deepseek-chat",
+      recordedAt: "2026-09-24T00:00:00.000Z",
+      entries: [
+        {
+          scenarioId: "s1",
+          kind: "known-right",
+          requestDigest: digest,
+          samples: [{ verdict: "pass", reason: "x", error: "unparseable" }],
+        },
+      ],
+    });
+    const grade = await gradeScenarioAnswer(REQUEST.answer, scenario, judge);
+    expect(grade.passed).toBe(false);
+    expect(grade.judge).toEqual({ verdict: "fail", reason: "x", error: "unparseable" });
   });
 
   test("a stale recording (rubric edited since recording) misses by digest and is refused, not silently reused", async () => {
