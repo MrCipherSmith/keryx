@@ -185,6 +185,18 @@ export async function resolveContainedPath(
   const posixRel = rel.split(path.sep).join("/");
 
   if (destinationRoots !== undefined && destinationRoots.length > 0) {
+    // R4-3 (flow 309 review round 4): `posixRel` equal to one of the roots
+    // itself (refused by `isUnderDestinationRoot` above, never accepted as
+    // contained) used to fall into the generic "not under any of this
+    // target's known destination roots" message — self-contradictory, since
+    // the path IS one of the roots listed right there. Name that case on its
+    // own terms instead.
+    if (destinationRoots.includes(posixRel)) {
+      return {
+        ok: false,
+        reason: `path "${relPath}" is a destination root itself, not a file under it`,
+      };
+    }
     const contained = destinationRoots.some((root) => isUnderDestinationRoot(posixRel, root));
     if (!contained) {
       return {

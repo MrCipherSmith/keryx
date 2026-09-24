@@ -5,7 +5,7 @@
 // file concurrently — see the flow dispatch's shared-file note.
 
 import path from "node:path";
-import { loadSkillCatalog, type CatalogScope } from "../gdskills/governance/catalog-index";
+import { loadSkillCatalog, loadSkillCatalogWithDiagnostics, type CatalogScope } from "../gdskills/governance/catalog-index";
 import { evalSkill } from "../gdskills/governance/eval";
 import { recordScout, scoutImports, scoutSkill, scoutVetCandidate } from "../gdskills/governance/scout";
 import { runStocktake } from "../gdskills/governance/stocktake";
@@ -284,7 +284,24 @@ async function evalCommand(args: readonly string[]): Promise<void> {
   }
 
   const root = process.cwd();
-  const catalog = loadSkillCatalog(root, { scope: "all" });
+  // R4-2 (flow 309 review round 4): `loadSkillCatalog` silently drops
+  // `unreadable` (R3-4) — a skill whose SKILL.md exists but cannot be read
+  // (EACCES, ...) is simply absent from `catalog`, so `evalSkill` below threw
+  // the generic "unknown skill id" for it, indistinguishable from a skill id
+  // that was never a skill at all. Loading with diagnostics lets this name
+  // the actual read error instead.
+  const { entries: catalog, unreadable } = loadSkillCatalogWithDiagnostics(root, { scope: "all" });
+  if (!catalog.some((entry) => entry.id === skillId)) {
+    const unreadableMatch = unreadable.find((entry) => {
+      const normalized = entry.path.split(path.sep).join("/");
+      return normalized.endsWith(`/${skillId}/SKILL.md`);
+    });
+    if (unreadableMatch !== undefined) {
+      console.error(`skill ${skillId}: SKILL.md is unreadable: ${unreadableMatch.path} (${unreadableMatch.code})`);
+      process.exitCode = 1;
+      return;
+    }
+  }
 
   try {
     const report = await evalSkill(skillId, catalog, { strictness, trials, modelGrader });
@@ -344,4 +361,14 @@ async function stocktakeCommand(args: readonly string[]): Promise<void> {
     console.log(`  ${verdict}: ${count}`);
   }
   console.log(`Cache: ${report.cache.hits} hit(s), ${report.cache.misses} miss(es)`);
+  // R4-2 (flow 309 review round 4): `report.unreadable` (R3-4) used to be
+  // JSON-only — a project skill with an unreadable SKILL.md silently
+  // disappeared from the human stocktake output with no indication anything
+  // was skipped. Named here the same way `--json` already names it.
+  if (report.unreadable.length > 0) {
+    console.log(`Unreadable: ${report.unreadable.length}`);
+    for (const entry of report.unreadable) {
+      console.log(`  ${entry.path}: ${entry.code}`);
+    }
+  }
 }

@@ -264,6 +264,34 @@ describe("doctor: drift reporting for a recorded surface that is now missing or 
     });
   });
 
+  // R4-1 (flow 309 review round 4): a recorded sha256 key that now names a
+  // directory used to throw the typed `NotARegularFileError` straight out of
+  // `doctorIntegration`, aborting `keryx integrations doctor --runtime all`
+  // with no report for ANY runtime (a raw EISDIR before R3-3 typed it). It
+  // must be reported as drift instead, naming the path as not a regular file,
+  // and doctor must keep running for the other surfaces/runtimes.
+  test("recorded sha256 path is now a directory -> drift names it, doctor keeps running (not a thrown NotARegularFileError)", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "kiro", { surfaces: ["ctx-guard"] });
+      const statePath = installStatePath(root, "kiro");
+      const state = JSON.parse(await readFile(statePath, "utf8")) as {
+        installedModules: Array<{ sha256: Record<string, string> }>;
+      };
+      // Point the recorded sha256 at a directory instead of the real file.
+      const moduleRecord = state.installedModules[0]!;
+      moduleRecord.sha256 = { ...moduleRecord.sha256, adir: "deadbeef" };
+      await writeFile(statePath, JSON.stringify(state), "utf8");
+      await mkdir(path.join(root, "adir"), { recursive: true });
+
+      const doctor = await doctorIntegration(root, "kiro");
+      const ctxGuard = doctor.surfaces.find((s) => s.surfaceId === "ctx-guard")!;
+      expect(ctxGuard.live).toBe("valid");
+      expect(ctxGuard.drift).toBeDefined();
+      expect(ctxGuard.drift).toContain("adir");
+      expect(ctxGuard.drift).toContain("not a regular file");
+    });
+  });
+
   test("opencode: plugin file edited after install -> probe reports drift", async () => {
     await withMetaproject(async (root) => {
       await installIntegration(root, "opencode");

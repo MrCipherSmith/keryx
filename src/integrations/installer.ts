@@ -29,6 +29,7 @@ import {
   installStatePath,
   installStateIsUnreadable,
   sha256OfFile,
+  NotARegularFileError,
   type InstalledModuleRecord,
 } from "./install-state";
 import { pathExists } from "../lib/fs";
@@ -651,12 +652,26 @@ async function liveStatusOf(
   return { live: "not-applicable", problems: [] };
 }
 
-async function shaDriftedSinceInstall(root: string, recorded: InstalledModuleRecord): Promise<boolean> {
+// R4-1 (flow 309 review round 4): a recorded sha256 key that now names a
+// directory (never a raw EISDIR — `sha256OfFile` throws the typed
+// `NotARegularFileError`, see R3-3 above) must not escape `doctorIntegration`
+// and abort `keryx integrations doctor --runtime all` for every runtime. It
+// is drift like any other live-vs-recorded mismatch, so it is reported with
+// a reason naming the path and "not a regular file" rather than thrown.
+async function shaDriftedSinceInstall(root: string, recorded: InstalledModuleRecord): Promise<string | undefined> {
   for (const [relativePath, expected] of Object.entries(recorded.sha256)) {
-    const current = await sha256OfFile(root, relativePath);
-    if (current !== expected) return true;
+    let current: string | undefined;
+    try {
+      current = await sha256OfFile(root, relativePath);
+    } catch (error) {
+      if (error instanceof NotARegularFileError) {
+        return `${relativePath} is not a regular file (likely a directory)`;
+      }
+      throw error;
+    }
+    if (current !== expected) return "file changed since install (still valid)";
   }
-  return false;
+  return undefined;
 }
 
 function driftMessage(surface: SurfaceAdapter, recorded: InstalledModuleRecord, live: string, problems: string[]): string {
@@ -695,8 +710,8 @@ export async function doctorIntegration(root: string, runtimeId: string): Promis
     let drift: string | undefined;
     if (recorded && live !== "valid") {
       drift = driftMessage(surface, recorded, live, surfaceProblems);
-    } else if (recorded && live === "valid" && (await shaDriftedSinceInstall(root, recorded))) {
-      drift = "file changed since install (still valid)";
+    } else if (recorded && live === "valid") {
+      drift = await shaDriftedSinceInstall(root, recorded);
     }
 
     surfaces.push({ surfaceId: surface.id, flag: surface.flag, recorded, live, problems: surfaceProblems, drift });

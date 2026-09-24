@@ -111,6 +111,14 @@ test("resolveContainedPath rejects a path under a same-prefixed sibling director
 test("resolveContainedPath rejects a path exactly equal to a destination root's own directory entry name (R3-3)", async () => {
   const result = await resolveContainedPath(root, ".claude/skills", [".claude/skills"]);
   expect(result.ok).toBe(false);
+  // R4-3 (flow 309 review round 4): the generic "is not under any of this
+  // target's known destination roots" message read as self-contradictory
+  // here, since the rejected path IS one of the roots listed right there.
+  // Named on its own terms instead.
+  if (!result.ok) {
+    expect(result.reason).toContain("is a destination root itself, not a file under it");
+    expect(result.reason).not.toContain("is not under any of this target's known destination roots");
+  }
 });
 
 // R2-2: round 1's symlink guard only realpath'd the nearest existing

@@ -6,7 +6,16 @@
 // now refused up front with `process.exitCode = 1` and a named message.
 
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { acquireCwd, releaseCwd } from "../lib/test-cwd";
 import { skillsGovernanceCommand } from "./skills-governance";
+
+// R3-4 (flow 309 review round 3): chmod 000 has no effect for the root user
+// (root can read/write regardless of mode bits) — same caveat as
+// catalog-index.test.ts's own chmod-based repro.
+const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
 
 let errors: string[] = [];
 let errorSpy: ReturnType<typeof spyOn> | undefined;
@@ -109,5 +118,62 @@ describe("R2-8: valueless flags are refused, not silently defaulted", () => {
     await skillsGovernanceCommand(["scout", "some query", "--record", "--json"]);
     expect(process.exitCode).toBe(1);
     expect(errors.some((line) => line.includes("--record requires a value"))).toBe(true);
+  });
+});
+
+// R4-2 (flow 309 review round 4): `report.unreadable` (R3-4) was JSON-only —
+// the human `stocktake` output never mentioned a skipped skill, and `eval`
+// on an unreadable-but-existing skill said "unknown skill id" instead of
+// naming the read error.
+describe("R4-2: an unreadable skill is named, not silently dropped or misreported", () => {
+  let logs: string[] = [];
+  let logSpy: ReturnType<typeof spyOn> | undefined;
+
+  beforeEach(() => {
+    logs = [];
+    logSpy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+  });
+
+  afterEach(() => {
+    logSpy?.mockRestore();
+  });
+
+  async function withUnreadableProjectSkill<T>(run: (root: string, badSkillMd: string) => Promise<T>): Promise<T> {
+    const root = mkdtempSync(path.join(tmpdir(), "skills-governance-unreadable-"));
+    const badDir = path.join(root, ".metaproject", "project-skills", "bad-skill");
+    mkdirSync(badDir, { recursive: true });
+    const badSkillMd = path.join(badDir, "SKILL.md");
+    writeFileSync(badSkillMd, `---\nname: bad-skill\ndescription: Use when unreadable.\n---\n\nBody.\n`, "utf8");
+    chmodSync(badSkillMd, 0o000);
+    try {
+      await acquireCwd(root);
+      try {
+        return await run(root, badSkillMd);
+      } finally {
+        releaseCwd();
+      }
+    } finally {
+      chmodSync(badSkillMd, 0o644);
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  test.skipIf(isRoot)("stocktake --scope all human output names the unreadable skill (not --json only)", async () => {
+    await withUnreadableProjectSkill(async (_root, badSkillMd) => {
+      await skillsGovernanceCommand(["stocktake", "--scope", "all"]);
+      expect(logs.some((line) => line.includes("Unreadable: 1"))).toBe(true);
+      expect(logs.some((line) => line.includes(badSkillMd) && line.includes("EACCES"))).toBe(true);
+    });
+  });
+
+  test.skipIf(isRoot)("eval on an unreadable skill names the read error, not 'unknown skill id'", async () => {
+    await withUnreadableProjectSkill(async (_root, badSkillMd) => {
+      await skillsGovernanceCommand(["eval", "project-skills/bad-skill"]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.some((line) => line.includes("unknown skill id"))).toBe(false);
+      expect(errors.some((line) => line.includes(badSkillMd) && line.includes("EACCES"))).toBe(true);
+    });
   });
 });
