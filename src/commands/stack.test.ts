@@ -215,6 +215,78 @@ describe("stack detect — Wave-2 exit: deterministic and offline", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Wave-2 defect fix: reasons are repo-relative, output is portable across
+// checkout locations, and `matched` carries marker/manifest evidence too.
+// ---------------------------------------------------------------------------
+
+async function writeFixture(root: string): Promise<void> {
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ name: "fixture", dependencies: { react: "^18.0.0", "react-dom": "^18.0.0", mobx: "^6.0.0" } }),
+  );
+  await writeFile(path.join(root, "Dockerfile"), "FROM node:20\n");
+  await writeFile(path.join(root, "go.mod"), "module example.com/app\n\ngo 1.22\n");
+}
+
+describe("stack detect — no absolute paths in reasons", () => {
+  test("reason and every perSignal[].reason are repo-relative, not the fixture's absolute dir", async () => {
+    const root = await makeTempRepo();
+    await writeFixture(root);
+
+    const result = await runCli(["stack", "detect", "--json"], root);
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe("");
+    const parsed = JSON.parse(result.stdout) as { reason: string; perSignal: { reason: string }[] };
+
+    expect(parsed.reason).not.toContain(root);
+    expect(parsed.reason).not.toContain(tmpdir());
+    for (const signal of parsed.perSignal) {
+      expect(signal.reason).not.toContain(root);
+      expect(signal.reason).not.toContain(tmpdir());
+    }
+  }, 30_000);
+});
+
+describe("stack detect — portable across checkout locations", () => {
+  test("the same fixture copied into two different temp directories yields byte-identical stack.json and inputsSha256", async () => {
+    const rootA = await makeTempRepo();
+    const rootB = await makeTempRepo();
+    await writeFixture(rootA);
+    await writeFixture(rootB);
+
+    const resultA = await runCli(["stack", "detect", "--json"], rootA);
+    const resultB = await runCli(["stack", "detect", "--json"], rootB);
+    expect(resultA.code).toBe(0);
+    expect(resultB.code).toBe(0);
+
+    const parsedA = JSON.parse(resultA.stdout) as { inputsSha256: string; detectedAt: string };
+    const parsedB = JSON.parse(resultB.stdout) as { inputsSha256: string; detectedAt: string };
+    expect(parsedA.inputsSha256).toBe(parsedB.inputsSha256);
+
+    // Bytes are identical modulo the `detectedAt` timestamp, which each run
+    // stamps independently (no shared prior stack.json to inherit it from).
+    const bytesA = resultA.stdout.replace(parsedA.detectedAt, "<detectedAt>");
+    const bytesB = resultB.stdout.replace(parsedB.detectedAt, "<detectedAt>");
+    expect(bytesA).toBe(bytesB);
+  }, 30_000);
+});
+
+describe("stack detect — matched includes marker evidence", () => {
+  test("matched contains dependency names AND marker/manifest hits like Dockerfile and go.mod", async () => {
+    const root = await makeTempRepo();
+    await writeFixture(root);
+
+    const result = await runCli(["stack", "detect", "--json"], root);
+    expect(result.code).toBe(0);
+    const parsed = JSON.parse(result.stdout) as { matched: string[] };
+
+    expect(parsed.matched).toContain("react");
+    expect(parsed.matched).toContain("Dockerfile");
+    expect(parsed.matched).toContain("go.mod");
+  }, 30_000);
+});
+
+// ---------------------------------------------------------------------------
 // Static: nothing under src/stack/*.ts (non-test) is network-capable.
 // ---------------------------------------------------------------------------
 

@@ -258,11 +258,11 @@ async function packageJsonSignal(cwd: string, fs: StackDetectFs): Promise<Signal
   } catch (error) {
     return uncertainFamily(
       "js",
-      `package.json at ${manifestPath} did not parse as JSON: ${error instanceof Error ? error.message : String(error)}`,
+      `package.json did not parse as JSON: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return uncertainFamily("js", `package.json at ${manifestPath} is not a JSON object`);
+    return uncertainFamily("js", "package.json is not a JSON object");
   }
 
   const record = parsed as Record<string, unknown>;
@@ -280,7 +280,7 @@ async function packageJsonSignal(cwd: string, fs: StackDetectFs): Promise<Signal
   if (workspaceGlobs.length > 0) {
     return uncertainFamily(
       "js",
-      `package.json at ${manifestPath} declares workspaces (${workspaceGlobs.join(
+      `package.json declares workspaces (${workspaceGlobs.join(
         ", ",
       )}); the dependencies that decide the stack live in the sub-packages, which this module does not walk`,
     );
@@ -288,7 +288,7 @@ async function packageJsonSignal(cwd: string, fs: StackDetectFs): Promise<Signal
   if (names.size === 0) {
     return uncertainFamily(
       "js",
-      `package.json at ${manifestPath} declares no dependencies in ${JS_DEPENDENCY_FIELDS.join(
+      `package.json declares no dependencies in ${JS_DEPENDENCY_FIELDS.join(
         "/",
       )} — a manifest that declares nothing has not said the repository uses nothing`,
     );
@@ -313,7 +313,7 @@ async function packageJsonSignal(cwd: string, fs: StackDetectFs): Promise<Signal
   return present(
     [...tags],
     matched,
-    `detected from ${manifestPath} (${names.size} declared dependenc${names.size === 1 ? "y" : "ies"})`,
+    `detected from package.json (${names.size} declared dependenc${names.size === 1 ? "y" : "ies"})`,
   );
 }
 
@@ -367,12 +367,12 @@ async function pyprojectSignal(cwd: string, fs: StackDetectFs): Promise<SignalOu
   }
   const broken = pyprojectBrokenReason(raw);
   if (broken !== undefined) {
-    return uncertainFamily("python", `pyproject.toml at ${manifestPath} is structurally broken: ${broken}`);
+    return uncertainFamily("python", `pyproject.toml is structurally broken: ${broken}`);
   }
   return present(
     ["python", ...pythonFrameworkTags(raw)],
-    pythonFrameworkTags(raw),
-    `detected from ${manifestPath}`,
+    ["pyproject.toml", ...pythonFrameworkTags(raw)],
+    "detected from pyproject.toml",
   );
 }
 
@@ -388,7 +388,11 @@ async function simplePythonManifestSignal(
   } catch {
     return undefined;
   }
-  return present(["python", ...pythonFrameworkTags(raw)], pythonFrameworkTags(raw), `detected from ${manifestPath}`);
+  return present(
+    ["python", ...pythonFrameworkTags(raw)],
+    [fileName, ...pythonFrameworkTags(raw)],
+    `detected from ${fileName}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -407,7 +411,7 @@ async function markerFileSignal(
   } catch {
     return undefined;
   }
-  return present(tags, [], `detected from ${filePath}`);
+  return present(tags, [fileName], `detected from ${fileName}`);
 }
 
 async function goModSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
@@ -430,7 +434,7 @@ async function packageSwiftSignal(cwd: string, fs: StackDetectFs): Promise<Signa
   if (/\.iOS\(/.test(raw)) {
     tags.push("ios");
   }
-  return present(tags, [], `detected from ${filePath}`);
+  return present(tags, ["Package.swift"], "detected from Package.swift");
 }
 
 async function pubspecSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
@@ -445,7 +449,7 @@ async function pubspecSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutc
   if (/\bflutter\b/.test(raw)) {
     tags.push("flutter");
   }
-  return present(tags, [], `detected from ${filePath}`);
+  return present(tags, ["pubspec.yaml"], "detected from pubspec.yaml");
 }
 
 async function composerSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
@@ -470,7 +474,11 @@ async function composerSignal(cwd: string, fs: StackDetectFs): Promise<SignalOut
   if (laravel) {
     tags.push("laravel");
   }
-  return present(tags, [], `detected from ${filePath}`);
+  return present(
+    tags,
+    laravel ? ["composer.json", "laravel/framework"] : ["composer.json"],
+    "detected from composer.json",
+  );
 }
 
 async function gemfileSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
@@ -485,7 +493,7 @@ async function gemfileSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutc
   if (/\brails\b/.test(raw)) {
     tags.push("rails");
   }
-  return present(tags, [], `detected from ${filePath}`);
+  return present(tags, ["Gemfile"], "detected from Gemfile");
 }
 
 async function jvmManifestSignal(
@@ -510,7 +518,7 @@ async function jvmManifestSignal(
   if (/com\.android\.(application|library)/.test(raw)) {
     tags.push("android");
   }
-  return present(tags, [], `detected from ${filePath}`);
+  return present(tags, [fileName], `detected from ${fileName}`);
 }
 
 async function dotnetProjectSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
@@ -527,7 +535,7 @@ async function dotnetProjectSignal(cwd: string, fs: StackDetectFs): Promise<Sign
   if (hit.length === 0) {
     return undefined;
   }
-  return present(["csharp", "dotnet"], [], `detected from ${hit.join(", ")}`);
+  return present(["csharp", "dotnet"], hit, `detected from ${hit.join(", ")}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -567,7 +575,11 @@ async function githubWorkflowsSignal(cwd: string, fs: StackDetectFs): Promise<Si
   if (hit.length === 0) {
     return undefined;
   }
-  return present(["github-actions"], [], `detected from ${dirPath} (${hit.join(", ")})`);
+  return present(
+    ["github-actions"],
+    hit.map((name) => `.github/workflows/${name}`),
+    `detected from .github/workflows (${hit.join(", ")})`,
+  );
 }
 
 async function rootGlobSignal(
@@ -589,7 +601,7 @@ async function rootGlobSignal(
   if (hit.length === 0) {
     return undefined;
   }
-  return present(tags, [], `detected from ${hit.join(", ")}`);
+  return present(tags, hit, `detected from ${hit.join(", ")}`);
 }
 
 async function terraformSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
