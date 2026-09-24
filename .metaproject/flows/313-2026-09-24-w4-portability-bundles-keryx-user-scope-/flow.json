@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T07:26:40.300Z",
+  "updatedAt": "2026-09-24T07:30:52.171Z",
   "source": {
     "type": "description",
     "ref": null
@@ -86,7 +86,7 @@
       "id": "T5",
       "title": "Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -94,7 +94,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -103,8 +104,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:51.891Z",
+            "outcome": "started",
+            "detail": "313-T6 lane dispatch"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -117,8 +124,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:51.985Z",
+            "outcome": "started",
+            "detail": "313-T7 lane dispatch"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -131,8 +144,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:52.087Z",
+            "outcome": "started",
+            "detail": "313-T8 lane dispatch"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -145,8 +164,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:52.171Z",
+            "outcome": "started",
+            "detail": "313-T9 lane dispatch"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -291,6 +316,31 @@
     {
       "at": "2026-09-24T07:26:40.300Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-24T07:29:01.511Z",
+      "event": "task-done",
+      "detail": "T5: Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)"
+    },
+    {
+      "at": "2026-09-24T07:30:51.892Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 313-T6 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:30:51.985Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 313-T7 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:30:52.087Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 313-T8 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:30:52.171Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 313-T9 lane dispatch"
     }
   ]
 }

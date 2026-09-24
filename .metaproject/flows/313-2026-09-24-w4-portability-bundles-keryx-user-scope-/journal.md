@@ -19,3 +19,8 @@
 - 2026-09-24T07:26:40.127Z - task-done: T1: Collect remaining context
 - 2026-09-24T07:26:40.211Z - frozen: 15 criteria; checksum recorded
 - 2026-09-24T07:26:40.300Z - started
+- 2026-09-24T07:29:01.511Z - task-done: T5: Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)
+- 2026-09-24T07:30:51.892Z - task-attempt: T6: started (attempt 1) — 313-T6 lane dispatch
+- 2026-09-24T07:30:51.985Z - task-attempt: T7: started (attempt 1) — 313-T7 lane dispatch
+- 2026-09-24T07:30:52.087Z - task-attempt: T8: started (attempt 1) — 313-T8 lane dispatch
+- 2026-09-24T07:30:52.171Z - task-attempt: T9: started (attempt 1) — 313-T9 lane dispatch
