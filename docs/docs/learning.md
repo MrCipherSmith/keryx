@@ -131,6 +131,10 @@ What this rules out by construction:
   recognized and do **not** disable observation; only `KERYX_LEARNING=off`
   does.
 
+### Known limitations
+
+The `edit` digests (`pathDigest`, `removedDigest`, `addedDigest`) are unsalted SHA-256 hashes. Someone holding both an observation file and access to the repository could potentially recover a file path by enumerating and hashing the repository's file list, or guess short edited strings by brute-force hashing. This design is acceptable because observation files remain local, are gitignored, are pruned after 30 days, and are never exported or promoted outside the local machine. Should observation data be exported in the future, these digests must be replaced with an HMAC scheme keyed with a per-project local salt.
+
 ### Opt-in host observer (Claude Code)
 
 An opt-in `learning-observer` surface (flag `observe`) lets a Claude Code
