@@ -446,9 +446,9 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
   });
 
   test("every bundled shipped agent verifies ok against the real skill/bundled trees, with the per-stack packs' gate stubbed cleared", () => {
-    // Flow 316: the honest DeepSeek judge gate run cleared `react` and
-    // `ts-js-node` (both `stability: "stable"` now), so they ship a
-    // generated `<id>-code-auditor` / `<id>-build-fixer` pair; `go` and
+    // Flow 316: the honest DeepSeek judge gate run cleared only
+    // `ts-js-node` (`stability: "stable"` now), so it ships a generated
+    // `<id>-code-auditor` / `<id>-build-fixer` pair; `react`, `go`, and
     // `python` stay `experimental` and ship none. `stackPackGateCleared` is
     // stubbed cleared anyway so this guard still proves everything OTHER
     // than pack gate status (schema, tools, skills, drift) is clean,
@@ -467,20 +467,15 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    expect(generatedNames).toEqual([
-      "react-build-fixer",
-      "react-code-auditor",
-      "ts-js-node-build-fixer",
-      "ts-js-node-code-auditor",
-    ]);
+    expect(generatedNames).toEqual(["ts-js-node-build-fixer", "ts-js-node-code-auditor"]);
   });
 
-  test("every bundled shipped agent against the real trees with NO stub: zero problems (react and ts-js-node are gate-cleared)", () => {
-    // Flow 316: react and ts-js-node are real, on-disk "stable" packs after
-    // the honest DeepSeek judge gate run, each with a generated agent pair
-    // on disk whose gate status the default (non-stubbed) resolver checks
-    // for real — the catalog verifies clean because both packs are
-    // genuinely gate-cleared. go and python stay "experimental" and ship no
+  test("every bundled shipped agent against the real trees with NO stub: zero problems (only ts-js-node is gate-cleared)", () => {
+    // Flow 316: ts-js-node is the only real, on-disk "stable" pack after the
+    // honest DeepSeek judge gate run, with a generated agent pair on disk
+    // whose gate status the default (non-stubbed) resolver checks for
+    // real — the catalog verifies clean because the pack is genuinely
+    // gate-cleared. react, go, and python stay "experimental" and ship no
     // generated agent, so they contribute nothing here either way.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {});
     expect(report.catalogErrors).toEqual([]);
@@ -491,12 +486,7 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    expect(generatedNames).toEqual([
-      "react-build-fixer",
-      "react-code-auditor",
-      "ts-js-node-build-fixer",
-      "ts-js-node-code-auditor",
-    ]);
+    expect(generatedNames).toEqual(["ts-js-node-build-fixer", "ts-js-node-code-auditor"]);
   });
 
   // Flow 314 W4 T10 (W2 §"Initial catalogue": "a hand edit to a generated

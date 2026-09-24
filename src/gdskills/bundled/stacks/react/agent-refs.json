@@ -1,3 +1,4 @@
 {
-  "agents": ["react-code-auditor", "react-build-fixer"]
+  "agents": [],
+  "note": "no pair — the react pack fails the honest stable-pack gate: react/react-build-fix no-disable-hooks-lint passRate 0.6 < 0.8. In the recorded trials, one answer included `eslint-disable-next-line react-hooks/exhaustive-deps` and one gave no staleness explanation and asked for code. deepseek-chat judge gate run, flow 316."
 }

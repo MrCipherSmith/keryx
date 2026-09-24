@@ -178,13 +178,13 @@ describe("keryx agents export", () => {
 });
 
 describe("keryx agents verify", () => {
-  // Flow 316: the honest DeepSeek judge gate run cleared `react` and
-  // `ts-js-node` (now `stability: "stable"`), so each ships a generated
-  // `<id>-code-auditor` / `<id>-build-fixer` pair; `go` and `python` stay
-  // `experimental` and ship none. The real, un-stubbed CLI path reports zero
-  // problems across the whole catalog, and exactly those four generated
-  // agent names are present.
-  test("the real bundled catalog verifies ok with zero problems (react and ts-js-node are gate-cleared)", async () => {
+  // Flow 316: the honest DeepSeek judge gate run cleared only `ts-js-node`
+  // (now `stability: "stable"`), so it ships a generated
+  // `<id>-code-auditor` / `<id>-build-fixer` pair; `react`, `go`, and
+  // `python` stay `experimental` and ship none. The real, un-stubbed CLI
+  // path reports zero problems across the whole catalog, and exactly those
+  // two generated agent names are present.
+  test("the real bundled catalog verifies ok with zero problems (only ts-js-node is gate-cleared)", async () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("verify", ["--json"], { cwd: REPO_ROOT, log, error });
     const report = JSON.parse(lines.join("\n")) as {
@@ -199,12 +199,7 @@ describe("keryx agents verify", () => {
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    expect(generatedNames).toEqual([
-      "react-build-fixer",
-      "react-code-auditor",
-      "ts-js-node-build-fixer",
-      "ts-js-node-code-auditor",
-    ]);
+    expect(generatedNames).toEqual(["ts-js-node-build-fixer", "ts-js-node-code-auditor"]);
   });
 
   test("narrows to one agent by name", async () => {

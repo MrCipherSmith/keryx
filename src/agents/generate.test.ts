@@ -231,13 +231,13 @@ describe("generateStackAgentPair", () => {
   // pack that changes gate status must update this assertion consciously,
   // not silently pass or fail a loop whose bound moved under it.
   //
-  // Flow 316: the honest DeepSeek judge gate run cleared `react` and
-  // `ts-js-node` (both now `stability: "stable"` in pack.json and in
-  // install-manifest.json); `go` and `python` stay `experimental` — see
-  // their `agent-refs.json` notes for the specific failing scenarios. Both
-  // cleared packs now ship their generated `<id>-code-auditor.md` /
-  // `<id>-build-fixer.md` pair, for 4 generated files total.
-  test("shipped state: exactly react and ts-js-node are gate-cleared, and their generated agent files are on disk", () => {
+  // Flow 316: the honest DeepSeek judge gate run cleared only `ts-js-node`
+  // (`stability: "stable"` in pack.json and in install-manifest.json);
+  // `react`, `go`, and `python` stay `experimental` — see their
+  // `agent-refs.json` notes for the specific failing scenarios. Only
+  // `ts-js-node` ships its generated `<id>-code-auditor.md` /
+  // `<id>-build-fixer.md` pair, for 2 generated files total.
+  test("shipped state: exactly ts-js-node is gate-cleared, and its generated agent files are on disk", () => {
     // Guards the drift check in verify.ts from the other direction: proves
     // the generator's real-pack output is what actually shipped, not just
     // what a fixture produces.
@@ -253,9 +253,9 @@ describe("generateStackAgentPair", () => {
       .map((entry: { name: string }) => entry.name);
     const gateCleared = stackIds.filter((id: string) => checkStackPackGateCleared(path.join(stacksRoot, id)).cleared).sort();
 
-    // Pin the shipped, honest-gate outcome explicitly: react and ts-js-node
-    // clear the gate; go and python still fail it.
-    expect(gateCleared).toEqual(["react", "ts-js-node"]);
+    // Pin the shipped, honest-gate outcome explicitly: only ts-js-node
+    // clears the gate; react, go, and python still fail it.
+    expect(gateCleared).toEqual(["ts-js-node"]);
 
     // Direction 1: every gate-cleared pack that carries an `agentProfile`
     // regenerates to exactly what is on disk — the byte-identical
@@ -288,10 +288,10 @@ describe("generateStackAgentPair", () => {
       expect(gateCleared).toContain(origin.sourceRef);
     }
 
-    // Explicit, not implied by the loop above: exactly 4 generated files
-    // ship — the react and ts-js-node code-auditor/build-fixer pairs.
-    expect(gateCleared).toEqual(["react", "ts-js-node"]);
-    expect(generatedFileCount).toBe(4);
+    // Explicit, not implied by the loop above: exactly 2 generated files
+    // ship — the ts-js-node code-auditor/build-fixer pair.
+    expect(gateCleared).toEqual(["ts-js-node"]);
+    expect(generatedFileCount).toBe(2);
   });
 
   // R2-4: the byte-identical regeneration path (Direction 1 above) has

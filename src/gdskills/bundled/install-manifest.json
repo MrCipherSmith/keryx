@@ -393,7 +393,7 @@
       ],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "react-skills": {
       "kind": "skill",
@@ -410,7 +410,7 @@
       ],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "go-rules": {
       "kind": "rule",

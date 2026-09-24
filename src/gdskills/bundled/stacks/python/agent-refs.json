@@ -1,4 +1,4 @@
 {
   "agents": [],
-  "note": "no pair — the python pack fails the honest stable-pack gate: python-build-fix mypy-error-no-blanket-suppress 0/5 (the scenario is under-specified — the prompt carries no code — and the rubric requires naming the exact mismatch); python-implementation resource-with-block 3/5 (the rubric criterion demands a literal `with open`, but Path.read_text is resource-safe); python-implementation's trigger-positive \"Add a new feature to this Python service that logs each request with the logging module\" is not selected (6/7). deepseek-chat judge gate run, flow 316."
+  "note": "no pair — the python pack fails the honest stable-pack gate: python-implementation's trigger-positive \"Add a new feature to this Python service that logs each request with the logging module\" is not selected (6/7). Every python behavior scenario now clears 0.8. deepseek-chat judge gate run, flow 316."
 }

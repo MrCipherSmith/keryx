@@ -1,4 +1,4 @@
 {
   "agents": [],
-  "note": "no pair — the go pack fails the honest stable-pack gate: go-testing table-driven-subtests 2/5 (in 3 of 5 trials the model emitted a tool/shell call instead of answering directly — the single-turn runner has no tools to call). deepseek-chat judge gate run, flow 316."
+  "note": "no pair — the go pack fails the honest stable-pack gate: go-testing table-driven-subtests 2/5 (the model emits a tool/shell call instead of answering) and no-sleep-sync 3/5 (the judge failed an answer with a select/time.After timeout and one with a bounded time.Sleep poll). deepseek-chat judge gate run, flow 316."
 }
