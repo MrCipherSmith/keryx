@@ -314,6 +314,10 @@ itself is never stored in the rendered file:
   `authors` — a login cannot be profiled unless it is already a recognized
   review author.
 
+### No-attribution filtering
+
+Configured reviewer logins are removed from learned text, and any remaining occurrence is refused, by matching the login at identifier boundaries. A boundary is any character other than a letter, a digit or `-`; `_` counts as a boundary. This catches `@login`, `login[bot]`, `login's` and `login_`. The filtering deliberately does not match a login glued to other letters with no boundary (for example `alicedev` inside `alicedeveloper`) — that is a known, accepted limitation, chosen so that short logins and ordinary words never block lessons, applies or graduations. Reviewer ids in files are always the opaque `rv-` hash.
+
 ## Model extractor capability (disabled by default)
 
 `keryx learn extract` can, in principle, run a model-backed extractor
