@@ -142,6 +142,32 @@ function isTextContent(buffer: Buffer): boolean {
 }
 
 /**
+ * R2-F12 residual (flow 313 W4 review round 2/3): a UTF-16 file (a BOM-
+ * marked `.md`/`.txt` from a Windows-authored skill, for instance) contains
+ * a NUL byte after every ASCII character by construction — `isTextContent`
+ * above refuses it outright as binary-content, so it was never text-scanned
+ * at all (`audit-not-applicable`-shaped skip), silently bypassing every
+ * secret/injection/auto-run check rather than failing closed OR being
+ * scanned. A leading UTF-16 BOM (`FF FE` little-endian, `FE FF` big-endian)
+ * is decoded and returned as ordinary text BEFORE the binary/text branch
+ * runs at all, so this content gets the full check set like any other text
+ * file; a NON-BOM-marked buffer still goes through the UTF-8 branch exactly
+ * as before (bare UTF-16 with no BOM is indistinguishable from binary
+ * without a declared encoding, and stays refused).
+ */
+function decodeUtf16WithBom(buffer: Buffer): string | undefined {
+  if (buffer.length < 2) return undefined;
+  const isLittleEndianBom = buffer[0] === 0xff && buffer[1] === 0xfe;
+  const isBigEndianBom = buffer[0] === 0xfe && buffer[1] === 0xff;
+  if (!isLittleEndianBom && !isBigEndianBom) return undefined;
+  try {
+    return new TextDecoder(isLittleEndianBom ? "utf-16le" : "utf-16be", { fatal: true }).decode(buffer.subarray(2));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * R2-F12: a small, explicitly documented magic-bytes allowlist of common
  * BINARY asset types a skill can legitimately carry (an icon, a screenshot in
  * its docs, a bundled font) — `isTextContent` above already refuses any
@@ -166,6 +192,73 @@ function knownBinaryAssetType(buffer: Buffer): string | undefined {
   if (buffer.length >= 4 && ascii(0, 4) === "wOFF") return "woff";
   if (buffer.length >= 4 && ascii(0, 4) === "wOF2") return "woff2";
   return undefined;
+}
+
+/**
+ * R3-F1 (flow 313 W4 review round 3, choke point c): several of the magic
+ * prefixes above are plain ASCII (`GIF89a`, `%PDF`) — a script's first bytes
+ * can spell one of those prefixes on purpose, with one invalid UTF-8 byte
+ * appended later just to fail `isTextContent` and fall into the "binary
+ * asset, not text-scanned" branch. Matching the prefix alone is therefore not
+ * enough to skip every text check on a file; the extension must also name
+ * that same format, so an attacker would need to both name the file `*.gif`/
+ * `*.pdf`/etc AND make it byte-for-byte structurally valid for that format —
+ * neither alone is sufficient, and a `.sh`/`.md`/`.js`/extensionless file
+ * with a forged magic prefix is refused (reason: binary-content) exactly as
+ * an arbitrary non-allowlisted binary already was.
+ */
+const BINARY_ASSET_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
+  png: [".png"],
+  jpeg: [".jpg", ".jpeg"],
+  gif: [".gif"],
+  webp: [".webp"],
+  ico: [".ico"],
+  pdf: [".pdf"],
+  woff: [".woff"],
+  woff2: [".woff2"],
+};
+
+function hasAllowlistedBinaryExtension(relativePath: string, binaryType: string): boolean {
+  const ext = path.extname(relativePath).toLowerCase();
+  return (BINARY_ASSET_EXTENSIONS[binaryType] ?? []).includes(ext);
+}
+
+/**
+ * R3-F1: beyond a matching extension, the content must also be structurally
+ * consistent with the claimed format — not just start with its magic bytes.
+ * These are deliberately cheap, format-native trailer/length checks (never a
+ * full spec-conformant parse), but each one requires bytes an attacker who
+ * only forges the 3-12 byte magic prefix would not otherwise produce, so the
+ * "magic prefix + wrong extension" and "magic prefix + no valid trailer"
+ * evasions from R3-F1 both fail closed (reason: binary-content).
+ */
+function isStructurallyValidBinaryAsset(buffer: Buffer, binaryType: string): boolean {
+  switch (binaryType) {
+    case "png": {
+      const trailer = Buffer.from([0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
+      return buffer.length >= trailer.length && buffer.subarray(buffer.length - trailer.length).equals(trailer);
+    }
+    case "jpeg":
+      return buffer.length >= 2 && buffer[buffer.length - 2] === 0xff && buffer[buffer.length - 1] === 0xd9;
+    case "gif":
+      return buffer.length >= 1 && buffer[buffer.length - 1] === 0x3b;
+    case "webp":
+      return buffer.length >= 12 && buffer.readUInt32LE(4) === buffer.length - 8;
+    case "ico": {
+      if (buffer.length < 6) return false;
+      const reserved = buffer.readUInt16LE(0);
+      const type = buffer.readUInt16LE(2);
+      const count = buffer.readUInt16LE(4);
+      return reserved === 0 && type === 1 && count > 0 && buffer.length >= 6 + count * 16;
+    }
+    case "pdf":
+      return buffer.subarray(Math.max(0, buffer.length - 1024)).toString("latin1").includes("%%EOF");
+    case "woff":
+    case "woff2":
+      return buffer.length >= 12 && buffer.readUInt32BE(8) === buffer.length;
+    default:
+      return false;
+  }
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -211,13 +304,36 @@ function collectHookCommands(value: unknown, pointer: string, out: Array<{ comma
     if (typeof record.command === "string") {
       out.push({ command: record.command, pointer: `${pointer}/command` });
     } else if (record.command && typeof record.command === "object" && !Array.isArray(record.command)) {
-      const rawArgv: unknown = (record.command as JsonRecord).argv;
+      const commandRecord = record.command as JsonRecord;
+      const rawArgv: unknown = commandRecord.argv;
       if (Array.isArray(rawArgv) && rawArgv.every((v): v is string => typeof v === "string")) {
         const argv = rawArgv;
         out.push({ command: argv.map(shellQuoteForMatching).join(" "), pointer: `${pointer}/command/argv` });
         argv.forEach((element, index) => {
           out.push({ command: element, pointer: `${pointer}/command/argv/${index}` });
         });
+      }
+      // R2-F3 (env-var indirection): the hook-config schema also allows
+      // `command.env`, a map of environment-variable name -> value, applied
+      // to the spawned process. A remote-exec/injection payload placed in an
+      // env value (rather than argv) used to get zero checks — the argv walk
+      // above never looked at `env` at all. Each env value is pushed at its
+      // own pointer, same as an argv element; the walk below also descends
+      // into `env` generically (it is not named "command"), so this is
+      // belt-and-suspenders for any future nested shape, but the explicit
+      // push keeps today's flat `{VAR: "value"}` shape checked even if a
+      // value under it happened to be a non-string that the generic walk
+      // would otherwise skip.
+      const rawEnv: unknown = commandRecord.env;
+      if (rawEnv && typeof rawEnv === "object" && !Array.isArray(rawEnv)) {
+        for (const [envKey, envValue] of Object.entries(rawEnv as JsonRecord)) {
+          if (typeof envValue === "string") {
+            out.push({ command: envValue, pointer: `${pointer}/command/env/${envKey}` });
+          }
+        }
+      }
+      if (typeof commandRecord.cwd === "string") {
+        out.push({ command: commandRecord.cwd, pointer: `${pointer}/command/cwd` });
       }
     }
     for (const [key, nested] of Object.entries(record)) {
@@ -363,9 +479,14 @@ async function scanImportedBundle(
         unreadable.push(entry.path);
         continue;
       }
-      if (!isTextContent(buffer)) {
+      const utf16Content = decodeUtf16WithBom(buffer);
+      if (utf16Content === undefined && !isTextContent(buffer)) {
         const binaryType = knownBinaryAssetType(buffer);
-        if (binaryType !== undefined) {
+        if (
+          binaryType !== undefined &&
+          hasAllowlistedBinaryExtension(entry.path, binaryType) &&
+          isStructurallyValidBinaryAsset(buffer, binaryType)
+        ) {
           scanned.push(entry.path);
           notes.push(`${entry.path}: recorded as hashed but not text-scanned (binary asset: ${binaryType})`);
           continue;
@@ -373,7 +494,7 @@ async function scanImportedBundle(
         unreadable.push(entry.path);
         continue;
       }
-      const content = buffer.toString("utf8");
+      const content = utf16Content ?? buffer.toString("utf8");
       scanned.push(entry.path);
       raw.push(
         ...asBundleFindings(

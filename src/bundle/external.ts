@@ -8,7 +8,7 @@
 // --include-imports` and `verifyExternalImports` can find and re-check it
 // without Keryx ever owning a copy of someone else's skill content.
 
-import { mkdir, lstat, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
+import { mkdir, lstat, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import path from "node:path";
 
@@ -570,6 +570,57 @@ export type ApplyExternalImportsResult =
 
 const EXTERNAL_IMPORTS_LOCK_RETRY_MS = 50;
 const EXTERNAL_IMPORTS_LOCK_TIMEOUT_MS = 3000;
+const EXTERNAL_IMPORTS_LOCK_STALE_AGE_MS = 10 * 60 * 1000;
+
+/**
+ * R3-F23 (flow 313 W4 review round 3): the lock file is only ever removed by
+ * its own holder's `finally` block — a crash or `kill -9` of that process
+ * leaves it on disk forever, and every later `bundle import --external`
+ * refused permanently with no recovery step. A lock is now RECLAIMABLE (and
+ * only reclaimable) when either holds:
+ *  - the pid recorded in the lock file is no longer alive (`process.kill
+ *    (pid, 0)` throws `ESRCH`) — the clearest possible signal the holder is
+ *    gone, checked without sending any real signal (signal 0 only probes);
+ *  - the lock file is older than `EXTERNAL_IMPORTS_LOCK_STALE_AGE_MS` (10
+ *    minutes) — a generous bound no real read-modify-write under this lock
+ *    should ever approach, kept as a fallback for pid REUSE (a dead holder's
+ *    pid reassigned to an unrelated live process would otherwise defeat the
+ *    liveness check above).
+ * A reclaim removes the stale file and retries acquisition exactly once;
+ * if the unlink or the retry race with another process, that is treated as
+ * ordinary lock contention (falls through to the normal poll/timeout path)
+ * rather than a second reclaim attempt, so two processes can never loop
+ * reclaiming each other's fresh lock.
+ */
+async function isStaleExternalImportsLock(lockPath: string): Promise<{ stale: boolean; note: string }> {
+  let raw: string;
+  let mtimeMs: number;
+  try {
+    const [content, stats] = await Promise.all([readFile(lockPath, "utf8"), stat(lockPath)]);
+    raw = content;
+    mtimeMs = stats.mtimeMs;
+  } catch {
+    // Already gone (another process reclaimed or released it) — not our job.
+    return { stale: false, note: "" };
+  }
+  const pid = Number.parseInt(raw.trim(), 10);
+  const ageMs = Date.now() - mtimeMs;
+  if (Number.isInteger(pid) && pid > 0) {
+    try {
+      process.kill(pid, 0);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code === "ESRCH") {
+        return { stale: true, note: `holder pid ${pid} is no longer running` };
+      }
+      // EPERM etc.: the pid exists but we can't probe it — fall through to
+      // the age check rather than assuming it is dead.
+    }
+  }
+  if (ageMs > EXTERNAL_IMPORTS_LOCK_STALE_AGE_MS) {
+    return { stale: true, note: `lock file is ${Math.round(ageMs / 1000)}s old (over the ${EXTERNAL_IMPORTS_LOCK_STALE_AGE_MS / 1000}s stale threshold)` };
+  }
+  return { stale: false, note: "" };
+}
 
 /**
  * R2-F9 (flow 313 review round 2 fix): the registry's read-modify-write
@@ -592,17 +643,36 @@ async function withExternalImportsLock<T>(
   await mkdir(path.dirname(lockPath), { recursive: true });
 
   const deadline = Date.now() + EXTERNAL_IMPORTS_LOCK_TIMEOUT_MS;
+  let reclaimAttempted = false;
+  let reclaimNote: string | undefined;
   for (;;) {
     try {
       await writeFile(lockPath, String(process.pid), { flag: "wx" });
       break;
     } catch (err) {
       if ((err as NodeJS.ErrnoException)?.code !== "EEXIST") throw err;
+      if (!reclaimAttempted) {
+        reclaimAttempted = true;
+        const { stale, note } = await isStaleExternalImportsLock(lockPath);
+        if (stale) {
+          reclaimNote = note;
+          await unlink(lockPath).catch(() => undefined);
+          try {
+            await writeFile(lockPath, String(process.pid), { flag: "wx" });
+            break;
+          } catch (retryErr) {
+            if ((retryErr as NodeJS.ErrnoException)?.code !== "EEXIST") throw retryErr;
+            // Lost the race to reclaim it (another process reclaimed or
+            // re-acquired first) — fall through to the ordinary poll below.
+          }
+        }
+      }
       if (Date.now() >= deadline) {
+        const reclaimSuffix = reclaimNote ? ` A stale lock was detected and reclaim was attempted (${reclaimNote}), but it lost the race to another process.` : "";
         return {
           ok: false,
           reason: "external-imports-locked",
-          message: `${lockPath} is held by another process; timed out after ${EXTERNAL_IMPORTS_LOCK_TIMEOUT_MS}ms`,
+          message: `${lockPath} is held by another process; timed out after ${EXTERNAL_IMPORTS_LOCK_TIMEOUT_MS}ms.${reclaimSuffix} If you're sure no "keryx bundle import --external" is running, delete this file and retry.`,
         };
       }
       await new Promise((resolve) => setTimeout(resolve, EXTERNAL_IMPORTS_LOCK_RETRY_MS));

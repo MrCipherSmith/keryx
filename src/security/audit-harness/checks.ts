@@ -10,6 +10,7 @@ import { scanMcpManifest } from "../detect/mcp";
 import { touchesAgentCredentials } from "../../lib/command-risk";
 import { redactSensitiveText } from "../redact";
 import { agentSentinelFormatOf, structuralSentinelModelTier, type AgentSentinelFormat } from "../../agents/sentinel";
+import type { DetectorMatch } from "../types";
 import type { AuditSeverity, FindingLocation, InternalProposal, RawFinding, SurfaceId } from "./types";
 
 function lineOfOffset(content: string, offset: number): number {
@@ -40,10 +41,101 @@ function lineOfOffset(content: string, offset: number): number {
 // marks block — built from numeric code points (never a literal escape or
 // character-class source) so the constant itself can never be silently
 // mis-rendered.
-const DROPPED_SINGLE_CODEPOINTS: ReadonlySet<number> = new Set([0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x2060, 0xfeff, 0x00ad]);
-const COMBINING_MARK_RANGE: readonly [number, number] = [0x0300, 0x036f];
+//
+// R3-F(R2-F10 continuation, flow 313 W4 review round 2/3): the round-2 set
+// only dropped the FIVE most common zero-width/bidi marks and ONE combining-
+// mark block. Round 3 showed four more evasions splicing invisible
+// characters between the letters of a keyword the same way: the remaining
+// bidi EMBEDDING/OVERRIDE/ISOLATE controls and the Arabic Letter Mark, the
+// invisible-plus (U+2064, used the same way a zero-width space is), and
+// combining marks OUTSIDE the original 0x0300-0x036F block (Unicode defines
+// four more combining-mark blocks a splicing attack can use identically).
+const DROPPED_SINGLE_CODEPOINTS: ReadonlySet<number> = new Set([
+  0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x2060, 0xfeff, 0x00ad,
+  // Bidi controls: Arabic Letter Mark, embeddings/overrides (LRE/RLE/PDF/LRO/RLO), isolates (LRI/RLI/FSI/PDI).
+  0x061c, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069,
+  // Invisible plus (visually nothing, but a word-boundary-defeating splice point like zero-width space).
+  0x2064,
+  // Unicode tag block's two non-mirroring control tags (language-tag start,
+  // deprecated; cancel tag) — the MIRRORING tag range (U+E0020-U+E007E) is
+  // folded back to its ASCII equivalent below, not dropped, because IT
+  // carries the hidden letters an attacker spells with it.
+  0xe0001, 0xe007f,
+]);
+// All five Unicode "combining mark" blocks — not just the original Combining
+// Diacritical Marks block — since a splicing evasion works identically with
+// a combining character from any of them.
+const COMBINING_MARK_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x0300, 0x036f], // Combining Diacritical Marks
+  [0x1ab0, 0x1aff], // Combining Diacritical Marks Extended
+  [0x1dc0, 0x1dff], // Combining Diacritical Marks Supplement
+  [0x20d0, 0x20ff], // Combining Diacritical Marks for Symbols
+  [0xfe20, 0xfe2f], // Combining Half Marks
+];
 function isDroppedForDetection(codePoint: number): boolean {
-  return DROPPED_SINGLE_CODEPOINTS.has(codePoint) || (codePoint >= COMBINING_MARK_RANGE[0] && codePoint <= COMBINING_MARK_RANGE[1]);
+  if (DROPPED_SINGLE_CODEPOINTS.has(codePoint)) return true;
+  return COMBINING_MARK_RANGES.some(([start, end]) => codePoint >= start && codePoint <= end);
+}
+
+// R2-F10/R3-F10-continuation: Mathematical Alphanumeric Symbols (U+1D400-
+// U+1D7FF) — bold/italic/script/fraktur/double-struck/sans-serif/monospace
+// letters and digits that visually spell an ordinary word but sit far
+// outside the ASCII/homoglyph tables above. Each style block is 52 code
+// points (A-Z then a-z) at a fixed start; a handful of letters in the
+// script/fraktur/double-struck styles were never assigned IN that block —
+// Unicode instead reuses pre-existing "letterlike symbol" code points for
+// those — so those are folded via a small explicit exceptions table instead
+// of the range formula.
+const MATH_ALPHANUMERIC_LETTER_STYLE_STARTS: readonly number[] = [
+  0x1d400, // bold
+  0x1d434, // italic
+  0x1d468, // bold italic
+  0x1d49c, // script
+  0x1d4d0, // bold script
+  0x1d504, // fraktur
+  0x1d538, // double-struck
+  0x1d56c, // bold fraktur
+  0x1d5a0, // sans-serif
+  0x1d5d4, // sans-serif bold
+  0x1d608, // sans-serif italic
+  0x1d63c, // sans-serif bold italic
+  0x1d670, // monospace
+];
+const MATH_ALPHANUMERIC_DIGIT_STYLE_STARTS: readonly number[] = [
+  0x1d7ce, // bold
+  0x1d7d8, // double-struck
+  0x1d7e2, // sans-serif
+  0x1d7ec, // sans-serif bold
+  0x1d7f6, // monospace
+];
+const MATH_ALPHANUMERIC_EXCEPTIONS: Readonly<Record<number, string>> = {
+  // Script capitals reused from the pre-existing Letterlike Symbols block.
+  0x212c: "B", 0x2130: "E", 0x2131: "F", 0x210b: "H", 0x2110: "I", 0x2112: "L", 0x2133: "M", 0x211b: "R",
+  // Script lowercase reused likewise.
+  0x212f: "e", 0x210a: "g", 0x2134: "o",
+  // Fraktur capitals reused likewise.
+  0x212d: "C", 0x210c: "H", 0x2111: "I", 0x211c: "R", 0x2128: "Z",
+  // Double-struck capitals reused likewise.
+  0x2102: "C", 0x210d: "H", 0x2115: "N", 0x2119: "P", 0x211a: "Q", 0x211d: "R", 0x2124: "Z",
+  // Italic lowercase h reused likewise (Planck-constant symbol).
+  0x210e: "h",
+};
+function foldMathAlphanumeric(codePoint: number): string | undefined {
+  const exception = MATH_ALPHANUMERIC_EXCEPTIONS[codePoint];
+  if (exception !== undefined) return exception;
+  for (const start of MATH_ALPHANUMERIC_LETTER_STYLE_STARTS) {
+    if (codePoint >= start && codePoint < start + 26) return String.fromCharCode(65 + (codePoint - start));
+    if (codePoint >= start + 26 && codePoint < start + 52) return String.fromCharCode(97 + (codePoint - start - 26));
+  }
+  for (const start of MATH_ALPHANUMERIC_DIGIT_STYLE_STARTS) {
+    if (codePoint >= start && codePoint < start + 10) return String.fromCharCode(48 + (codePoint - start));
+  }
+  return undefined;
+}
+
+/** R2-F10/R3 continuation: the mirroring range of the Unicode tag block (U+E0020-U+E007E) is a byte-for-byte invisible shadow of ASCII 0x20-0x7E (offset -0xE0000) — an attacker spells a hidden word in tag characters that render as NOTHING, folded back to the plain ASCII it shadows so detection sees it. */
+function foldTagCharacter(codePoint: number): string | undefined {
+  return codePoint >= 0xe0020 && codePoint <= 0xe007e ? String.fromCharCode(codePoint - 0xe0000) : undefined;
 }
 const HTML_ENTITY_AT_RE = /^&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);/;
 const NAMED_HTML_ENTITIES: Record<string, string> = {
@@ -80,6 +172,27 @@ function foldFullWidth(ch: string): string {
   return code >= 0xff01 && code <= 0xff5e ? String.fromCodePoint(code - 0xfee0) : ch;
 }
 
+/** Decodes exactly ONE entity at the very start of `text` (`^`-anchored), or returns undefined if `text` does not start with a recognized entity. */
+function decodeEntityStep(text: string): string | undefined {
+  const match = HTML_ENTITY_AT_RE.exec(text);
+  if (!match) return undefined;
+  const body = match[1]!;
+  if (body.startsWith("#x")) {
+    const code = Number.parseInt(body.slice(2), 16);
+    return Number.isFinite(code) ? String.fromCodePoint(code) : undefined;
+  }
+  if (body.startsWith("#")) {
+    const code = Number.parseInt(body.slice(1), 10);
+    return Number.isFinite(code) ? String.fromCodePoint(code) : undefined;
+  }
+  return NAMED_HTML_ENTITIES[body];
+}
+
+function entityMatchLength(text: string): number {
+  const match = HTML_ENTITY_AT_RE.exec(text);
+  return match ? match[0].length : 0;
+}
+
 function normalizeForDetection(content: string): NormalizedText {
   let text = "";
   const origIndexOf: number[] = [];
@@ -87,39 +200,49 @@ function normalizeForDetection(content: string): NormalizedText {
   const n = content.length;
   while (i < n) {
     if (content[i] === "&") {
-      const rest = content.slice(i, i + 12);
-      const entityMatch = HTML_ENTITY_AT_RE.exec(rest);
-      if (entityMatch) {
-        const body = entityMatch[1]!;
-        let decoded: string | undefined;
-        if (body.startsWith("#x")) {
-          const code = Number.parseInt(body.slice(2), 16);
-          decoded = Number.isFinite(code) ? String.fromCodePoint(code) : undefined;
-        } else if (body.startsWith("#")) {
-          const code = Number.parseInt(body.slice(1), 10);
-          decoded = Number.isFinite(code) ? String.fromCodePoint(code) : undefined;
-        } else {
-          decoded = NAMED_HTML_ENTITIES[body];
+      const rest0 = content.slice(i, i + 12);
+      const step0 = decodeEntityStep(rest0);
+      if (step0 !== undefined) {
+        let totalLen = entityMatchLength(rest0);
+        let result = step0;
+        // R2-F10 (double/chained-encoded entities): literal source text
+        // `&amp;#x67;` decodes its first entity (`&amp;`) to a literal `&`,
+        // and the RAW text right after that match (`#x67;`) then forms a
+        // second, real entity together with that just-decoded `&`. Bounded
+        // to 4 extra rounds so a chain of double/triple-encoded entities
+        // collapses to the same plain character a renderer would eventually
+        // show, without looping on adversarial input.
+        for (let iter = 0; iter < 4 && result === "&"; iter += 1) {
+          const probe = "&" + content.slice(i + totalLen, i + totalLen + 12);
+          const nextLen = entityMatchLength(probe);
+          if (nextLen <= 1) break;
+          const nextStep = decodeEntityStep(probe);
+          if (nextStep === undefined) break;
+          totalLen += nextLen - 1;
+          result = nextStep;
         }
-        if (decoded !== undefined) {
-          for (const dch of decoded) {
-            text += dch;
-            origIndexOf.push(i);
-          }
-          i += entityMatch[0].length;
-          continue;
+        for (const dch of result) {
+          text += dch;
+          origIndexOf.push(i);
         }
+        i += totalLen;
+        continue;
       }
     }
-    const ch = content[i]!;
-    if (isDroppedForDetection(ch.codePointAt(0)!)) {
-      i += 1;
+    const codePoint = content.codePointAt(i)!;
+    const charLen = codePoint > 0xffff ? 2 : 1;
+    if (isDroppedForDetection(codePoint)) {
+      i += charLen;
       continue;
     }
-    const folded = HOMOGLYPH_FOLD[ch] ?? foldFullWidth(ch);
-    text += folded;
-    origIndexOf.push(i);
-    i += 1;
+    const ch = content.slice(i, i + charLen);
+    const folded =
+      HOMOGLYPH_FOLD[ch] ?? foldMathAlphanumeric(codePoint) ?? foldTagCharacter(codePoint) ?? foldFullWidth(ch);
+    for (const fch of folded) {
+      text += fch;
+      origIndexOf.push(i);
+    }
+    i += charLen;
   }
   return { text, origIndexOf };
 }
@@ -133,6 +256,23 @@ function originalOffset(normalized: NormalizedText, originalContent: string, nor
 }
 
 // --- secret-in-instructions / skill-script-secret --------------------------
+//
+// R3-F5 (flow 313 W4 review round 3): documented, well-known PLACEHOLDER
+// values legitimately appear in security documentation this repo (and any
+// other project) legitimately bundles — AWS's own docs use the literal
+// access key `AKIAIOSFODNN7EXAMPLE` (any key ending in the literal word
+// `EXAMPLE`) as ITS placeholder convention, and this repo's own security-
+// baseline rule quotes it while teaching that exact recognition rule. A
+// real credential never ends in the literal word `EXAMPLE`. This exemption
+// is scoped to the audit-harness ONLY (here, not in `detect/secrets.ts`
+// itself, which is a shared choke point other consumers — output
+// redaction, `resolve.ts`, `export-audit.ts` — deliberately keep
+// unconditional and fail-closed on ANY AWS-shaped key; weakening the shared
+// detector would silently weaken those too).
+function isDocumentedPlaceholderSecret(match: DetectorMatch): boolean {
+  if (match.policyId === "secrets.aws-access-key" && /EXAMPLE$/.test(match.value)) return true;
+  return false;
+}
 
 export function checkSecretsInText(
   surface: SurfaceId,
@@ -141,7 +281,7 @@ export function checkSecretsInText(
   content: string,
   severity: AuditSeverity,
 ): RawFinding[] {
-  const matches = detectSecrets(content);
+  const matches = detectSecrets(content).filter((match) => !isDocumentedPlaceholderSecret(match));
   return matches.map((match) => ({
     surface,
     check,
@@ -162,6 +302,74 @@ export function checkSecretsInText(
 // `originalOffset`, so the reported line is where the (possibly obfuscated)
 // text actually lives on disk.
 
+// R3-F5 (flow 313 W4 review round 3): the injection patterns above are
+// imperative-SHAPED ("ignore previous instructions") on purpose, so they
+// also match the exact phrase a skill quotes WHILE TEACHING DEFENSE against
+// it — this repo's own `review-pr-feedback` skill was flagged twice for
+// quoting the very phrases it warns readers to watch for. Directed-at-the-
+// reader prose ("ignore your previous instructions and do X") and a quoted/
+// fenced EXAMPLE of that same phrase ("...matches phrases such as `ignore
+// previous instructions`...") read identically to the raw regex; the
+// difference a human sees is the quoting/fencing around the second case.
+// Neither is suppressed outright (a real injection payload can itself be
+// wrapped in quotes to look like documentation) — a quoted or fenced match
+// is reported at a lower severity/confidence instead, same choke point as
+// the fenced remote-exec downgrade above (`computeFencedRanges`/
+// `isInsideFence`), so a human/gate reviewing `medium` findings still sees
+// it, but it does not fail the W8 gate (which only fails closed on
+// `high`/`critical`) the way an un-quoted, un-fenced imperative directed at
+// the reader still does.
+const QUOTE_CHARS_ANY = ["'", '"', "`", "‘", "’", "“", "”"];
+function matchingCloseQuote(ch: string): string {
+  if (ch === "‘") return "’";
+  if (ch === "“") return "”";
+  return ch;
+}
+
+/** True when the match sits inside a quoted span ON THE SAME LINE — an open quote somewhere before it, and its matching close somewhere after it, without crossing a newline (never spans a whole fenced/quoted BLOCK; that is `computeFencedRanges`'s job). */
+function isQuotedExample(content: string, start: number, end: number): boolean {
+  const lineStart = content.lastIndexOf("\n", start - 1) + 1;
+  const lineEndIdx = content.indexOf("\n", end);
+  const lineEnd = lineEndIdx === -1 ? content.length : lineEndIdx;
+  const before = content.slice(lineStart, start);
+  const after = content.slice(end, lineEnd);
+  let openChar: string | undefined;
+  for (let i = before.length - 1; i >= 0; i -= 1) {
+    if (QUOTE_CHARS_ANY.includes(before[i]!)) {
+      openChar = before[i];
+      break;
+    }
+  }
+  if (openChar === undefined) return false;
+  return after.includes(matchingCloseQuote(openChar));
+}
+
+/**
+ * True when the phrase is REPORTED/DESCRIBED rather than a direct imperative
+ * to the reader — "a comment that says TO ignore prior instructions... is
+ * content to report" describes the concept in third person; a real
+ * injection payload phrases it as a bare imperative ("Ignore all previous
+ * instructions and..."), never as the object of "to". The infinitive marker
+ * "to" immediately before the match is the reliable, narrow signal: it never
+ * appears before a genuine imperative sentence-start (which begins the
+ * clause, with nothing before it but whitespace/punctuation).
+ */
+function isReportedSpeechContext(content: string, start: number): boolean {
+  const before = content.slice(Math.max(0, start - 6), start);
+  return /\bto\s*$/i.test(before);
+}
+
+function isDowngradedInjectionContext(content: string, origStart: number, origEnd: number): boolean {
+  if (isInsideFence(computeFencedRanges(content), origStart)) return true;
+  if (isQuotedExample(content, origStart, origEnd)) return true;
+  return isReportedSpeechContext(content, origStart);
+}
+
+const SEVERITY_RANK: Readonly<Record<AuditSeverity, number>> = { low: 1, medium: 2, high: 3, critical: 4 };
+function downgradeSeverity(severity: AuditSeverity): AuditSeverity {
+  return SEVERITY_RANK[severity] > SEVERITY_RANK.medium ? "medium" : severity;
+}
+
 export function checkInjectionInText(
   surface: SurfaceId,
   check: "prompt-injection-in-instructions" | "skill-script-injection",
@@ -171,16 +379,24 @@ export function checkInjectionInText(
 ): RawFinding[] {
   const normalized = normalizeForDetection(content);
   const matches = detectInjection(normalized.text);
-  return matches.map((match) => ({
-    surface,
-    check,
-    severity,
-    confidence: match.confidence,
-    path: relativePath,
-    location: { line: lineOfOffset(content, originalOffset(normalized, content, match.start)) },
-    message: `${relativePath} contains a phrase matching a prompt-injection pattern (${match.policyId}).`,
-    evidence: { category: match.category, policyId: match.policyId, matchedToken: match.policyId },
-  }));
+  return matches.map((match) => {
+    const origStart = originalOffset(normalized, content, match.start);
+    const origEnd = originalOffset(normalized, content, match.end);
+    const quotedOrFenced = isDowngradedInjectionContext(content, origStart, origEnd);
+    const effectiveSeverity = quotedOrFenced ? downgradeSeverity(severity) : severity;
+    return {
+      surface,
+      check,
+      severity: effectiveSeverity,
+      confidence: quotedOrFenced ? Math.min(match.confidence, 0.3) : match.confidence,
+      path: relativePath,
+      location: { line: lineOfOffset(content, origStart) },
+      message: quotedOrFenced
+        ? `${relativePath} quotes or fences a phrase matching a prompt-injection pattern (${match.policyId}); treated as a documentation example, not an instruction directed at the reader.`
+        : `${relativePath} contains a phrase matching a prompt-injection pattern (${match.policyId}).`,
+      evidence: { category: match.category, policyId: match.policyId, matchedToken: match.policyId },
+    };
+  });
 }
 
 // --- auto-run-directive -----------------------------------------------------
@@ -559,6 +775,22 @@ export function checkHookExfiltrationShape(relativePath: string, hookCommand: st
 // markdown) is unaffected by the fenced-code rule below, which only applies
 // to free text via `checkRemoteExecInText`.
 const SHELL_INTERPRETERS = "sh|bash|zsh|dash|ksh|python3?|node|perl|ruby";
+// R2-F12 (flow 313 W4 review round 2/3 residual): a shell (`sh`/`bash`/...)
+// piped a download's output ALWAYS executes it as commands — there is no
+// legitimate "pipe into a shell as a filter" usage. A scripting-language
+// interpreter (`python3`/`node`/`perl`/`ruby`) is different: `curl ... |
+// python3 -m json.tool` and `curl ... | node -e 'console.log(1)'` are
+// ordinary, common documentation for piping a download into a FILTER/
+// pretty-printer, not into code execution — the interpreter never reads its
+// own PROGRAM from stdin when it is given a module/flag/script argument.
+// Split the interpreter list so the pipe-to-shell shape only fires
+// unconditionally for the shell-likes; a pipe into a scripting interpreter
+// is only the "download that gets executed" shape when the interpreter is
+// BARE (reads its program from stdin) — nothing else on the line after its
+// name — which is exactly what `PIPE_TO_SCRIPT_STDIN_RE` below requires via
+// its trailing lookahead.
+const SHELL_LIKE_INTERPRETERS = "sh|bash|zsh|dash|ksh";
+const SCRIPT_STDIN_INTERPRETERS = "python3?|node|perl|ruby";
 const DOWNLOAD_TOOLS = "curl|wget";
 const ABS_PATH_PREFIX = "(?:/usr/bin/|/bin/|/usr/local/bin/)?";
 // Leading `VAR=value` assignments, then an optional `sudo`, then an optional
@@ -578,7 +810,14 @@ const TEE_HOP = `(?:tee\\s+\\S+\\s*\\|\\s*)?`;
 const BACKTICK = "\\u0060";
 
 const PIPE_TO_SHELL_RE = new RegExp(
-  `\\b(?:${DOWNLOAD_TOOLS})\\b[^\\n]*\\|\\s*${TEE_HOP}${WRAPPER_PREFIX}(?:${SHELL_INTERPRETERS})(?!-)\\b`,
+  `\\b(?:${DOWNLOAD_TOOLS})\\b[^\\n]*\\|\\s*${TEE_HOP}${WRAPPER_PREFIX}(?:${SHELL_LIKE_INTERPRETERS})(?!-)\\b`,
+  "i",
+);
+// R2-F12 residual: only a BARE scripting interpreter (nothing after its name
+// but a separator/end-of-line) counts as "reads and executes the piped
+// download" — `(?=\s*(?:[;&|]|\n|$))` requires that boundary.
+const PIPE_TO_SCRIPT_STDIN_RE = new RegExp(
+  `\\b(?:${DOWNLOAD_TOOLS})\\b[^\\n]*\\|\\s*${TEE_HOP}${WRAPPER_PREFIX}(?:${SCRIPT_STDIN_INTERPRETERS})(?!-)\\b(?=\\s*(?:[;&|]|\\n|$))`,
   "i",
 );
 const DASH_C_COMMAND_SUB_RE = new RegExp(
@@ -598,6 +837,7 @@ const POWERSHELL_DOWNLOADSTRING_RE = /\b(?:iex|invoke-expression)\b[^\n]*downloa
 
 const REMOTE_EXEC_SHAPES: Array<{ id: string; regex: RegExp }> = [
   { id: "audit.hook.remote-exec.pipe-to-shell", regex: PIPE_TO_SHELL_RE },
+  { id: "audit.hook.remote-exec.pipe-to-script-stdin", regex: PIPE_TO_SCRIPT_STDIN_RE },
   { id: "audit.hook.remote-exec.dash-c-command-substitution", regex: DASH_C_COMMAND_SUB_RE },
   { id: "audit.hook.remote-exec.process-substitution", regex: PROCESS_SUB_RE },
   { id: "audit.hook.remote-exec.source-process-substitution", regex: SOURCE_PROCESS_SUB_RE },
@@ -616,20 +856,96 @@ function matchRemoteExecShape(text: string): { id: string; index: number } | und
   return undefined;
 }
 
+// R1-F13 (flow 313 W4 review round 1/3): the literal SHAPES above (a
+// specific download tool piped/substituted into a specific interpreter) can
+// never enumerate every schema-valid hook argv that fetches and runs remote
+// code — round 3 showed 15 of 18 schema-valid shapes slipping past unflagged:
+// `python3 -c "exec(urlopen(...).read())"`, `node -e "fetch(..).then(eval)"`,
+// `perl -MLWP::Simple -e ...`, a reverse shell via `/dev/tcp` or `nc -e`,
+// `busybox sh`, a base64-decoded payload piped to a shell, and quote/
+// variable-split obfuscation of a download tool's own name (`c''url`,
+// `c${X}url`). Rather than adding yet more literal shapes (a denylist of
+// known-bad forms can never close a behavior CLASS), these are matched by
+// BEHAVIOR: "an interpreter is told to execute a literal program string" or
+// "a raw TCP/reverse-shell primitive is invoked" or "a decoded/obfuscated
+// payload is piped into a shell" — always reported at MEDIUM (never blocks
+// the W8 gate on its own), because a `-c`/`-e` flag legitimately appears in
+// tooling that never fetches remote code; a human/reviewer still sees it.
+const INTERPRETER_EXEC_FLAG_RE =
+  /\b(?:python3?|node|perl|ruby|php)\b(?:\s+(?:-[A-Za-z][A-Za-z0-9:]*|--[A-Za-z][A-Za-z0-9-]*(?:=\S+)?))*\s+-[A-Za-z]*[ceM][A-Za-z]*\b/;
+const REVERSE_SHELL_RE = /\/dev\/tcp\/|\b(?:nc|ncat|netcat)\b[^\n]{0,20}-e\b|\bbusybox\s+sh\b/i;
+const BASE64_PIPE_SHELL_RE = new RegExp(
+  `\\bbase64\\b[^\\n]{0,20}(?:-d|--decode)\\b[^\\n]{0,20}\\|\\s*${TEE_HOP}${WRAPPER_PREFIX}(?:${SHELL_INTERPRETERS})(?!-)\\b`,
+  "i",
+);
+
+const BEHAVIOR_CLASS_SHAPES: Array<{ id: string; regex: RegExp }> = [
+  { id: "audit.hook.remote-exec.interpreter-exec-flag", regex: INTERPRETER_EXEC_FLAG_RE },
+  { id: "audit.hook.remote-exec.reverse-shell-primitive", regex: REVERSE_SHELL_RE },
+  { id: "audit.hook.remote-exec.base64-pipe-to-shell", regex: BASE64_PIPE_SHELL_RE },
+];
+
+/**
+ * Quote/variable-split obfuscation (`c''url`, `c${X}url`, `c"u"rl`) hides a
+ * download tool's or interpreter's name from every regex above by splicing
+ * an empty-string shell expansion INSIDE the literal word — the shell itself
+ * collapses these back to the plain word before exec, so a detector reading
+ * the RAW text has to do the same collapse to see what will actually run.
+ * Only empty/trivial expansions are collapsed (an adjacent empty quote pair,
+ * or a `${NAME}` reference) — never a guess at what a variable's runtime
+ * value is, so this can only ever reveal a shape, never hallucinate one that
+ * ISN'T there in some other resolution of the variable.
+ */
+function deobfuscateShellText(text: string): string {
+  return text.replace(/\$\{[A-Za-z_][A-Za-z0-9_]*\}/g, "").replace(/(['"])\1/g, "");
+}
+
+function matchBehaviorClassShape(text: string): { id: string; index: number } | undefined {
+  for (const shape of BEHAVIOR_CLASS_SHAPES) {
+    const match = shape.regex.exec(text);
+    if (match) return { id: shape.id, index: match.index };
+  }
+  const deobfuscated = deobfuscateShellText(text);
+  if (deobfuscated !== text) {
+    const direct = matchRemoteExecShape(deobfuscated);
+    if (direct) return { id: `${direct.id}.obfuscated`, index: direct.index };
+    for (const shape of BEHAVIOR_CLASS_SHAPES) {
+      const match = shape.regex.exec(deobfuscated);
+      if (match) return { id: `${shape.id}.obfuscated`, index: match.index };
+    }
+  }
+  return undefined;
+}
+
 /** Hook-config `command` strings (JSON, pointer-addressed) — both the live `hooks` surface and, via `bundle-hook-remote-exec`, a staged bundle's `hook-config` entries. Never inside markdown, so the fenced-code severity rule in `checkRemoteExecInText` does not apply here — always `high`. */
 export function checkHookRemoteExec(relativePath: string, hookCommand: string, pointer: string): RawFinding[] {
   const match = matchRemoteExecShape(hookCommand);
-  if (!match) return [];
+  if (match) {
+    return [
+      {
+        surface: "hooks",
+        check: "hook-remote-exec",
+        severity: "high",
+        confidence: 0.85,
+        path: relativePath,
+        location: { pointer },
+        message: `${relativePath} downloads and executes remote content (${match.id}), a download-and-execute shape.`,
+        evidence: { category: "egress", policyId: match.id, matchedToken: match.id },
+      },
+    ];
+  }
+  const behavior = matchBehaviorClassShape(hookCommand);
+  if (!behavior) return [];
   return [
     {
       surface: "hooks",
       check: "hook-remote-exec",
-      severity: "high",
-      confidence: 0.85,
+      severity: "medium",
+      confidence: 0.55,
       path: relativePath,
       location: { pointer },
-      message: `${relativePath} downloads and executes remote content (${match.id}), a download-and-execute shape.`,
-      evidence: { category: "egress", policyId: match.id, matchedToken: match.id },
+      message: `${relativePath} matches a remote-execution behavior class (${behavior.id}) — an interpreter/shell primitive that can run fetched or decoded content.`,
+      evidence: { category: "egress", policyId: behavior.id, matchedToken: behavior.id },
     },
   ];
 }
@@ -644,14 +960,38 @@ export function checkHookRemoteExec(relativePath: string, hookCommand: string, p
 // closed on `high`/`critical`) while the exact same shape found OUTSIDE a
 // fence — in a script that is actually executed, or in prose instructing an
 // agent to run it — stays `high`.
+// R3-F6 (flow 313 W4 review round 3, choke point f): the previous version
+// treated ANY line whose TRIMMED start began with ``` or ~~~ as a fence
+// marker, with no indentation limit, and — if a fence was never explicitly
+// closed — silently spanned the "fence" all the way to end-of-content. Both
+// let an attacker force the medium-severity downgrade above onto content
+// that a real markdown renderer would never treat as fenced: an 8-space-
+// indented ``` (CommonMark caps fence-marker indentation at 3 spaces; wider
+// indentation is either an indented code block with no closing rule, or
+// plain paragraph text) or an unterminated fence (open ``` with no matching
+// close before the file ends) both used to "close" over everything that
+// followed. A fence range is now only ever produced from a MATCHED opening/
+// closing marker PAIR, each indented at most 3 spaces, mirroring how a
+// CommonMark renderer decides a block is fenced; an unclosed trailing fence
+// contributes no range at all (nothing after it is treated as "inside a
+// fence").
+const MAX_FENCE_INDENT = 3;
+
 function computeFencedRanges(content: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
   let offset = 0;
   let fenceStart: number | undefined;
   let fenceMarker: string | undefined;
   for (const line of content.split("\n")) {
-    const trimmed = line.trimStart();
-    const marker = trimmed.startsWith("```") ? "`" : trimmed.startsWith("~~~") ? "~" : undefined;
+    const indentMatch = /^ */.exec(line);
+    const indent = indentMatch ? indentMatch[0].length : 0;
+    const trimmed = line.slice(indent);
+    const marker =
+      indent <= MAX_FENCE_INDENT && trimmed.startsWith("```")
+        ? "`"
+        : indent <= MAX_FENCE_INDENT && trimmed.startsWith("~~~")
+          ? "~"
+          : undefined;
     if (marker !== undefined) {
       if (fenceStart === undefined) {
         fenceStart = offset;
@@ -664,9 +1004,8 @@ function computeFencedRanges(content: string): Array<[number, number]> {
     }
     offset += line.length + 1;
   }
-  if (fenceStart !== undefined) {
-    ranges.push([fenceStart, content.length]);
-  }
+  // An unterminated trailing fence (fenceStart still set) produces no range:
+  // nothing after an unclosed opening marker is "inside a fence".
   return ranges;
 }
 
@@ -677,21 +1016,36 @@ function isInsideFence(ranges: Array<[number, number]>, index: number): boolean 
 /** Free-text content (skill scripts/instructions, line-addressed) — used against a staged bundle's `skill` entry text under `bundle-hook-remote-exec`. */
 export function checkRemoteExecInText(surface: SurfaceId, relativePath: string, content: string): RawFinding[] {
   const match = matchRemoteExecShape(content);
-  if (!match) return [];
-  const fenced = isInsideFence(computeFencedRanges(content), match.index);
-  const severity: AuditSeverity = fenced ? "medium" : "high";
+  if (match) {
+    const fenced = isInsideFence(computeFencedRanges(content), match.index);
+    const severity: AuditSeverity = fenced ? "medium" : "high";
+    return [
+      {
+        surface,
+        check: "hook-remote-exec",
+        severity,
+        confidence: fenced ? 0.6 : 0.85,
+        path: relativePath,
+        location: { line: lineOfOffset(content, match.index) },
+        message: fenced
+          ? `${relativePath} shows a download-and-execute shape (${match.id}) inside a fenced code block; treated as a documentation example, not confirmed executable content.`
+          : `${relativePath} downloads and executes remote content (${match.id}), a download-and-execute shape.`,
+        evidence: { category: "egress", policyId: match.id, matchedToken: match.id },
+      },
+    ];
+  }
+  const behavior = matchBehaviorClassShape(content);
+  if (!behavior) return [];
   return [
     {
       surface,
       check: "hook-remote-exec",
-      severity,
-      confidence: fenced ? 0.6 : 0.85,
+      severity: "medium",
+      confidence: 0.5,
       path: relativePath,
-      location: { line: lineOfOffset(content, match.index) },
-      message: fenced
-        ? `${relativePath} shows a download-and-execute shape (${match.id}) inside a fenced code block; treated as a documentation example, not confirmed executable content.`
-        : `${relativePath} downloads and executes remote content (${match.id}), a download-and-execute shape.`,
-      evidence: { category: "egress", policyId: match.id, matchedToken: match.id },
+      location: { line: lineOfOffset(content, behavior.index) },
+      message: `${relativePath} matches a remote-execution behavior class (${behavior.id}) — an interpreter/shell primitive that can run fetched or decoded content.`,
+      evidence: { category: "egress", policyId: behavior.id, matchedToken: behavior.id },
     },
   ];
 }

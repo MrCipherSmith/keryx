@@ -1,7 +1,7 @@
 // Flow 313 (W4 portability), T10 — `src/bundle/external.ts`: vetting and
 // reference-only recording of an Agent-Skills-standard catalog (W4-AC9).
 
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -656,6 +656,85 @@ describe("concurrent applyExternalImports (R2-F9)", () => {
     // writes from an empty registry must land on version 2, never 1 (which
     // would mean one write clobbered the other rather than merging).
     expect(read.registry.version).toBe(2);
+  });
+});
+
+// R3-F23 (flow 313 W4 review round 3): a lock file whose holder crashed
+// (pid dead) or that is simply very old (holder pid reused by an unrelated
+// live process) used to block every future `applyExternalImports` forever —
+// nothing ever checked liveness/age before this fix. Reclaim must fire on
+// EITHER signal independently.
+describe("stale external-imports lock reclaim (R3-F23)", () => {
+  test("a lock file left by a dead pid is reclaimed and the import proceeds", async () => {
+    const home = await makeTempDir("keryx-external-home-");
+    const projectRoot = await makeTempDir("keryx-external-project-");
+    const catalogRoot = await makeTempDir("keryx-external-catalog-");
+    const skillDir = path.join(catalogRoot, "stale-lock-pid-quokka");
+    await writeSkill(skillDir, "name: stale-lock-pid-quokka\ndescription: A completely fabricated zzz-quokka placeholder skill for the stale-lock reclaim test");
+
+    const lockPath = path.join(userStorePaths(process.env, home).state, "external-imports.lock");
+    await mkdir(path.dirname(lockPath), { recursive: true });
+    // A pid essentially guaranteed not to be a live process in any test
+    // environment (well past the usual pid_max on every platform this repo
+    // targets), but still inside the platform's valid pid_t range so
+    // `process.kill(pid, 0)` reports ESRCH rather than an out-of-range error.
+    await writeFile(lockPath, "999999", "utf8");
+
+    const result = await vetExternalCatalog({ catalogPath: catalogRoot, projectRoot, env: process.env, homeDir: home });
+    expect(result.candidates[0]?.decision).toBe("accepted");
+    const applied = await applyExternalImports(result, { env: process.env, homeDir: home });
+    expect(applied.ok).toBe(true);
+
+    const read = await readExternalImports(process.env, home);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(Object.keys(read.registry.imports)).toContain("stale-lock-pid-quokka");
+  });
+
+  test("a lock file older than the stale-age threshold is reclaimed even with a live pid recorded in it", async () => {
+    const home = await makeTempDir("keryx-external-home-");
+    const projectRoot = await makeTempDir("keryx-external-project-");
+    const catalogRoot = await makeTempDir("keryx-external-catalog-");
+    const skillDir = path.join(catalogRoot, "stale-lock-age-narwhal");
+    await writeSkill(skillDir, "name: stale-lock-age-narwhal\ndescription: A completely fabricated zzz-narwhal placeholder skill for the stale-lock age-reclaim test");
+
+    const lockPath = path.join(userStorePaths(process.env, home).state, "external-imports.lock");
+    await mkdir(path.dirname(lockPath), { recursive: true });
+    // The pid IS alive (it's this test process) — only the age makes this
+    // lock reclaimable, guarding against a dead holder's pid being reused by
+    // an unrelated live process.
+    await writeFile(lockPath, String(process.pid), "utf8");
+    const eleventhMinuteAgo = new Date(Date.now() - 11 * 60 * 1000);
+    await utimes(lockPath, eleventhMinuteAgo, eleventhMinuteAgo);
+
+    const result = await vetExternalCatalog({ catalogPath: catalogRoot, projectRoot, env: process.env, homeDir: home });
+    expect(result.candidates[0]?.decision).toBe("accepted");
+    const applied = await applyExternalImports(result, { env: process.env, homeDir: home });
+    expect(applied.ok).toBe(true);
+
+    const read = await readExternalImports(process.env, home);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(Object.keys(read.registry.imports)).toContain("stale-lock-age-narwhal");
+  });
+
+  test("a fresh lock file with a live pid is NOT reclaimed (still ordinary contention)", async () => {
+    const home = await makeTempDir("keryx-external-home-");
+    const projectRoot = await makeTempDir("keryx-external-project-");
+    const catalogRoot = await makeTempDir("keryx-external-catalog-");
+    const skillDir = path.join(catalogRoot, "held-lock-tapir");
+    await writeSkill(skillDir, "name: held-lock-tapir\ndescription: A completely fabricated zzz-tapir placeholder skill for the held-lock contention test");
+
+    const lockPath = path.join(userStorePaths(process.env, home).state, "external-imports.lock");
+    await mkdir(path.dirname(lockPath), { recursive: true });
+    await writeFile(lockPath, String(process.pid), "utf8");
+
+    const result = await vetExternalCatalog({ catalogPath: catalogRoot, projectRoot, env: process.env, homeDir: home });
+    expect(result.candidates[0]?.decision).toBe("accepted");
+    const applied = await applyExternalImports(result, { env: process.env, homeDir: home });
+    expect(applied.ok).toBe(false);
+    if (applied.ok) return;
+    expect(applied.reason).toBe("external-imports-locked");
   });
 });
 
