@@ -1,12 +1,55 @@
 // Flow 309, W1 Lane C — `keryx skills scout`, the pre-creation dedupe gate
-// (W1-AC9). Deterministic, lexical, offline: the same `normalizeRouteText`/
-// `routeTokens` tokenizer the skill router itself scores with
-// (`src/lib/route-tokens.ts`), so a scout decision and a live routing
+// (W1-AC9). Deterministic, lexical, offline: tokenization reuses the same
+// `normalizeRouteText`/`routeTokens` tokenizer the skill router itself scores
+// with (`src/lib/route-tokens.ts`), so a scout decision and a live routing
 // decision can never silently disagree about what counts as a shared term.
+//
+// SCORING (flow 309, T12 — replaces the original symmetric-Jaccard scorer)
+//
+// The original scorer computed `|A∩B| / |A∪B|` between the query's tokens and
+// an entry's FULL haystack (name + description + triggers). That punishes
+// every short query: a 2-3 token trigger phrase scored against a 40-60 token
+// description caps out near `query.size / description.size`, regardless of
+// how completely the query's own intent is covered — `keryx skills eval`
+// (flow 309, T12 diagnosis) showed `review/review-frontend`'s OWN triggers
+// ("ui review", "review components", ...) scoring 0.03-0.09 against its own
+// catalog entry, nowhere near `SCOUT_USE_THRESHOLD`, purely because the
+// denominator is dominated by the description's unrelated tokens. A real
+// dedupe query ("review react components mobx") suffered the same fate
+// (0.086 against `review-frontend`, decision `create`) even though the
+// skill plainly covers it.
+//
+// The fix scores QUERY COVERAGE, not set overlap: what fraction of the
+// query's own (IDF-weighted) intent does this entry account for. A query
+// token that matches is worth its IDF weight (rare terms like "mobx" count
+// for more than "review", which appears in nearly every review/* skill's
+// haystack); the entry's total token count no longer enters the score at
+// all, so a 60-token description is not penalized relative to a 6-token one.
+// `stemLite` folds "components"/"reviewing"/"reviews" onto "component"/
+// "review"/"review" first, so plural/-ing variants of the same term always
+// share one IDF bucket instead of splitting it — this is the fix for the
+// second observed defect ("review components" vs "review component" scoring
+// as unrelated tokens under the old exact-match scorer).
+//
+// Calibration evidence (flow 309, T12; scored against the real bundled
+// catalog, 72 skills):
+//   - `review/review-frontend`'s own description as query -> scores 1.0
+//     against itself (full coverage; every other bundled skill's description
+//     is checked as OK too — no self-query mismatch across all 72 skills).
+//   - "review react components mobx" -> 0.661 against `review-frontend`,
+//     `review-backend` and `review-flow-graph` (all three genuinely share
+//     "review"+"react"+"component"), clearing `SCOUT_USE_THRESHOLD` (was
+//     0.086, decision `create`).
+//   - "kubernetes helm chart linting" (unrelated) -> top score 0.209
+//     (`orchestration/code-verifier`/`platform/hookify`, sharing only
+//     "lint"), well under `SCOUT_FORK_THRESHOLD`; decision stays `create`.
+// See `SCOUT_USE_THRESHOLD`/`SCOUT_FORK_THRESHOLD` below for the threshold
+// values themselves — unchanged by this fix, since both were already
+// calibrated against a [0, 1] coverage-shaped score and the failure was in
+// how the score was COMPUTED, not where the bar was set.
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { jaccardSimilarity } from "../bundled-eval";
 import { normalizeRouteText, routeTokens } from "../../lib/route-tokens";
 import type { CatalogEntry } from "./catalog-index";
 
@@ -15,7 +58,8 @@ import type { CatalogEntry } from "./catalog-index";
  * rather than forked or duplicated. Calibrated against the real bundled
  * catalog: scouting an existing skill's own description returns its own id
  * at or above this score (the description IS the bulk of that skill's
- * scored text), and an unrelated query scores every entry well below it.
+ * scored text, so its own-description query always reaches full coverage),
+ * and an unrelated query scores every entry well below it.
  */
 export const SCOUT_USE_THRESHOLD = 0.55;
 
@@ -26,6 +70,7 @@ export type ScoutDecision = "use" | "fork" | "create";
 
 export interface ScoutMatch {
   readonly skillId: string;
+  readonly category: string;
   readonly overlapScore: number;
   readonly reason: string;
 }
@@ -41,12 +86,94 @@ export interface ScoutOptions {
   readonly threshold?: { readonly use?: number; readonly fork?: number };
 }
 
-function scoreEntry(queryTokens: ReadonlySet<string>, entry: CatalogEntry): { score: number; reason: string } {
-  const haystack = [entry.name, entry.description, ...entry.triggers].join(" ");
-  const entryTokens = routeTokens(normalizeRouteText(haystack));
-  const score = jaccardSimilarity(queryTokens, entryTokens);
+// ---------------------------------------------------------------------------
+// Lexical scoring: IDF-weighted query coverage over stemmed tokens.
+// ---------------------------------------------------------------------------
+
+/**
+ * Lightweight, deterministic suffix stripping so "component"/"components",
+ * "review"/"reviews"/"reviewing" share one token instead of splitting IDF
+ * weight (and match credit) across near-duplicate surface forms. Not a real
+ * stemmer (no dictionary, no exceptions) — just enough to stop plural/-ing
+ * near-misses from reading as "no shared terms".
+ */
+function stemLite(token: string): string {
+  if (token.length > 4 && token.endsWith("ies")) return `${token.slice(0, -3)}y`;
+  if (token.length > 4 && token.endsWith("es")) return token.slice(0, -2);
+  if (token.length > 5 && token.endsWith("ing")) return token.slice(0, -3);
+  if (token.length > 3 && token.endsWith("s") && !token.endsWith("ss")) return token.slice(0, -1);
+  return token;
+}
+
+function lexicalTokens(text: string): Set<string> {
+  return new Set([...routeTokens(normalizeRouteText(text))].map(stemLite));
+}
+
+/** `name + description + triggers`, tokenized and stemmed — the text an entry is scored on. */
+function entryLexicalTokens(entry: CatalogEntry): Set<string> {
+  return lexicalTokens([entry.name, entry.description, ...entry.triggers].join(" "));
+}
+
+interface LexicalIndex {
+  readonly tokensById: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Smoothed IDF: `ln((N+1)/(df+1)) + 1`, always > 0, so an unseen query token still contributes its (maximal) weight rather than vanishing. */
+  readonly idf: (token: string) => number;
+}
+
+/** Builds the corpus IDF table this `catalog` scores against — document frequency per stemmed token, over this catalog only, so two calls against different catalogs never leak weights between them. */
+function buildLexicalIndex(catalog: readonly CatalogEntry[]): LexicalIndex {
+  const tokensById = new Map<string, ReadonlySet<string>>();
+  const documentFrequency = new Map<string, number>();
+  for (const entry of catalog) {
+    const tokens = entryLexicalTokens(entry);
+    tokensById.set(entry.id, tokens);
+    for (const token of tokens) documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
+  }
+  const n = catalog.length;
+  const idf = (token: string): number => Math.log((n + 1) / ((documentFrequency.get(token) ?? 0) + 1)) + 1;
+  return { tokensById, idf };
+}
+
+/**
+ * IDF-weighted fraction of `queryTokens`' own weight that `entryTokens`
+ * covers — `sum(idf(t) for t in query ∩ entry) / sum(idf(t) for t in query)`.
+ * Unlike Jaccard, the entry's OWN size never enters the denominator: a short
+ * trigger phrase scored against a long description is judged only on how
+ * much of the phrase's intent that description accounts for, not diluted by
+ * everything else the description also talks about.
+ */
+function coverageScore(
+  queryTokens: ReadonlySet<string>,
+  entryTokens: ReadonlySet<string>,
+  idf: (token: string) => number,
+): { score: number; shared: string[] } {
   const shared = [...queryTokens].filter((token) => entryTokens.has(token)).sort();
-  return { score, reason: shared.length > 0 ? `shared terms: ${shared.join(", ")}` : "no shared terms" };
+  if (queryTokens.size === 0) return { score: 0, shared };
+  let queryWeight = 0;
+  let matchedWeight = 0;
+  for (const token of queryTokens) {
+    const weight = idf(token);
+    queryWeight += weight;
+    if (entryTokens.has(token)) matchedWeight += weight;
+  }
+  return { score: queryWeight === 0 ? 0 : matchedWeight / queryWeight, shared };
+}
+
+/** Every catalog entry scored against `query`, sorted by score descending then id ascending (deterministic ties) — the FULL ranking, uncapped (`scoutSkill` caps it to 5 for display; the trigger grader needs the whole thing to check what outranks what). */
+function rankCatalog(query: string, catalog: readonly CatalogEntry[]): ScoutMatch[] {
+  const index = buildLexicalIndex(catalog);
+  const queryTokens = lexicalTokens(query);
+  const scored = catalog.map((entry) => {
+    const entryTokens = index.tokensById.get(entry.id) ?? new Set<string>();
+    const { score, shared } = coverageScore(queryTokens, entryTokens, index.idf);
+    return {
+      skillId: entry.id,
+      category: entry.category,
+      overlapScore: score,
+      reason: shared.length > 0 ? `shared terms: ${shared.join(", ")}` : "no shared terms",
+    };
+  });
+  return scored.sort((a, b) => b.overlapScore - a.overlapScore || a.skillId.localeCompare(b.skillId));
 }
 
 /**
@@ -57,15 +184,8 @@ function scoreEntry(queryTokens: ReadonlySet<string>, entry: CatalogEntry): { sc
 export function scoutSkill(query: string, catalog: readonly CatalogEntry[], options: ScoutOptions = {}): ScoutResult {
   const use = options.threshold?.use ?? SCOUT_USE_THRESHOLD;
   const fork = options.threshold?.fork ?? SCOUT_FORK_THRESHOLD;
-  const queryTokens = routeTokens(normalizeRouteText(query));
 
-  const scored = catalog
-    .map((entry) => {
-      const { score, reason } = scoreEntry(queryTokens, entry);
-      return { skillId: entry.id, overlapScore: score, reason };
-    })
-    .sort((a, b) => b.overlapScore - a.overlapScore || a.skillId.localeCompare(b.skillId));
-
+  const scored = rankCatalog(query, catalog);
   const matches = scored.slice(0, 5);
   const top = scored[0];
   let decision: ScoutDecision = "create";
@@ -75,6 +195,70 @@ export function scoutSkill(query: string, catalog: readonly CatalogEntry[], opti
   }
 
   return { query, decision, thresholds: { use, fork }, matches };
+}
+
+// ---------------------------------------------------------------------------
+// Trigger-selection grader — shared by `keryx skills eval`'s trigger-accuracy
+// check and `keryx skills stocktake`'s own-trigger-routes-back check, so the
+// two gates can never quietly disagree about what "this prompt selects that
+// skill" means.
+// ---------------------------------------------------------------------------
+
+export interface SkillSelectionCheck {
+  /** Whether `query` selects `skillId` under the rule below. */
+  readonly selected: boolean;
+  /** `skillId`'s own coverage score for `query` (0 when `skillId` is not in `catalog`). */
+  readonly score: number;
+  /** 1-based rank of `skillId` in the full (uncapped) ranking for `query`; `-1` when absent. */
+  readonly rank: number;
+  /** The id of a different-CATEGORY entry that strictly outscored `skillId`, when one exists — the reason a query failed to select it. */
+  readonly outrankedBy?: string;
+}
+
+/**
+ * Whether `query` selects `skillId`, GRADER RULE (flow 309, T12):
+ *
+ *   score(skillId, query) >= SCOUT_FORK_THRESHOLD
+ *   AND no entry from a DIFFERENT category strictly outscores skillId.
+ *
+ * Why not "must be the outright top-1 match, score >= SCOUT_USE_THRESHOLD"
+ * (the original rule): `SCOUT_USE_THRESHOLD` is calibrated for "does this
+ * query cover the WHOLE skill" (scout's own use/fork/create decision) — a
+ * much higher bar than "does this short trigger phrase route to the right
+ * skill", which the eval/stocktake gates actually need. And strict top-1 is
+ * not a sound target at all under IDF-weighted coverage scoring: a query
+ * that reduces to one very common token (e.g. "ui review" tokenizes to just
+ * {"review"} once the 2-char "ui" is dropped by the shared tokenizer's
+ * min-length filter) legitimately ties EVERY entry that mentions "review" at
+ * full coverage (1.0) — there is no principled way to rank one of twenty
+ * ties "first" by score alone, and picking one by alphabetical accident
+ * (the deterministic tie-break `rankCatalog` needs for a STABLE top-5
+ * display) is not a meaningful trigger-accuracy signal.
+ *
+ * The category-family comparison is: a near-duplicate skill in the SAME
+ * category tying or narrowly beating skillId (e.g. `review-frontend` vs.
+ * `review-backend` on a query that only says "review") is exactly the
+ * ambiguity a human is expected to resolve from the surrounding categories
+ * shown to them — not a trigger defect. A DIFFERENT-category entry
+ * outscoring skillId (a `quality/*` or `orchestration/*` skill beating a
+ * `review/*` one) is the real false-negative signal: the query's own words
+ * point somewhere else entirely.
+ */
+export function checkSkillSelected(query: string, skillId: string, catalog: readonly CatalogEntry[], options: ScoutOptions = {}): SkillSelectionCheck {
+  const fork = options.threshold?.fork ?? SCOUT_FORK_THRESHOLD;
+  const ranked = rankCatalog(query, catalog);
+  const index = ranked.findIndex((match) => match.skillId === skillId);
+  if (index === -1) return { selected: false, score: 0, rank: -1 };
+
+  const target = ranked[index] as ScoutMatch;
+  const outranker = ranked.find((match) => match.category !== target.category && match.overlapScore > target.overlapScore);
+  const selected = target.overlapScore >= fork && outranker === undefined;
+  return {
+    selected,
+    score: target.overlapScore,
+    rank: index + 1,
+    ...(outranker !== undefined ? { outrankedBy: outranker.skillId } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------

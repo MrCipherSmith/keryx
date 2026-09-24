@@ -54,6 +54,10 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 .metaproject/core/**/*.ts
 .metaproject/data/**/storage/
 .metaproject/data/**/raw/
+# Governance stocktake cache (flow 309 T12): per-machine, keyed by content
+# hash + algorithm version — regenerated on the next `keryx skills stocktake`
+# run, never meant to be shared across checkouts.
+.metaproject/data/skills/stocktake/cache.json
 .metaproject/data/**/queries/
 .metaproject/data/**/summaries/
 .metaproject/data/gdctx/artifacts/

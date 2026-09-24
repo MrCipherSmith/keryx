@@ -132,6 +132,29 @@ describe("evalSkill", () => {
   });
 });
 
+describe("evalSkill against the real bundled catalog — near-duplicate skills", () => {
+  test("review/review-frontend's own synthesized triggers all pass trigger accuracy (flow 309 T12 regression)", async () => {
+    // review/review-frontend sits beside several near-duplicate review/*
+    // skills (review-frontend-conventions, review-orchestrator, ...) whose
+    // descriptions share most of their vocabulary. Before flow 309 T12 this
+    // reported 0/5 true positives: the old symmetric-Jaccard scorer punished
+    // every short trigger phrase against the long description, and the old
+    // grader required an outright top-1 match above SCOUT_USE_THRESHOLD —
+    // neither of which a 2-3 word trigger phrase could ever clear. This is
+    // a catalog-content regression guard, not just a synthetic fixture: it
+    // runs against the actual bundled skill, which is what the reported bug
+    // exercised.
+    const skill = catalog.find((entry) => entry.id === "review/review-frontend");
+    expect(skill).toBeDefined();
+    if (skill === undefined) return;
+    const report = await evalSkill("review/review-frontend", catalog, { strictness: "high", trials: 3 });
+    expect(report.triggerAccuracy.truePositive).toBe(report.triggerAccuracy.positives);
+    expect(report.triggerAccuracy.falsePositive).toBe(0);
+    const failedPositives = report.scenarios.filter((s) => s.kind === "trigger-positive" && s.passRate < 1);
+    expect(failedPositives).toEqual([]);
+  });
+});
+
 describe("validateEvalReport", () => {
   test("flags high strictness with trials < 3", () => {
     const errors = validateEvalReport({

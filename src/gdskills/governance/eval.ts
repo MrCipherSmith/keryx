@@ -3,8 +3,19 @@
 //
 //   - TRIGGER accuracy: deterministic. Every positive/negative prompt is
 //     routed against the whole catalog with the same scoring `scout` uses,
-//     and the scenario passes when the skill under test is (or is not) the
-//     top-ranked, above-threshold match. No model call, no flake.
+//     via `scout.ts`'s `checkSkillSelected` — the shared grader (also used
+//     by `stocktake`'s own trigger-accuracy check, so the two gates can
+//     never disagree about what "this prompt selects that skill" means). A
+//     prompt SELECTS the skill under test when its coverage score clears
+//     `SCOUT_FORK_THRESHOLD` and no entry from a DIFFERENT category
+//     outscores it — see `checkSkillSelected`'s own doc comment for why
+//     "outright top-1 above `SCOUT_USE_THRESHOLD`" (the original rule) is
+//     unsound for short trigger phrases: `SCOUT_USE_THRESHOLD` is calibrated
+//     for "does this query cover the WHOLE skill", a much higher bar than
+//     trigger routing needs, and IDF-weighted coverage scoring legitimately
+//     ties many same-category skills at 1.0 on a query that reduces to one
+//     common token — there is no principled single "top" among such ties.
+//     No model call, no flake either way.
 //   - BEHAVIOR scenarios: from an optional `evals.json` beside the skill's
 //     `SKILL.md`. These need an agent to actually run the skill, which this
 //     workstream does not build a default runner for — the CLI has none, so
@@ -21,7 +32,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { CatalogEntry } from "./catalog-index";
-import { SCOUT_USE_THRESHOLD, scoutSkill } from "./scout";
+import { checkSkillSelected } from "./scout";
 
 export type Strictness = "low" | "medium" | "high";
 export type Grader = "contains" | "regex" | "not-contains" | "model";
@@ -127,11 +138,9 @@ function synthesizeNegatives(skill: CatalogEntry, catalog: readonly CatalogEntry
   return negatives;
 }
 
-/** Whether routing `prompt` against `catalog` (scout's own scoring) selects `skill` as the top, above-threshold match. */
+/** Whether routing `prompt` against `catalog` (scout's own scoring) selects `skill` — see the module header and `checkSkillSelected`'s doc comment for the exact rule. */
 function selectsSkill(prompt: string, skill: CatalogEntry, catalog: readonly CatalogEntry[]): boolean {
-  const result = scoutSkill(prompt, catalog);
-  const top = result.matches[0];
-  return top !== undefined && top.skillId === skill.id && top.overlapScore >= SCOUT_USE_THRESHOLD;
+  return checkSkillSelected(prompt, skill.id, catalog).selected;
 }
 
 function gradeDeterministic(output: string, expected: ExpectedBehavior): boolean | undefined {
@@ -166,7 +175,7 @@ function triggerScenario(
     passes: passed ? trials : 0,
     passRate: passed ? 1 : 0,
     passAtK: passed ? 1 : 0,
-    grader: "trigger-rank",
+    grader: "trigger-rank-fork-family",
     status: "ran",
   };
 }

@@ -3,7 +3,16 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSkillCatalog } from "./catalog-index";
-import { readScoutRecord, recordScout, SCOUT_FORK_THRESHOLD, SCOUT_USE_THRESHOLD, scoutImports, scoutSkill, scoutVetCandidate } from "./scout";
+import {
+  checkSkillSelected,
+  readScoutRecord,
+  recordScout,
+  SCOUT_FORK_THRESHOLD,
+  SCOUT_USE_THRESHOLD,
+  scoutImports,
+  scoutSkill,
+  scoutVetCandidate,
+} from "./scout";
 
 const catalog = loadSkillCatalog(process.cwd(), { scope: "bundled" });
 
@@ -19,6 +28,25 @@ describe("scoutSkill", () => {
 
   test("an unrelated query returns create", () => {
     const result = scoutSkill("underwater basket weaving championship schedule for goldfish", catalog);
+    expect(result.decision).toBe("create");
+  });
+
+  test("a short domain query against a covering skill reaches fork or use, never create (flow 309 T12 regression)", () => {
+    // Before flow 309 T12 this scored review/review-frontend at 0.086
+    // (symmetric Jaccard against its full ~40-token description) and decided
+    // "create" even though review-frontend/code-mobx-store-review plainly
+    // cover "review react components mobx". The IDF-weighted coverage
+    // scorer judges the query's own intent, not diluted by the rest of the
+    // description, so a covering skill now clears at least the fork bar.
+    const result = scoutSkill("review react components mobx", catalog);
+    expect(result.decision).not.toBe("create");
+    const coveringIds = ["review/review-frontend", "review/code-mobx-store-review", "review/review-backend"];
+    const topMatchIsCovering = result.matches.some((match) => coveringIds.includes(match.skillId) && match.overlapScore >= SCOUT_FORK_THRESHOLD);
+    expect(topMatchIsCovering).toBe(true);
+  });
+
+  test("a fully unrelated technical query still returns create", () => {
+    const result = scoutSkill("kubernetes helm chart linting", catalog);
     expect(result.decision).toBe("create");
   });
 
@@ -41,6 +69,34 @@ describe("scoutSkill", () => {
     const result = scoutSkill("anything at all", []);
     expect(result.decision).toBe("create");
     expect(result.matches).toEqual([]);
+  });
+});
+
+describe("checkSkillSelected", () => {
+  test("review/review-frontend's own triggers all select it against the real bundled catalog", () => {
+    const skill = catalog.find((entry) => entry.id === "review/review-frontend");
+    expect(skill).toBeDefined();
+    if (skill === undefined) return;
+    for (const trigger of skill.triggers) {
+      const result = checkSkillSelected(trigger, skill.id, catalog);
+      expect(result.selected).toBe(true);
+    }
+  });
+
+  test("a different-category skill's trigger does not select an unrelated skill", () => {
+    const skill = catalog.find((entry) => entry.id === "review/review-frontend");
+    const other = catalog.find((entry) => entry.category !== "review" && entry.triggers.length > 0);
+    expect(skill).toBeDefined();
+    expect(other).toBeDefined();
+    if (skill === undefined || other === undefined) return;
+    const result = checkSkillSelected(other.triggers[0] as string, skill.id, catalog);
+    expect(result.selected).toBe(false);
+  });
+
+  test("reports rank -1 and not selected for an id absent from the catalog", () => {
+    const result = checkSkillSelected("anything", "nope/does-not-exist", catalog);
+    expect(result.selected).toBe(false);
+    expect(result.rank).toBe(-1);
   });
 });
 

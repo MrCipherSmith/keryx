@@ -30,7 +30,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { lintSkill } from "./authoring-lint";
 import { loadSkillCatalog, type CatalogEntry, type CatalogScope } from "./catalog-index";
-import { SCOUT_USE_THRESHOLD, scoutSkill } from "./scout";
+import { checkSkillSelected, SCOUT_USE_THRESHOLD, scoutSkill } from "./scout";
 
 export type StocktakeVerdict = "keep" | "improve" | "update" | "retire" | "merge";
 
@@ -57,8 +57,17 @@ export interface StocktakeOptions {
   readonly cachePath?: string;
 }
 
-/** Bumped when the verdict-derivation algorithm changes, so a stale cache entry is never reused across a semantic change. */
-const ALGORITHM_VERSION = "1";
+/**
+ * Bumped when the verdict-derivation algorithm changes, so a stale cache
+ * entry is never reused across a semantic change. Bumped to "2" in flow 309
+ * T12: `scoutSkill`'s scorer moved from symmetric Jaccard to IDF-weighted
+ * query coverage, and the trigger-accuracy check now uses `checkSkillSelected`
+ * (fork-threshold + category-family) instead of a bare top-1 match — a cache
+ * entry written under "1" reflects verdicts the old, defective scoring
+ * produced (e.g. spurious `improve` from trigger prompts that could never
+ * clear the old, too-strict rule) and must not be served after this fix.
+ */
+const ALGORITHM_VERSION = "2";
 
 interface CacheRecord {
   readonly sha256: string;
@@ -153,8 +162,15 @@ function evaluateEntry(root: string, entry: CatalogEntry, catalog: readonly Cata
   if (retired !== undefined) return retired;
 
   if (!quick) {
+    // Same selection rule `keryx skills eval`'s trigger-accuracy check uses
+    // (`checkSkillSelected` in scout.ts) — not a bare top-1 match, which
+    // IDF-weighted coverage scoring can legitimately tie across many
+    // same-category skills on a short trigger phrase (see that function's
+    // doc comment). A trigger "routes back" here when it clears
+    // `SCOUT_FORK_THRESHOLD` and no entry from a DIFFERENT category
+    // outscores this skill.
     const positives = entry.triggers.length > 0 ? entry.triggers.slice(0, 3) : [entry.description];
-    const hits = positives.filter((prompt) => scoutSkill(prompt, catalog).matches[0]?.skillId === entry.id).length;
+    const hits = positives.filter((prompt) => checkSkillSelected(prompt, entry.id, catalog).selected).length;
     const accuracy = positives.length > 0 ? hits / positives.length : 1;
     if (accuracy < 0.5) {
       return {
