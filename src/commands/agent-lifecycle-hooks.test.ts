@@ -18,7 +18,10 @@ import type { AgentDeps, AgentIO } from "./agent";
 import { buildShellHookRuntime, HOOK_TOOL_NAME_ALIASES } from "./agent-hooks";
 import type { ShellHookContext } from "./agent-hooks";
 import { detectSandboxLauncher } from "../harness/process/sandbox/detect";
+import { BUILTIN_HOOK_REGISTRATIONS } from "../harness/hooks/builtins";
+import { createHookRuntime } from "../harness/hooks/runtime";
 import type { HookFireResult, HookRuntime } from "../harness/hooks/runtime";
+import type { HookProcessRunner } from "../harness/hooks/runner";
 import type { HookEventName } from "../harness/hooks/types";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { ToolRisk } from "../harness/tool/types";
@@ -452,6 +455,89 @@ test("PreToolUse allow does not lift a /plan read-only deny", async () => {
     "go",
   );
   expect(ran()).toBe(false);
+});
+
+// F-001 (fix round 3, T21 review): the REAL `keryx.impact-evidence` builtin,
+// driven through the real `firePreToolUseHook` wiring, with a real
+// `apply_patch` call whose patch touches two files — proving the provider
+// receives BOTH, not just a synthetic `Write`/`file_path` shape no Keryx
+// tool actually produces. Uses `createHookRuntime` directly (not
+// `buildShellHookRuntime`) with only the `keryx.impact-evidence`
+// registration, so no command hook needs a real/fake subprocess runner.
+test("F-001: an agent-level apply_patch call touching two files reaches the impact-evidence provider with both", async () => {
+  // NOT `fakeTool("apply_patch", "write")` — that helper's `inputSchema`
+  // requires a `command` field (the `shell_exec`/`bus_pause` shape most
+  // other tests in this file use), which would reject a `{patch}` call
+  // before it ever reached the hook. A real `apply_patch`-shaped schema.
+  let invoked = false;
+  const ran = (): boolean => invoked;
+  const tool: InteractiveTool = {
+    definition: {
+      name: "apply_patch",
+      description: "test apply_patch",
+      inputSchema: { type: "object", properties: { patch: { type: "string" } }, required: ["patch"], additionalProperties: false },
+      risk: "write",
+    },
+    invoke: async () => {
+      invoked = true;
+      return { output: "ran", isError: false };
+    },
+  };
+  const seenFiles: string[][] = [];
+  const neverRunner: HookProcessRunner = {
+    run: async () => {
+      throw new Error("no command hook should run in this test");
+    },
+  };
+  const runtime = createHookRuntime({
+    registrations: BUILTIN_HOOK_REGISTRATIONS.filter((r) => r.id === "keryx.impact-evidence"),
+    runner: neverRunner,
+    clock: () => "2026-01-01T00:00:00.000Z",
+    profileId: "monitored-trusted-local",
+    interactive: true,
+    sessionId: "s1",
+    runId: "r1",
+    projectRoot: "/proj",
+    ports: {
+      impactEvidence: {
+        evidenceFor: (input) => {
+          seenFiles.push(input.files);
+          return {};
+        },
+      },
+    },
+  });
+  const hooks: ShellHookContext = { runtime, sessionId: "s1", runId: "r1" };
+  const io: AgentIO = { write: () => {}, permissionMode: () => "auto" };
+  const patch = [
+    "--- a/src/a.ts",
+    "+++ b/src/a.ts",
+    "@@ -1 +1 @@",
+    "-old a",
+    "+new a",
+    "--- a/src/b.ts",
+    "+++ b/src/b.ts",
+    "@@ -1 +1 @@",
+    "-old b",
+    "+new b",
+    "",
+  ].join("\n");
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("apply_patch", JSON.stringify({ patch }))),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+      hooks,
+    },
+    [],
+    "go",
+  );
+  expect(ran()).toBe(true);
+  expect(seenFiles).toEqual([["src/a.ts", "src/b.ts"]]);
 });
 
 // --- Post*: observe-only, never alters the result -----------------------

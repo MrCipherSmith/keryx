@@ -15,18 +15,22 @@
 //
 // MAPPING
 //
-//   - W6 only calls this port on a session's FIRST edit of a file
-//     (`ImpactEvidenceInput.firstEditInSession` is always `true` by
-//     construction — `runtime.ts`'s `runBuiltinHook` never calls the port
-//     otherwise), and only ever registers it `class: "gate-advisory"`
+//   - W6 only calls this port on a session's FIRST edit of a file (or, since
+//     fix round 3 F-001, the first edit of ANY file in a multi-file
+//     `apply_patch` call — `ImpactEvidenceInput.firstEditInSession` is always
+//     `true` by construction, `runtime.ts`'s `runBuiltinHook` never calls the
+//     port otherwise), and only ever registers it `class: "gate-advisory"`
 //     (`builtins.ts`'s `IMPACT_EVIDENCE` registration, matcher `Write|Edit`).
-//     So a hard `deny` has no home in `ImpactEvidenceResult` (only
-//     `decision?: "ask"` exists) — both of W8's escalating outcomes
-//     (`"ask"` and, under its own `gate`/strict class or a rejected path,
-//     `"deny"`) map to `decision: "ask"` here, never silently down to
-//     nothing. `"allow"` maps to `{}` (no decision) — matching W8's own CLI
-//     codec (`commands/security-impact-evidence.ts`), which treats `"allow"`
-//     as "defer to the host's own prompt", never as an auto-approve.
+//   - Fix round 3, F-003: W8's own escalating outcomes are no longer folded
+//     into one. `"ask"` maps to `decision: "ask"`; a W8 `"deny"` (its own
+//     strict/gate class, or a rejected path) maps to `decision: "deny"` —
+//     previously both mapped to `"ask"`, which let an operator APPROVE what
+//     W8 strict mode requires to fail closed. `"allow"` still maps to `{}`
+//     (no decision) — matching W8's own CLI codec
+//     (`commands/security-impact-evidence.ts`), which treats `"allow"` as
+//     "defer to the host's own prompt", never as an auto-approve. W8's
+//     `warnings` (e.g. a rejected out-of-root path folded to a warning
+//     rather than a decision) are forwarded rather than dropped.
 //   - A rejected/thrown provider call is NOT caught here: it propagates out
 //     of `evidenceFor`, so W6's `runOneHook` routes it through the same
 //     `buildFailureOutcome("crash", …)` gate-advisory-failure path every
@@ -37,7 +41,14 @@
 //     (enabled/strict/exemptGlobs/dampenAfter, with its checksum-trust check)
 //     are NOT read here — `createImpactEvidenceProvider()` already resolves
 //     and honors them internally. Reading them again here would be a second,
-//     driftable copy.
+//     driftable copy. The one exception is the raw `env` map W8's kill-switch
+//     check itself reads (`provider.ts`'s `killSwitchEnabled`): an explicit
+//     `opts.env` is forwarded so a caller (a test, or a future per-session
+//     override) never has to mutate the real `process.env` global to flip it
+//     — `createShellImpactEvidenceProvider`'s own callers
+//     (`commands/agent-hooks.ts`, `lib/serve-turn.ts`) already resolve an
+//     `env` for `KERYX_HOOKS`; this just reuses that same resolved value
+//     instead of letting `provider.ts` fall back to `process.env` on its own.
 //
 // KNOWN LIMITATION — see `CreateShellImpactEvidenceProviderOptions.profile`'s
 // own doc comment: `ImpactEvidenceInput` carries no per-fire policy profile,
@@ -68,6 +79,16 @@ export interface CreateShellImpactEvidenceProviderOptions {
    * reflected in a request built from an already-constructed provider.
    */
   profile: ImpactEvidenceProfile;
+  /**
+   * Fix round 3 (F-005/hermeticity): the same resolved env `KERYX_HOOKS` is
+   * already checked against (`buildShellHookRuntime`'s `env` local,
+   * `buildRemoteHookRuntime`'s), forwarded to W8's own `KERYX_DISABLE_IMPACT_GATE`
+   * kill-switch check (`provider.ts`'s `killSwitchEnabled`) instead of
+   * letting it read the real `process.env` on its own. Absent (every
+   * existing call site before this field existed) ⇒ `provider.ts` falls back
+   * to `process.env` itself, byte-identical to before.
+   */
+  env?: Record<string, string | undefined>;
   /** Injectable for tests; defaults to a real `createImpactEvidenceProvider()`. */
   provider?: (request: ImpactEvidenceRequest) => Promise<ImpactEvidenceDecision>;
 }
@@ -80,8 +101,9 @@ function toImpactEvidenceRequest(
     root: opts.root,
     sessionId: input.sessionId,
     toolName: input.toolName,
-    files: [input.filePath],
+    files: input.files,
     profile: opts.profile,
+    ...(opts.env !== undefined ? { env: opts.env } : {}),
   };
 }
 
@@ -90,12 +112,15 @@ function toHookResult(decision: ImpactEvidenceDecision): ImpactEvidenceResult {
   if (decision.additionalContext !== undefined) {
     result.additionalContext = decision.additionalContext;
   }
-  // W6's port can only escalate to "ask" at this slot (gate-advisory, never a
-  // hard deny) — map both of W8's escalating outcomes ("ask", and "deny" from
-  // its own strict/gate class or a rejected path) onto it, rather than
-  // dropping a "deny" verdict down to allow.
+  // Fix round 3, F-003: W8's two escalating outcomes are no longer folded
+  // into one. "ask" stays an approval ask; W8's own "deny" (its strict/gate
+  // class, or a rejected path) now maps to a real "deny" instead of being
+  // silently loosened to something an operator could approve.
   if (decision.outcome === "ask" || decision.outcome === "deny") {
-    result.decision = "ask";
+    result.decision = decision.outcome;
+  }
+  if (decision.warnings.length > 0) {
+    result.warnings = decision.warnings;
   }
   return result;
 }

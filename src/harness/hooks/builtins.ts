@@ -56,17 +56,31 @@ export const NOOP_LEARNING_OBSERVATION_SINK: LearningObservationSink = {
 
 export interface ImpactEvidenceInput {
   sessionId: string;
-  filePath: string;
+  /**
+   * Every file this ONE tool call touches (flow 306, fix round 3, F-001) —
+   * `apply_patch`'s `{patch}` shape can name several files in one call, and
+   * W8's own batch rule requires that files 2..n never dodge the gate just
+   * because they rode along with an already-cleared file. A single-file
+   * `Write`/`Edit`-shaped call still produces a one-element array.
+   */
+  files: string[];
   toolName: string;
   projectRoot: string;
-  /** Whether this is the session's first edit of `filePath` (the only time the provider is consulted). */
+  /** Whether at least one of `files` is the session's first (not-yet-cleanly-gated) edit. */
   firstEditInSession: boolean;
 }
 
 export interface ImpactEvidenceResult {
   additionalContext?: string;
-  /** Present only when W8 strict mode wants to escalate this edit to an approval ask. */
-  decision?: "ask";
+  /**
+   * Present when W8 wants to escalate this edit to an approval ask (`"ask"`,
+   * or its own strict/gate-class `"deny"` — fix round 3, F-003: previously
+   * both were folded down to `"ask"`, silently loosening a W8 `deny` into
+   * something an operator could approve).
+   */
+  decision?: "ask" | "deny";
+  /** W8 warnings that never rose to a decision (e.g. a rejected out-of-root path) — carried through rather than dropped. */
+  warnings?: string[];
 }
 
 /** W8's extension point: importers/tests/memory caveats for a first edit of a file. */

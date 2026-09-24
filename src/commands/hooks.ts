@@ -515,7 +515,7 @@ async function runOneBuiltinHook(
     try {
       const result = await provider.evidenceFor({
         sessionId: "hooks-test-session",
-        filePath,
+        files: [filePath],
         toolName: typeof payload.toolName === "string" ? payload.toolName : "Write",
         projectRoot: cwd,
         firstEditInSession: true,

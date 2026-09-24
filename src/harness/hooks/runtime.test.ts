@@ -271,6 +271,183 @@ describe("createHookRuntime — built-in ports", () => {
     expect(calls).toBe(2); // a different file -> first edit again
   });
 
+  // F-001 (fix round 3): `apply_patch`'s `{patch}` input has no `filePath`/
+  // `file_path`/`path` field — the ONLY edit-tool shape `keryx shell`/ACP
+  // ever actually produce. Before this fix the provider was never consulted
+  // for it at all. A patch naming two files must reach the provider with
+  // BOTH (W8's batch rule: a batch cannot let files 2..n dodge the gate).
+  test("impact-evidence extracts every target file from an apply_patch-shaped PreToolUse (F-001)", async () => {
+    const { runner } = makeFakeRunner({});
+    const seenFiles: string[][] = [];
+    const runtime = createHookRuntime(
+      baseCtx({
+        registrations: BUILTIN_HOOK_REGISTRATIONS,
+        runner,
+        builtinArgvResolver: (argv) => [...argv],
+        ports: {
+          impactEvidence: {
+            evidenceFor: (input) => {
+              seenFiles.push(input.files);
+              return {};
+            },
+          },
+        },
+      }),
+    );
+
+    const patch = [
+      "--- a/src/a.ts",
+      "+++ b/src/a.ts",
+      "@@ -1 +1 @@",
+      "-old a",
+      "+new a",
+      "--- a/src/b.ts",
+      "+++ b/src/b.ts",
+      "@@ -1 +1 @@",
+      "-old b",
+      "+new b",
+      "",
+    ].join("\n");
+
+    await runtime.fire(
+      "PreToolUse",
+      {
+        sessionId: "s1",
+        runId: "r1",
+        toolCallId: "t1",
+        // Aliased the way `commands/agent-hooks.ts`'s `HOOK_TOOL_NAME_ALIASES`
+        // maps `apply_patch` -> `Edit` for matcher purposes; the raw input is
+        // unchanged (`{patch}`, never a `filePath`/`file_path`/`path` field).
+        toolName: "Edit",
+        keryxToolName: "apply_patch",
+        toolInput: { patch },
+        policyProfile: "monitored-trusted-local",
+      },
+      { toolName: "Edit" },
+    );
+
+    expect(seenFiles).toEqual([["src/a.ts", "src/b.ts"]]);
+  });
+
+  // F-002 (fix round 3): a file must only leave the gate once a call for it
+  // has resolved CLEANLY (no ask/deny escalation, no failure) — not on the
+  // first attempt regardless of outcome. Otherwise a refused/crashed first
+  // attempt permanently disarms the gate for that file, and the model only
+  // has to repeat the same call to skip it.
+  test("an ask, followed by a retry of the same file, calls the provider again (F-002)", async () => {
+    const { runner } = makeFakeRunner({});
+    let calls = 0;
+    const runtime = createHookRuntime(
+      baseCtx({
+        registrations: BUILTIN_HOOK_REGISTRATIONS,
+        runner,
+        builtinArgvResolver: (argv) => [...argv],
+        ports: {
+          impactEvidence: {
+            evidenceFor: () => {
+              calls += 1;
+              return { decision: "ask" };
+            },
+          },
+        },
+      }),
+    );
+    const payload = {
+      sessionId: "s1",
+      runId: "r1",
+      toolCallId: "t1",
+      toolName: "Write",
+      toolInput: { filePath: "/a.ts" },
+      policyProfile: "monitored-trusted-local",
+    };
+
+    const first = await runtime.fire("PreToolUse", payload, { toolName: "Write" });
+    expect(calls).toBe(1);
+    expect(first.decisions).toEqual([{ hookId: "keryx.impact-evidence", decision: "ask" }]);
+
+    // Retry of the SAME file: the first attempt never resolved cleanly (it
+    // asked), so the gate must still be armed.
+    const retry = await runtime.fire("PreToolUse", payload, { toolName: "Write" });
+    expect(calls).toBe(2);
+    expect(retry.decisions).toEqual([{ hookId: "keryx.impact-evidence", decision: "ask" }]);
+  });
+
+  test("a crashed provider call, followed by a retry of the same file, calls the provider again (F-002)", async () => {
+    const { runner } = makeFakeRunner({});
+    let calls = 0;
+    const runtime = createHookRuntime(
+      baseCtx({
+        registrations: BUILTIN_HOOK_REGISTRATIONS,
+        runner,
+        builtinArgvResolver: (argv) => [...argv],
+        profileId: "unattended-untrusted",
+        ports: {
+          impactEvidence: {
+            evidenceFor: () => {
+              calls += 1;
+              throw new Error("evidence service unavailable");
+            },
+          },
+        },
+      }),
+    );
+    const payload = {
+      sessionId: "s1",
+      runId: "r1",
+      toolCallId: "t1",
+      toolName: "Write",
+      toolInput: { filePath: "/a.ts" },
+      policyProfile: "unattended-untrusted",
+    };
+
+    // gate-advisory + a crash + unattended-untrusted denies (semantics.ts's
+    // failure matrix) — the first attempt is correctly denied.
+    const first = await runtime.fire("PreToolUse", payload, { toolName: "Write" });
+    expect(calls).toBe(1);
+    expect(first.decisions.some((d) => d.decision === "deny")).toBe(true);
+
+    // The model only has to repeat the call: the crash never resolved
+    // cleanly, so a retry of the same file must still call the provider
+    // (and, under unattended-untrusted, deny again) rather than silently
+    // skipping the gate.
+    const retry = await runtime.fire("PreToolUse", payload, { toolName: "Write" });
+    expect(calls).toBe(2);
+    expect(retry.decisions.some((d) => d.decision === "deny")).toBe(true);
+  });
+
+  // F-003 (fix round 3): W8's own strict/gate-class "deny" must survive as a
+  // real "deny" decision out of `fire()`, not be silently loosened.
+  test("a provider deny surfaces as a real deny decision (F-003)", async () => {
+    const { runner } = makeFakeRunner({});
+    const runtime = createHookRuntime(
+      baseCtx({
+        registrations: BUILTIN_HOOK_REGISTRATIONS,
+        runner,
+        builtinArgvResolver: (argv) => [...argv],
+        ports: {
+          impactEvidence: {
+            evidenceFor: () => ({ decision: "deny", warnings: ["skipped 1 path(s) outside the project root"] }),
+          },
+        },
+      }),
+    );
+    const result = await runtime.fire(
+      "PreToolUse",
+      {
+        sessionId: "s1",
+        runId: "r1",
+        toolCallId: "t1",
+        toolName: "Write",
+        toolInput: { filePath: "/a.ts" },
+        policyProfile: "monitored-trusted-local",
+      },
+      { toolName: "Write" },
+    );
+    expect(result.decisions).toEqual([{ hookId: "keryx.impact-evidence", decision: "deny" }]);
+    const record = result.records.find((r) => r.hookId === "keryx.impact-evidence");
+    expect(record?.reason).toContain("skipped 1 path(s) outside the project root");
+  });
+
   test("a learning-observer sink is invoked with the mapped observation kind", async () => {
     const { runner } = makeFakeRunner({});
     const observed: string[] = [];

@@ -81,7 +81,7 @@ describe("default ports", () => {
   test("NOOP_IMPACT_EVIDENCE_PROVIDER.evidenceFor returns no context, no decision", async () => {
     const result = await NOOP_IMPACT_EVIDENCE_PROVIDER.evidenceFor({
       sessionId: "s",
-      filePath: "/a.ts",
+      files: ["/a.ts"],
       toolName: "Write",
       projectRoot: "/proj",
       firstEditInSession: true,

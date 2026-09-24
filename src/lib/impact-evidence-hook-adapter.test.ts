@@ -1,5 +1,6 @@
-// Flow 306 (W6, T20): the `keryx.impact-evidence` port adapter's own mapping —
-// request shape, outcome->decision mapping, and the crash-propagates contract.
+// Flow 306 (W6, T20; fix round 3, T21): the `keryx.impact-evidence` port
+// adapter's own mapping — request shape, outcome->decision mapping, and the
+// crash-propagates contract.
 import { describe, expect, test } from "bun:test";
 import type { ImpactEvidenceDecision, ImpactEvidenceRequest } from "../security/service";
 import { createShellImpactEvidenceProvider } from "./impact-evidence-hook-adapter";
@@ -16,7 +17,7 @@ function decision(overrides: Partial<ImpactEvidenceDecision> = {}): ImpactEviden
 }
 
 describe("createShellImpactEvidenceProvider: request mapping", () => {
-  test("maps ImpactEvidenceInput to an ImpactEvidenceRequest with a single-file list and the constructed profile", async () => {
+  test("maps ImpactEvidenceInput to an ImpactEvidenceRequest with the same file list and the constructed profile", async () => {
     let seen: ImpactEvidenceRequest | undefined;
     const port = createShellImpactEvidenceProvider({
       root: "/proj",
@@ -29,7 +30,7 @@ describe("createShellImpactEvidenceProvider: request mapping", () => {
 
     await port.evidenceFor({
       sessionId: "s1",
-      filePath: "/proj/src/a.ts",
+      files: ["/proj/src/a.ts"],
       toolName: "Write",
       projectRoot: "/proj",
       firstEditInSession: true,
@@ -43,6 +44,80 @@ describe("createShellImpactEvidenceProvider: request mapping", () => {
       profile: "unattended-untrusted",
     });
   });
+
+  // F-001 (fix round 3): a multi-file `apply_patch` batch must reach the
+  // provider with EVERY target file, not just the first — a batch cannot let
+  // files 2..n dodge the gate.
+  test("a multi-file ImpactEvidenceInput carries every file through to the request", async () => {
+    let seen: ImpactEvidenceRequest | undefined;
+    const port = createShellImpactEvidenceProvider({
+      root: "/proj",
+      profile: "monitored-trusted-local",
+      provider: async (request) => {
+        seen = request;
+        return decision();
+      },
+    });
+
+    await port.evidenceFor({
+      sessionId: "s1",
+      files: ["/proj/src/a.ts", "/proj/src/b.ts"],
+      toolName: "Edit",
+      projectRoot: "/proj",
+      firstEditInSession: true,
+    });
+
+    expect(seen?.files).toEqual(["/proj/src/a.ts", "/proj/src/b.ts"]);
+  });
+
+  // Fix round 3 (F-005/hermeticity): an injected `env` is forwarded so a
+  // caller never has to mutate the real `process.env` global to flip W8's
+  // `KERYX_DISABLE_IMPACT_GATE` kill switch (or any other env-driven branch
+  // `provider.ts` reads through `ImpactEvidenceRequest.env`).
+  test("an injected env is forwarded on the request", async () => {
+    let seen: ImpactEvidenceRequest | undefined;
+    const port = createShellImpactEvidenceProvider({
+      root: "/proj",
+      profile: "monitored-trusted-local",
+      env: { KERYX_DISABLE_IMPACT_GATE: "1" },
+      provider: async (request) => {
+        seen = request;
+        return decision();
+      },
+    });
+
+    await port.evidenceFor({
+      sessionId: "s1",
+      files: ["/proj/a.ts"],
+      toolName: "Write",
+      projectRoot: "/proj",
+      firstEditInSession: true,
+    });
+
+    expect(seen?.env).toEqual({ KERYX_DISABLE_IMPACT_GATE: "1" });
+  });
+
+  test("no injected env leaves the request's env field absent", async () => {
+    let seen: ImpactEvidenceRequest | undefined;
+    const port = createShellImpactEvidenceProvider({
+      root: "/proj",
+      profile: "monitored-trusted-local",
+      provider: async (request) => {
+        seen = request;
+        return decision();
+      },
+    });
+
+    await port.evidenceFor({
+      sessionId: "s1",
+      files: ["/proj/a.ts"],
+      toolName: "Write",
+      projectRoot: "/proj",
+      firstEditInSession: true,
+    });
+
+    expect(seen?.env).toBeUndefined();
+  });
 });
 
 describe("createShellImpactEvidenceProvider: outcome -> decision mapping", () => {
@@ -54,7 +129,7 @@ describe("createShellImpactEvidenceProvider: outcome -> decision mapping", () =>
     });
     const result = await port.evidenceFor({
       sessionId: "s",
-      filePath: "/proj/a.ts",
+      files: ["/proj/a.ts"],
       toolName: "Write",
       projectRoot: "/proj",
       firstEditInSession: true,
@@ -70,7 +145,7 @@ describe("createShellImpactEvidenceProvider: outcome -> decision mapping", () =>
     });
     const result = await port.evidenceFor({
       sessionId: "s",
-      filePath: "/proj/a.ts",
+      files: ["/proj/a.ts"],
       toolName: "Write",
       projectRoot: "/proj",
       firstEditInSession: true,
@@ -87,7 +162,7 @@ describe("createShellImpactEvidenceProvider: outcome -> decision mapping", () =>
     });
     const result = await port.evidenceFor({
       sessionId: "s",
-      filePath: "/proj/a.ts",
+      files: ["/proj/a.ts"],
       toolName: "Write",
       projectRoot: "/proj",
       firstEditInSession: true,
@@ -95,11 +170,11 @@ describe("createShellImpactEvidenceProvider: outcome -> decision mapping", () =>
     expect(result).toEqual({ decision: "ask", additionalContext: "please acknowledge" });
   });
 
-  // W6 registers this port only as `class: "gate-advisory"` (never a hard
-  // `deny` at this slot) — a W8 strict/gate "deny" (e.g. a rejected path
-  // under `unattended-untrusted`) must still surface as an approval ask,
-  // never silently collapse to allow.
-  test("deny (W8's own strict/gate class) also maps to decision: 'ask', never to allow", async () => {
+  // Fix round 3, F-003: previously BOTH of W8's escalating outcomes ("ask"
+  // and its own strict/gate-class "deny") were folded down to "ask" here,
+  // which let an operator approve what W8 strict mode requires to fail
+  // closed. A W8 "deny" now maps to a real "deny".
+  test("deny (W8's own strict/gate class) maps to decision: 'deny', not 'ask'", async () => {
     const port = createShellImpactEvidenceProvider({
       root: "/proj",
       profile: "unattended-untrusted",
@@ -107,12 +182,46 @@ describe("createShellImpactEvidenceProvider: outcome -> decision mapping", () =>
     });
     const result = await port.evidenceFor({
       sessionId: "s",
-      filePath: "/proj/a.ts",
+      files: ["/proj/a.ts"],
       toolName: "Write",
       projectRoot: "/proj",
       firstEditInSession: true,
     });
-    expect(result.decision).toBe("ask");
+    expect(result.decision).toBe("deny");
+  });
+
+  // Fix round 3, F-003: W8's `warnings` used to be dropped entirely.
+  test("warnings on an allow decision are forwarded, not dropped", async () => {
+    const port = createShellImpactEvidenceProvider({
+      root: "/proj",
+      profile: "monitored-trusted-local",
+      provider: async () =>
+        decision({ outcome: "allow", warnings: ["skipped 1 path(s) outside the project root"] }),
+    });
+    const result = await port.evidenceFor({
+      sessionId: "s",
+      files: ["/proj/a.ts"],
+      toolName: "Write",
+      projectRoot: "/proj",
+      firstEditInSession: true,
+    });
+    expect(result.warnings).toEqual(["skipped 1 path(s) outside the project root"]);
+  });
+
+  test("no warnings leaves the result's warnings field absent", async () => {
+    const port = createShellImpactEvidenceProvider({
+      root: "/proj",
+      profile: "monitored-trusted-local",
+      provider: async () => decision({ outcome: "allow", warnings: [] }),
+    });
+    const result = await port.evidenceFor({
+      sessionId: "s",
+      files: ["/proj/a.ts"],
+      toolName: "Write",
+      projectRoot: "/proj",
+      firstEditInSession: true,
+    });
+    expect(result.warnings).toBeUndefined();
   });
 });
 
@@ -129,7 +238,7 @@ describe("createShellImpactEvidenceProvider: failure propagation", () => {
     await expect(
       port.evidenceFor({
         sessionId: "s",
-        filePath: "/proj/a.ts",
+        files: ["/proj/a.ts"],
         toolName: "Write",
         projectRoot: "/proj",
         firstEditInSession: true,

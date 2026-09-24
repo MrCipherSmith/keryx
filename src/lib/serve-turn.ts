@@ -416,7 +416,10 @@ function buildRemoteHookRuntime(opts: {
     // T20: same real `keryx.impact-evidence` port `commands/agent-hooks.ts`'s
     // `buildShellHookRuntime` wires for `keryx shell`/ACP — a remote turn gets
     // the same gate, not a silent NOOP.
-    ports: { impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot }) },
+    // Fix round 3 (F-005/hermeticity): forward the same resolved `env` local
+    // this function already checked `KERYX_HOOKS` against — see
+    // `commands/agent-hooks.ts`'s identical wiring for the full rationale.
+    ports: { impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot, env }) },
   });
 }
 

@@ -26,6 +26,7 @@ import { buildHookEnv } from "./runner";
 import { failureEffect } from "./semantics";
 import { GATE_CAPABLE_EVENTS, PER_TOOL_EVENTS } from "./types";
 import { resolveLocalProfile } from "../policy/profiles";
+import { parsePatchTargets } from "../../lib/patch-risk";
 import type {
   HookAnomalyName,
   HookEventName,
@@ -221,16 +222,46 @@ async function runWithTimeout<T>(fn: () => Promise<T> | T, timeoutMs: number): P
   }
 }
 
-/** Best-effort file-path extraction from a `PreToolUse` payload's `toolInput` (Write/Edit tool shapes vary). */
-function extractFilePath(payload: Record<string, unknown>): string | undefined {
+/**
+ * Best-effort target-file extraction from a `PreToolUse` payload's
+ * `toolInput` (Write/Edit tool shapes vary) — fix round 3, F-001.
+ *
+ * Two shapes are understood:
+ *   - A single-path tool (`Write`/`Edit`-shaped hosts): `filePath`/`file_path`/
+ *     `path` is a string naming the one file touched.
+ *   - Keryx's own `apply_patch` tool (`{ patch: string }`, aliased to `Edit`
+ *     for matcher purposes by `commands/agent-hooks.ts`'s
+ *     `HOOK_TOOL_NAME_ALIASES` — see `apply-patch-tool.ts`): the patch can
+ *     name several files in one call, so every target `parsePatchTargets`
+ *     finds is returned, not just the first. Reusing `parsePatchTargets`
+ *     (the same parser `apply-patch-tool.ts`/`unattended.ts` use to classify
+ *     patch risk) rather than a second, driftable copy.
+ *
+ * Neither shape is required to be present — an unrecognized `toolInput`
+ * (or one with no path field and no `patch` string) yields no targets, and
+ * the caller's `runBuiltinHook` treats that as "nothing to gate", exactly
+ * as the single-path-only version did.
+ */
+function extractFilePaths(payload: Record<string, unknown>): string[] {
   const toolInput = payload.toolInput;
-  if (typeof toolInput !== "object" || toolInput === null) return undefined;
+  if (typeof toolInput !== "object" || toolInput === null) return [];
   const record = toolInput as Record<string, unknown>;
+  if (typeof record.patch === "string") {
+    const targets = parsePatchTargets(record.patch);
+    if (targets.length > 0) {
+      return targets.map((target) => target.path);
+    }
+    // A `patch` field that parses to zero targets (malformed/empty diff)
+    // falls through to the single-path fields below rather than reporting
+    // no targets outright — harmless in practice (apply_patch's own input
+    // never carries both), and keeps this function's behavior a strict
+    // superset of the pre-F-001 single-path extractor.
+  }
   for (const key of ["filePath", "file_path", "path"]) {
     const value = record[key];
-    if (typeof value === "string" && value.length > 0) return value;
+    if (typeof value === "string" && value.length > 0) return [value];
   }
-  return undefined;
+  return [];
 }
 
 class HookRuntimeImpl implements HookRuntime {
@@ -481,12 +512,24 @@ class HookRuntimeImpl implements HookRuntime {
     }
 
     if (reg.handler.name === "impact-evidence") {
-      const filePath = extractFilePath(payload);
-      const firstEdit = filePath !== undefined && !this.editedFiles.has(filePath);
-      if (filePath !== undefined && firstEdit) {
-        this.editedFiles.add(filePath);
-      }
-      if (filePath === undefined || !firstEdit) {
+      // F-001 (fix round 3): every file this ONE call touches, not just a
+      // single `filePath` field — `apply_patch`'s `{patch}` shape can name
+      // several files, and W8's batch rule requires none of them dodge the
+      // gate just because a sibling target already rode along.
+      const files = extractFilePaths(payload);
+      // F-002 (fix round 3): a file only leaves `editedFiles` CLEAN once a
+      // call for it has actually resolved without escalating or failing —
+      // see the "only mark on a clean allow" write below. Marking it here,
+      // before the provider has even been asked, used to disarm the gate for
+      // the rest of the session on a refused/crashed/timed-out FIRST attempt:
+      // the model only had to repeat the same call to skip the gate for
+      // good. `firstEdit` is true whenever at least one of `files` has never
+      // been cleanly resolved — a batch with one already-clear file and one
+      // new one still calls the provider (with the full file list; W8 keeps
+      // its own per-file `touched`/`pendingAck`/`denials` state and answers
+      // an already-clear file with `skipped-repeat` rather than re-asking).
+      const firstEdit = files.some((f) => !this.editedFiles.has(f));
+      if (files.length === 0 || !firstEdit) {
         return {
           record: {
             hookId: reg.id,
@@ -506,7 +549,7 @@ class HookRuntimeImpl implements HookRuntime {
         () =>
           provider.evidenceFor({
             sessionId: this.sessionId,
-            filePath,
+            files,
             toolName,
             projectRoot: this.projectRoot,
             firstEditInSession: true,
@@ -515,9 +558,23 @@ class HookRuntimeImpl implements HookRuntime {
       );
       const durationMs = Date.now() - startedAt;
       if (!result.ok) {
+        // F-002: NOT marked clean — a retry of the same file(s) must still
+        // call the provider, whether this attempt asked-and-was-declined,
+        // crashed, or timed out.
         return this.buildFailureOutcome(reg, event, durationMs, result.failure, ctx.decideOutcome, fireProfileId);
       }
       const decision = result.value.decision;
+      if (decision === undefined) {
+        // A clean, non-escalating outcome (W8 "allow") — NOW it is safe to
+        // stop gating these files for the rest of the session (F-002).
+        for (const f of files) this.editedFiles.add(f);
+      }
+      // F-003: forward W8's warnings (e.g. a rejected out-of-root path)
+      // rather than dropping them — folded into the invocation record's
+      // `reason` so they land somewhere a caller/log can actually see them,
+      // without inventing a new anomaly taxonomy for a non-failure signal.
+      const warnings = result.value.warnings ?? [];
+      const reason = warnings.length > 0 ? warnings.join("; ") : undefined;
       return {
         record: {
           hookId: reg.id,
@@ -526,7 +583,8 @@ class HookRuntimeImpl implements HookRuntime {
           scope: reg.scope,
           outcome: decision ?? "none",
           durationMs,
-          changedOutcome: decision === "ask",
+          changedOutcome: decision !== undefined,
+          ...(reason !== undefined ? { reason } : {}),
         },
         ...(decision !== undefined ? { decision } : {}),
         ...(result.value.additionalContext !== undefined ? { additionalContext: result.value.additionalContext } : {}),

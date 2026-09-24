@@ -217,7 +217,13 @@ export function buildShellHookRuntime(opts: BuildShellHookRuntimeOptions): Shell
       // `.metaproject/security.config.json` enables it) — a test that wants a
       // fake instead constructs `createHookRuntime` directly with its own
       // `ports`, as `harness/hooks/runtime.test.ts` already does.
-      ports: { impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot }) },
+      // Fix round 3 (F-005/hermeticity): forward the SAME resolved `env` this
+      // function already checked `KERYX_HOOKS` against, rather than letting
+      // the adapter fall back to the real `process.env` global for W8's own
+      // `KERYX_DISABLE_IMPACT_GATE` kill switch — a test (or a future caller)
+      // can now flip that switch via the injectable `env` option instead of
+      // mutating global state.
+      ports: { impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot, env }) },
     });
   } else {
     opts.onConfigError?.(loaded.diagnostics);

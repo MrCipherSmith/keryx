@@ -118,20 +118,40 @@ test("an invalid project hooks.json builds a runtime that denies every PreToolUs
 // resolve `~/.keryx/hooks.json` to two DIFFERENT paths — the CLI honored
 // `KERYX_HOME`, the runtime always read `os.homedir()`. Both now share
 // `resolveHooksHomeDir`/`resolveHooksProjectRoot`.
-// Flow 306 (W6, T20): `buildShellHookRuntime` wires the real
-// `keryx.impact-evidence` port (W8's gate, via `lib/impact-evidence-hook-adapter.ts`)
-// by default, not the runtime's own NOOP fallback. Proven with an observable
-// side effect only the REAL provider produces (a `disabled-env` record
-// appended to W8's own log via `KERYX_DISABLE_IMPACT_GATE`) — the NOOP port
-// never touches that log at all, and the in-runtime invocation record's
-// `outcome` field is identical ("none") for both a NOOP port and a real
-// "allow" decision, so the log is the only reliable signal.
+// Flow 306 (W6, T20; fix round 3, T21): `buildShellHookRuntime` wires the
+// real `keryx.impact-evidence` port (W8's gate, via
+// `lib/impact-evidence-hook-adapter.ts`) by default, not the runtime's own
+// NOOP fallback. Proven with an observable side effect only the REAL
+// provider produces (a `disabled-env` record appended to W8's own log via
+// `KERYX_DISABLE_IMPACT_GATE`) — the NOOP port never touches that log at
+// all, and the in-runtime invocation record's `outcome` field is identical
+// ("none") for both a NOOP port and a real "allow" decision, so the log is
+// the only reliable signal.
+//
+// Fix round 3 (F-005): this test used to mutate the REAL `process.env`
+// global (`process.env.KERYX_DISABLE_IMPACT_GATE = "1"`) to flip W8's kill
+// switch, restoring it in `finally` — not hermetic under a shared test
+// process (a concurrent test reading `process.env` mid-run could observe the
+// mutation, and a failure between the mutation and the restore leaks it to
+// every later test in the run). It now passes the kill switch through
+// `buildShellHookRuntime`'s own injectable `env` option, which fix round 3
+// threads all the way to `ImpactEvidenceRequest.env` (see
+// `impact-evidence-hook-adapter.ts`) instead of letting the adapter fall
+// back to the real `process.env`.
+//
+// Also rewritten (F-001/F-005) to fire an `apply_patch`-SHAPED call —
+// `{patch: string}`, the only edit-tool input `keryx shell`/ACP ever
+// actually produce — rather than a synthetic `toolName: "Write"` with a
+// `file_path` field no real Keryx tool sends. Before the F-001 fix this
+// would have called the provider zero times (`extractFilePaths` found no
+// target in a bare `{patch}` input), which is exactly the gap round 3 found.
 test("buildShellHookRuntime wires a real keryx.impact-evidence provider by default", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-impact-"));
-  const previousKillSwitch = process.env.KERYX_DISABLE_IMPACT_GATE;
   try {
     await writeFile(path.join(dir, "a.ts"), "export const a = 1;\n", "utf8");
-    process.env.KERYX_DISABLE_IMPACT_GATE = "1";
+    const patch = ["--- a/a.ts", "+++ b/a.ts", "@@ -1 +1 @@", "-export const a = 1;", "+export const a = 2;", ""].join(
+      "\n",
+    );
 
     const result = buildShellHookRuntime({
       projectRoot: dir,
@@ -140,7 +160,7 @@ test("buildShellHookRuntime wires a real keryx.impact-evidence provider by defau
       interactive: true,
       profileId: "monitored-trusted-local",
       homeDir: dir,
-      env: {},
+      env: { KERYX_DISABLE_IMPACT_GATE: "1" },
     });
     expect(result).toBeDefined();
 
@@ -150,13 +170,15 @@ test("buildShellHookRuntime wires a real keryx.impact-evidence provider by defau
         sessionId: "impact-session",
         runId: "r",
         toolCallId: "c1",
-        toolName: "Write",
-        toolInput: { file_path: path.join(dir, "a.ts") },
+        toolName: "Edit",
+        keryxToolName: "apply_patch",
+        toolInput: { patch },
         policyProfile: "monitored-trusted-local",
       },
       // `matcherMatches`/`selectCandidates` read the tool name from `ctx`, not
-      // from the payload — see `runtime.ts`'s `fire()`.
-      { toolName: "Write" },
+      // from the payload — see `runtime.ts`'s `fire()`. `apply_patch` is
+      // aliased to `Edit` for matcher purposes (`HOOK_TOOL_NAME_ALIASES`).
+      { toolName: "Edit" },
     );
     // gate-advisory: the kill switch's "allow" never denies the tool call.
     expect(fire.decisions.some((d) => d.decision === "deny")).toBe(false);
@@ -164,11 +186,6 @@ test("buildShellHookRuntime wires a real keryx.impact-evidence provider by defau
     const records = await readLogRecords(dir);
     expect(records.some((r) => r.sessionId === "impact-session" && r.event === "disabled-env")).toBe(true);
   } finally {
-    if (previousKillSwitch === undefined) {
-      delete process.env.KERYX_DISABLE_IMPACT_GATE;
-    } else {
-      process.env.KERYX_DISABLE_IMPACT_GATE = previousKillSwitch;
-    }
     await rm(dir, { recursive: true, force: true });
   }
 });
