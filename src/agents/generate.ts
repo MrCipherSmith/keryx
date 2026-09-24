@@ -51,15 +51,22 @@ const FIXER_TOOLS = ["read_file", "list_dir", "get_cwd", "search_code", "graph_a
  * — this module stays a leaf with no dependency on `compile.ts`'s export
  * surface, and `JSON.stringify` produces a valid YAML double-quoted scalar
  * for any string, the same closed injection argument `compile.ts` documents).
+ *
+ * R1-7 (review round 1, PR #692): every frontmatter scalar and list item —
+ * not just `description`/`role` — is now emitted through this function, so
+ * no pack-supplied string (id, sourceRef, a skill name) can ever be written
+ * unquoted into frontmatter and interpreted as new YAML keys.
+ * `frontmatter.ts`'s parser strips one layer of matching quotes on both the
+ * flat-scalar and block-list paths, so this round-trips.
  */
 function yamlQuoted(value: string): string {
   return JSON.stringify(value);
 }
 
-/** `key: []` for an empty list, else a block list (`key:\n  - a\n  - b`) — matches `frontmatter.ts`'s grammar either way. */
+/** `key: []` for an empty list, else a block list (`key:\n  - "a"\n  - "b"`) — matches `frontmatter.ts`'s grammar either way. */
 function yamlList(key: string, items: readonly string[]): string {
   if (items.length === 0) return `${key}: []`;
-  return [`${key}:`, ...items.map((item) => `  - ${item}`)].join("\n");
+  return [`${key}:`, ...items.map((item) => `  - ${yamlQuoted(item)}`)].join("\n");
 }
 
 function frontmatter(fields: {
@@ -78,21 +85,71 @@ function frontmatter(fields: {
   return [
     "---",
     "schema_version: 1",
-    `name: ${fields.name}`,
+    `name: ${yamlQuoted(fields.name)}`,
     `description: ${yamlQuoted(fields.description)}`,
     `role: ${yamlQuoted(fields.role)}`,
     yamlList("tools", fields.tools),
-    `model_tier: ${fields.model_tier}`,
-    `policy_profile: ${fields.policy_profile}`,
+    `model_tier: ${yamlQuoted(fields.model_tier)}`,
+    `policy_profile: ${yamlQuoted(fields.policy_profile)}`,
     yamlList("skills", fields.skills),
     yamlList("stacks", fields.stacks),
-    `output_contract: ${fields.output_contract}`,
-    `isolation: ${fields.isolation}`,
+    `output_contract: ${yamlQuoted(fields.output_contract)}`,
+    `isolation: ${yamlQuoted(fields.isolation)}`,
     "origin:",
-    `  kind: ${fields.origin.kind}`,
-    `  sourceRef: ${fields.origin.sourceRef}`,
+    `  kind: ${yamlQuoted(fields.origin.kind)}`,
+    `  sourceRef: ${yamlQuoted(fields.origin.sourceRef)}`,
     "---",
   ].join("\n");
+}
+
+// R1-7 (review round 1, PR #692): the same shape `verify.ts`'s
+// `STACK_SOURCE_REF_RE` and `agents-catalog.ts`'s `STACK_ID_PATTERN` already
+// require of a stack-pack id — duplicated locally (this module stays a leaf,
+// per its header comment) rather than imported, since a pack reader must
+// validate `pack.id` and every skill name against this BEFORE calling this
+// generator, and this generator must not trust a caller to have done so.
+const IDENTIFIER_PATTERN = /^[a-z][a-z0-9-]*$/;
+
+// Any C0/C1 control character (including bare `\n`/`\r`) — none of these may
+// appear in a pack-supplied field this generator interpolates into Markdown
+// body text (`displayName`, `auditFocus`/`buildCommands`/`fixGuardrails`
+// items). A newline there could forge a fake heading, a fake
+// `STATUS:`-contract line, or otherwise restructure the generated agent's
+// body; frontmatter fields are separately protected by `yamlQuoted` above.
+// eslint-disable-next-line no-control-regex -- matching control characters is the point (R1-7: reject a newline/control char forging Markdown/frontmatter structure)
+const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/;
+
+/** Thrown by {@link generateStackAgentPair} for a hostile/malformed pack.json field — never silently sanitized. */
+export class InvalidStackPackFieldError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidStackPackFieldError";
+  }
+}
+
+function assertValidIdentifier(kind: string, value: string): void {
+  if (!IDENTIFIER_PATTERN.test(value)) {
+    throw new InvalidStackPackFieldError(
+      `${kind} "${value}" does not match ${IDENTIFIER_PATTERN.source} — refusing to generate an agent pair from it`,
+    );
+  }
+}
+
+function assertNoControlChars(kind: string, value: string): void {
+  if (CONTROL_CHAR_PATTERN.test(value)) {
+    throw new InvalidStackPackFieldError(`${kind} contains a control character or newline — refusing to generate an agent pair from it`);
+  }
+}
+
+function assertSafePack(pack: StackPackForAgentGeneration): void {
+  assertValidIdentifier("pack.id", pack.id);
+  for (const skill of pack.skills.review ?? []) assertValidIdentifier("review skill name", skill);
+  for (const skill of pack.skills["build-fix"] ?? []) assertValidIdentifier("build-fix skill name", skill);
+
+  assertNoControlChars("agentProfile.displayName", pack.agentProfile.displayName);
+  for (const item of pack.agentProfile.auditFocus) assertNoControlChars("agentProfile.auditFocus item", item);
+  for (const item of pack.agentProfile.buildCommands) assertNoControlChars("agentProfile.buildCommands item", item);
+  for (const item of pack.agentProfile.fixGuardrails) assertNoControlChars("agentProfile.fixGuardrails item", item);
 }
 
 const STATUS_LINE =
@@ -188,6 +245,7 @@ function fixerBody(pack: StackPackForAgentGeneration): string {
  * pack's `agent-refs.json`.
  */
 export function generateStackAgentPair(pack: StackPackForAgentGeneration): GeneratedAgentPair {
+  assertSafePack(pack);
   const auditorName = `${pack.id}-code-auditor`;
   const fixerName = `${pack.id}-build-fixer`;
 

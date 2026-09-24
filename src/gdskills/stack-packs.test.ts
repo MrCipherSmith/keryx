@@ -232,9 +232,10 @@ describe("stack pack layout (real bundled tree)", () => {
     test(`${packId}: the stable-pack eval gate is not-applicable or passing (never a silent fail)`, () => {
       const pack = readPackJson(packDir);
       const result = checkStablePackGate(packDir, pack.stability);
-      // python ships "experimental" today, so this is "not-applicable" — the
-      // gate is proven to actually FIRE (not just early-return unexercised)
-      // by the fixture tests below, which force stability: "stable".
+      // A pack whose own `pack.json` stability is not "stable" (react ships
+      // "experimental" today) makes this "not-applicable" — the gate is
+      // proven to actually FIRE (not just early-return unexercised) by the
+      // fixture tests below, which force stability: "stable".
       expect(result.status).not.toBe("fail");
     });
 

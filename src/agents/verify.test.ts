@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { computeSkillEvalDigest, PACK_MIN_TRIALS } from "../gdskills/governance/eval";
 import { generateStackAgentPair } from "./generate";
 import { checkStackPackGateCleared, verifyAgents } from "./verify";
 
@@ -178,7 +179,7 @@ describe("verifyAgents", () => {
     expect(agent?.problems.some((p) => p.reason === "stack-pack-missing")).toBe(false);
   });
 
-  test("W4: the default stackPackGateCleared resolver fails closed for a real 'experimental' pack (the shipped python pack today)", () => {
+  test("W4: the default stackPackGateCleared resolver fails closed for a real 'experimental' pack (a fixture pack directory, independent of any shipped pack's current stability)", () => {
     writeAgent(
       bundledRoot,
       "generated-python-agent",
@@ -197,7 +198,20 @@ describe("verifyAgents", () => {
     expect(agent?.problems.some((p) => p.reason === "stack-pack-not-gate-cleared")).toBe(true);
   });
 
-  test("W4: the default stackPackGateCleared resolver passes for a real 'stable' pack with a passing eval.json", () => {
+  // R1-4 (review round 1, PR #692): a stack pack's stable-pack gate now
+  // REQUIRES the pack-level `{ schemaVersion, reports: EvalReport[] }` form —
+  // the legacy single-report shape this fixture used to build (one report,
+  // `skills: {}`, no behavior scenario at all) is a named "fail" for a stack
+  // pack (`checkStablePackGate` in `src/gdskills/governance/eval.ts`), not a
+  // gate-clearing shortcut. This fixture builds a pack-level document that
+  // satisfies every requirement `checkSkillReportForPackGate` enforces:
+  // verdict "pass", evidence "authored", strictness "high" with
+  // `trials >= PACK_MIN_TRIALS`, `scope: "bundled"`, non-empty runner/model,
+  // a `skillDigest` matching `computeSkillEvalDigest` of the CURRENT skill
+  // dir, behavior-scenario ids and trigger prompts matching the skill's own
+  // `evals.json` exactly, and at least one ran behavior scenario with
+  // `passRate >= PACK_BEHAVIOR_PASS_FLOOR` (0.8).
+  test("W4/R1-4: the default stackPackGateCleared resolver passes for a real 'stable' pack with a pack-level eval document", () => {
     writeAgent(
       bundledRoot,
       "generated-stable-agent",
@@ -205,17 +219,88 @@ describe("verifyAgents", () => {
     );
     const stacksRoot = path.join(path.dirname(bundledRoot), "stacks");
     const packDir = path.join(stacksRoot, "fixture-stable");
+    const skillDir = path.join(packDir, "skills", "fixture-skill");
+    mkdirSync(path.join(packDir, "governance"), { recursive: true });
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      path.join(packDir, "pack.json"),
+      JSON.stringify({
+        id: "fixture-stable",
+        family: "language",
+        modules: [],
+        stability: "stable",
+        skills: { review: ["fixture-skill"], "build-fix": [] },
+      }),
+      "utf8",
+    );
+    writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n", "utf8");
+    writeFileSync(
+      path.join(skillDir, "evals.json"),
+      JSON.stringify({
+        triggers: { positive: ["p"], negative: ["n"] },
+        scenarios: [
+          { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
+        ],
+      }),
+      "utf8",
+    );
+    const skillDigest = computeSkillEvalDigest(skillDir);
+    writeFileSync(
+      path.join(packDir, "governance", "eval.json"),
+      JSON.stringify({
+        schemaVersion: "1.0.0",
+        reports: [
+          {
+            schemaVersion: "1.0.0",
+            skillId: "fixture-stable/fixture-skill",
+            strictness: "high",
+            trials: PACK_MIN_TRIALS,
+            triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+            evidence: "authored",
+            scope: "bundled",
+            skillDigest,
+            runner: "ollama",
+            model: "llama3.1:latest",
+            recordedAt: "2026-01-01T00:00:00.000Z",
+            scenarios: [
+              { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+              { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+              { id: "behavior-1", kind: "behavior", prompt: "Do the thing", strictness: "high", trials: PACK_MIN_TRIALS, passes: PACK_MIN_TRIALS, passRate: 1, passAtK: 1, grader: "contains", status: "ran" },
+            ],
+            verdict: "pass",
+          },
+        ],
+      }),
+      "utf8",
+    );
+    const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
+    expect(report.ok).toBe(true);
+    const agent = report.agents.find((a) => a.name === "generated-stable-agent");
+    expect(agent?.problems).toEqual([]);
+  });
+
+  // R1-4: the legacy single-report `eval.json` form (no `reports` array) is
+  // never gate-cleared for a stack pack, even when it looks otherwise
+  // complete — the pack-level form is now mandatory for a stack pack.
+  test("R1-4: a stack pack shipping the legacy single-report eval.json form is never gate-cleared", () => {
+    writeAgent(
+      bundledRoot,
+      "generated-legacy-agent",
+      agentMarkdown("generated-legacy-agent", {}, "\norigin:\n  kind: generated\n  sourceRef: fixture-legacy"),
+    );
+    const stacksRoot = path.join(path.dirname(bundledRoot), "stacks");
+    const packDir = path.join(stacksRoot, "fixture-legacy");
     mkdirSync(path.join(packDir, "governance"), { recursive: true });
     writeFileSync(
       path.join(packDir, "pack.json"),
-      JSON.stringify({ id: "fixture-stable", family: "language", modules: [], stability: "stable", skills: {} }),
+      JSON.stringify({ id: "fixture-legacy", family: "language", modules: [], stability: "stable", skills: { review: ["fixture-skill"] } }),
       "utf8",
     );
     writeFileSync(
       path.join(packDir, "governance", "eval.json"),
       JSON.stringify({
         schemaVersion: "1.0.0",
-        skillId: "fixture-stable/fixture-skill",
+        skillId: "fixture-legacy/fixture-skill",
         strictness: "low",
         trials: 3,
         triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
@@ -229,9 +314,13 @@ describe("verifyAgents", () => {
       "utf8",
     );
     const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
-    expect(report.ok).toBe(true);
-    const agent = report.agents.find((a) => a.name === "generated-stable-agent");
-    expect(agent?.problems).toEqual([]);
+    expect(report.ok).toBe(false);
+    const agent = report.agents.find((a) => a.name === "generated-legacy-agent");
+    expect(
+      agent?.problems.some(
+        (p) => p.reason === "stack-pack-not-gate-cleared" && p.detail.includes("pack-level eval document"),
+      ),
+    ).toBe(true);
   });
 
   test("R1-F7: a generated definition with a path-traversal sourceRef fails closed with invalid-source-ref, never reaching the resolver", () => {
@@ -500,49 +589,58 @@ describe("checkStackPackGateCleared", () => {
     fixtureRoot = mkdtempSync(path.join(tmpdir(), "check-stack-pack-gate-"));
     const packDir = path.join(fixtureRoot, "fixture-lang");
     mkdirSync(path.join(packDir, "governance"), { recursive: true });
-    writeFileSync(path.join(packDir, "pack.json"), JSON.stringify({ id: "fixture-lang", stability }, null, 2), "utf8");
+    writeFileSync(
+      path.join(packDir, "pack.json"),
+      JSON.stringify({ id: "fixture-lang", stability, skills: { review: ["fixture-skill"] } }, null, 2),
+      "utf8",
+    );
     return packDir;
   }
 
+  // R1-4 (review round 1, PR #692): the stack-pack gate now requires the
+  // pack-level `{ schemaVersion, reports: EvalReport[] }` document form —
+  // see the matching fixture in the `verifyAgents` describe block above for
+  // the full shape rationale.
   function writePassingEval(packDir: string): void {
-    const report = {
+    const skillDir = path.join(packDir, "skills", "fixture-skill");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n", "utf8");
+    writeFileSync(
+      path.join(skillDir, "evals.json"),
+      JSON.stringify({
+        triggers: { positive: ["p"], negative: ["n"] },
+        scenarios: [
+          { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
+        ],
+      }),
+      "utf8",
+    );
+    const skillDigest = computeSkillEvalDigest(skillDir);
+    const doc = {
       schemaVersion: "1.0.0",
-      skillId: "fixture-lang/fixture-skill",
-      strictness: "low",
-      trials: 3,
-      triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
-      evidence: "authored",
-      scenarios: [
+      reports: [
         {
-          id: "trigger-positive-1",
-          kind: "trigger-positive",
-          prompt: "p",
-          strictness: "low",
-          trials: 1,
-          passes: 1,
-          passRate: 1,
-          passAtK: 1,
-          grader: "trigger-rank-fork-family",
-          status: "ran",
-          deterministic: true,
-        },
-        {
-          id: "trigger-negative-1",
-          kind: "trigger-negative",
-          prompt: "n",
-          strictness: "low",
-          trials: 1,
-          passes: 1,
-          passRate: 1,
-          passAtK: 1,
-          grader: "trigger-rank-fork-family",
-          status: "ran",
-          deterministic: true,
+          schemaVersion: "1.0.0",
+          skillId: "fixture-lang/fixture-skill",
+          strictness: "high",
+          trials: PACK_MIN_TRIALS,
+          triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+          evidence: "authored",
+          scope: "bundled",
+          skillDigest,
+          runner: "ollama",
+          model: "llama3.1:latest",
+          recordedAt: "2026-01-01T00:00:00.000Z",
+          scenarios: [
+            { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+            { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+            { id: "behavior-1", kind: "behavior", prompt: "Do the thing", strictness: "high", trials: PACK_MIN_TRIALS, passes: PACK_MIN_TRIALS, passRate: 1, passAtK: 1, grader: "contains", status: "ran" },
+          ],
+          verdict: "pass",
         },
       ],
-      verdict: "pass",
     };
-    writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(report, null, 2), "utf8");
+    writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
   }
 
   afterEach(() => {

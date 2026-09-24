@@ -66,6 +66,7 @@ export type AgentVerifyProblemReason =
   | "stack-pack-missing"
   | "stack-pack-not-gate-cleared"
   | "generated-drift"
+  | "generated-source-mismatch"
   | "baseline-in-body"
   | "no-export-support"
   | "catalog-error"
@@ -140,9 +141,11 @@ export interface VerifyAgentsOptions {
    * `<projectRoot>/.metaproject/project-skills/<module>/<name>` and
    * `<projectRoot>/.metaproject/skills/gdskills/<category>/<name>` (the same
    * two trees `agent-catalogue-xref.test.ts`'s `knownAgentNames` walks for
-   * shipped skill directories).
+   * shipped skill directories), plus (R1-10) a W1 stack-pack skill scoped to
+   * the checked agent's own `stacks[]`/`extends` chain — see
+   * {@link SkillResolutionContext}.
    */
-  readonly skillExists?: (skillId: string) => boolean;
+  readonly skillExists?: (skillId: string, context?: SkillResolutionContext) => boolean;
   /** Forwarded to `agentExportSupport` (T7's `export.ts`); default: `defaultAgentSupportLookup`. */
   readonly supportLookup?: AgentSupportLookup;
 }
@@ -284,6 +287,13 @@ function isStringArray(value: unknown): value is readonly string[] {
  * short of that shape — never guesses a default for a missing field, since a
  * guessed field would make the regenerated content diverge from what a real
  * `keryx agents generate` run would produce and falsely report drift.
+ *
+ * R1-12 (review round 1, PR #692): `pack.id` is deliberately NOT compared
+ * against `sourceRef` here — a mismatch is a meaningful, reportable finding
+ * (`generated-source-mismatch`, checked by `verifyOne` below) rather than a
+ * reason to silently skip the drift check the way an unparseable/incomplete
+ * `pack.json` does. This function only narrows shape; identity checks live
+ * in the caller so they can be reported rather than swallowed.
  */
 function asStackPackForAgentGeneration(raw: unknown): StackPackForAgentGeneration | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
@@ -348,33 +358,86 @@ function defaultLoadStackPackForGeneration(
   };
 }
 
+/** Extra context `verifyOne` gives the skill resolver so a stack-pack skill name can be scoped to the agents that may legitimately name it. */
+export interface SkillResolutionContext {
+  /** The checked agent's own `stacks[]` (may be empty for a stack-agnostic agent). */
+  readonly stacks: readonly string[];
+}
+
+interface StackPackSkillsInfo {
+  readonly skillNames: ReadonlySet<string>;
+  readonly extendsId: string | undefined;
+  readonly deprecated: boolean;
+}
+
+/**
+ * Read `<stacksRoot>/<packId>/pack.json` + `skills/` for the subset
+ * {@link defaultSkillExists} needs: which skill directories actually carry a
+ * `SKILL.md` (R1-10: an empty leftover directory must not count), the pack's
+ * `extends` chain (a pack may legitimately reuse a parent pack's skills —
+ * e.g. `react` extends `ts-js-node`), and whether the pack is `deprecated`
+ * (a deprecated pack's skills are never a valid resolution target).
+ */
+function readStackPackSkillsInfo(stacksRoot: string, packId: string): StackPackSkillsInfo | undefined {
+  const packDir = path.join(stacksRoot, packId);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path.join(packDir, "pack.json"), "utf8"));
+  } catch {
+    return undefined;
+  }
+  const pack = raw as { readonly extends?: unknown; readonly stability?: unknown };
+  const extendsId = typeof pack.extends === "string" && pack.extends.length > 0 ? pack.extends : undefined;
+  const deprecated = pack.stability === "deprecated";
+  const skillNames = new Set<string>();
+  const skillsDir = path.join(packDir, "skills");
+  if (existsSync(skillsDir)) {
+    try {
+      for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        if (existsSync(path.join(skillsDir, entry.name, "SKILL.md"))) {
+          skillNames.add(entry.name);
+        }
+      }
+    } catch {
+      // Unreadable pack's skills directory: no skill names resolve from it.
+    }
+  }
+  return { skillNames, extendsId, deprecated };
+}
+
 /**
  * Default skill resolver: `BUNDLED_GDSKILLS` names, plus every skill
  * directory under the project's installed `.metaproject/skills/gdskills`
  * tree and its local `.metaproject/project-skills` tree, plus (flow 314, W4
- * Wave 4) every stack-pack skill directory under
- * `<bundledAgentsRoot>/../stacks/<pack>/skills/<name>` — the W1 stack packs' own
- * skills, which a `generated` agent's `skills[]` may legitimately name.
- * Walks a `<tree>/<category-or-module>/<name>` layout — the same shape
- * `agent-catalogue-xref.test.ts`'s `knownAgentNames` and
- * `project-skills.ts`'s `packageRoot` both use.
+ * Wave 4; narrowed by R1-10, review round 1 PR #692) a W1 stack pack's own
+ * skill — but ONLY when:
+ *  - the checked agent's `stacks[]` names that pack, or a pack it (or its
+ *    `extends` chain) resolves to;
+ *  - that pack is not `deprecated`;
+ *  - `skills/<name>/SKILL.md` actually exists (an empty leftover directory
+ *    never resolves).
+ * Before R1-10, every stack-pack skill directory name — from ANY pack,
+ * regardless of the agent's own `stacks[]`, stability, or whether a
+ * `SKILL.md` existed — was flattened into one global set, so an authored
+ * agent naming an unrelated (or experimental, or deleted) pack's skill
+ * silently passed. `BUNDLED_GDSKILLS`/project-skills names stay unscoped —
+ * those are the general-purpose skill catalog any agent may name, not a
+ * stack pack's own skills.
  */
-function defaultSkillExists(projectRoot: string, bundledAgentsRoot: string): (skillId: string) => boolean {
+function defaultSkillExists(
+  projectRoot: string,
+  bundledAgentsRoot: string,
+): (skillId: string, context?: SkillResolutionContext) => boolean {
   const names = new Set(BUNDLED_GDSKILLS.map((skill) => skill.name));
   const stacksRoot = path.join(path.dirname(bundledAgentsRoot), "stacks");
+  const packInfo = new Map<string, StackPackSkillsInfo>();
   if (existsSync(stacksRoot)) {
     try {
       for (const packEntry of readdirSync(stacksRoot, { withFileTypes: true })) {
         if (!packEntry.isDirectory()) continue;
-        const skillsDir = path.join(stacksRoot, packEntry.name, "skills");
-        if (!existsSync(skillsDir)) continue;
-        try {
-          for (const skillEntry of readdirSync(skillsDir, { withFileTypes: true })) {
-            if (skillEntry.isDirectory()) names.add(skillEntry.name);
-          }
-        } catch {
-          // Unreadable pack's skills directory: skip it rather than fail the whole resolver.
-        }
+        const info = readStackPackSkillsInfo(stacksRoot, packEntry.name);
+        if (info !== undefined) packInfo.set(packEntry.name, info);
       }
     } catch {
       // Unreadable stacks root: fall through with just the bundled/project trees.
@@ -407,7 +470,25 @@ function defaultSkillExists(projectRoot: string, bundledAgentsRoot: string): (sk
       }
     }
   }
-  return (skillId: string): boolean => names.has(skillId);
+
+  function resolvesInStackChain(skillId: string, startPackId: string): boolean {
+    let current: string | undefined = startPackId;
+    const seen = new Set<string>();
+    while (current !== undefined && !seen.has(current)) {
+      seen.add(current);
+      const info = packInfo.get(current);
+      if (info === undefined) return false;
+      if (!info.deprecated && info.skillNames.has(skillId)) return true;
+      current = info.extendsId;
+    }
+    return false;
+  }
+
+  return (skillId: string, context?: SkillResolutionContext): boolean => {
+    if (names.has(skillId)) return true;
+    if (context === undefined) return false;
+    return context.stacks.some((stackId) => resolvesInStackChain(skillId, stackId));
+  };
 }
 
 function verifyOne(
@@ -416,7 +497,7 @@ function verifyOne(
     readonly stackPackExists: (sourceRef: string) => boolean;
     readonly stackPackGateCleared: (sourceRef: string) => { readonly cleared: boolean; readonly reason?: string };
     readonly loadStackPackForGeneration: (sourceRef: string) => StackPackForAgentGeneration | undefined;
-    readonly skillExists: (skillId: string) => boolean;
+    readonly skillExists: (skillId: string, context?: SkillResolutionContext) => boolean;
     readonly supportLookup?: AgentSupportLookup;
   },
 ): AgentVerifyResult {
@@ -444,7 +525,7 @@ function verifyOne(
   }
 
   for (const skillId of definition.skills) {
-    if (!options.skillExists(skillId)) {
+    if (!options.skillExists(skillId, { stacks: definition.stacks })) {
       problems.push({ reason: "unknown-skill", detail: `skills[] references unknown skill "${skillId}"` });
     }
   }
@@ -520,15 +601,48 @@ function verifyOne(
         if (loaded.source.kind === "bundled") {
           const sourcePack = options.loadStackPackForGeneration(origin.sourceRef);
           if (sourcePack !== undefined) {
-            const pair = generateStackAgentPair(sourcePack);
-            const expected = [pair.auditor, pair.fixer].find((file) => file.name === definition.name);
-            if (expected !== undefined && expected.content !== loaded.raw) {
+            // R1-12: a `pack.json` whose own `id` disagrees with the
+            // `sourceRef` (directory name) it was loaded from is never
+            // regenerated against — that would either throw (an invalid id
+            // shape now fails `generateStackAgentPair`'s own validation) or
+            // silently compare against the WRONG pack's derived name/content.
+            // Report it as a named, non-silent finding instead.
+            if (sourcePack.id !== origin.sourceRef || !STACK_SOURCE_REF_RE.test(sourcePack.id)) {
               problems.push({
-                reason: "generated-drift",
+                reason: "generated-source-mismatch",
                 detail:
-                  `bundled agent "${definition.name}" no longer matches what "keryx agents generate --stack ${origin.sourceRef}" ` +
-                  `would produce from its current pack.json — regenerate rather than hand-editing it`,
+                  `bundled agent "${definition.name}"'s origin.sourceRef "${origin.sourceRef}" does not match its ` +
+                  `pack.json "id" ("${sourcePack.id}") — the pack cannot be trusted to regenerate this agent`,
               });
+            } else {
+              let pair: ReturnType<typeof generateStackAgentPair> | undefined;
+              try {
+                pair = generateStackAgentPair(sourcePack);
+              } catch (cause) {
+                problems.push({
+                  reason: "generated-source-mismatch",
+                  detail: `bundled agent "${definition.name}"'s pack.json cannot be regenerated: ${cause instanceof Error ? cause.message : String(cause)}`,
+                });
+              }
+              if (pair !== undefined) {
+                const expected = [pair.auditor, pair.fixer].find((file) => file.name === definition.name);
+                if (expected === undefined) {
+                  problems.push({
+                    reason: "generated-source-mismatch",
+                    detail:
+                      `bundled agent "${definition.name}" does not match either generated name ` +
+                      `("${pair.auditor.name}"/"${pair.fixer.name}") that "keryx agents generate --stack ${origin.sourceRef}" ` +
+                      `would produce from its current pack.json`,
+                  });
+                } else if (expected.content !== loaded.raw) {
+                  problems.push({
+                    reason: "generated-drift",
+                    detail:
+                      `bundled agent "${definition.name}" no longer matches what "keryx agents generate --stack ${origin.sourceRef}" ` +
+                      `would produce from its current pack.json — regenerate rather than hand-editing it`,
+                  });
+                }
+              }
             }
           }
         }

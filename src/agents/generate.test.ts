@@ -6,7 +6,7 @@
 // `parseAgentFrontmatter` the same way a real bundled file would.
 import { describe, expect, test } from "bun:test";
 import { parseAgentFrontmatter } from "./frontmatter";
-import { generateStackAgentPair, type StackPackForAgentGeneration } from "./generate";
+import { generateStackAgentPair, InvalidStackPackFieldError, type StackPackForAgentGeneration } from "./generate";
 import { buildAgentDefinition, validateAgentFrontmatter } from "./schema";
 
 function fixturePack(overrides: Partial<StackPackForAgentGeneration> = {}): StackPackForAgentGeneration {
@@ -135,25 +135,145 @@ describe("generateStackAgentPair", () => {
     expect(fixerDefinition.skills).toEqual([]);
   });
 
-  test("every real shipped stack pack with an agentProfile regenerates to exactly what is on disk", () => {
+  // R1-7 (review round 1, PR #692): `inject.ts`'s probe showed a newline in
+  // `pack.id` or a `skills[]` entry could inject new YAML keys into the
+  // generated frontmatter (e.g. escalating `policy_profile` to
+  // `workspace-write` on the read-only auditor). Every pack-supplied
+  // identifier is now validated against `^[a-z][a-z0-9-]*$` up front — a
+  // hostile value throws `InvalidStackPackFieldError` rather than reaching
+  // the frontmatter writer at all.
+  describe("R1-7: hostile pack.json fields cannot inject YAML or escalate policy", () => {
+    test("a pack.id with an embedded newline and a policy_profile injection throws, rather than generating a definition", () => {
+      const pack = fixturePack({ id: 'go\npolicy_profile: workspace-write\ntools:\n  - shell_exec' });
+      expect(() => generateStackAgentPair(pack)).toThrow(InvalidStackPackFieldError);
+    });
+
+    test("a hostile review skill name with an embedded newline throws", () => {
+      const pack = fixturePack({
+        skills: { review: ["go-code-review\npolicy_profile: workspace-write"], "build-fix": ["fixture-build-fix"] },
+      });
+      expect(() => generateStackAgentPair(pack)).toThrow(InvalidStackPackFieldError);
+    });
+
+    test("a hostile build-fix skill name with an embedded newline throws", () => {
+      const pack = fixturePack({
+        skills: { review: ["fixture-code-review"], "build-fix": ["go-build-fix\npolicy_profile: workspace-write"] },
+      });
+      expect(() => generateStackAgentPair(pack)).toThrow(InvalidStackPackFieldError);
+    });
+
+    test("a skill name containing a colon throws rather than being written unquoted", () => {
+      const pack = fixturePack({ skills: { review: ["a: b"], "build-fix": ["fixture-build-fix"] } });
+      expect(() => generateStackAgentPair(pack)).toThrow(InvalidStackPackFieldError);
+    });
+
+    test("an invalid id never reaches yamlQuoted/frontmatter — the auditor definition is never even built", () => {
+      // Reproduces inject.ts's escalation case end to end: before R1-7 this
+      // id round-tripped through parseAgentFrontmatter/buildAgentDefinition
+      // as a `read-only` auditor with `policy_profile: workspace-write` and
+      // `tools: ["shell_exec"]`. Now it must never get that far.
+      const pack = fixturePack({ id: "go\npolicy_profile: workspace-write\ntools:\n  - shell_exec" });
+      let thrown: unknown;
+      try {
+        generateStackAgentPair(pack);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(InvalidStackPackFieldError);
+    });
+
+    test("a displayName carrying a newline throws rather than forging frontmatter/body structure", () => {
+      const pack = fixturePack({
+        agentProfile: {
+          displayName: 'Go"\n---\npolicy_profile: workspace-write\n',
+          auditFocus: ["a"],
+          buildCommands: ["go build ./..."],
+          fixGuardrails: ["g"],
+        },
+      });
+      expect(() => generateStackAgentPair(pack)).toThrow(InvalidStackPackFieldError);
+    });
+
+    test("a valid pack still generates a definition whose parsed policy/tools are exactly the fixed auditor/fixer allowlists", () => {
+      const pair = generateStackAgentPair(fixturePack({ id: "go" }));
+      const auditor = parseAndValidate(pair.auditor.content);
+      expect(auditor.policy_profile).toBe("read-only");
+      expect(auditor.tools).not.toContain("shell_exec");
+      expect(auditor.tools).not.toContain("apply_patch");
+      const fixer = parseAndValidate(pair.fixer.content);
+      expect(fixer.policy_profile).toBe("workspace-write");
+    });
+
+    test("a skill name with a colon, when valid-shaped, round-trips as one literal skill string (no key injection)", () => {
+      // `a-b` is a VALID skill name (matches the id pattern) — confirms the
+      // quoting itself is transparent for a legitimate value, complementing
+      // the colon-rejection test above for an INVALID one.
+      const pair = generateStackAgentPair(fixturePack({ skills: { review: ["a-b"], "build-fix": [] } }));
+      const auditor = parseAndValidate(pair.auditor.content);
+      expect(auditor.skills).toEqual(["a-b"]);
+    });
+  });
+
+  // R1-14 (review round 1, PR #692): this used to hardcode
+  // `["ts-js-node", "python", "go"]` while its title claimed "every real
+  // shipped stack pack" — a future gate-cleared pack with no generated pair
+  // would never be caught, and a pack that fell OUT of gate would still be
+  // asserted against. The list is now derived from `checkStackPackGateCleared`
+  // (the same function `agents generate`/`agents verify` use to decide
+  // "cleared"), checked in BOTH directions: every currently gate-cleared
+  // pack with an `agentProfile` regenerates to exactly what is on disk, and
+  // every bundled `generated`-origin agent file on disk names a currently
+  // gate-cleared pack.
+  //
+  // NOTE (flow 314 fix attempt 1): while content lanes are concurrently
+  // editing skill/evals.json content in this same working tree, a pack's
+  // `governance/eval.json` can go stale (its `skillDigest` no longer matches
+  // the current `SKILL.md`+`evals.json`), which makes `gateCleared` empty or
+  // a strict subset of the real stable packs for the run. Both assertions
+  // below stay meaningful regardless: they only ever compare AGAINST
+  // whatever `checkStackPackGateCleared` says right now, never against a
+  // hardcoded expectation of which packs "should" be cleared.
+  test("every gate-cleared real shipped stack pack regenerates byte-identically, and every bundled generated agent belongs to a gate-cleared pack", () => {
     // Guards the drift check in verify.ts from the other direction: proves
     // the generator's real-pack output is what actually shipped, not just
     // what a fixture produces.
     const path = require("node:path") as typeof import("node:path");
     const fs = require("node:fs") as typeof import("node:fs");
+    const { checkStackPackGateCleared } = require("./verify") as typeof import("./verify");
     const stacksRoot = path.join(import.meta.dir, "..", "gdskills", "bundled", "stacks");
     const agentsRoot = path.join(import.meta.dir, "..", "gdskills", "bundled", "agents");
-    // "react" is deliberately excluded: flow 314 T13a removed its generated
-    // pair from disk (agent-refs.json now `{ agents: [] }`) because the pack
-    // is not gate-cleared — `agents generate` itself now refuses to produce
-    // one, so there is nothing on disk for `react` to compare against here.
-    for (const id of ["ts-js-node", "python", "go"]) {
-      const pack = JSON.parse(fs.readFileSync(path.join(stacksRoot, id, "pack.json"), "utf8")) as StackPackForAgentGeneration;
+
+    const stackIds = fs
+      .readdirSync(stacksRoot, { withFileTypes: true })
+      .filter((entry: { isDirectory(): boolean }) => entry.isDirectory())
+      .map((entry: { name: string }) => entry.name);
+    const gateCleared = stackIds.filter((id: string) => checkStackPackGateCleared(path.join(stacksRoot, id)).cleared);
+
+    // Direction 1: every gate-cleared pack that carries an `agentProfile`
+    // regenerates to exactly what is on disk.
+    for (const id of gateCleared) {
+      const pack = JSON.parse(fs.readFileSync(path.join(stacksRoot, id, "pack.json"), "utf8")) as StackPackForAgentGeneration & {
+        agentProfile?: unknown;
+      };
+      if (pack.agentProfile === undefined) continue; // a gate-cleared pack need not carry a generated pair
       const pair = generateStackAgentPair(pack);
       for (const file of [pair.auditor, pair.fixer]) {
-        const onDisk = fs.readFileSync(path.join(agentsRoot, file.fileName), "utf8");
-        expect(file.content).toBe(onDisk);
+        const filePath = path.join(agentsRoot, file.fileName);
+        expect(fs.existsSync(filePath)).toBe(true);
+        expect(fs.readFileSync(filePath, "utf8")).toBe(file.content);
       }
+    }
+
+    // Direction 2: every bundled `generated`-origin agent file names a
+    // currently gate-cleared pack.
+    for (const fileName of fs.readdirSync(agentsRoot) as string[]) {
+      if (!fileName.endsWith("-code-auditor.md") && !fileName.endsWith("-build-fixer.md")) continue;
+      const raw = fs.readFileSync(path.join(agentsRoot, fileName), "utf8");
+      const parsed = parseAgentFrontmatter(raw);
+      if (!parsed.ok) continue;
+      const origin = parsed.result.data.origin as { readonly kind?: string; readonly sourceRef?: string } | undefined;
+      if (origin === undefined || origin.kind !== "generated" || origin.sourceRef === undefined) continue;
+      expect(gateCleared).toContain(origin.sourceRef);
     }
   });
 });

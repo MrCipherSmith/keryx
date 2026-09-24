@@ -393,8 +393,21 @@ interface GenerateFileOutcome {
   readonly existed: boolean;
 }
 
-/** Same narrowing `verify.ts`'s `defaultLoadStackPackForGeneration` uses — kept local rather than imported (that resolver is `verify.ts`-internal, not exported). */
-function readStackPackForGeneration(packJsonPath: string): StackPackForAgentGeneration | undefined {
+/**
+ * Same narrowing `verify.ts`'s `defaultLoadStackPackForGeneration` uses —
+ * kept local rather than imported (that resolver is `verify.ts`-internal,
+ * not exported).
+ *
+ * R1-6 (review round 1, PR #692): `pack.json`'s `id` field is untrusted —
+ * nothing previously checked it equalled the `--stack`/directory name it was
+ * read from, so a mismatched or path-traversal `id` could make
+ * `generateStackAgentPair` derive a file name that escapes the bundled
+ * agents directory. `stackId` (the directory name, already matched against
+ * `STACK_ID_PATTERN` by the caller) is now REQUIRED to equal `pack.id`, and
+ * `pack.id` is independently re-checked against the same pattern rather than
+ * trusting the caller's check transitively.
+ */
+function readStackPackForGeneration(packJsonPath: string, stackId: string): StackPackForAgentGeneration | undefined {
   let raw: unknown;
   try {
     raw = JSON.parse(readFileSync(packJsonPath, "utf8"));
@@ -408,6 +421,7 @@ function readStackPackForGeneration(packJsonPath: string): StackPackForAgentGene
     agentProfile?: { displayName?: unknown; auditFocus?: unknown; buildCommands?: unknown; fixGuardrails?: unknown };
   };
   if (typeof pack.id !== "string" || pack.id.length === 0) return undefined;
+  if (!STACK_ID_PATTERN.test(pack.id) || pack.id !== stackId) return undefined;
   const profile = pack.agentProfile;
   const isStringArray = (v: unknown): v is readonly string[] => Array.isArray(v) && v.every((i) => typeof i === "string");
   if (
@@ -510,19 +524,59 @@ function generateCommand(args: string[], depsIn: AgentsCatalogDeps): void {
     return;
   }
 
-  const pack = readStackPackForGeneration(packJsonPath);
+  const pack = readStackPackForGeneration(packJsonPath, stackId);
   if (pack === undefined) {
-    error(`Stack pack "${stackId}" has no usable agentProfile in ${packJsonPath} — cannot generate an agent pair.`);
+    error(
+      `Stack pack "${stackId}" has no usable agentProfile in ${packJsonPath}, or its pack.json "id" is missing/invalid/does not match the "${stackId}" directory — cannot generate an agent pair.`,
+    );
     process.exitCode = 1;
     return;
   }
 
-  const pair = generateStackAgentPair(pack);
+  // R1-7: `generateStackAgentPair` now validates `pack.id` and every
+  // review/build-fix skill name (plus rejects control characters in
+  // body-interpolated fields) and THROWS on a hostile value, rather than
+  // trusting the caller to have pre-validated it. That must never crash this
+  // CLI command — surface it as the same kind of named, exit-1 refusal every
+  // other bad-input path here already uses.
+  let pair: ReturnType<typeof generateStackAgentPair>;
+  try {
+    pair = generateStackAgentPair(pack);
+  } catch (cause) {
+    error(`Stack pack "${stackId}" cannot be generated: ${cause instanceof Error ? cause.message : String(cause)}`);
+    process.exitCode = 1;
+    return;
+  }
   const outcomes: GenerateFileOutcome[] = [];
 
   for (const file of [pair.auditor, pair.fixer]) {
     const filePath = path.join(bundledAgentsRoot, file.fileName);
-    const existed = existsSync(filePath);
+
+    // R1-6: `file.fileName` is derived from `pack.id`, which is now checked
+    // (above) to equal `stackId` and to match `STACK_ID_PATTERN` — but this
+    // containment check is a second, independent layer that does not rely on
+    // that upstream validation staying correct. Refuse to write anywhere the
+    // resolved path is not actually inside `bundledAgentsRoot`, and refuse to
+    // write through a symlinked target (an attacker-planted symlink at the
+    // destination name pointing elsewhere).
+    const relative = path.relative(bundledAgentsRoot, filePath);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      error(`Refusing to write "${file.fileName}": it resolves outside the bundled agents directory.`);
+      process.exitCode = 1;
+      return;
+    }
+    let existed: boolean;
+    try {
+      const targetStats = lstatSync(filePath);
+      existed = true;
+      if (targetStats.isSymbolicLink()) {
+        error(`Refusing to write "${file.fileName}": the target is a symlink.`);
+        process.exitCode = 1;
+        return;
+      }
+    } catch {
+      existed = false;
+    }
     const previous = existed ? readFileSync(filePath, "utf8") : undefined;
     const changed = previous !== file.content;
 

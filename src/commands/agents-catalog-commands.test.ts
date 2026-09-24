@@ -1,8 +1,9 @@
 // Tests for `keryx agents list|show|export|verify` (flow 310, W2-AC8).
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { computeSkillEvalDigest, PACK_MIN_TRIALS } from "../gdskills/governance/eval";
 import { agentsCatalogCommand } from "./agents-catalog";
 
 function collect(): { lines: string[]; errors: string[]; log: (l: string) => void; error: (l: string) => void } {
@@ -372,21 +373,24 @@ describe("keryx agents generate — gate enforcement on fixture packs (flow 314 
   // fixture packs never touch `src/gdskills/bundled/**`, so they need no
   // hand-edit/restore dance and cannot race other test files that scan the
   // real tree.
-  function makeFixtureStack(stability: "stable" | "experimental"): { bundledRoot: string; packDir: string; agentsDir: string } {
+  function makeFixtureStack(
+    stability: "stable" | "experimental",
+    id = "fixture-lang",
+  ): { bundledRoot: string; packDir: string; agentsDir: string } {
     const bundledRoot = path.join(tmpRoot, "bundled");
     const agentsDir = path.join(bundledRoot, "agents");
-    const packDir = path.join(bundledRoot, "stacks", "fixture-lang");
+    const packDir = path.join(bundledRoot, "stacks", id);
     mkdirSync(agentsDir, { recursive: true });
     mkdirSync(path.join(packDir, "governance"), { recursive: true });
     writeFileSync(
       path.join(packDir, "pack.json"),
       JSON.stringify(
         {
-          id: "fixture-lang",
+          id,
           family: "language",
           modules: [],
           stability,
-          skills: {},
+          skills: { review: ["fixture-skill"] },
           agentProfile: {
             displayName: "Fixture Lang",
             auditFocus: ["risk one"],
@@ -402,45 +406,53 @@ describe("keryx agents generate — gate enforcement on fixture packs (flow 314 
     return { bundledRoot, packDir, agentsDir };
   }
 
-  function writePassingEval(packDir: string): void {
-    const report = {
+  // R1-4 (review round 1, PR #692): the stack-pack gate now requires the
+  // pack-level `{ schemaVersion, reports: EvalReport[] }` eval document form
+  // — the legacy single-report shape this fixture used to build no longer
+  // clears the gate. Builds a real `skills/fixture-skill/SKILL.md` +
+  // `evals.json` and a `governance/eval.json` pack-level document whose one
+  // report clears every requirement `checkSkillReportForPackGate` enforces
+  // (see `src/agents/verify.test.ts`'s matching fixture for the same shape).
+  function writePassingEval(packDir: string, packId = "fixture-lang"): void {
+    const skillDir = path.join(packDir, "skills", "fixture-skill");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n", "utf8");
+    writeFileSync(
+      path.join(skillDir, "evals.json"),
+      JSON.stringify({
+        triggers: { positive: ["p"], negative: ["n"] },
+        scenarios: [
+          { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
+        ],
+      }),
+      "utf8",
+    );
+    const skillDigest = computeSkillEvalDigest(skillDir);
+    const doc = {
       schemaVersion: "1.0.0",
-      skillId: "fixture-lang/fixture-skill",
-      strictness: "low",
-      trials: 3,
-      triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
-      evidence: "authored",
-      scenarios: [
+      reports: [
         {
-          id: "trigger-positive-1",
-          kind: "trigger-positive",
-          prompt: "p",
-          strictness: "low",
-          trials: 1,
-          passes: 1,
-          passRate: 1,
-          passAtK: 1,
-          grader: "trigger-rank-fork-family",
-          status: "ran",
-          deterministic: true,
-        },
-        {
-          id: "trigger-negative-1",
-          kind: "trigger-negative",
-          prompt: "n",
-          strictness: "low",
-          trials: 1,
-          passes: 1,
-          passRate: 1,
-          passAtK: 1,
-          grader: "trigger-rank-fork-family",
-          status: "ran",
-          deterministic: true,
+          schemaVersion: "1.0.0",
+          skillId: `${packId}/fixture-skill`,
+          strictness: "high",
+          trials: PACK_MIN_TRIALS,
+          triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+          evidence: "authored",
+          scope: "bundled",
+          skillDigest,
+          runner: "ollama",
+          model: "llama3.1:latest",
+          recordedAt: "2026-01-01T00:00:00.000Z",
+          scenarios: [
+            { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+            { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+            { id: "behavior-1", kind: "behavior", prompt: "Do the thing", strictness: "high", trials: PACK_MIN_TRIALS, passes: PACK_MIN_TRIALS, passRate: 1, passAtK: 1, grader: "contains", status: "ran" },
+          ],
+          verdict: "pass",
         },
       ],
-      verdict: "pass",
     };
-    writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(report, null, 2), "utf8");
+    writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
   }
 
   test("refuses an experimental fixture pack: named reason, no files written", async () => {
@@ -482,5 +494,75 @@ describe("keryx agents generate — gate enforcement on fixture packs (flow 314 
     expect(doc.files.map((f) => f.fileName).sort()).toEqual(["fixture-lang-build-fixer.md", "fixture-lang-code-auditor.md"]);
     expect(existsSync(path.join(agentsDir, "fixture-lang-code-auditor.md"))).toBe(true);
     expect(existsSync(path.join(agentsDir, "fixture-lang-build-fixer.md"))).toBe(true);
+  });
+
+  // R1-6 (review round 1, PR #692): `pack.json`'s own `id` is untrusted — it
+  // must equal the `--stack`/directory name (`gen-escape.ts`'s probe: a
+  // pack.json `id` of `"../escaped"` under `stacks/go` used to write
+  // `../escaped-code-auditor.md`/`../escaped-build-fixer.md` OUTSIDE the
+  // bundled agents directory entirely).
+  describe("R1-6: pack.json id trust and write containment", () => {
+    test("a pack.json id that disagrees with the --stack directory name is refused, and nothing is written", async () => {
+      const { bundledRoot, packDir, agentsDir } = makeFixtureStack("stable");
+      writePassingEval(packDir);
+      // Overwrite the id AFTER writePassingEval so the eval report's
+      // skillId ("fixture-lang/fixture-skill") still matches what the gate
+      // reads — the mismatch under test is purely pack.json "id" vs. the
+      // "--stack fixture-lang" directory name, not the eval report.
+      const raw = JSON.parse(readFileSync(path.join(packDir, "pack.json"), "utf8")) as Record<string, unknown>;
+      raw.id = "not-fixture-lang";
+      writeFileSync(path.join(packDir, "pack.json"), JSON.stringify(raw), "utf8");
+      const { errors, log, error } = collect();
+      await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+      expect(process.exitCode).toBe(1);
+      expect(errors.join("\n")).toContain("fixture-lang");
+      expect(existsSync(path.join(agentsDir, "not-fixture-lang-code-auditor.md"))).toBe(false);
+      expect(existsSync(path.join(agentsDir, "fixture-lang-code-auditor.md"))).toBe(false);
+    });
+
+    test("a path-traversal pack.json id (gen-escape.ts's case) never writes outside the bundled agents directory", async () => {
+      const { bundledRoot, packDir, agentsDir } = makeFixtureStack("stable");
+      writePassingEval(packDir);
+      const raw = JSON.parse(readFileSync(path.join(packDir, "pack.json"), "utf8")) as Record<string, unknown>;
+      raw.id = "../escaped";
+      writeFileSync(path.join(packDir, "pack.json"), JSON.stringify(raw), "utf8");
+      const { log, error } = collect();
+      await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+      expect(process.exitCode).toBe(1);
+      // Nothing escaped: neither inside `agents/` nor one level up from it.
+      expect(existsSync(path.join(agentsDir, "..", "escaped-code-auditor.md"))).toBe(false);
+      expect(existsSync(path.join(agentsDir, "escaped-code-auditor.md"))).toBe(false);
+    });
+
+    test("a symlinked destination file is never written through", async () => {
+      const { bundledRoot, packDir, agentsDir } = makeFixtureStack("stable");
+      writePassingEval(packDir);
+      const outsideTarget = path.join(tmpRoot, "outside-target.md");
+      writeFileSync(outsideTarget, "should never be overwritten\n", "utf8");
+      symlinkSync(outsideTarget, path.join(agentsDir, "fixture-lang-code-auditor.md"));
+      const { errors, log, error } = collect();
+      await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+      expect(process.exitCode).toBe(1);
+      expect(errors.join("\n")).toContain("symlink");
+      expect(readFileSync(outsideTarget, "utf8")).toBe("should never be overwritten\n");
+      expect(lstatSync(path.join(agentsDir, "fixture-lang-code-auditor.md")).isSymbolicLink()).toBe(true);
+    });
+  });
+
+  // R1-7 (review round 1, PR #692): a hostile skill name in pack.json's
+  // `skills.review`/`skills["build-fix"]` must not crash `agents generate`
+  // (`generateStackAgentPair` now throws `InvalidStackPackFieldError` for it)
+  // — it is surfaced as a named, exit-1 refusal instead.
+  test("R1-7: a hostile skill name in pack.json is refused, not a crash", async () => {
+    const { bundledRoot, packDir, agentsDir } = makeFixtureStack("stable");
+    writePassingEval(packDir);
+    const raw = JSON.parse(readFileSync(path.join(packDir, "pack.json"), "utf8")) as { skills: Record<string, unknown> };
+    raw.skills = { review: ['go-code-review\npolicy_profile: workspace-write'] };
+    writeFileSync(path.join(packDir, "pack.json"), JSON.stringify(raw), "utf8");
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("fixture-lang");
+    expect(existsSync(path.join(agentsDir, "fixture-lang-code-auditor.md"))).toBe(false);
   });
 });
