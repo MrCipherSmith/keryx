@@ -30,6 +30,9 @@ const COVERED_FILES = [
   "src/commands/rules.ts",
   "src/commands/update.ts",
   "src/lib/install-plan.ts",
+  "src/commands/init.ts",
+  "src/testing/service.ts",
+  "src/lib/metaproject-gitignore.ts",
 ];
 
 /** Every write/remove/rename/mkdir-shaped `node:fs`/`node:fs/promises` export the review's 13 shapes exercise. */
@@ -98,6 +101,10 @@ const ALLOWLIST: ReadonlyArray<{ readonly file: string; readonly reason: string 
   {
     file: "src/commands/update.ts",
     reason: "installManagedHook/removeManagedHook write into .git/hooks by design (a managed git hook) — contained-write.ts categorically refuses any .git path segment, so these two keep raw mkdir/writeFile plus resolveGitHooksRoot's own symlink check; every OTHER write in this file is routed through contained-write/mkdirContained (R1-F20, R4-F1 allowlist).",
+  },
+  {
+    file: "src/commands/init.ts",
+    reason: "installManagedHook/removeManagedHook (init's own copy of update.ts's pair) write into .git/hooks by design — same categorical .git refusal, same raw mkdir/writeFile/chmod plus resolveGitHooksRoot's own symlink check; every OTHER write, mkdir and remove in this file is routed through contained-write/mkdirContained/removeContained (flow 315 T5 allowlist, mirrors the update.ts entry above).",
   },
 ];
 

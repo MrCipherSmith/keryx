@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { withCwd } from "../lib/test-cwd";
 import { RETIRED_RULES } from "../gdskills/retired-rules";
+import { ContainedWriteError } from "../lib/contained-write";
 import { memoryCommand } from "./memory";
 import { initCommand } from "./init";
 
@@ -223,6 +224,75 @@ test("init ignores generated memory data but tracks canonical memory", async () 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// Flow 315 T5 (R5-F1 major): `keryx init`'s writers used to follow in-repo
+// symlinks that escape the project — a symlinked `.metaproject/metaproject.json`
+// took a write meant for the manifest and landed it on whatever the link
+// pointed at outside the project. Every write in init.ts now routes through
+// `contained-write.ts`, which refuses (ContainedWriteError, reason
+// "escaping-symlink") instead of following the link, so init throws and the
+// outside file is left byte-for-byte unchanged.
+test("keryx init refuses to write metaproject.json through a symlink that escapes the project", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-escape-manifest-"));
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "keryx-init-escape-manifest-outside-"));
+  try {
+    const sentinelPath = path.join(outsideRoot, "victim.json");
+    await writeFile(sentinelPath, "ORIGINAL\n", "utf8");
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await symlink(sentinelPath, path.join(root, ".metaproject", "metaproject.json"));
+
+    let caught: unknown;
+    await withCwd(root, async () => {
+      try {
+        await initCommand(["--yes"]);
+      } catch (error) {
+        caught = error;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(ContainedWriteError);
+    expect((caught as ContainedWriteError).reason).toBe("escaping-symlink");
+    expect(await readFile(sentinelPath, "utf8")).toBe("ORIGINAL\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+}, 120_000);
+
+// Flow 315 T5 (R5-F1 major): same failure mode, a DIRECTORY this time — a
+// symlinked `.metaproject/reports` (a scaffold directory only
+// `createBaseStructure` in this file creates; no other already-contained
+// writer touches it, so this specifically proves THIS file's own `mkdir`
+// calls are now routed through `mkdirContained` rather than being caught
+// incidentally by some other module's containment) used to have its raw
+// `mkdir(dir, { recursive: true })` follow the link and silently create real
+// directory structure wherever it pointed, outside the project.
+// `createBaseStructure`'s `mkdirContained` now refuses before anything is
+// written into it.
+test("keryx init refuses to create .metaproject/reports through a directory symlink that escapes the project", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-escape-reports-"));
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "keryx-init-escape-reports-outside-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await symlink(outsideRoot, path.join(root, ".metaproject", "reports"));
+
+    let caught: unknown;
+    await withCwd(root, async () => {
+      try {
+        await initCommand(["--yes"]);
+      } catch (error) {
+        caught = error;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(ContainedWriteError);
+    expect((caught as ContainedWriteError).reason).toBe("escaping-symlink");
+    expect(await readdir(outsideRoot)).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+}, 120_000);
 
 test("memory index output is ignored and reproducible after init", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-init-memory-index-"));

@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { ContainedWriteError } from "./contained-write";
 import {
   findLegacyMemoryArtifacts,
   formatLegacyMemoryMigrationAdvisory,
   renderMetaprojectGitignoreBlock,
+  syncMetaprojectGitignore,
 } from "./metaproject-gitignore";
 
 // Flow 313 (W4): the bundle ledger (applied-state.json) and any staged bundle
@@ -48,4 +50,34 @@ test("the managed block ignores W3's per-machine learning paths (W3-AC9)", () =>
   const block = renderMetaprojectGitignoreBlock();
   expect(block).toContain(".metaproject/data/learning/observations/\n");
   expect(block).toContain(".metaproject/data/learning/candidates/\n");
+});
+
+// Flow 315 T5 (R5-F1 minor): a project's own `.gitignore` can be a symlink —
+// deliberately, or planted by something hostile — pointing outside the
+// project. The pre-fix raw `writeFile(gitignorePath, ...)` followed it and
+// overwrote whatever it pointed at. `syncMetaprojectGitignore` now refuses
+// (ContainedWriteError, reason "escaping-symlink") rather than writing
+// through it, leaving the outside file byte-for-byte unchanged.
+test("syncMetaprojectGitignore refuses to write through a .gitignore symlink that escapes the project", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-gitignore-escape-"));
+  const outsideRoot = await mkdtemp(path.join(tmpdir(), "keryx-gitignore-escape-outside-"));
+  try {
+    const sentinelPath = path.join(outsideRoot, "victim.gitignore");
+    await writeFile(sentinelPath, "ORIGINAL\n");
+    await symlink(sentinelPath, path.join(root, ".gitignore"));
+
+    let caught: unknown;
+    try {
+      await syncMetaprojectGitignore(root);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ContainedWriteError);
+    expect((caught as ContainedWriteError).reason).toBe("escaping-symlink");
+    expect(await readFile(sentinelPath, "utf8")).toBe("ORIGINAL\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
 });
