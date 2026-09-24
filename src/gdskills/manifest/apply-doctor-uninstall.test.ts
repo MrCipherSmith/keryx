@@ -139,6 +139,49 @@ test("doctor reports drifted after an edit, missing after a delete, and orphaned
   expect(byPath.get(".claude/rules/orphan.mdc")).toBe("orphaned");
 });
 
+// R3-3 (flow 309 review round 3): a recorded FILE that has since been
+// replaced on disk by a DIRECTORY must not crash doctor/uninstall/apply with
+// a raw EISDIR — `sha256OfFile`'s underlying `readFile` throws EISDIR for a
+// directory, and before this fix nothing caught it.
+test("doctor reports 'drifted' (not a crash) when a recorded file is replaced by a directory (R3-3)", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  await applyInstall(plan, root);
+
+  await rm(path.join(root, ".claude", "rules", "a.mdc"), { force: true });
+  await mkdir(path.join(root, ".claude", "rules", "a.mdc"), { recursive: true });
+
+  const doctor = await doctorInstall(root, "claude");
+  expect(doctor.ok).toBe(false);
+  const byPath = new Map(doctor.entries.map((e) => [e.path, e.status]));
+  expect(byPath.get(".claude/rules/a.mdc")).toBe("drifted");
+});
+
+test("uninstall refuses (not a crash) when a recorded file is replaced by a directory, even with --force (R3-3)", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  await applyInstall(plan, root);
+
+  await rm(path.join(root, ".claude", "rules", "a.mdc"), { force: true });
+  await mkdir(path.join(root, ".claude", "rules", "a.mdc"), { recursive: true });
+
+  const result = await uninstallInstall(root, "claude", { force: true });
+  expect(result.ok).toBe(false);
+  expect(result.refused.some((r) => r.path === ".claude/rules/a.mdc")).toBe(true);
+  // Never removed — the directory that now sits at the recorded path is
+  // untouched.
+  const { stat } = await import("node:fs/promises");
+  expect((await stat(path.join(root, ".claude", "rules", "a.mdc"))).isDirectory()).toBe(true);
+});
+
+test("apply skips (not a crash) when a planned destination already exists as a directory (R3-3)", async () => {
+  await mkdir(path.join(root, ".claude", "rules", "a.mdc"), { recursive: true });
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  expect(plan.ok).toBe(true);
+
+  const result = await applyInstall(plan, root);
+  expect(result.ok).toBe(false);
+  expect(result.skipped.some((s) => s.path === ".claude/rules/a.mdc")).toBe(true);
+});
+
 test("uninstall refuses a drifted file without --force and removes only recorded, hash-matching files", async () => {
   const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
   await applyInstall(plan, root);

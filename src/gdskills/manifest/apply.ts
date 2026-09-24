@@ -10,6 +10,7 @@ import path from "node:path";
 import { pathExists } from "../../lib/fs";
 import { destinationRootsForTarget, type InstallPlan } from "./plan";
 import {
+  NotARegularFileError,
   readSkillsInstallState,
   resolveContainedPath,
   skillsInstallStateIsUnreadable,
@@ -126,7 +127,19 @@ export async function applyInstall(
       const alreadyExists = await pathExists(destinationAbs);
       if (alreadyExists && !options.force) {
         const recordedHash = recordedHashes.get(file.destination);
-        const currentHash = await sha256OfFile(destRoot, file.destination);
+        // R3-3: a planned destination that already exists as a directory
+        // must not crash apply with a raw EISDIR — skip it the same way an
+        // unrecorded/drifted file is skipped, rather than hash it.
+        let currentHash: string | undefined;
+        try {
+          currentHash = await sha256OfFile(destRoot, file.destination);
+        } catch (error) {
+          if (error instanceof NotARegularFileError) {
+            skipped.push({ path: file.destination, reason: `${error.message} — refusing to overwrite it` });
+            continue;
+          }
+          throw error;
+        }
         if (recordedHash === undefined) {
           skipped.push({
             path: file.destination,

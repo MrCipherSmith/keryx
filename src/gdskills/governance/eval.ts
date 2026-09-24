@@ -165,10 +165,112 @@ export interface EvalOptions {
 /** Thrown when the requested eval violates its own contract (e.g. high strictness with < 3 trials) — the CLI maps this to exit 1. */
 export class EvalContractError extends Error {}
 
+/**
+ * R3-1 (flow 309 review round 3): thrown when a skill's own `evals.json` is
+ * malformed — bad JSON, a wrong-shaped field, an unknown `grader`, an empty
+ * `expected_behavior` list, or an invalid `regex` value. Before this fix,
+ * `readEvalSpec` cast the parsed JSON straight to `EvalSpecFile` with no
+ * validation at all: a scenario with a typo'd grader (`"regexp"` for
+ * `"regex"`) or an empty `expected_behavior` array graded every trial as a
+ * pass (`gradeDeterministic` returns `undefined` for an unknown grader, and
+ * the trial loop only ever flipped `trialPassed` on `=== false` — so
+ * `undefined` and "nothing to check" both silently counted as passing),
+ * reporting a fabricated 100% pass that `validateEvalReport`/
+ * `checkStablePackGate` had no way to catch (a genuinely `"ran"` scenario
+ * with `passRate: 1`). Always names the offending file so the CLI/API
+ * caller knows which `evals.json` to fix, never a raw `TypeError`/
+ * `SyntaxError` (R3-6).
+ */
+export class EvalSpecError extends Error {}
+
+const VALID_GRADERS: readonly Grader[] = ["contains", "regex", "not-contains", "model"];
+
+function isValidRegexPattern(value: string): boolean {
+  try {
+    new RegExp(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * R3-1: a strict shape check over a parsed `evals.json`, run once on load —
+ * `evalSkill`/`checkStablePackGate` must never reach a scenario whose
+ * `expected_behavior` cannot actually be graded. Throws `EvalSpecError`
+ * (naming `specPath`) for the first violation found; returns normally for a
+ * well-formed (possibly `triggers`/`scenarios`-absent) spec.
+ */
+function validateEvalSpec(value: unknown, specPath: string): asserts value is EvalSpecFile {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new EvalSpecError(`${specPath}: evals.json must be a JSON object`);
+  }
+  const spec = value as Record<string, unknown>;
+
+  if (spec.triggers !== undefined) {
+    if (typeof spec.triggers !== "object" || spec.triggers === null || Array.isArray(spec.triggers)) {
+      throw new EvalSpecError(`${specPath}: "triggers" must be an object`);
+    }
+    const triggers = spec.triggers as Record<string, unknown>;
+    for (const side of ["positive", "negative"] as const) {
+      if (triggers[side] === undefined) continue;
+      const list = triggers[side];
+      if (!Array.isArray(list) || !list.every((prompt) => typeof prompt === "string")) {
+        throw new EvalSpecError(`${specPath}: "triggers.${side}" must be an array of strings`);
+      }
+    }
+  }
+
+  if (spec.scenarios === undefined) return;
+  if (!Array.isArray(spec.scenarios)) {
+    throw new EvalSpecError(`${specPath}: "scenarios" must be an array`);
+  }
+  spec.scenarios.forEach((scenarioValue, index) => {
+    if (typeof scenarioValue !== "object" || scenarioValue === null || Array.isArray(scenarioValue)) {
+      throw new EvalSpecError(`${specPath}: scenarios[${index}] must be an object`);
+    }
+    const scenario = scenarioValue as Record<string, unknown>;
+    const label = typeof scenario.id === "string" && scenario.id.length > 0 ? scenario.id : `scenarios[${index}]`;
+    if (typeof scenario.id !== "string" || scenario.id.length === 0) {
+      throw new EvalSpecError(`${specPath}: ${label} must have a non-empty "id"`);
+    }
+    if (typeof scenario.prompt !== "string" || scenario.prompt.length === 0) {
+      throw new EvalSpecError(`${specPath}: scenario "${label}" must have a non-empty "prompt" string`);
+    }
+    if (!Array.isArray(scenario.expected_behavior) || scenario.expected_behavior.length === 0) {
+      throw new EvalSpecError(`${specPath}: scenario "${label}" must have at least one "expected_behavior" entry`);
+    }
+    scenario.expected_behavior.forEach((expectedValue, expectedIndex) => {
+      if (typeof expectedValue !== "object" || expectedValue === null || Array.isArray(expectedValue)) {
+        throw new EvalSpecError(`${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] must be an object`);
+      }
+      const expected = expectedValue as Record<string, unknown>;
+      if (typeof expected.grader !== "string" || !VALID_GRADERS.includes(expected.grader as Grader)) {
+        throw new EvalSpecError(
+          `${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] has an unknown grader ${JSON.stringify(expected.grader)} (must be one of ${VALID_GRADERS.join(", ")})`,
+        );
+      }
+      if (typeof expected.value !== "string" || expected.value.length === 0) {
+        throw new EvalSpecError(`${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] must have a non-empty "value" string`);
+      }
+      if (expected.grader === "regex" && !isValidRegexPattern(expected.value)) {
+        throw new EvalSpecError(`${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] has an invalid regex value ${JSON.stringify(expected.value)}`);
+      }
+    });
+  });
+}
+
 function readEvalSpec(skillMdPath: string): EvalSpecFile | undefined {
   const specPath = path.join(path.dirname(skillMdPath), "evals.json");
   if (!existsSync(specPath)) return undefined;
-  return JSON.parse(readFileSync(specPath, "utf8")) as EvalSpecFile;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(specPath, "utf8"));
+  } catch (error) {
+    throw new EvalSpecError(`${specPath}: could not parse evals.json (${error instanceof Error ? error.message : String(error)})`);
+  }
+  validateEvalSpec(parsed, specPath);
+  return parsed;
 }
 
 const USE_WHEN_CLAUSE = /use when[^.]*\.?/i;
@@ -399,7 +501,14 @@ export async function evalSkill(
           if (!graded) trialPassed = false;
           continue;
         }
-        if (gradeDeterministic(output, expected) === false) trialPassed = false;
+        // R3-1 (defense in depth): treat anything other than a genuine
+        // `true` as a failure — `readEvalSpec`'s validation already refuses
+        // an unknown grader before this ever runs, but a scenario reaching
+        // this loop by some other path (a caller building an `EvalReport`
+        // by hand, a future spec source) must not have `gradeDeterministic`
+        // returning `undefined` for a non-"model" grader silently read as
+        // "nothing to check, so it passed".
+        if (gradeDeterministic(output, expected) !== true) trialPassed = false;
       }
       if (trialPassed) passes += 1;
     }
@@ -538,6 +647,37 @@ export function validateEvalReport(report: EvalReport): string[] {
     }
     if (report.scenarios.some((scenario) => scenario.status === "skipped" || scenario.status === "not-run")) {
       errors.push("verdict 'pass' is not allowed while a scenario is 'skipped' or 'not-run'");
+    }
+
+    // R3-2 (flow 309 review round 3): R2-6 only checked evidence/ran-counts
+    // — a hand-edited report could still declare `verdict: "pass"` while its
+    // OWN scenario data says the run failed (e.g. `triggerAccuracy: {truePositive:
+    // 0, falsePositive: 1, ...}`, every scenario `passRate: 0`). Recompute
+    // the exact same `triggersOk`/`behaviorOk` expression `evalSkill` itself
+    // uses to derive a verdict, directly from the report's own
+    // `triggerAccuracy` and `scenarios` — a self-declared "pass" that
+    // disagrees with its own data is refused.
+    const triggersOk =
+      report.triggerAccuracy.positives > 0 &&
+      report.triggerAccuracy.negatives > 0 &&
+      report.triggerAccuracy.truePositive === report.triggerAccuracy.positives &&
+      report.triggerAccuracy.falsePositive === 0;
+    if (!triggersOk) {
+      errors.push(
+        `verdict 'pass' disagrees with its own triggerAccuracy (truePositive ${report.triggerAccuracy.truePositive}/${report.triggerAccuracy.positives}, falsePositive ${report.triggerAccuracy.falsePositive})`,
+      );
+    }
+    const ranTriggerScenariosAllPass = [...triggerPositiveScenarios, ...triggerNegativeScenarios]
+      .filter((scenario) => scenario.status === "ran")
+      .every((scenario) => scenario.passRate === 1);
+    if (!ranTriggerScenariosAllPass) {
+      errors.push("verdict 'pass' disagrees with its own scenarios: a ran trigger scenario has passRate < 1");
+    }
+    const ranBehaviorScenariosOk = report.scenarios
+      .filter((scenario) => scenario.kind === "behavior" && scenario.status === "ran")
+      .every((scenario) => scenario.passRate >= 0.5);
+    if (!ranBehaviorScenariosOk) {
+      errors.push("verdict 'pass' disagrees with its own scenarios: a ran behavior scenario has passRate < 0.5");
     }
   }
 

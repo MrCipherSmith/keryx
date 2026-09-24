@@ -30,7 +30,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { lintSkill } from "./authoring-lint";
-import { loadSkillCatalog, type CatalogEntry, type CatalogScope } from "./catalog-index";
+import { loadSkillCatalogWithDiagnostics, type CatalogEntry, type CatalogScope, type UnreadableCatalogEntry } from "./catalog-index";
 import { checkSkillSelectedLeaveOneOut, SCOUT_USE_THRESHOLD, scoutSkill } from "./scout";
 
 export type StocktakeVerdict = "keep" | "improve" | "update" | "retire" | "merge";
@@ -48,6 +48,8 @@ export interface StocktakeReport {
   readonly scope: CatalogScope;
   readonly entries: readonly StocktakeEntry[];
   readonly cache: { readonly hits: number; readonly misses: number };
+  /** R3-4 (flow 309 review round 3): catalog entries this run could not read (e.g. EACCES on a project SKILL.md) — skipped rather than aborting the whole run. Empty in the common case. */
+  readonly unreadable: readonly UnreadableCatalogEntry[];
 }
 
 export interface StocktakeOptions {
@@ -353,11 +355,27 @@ function escapeRegExpLiteral(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function stripSkillIdentity(reason: string, skillId: string): string {
+/**
+ * R3-6 (flow 309 review round 3): `\b` is a transition between a `\w`
+ * character and a non-`\w` one — a hyphen is NOT `\w`, so `\breview-frontend\b`
+ * matches inside `"review-frontend-conventions"` too (the `d`|`-` boundary
+ * right before `-conventions` counts as a word boundary just as validly as
+ * the one at the very start of the string). That over-strips a shorter
+ * hyphenated name where it is really just the PREFIX of a longer, unrelated
+ * one, which can mis-tag (or mis-hide) a `duplicateReasonOf` collision
+ * between two skills that only share a hyphenated prefix. A boundary is
+ * "real" here only when the character on either side (if any) is not
+ * itself part of an identifier — letters, digits, `-`, or `/` (ids are
+ * `category/name`).
+ */
+function escapeIdentityMatch(value: string): RegExp {
+  return new RegExp(`(?<![A-Za-z0-9_/-])${escapeRegExpLiteral(value)}(?![A-Za-z0-9_/-])`, "g");
+}
+
+/** Exported for direct testing (R3-6, flow 309 review round 3) — see `escapeIdentityMatch`'s doc comment for the hyphen word-boundary bug this guards against. */
+export function stripSkillIdentity(reason: string, skillId: string): string {
   const name = skillId.split("/").at(-1) ?? skillId;
-  const idPattern = new RegExp(`\\b${escapeRegExpLiteral(skillId)}\\b`, "g");
-  const namePattern = new RegExp(`\\b${escapeRegExpLiteral(name)}\\b`, "g");
-  return reason.replace(idPattern, "<skill>").replace(namePattern, "<skill>");
+  return reason.replace(escapeIdentityMatch(skillId), "<skill>").replace(escapeIdentityMatch(name), "<skill>");
 }
 
 /**
@@ -423,7 +441,7 @@ export function runStocktake(root: string, options: StocktakeOptions = {}): Stoc
   const scope = options.scope ?? "bundled";
   const quick = options.quick ?? false;
   const now = options.now ?? ((): Date => new Date());
-  const catalog = loadSkillCatalog(root, { scope });
+  const { entries: catalog, unreadable } = loadSkillCatalogWithDiagnostics(root, { scope });
   const cachePath = options.cachePath ?? path.join(root, ".metaproject", "data", "skills", "stocktake", "cache.json");
   const cache = loadCache(cachePath);
 
@@ -459,6 +477,7 @@ export function runStocktake(root: string, options: StocktakeOptions = {}): Stoc
     scope,
     entries: tagDuplicateReasons(sortedEntries),
     cache: { hits, misses },
+    unreadable,
   };
 
   saveCache(cachePath, cache);

@@ -102,9 +102,15 @@ test("resolveContainedPath rejects a path under a same-prefixed sibling director
   expect(result.ok).toBe(false);
 });
 
-test("resolveContainedPath accepts a path exactly equal to a destination root's own directory entry name", async () => {
+// R3-3 (flow 309 review round 3): a path exactly equal to a destination
+// root is now REFUSED, not accepted — Keryx only ever records individual
+// FILES in install-state, never a bare destination root directory itself.
+// Before this fix, a recorded `writtenPaths: [".claude/skills"]` passed
+// containment and then crashed `sha256OfFile` with a raw `EISDIR` (the root
+// is always an existing directory once anything is installed under it).
+test("resolveContainedPath rejects a path exactly equal to a destination root's own directory entry name (R3-3)", async () => {
   const result = await resolveContainedPath(root, ".claude/skills", [".claude/skills"]);
-  expect(result.ok).toBe(true);
+  expect(result.ok).toBe(false);
 });
 
 // R2-2: round 1's symlink guard only realpath'd the nearest existing

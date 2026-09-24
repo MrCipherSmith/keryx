@@ -15,7 +15,7 @@
 // actually wrote something.
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { currentWriterVersion } from "../lib/install-plan";
@@ -51,10 +51,30 @@ export function installStatePath(root: string, runtimeId: string): string {
   return path.join(metaprojectDir(root), "data", "integrations", "install-state", `${runtimeId}.json`);
 }
 
-/** sha256 hex of a project-relative file's current on-disk content, or `undefined` when it does not exist. */
+/**
+ * R3-3 (flow 309 review round 3): thrown by `sha256OfFile` when the path
+ * exists but is not a regular file (almost always a directory sitting where
+ * a recorded/planned file was expected) — never the raw `EISDIR` node's
+ * `readFile` would otherwise throw. `writtenPaths`/planned destinations are
+ * always individual files; a directory there means the on-disk state has
+ * drifted in a way `doctor`/`uninstall`/`apply` must report explicitly
+ * rather than crash trying to hash.
+ */
+export class NotARegularFileError extends Error {
+  constructor(readonly relativePath: string) {
+    super(`"${relativePath}" exists but is not a regular file (likely a directory) — refusing to hash it`);
+    this.name = "NotARegularFileError";
+  }
+}
+
+/** sha256 hex of a project-relative file's current on-disk content, or `undefined` when it does not exist. Throws `NotARegularFileError` (R3-3) when the path exists but is not a regular file — never a raw `EISDIR`. */
 export async function sha256OfFile(root: string, relativePath: string): Promise<string | undefined> {
   const file = path.join(root, ...relativePath.split("/"));
   if (!(await pathExists(file))) return undefined;
+  const stats = await stat(file);
+  if (!stats.isFile()) {
+    throw new NotARegularFileError(relativePath);
+  }
   const content = await readFile(file);
   return createHash("sha256").update(content).digest("hex");
 }

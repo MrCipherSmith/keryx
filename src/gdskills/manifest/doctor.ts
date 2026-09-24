@@ -18,7 +18,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
 import { destinationRootsForTarget } from "./plan";
-import { readSkillsInstallState, resolveContainedPath, skillsInstallStateIsUnreadable, sha256OfFile } from "./state";
+import { NotARegularFileError, readSkillsInstallState, resolveContainedPath, skillsInstallStateIsUnreadable, sha256OfFile } from "./state";
 
 export type DoctorStatus = "ok" | "drifted" | "missing" | "orphaned";
 
@@ -115,7 +115,20 @@ export async function doctorInstall(repoRoot: string, target: string): Promise<D
         continue;
       }
       const recordedHash = record.sha256[filePath];
-      const currentHash = await sha256OfFile(repoRoot, filePath);
+      // R3-3: a recorded path that has since been replaced by a directory
+      // must not crash the whole doctor run with a raw EISDIR — it is
+      // unambiguously drifted (the recorded FILE is gone, something else is
+      // there now).
+      let currentHash: string | undefined;
+      try {
+        currentHash = await sha256OfFile(repoRoot, filePath);
+      } catch (error) {
+        if (error instanceof NotARegularFileError) {
+          entries.push({ moduleId: record.moduleId, path: filePath, status: "drifted" });
+          continue;
+        }
+        throw error;
+      }
       const status: DoctorStatus = recordedHash !== undefined && currentHash === recordedHash ? "ok" : "drifted";
       entries.push({ moduleId: record.moduleId, path: filePath, status });
     }

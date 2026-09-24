@@ -6,7 +6,7 @@
 
 import path from "node:path";
 import { loadSkillCatalog, type CatalogScope } from "../gdskills/governance/catalog-index";
-import { EvalContractError, evalSkill } from "../gdskills/governance/eval";
+import { evalSkill } from "../gdskills/governance/eval";
 import { recordScout, scoutImports, scoutSkill, scoutVetCandidate } from "../gdskills/governance/scout";
 import { runStocktake } from "../gdskills/governance/stocktake";
 import { optionValue } from "../lib/args";
@@ -302,8 +302,13 @@ async function evalCommand(args: readonly string[]): Promise<void> {
     }
     process.exitCode = report.verdict === "fail" ? 1 : 0;
   } catch (error) {
+    // R3-6 (flow 309 review round 3): this ternary always evaluated to `1`
+    // regardless of the error type — a no-op that masked the intent to
+    // exit 1 on ANY eval failure, contract violation (`EvalContractError`)
+    // or malformed `evals.json` (`EvalSpecError`, R3-1) alike. Written as a
+    // plain assignment now that both branches agree.
     console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = error instanceof EvalContractError ? 1 : 1;
+    process.exitCode = 1;
   }
 }
 

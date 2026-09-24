@@ -400,14 +400,46 @@ describe("R2-9: escaped backslashes and triple-quoted strings", () => {
     expect(signal?.uncertain).toBe(false);
   });
 
-  test("a '[' inside a triple-quoted \"\"\" string is content, not a table header", async () => {
+  // R3-5 (flow 309 review round 3): the original fixture ("[docs]") has
+  // BALANCED brackets, so it doesn't discriminate — the pre-fix code (no
+  // `"""` tracking; brackets/quotes scanned in "normal" state at all times,
+  // and a bare `\n` inside a `"` string silently resets to "normal" rather
+  // than flagging anything) also nets depth 0 for a balanced `[`...`]` pair,
+  // regardless of whether it understands triple-quoted strings at all.
+  // Rewritten with an UNBALANCED `[` (no closing `]`) inside the `"""`
+  // body: the fixed state machine must recognize this is string content
+  // (not table/array syntax) to still report `uncertain: false`; the
+  // pre-fix code counts the stray `[` in "normal" state and reports
+  // `uncertain: true` (verified against detect.ts@358c8d70, restored in a
+  // scratch copy).
+  test("an unbalanced '[' inside a triple-quoted \"\"\" string is content, not a table header (R3-5: discriminating fixture)", async () => {
     const fs = fakeFs({
       "/repo/pyproject.toml":
-        '[tool.poetry]\nname = "app"\ndescription = """\nSee [docs](https://example.com) for more.\n"""\n',
+        '[tool.poetry]\nname = "app"\ndescription = """\nSee [docs for more.\n"""\n',
     });
     const result = await detectStack("/repo", { fs });
     const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
     expect(signal?.uncertain).toBe(false);
+  });
+
+  // R3-5: a basic (single-line) string that ends in an escaped backslash
+  // pair, immediately followed on the SAME line by a genuinely unbalanced
+  // `[`. The pre-fix code's closing-quote check only looked at the single
+  // PRECEDING character (`text[i - 1] !== "\\"`), so the last of a `\\`
+  // pair reads as "this quote is escaped" and the string never closes —
+  // everything after it, including the real stray `[`, is silently
+  // swallowed as (mistaken) string content until the next bare newline
+  // resets to "normal" with nothing flagged. The fixed code consumes an
+  // escape pair (`\\`) two characters at a time, so it closes the string
+  // correctly and then genuinely finds the unterminated `[` that follows.
+  test("an escaped-backslash-terminated string followed by a real unbalanced '[' on the same line is still caught (R3-5: discriminating fixture)", async () => {
+    const fs = fakeFs({
+      "/repo/pyproject.toml": '[tool.poetry]\nname = "app"\nwin = "C:\\\\" extra = [\n',
+    });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(true);
+    expect(signal?.reason).toMatch(/unterminated table header or array/);
   });
 
   test("a valid triple-quoted ''' literal string spanning lines is not flagged broken", async () => {

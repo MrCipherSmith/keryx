@@ -10,7 +10,7 @@
 import { lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
-import { sha256OfFile, type InstallState, type InstalledModuleRecord } from "../../integrations/install-state";
+import { NotARegularFileError, sha256OfFile, type InstallState, type InstalledModuleRecord } from "../../integrations/install-state";
 import { validateAgainstSchemaObject } from "../../contracts/validator";
 import installManifestSchemaJson from "../../../docs/requirements/keryx-agent-platform-expansion/schemas/install-manifest.schema.json" with {
   type: "json",
@@ -18,7 +18,7 @@ import installManifestSchemaJson from "../../../docs/requirements/keryx-agent-pl
 
 export const SKILLS_INSTALL_STATE_SCHEMA_VERSION = "1.0.0";
 
-export { sha256OfFile };
+export { NotARegularFileError, sha256OfFile };
 export type { InstallState, InstalledModuleRecord };
 
 /**
@@ -87,9 +87,20 @@ function hasDotDotSegment(relPath: string): boolean {
   return relPath.split(/[\\/]/).some((segment) => segment === "..");
 }
 
-/** `rel` (posix-separated, project-relative, no leading/trailing slash) is `root` or a descendant of it — compared by whole path segments, never a raw string prefix (so `.claude/skillsX` never matches root `.claude/skills`). */
+/**
+ * R3-3 (flow 309 review round 3): `rel` (posix-separated, project-relative,
+ * no leading/trailing slash) is a DESCENDANT of `root` — compared by whole
+ * path segments, never a raw string prefix (so `.claude/skillsX` never
+ * matches root `.claude/skills`). `rel === root` itself is REFUSED, not
+ * accepted: Keryx only ever records individual FILES in install-state
+ * (`writtenPaths`), never a bare destination root directory — a record
+ * naming `.claude/skills` itself used to pass containment and then crash
+ * `sha256OfFile` with a raw `EISDIR` the moment doctor/uninstall/apply tried
+ * to hash it (that root is always an existing directory once anything is
+ * installed under it).
+ */
 function isUnderDestinationRoot(rel: string, root: string): boolean {
-  return rel === root || rel.startsWith(`${root}/`);
+  return rel.startsWith(`${root}/`);
 }
 
 /**

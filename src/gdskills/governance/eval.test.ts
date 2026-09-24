@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { CatalogEntry } from "./catalog-index";
 import { loadSkillCatalog } from "./catalog-index";
-import { checkStablePackGate, EvalContractError, type EvalReport, evalSkill, validateEvalReport } from "./eval";
+import { checkStablePackGate, EvalContractError, EvalSpecError, type EvalReport, evalSkill, validateEvalReport } from "./eval";
 
 const catalog = loadSkillCatalog(process.cwd(), { scope: "bundled" });
 const sampleSkillId = catalog.find((entry) => entry.triggers.length > 0)?.id;
@@ -597,28 +597,43 @@ describe("R2-5 (flow 309 review round 2): leave-one-out trigger scoring", () => 
   // never change the outcome. Leave-one-out restores `field: "full"`
   // (triggers included) while still excluding the ONE trigger a synthesized
   // positive was built from.
-  test("a skill's own triggers now affect its trigger-eval outcome (not fully ignored)", async () => {
+  // R3-5 (flow 309 review round 3): the original fixture named the skill
+  // "sample-widget-skill" — the NAME ALONE supplied the "widget" token the
+  // query needed, so this test passed even against the PRE-R2-5 code (which
+  // scored every prompt with `field: "description-only"`, no triggers at
+  // all, ever — see `selectsSkill` at eval.ts@dd4f9318:208-210, quoted in
+  // this describe block's own header) — the fixture never actually
+  // exercised leave-one-out's inclusion of the SIBLING trigger. Renamed to
+  // "helper" (name/description share no vocabulary with the query at all)
+  // and widened to a 7-token trigger phrase so a single shared word's IDF
+  // share sits BELOW `SCOUT_FORK_THRESHOLD` (0.3) but still clears
+  // `DESCRIPTION_SUPPORT_THRESHOLD` (0.12) — verified empirically against
+  // the real scorer: description-only (pre-fix) score 0.127 (not selected),
+  // leave-one-out (post-fix, sibling trigger included) score 0.839
+  // (selected). Confirmed by running both `checkSkillSelected(...,
+  // {field: "description-only"})` (the pre-R2-5 code path, quoted above)
+  // and `checkSkillSelectedLeaveOneOut` directly against this exact fixture
+  // in a scratch script — the pre-fix path returns `selected: false` here.
+  test("a skill's own triggers now affect its trigger-eval outcome (not fully ignored) (R3-5: discriminating fixture)", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "eval-loo-triggers-matter-"));
     try {
       const skillDir = path.join(root, "skill");
       mkdirSync(skillDir, { recursive: true });
       const skillMd = path.join(skillDir, "SKILL.md");
-      // A thin description that, alone, does not mention "widget" or
-      // "gizmo" at all — under `description-only` scoring this always
-      // scores 0 regardless of triggers. Under leave-one-out (full field),
-      // the OTHER trigger ("gizmo dashboard") should carry "widget
-      // dashboard" home even though the description alone would not.
+      const description = "Use when the user needs help from the wizard for routine tasks.";
+      const sourceTrigger = "acme corp global widget dashboard configuration wizard";
+      const siblingTrigger = "acme corp global widget dashboard settings wizard";
       writeFileSync(
         skillMd,
-        `---\nname: sample-widget-skill\ndescription: Use when the user needs help with the dashboard tool.\ntriggers:\n  - widget dashboard\n  - gizmo dashboard\nmetadata:\n  origin: authored\n---\n\nBody.\n`,
+        `---\nname: helper\ndescription: ${description}\ntriggers:\n  - ${sourceTrigger}\n  - ${siblingTrigger}\nmetadata:\n  origin: authored\n---\n\nBody.\n`,
         "utf8",
       );
       const entry: CatalogEntry = {
-        id: "widget/sample-widget-skill",
-        category: "widget",
-        name: "sample-widget-skill",
-        description: "Use when the user needs help with the dashboard tool.",
-        triggers: ["widget dashboard", "gizmo dashboard"],
+        id: "misc/helper",
+        category: "misc",
+        name: "helper",
+        description,
+        triggers: [sourceTrigger, siblingTrigger],
         body: "",
         bodyLines: 5,
         sha256: "y".repeat(64),
@@ -627,6 +642,7 @@ describe("R2-5 (flow 309 review round 2): leave-one-out trigger scoring", () => 
       const localCatalog: CatalogEntry[] = [entry, ...catalog];
       const report = await evalSkill(entry.id, localCatalog, { trials: 1 });
       const positive = report.scenarios.find((s) => s.id === "trigger-positive-1");
+      expect(positive?.prompt).toBe(sourceTrigger);
       expect(positive?.passRate).toBe(1);
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -677,7 +693,13 @@ describe("R2-5 (flow 309 review round 2): leave-one-out trigger scoring", () => 
   // circularity to guard against). A paraphrase that never appears in
   // `triggers` verbatim, but IS covered by the skill's full definition,
   // must still select it.
-  test("an authored positive prompt is scored against the skill's FULL definition (triggers included), not description-only", async () => {
+  // R3-5: same name-collision problem as the leave-one-out test above —
+  // "sample-widget-skill" supplied "widget" from the NAME alone, so this
+  // passed under the pre-R2-5 `field: "description-only"` path too.
+  // Renamed to "helper" (no shared vocabulary in name/description) —
+  // verified empirically: pre-fix `field: "description-only"` score 0.000
+  // (not selected), post-fix `field: "full"` score 0.635 (selected).
+  test("an authored positive prompt is scored against the skill's FULL definition (triggers included), not description-only (R3-5: discriminating fixture)", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "eval-authored-full-field-"));
     try {
       const skillDir = path.join(root, "skill");
@@ -685,13 +707,13 @@ describe("R2-5 (flow 309 review round 2): leave-one-out trigger scoring", () => 
       const skillMd = path.join(skillDir, "SKILL.md");
       writeFileSync(
         skillMd,
-        `---\nname: sample-widget-skill\ndescription: Use when the user needs help.\ntriggers:\n  - widget dashboard configuration\nmetadata:\n  origin: authored\n---\n\nBody.\n`,
+        `---\nname: helper\ndescription: Use when the user needs help.\ntriggers:\n  - widget dashboard configuration\nmetadata:\n  origin: authored\n---\n\nBody.\n`,
         "utf8",
       );
       const entry: CatalogEntry = {
-        id: "widget/sample-widget-skill",
-        category: "widget",
-        name: "sample-widget-skill",
+        id: "misc/helper",
+        category: "misc",
+        name: "helper",
         description: "Use when the user needs help.",
         triggers: ["widget dashboard configuration"],
         body: "",
@@ -784,6 +806,187 @@ describe("R2-6 (flow 309 review round 2): checkStablePackGate recomputes, does n
       writeFileSync(path.join(governanceDir, "eval.json"), JSON.stringify(forged), "utf8");
       const result = checkStablePackGate(root, "stable");
       expect(result.status).toBe("fail");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("R3-2 (flow 309 review round 3): validateEvalReport/checkStablePackGate recompute the verdict, not just trust it", () => {
+  test("a forged report (TP0/FP1, every scenario passRate 0, verdict 'pass') is rejected by validateEvalReport", () => {
+    const forged: EvalReport = {
+      schemaVersion: "1.0.0",
+      skillId: "x/y",
+      strictness: "low",
+      trials: 1,
+      triggerAccuracy: { truePositive: 0, falsePositive: 1, positives: 1, negatives: 1 },
+      evidence: "authored",
+      scenarios: [
+        { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "low", trials: 1, passes: 0, passRate: 0, passAtK: 0, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+        { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "low", trials: 1, passes: 0, passRate: 0, passAtK: 0, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+      ],
+      verdict: "pass",
+    };
+    const errors = validateEvalReport(forged);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some((e) => e.includes("disagrees with its own"))).toBe(true);
+  });
+
+  test("the same forged report also fails checkStablePackGate (not just {status: 'pass'})", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "stable-pack-gate-forged-tp0fp1-"));
+    try {
+      const governanceDir = path.join(root, "governance");
+      mkdirSync(governanceDir, { recursive: true });
+      const forged: EvalReport = {
+        schemaVersion: "1.0.0",
+        skillId: "x/y",
+        strictness: "low",
+        trials: 1,
+        triggerAccuracy: { truePositive: 0, falsePositive: 1, positives: 1, negatives: 1 },
+        evidence: "authored",
+        scenarios: [
+          { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "low", trials: 1, passes: 0, passRate: 0, passAtK: 0, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+          { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "low", trials: 1, passes: 0, passRate: 0, passAtK: 0, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+        ],
+        verdict: "pass",
+      };
+      writeFileSync(path.join(governanceDir, "eval.json"), JSON.stringify(forged), "utf8");
+      const result = checkStablePackGate(root, "stable");
+      expect(result.status).toBe("fail");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("R3-1 (flow 309 review round 3): evals.json is validated on load, never silently vacuous", () => {
+  function writeSkill(skillDir: string, evalsJsonBody: string): string {
+    mkdirSync(skillDir, { recursive: true });
+    const skillMd = path.join(skillDir, "SKILL.md");
+    writeFileSync(
+      skillMd,
+      `---\nname: sample-skill\ndescription: Use when sample fixtures need evaluating.\ntriggers:\n  - sample fixture\nmetadata:\n  origin: authored\n---\n\nBody.\n`,
+      "utf8",
+    );
+    writeFileSync(path.join(skillDir, "evals.json"), evalsJsonBody, "utf8");
+    return skillMd;
+  }
+
+  function localCatalogFor(skillMd: string): CatalogEntry[] {
+    return [
+      {
+        id: "widget/sample-skill",
+        category: "widget",
+        name: "sample-skill",
+        description: "Use when sample fixtures need evaluating.",
+        triggers: ["sample fixture"],
+        body: "",
+        bodyLines: 5,
+        sha256: "x".repeat(64),
+        path: skillMd,
+      },
+      ...catalog,
+    ];
+  }
+
+  test("a typo'd grader (e.g. 'regexp') never yields passRate 1 or verdict 'pass' — evalSkill rejects it", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "eval-spec-typo-grader-"));
+    try {
+      const skillMd = writeSkill(
+        path.join(root, "skill"),
+        JSON.stringify({
+          scenarios: [
+            {
+              id: "s1",
+              prompt: "do the thing",
+              strictness: "low",
+              expected_behavior: [{ grader: "regexp", value: "MUST_APPEAR" }],
+            },
+          ],
+        }),
+      );
+      await expect(
+        evalSkill("widget/sample-skill", localCatalogFor(skillMd), {
+          trials: 1,
+          runner: async () => ({ output: "garbage that never contains the expected value" }),
+        }),
+      ).rejects.toBeInstanceOf(EvalSpecError);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("an empty expected_behavior array never yields passRate 1 or verdict 'pass' — evalSkill rejects it", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "eval-spec-empty-expectation-"));
+    try {
+      const skillMd = writeSkill(
+        path.join(root, "skill"),
+        JSON.stringify({
+          scenarios: [{ id: "s1", prompt: "do the thing", strictness: "low", expected_behavior: [] }],
+        }),
+      );
+      await expect(
+        evalSkill("widget/sample-skill", localCatalogFor(skillMd), {
+          trials: 1,
+          runner: async () => ({ output: "anything" }),
+        }),
+      ).rejects.toBeInstanceOf(EvalSpecError);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("an invalid regex value is rejected at load, not at grading time", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "eval-spec-bad-regex-"));
+    try {
+      const skillMd = writeSkill(
+        path.join(root, "skill"),
+        JSON.stringify({
+          scenarios: [
+            {
+              id: "s1",
+              prompt: "do the thing",
+              strictness: "low",
+              expected_behavior: [{ grader: "regex", value: "(unclosed" }],
+            },
+          ],
+        }),
+      );
+      await expect(evalSkill("widget/sample-skill", localCatalogFor(skillMd), { trials: 1 })).rejects.toBeInstanceOf(EvalSpecError);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("malformed JSON in evals.json throws a typed error naming the file, not a raw SyntaxError (R3-6)", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "eval-spec-bad-json-"));
+    try {
+      const skillMd = writeSkill(path.join(root, "skill"), "{ not valid json");
+      let caught: unknown;
+      try {
+        await evalSkill("widget/sample-skill", localCatalogFor(skillMd), { trials: 1 });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(EvalSpecError);
+      expect((caught as Error).message).toContain("evals.json");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("triggers.positive given as a string (wrong type) throws a typed error naming the file, not a raw TypeError (R3-6)", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "eval-spec-wrong-type-"));
+    try {
+      const skillMd = writeSkill(path.join(root, "skill"), JSON.stringify({ triggers: { positive: "not an array", negative: [] } }));
+      let caught: unknown;
+      try {
+        await evalSkill("widget/sample-skill", localCatalogFor(skillMd), { trials: 1 });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(EvalSpecError);
+      expect((caught as Error).message).toContain("triggers.positive");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

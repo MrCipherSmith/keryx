@@ -60,12 +60,36 @@ export interface LoadSkillCatalogOptions {
   readonly scope: CatalogScope;
 }
 
-function sortedDirs(dir: string): string[] {
+/**
+ * R3-4 (flow 309 review round 3): one catalog entry (a `SKILL.md`) or
+ * directory listing this loader could not read — `code` is the underlying
+ * `NodeJS.ErrnoException.code` when available (`"EACCES"`, `"ELOOP"`, ...),
+ * or `"UNKNOWN"` otherwise. Surfaced as a top-level list rather than thrown:
+ * one unreadable project skill must not make `stocktake`/`eval`/`scout
+ * --scope all` abort with no report for the other 71 skills.
+ */
+export interface UnreadableCatalogEntry {
+  readonly path: string;
+  readonly code: string;
+}
+
+function errnoCode(error: unknown): string {
+  return typeof error === "object" && error !== null && "code" in error && typeof (error as { code: unknown }).code === "string"
+    ? (error as { code: string }).code
+    : "UNKNOWN";
+}
+
+function sortedDirs(dir: string, unreadable: UnreadableCatalogEntry[]): string[] {
   if (!existsSync(dir)) return [];
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort();
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch (error) {
+    unreadable.push({ path: dir, code: errnoCode(error) });
+    return [];
+  }
 }
 
 function readCatalogEntry(skillMdPath: string, category: string, name: string): CatalogEntry {
@@ -86,38 +110,64 @@ function readCatalogEntry(skillMdPath: string, category: string, name: string): 
   };
 }
 
+/**
+ * Reads one `SKILL.md` into a `CatalogEntry`, or records it in `unreadable`
+ * and returns `undefined` (R3-4) — a single unreadable file (EACCES on the
+ * file itself, or on an ancestor directory an `existsSync` probe cannot
+ * detect) must not abort the whole catalog walk.
+ */
+function tryReadCatalogEntry(skillMdPath: string, category: string, name: string, unreadable: UnreadableCatalogEntry[]): CatalogEntry | undefined {
+  try {
+    return readCatalogEntry(skillMdPath, category, name);
+  } catch (error) {
+    unreadable.push({ path: skillMdPath, code: errnoCode(error) });
+    return undefined;
+  }
+}
+
 /** `<root>/<category>/<name>/SKILL.md` for every `category`/`name` pair under `root`. */
-function walkCategorizedSkills(root: string): CatalogEntry[] {
+function walkCategorizedSkills(root: string, unreadable: UnreadableCatalogEntry[]): CatalogEntry[] {
   const out: CatalogEntry[] = [];
-  for (const category of sortedDirs(root)) {
+  for (const category of sortedDirs(root, unreadable)) {
     const categoryDir = path.join(root, category);
-    for (const name of sortedDirs(categoryDir)) {
+    for (const name of sortedDirs(categoryDir, unreadable)) {
       const skillMd = path.join(categoryDir, name, "SKILL.md");
-      if (existsSync(skillMd)) out.push(readCatalogEntry(skillMd, category, name));
+      if (!existsSync(skillMd)) continue;
+      const entry = tryReadCatalogEntry(skillMd, category, name, unreadable);
+      if (entry !== undefined) out.push(entry);
     }
   }
   return out;
 }
 
 /** `<stacksRoot>/<stack-id>/skills/<name>/SKILL.md` — category is the stack id. */
-function walkStackSkills(stacksRoot: string): CatalogEntry[] {
+function walkStackSkills(stacksRoot: string, unreadable: UnreadableCatalogEntry[]): CatalogEntry[] {
   const out: CatalogEntry[] = [];
-  for (const stackId of sortedDirs(stacksRoot)) {
+  for (const stackId of sortedDirs(stacksRoot, unreadable)) {
     const skillsDir = path.join(stacksRoot, stackId, "skills");
-    for (const name of sortedDirs(skillsDir)) {
+    for (const name of sortedDirs(skillsDir, unreadable)) {
       const skillMd = path.join(skillsDir, name, "SKILL.md");
-      if (existsSync(skillMd)) out.push(readCatalogEntry(skillMd, stackId, name));
+      if (!existsSync(skillMd)) continue;
+      const entry = tryReadCatalogEntry(skillMd, stackId, name, unreadable);
+      if (entry !== undefined) out.push(entry);
     }
   }
   return out;
 }
 
 /** Any `SKILL.md` under `root`, category/name derived from its immediate parent dirs. */
-function walkLooseSkillTree(root: string): CatalogEntry[] {
+function walkLooseSkillTree(root: string, unreadable: UnreadableCatalogEntry[]): CatalogEntry[] {
   if (!existsSync(root)) return [];
   const out: CatalogEntry[] = [];
   const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+    } catch (error) {
+      unreadable.push({ path: dir, code: errnoCode(error) });
+      return;
+    }
+    for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         walk(full);
@@ -126,24 +176,38 @@ function walkLooseSkillTree(root: string): CatalogEntry[] {
       if (entry.name !== "SKILL.md") continue;
       const name = path.basename(dir);
       const category = path.basename(path.dirname(dir)) || "project";
-      out.push(readCatalogEntry(full, category, name));
+      const catalogEntry = tryReadCatalogEntry(full, category, name, unreadable);
+      if (catalogEntry !== undefined) out.push(catalogEntry);
     }
   };
   walk(root);
   return out;
 }
 
-/** Loads the skill catalog governance gates score against. See the module header for scope semantics. */
-export function loadSkillCatalog(root: string, options: LoadSkillCatalogOptions): CatalogEntry[] {
+export interface CatalogLoadResult {
+  readonly entries: readonly CatalogEntry[];
+  /** R3-4: every `SKILL.md`/directory this loader could not read, skipped rather than aborting the whole walk. Empty in the common case. */
+  readonly unreadable: readonly UnreadableCatalogEntry[];
+}
+
+/**
+ * Loads the skill catalog governance gates score against, plus (R3-4,
+ * flow 309 review round 3) any entries it could not read — an unreadable
+ * project `SKILL.md` (EACCES, a broken symlink, ...) is skipped and
+ * recorded rather than making the whole load throw. See the module header
+ * for scope semantics.
+ */
+export function loadSkillCatalogWithDiagnostics(root: string, options: LoadSkillCatalogOptions): CatalogLoadResult {
   const bundledRoot = defaultBundledRoot();
+  const unreadable: UnreadableCatalogEntry[] = [];
   const entries: CatalogEntry[] = [
-    ...walkCategorizedSkills(path.join(bundledRoot, "skills")),
-    ...walkStackSkills(path.join(bundledRoot, "stacks")),
+    ...walkCategorizedSkills(path.join(bundledRoot, "skills"), unreadable),
+    ...walkStackSkills(path.join(bundledRoot, "stacks"), unreadable),
   ];
 
   if (options.scope === "all") {
-    entries.push(...walkCategorizedSkills(path.join(root, ".metaproject", "skills", "gdskills")));
-    entries.push(...walkLooseSkillTree(path.join(root, ".metaproject", "project-skills")));
+    entries.push(...walkCategorizedSkills(path.join(root, ".metaproject", "skills", "gdskills"), unreadable));
+    entries.push(...walkLooseSkillTree(path.join(root, ".metaproject", "project-skills"), unreadable));
   }
 
   const byId = new Map<string, CatalogEntry>();
@@ -153,5 +217,13 @@ export function loadSkillCatalog(root: string, options: LoadSkillCatalogOptions)
     // always) never displaces the canonical source entry.
     if (!byId.has(entry.id)) byId.set(entry.id, entry);
   }
-  return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+  return {
+    entries: [...byId.values()].sort((a, b) => a.id.localeCompare(b.id)),
+    unreadable: [...unreadable].sort((a, b) => a.path.localeCompare(b.path)),
+  };
+}
+
+/** Loads the skill catalog governance gates score against. See the module header for scope semantics. Drops diagnostics — use `loadSkillCatalogWithDiagnostics` to also learn which entries could not be read (R3-4). */
+export function loadSkillCatalog(root: string, options: LoadSkillCatalogOptions): CatalogEntry[] {
+  return [...loadSkillCatalogWithDiagnostics(root, options).entries];
 }

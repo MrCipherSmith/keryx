@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { loadSkillCatalog } from "./catalog-index";
+import { loadSkillCatalog, loadSkillCatalogWithDiagnostics } from "./catalog-index";
+
+// R3-4 (flow 309 review round 3): chmod 000 has no effect for the root user
+// (root can read/write regardless of mode bits), so the chmod-based
+// discrimination this describe block relies on is skipped when running as
+// root — matches the review's own repro note.
+const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
 
 describe("loadSkillCatalog", () => {
   test("loads the real bundled catalog with non-empty, well-shaped entries", () => {
@@ -47,6 +53,35 @@ describe("loadSkillCatalog", () => {
       expect(found).toBeDefined();
       expect(found?.description).toContain("Use when widgets need testing");
     } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // R3-4 (flow 309 review round 3): before this fix, `loadSkillCatalog`
+  // called `readFileSync`/`readdirSync` with no error handling — a single
+  // unreadable project `SKILL.md` (EACCES) or unreadable directory made the
+  // WHOLE load throw, so `stocktake`/`eval`/`scout --scope all` aborted with
+  // no report at all for the other, perfectly readable skills.
+  test.skipIf(isRoot)("an unreadable project SKILL.md (EACCES) is skipped, not thrown — the rest of the catalog still loads (R3-4)", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "catalog-index-eacces-"));
+    try {
+      const okDir = path.join(root, ".metaproject", "project-skills", "ok-skill");
+      mkdirSync(okDir, { recursive: true });
+      writeFileSync(path.join(okDir, "SKILL.md"), `---\nname: ok-skill\ndescription: Use when things are fine.\n---\n\nBody.\n`, "utf8");
+
+      const badDir = path.join(root, ".metaproject", "project-skills", "bad-skill");
+      mkdirSync(badDir, { recursive: true });
+      const badSkillMd = path.join(badDir, "SKILL.md");
+      writeFileSync(badSkillMd, `---\nname: bad-skill\ndescription: Use when unreadable.\n---\n\nBody.\n`, "utf8");
+      chmodSync(badSkillMd, 0o000);
+
+      expect(() => loadSkillCatalog(root, { scope: "all" })).not.toThrow();
+      const { entries, unreadable } = loadSkillCatalogWithDiagnostics(root, { scope: "all" });
+      expect(entries.some((entry) => entry.id === "project-skills/ok-skill")).toBe(true);
+      expect(unreadable.some((u) => u.path === badSkillMd)).toBe(true);
+      expect(unreadable.find((u) => u.path === badSkillMd)?.code).toBe("EACCES");
+    } finally {
+      chmodSync(path.join(root, ".metaproject", "project-skills", "bad-skill", "SKILL.md"), 0o644);
       rmSync(root, { recursive: true, force: true });
     }
   });

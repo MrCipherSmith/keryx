@@ -10,6 +10,7 @@ import path from "node:path";
 import { pathExists } from "../../lib/fs";
 import { destinationRootsForTarget } from "./plan";
 import {
+  NotARegularFileError,
   readSkillsInstallState,
   resolveContainedPath,
   skillsInstallStateIsUnreadable,
@@ -124,7 +125,22 @@ export async function uninstallInstall(
         continue;
       }
       const recordedHash = record.sha256[filePath];
-      const currentHash = await sha256OfFile(repoRoot, filePath);
+      // R3-3: a recorded path that has since been replaced by a directory
+      // must not crash uninstall with a raw EISDIR — refuse it outright
+      // (never removed, `--force` included: `rm` on a non-recursive path
+      // would itself throw EISDIR, and this is unexpected drift, not an
+      // ordinary content mismatch to force through).
+      let currentHash: string | undefined;
+      try {
+        currentHash = await sha256OfFile(repoRoot, filePath);
+      } catch (error) {
+        if (error instanceof NotARegularFileError) {
+          refused.push({ path: filePath, reason: `${error.message} — refusing to uninstall it` });
+          keptPaths.push(filePath);
+          continue;
+        }
+        throw error;
+      }
       const matches = recordedHash !== undefined && currentHash === recordedHash;
 
       if (!matches) {
