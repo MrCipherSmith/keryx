@@ -55,6 +55,22 @@ function parseScope(args: readonly string[]): ScopeResult {
  * shape used to read as `undefined` (same as "not given") and silently fall
  * back to the default trial count instead of being refused.
  */
+// Flow 312, W3 T10: `--origin learned --source-ref <id>` on `keryx skills
+// scout --record <pack-dir>` — the provenance a `keryx learn graduate`
+// skill-target proposal's own `nextSteps` prints. Duplicated here rather than
+// imported from `src/learning/paths.ts`'s `LEARNING_ID_PATTERN`: this module
+// (`src/gdskills`) has no dependency on flow 312's feature module, and a
+// `sourceRef` here is either a learned-pattern id OR a graduation proposal id
+// (`grad-...`, never a learned-pattern id itself) — a shape this module owns
+// checking, not one to borrow from the other feature's internal id pattern.
+const SCOUT_ORIGIN_VALUES = ["learned"] as const;
+const LEARNED_PATTERN_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
+
+/** A `learned-pattern` record id, or a graduation proposal id (`grad-...`) — see the comment above. */
+function isValidScoutSourceRef(value: string): boolean {
+  return value.startsWith("grad-") || LEARNED_PATTERN_ID_PATTERN.test(value);
+}
+
 function positiveIntegerFlag(args: readonly string[], flag: string): number | undefined | "invalid" {
   const raw = stringFlag(args, flag);
   if (raw === undefined) return undefined;
@@ -92,7 +108,7 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
   // the loop below silently swallowing the NEXT flag as this one's value
   // (`--record --json` used to set `record = "--json"`) or silently leaving
   // the field `undefined` and proceeding as if the flag were never given.
-  for (const flag of ["--record", "--justification", "--skill-name", "--candidate"] as const) {
+  for (const flag of ["--record", "--justification", "--skill-name", "--candidate", "--origin", "--source-ref"] as const) {
     if (stringFlag(args, flag) === "missing-value") {
       console.error(`${flag} requires a value`);
       process.exitCode = 1;
@@ -111,6 +127,8 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
   let candidate: string | undefined;
   let justification: string | undefined;
   let skillNameOverride: string | undefined;
+  let origin: string | undefined;
+  let sourceRef: string | undefined;
   let includeImports = false;
   const json = args.includes("--json");
   const scope = scopeResult.scope;
@@ -133,6 +151,14 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
       candidate = args[++i];
       continue;
     }
+    if (arg === "--origin") {
+      origin = args[++i];
+      continue;
+    }
+    if (arg === "--source-ref") {
+      sourceRef = args[++i];
+      continue;
+    }
     if (arg === "--scope") {
       i += 1; // value already consumed by parseScope
       continue;
@@ -148,8 +174,35 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
   const query = queryWords.join(" ");
   if (query.length === 0) {
     console.error(
-      "Usage: keryx skills scout <name-or-description> [--record <pack-dir>] [--skill-name <name>] [--justification <text>] [--include-imports] [--candidate <dir>] [--scope bundled|all] [--json]",
+      "Usage: keryx skills scout <name-or-description> [--record <pack-dir>] [--skill-name <name>] [--justification <text>] " +
+        "[--include-imports] [--candidate <dir>] [--scope bundled|all] [--origin learned --source-ref <id>] [--json]",
     );
+    process.exitCode = 1;
+    return;
+  }
+
+  // Flow 312, W3 T10: `--origin`/`--source-ref` are required together, only
+  // meaningful alongside `--record` (there is no scout-record row to attach
+  // provenance to without it), `--origin` accepts only `"learned"`, and
+  // `--source-ref` must look like a learned-pattern or graduation-proposal
+  // id — see `isValidScoutSourceRef`'s comment above.
+  if ((origin !== undefined) !== (sourceRef !== undefined)) {
+    console.error("--origin and --source-ref must be given together");
+    process.exitCode = 1;
+    return;
+  }
+  if (origin !== undefined && record === undefined) {
+    console.error("--origin/--source-ref require --record <pack-dir>");
+    process.exitCode = 1;
+    return;
+  }
+  if (origin !== undefined && !(SCOUT_ORIGIN_VALUES as readonly string[]).includes(origin)) {
+    console.error(`--origin must be one of ${SCOUT_ORIGIN_VALUES.join(", ")} (got ${JSON.stringify(origin)})`);
+    process.exitCode = 1;
+    return;
+  }
+  if (sourceRef !== undefined && !isValidScoutSourceRef(sourceRef)) {
+    console.error(`--source-ref ${JSON.stringify(sourceRef)} is not a valid learned-pattern or graduation-proposal id`);
     process.exitCode = 1;
     return;
   }
@@ -177,6 +230,7 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
       // own directory.
       skillName: skillNameOverride ?? path.basename(packDir),
       ...(justification !== undefined ? { justification } : {}),
+      ...(origin === "learned" && sourceRef !== undefined ? { origin: { kind: "learned" as const, sourceRef } } : {}),
     });
   }
 

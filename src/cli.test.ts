@@ -124,6 +124,21 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx bundle verify --external-imports [--json]\n",
     "  keryx bundle uninstall <bundleId> --target-scope <scope> [--dry-run] [--json]\n",
     "  bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses\n",
+    // Flow 312 (W3, T8): the new `keryx learn` verb — eleven USAGE_BODY lines
+    // (three wrap onto a continuation line) plus its Commands: summary row.
+    "  keryx learn observe [--hook claude]           Flush pending observations, or adapt one host-hook payload\n",
+    "  keryx learn extract [--domain <d>] [--since <date>] [--json]\n",
+    "                                               Run deterministic signals over the observation window\n",
+    "  keryx learn list [--status <s>] [--domain <d>] [--scope <s>] [--json]\n",
+    "  keryx learn review [<id>] [--scope <s>]       Print a candidate (or all candidates) with its evidence\n",
+    "  keryx learn accept <id> [--scope user] [--refresh]\n",
+    "                                               candidate -> accepted; TTY only, no bypass flag\n",
+    "  keryx learn reject <id> [--scope user]\n",
+    "  keryx learn apply <id> --skill <module/name> [--dry-run]\n",
+    "  keryx learn promote <id>                      project accepted -> user candidate; TTY + typed confirm\n",
+    "  keryx learn graduate [--domain <d>] | graduate apply <proposal-id>\n",
+    "  keryx learn prune [--dry-run] [--json]\n",
+    "  learn     Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune\n",
   ];
 
   test("the flat --help block is the pre-flow fixture plus exactly those lines, nothing else", async () => {

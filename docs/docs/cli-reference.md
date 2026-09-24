@@ -2143,6 +2143,51 @@ for a tampered, unverifiable, or case-shadowed external-imports registry.
 
 ---
 
+## learn
+
+```
+keryx learn observe [--hook claude]
+keryx learn extract [--domain <d>] [--since <YYYY-MM-DD>] [--json]
+keryx learn list [--status <s>] [--domain <d>] [--scope <s>] [--json]
+keryx learn review [<id>] [--scope <s>]
+keryx learn accept <id> [--scope user] [--refresh]
+keryx learn reject <id> [--scope user]
+keryx learn apply <id> --skill <module/name> [--dry-run]
+keryx learn promote <id>
+keryx learn graduate [--domain <d>]
+keryx learn graduate apply <proposal-id>
+keryx learn prune [--dry-run] [--json]
+```
+
+The self-learning loop's consent CLI (flow 312, W3): passive observation
+(`observe`), deterministic extraction (`extract`) into `status: candidate`
+`learned-pattern` records, human review and consent (`review`/`accept`/
+`reject`), and the bounded paths onward from an accepted record (`apply`,
+`promote`, `graduate`).
+
+| Subcommand | Description |
+|---|---|
+| `observe --hook claude` | Reads one host-hook payload from stdin (bounded), maps it to the same observation-event shape the built-in `keryx.learning-observer` hook writes, and appends it under `.metaproject/data/learning/observations/<date>.jsonl`. Always exits `0` and prints nothing to stdout — invalid JSON on stdin is simply not written, never a failure. This is the command an opt-in Claude Code hook runs. |
+| `observe` (no `--hook`) | Manual/offline use: reports today's observation file's line count. Nothing to flush — the writer is unbuffered. |
+| `extract` | Runs the deterministic signals (repeated correction, reverted edit, failing→passing test, reviewer comments, health regression) — and, only when no deterministic signal fired and the capability is enabled, the optional model-backed extractor — over the observation window, creating or reinforcing `status: candidate` records. Also decays existing candidate/accepted records. Never writes `status: "accepted"`. |
+| `list` | Lists records, filterable by `--status`, `--domain`, `--scope`. Also prints an integrity warning for any `accepted` record with no matching `accept` decision on record (`auditAcceptedRecords`). |
+| `review [<id>]` | Prints one candidate (by id) or every candidate, with trigger, action, confidence, confidenceLevel and evidence references, for a human to read before deciding. |
+| `accept <id>` | `status: candidate → accepted`. The ONLY command that produces `accepted` — refuses outside a real interactive terminal, with no bypass flag or environment variable. For a `scope: project` record, also writes (or, with `--refresh`, overwrites only the current project's) entry in `~/.keryx/learning/index.json` (see "Cross-project evidence" in the W3 spec). Never writes a skill, rule, agent or memory entry. |
+| `reject <id>` | `status: candidate → rejected`. No terminal requirement. |
+| `apply <id> --skill <module/name>` | For a `domain` other than `review-conventions`: renders the accepted record as a `LearningProposal` and applies it through the existing `applyLearningProposal` — still the only writer. |
+| `promote <id>` | Promotes a `scope: project`, `status: accepted` record backed by `>=2` distinct project identities (each at indexed confidence `>=0.8`) to a new `scope: user`, `status: candidate` record. Interactive-only: refuses outside a terminal, with no bypass flag, and prompts you to type the pattern's id back to confirm. |
+| `graduate [--domain <d>]` | Clusters accepted records by domain and trigger-keyword overlap and writes a graduation **proposal** — never a `SKILL.md`, agent definition, or rule file directly. |
+| `graduate apply <proposal-id>` | Applies one graduation proposal. Interactive-only, same as `promote`: refuses outside a terminal, no bypass flag, and prompts you to type the proposal's id back to confirm. |
+| `prune` | Deletes observation files more than 30 days past their own date, and expires `status: candidate` records past their `ttl.expiresAt` with no decision (`status: expired`). `--dry-run` reports without writing or deleting anything. |
+
+`accept`, `promote` and `graduate apply` never take a `--yes`/`--force`/
+`--non-interactive` flag: this mirrors `keryx schedule add`/`keryx flow
+confirm`'s own rule that an action a human must consciously approve gets no
+unattended path. None of the three is reachable through MCP — `src/mcp/
+tools.ts` is a hand-curated allowlist and carries no entry for `learn`.
+
+---
+
 ## commands
 
 The agent-facing command registry: each described keryx command as a
@@ -2384,7 +2429,8 @@ keryx skills learn apply <proposal.json>
 keryx skills export <project-skill> --runtime codex|claude|plugin
 keryx skills sync --runtime codex|claude --target <dir>
 keryx skills contracts validate <file> --schema <name>
-keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all] [--json]
+keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all]
+    [--origin learned --source-ref <id>] [--json]
 keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>] [--model-grader] [--json]
 keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 ```
@@ -3271,6 +3317,7 @@ keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
                             [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                             [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
 keryx review learn --pr <n> [--dry-run] [--json]
+keryx review learn --reviewer <id> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
@@ -3465,12 +3512,22 @@ three things the join needs and nothing else:
 | Flag | Description |
 |---|---|
 | `--pr <n>` | The pull request to learn from. Its comments must already have been collected. |
-| `--dry-run` | Compute the proposal and write no proposal file. |
+| `--reviewer <id>` | Sibling mode (W3): apply an accepted `domain: review-conventions` learned-pattern record to `.metaproject/rules/reviewers/<id>.mdc` instead of the `--pr` path above. `--pr` is not read in this mode. |
+| `--dry-run` | Compute the proposal (or, with `--reviewer`, the rendered profile) and write nothing. |
 | `--json` | Machine-readable result, including the selection counts. |
 
 **There is no `--authors`, `--skill` or `--repo` flag, deliberately.** A flag
 would make the configured list a default, and one invocation could teach a
 project from somebody it never named.
+
+**`--reviewer <id>` applies a per-reviewer profile, not a per-skill proposal.**
+The source is an accepted `keryx learn` record (`domain: review-conventions`,
+`reviewerProfile.reviewerId` set) — a human already ran `keryx learn accept`
+on it. This mode writes `.metaproject/rules/reviewers/<id>.mdc` directly: a
+semver header comment, the generalized conventions, and a changelog entry.
+`<id>` is always the opaque `rv-`-prefixed hash `keryx learn` records —
+never the reviewer's literal login, which the rendered file is refused from
+ever containing.
 
 **A project with no config file does not learn.** That prints one line and exits
 `0`. It is a supported state, not a warning — a tool that warns about the normal

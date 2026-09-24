@@ -121,6 +121,107 @@ describe("R2-8: valueless flags are refused, not silently defaulted", () => {
   });
 });
 
+// Flow 312, W3 T10: `--origin learned --source-ref <id>` — the provenance a
+// `keryx learn graduate` skill-target proposal's own `nextSteps` prints.
+describe("keryx skills scout --origin/--source-ref (flow 312, W3 T10)", () => {
+  test("--origin without --source-ref is refused", async () => {
+    await skillsGovernanceCommand(["scout", "some query", "--record", "/tmp/x", "--origin", "learned"]);
+    expect(process.exitCode).toBe(1);
+    expect(errors.some((line) => line.includes("--origin and --source-ref must be given together"))).toBe(true);
+  });
+
+  test("--source-ref without --origin is refused", async () => {
+    await skillsGovernanceCommand(["scout", "some query", "--record", "/tmp/x", "--source-ref", "testing.some-pattern-aaaaaaaa"]);
+    expect(process.exitCode).toBe(1);
+    expect(errors.some((line) => line.includes("--origin and --source-ref must be given together"))).toBe(true);
+  });
+
+  test("--origin/--source-ref without --record is refused", async () => {
+    await skillsGovernanceCommand(["scout", "some query", "--origin", "learned", "--source-ref", "testing.some-pattern-aaaaaaaa"]);
+    expect(process.exitCode).toBe(1);
+    expect(errors.some((line) => line.includes("--origin/--source-ref require --record"))).toBe(true);
+  });
+
+  test("an --origin value other than 'learned' is refused", async () => {
+    await skillsGovernanceCommand([
+      "scout",
+      "some query",
+      "--record",
+      "/tmp/x",
+      "--origin",
+      "generated",
+      "--source-ref",
+      "testing.some-pattern-aaaaaaaa",
+    ]);
+    expect(process.exitCode).toBe(1);
+    expect(errors.some((line) => line.includes("--origin must be one of learned"))).toBe(true);
+  });
+
+  test("a --source-ref that matches neither the learned-pattern id pattern nor grad- is refused", async () => {
+    await skillsGovernanceCommand(["scout", "some query", "--record", "/tmp/x", "--origin", "learned", "--source-ref", "NOT VALID!"]);
+    expect(process.exitCode).toBe(1);
+    expect(errors.some((line) => line.includes("is not a valid learned-pattern or graduation-proposal id"))).toBe(true);
+  });
+
+  test("a well-formed learned-pattern id source-ref is accepted and recorded", async () => {
+    const packDir = mkdtempSync(path.join(tmpdir(), "scout-origin-record-"));
+    try {
+      await skillsGovernanceCommand([
+        "scout",
+        "extract shared helper logic",
+        "--record",
+        packDir,
+        "--origin",
+        "learned",
+        "--source-ref",
+        "code-style.extract-helper-aaaaaaaa",
+      ]);
+      expect(process.exitCode).toBe(0);
+      const { readScoutRecord } = await import("../gdskills/governance/scout");
+      const record = readScoutRecord(packDir);
+      expect(record).toHaveLength(1);
+      expect(record[0]?.origin).toEqual({ kind: "learned", sourceRef: "code-style.extract-helper-aaaaaaaa" });
+    } finally {
+      rmSync(packDir, { recursive: true, force: true });
+    }
+  });
+
+  test("a grad- proposal id source-ref is accepted", async () => {
+    const packDir = mkdtempSync(path.join(tmpdir(), "scout-origin-record-"));
+    try {
+      await skillsGovernanceCommand([
+        "scout",
+        "extract shared helper logic",
+        "--record",
+        packDir,
+        "--origin",
+        "learned",
+        "--source-ref",
+        "grad-skill-0123456789ab",
+      ]);
+      expect(process.exitCode).toBe(0);
+      const { readScoutRecord } = await import("../gdskills/governance/scout");
+      const record = readScoutRecord(packDir);
+      expect(record[0]?.origin).toEqual({ kind: "learned", sourceRef: "grad-skill-0123456789ab" });
+    } finally {
+      rmSync(packDir, { recursive: true, force: true });
+    }
+  });
+
+  test("scout without --origin/--source-ref records no origin field (existing behavior unchanged)", async () => {
+    const packDir = mkdtempSync(path.join(tmpdir(), "scout-origin-record-"));
+    try {
+      await skillsGovernanceCommand(["scout", "some query", "--record", packDir]);
+      expect(process.exitCode).toBe(0);
+      const { readScoutRecord } = await import("../gdskills/governance/scout");
+      const record = readScoutRecord(packDir);
+      expect(record[0]?.origin).toBeUndefined();
+    } finally {
+      rmSync(packDir, { recursive: true, force: true });
+    }
+  });
+});
+
 // R4-2 (flow 309 review round 4): `report.unreadable` (R3-4) was JSON-only —
 // the human `stocktake` output never mentioned a skipped skill, and `eval`
 // on an unreadable-but-existing skill said "unknown skill id" instead of

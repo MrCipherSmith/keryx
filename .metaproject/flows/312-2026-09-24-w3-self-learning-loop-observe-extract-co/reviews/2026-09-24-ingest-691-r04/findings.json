@@ -1,0 +1,83 @@
+[
+  {
+    "id": "R6-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Graduate derives keyword tokens that turn a hyphen-glued login into a standalone login in the agent name/description",
+    "impact": "A configured login is written as a standalone word into an agent file name and description.",
+    "suggested_fix": "Drop keyword tokens equal to a configured login before building summary/suggestedName.",
+    "evidence": "probe D: authors ['alice'], member 'alice-style' -> agent alice-early-returns.md written",
+    "confidence": "high",
+    "file": "src/learning/graduate.ts",
+    "line": 643,
+    "class_scope": {
+      "sites": [
+        "graduate.ts:414 suggestedNameFor",
+        "graduate.ts:415-417 topKeywords -> summary",
+        "graduate.ts:643 gate"
+      ],
+      "enumeration_method": "every writer of proposal.summary/suggestedName into renderAgentMarkdown; probe r8/p.ts D"
+    },
+    "global_id": "2026-09-24-ingest-691-r04#R6-F1"
+  },
+  {
+    "id": "R6-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "runGraduate writes proposal files without a login gate",
+    "impact": "Login persists in proposal artifacts shown to the user.",
+    "suggested_fix": "Load logins in runGraduate; drop login-equal keywords and skip clusters whose member text contains a boundary login (report refused 'attribution').",
+    "evidence": "probe C3: proposal files contain 'alice'",
+    "confidence": "high",
+    "file": "src/learning/graduate.ts",
+    "line": 417,
+    "class_scope": {
+      "sites": [
+        "graduate.ts:404-437"
+      ],
+      "enumeration_method": "every writeFileAtomic in src/learning checked for a login gate; probe C3"
+    },
+    "global_id": "2026-09-24-ingest-691-r04#R6-F2"
+  },
+  {
+    "id": "R6-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Comments misstate the matching rule (login-reviewer listed as caught; extract.ts still describes the removed substring fallback)",
+    "impact": "Misleading security documentation.",
+    "suggested_fix": "Fix both comments.",
+    "evidence": "containsConfiguredLogin('alice-reviewer prefers x',['alice']) === false",
+    "confidence": "high",
+    "file": "src/learning/reviewer-id.ts",
+    "line": 52,
+    "class_scope": {
+      "sites": [
+        "reviewer-id.ts:52",
+        "extract.ts:265-281"
+      ],
+      "enumeration_method": "comments near each call site"
+    },
+    "global_id": "2026-09-24-ingest-691-r04#R6-F3"
+  },
+  {
+    "id": "R6-F4",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Login gates still see fixed wording of non-reviewer-comment signal templates",
+    "impact": "Rare whole-signal false refusal.",
+    "suggested_fix": "Apply the login gate only to reviewer-comment-derived text; the other signals never read review text.",
+    "evidence": "containsConfiguredLogin('When an edit to foo.ts is immediately reverted in this project',['edit']) === true",
+    "confidence": "medium",
+    "file": "src/learning/extract.ts",
+    "line": 283,
+    "class_scope": {
+      "sites": [
+        "extract.ts:283",
+        "apply.ts:218",
+        "graduate.ts:530-533"
+      ],
+      "enumeration_method": "12 trigger/action templates in src/learning/signals/*.ts cross-checked against gate inputs"
+    },
+    "global_id": "2026-09-24-ingest-691-r04#R6-F4"
+  }
+]

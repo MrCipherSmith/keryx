@@ -1,0 +1,64 @@
+[
+  {
+    "id": "R7-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Final token gate in applyGraduation matches login pieces against the summary's fixed wording",
+    "impact": "Projects with such logins can never graduate an agent.",
+    "suggested_fix": "Drop the final summary/suggestedName token gate; keywords are filtered by construction and member text is gated.",
+    "evidence": "q.ts T1/T1b/T1c: tom-s, alice-review, code-bot → REFUSED on clean clusters",
+    "confidence": "high",
+    "file": "src/learning/graduate.ts",
+    "line": 735,
+    "class_scope": {
+      "sites": [
+        "graduate.ts:735",
+        "graduate.ts:196-205",
+        "graduate.ts summary template"
+      ],
+      "enumeration_method": "tokenized the summary template, domain names and fallback name against login pieces (r10/q.ts T1)"
+    },
+    "global_id": "2026-09-24-ingest-691-r05#R7-F1"
+  },
+  {
+    "id": "R7-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "applyGraduation member-text gate not scoped to text that can carry reviewer logins",
+    "impact": "Clusters of other signals proposed but always refused at apply.",
+    "suggested_fix": "Use the same scoping predicate as runGraduate.",
+    "evidence": "q.ts T2: reverted-edit cluster with login 'edit' proposed then refused",
+    "confidence": "high",
+    "file": "src/learning/graduate.ts",
+    "line": 716,
+    "class_scope": {
+      "sites": [
+        "graduate.ts:596-604",
+        "graduate.ts:716"
+      ],
+      "enumeration_method": "every containsConfiguredLogin call checked for scoping (q.ts T2)"
+    },
+    "global_id": "2026-09-24-ingest-691-r05#R7-F2"
+  },
+  {
+    "id": "R7-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Scoping by self-declared extractor label removes the attribution gate for model-backed drafts",
+    "impact": "A login written by a model-backed extractor is stored and applied unchecked.",
+    "suggested_fix": "Gate when extractor === 'reviewer-comment' OR extractorKind === 'model-backed', via one shared predicate.",
+    "evidence": "q.ts M1: model draft with '@alice' stored; p.ts C2 apply passes the gate",
+    "confidence": "medium",
+    "file": "src/learning/extract.ts",
+    "line": 289,
+    "class_scope": {
+      "sites": [
+        "extract.ts:289",
+        "apply.ts:214",
+        "graduate.ts:478"
+      ],
+      "enumeration_method": "traced every provenance.extractor assignment; checked deterministic signal templates"
+    },
+    "global_id": "2026-09-24-ingest-691-r05#R7-F3"
+  }
+]

@@ -134,6 +134,16 @@ export const SUBSYSTEM_SHELL_HOOKS = "shell-hooks";
 // project content (the rule list), so it is deliberately NOT special-cased by
 // `matrix.ts`'s `classifySurfaceState` as `instruction-only`.
 export const SUBSYSTEM_RULES_EXPORT = "rules-export";
+/**
+ * Flow 312 (W3, T11): the opt-in host-harness learning observer — a passive,
+ * never-blocking hook that forwards a harness's own hook payload to `keryx
+ * learn observe --hook <runtime>` (`src/learning/observe.ts`'s
+ * `observeHostHookPayload`). Distinct from `SUBSYSTEM_SHELL_HOOKS` (W6's own
+ * compiled-in runtime, `policy-travels-with-agent`): this subsystem writes
+ * INTO a host's own settings file, the same `host-hook` shape ctx-guard/
+ * orient/security already use.
+ */
+export const SUBSYSTEM_LEARNING = "learning";
 
 /**
  * T17: the richer `customUninstall` return shape for a surface that may keep

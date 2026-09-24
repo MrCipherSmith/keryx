@@ -50,6 +50,32 @@ type MetaprojectManifest = {
   };
 };
 
+// (W3, flow 312 T9) Resolves `--skill <module>/<name>` against the registered
+// project-skill registry the exact way `learnProjectSkill` already does for
+// its own explicit `--skill` — same lookup, same "single registered skill"
+// fallback, no behaviour change. Exported so `src/learning/apply.ts` can
+// target a project skill from `keryx learn apply --skill <module/name>`
+// without a second, divergent resolver.
+export async function resolveRegisteredSkillTarget(
+  projectRoot: string,
+  skillArg: string,
+): Promise<ProjectSkillRegistryEntry> {
+  const metaprojectRoot = path.join(projectRoot, ".metaproject");
+  if (!(await pathExists(metaprojectRoot))) {
+    throw new Error("Metaproject is not initialized. Run: keryx init");
+  }
+  const manifest = await readManifest(projectRoot);
+  const registry = manifest.modules?.gdskills?.projectSkillRegistry ?? [];
+  if (registry.length === 0) {
+    throw new Error("No project skills registered. Run: keryx skills create <target> first.");
+  }
+  const skill = resolveSkillForLearning({ registry, explicitSkill: skillArg, source: "", sourcePath: "" });
+  if (!skill) {
+    throw new Error(`Unable to resolve project skill "${skillArg}". Pass an existing "<module>/<name>".`);
+  }
+  return skill;
+}
+
 export async function learnProjectSkill(
   projectRoot: string,
   options: LearnProjectSkillOptions,
@@ -253,7 +279,10 @@ type HealthFinding = {
   scope?: { skill?: string | null };
 };
 
-function parseHealthFindings(source: string): HealthFinding[] {
+// Exported (W3, flow 312 T7) so `src/learning/signals/health-regression.ts`
+// can reuse the exact same "what counts as a health finding" shape without a
+// second parser — behaviour unchanged, only the export keyword is new.
+export function parseHealthFindings(source: string): HealthFinding[] {
   try {
     const parsed = JSON.parse(source) as { findings?: HealthFinding[] };
     return Array.isArray(parsed.findings) ? parsed.findings : [];
@@ -265,7 +294,9 @@ function parseHealthFindings(source: string): HealthFinding[] {
 // Pick the project-skill with the most Code Health findings, restricted to
 // skills that exist in the registry. Lets `learn --from-health` resolve the
 // target skill without an explicit `--skill`.
-function dominantHealthSkill(
+// Exported (W3, flow 312 T7) for the same reason as `parseHealthFindings`
+// above — behaviour unchanged.
+export function dominantHealthSkill(
   source: string,
   registry: ProjectSkillRegistryEntry[],
 ): string | undefined {
@@ -382,7 +413,9 @@ function keywordsFor(sourceType: LearningSourceType): string[] {
   return common;
 }
 
-function suggestedSectionsFor(sourceType: LearningSourceType): string[] {
+// Exported (W3, flow 312 T9) for the same reason as `renderProposalMarkdown`
+// above — reused verbatim by `src/learning/apply.ts` rather than duplicated.
+export function suggestedSectionsFor(sourceType: LearningSourceType): string[] {
   if (sourceType === "review") {
     return ["Review Lessons", "Review Checklist", "Anti-patterns"];
   }
@@ -414,7 +447,10 @@ function confidenceFor({
   return "low";
 }
 
-function renderProposalMarkdown(proposal: LearningProposal): string {
+// Exported (W3, flow 312 T9) so `src/learning/apply.ts` writes the identical
+// `.md` provenance file `learnProjectSkill` already writes, rather than a
+// second near-duplicate renderer. Behaviour unchanged.
+export function renderProposalMarkdown(proposal: LearningProposal): string {
   const lessons = proposal.lessons.length > 0
     ? proposal.lessons.map((lesson) => `- ${lesson}`).join("\n")
     : "- No concrete lessons extracted. Review the source manually.";

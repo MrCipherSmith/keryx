@@ -1,0 +1,728 @@
+// `keryx learn` (flow 312, W3 self-learning loop, T8) — the consent CLI over
+// `src/learning/`: observe (manual trigger / host-hook adapter), extract,
+// list, review, accept, reject, apply, promote, graduate, prune.
+//
+//   observe [--hook claude]         flush/adapt one host-hook payload, or report today's file
+//   extract [--domain] [--since]    run the deterministic (+ optional model) signals
+//   list [--status] [--domain] [--scope] [--json]
+//   review [<id>] [--scope]         print a candidate (or all candidates) with its evidence
+//   accept <id> [--scope user] [--refresh]     candidate -> accepted (TTY only)
+//   reject <id> [--scope user]                 candidate -> rejected
+//   apply <id> --skill <module/name> [--dry-run]
+//   promote <id>                    project accepted -> user candidate (TTY + typed confirm)
+//   graduate [--domain] | graduate apply <proposal-id>
+//   prune [--dry-run] [--json]
+//
+// `accept`, `promote` and `graduate apply` never take a `--yes`/`--force`/
+// `--non-interactive` flag — each refuses outside a real terminal with a
+// named reason and no bypass (W3 spec "Promotion rule" #2; plan D2). None of
+// the three is agent-invocable through MCP: `src/mcp/tools.ts` is a hand-
+// curated allowlist of tool entries, and this file adds none there.
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { createInterface } from "node:readline/promises";
+import path from "node:path";
+import { readStdinBounded, LEARN_OBSERVE_MAX_STDIN_BYTES } from "../lib/bounded-stdin";
+import { resolveProjectRoot } from "../lib/contained-path";
+import {
+  acceptPattern,
+  applyGraduation,
+  applyLearnedPattern,
+  auditAcceptedRecords,
+  LearningAcceptError,
+  LearningApplyError,
+  LearningGraduateError,
+  LearningPromoteError,
+  listPatterns,
+  observationFilePath,
+  observeHostHookPayload,
+  parseLearnArgs,
+  promotePattern,
+  pruneLearning,
+  readPattern,
+  rejectPattern,
+  runExtract,
+  runGraduate,
+  type LearnedPattern,
+  type LearningDomain,
+  type LearningScope,
+  type LearningStatus,
+  type ParsedLearnArgs,
+} from "../learning/service";
+
+const STDIN_DEADLINE_MS = 2_000;
+// O-6: a hook payload larger than this is dropped rather than parsed/stored —
+// bounds the memory/CPU cost of a single hook invocation regardless of what
+// the host chooses to put on stdin.
+const MAX_HOOK_STDIN_BYTES = 1024 * 1024; // 1 MiB
+
+const STATUSES: readonly LearningStatus[] = ["candidate", "accepted", "rejected", "superseded", "expired"];
+const SCOPES: readonly LearningScope[] = ["project", "user"];
+const DOMAINS: readonly LearningDomain[] = [
+  "code-style",
+  "architecture",
+  "testing",
+  "security",
+  "review-conventions",
+  "workflow",
+  "documentation",
+  "performance",
+  "tooling",
+  "other",
+];
+
+/** Injectable seams for tests. Production passes none. */
+export interface LearnCommandDeps {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  homeDir?: string;
+  now?: () => Date;
+  /** Both stdin and stdout are terminals. Default: `process.stdin.isTTY && process.stdout.isTTY`. */
+  isTerminal?: boolean;
+  /** Prompt on the terminal and return the typed line. Defaults to a real `node:readline/promises` prompt on stdin/stdout. */
+  readLine?: (prompt: string) => Promise<string>;
+  /** `observe --hook`'s stdin source. Defaults to the real bounded stdin reader (`readStdinBounded`, shared with `keryx ctx hook`). Test seam. */
+  readStdin?: () => Promise<string | null>;
+}
+
+// O-3: every manual verb resolves the project root the same way `keryx ctx`
+// does (`resolveProjectRoot`: walk up from cwd to the nearest `.metaproject/`
+// or `.git/`, falling back to the starting directory when neither exists) —
+// not a bare `process.cwd()`, which put `.metaproject/data/learning/` (and
+// `.gitignore`-less) under whatever subdirectory the command happened to run
+// from.
+function resolveRoot(deps: LearnCommandDeps): string {
+  return resolveProjectRoot(deps.cwd ?? process.cwd());
+}
+
+/**
+ * Stricter root resolution for `observe --hook`, which fires automatically
+ * and silently from wherever the host process's cwd happens to be — unlike
+ * the manual verbs above, it must never widen its search to `.git/` (that
+ * would write learning data into a bare git checkout with no `.metaproject/`
+ * at all) and it must never fall back to the starting directory when no
+ * project is found. `$CLAUDE_PROJECT_DIR` is checked first (the host's own
+ * notion of the project root, when it supplies one and that directory really
+ * does have a `.metaproject/`); otherwise walks up from `startDir` to the
+ * nearest ancestor with one. Returns `undefined` — write nothing — when
+ * neither finds one, rather than creating a new, wrongly-rooted
+ * `.metaproject/` as a side effect of passive observation.
+ */
+function resolveLearnRoot(startDir: string, env: NodeJS.ProcessEnv): string | undefined {
+  const hasMetaproject = (dir: string): boolean => existsSync(path.join(dir, ".metaproject"));
+  const fromEnv = env.CLAUDE_PROJECT_DIR;
+  if (typeof fromEnv === "string" && fromEnv.length > 0 && hasMetaproject(fromEnv)) {
+    return fromEnv;
+  }
+  let current = path.resolve(startDir);
+  for (;;) {
+    if (hasMetaproject(current)) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+function resolveEnv(deps: LearnCommandDeps): NodeJS.ProcessEnv {
+  return deps.env ?? process.env;
+}
+
+function resolveTerminal(deps: LearnCommandDeps): boolean {
+  return deps.isTerminal ?? (process.stdin.isTTY === true && process.stdout.isTTY === true);
+}
+
+function resolveNow(deps: LearnCommandDeps): Date {
+  return (deps.now ?? ((): Date => new Date()))();
+}
+
+function fail(message: string): void {
+  console.error(`keryx learn: ${message}`);
+  process.exitCode = 1;
+}
+
+function reportError(error: unknown): void {
+  const reason =
+    error instanceof LearningAcceptError ||
+    error instanceof LearningApplyError ||
+    error instanceof LearningPromoteError ||
+    error instanceof LearningGraduateError
+      ? ` [${error.reason}]`
+      : "";
+  console.error(`keryx learn: ${error instanceof Error ? error.message : String(error)}${reason}`);
+  process.exitCode = 1;
+}
+
+async function defaultReadLine(prompt: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(prompt);
+  } finally {
+    rl.close();
+  }
+}
+
+/** `confirm: () => Promise<boolean>` (the shape `promotePattern`/`applyGraduation` expect): prompts the operator to type `id` back exactly. */
+function makeTypedIdConfirm(id: string, label: string, deps: LearnCommandDeps): () => Promise<boolean> {
+  return async () => {
+    const readLine = deps.readLine ?? defaultReadLine;
+    const answer = await readLine(`Type the ${label} id "${id}" to confirm: `);
+    return answer.trim() === id;
+  };
+}
+
+function parseEnumFlag<T extends string>(value: string | undefined, flag: string, allowed: readonly T[]): T | undefined {
+  if (value === undefined) return undefined;
+  if (!allowed.includes(value as T)) {
+    throw new Error(`${flag} must be one of ${allowed.join(", ")}, not "${value}"`);
+  }
+  return value as T;
+}
+
+function storeOptionsOf(deps: LearnCommandDeps): { env?: NodeJS.ProcessEnv; homeDir?: string } {
+  return {
+    ...(deps.env !== undefined ? { env: deps.env } : {}),
+    ...(deps.homeDir !== undefined ? { homeDir: deps.homeDir } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// R2-F2: per-verb -h/--help and positional-arity enforcement
+// ---------------------------------------------------------------------------
+
+/** One line, matching the `Usage:` block in `printLearnHelp` below. */
+const VERB_USAGE: Readonly<Record<string, string>> = {
+  observe: "keryx learn observe [--hook claude]",
+  extract: "keryx learn extract [--domain <d>] [--since <YYYY-MM-DD>] [--json]",
+  list: "keryx learn list [--status <s>] [--domain <d>] [--scope <s>] [--json]",
+  review: "keryx learn review [<id>] [--scope <s>]",
+  accept: "keryx learn accept <id> [--scope user] [--refresh]",
+  reject: "keryx learn reject <id> [--scope user]",
+  apply: "keryx learn apply <id> --skill <module/name> [--dry-run]",
+  promote: "keryx learn promote <id>",
+  graduate: "keryx learn graduate [--domain <d>] [--json]",
+  "graduate apply": "keryx learn graduate apply <proposal-id>",
+  prune: "keryx learn prune [--dry-run] [--json]",
+};
+
+/** `-h`/`--help` anywhere in the verb's own (already-split-off) args — checked against the RAW args, before `parseLearnArgs`, so it is never reported as an unknown/single-dash flag and never reaches any mutating code. */
+function wantsHelp(args: readonly string[]): boolean {
+  return args.includes("-h") || args.includes("--help");
+}
+
+/** Prints just this verb's usage line and returns — exit code stays 0, nothing is read or written. */
+function printVerbHelp(verb: keyof typeof VERB_USAGE): void {
+  console.log(`Usage:\n  ${VERB_USAGE[verb]}`);
+}
+
+/** `undefined` when `parsed.positionals.length` is within `[min, max]`; otherwise the "unexpected/missing argument" message the caller should `fail()` with. */
+function positionalArityError(parsed: ParsedLearnArgs, min: number, max: number, usage: string): string | undefined {
+  if (parsed.positionals.length < min) return `usage: ${usage}`;
+  if (parsed.positionals.length > max) {
+    const extra = parsed.positionals.slice(max);
+    return `unexpected argument(s): ${extra.join(", ")} — usage: ${usage}`;
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// observe
+// ---------------------------------------------------------------------------
+
+async function runObserveHook(deps: LearnCommandDeps): Promise<void> {
+  // Always exits 0 and prints nothing on stdout (W3 spec "Observe"; D5: the
+  // host observer never blocks or signals a decision). Every failure —
+  // unreadable stdin, invalid JSON, a redaction/disk error inside
+  // `observeHostHookPayload` itself — is swallowed here, never thrown.
+  process.exitCode = 0;
+  try {
+    const readStdin = deps.readStdin ?? ((): Promise<string | null> => readStdinBounded(STDIN_DEADLINE_MS, LEARN_OBSERVE_MAX_STDIN_BYTES));
+    const raw = await readStdin();
+    if (raw === null || raw.trim().length === 0) return;
+    if (Buffer.byteLength(raw, "utf8") > MAX_HOOK_STDIN_BYTES) return; // O-6: drop, don't parse/store, still exit 0.
+    let payload: unknown;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return; // invalid JSON: no line written, still exit 0.
+    }
+    const env = resolveEnv(deps);
+    const root = resolveLearnRoot(deps.cwd ?? process.cwd(), env); // O-3
+    if (root === undefined) return; // no `.metaproject/` found anywhere above cwd: write nothing.
+    await observeHostHookPayload(root, "claude", payload, {
+      ...storeOptionsOf(deps),
+      now: () => resolveNow(deps).toISOString(),
+    });
+  } catch {
+    // Never throw into the hook runtime.
+  }
+}
+
+async function countObservationLines(filePath: string): Promise<number> {
+  try {
+    const raw = await readFile(filePath, "utf8");
+    return raw.split("\n").filter((line) => line.length > 0).length;
+  } catch {
+    return 0;
+  }
+}
+
+async function runObserveManual(deps: LearnCommandDeps): Promise<void> {
+  const root = resolveRoot(deps);
+  const today = resolveNow(deps).toISOString().slice(0, 10);
+  const lines = await countObservationLines(observationFilePath(root, today));
+  console.log(`keryx learn observe: ${lines} line(s) in today's observation file (${today}.jsonl).`);
+  console.log("writer is unbuffered; nothing to flush.");
+}
+
+async function runObserve(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("observe");
+  const parsed = parseLearnArgs(args, { value: ["--hook"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 0, VERB_USAGE.observe as string);
+  if (arityError !== undefined) return fail(arityError);
+  const hook = parsed.values.get("--hook");
+  if (hook !== undefined && hook !== "claude") return fail(`--hook must be "claude", not "${hook}"`);
+  if (hook === "claude") {
+    await runObserveHook(deps);
+    return;
+  }
+  await runObserveManual(deps);
+}
+
+// ---------------------------------------------------------------------------
+// extract
+// ---------------------------------------------------------------------------
+
+async function runExtractCommand(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("extract");
+  const parsed = parseLearnArgs(args, { boolean: ["--json"], value: ["--domain", "--since"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 0, VERB_USAGE.extract as string);
+  if (arityError !== undefined) return fail(arityError);
+  try {
+    const domain = parseEnumFlag(parsed.values.get("--domain"), "--domain", DOMAINS);
+    const since = parsed.values.get("--since");
+    const root = resolveRoot(deps);
+    const report = await runExtract(root, {
+      ...(domain !== undefined ? { domain } : {}),
+      ...(since !== undefined ? { since } : {}),
+      now: resolveNow(deps),
+      ...storeOptionsOf(deps),
+    });
+    if (parsed.flags.has("--json")) {
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+    console.log(
+      `keryx learn extract: created ${report.created.length}, reinforced ${report.reinforced.length}, decayed ${report.decayed.length}, refused ${report.refused.length}, skipped (already decided) ${report.skippedDecided.length}.`,
+    );
+    for (const [signal, count] of Object.entries(report.signals)) {
+      console.log(`  ${signal}: ${count}`);
+    }
+    for (const id of report.created) console.log(`  + ${id}`);
+    for (const id of report.reinforced) console.log(`  ~ ${id}`);
+    for (const refusal of report.refused) console.log(`  refused (${refusal.signal}): ${refusal.categories.join(", ")}`);
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// list
+// ---------------------------------------------------------------------------
+
+function formatRecordRow(record: LearnedPattern): string {
+  const level = record.confidenceLevel !== undefined ? ` (${record.confidenceLevel})` : "";
+  return `${record.id}  status=${record.status} scope=${record.scope} domain=${record.domain} confidence=${record.confidence}${level}`;
+}
+
+async function runList(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("list");
+  const parsed = parseLearnArgs(args, { boolean: ["--json"], value: ["--status", "--domain", "--scope"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 0, VERB_USAGE.list as string);
+  if (arityError !== undefined) return fail(arityError);
+  try {
+    const status = parseEnumFlag(parsed.values.get("--status"), "--status", STATUSES);
+    const domain = parseEnumFlag(parsed.values.get("--domain"), "--domain", DOMAINS);
+    const scope = parseEnumFlag(parsed.values.get("--scope"), "--scope", SCOPES);
+    const root = resolveRoot(deps);
+    const storeOptions = storeOptionsOf(deps);
+    const records = await listPatterns(
+      root,
+      {
+        ...(status !== undefined ? { status } : {}),
+        ...(domain !== undefined ? { domain } : {}),
+        ...(scope !== undefined ? { scope } : {}),
+      },
+      storeOptions,
+    );
+
+    if (parsed.flags.has("--json")) {
+      console.log(JSON.stringify(records, null, 2));
+    } else if (records.length === 0) {
+      console.log("keryx learn list: no records match.");
+    } else {
+      for (const record of records) console.log(formatRecordRow(record));
+    }
+
+    const flagged = await auditAcceptedRecords(root, storeOptions);
+    for (const entry of flagged) {
+      console.error(
+        `keryx learn list: WARNING — accepted record "${entry.id}" (${entry.scope}) has no matching accept decision recorded (integrity check).`,
+      );
+    }
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// review
+// ---------------------------------------------------------------------------
+
+function printRecordDetail(record: LearnedPattern): void {
+  console.log(`${record.id}  [${record.status}, ${record.scope}]`);
+  console.log(`  domain: ${record.domain}`);
+  console.log(`  trigger: ${record.trigger}`);
+  console.log(`  action: ${record.action}`);
+  console.log(`  confidence: ${record.confidence}${record.confidenceLevel !== undefined ? ` (${record.confidenceLevel})` : ""}`);
+  console.log("  evidence:");
+  for (const item of record.evidence) {
+    console.log(`    - ${item.kind}/${item.sourceType} ${item.sourceRef} @ ${item.observedAt}`);
+  }
+}
+
+async function findById(
+  root: string,
+  id: string,
+  scope: LearningScope | undefined,
+  storeOptions: { env?: NodeJS.ProcessEnv; homeDir?: string },
+): Promise<LearnedPattern | undefined> {
+  if (scope !== undefined) return readPattern(root, id, scope, storeOptions);
+  const project = await readPattern(root, id, "project", storeOptions);
+  if (project !== undefined) return project;
+  return readPattern(root, id, "user", storeOptions);
+}
+
+async function runReview(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("review");
+  const parsed = parseLearnArgs(args, { value: ["--scope"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 1, VERB_USAGE.review as string);
+  if (arityError !== undefined) return fail(arityError);
+  try {
+    const scope = parseEnumFlag(parsed.values.get("--scope"), "--scope", SCOPES);
+    const root = resolveRoot(deps);
+    const storeOptions = storeOptionsOf(deps);
+    const id = parsed.positionals[0];
+
+    if (id !== undefined) {
+      const record = await findById(root, id, scope, storeOptions);
+      if (record === undefined) return fail(`no learned-pattern record "${id}"`);
+      printRecordDetail(record);
+      return;
+    }
+
+    const candidates = await listPatterns(root, { status: "candidate", ...(scope !== undefined ? { scope } : {}) }, storeOptions);
+    if (candidates.length === 0) {
+      console.log("keryx learn review: no candidates.");
+      return;
+    }
+    candidates.forEach((record, index) => {
+      if (index > 0) console.log("");
+      printRecordDetail(record);
+    });
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// accept / reject
+// ---------------------------------------------------------------------------
+
+async function runAccept(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("accept");
+  const parsed = parseLearnArgs(args, { boolean: ["--refresh"], value: ["--scope"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 1, 1, VERB_USAGE.accept as string);
+  if (arityError !== undefined) return fail(arityError);
+  const id = parsed.positionals[0];
+  if (id === undefined) return fail("usage: keryx learn accept <id> [--scope user] [--refresh]");
+  try {
+    const scope = parseEnumFlag(parsed.values.get("--scope"), "--scope", SCOPES);
+    const root = resolveRoot(deps);
+    const result = await acceptPattern(root, id, {
+      ...(scope !== undefined ? { scope } : {}),
+      refresh: parsed.flags.has("--refresh"),
+      isTerminal: resolveTerminal(deps),
+      now: () => resolveNow(deps),
+      ...storeOptionsOf(deps),
+    });
+    console.log(
+      `keryx learn accept: "${result.id}" (${result.scope}) is now accepted.${result.indexUpdated ? " Index entry written/refreshed." : ""}`,
+    );
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+async function runReject(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("reject");
+  const parsed = parseLearnArgs(args, { value: ["--scope"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 1, 1, VERB_USAGE.reject as string);
+  if (arityError !== undefined) return fail(arityError);
+  const id = parsed.positionals[0];
+  if (id === undefined) return fail("usage: keryx learn reject <id> [--scope user]");
+  try {
+    const scope = parseEnumFlag(parsed.values.get("--scope"), "--scope", SCOPES);
+    const root = resolveRoot(deps);
+    const result = await rejectPattern(root, id, {
+      ...(scope !== undefined ? { scope } : {}),
+      now: () => resolveNow(deps),
+      ...storeOptionsOf(deps),
+    });
+    console.log(`keryx learn reject: "${result.id}" (${result.scope}) is now rejected.`);
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// apply
+// ---------------------------------------------------------------------------
+
+async function runApply(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("apply");
+  const parsed = parseLearnArgs(args, { boolean: ["--dry-run"], value: ["--skill"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 1, 1, VERB_USAGE.apply as string);
+  if (arityError !== undefined) return fail(arityError);
+  const id = parsed.positionals[0];
+  if (id === undefined) return fail("usage: keryx learn apply <id> --skill <module/name> [--dry-run]");
+  const skill = parsed.values.get("--skill");
+  if (skill === undefined) return fail("--skill <module/name> is required");
+  try {
+    const root = resolveRoot(deps);
+    const dryRun = parsed.flags.has("--dry-run");
+    const result = await applyLearnedPattern(root, id, { skill, dryRun, ...storeOptionsOf(deps) });
+    if (dryRun) {
+      console.log(`keryx learn apply: dry run — "${id}" would update skill "${skill}" (${result.applied.previousVersion} -> ${result.applied.nextVersion}). Nothing written.`);
+    } else {
+      console.log(
+        `keryx learn apply: "${id}" applied to "${skill}" (${result.applied.previousVersion} -> ${result.applied.nextVersion}). ` +
+          `Changed sections: ${result.applied.changedSections.join(", ") || "(none)"}.`,
+      );
+    }
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// promote
+// ---------------------------------------------------------------------------
+
+async function runPromote(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("promote");
+  // No flags at all — in particular, no --yes/--force/--non-interactive (W3
+  // spec "Promotion rule" #2). Any flag here is refused, not just an unknown one.
+  const parsed = parseLearnArgs(args, {});
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")} — promote takes no flags (no bypass exists)`);
+  const arityError = positionalArityError(parsed, 1, 1, VERB_USAGE.promote as string);
+  if (arityError !== undefined) return fail(arityError);
+  const id = parsed.positionals[0];
+  if (id === undefined) return fail("usage: keryx learn promote <id>");
+  const terminal = resolveTerminal(deps);
+  if (!terminal) {
+    fail(
+      "promote needs an interactive terminal on both stdin and stdout, and refuses to run from a pipe, an agent's shell, " +
+        "an MCP or ACP client, or an unattended run. Run it yourself, in a terminal. [promote-requires-terminal]",
+    );
+    return;
+  }
+  try {
+    const root = resolveRoot(deps);
+    const result = await promotePattern(root, id, {
+      isTerminal: terminal,
+      confirm: makeTypedIdConfirm(id, "pattern", deps),
+      now: resolveNow(deps),
+      ...storeOptionsOf(deps),
+    });
+    console.log(`keryx learn promote: "${result.id}" promoted to scope "${result.scope}" as status "${result.status}".`);
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// graduate / graduate apply
+// ---------------------------------------------------------------------------
+
+async function runGraduateRun(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("graduate");
+  const parsed = parseLearnArgs(args, { boolean: ["--json"], value: ["--domain"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 0, VERB_USAGE.graduate as string);
+  if (arityError !== undefined) return fail(arityError);
+  try {
+    const domain = parseEnumFlag(parsed.values.get("--domain"), "--domain", DOMAINS);
+    const root = resolveRoot(deps);
+    const report = await runGraduate(root, { ...(domain !== undefined ? { domain } : {}), now: resolveNow(deps), ...storeOptionsOf(deps) });
+    if (parsed.flags.has("--json")) {
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+    console.log(
+      `keryx learn graduate: ${report.proposals.length} new proposal(s), ${report.alreadyProposed.length} already proposed, ${report.refused.length} refused.`,
+    );
+    for (const proposal of report.proposals) {
+      console.log(`  + ${proposal.proposalId} (${proposal.target}, domain=${proposal.domain}) members: ${proposal.members.join(", ")}`);
+      console.log(`    ${proposal.summary}`);
+      for (const step of proposal.nextSteps) console.log(`    next: ${step}`);
+    }
+    for (const id of report.alreadyProposed) console.log(`  = ${id} (already proposed)`);
+    for (const refusal of report.refused) {
+      console.log(`  refused (${refusal.categories.join(", ")}): members ${refusal.memberIds.join(", ")}`);
+    }
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+async function runGraduateApply(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("graduate apply");
+  // Same "no flags at all" rule as promote — no bypass exists for graduate apply either.
+  const parsed = parseLearnArgs(args, {});
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")} — graduate apply takes no flags (no bypass exists)`);
+  const arityError = positionalArityError(parsed, 1, 1, VERB_USAGE["graduate apply"] as string);
+  if (arityError !== undefined) return fail(arityError);
+  const proposalId = parsed.positionals[0];
+  if (proposalId === undefined) return fail("usage: keryx learn graduate apply <proposal-id>");
+  const terminal = resolveTerminal(deps);
+  if (!terminal) {
+    fail(
+      "graduate apply needs an interactive terminal on both stdin and stdout, and refuses to run from a pipe, an agent's " +
+        "shell, an MCP or ACP client, or an unattended run. Run it yourself, in a terminal. [graduate-apply-requires-terminal]",
+    );
+    return;
+  }
+  try {
+    const root = resolveRoot(deps);
+    const result = await applyGraduation(root, proposalId, {
+      isTerminal: terminal,
+      confirm: makeTypedIdConfirm(proposalId, "proposal", deps),
+      now: resolveNow(deps),
+      ...storeOptionsOf(deps),
+    });
+    console.log(`keryx learn graduate apply: "${proposalId}" applied. Agent candidate written to ${result.path}.`);
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+async function runGraduateCommand(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (args[0] === "apply") {
+    await runGraduateApply(args.slice(1), deps);
+    return;
+  }
+  await runGraduateRun(args, deps);
+}
+
+// ---------------------------------------------------------------------------
+// prune
+// ---------------------------------------------------------------------------
+
+async function runPrune(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("prune");
+  const parsed = parseLearnArgs(args, { boolean: ["--dry-run", "--json"] });
+  if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 0, VERB_USAGE.prune as string);
+  if (arityError !== undefined) return fail(arityError);
+  try {
+    const root = resolveRoot(deps);
+    const dryRun = parsed.flags.has("--dry-run");
+    const report = await pruneLearning(root, { now: resolveNow(deps), dryRun, ...storeOptionsOf(deps) });
+    if (parsed.flags.has("--json")) {
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+    // R2-F8: a dry run deletes/expires nothing — say "would", and say so
+    // explicitly, rather than printing the same "deleted"/"expired" wording
+    // a real run uses (an operator piping/skimming output could not tell
+    // the two apart).
+    const verb = dryRun ? "would delete" : "deleted";
+    const expireVerb = dryRun ? "would expire" : "expired";
+    console.log(
+      `keryx learn prune: ${verb} ${report.deletedObservationFiles.length} observation file(s), ${expireVerb} ${report.expired.length} candidate(s)${
+        report.errors.length > 0 ? `, ${report.errors.length} error(s)` : ""
+      }.${dryRun ? " (dry run — nothing written)" : ""}`,
+    );
+    for (const file of report.deletedObservationFiles) console.log(`  - observations/${file}`);
+    for (const entry of report.expired) console.log(`  - ${entry.id} (${entry.scope})`);
+    for (const message of report.errors) console.error(`keryx learn prune: WARNING — ${message}`);
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// dispatch
+// ---------------------------------------------------------------------------
+
+export async function learnCommand(args: string[] = [], deps: LearnCommandDeps = {}): Promise<void> {
+  const [command, ...rest] = args;
+  if (command === undefined || command === "--help" || command === "-h") {
+    printLearnHelp();
+    return;
+  }
+  const env = resolveEnv(deps);
+  const resolvedDeps: LearnCommandDeps = { ...deps, env };
+
+  if (command === "observe") return runObserve(rest, resolvedDeps);
+  if (command === "extract") return runExtractCommand(rest, resolvedDeps);
+  if (command === "list") return runList(rest, resolvedDeps);
+  if (command === "review") return runReview(rest, resolvedDeps);
+  if (command === "accept") return runAccept(rest, resolvedDeps);
+  if (command === "reject") return runReject(rest, resolvedDeps);
+  if (command === "apply") return runApply(rest, resolvedDeps);
+  if (command === "promote") return runPromote(rest, resolvedDeps);
+  if (command === "graduate") return runGraduateCommand(rest, resolvedDeps);
+  if (command === "prune") return runPrune(rest, resolvedDeps);
+
+  fail(`unknown subcommand "${command}". See \`keryx learn --help\`.`);
+  printLearnHelp();
+}
+
+export function printLearnHelp(): void {
+  console.log(`keryx learn — the self-learning loop's consent CLI (observe, extract, review, accept, apply, promote, graduate, prune)
+
+Usage:
+  keryx learn observe [--hook claude]
+  keryx learn extract [--domain <d>] [--since <YYYY-MM-DD>] [--json]
+  keryx learn list [--status <s>] [--domain <d>] [--scope <s>] [--json]
+  keryx learn review [<id>] [--scope <s>]
+  keryx learn accept <id> [--scope user] [--refresh]
+  keryx learn reject <id> [--scope user]
+  keryx learn apply <id> --skill <module/name> [--dry-run]
+  keryx learn promote <id>
+  keryx learn graduate [--domain <d>] [--json]
+  keryx learn graduate apply <proposal-id>
+  keryx learn prune [--dry-run] [--json]
+
+\`observe --hook claude\` reads one host-hook payload from stdin, always exits 0 and
+prints nothing to stdout — it is the command an opt-in Claude Code hook runs. Without
+--hook it reports today's observation file line count for manual/offline use.
+
+\`accept\`, \`promote\` and \`graduate apply\` never take a --yes/--force/--non-interactive
+flag: each refuses outside a real interactive terminal, with a named reason and no
+bypass. \`promote\`/\`graduate apply\` additionally prompt you to type the pattern's (or
+proposal's) id back to confirm. None of the three is reachable through MCP.
+
+Status values: ${STATUSES.join(", ")}
+Scope values: ${SCOPES.join(", ")}
+Domain values: ${DOMAINS.join(", ")}
+`);
+}

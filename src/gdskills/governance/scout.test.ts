@@ -150,6 +150,26 @@ describe("scout record", () => {
     }
   });
 
+  // Flow 312, W3 T10: `origin` is optional and round-trips through plain
+  // JSON.parse — `readScoutRecord` needed no code change to tolerate it.
+  test("recordScout accepts and round-trips an optional learned origin", () => {
+    const packDir = mkdtempSync(path.join(tmpdir(), "scout-record-"));
+    try {
+      recordScout(packDir, {
+        query: "extract shared helper logic",
+        decision: "fork",
+        topMatch: "review/review-flow-graph",
+        recordedAt: "2026-09-24T00:00:00.000Z",
+        skillName: "extract-helper",
+        origin: { kind: "learned", sourceRef: "code-style.extract-helper-aaaaaaaa" },
+      });
+      const record = readScoutRecord(packDir);
+      expect(record[0]?.origin).toEqual({ kind: "learned", sourceRef: "code-style.extract-helper-aaaaaaaa" });
+    } finally {
+      rmSync(packDir, { recursive: true, force: true });
+    }
+  });
+
   test("readScoutRecord omits justification when not recorded", () => {
     const packDir = mkdtempSync(path.join(tmpdir(), "scout-record-"));
     try {

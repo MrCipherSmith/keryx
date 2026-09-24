@@ -95,6 +95,7 @@ nav:
   - Integrations: integrations.md
   - Lifecycle hooks: hooks.md
   - Modules: modules.md
+  - Self-learning loop: learning.md
   - CLI reference: cli-reference.md
   - Commands by task: commands-by-task.md
   - Workspace and lifecycle: workspace-and-lifecycle.md

@@ -51,6 +51,7 @@ import { scheduleCommand } from "./commands/schedule";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
 import { hooksCommand, printHooksHelp } from "./commands/hooks";
 import { bundleCommand, printBundleHelp } from "./commands/bundle";
+import { learnCommand, printLearnHelp } from "./commands/learn";
 import { sandboxNetForwardCommand } from "./commands/sandbox-net-forward";
 import { helpCommand } from "./commands/help";
 import packageJson from "../package.json" with { type: "json" };
@@ -128,6 +129,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   governance: governanceCommand,
   hooks: hooksCommand,
   bundle: bundleCommand,
+  learn: learnCommand,
   // Flow 301 (AC5): internal helper only — `planUnattendedSandbox.wrap()` invokes this
   // from inside the sandbox; no operator ever types it. Excluded from the CLI
   // reference with a reason (`DOCUMENTED_ELSEWHERE` in `cli-reference-coverage.test.ts`).
@@ -353,6 +355,18 @@ export const USAGE_BODY = `Usage:
   keryx bundle verify <bundle> [--json]
   keryx bundle verify --external-imports [--json]
   keryx bundle uninstall <bundleId> --target-scope <scope> [--dry-run] [--json]
+  keryx learn observe [--hook claude]           Flush pending observations, or adapt one host-hook payload
+  keryx learn extract [--domain <d>] [--since <date>] [--json]
+                                               Run deterministic signals over the observation window
+  keryx learn list [--status <s>] [--domain <d>] [--scope <s>] [--json]
+  keryx learn review [<id>] [--scope <s>]       Print a candidate (or all candidates) with its evidence
+  keryx learn accept <id> [--scope user] [--refresh]
+                                               candidate -> accepted; TTY only, no bypass flag
+  keryx learn reject <id> [--scope user]
+  keryx learn apply <id> --skill <module/name> [--dry-run]
+  keryx learn promote <id>                      project accepted -> user candidate; TTY + typed confirm
+  keryx learn graduate [--domain <d>] | graduate apply <proposal-id>
+  keryx learn prune [--dry-run] [--json]
   keryx --version
 
 Commands:
@@ -406,6 +420,7 @@ Commands:
   governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
   hooks     Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration
   bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses
+  learn     Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune
 `;
 
 function printHelp(): void {
@@ -473,6 +488,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, () => void> = new Map([
   ["governance", printGovernanceHelp],
   ["hooks", printHooksHelp],
   ["bundle", printBundleHelp],
+  ["learn", printLearnHelp],
 ]);
 
 /**

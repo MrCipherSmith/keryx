@@ -45,6 +45,7 @@ import {
   RULES_EXPORT_KIRO,
   RULES_EXPORT_WINDSURF,
 } from "./surfaces-rules";
+import { LEARNING_OBSERVER_CLAUDE } from "./surfaces-learning";
 import { ANTIGRAVITY_DECISION_CODEC, COPILOT_DECISION_CODEC, CURSOR_DECISION_CODEC, EXIT_CODE_DECISION_CODEC } from "./codecs";
 import type { DecisionCodec, HarnessAdapter, HookAction, SettingsFileOwner, SurfaceAdapter, SurfaceFlag } from "./types";
 import { createSettingsFileOwner } from "./settings-file";
@@ -62,7 +63,15 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "Claude Code",
     confidence: "verified",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_CLAUDE, ORIENT_CLAUDE, SECURITY_CHECK_INPUT_CLAUDE, SECURITY_CHECK_OUTPUT_CLAUDE, AGENTS_CLAUDE, RULES_EXPORT_CLAUDE],
+    surfaces: [
+      CTX_GUARD_CLAUDE,
+      ORIENT_CLAUDE,
+      SECURITY_CHECK_INPUT_CLAUDE,
+      SECURITY_CHECK_OUTPUT_CLAUDE,
+      AGENTS_CLAUDE,
+      RULES_EXPORT_CLAUDE,
+      LEARNING_OBSERVER_CLAUDE,
+    ],
     unsupported: {},
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "src/security/agent-hooks/runtimes.ts"],
     lastVerified: LAST_VERIFIED,
