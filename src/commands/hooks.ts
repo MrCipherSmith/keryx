@@ -26,6 +26,7 @@ import {
   failureEffect,
   loadHookConfig,
   parseHookResult,
+  resolveBuiltinCommandRunsIn,
   resolveKeryxArgv,
   validateHookConfigDocument,
 } from "../harness/hooks";
@@ -105,12 +106,21 @@ export interface HooksListRow {
   enabled: boolean;
   appliesToChildAgents: boolean;
   timeoutMs: number;
+  /**
+   * The `runsIn` this hook ACTUALLY spawns with under `profileId` (flow 306,
+   * W6, T15) — for a built-in command hook this can differ from its
+   * registration's own `runsIn` (always `"sandbox"`), because
+   * `resolveBuiltinCommandRunsIn` runs it unsandboxed off a profile that does
+   * not require fail-closed isolation. A user/project hook's `runsIn` is
+   * always identical to its registration's.
+   */
+  runsIn: "sandbox" | "unsandboxed";
   /** `{kind:"command", argv}` for a spawned hook, `{kind:"builtin", name}` for the two in-process built-ins. */
   handler: { kind: "command"; argv: string[] } | { kind: "builtin"; name: string };
   description?: string;
 }
 
-function groupById(registrations: readonly HookRegistration[]): HooksListRow[] {
+function groupById(registrations: readonly HookRegistration[], profileId: PolicyProfileId): HooksListRow[] {
   const byId = new Map<string, HooksListRow>();
   for (const reg of registrations) {
     const existing = byId.get(reg.id);
@@ -127,6 +137,7 @@ function groupById(registrations: readonly HookRegistration[]): HooksListRow[] {
       enabled: reg.enabled,
       appliesToChildAgents: reg.appliesToChildAgents,
       timeoutMs: reg.timeoutMs,
+      runsIn: resolveBuiltinCommandRunsIn(reg, profileId),
       handler:
         reg.handler.kind === "command"
           ? { kind: "command", argv: reg.handler.argv }
@@ -137,13 +148,14 @@ function groupById(registrations: readonly HookRegistration[]): HooksListRow[] {
   return [...byId.values()];
 }
 
-function renderListText(rows: readonly HooksListRow[]): string {
+function renderListText(rows: readonly HooksListRow[], profileId: PolicyProfileId): string {
   const lines = rows.map((row) => {
     const command = row.handler.kind === "command" ? row.handler.argv.join(" ") : `builtin:${row.handler.name}`;
     return [
       `${row.id}`,
       `  scope=${row.scope} class=${row.class} enabled=${String(row.enabled)} appliesToChildAgents=${String(row.appliesToChildAgents)}`,
       `  events=${row.events.join(",")} matcher=${row.matcher} timeoutMs=${row.timeoutMs}`,
+      `  runsIn=${row.runsIn} (effective under profile "${profileId}"; command hooks only)`,
       `  command: ${command}`,
     ].join("\n");
   });
@@ -154,6 +166,11 @@ async function runList(args: readonly string[], deps: HooksCommandDeps): Promise
   const cwd = deps.cwd ?? process.cwd();
   const homeDir = resolveHomeDir(deps);
   const asJson = args.includes("--json");
+  const profileArg = optionValue([...args], "--profile");
+  const profileId: PolicyProfileId = (profileArg as PolicyProfileId | undefined) ?? DEFAULT_PROFILE;
+  if (!VALID_PROFILES.includes(profileId)) {
+    fail(`Unknown --profile "${String(profileArg)}". Valid: ${VALID_PROFILES.join(", ")}.`);
+  }
 
   const loaded = loadHookConfig({ projectRoot: cwd, homeDir });
   if (!loaded.ok) {
@@ -162,11 +179,11 @@ async function runList(args: readonly string[], deps: HooksCommandDeps): Promise
     return;
   }
 
-  const rows = groupById(loaded.registrations).sort((a, b) => a.id.localeCompare(b.id));
+  const rows = groupById(loaded.registrations, profileId).sort((a, b) => a.id.localeCompare(b.id));
   if (asJson) {
-    console.log(JSON.stringify({ hooks: rows }, null, 2));
+    console.log(JSON.stringify({ profileId, hooks: rows }, null, 2));
   } else {
-    console.log(renderListText(rows));
+    console.log(renderListText(rows, profileId));
   }
 }
 
@@ -340,6 +357,14 @@ export interface HooksTestReport {
   effect?: "deny" | "proceed" | "silent-approve";
   effectReason?: HookAnomalyName;
   additionalContext?: string;
+  /**
+   * The `runsIn` this invocation actually spawned with (flow 306, W6, T15) —
+   * present only for a `command`-handler hook. For a built-in it reflects
+   * `resolveBuiltinCommandRunsIn(reg, profileId)`, which can differ from the
+   * registration's own `runsIn` under a profile that does not require
+   * fail-closed isolation.
+   */
+  runsIn?: "sandbox" | "unsandboxed";
 }
 
 async function runOneCommandHook(
@@ -365,6 +390,7 @@ async function runOneCommandHook(
   });
   if (reg.handler.kind !== "command") throw new Error("runOneCommandHook requires a command handler");
   const argv = resolveKeryxArgv(reg.handler.argv);
+  const effectiveRunsIn = resolveBuiltinCommandRunsIn(reg, profileId);
   const raw = await runner.run({
     argv,
     cwd: reg.handler.cwd ?? ".",
@@ -372,7 +398,7 @@ async function runOneCommandHook(
     stdin: JSON.stringify(stdinObj),
     timeoutMs: reg.timeoutMs,
     network: reg.network,
-    runsIn: reg.runsIn,
+    runsIn: effectiveRunsIn,
   });
   const parsed = parseHookResult(
     {
@@ -396,6 +422,7 @@ async function runOneCommandHook(
     stderr: stderrCapped.text,
     stderrTruncated: stderrCapped.truncated,
     durationMs: raw.durationMs,
+    runsIn: effectiveRunsIn,
   };
   if (parsed.kind === "ok") {
     return {
@@ -562,6 +589,7 @@ async function runTest(args: readonly string[], deps: HooksCommandDeps): Promise
   }
   console.log(`hook: ${report.hookId} (${report.event}, class ${report.class})`);
   console.log(`decision: ${report.decision ?? "none"}`);
+  if (report.runsIn !== undefined) console.log(`runsIn: ${report.runsIn} (effective under profile "${profileId}")`);
   if (report.exitCode !== undefined) console.log(`exitCode: ${String(report.exitCode)}`);
   if (report.failure !== undefined) console.log(`failure: ${report.failure} -> effect: ${report.effect} (${report.effectReason})`);
   console.log(`durationMs: ${report.durationMs}`);

@@ -247,6 +247,29 @@ first.
   `runsIn: "unsandboxed"` is refused outright (`spawnError: "refused"`)
   whenever the active security profile's isolation is
   `required-fail-closed`.
+- **Built-in command hooks run unsandboxed off `required-fail-closed`**
+  (flow 306, W6, T15): `keryx.ctx-guard`, `keryx.security-check-input` and
+  `keryx.security-check-output` spawn the running `keryx` binary itself —
+  the same trust domain and containment as the Keryx process that spawns
+  them, not an untrusted third-party command, so wrapping them in the OS
+  sandbox adds no containment while making them load-bearing on a launcher
+  (`bwrap`/`sandbox-exec`) that is frequently unavailable. A Linux user
+  without bubblewrap would otherwise see EVERY prompt denied by
+  `keryx.security-check-input`'s fail-closed sandbox-unavailable path — a
+  usability regression, not a security gain. So `resolveBuiltinCommandRunsIn`
+  (`src/harness/hooks/runtime.ts`) resolves these three to `runsIn:
+  "unsandboxed"` for whichever profile is active on THIS fire, whenever that
+  profile's `requiredControls.isolation` is not `required-fail-closed`
+  (`read-only-review` and `monitored-trusted-local` today —
+  `src/harness/policy/profiles.ts`). Under `unattended-untrusted`
+  (`required-fail-closed`), they stay `sandbox` and fail closed exactly as
+  before. A user/project hook's own `runsIn` is never touched by this —
+  it only ever widens a `scope: "builtin"` + `handler.kind: "command"`
+  registration, and stays `sandbox` by default with the same
+  sandbox-unavailable fail-closed path (named `hook-sandbox-unavailable`) it
+  always had. `keryx hooks list`/`keryx hooks test` (optionally with
+  `--profile <id>`) report the EFFECTIVE `runsIn` for the profile in play,
+  not just the registration's own default.
 - **No network by default** (`network: "none"`); `network: "restricted"`
   routes through the sandbox's existing proxy allowlist. Never `full`.
 - **Env allowlist** (`buildHookEnv` in `src/harness/hooks/runner.ts`) — the

@@ -342,3 +342,70 @@ describe("createHookRuntime — per-fire profileId override (flow 306, W6, T14)"
     expect(withOverride.decisions).toEqual([{ hookId: "read-only-guard", decision: "ask" }]);
   });
 });
+
+describe("createHookRuntime — built-in command hooks run unsandboxed off required-isolation profiles (flow 306, W6, T15)", () => {
+  /** A fake runner that fails exactly the way a missing sandbox launcher does (`spawnError: "sandbox-unavailable"`), only for a "sandbox" request — an "unsandboxed" request always succeeds. */
+  function sandboxUnavailableRunner(): { runner: HookProcessRunner; calls: HookRunRequest[] } {
+    const calls: HookRunRequest[] = [];
+    const runner: HookProcessRunner = {
+      async run(req: HookRunRequest): Promise<HookRunResult> {
+        calls.push(req);
+        if (req.runsIn === "sandbox") {
+          return { exitCode: null, stdout: "", stderr: "", timedOut: false, spawnError: "sandbox-unavailable", durationMs: 1 };
+        }
+        return { exitCode: 0, stdout: JSON.stringify({ decision: "allow" }), stderr: "", timedOut: false, durationMs: 1 };
+      },
+    };
+    return { runner, calls };
+  }
+
+  test("keryx.security-check-input runs unsandboxed and succeeds under monitored-trusted-local even when the sandbox is unavailable", async () => {
+    const { runner, calls } = sandboxUnavailableRunner();
+    const reg = BUILTIN_HOOK_REGISTRATIONS.find((r) => r.id === "keryx.security-check-input");
+    if (reg === undefined) throw new Error("keryx.security-check-input not found in BUILTIN_HOOK_REGISTRATIONS");
+    const runtime = createHookRuntime(baseCtx({ registrations: [reg], runner, profileId: "monitored-trusted-local", interactive: true }));
+
+    const result = await runtime.fire("UserPromptSubmit", { sessionId: "s1", runId: "r1", prompt: "hi" });
+
+    expect(calls[0]?.runsIn).toBe("unsandboxed");
+    expect(result.tightened).toBe("allow");
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  test("a default-runsIn user gate hook on the same event and profile still fails closed with the sandbox reason", async () => {
+    const { runner, calls } = sandboxUnavailableRunner();
+    const registrations: HookRegistration[] = [commandReg({ id: "user.guard", event: "UserPromptSubmit", scope: "project", order: 0 })];
+    const runtime = createHookRuntime(baseCtx({ registrations, runner, profileId: "monitored-trusted-local", interactive: false }));
+
+    const result = await runtime.fire("UserPromptSubmit", { sessionId: "s1", runId: "r1", prompt: "hi" });
+
+    expect(calls[0]?.runsIn).toBe("sandbox");
+    expect(result.tightened).toBe("deny");
+    expect(result.records[0]?.failure).toBe("sandbox-unavailable");
+  });
+
+  test("under unattended-untrusted, keryx.security-check-input stays sandboxed and fails closed like before", async () => {
+    const { runner, calls } = sandboxUnavailableRunner();
+    const reg = BUILTIN_HOOK_REGISTRATIONS.find((r) => r.id === "keryx.security-check-input");
+    if (reg === undefined) throw new Error("keryx.security-check-input not found in BUILTIN_HOOK_REGISTRATIONS");
+    const runtime = createHookRuntime(baseCtx({ registrations: [reg], runner, profileId: "unattended-untrusted", interactive: false }));
+
+    const result = await runtime.fire("UserPromptSubmit", { sessionId: "s1", runId: "r1", prompt: "hi" });
+
+    expect(calls[0]?.runsIn).toBe("sandbox");
+    expect(result.tightened).toBe("deny");
+    expect(result.records[0]?.failure).toBe("sandbox-unavailable");
+  });
+
+  test("a project-configured hook with an explicit keryx.* id is a normal `project`-scope registration, not a `builtin`-scope one — it is unaffected by this override", async () => {
+    const { runner, calls } = sandboxUnavailableRunner();
+    const registrations: HookRegistration[] = [
+      commandReg({ id: "keryx.security-check-input", event: "UserPromptSubmit", scope: "project", order: 0 }),
+    ];
+    const runtime = createHookRuntime(baseCtx({ registrations, runner, profileId: "monitored-trusted-local", interactive: true }));
+
+    await runtime.fire("UserPromptSubmit", { sessionId: "s1", runId: "r1", prompt: "hi" });
+
+    expect(calls[0]?.runsIn).toBe("sandbox");
+  });
+});

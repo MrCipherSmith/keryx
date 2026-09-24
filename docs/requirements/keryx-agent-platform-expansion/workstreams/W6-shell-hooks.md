@@ -472,3 +472,38 @@ documenting it.
   `decision: "ask"` on a disqualifying failure and relying on
   `composeDecision`'s existing tighten-only rule. See docs/docs/hooks.md's
   "Extension points for W3 and W8" section for the two candidate paths.
+- **Built-in command hooks run unsandboxed off `required-fail-closed`
+  profiles (T15).** Wiring a real `HookRuntime` into ACP (`src/acp/
+  server.ts`) surfaced a usability regression the sandboxed-by-default design
+  above did not anticipate: `keryx.ctx-guard`, `keryx.security-check-input`
+  and `keryx.security-check-output` spawn the running `keryx` binary itself
+  — the same trust domain as the process that spawns them — but sandboxing
+  them anyway meant every ordinary prompt was denied on a host without a
+  working OS-sandbox launcher (no bubblewrap on Linux, in particular), via
+  the fail-closed `sandbox-unavailable` path. Since there is no containment
+  boundary between Keryx and Keryx, `resolveBuiltinCommandRunsIn`
+  (`src/harness/hooks/runtime.ts`) now resolves a `scope: "builtin"` +
+  `handler.kind: "command"` registration to `runsIn: "unsandboxed"` for
+  whichever `PolicyProfileId` is active on THIS `fire()`, whenever
+  `resolveLocalProfile(profileId).requiredControls.isolation !==
+  "required-fail-closed"` — `read-only-review` and `monitored-trusted-local`
+  today (`src/harness/policy/profiles.ts`). Under `unattended-untrusted`
+  (`required-fail-closed`), the three stay `sandbox` and fail closed exactly
+  as the original design specified — an unattended/untrusted turn gets no
+  exception. A user/project hook's own `runsIn` (default `sandbox`, same
+  `hook-sandbox-unavailable` fail-closed path) is never touched — the
+  override only ever widens a built-in's own registration, never a
+  configured one, even when a project file names an id starting with
+  `keryx.` (`config.ts` already refuses that as a built-in-id collision
+  before it can reach a `HookRegistration`, so the only way to see a
+  `keryx.*` id at `scope: "project"` is a runtime-constructed test double,
+  never a real load path). `keryx hooks list`/`keryx hooks test` (both now
+  accept `--profile <id>`) print the EFFECTIVE `runsIn` under that profile,
+  not just the registration's static default, so an operator can see which
+  mode a built-in will actually run in before relying on it. See
+  docs/docs/hooks.md's "Execution" section for the operator-facing writeup,
+  and `src/harness/hooks/runtime.test.ts`'s "built-in command hooks run
+  unsandboxed off required-isolation profiles" suite for the pinned
+  behavior (including the negative case: a `sandbox-unavailable` launcher
+  still fails a default-`runsIn` user hook closed on the exact same profile
+  and event).

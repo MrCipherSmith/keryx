@@ -163,6 +163,12 @@ describe("an `ask` terminates in a recorded denial (AC5)", () => {
       scanRoot: configDir,
       toolRegistry: registry(),
       containmentAvailable: () => true,
+      // Flow 306 (W6, T15): this suite calls `runRemoteTurn` directly,
+      // IN-PROCESS, inside `bun test` — a built-in command hook's
+      // `resolveKeryxArgv` fallback would resolve the test runner's own
+      // entry script, not `keryx`'s (see `RunTurnInput.hooksEnv`'s own doc
+      // comment). A real `keryx serve` process has no such problem.
+      hooksEnv: { KERYX_HOOKS: "off" },
     });
   }
 
@@ -299,6 +305,9 @@ describe("parity between the HTTP path and the local harness path (AC2)", () => 
       containmentAvailable: () => true,
       clock: () => "2026-08-01T00:00:00.000Z",
       newId: () => `00000000-0000-4000-8000-00000000000${counter++}`,
+      // Flow 306 (W6, T15): see the comment on the earlier `runRemoteTurn`
+      // call in this file — same in-process-test reason.
+      hooksEnv: { KERYX_HOOKS: "off" },
     });
 
     const remoteRecord = recordOf(remote.turnId, configDir);
@@ -346,6 +355,9 @@ describe("parity between the HTTP path and the local harness path (AC2)", () => 
       containmentAvailable: () => true,
       clock: () => "2026-08-01T00:00:00.000Z",
       newId: () => `00000000-0000-4000-8000-00000000000${counter++}`,
+      // Flow 306 (W6, T15): see the comment on the earlier `runRemoteTurn`
+      // call in this file — same in-process-test reason.
+      hooksEnv: { KERYX_HOOKS: "off" },
     });
 
     expect(remote.result.origin).toBe(REMOTE_ORIGIN);
@@ -374,6 +386,9 @@ describe("parity between the HTTP path and the local harness path (AC2)", () => 
       containmentAvailable: () => true,
       clock: () => "2026-08-01T00:00:00.000Z",
       newId: () => `00000000-0000-4000-8000-00000000000${counter++}`,
+      // Flow 306 (W6, T15): see the comment on the earlier `runRemoteTurn`
+      // call in this file — same in-process-test reason.
+      hooksEnv: { KERYX_HOOKS: "off" },
     });
 
     // A `deny` is not an `ask`: the turn completes rather than being denied for

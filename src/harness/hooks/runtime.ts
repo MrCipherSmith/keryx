@@ -25,6 +25,7 @@ import { tightenOutcome } from "./compose";
 import { buildHookEnv } from "./runner";
 import { failureEffect } from "./semantics";
 import { GATE_CAPABLE_EVENTS, PER_TOOL_EVENTS } from "./types";
+import { resolveLocalProfile } from "../policy/profiles";
 import type {
   HookAnomalyName,
   HookEventName,
@@ -34,6 +35,43 @@ import type {
 } from "./types";
 import type { HookProcessRunner } from "./runner";
 import type { PolicyOutcome, PolicyProfileId } from "../policy/types";
+
+/**
+ * The `runsIn` a built-in COMMAND hook actually spawns with, for THIS fire
+ * (flow 306, W6, T15).
+ *
+ * A built-in gate hook (`keryx.ctx-guard`, `keryx.security-check-input`,
+ * `keryx.security-check-output`) spawns the running `keryx` binary itself —
+ * the same trust domain and containment as the Keryx process that spawns it,
+ * not an untrusted third-party command. Wrapping it in the OS sandbox adds no
+ * containment (there is no boundary between Keryx and Keryx) while making the
+ * hook load-bearing on a launcher (`bwrap`/`sandbox-exec`) that is frequently
+ * unavailable — a Linux user without bubblewrap would see EVERY prompt denied
+ * by `keryx.security-check-input`'s fail-closed sandbox-unavailable path,
+ * which is a usability regression, not a security gain.
+ *
+ * So a built-in command hook runs `unsandboxed` whenever the active profile's
+ * isolation is not `required-fail-closed` (`read-only-review` and
+ * `monitored-trusted-local` today — see `policy/profiles.ts`). Under a
+ * profile that DOES require fail-closed isolation (`unattended-untrusted`),
+ * the built-in stays sandboxed and fails closed exactly like before — an
+ * unattended/untrusted turn gets no exception.
+ *
+ * User/project hooks are unaffected: this only ever widens a `scope:
+ * "builtin"` + `handler.kind: "command"` registration, so a project's own
+ * configured hook keeps whatever `runsIn` its registration resolved to
+ * (default `sandbox`, fail-closed when the launcher is unavailable).
+ */
+export function resolveBuiltinCommandRunsIn(
+  reg: Pick<HookRegistration, "scope" | "handler" | "runsIn">,
+  profileId: PolicyProfileId,
+): "sandbox" | "unsandboxed" {
+  if (reg.scope !== "builtin" || reg.handler.kind !== "command") {
+    return reg.runsIn;
+  }
+  const isolationRequired = resolveLocalProfile(profileId).requiredControls.isolation === "required-fail-closed";
+  return isolationRequired ? "sandbox" : "unsandboxed";
+}
 
 export interface HookRuntimePorts {
   learningSink?: LearningObservationSink;
@@ -287,6 +325,7 @@ class HookRuntimeImpl implements HookRuntime {
     event: HookEventName,
     payload: Record<string, unknown>,
     ctx: FireContext,
+    fireProfileId: PolicyProfileId,
   ): Promise<HookRunOutcome> {
     if (reg.handler.kind !== "command") throw new Error("runCommandHook requires a command handler");
     const stdinObj = buildHookStdin(event, payload, {
@@ -312,7 +351,7 @@ class HookRuntimeImpl implements HookRuntime {
       stdin: JSON.stringify(stdinObj),
       timeoutMs: reg.timeoutMs,
       network: reg.network,
-      runsIn: reg.runsIn,
+      runsIn: resolveBuiltinCommandRunsIn(reg, fireProfileId),
     });
     const parsed = parseHookResult(
       { exitCode: raw.exitCode, stdout: raw.stdout, stderr: raw.stderr, timedOut: raw.timedOut, ...(raw.spawnError !== undefined ? { spawnError: raw.spawnError } : {}) },
@@ -434,9 +473,10 @@ class HookRuntimeImpl implements HookRuntime {
     event: HookEventName,
     payload: Record<string, unknown>,
     ctx: FireContext,
+    fireProfileId: PolicyProfileId,
   ): Promise<HookRunOutcome> {
     return reg.handler.kind === "command"
-      ? this.runCommandHook(reg, event, payload, ctx)
+      ? this.runCommandHook(reg, event, payload, ctx, fireProfileId)
       : this.runBuiltinHook(reg, event, payload, ctx);
   }
 
@@ -455,7 +495,7 @@ class HookRuntimeImpl implements HookRuntime {
     const outcomes: HookRunOutcome[] = [];
 
     for (const reg of gateGroup) {
-      const outcome = await this.runOneHook(reg, event, payload, ctx);
+      const outcome = await this.runOneHook(reg, event, payload, ctx, fireProfileId);
       outcomes.push(outcome);
       if (outcome.decision === "deny") {
         break; // First deny short-circuits the remaining gate hooks for this event.
@@ -472,7 +512,7 @@ class HookRuntimeImpl implements HookRuntime {
         const raced = await Promise.race<
           { timedOut: false; outcome: HookRunOutcome } | { timedOut: true }
         >([
-          this.runOneHook(reg, event, payload, ctx).then((outcome) => ({ timedOut: false as const, outcome })),
+          this.runOneHook(reg, event, payload, ctx, fireProfileId).then((outcome) => ({ timedOut: false as const, outcome })),
           delay(reg.timeoutMs).then(() => ({ timedOut: true as const })),
         ]);
         if (raced.timedOut) {
