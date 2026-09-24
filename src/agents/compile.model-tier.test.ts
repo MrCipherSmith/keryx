@@ -18,7 +18,7 @@ const MODEL_NAME_PATTERN = new RegExp(
 
 function fixture(model_tier: ModelTier): AgentDefinition {
   return {
-    name: "tdd-guide",
+    name: "test-first-driver",
     description: "Drives a failing-test-first implementation loop.",
     role: "You write a failing test before any implementation change.",
     tools: ["read_file", "apply_patch"],

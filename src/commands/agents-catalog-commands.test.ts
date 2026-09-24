@@ -29,7 +29,7 @@ describe("keryx agents list", () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("list", [], { cwd: REPO_ROOT, log, error });
     const text = lines.join("\n");
-    for (const name of ["architect", "planner", "code-explorer", "tdd-guide"]) {
+    for (const name of ["design-advisor", "work-planner", "codebase-navigator", "test-first-driver"]) {
       expect(text).toContain(name);
     }
   });
@@ -60,7 +60,7 @@ describe("keryx agents list", () => {
 describe("keryx agents show", () => {
   test("renders frontmatter summary and the compiled keryx-shell task", async () => {
     const { lines, log, error } = collect();
-    await agentsCatalogCommand("show", ["architect"], { cwd: REPO_ROOT, log, error });
+    await agentsCatalogCommand("show", ["design-advisor"], { cwd: REPO_ROOT, log, error });
     const text = lines.join("\n");
     expect(text).toContain("model_tier: deep");
     expect(text).toContain("policy_profile: read-only");
@@ -70,9 +70,9 @@ describe("keryx agents show", () => {
 
   test("--json emits the definition, source, and compiled result", async () => {
     const { lines, log, error } = collect();
-    await agentsCatalogCommand("show", ["architect", "--json"], { cwd: REPO_ROOT, log, error });
+    await agentsCatalogCommand("show", ["design-advisor", "--json"], { cwd: REPO_ROOT, log, error });
     const doc = JSON.parse(lines.join("\n")) as { definition: { name: string }; compiled: { target: string } };
-    expect(doc.definition.name).toBe("architect");
+    expect(doc.definition.name).toBe("design-advisor");
     expect(doc.compiled.target).toBe("keryx-shell");
   });
 
@@ -94,7 +94,7 @@ describe("keryx agents show", () => {
 describe("keryx agents export", () => {
   test("--dry-run plans without writing, for a real bundled agent", async () => {
     const { lines, log, error } = collect();
-    await agentsCatalogCommand("export", ["--runtime", "claude", "architect", "--dry-run", "--json"], {
+    await agentsCatalogCommand("export", ["--runtime", "claude", "design-advisor", "--dry-run", "--json"], {
       cwd: tmpRoot,
       log,
       error,
@@ -115,7 +115,7 @@ describe("keryx agents export", () => {
 
   test("keryx-shell runtime prints the compiled spawn_subagent input", async () => {
     const { lines, log, error } = collect();
-    await agentsCatalogCommand("export", ["--runtime", "keryx-shell", "architect", "--json"], {
+    await agentsCatalogCommand("export", ["--runtime", "keryx-shell", "design-advisor", "--json"], {
       cwd: tmpRoot,
       log,
       error,
@@ -132,7 +132,7 @@ describe("keryx agents export", () => {
     // `.claude/agents/`, instruction-only → the prose fallback path), rather
     // than assuming which one this repo currently resolves to.
     const probe = collect();
-    await agentsCatalogCommand("export", ["--runtime", "claude", "architect", "--dry-run", "--json"], {
+    await agentsCatalogCommand("export", ["--runtime", "claude", "design-advisor", "--dry-run", "--json"], {
       cwd: tmpRoot,
       log: probe.log,
       error: probe.error,
@@ -143,7 +143,7 @@ describe("keryx agents export", () => {
     writeFileSync(path.join(tmpRoot, ...relativePath.split("/")), "# hand-authored, not keryx's\n", "utf8");
 
     const { lines, log, error } = collect();
-    await agentsCatalogCommand("export", ["--runtime", "claude", "architect", "--json"], { cwd: tmpRoot, log, error });
+    await agentsCatalogCommand("export", ["--runtime", "claude", "design-advisor", "--json"], { cwd: tmpRoot, log, error });
     const doc = JSON.parse(lines.join("\n")) as { plan: { action: string } };
     expect(doc.plan.action).toBe("refuse-unmanaged");
     expect(process.exitCode).toBe(1);
@@ -151,25 +151,25 @@ describe("keryx agents export", () => {
 
   test("a second export is unchanged; --dry-run never touches disk", async () => {
     const first = collect();
-    await agentsCatalogCommand("export", ["--runtime", "claude", "architect"], { cwd: tmpRoot, log: first.log, error: first.error });
+    await agentsCatalogCommand("export", ["--runtime", "claude", "design-advisor"], { cwd: tmpRoot, log: first.log, error: first.error });
     expect(process.exitCode).not.toBe(1);
 
     const second = collect();
-    await agentsCatalogCommand("export", ["--runtime", "claude", "architect", "--json"], { cwd: tmpRoot, log: second.log, error: second.error });
+    await agentsCatalogCommand("export", ["--runtime", "claude", "design-advisor", "--json"], { cwd: tmpRoot, log: second.log, error: second.error });
     const doc = JSON.parse(second.lines.join("\n")) as { plan: { action: string } };
     expect(doc.plan.action).toBe("unchanged");
   });
 
   test("an invalid --runtime is refused", async () => {
     const { errors, log, error } = collect();
-    await agentsCatalogCommand("export", ["--runtime", "gemini", "architect"], { cwd: tmpRoot, log, error });
+    await agentsCatalogCommand("export", ["--runtime", "gemini", "design-advisor"], { cwd: tmpRoot, log, error });
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("--runtime");
   });
 
   test("an unknown flag is refused rather than ignored", async () => {
     const { errors, log, error } = collect();
-    await agentsCatalogCommand("export", ["--runtime", "claude", "architect", "--wat"], { cwd: tmpRoot, log, error });
+    await agentsCatalogCommand("export", ["--runtime", "claude", "design-advisor", "--wat"], { cwd: tmpRoot, log, error });
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("Unknown flag");
   });
@@ -188,9 +188,9 @@ describe("keryx agents verify", () => {
 
   test("narrows to one agent by name", async () => {
     const { lines, log, error } = collect();
-    await agentsCatalogCommand("verify", ["architect", "--json"], { cwd: REPO_ROOT, log, error });
+    await agentsCatalogCommand("verify", ["design-advisor", "--json"], { cwd: REPO_ROOT, log, error });
     const report = JSON.parse(lines.join("\n")) as { agents: Array<{ name: string }> };
-    expect(report.agents.map((a) => a.name)).toEqual(["architect"]);
+    expect(report.agents.map((a) => a.name)).toEqual(["design-advisor"]);
   });
 
   test("an unknown name exits non-zero with the not-found reason", async () => {

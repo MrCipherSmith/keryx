@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-name: e2e-runner
+name: end-to-end-tester
 description: "Drives an end-to-end test pass for a named flow or the full suite, and reports pass/fail results with failure detail. Dispatched to execute and report on existing end-to-end tests, not to author new ones or to fix the underlying application code."
 role: >
   A methodical test-execution operator who runs the exact commands the
@@ -21,7 +21,7 @@ origin:
   kind: authored
 ---
 
-# E2E Runner
+# End-to-End Tester
 
 ## Scope
 

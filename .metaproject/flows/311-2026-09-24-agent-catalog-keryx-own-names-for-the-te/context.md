@@ -55,4 +55,43 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+Rename map (old → new):
+architect→design-advisor, planner→work-planner, code-explorer→codebase-navigator,
+tdd-guide→test-first-driver, refactor-cleaner→refactoring-steward,
+silent-failure-hunter→error-path-auditor, doc-updater→docs-maintainer,
+security-reviewer→security-auditor, performance-reviewer→performance-auditor,
+e2e-runner→end-to-end-tester.
+
+Bundled agent source files: `src/gdskills/bundled/agents/<name>.md` (10
+files, YAML frontmatter `name`/`description`/`role`/`tools`/`model_tier`/
+`policy_profile`/`skills`/`output_contract`/`isolation`/`origin` + Markdown
+body). Example read: `architect.md` — body has a `## Scope`/`## Procedure`/
+`## Report` structure driven by the name/role, needs prose rewrite not just
+find/replace.
+
+`keryx ctx rg -i -l "<name>" src docs` per old name (raw output in
+`.metaproject/data/gdctx/raw/`, gdctx routed) found:
+- `architect` and `planner` are common English words/substrings
+  (architecture, blueprint-planner, etc.) with 295 and 34 files respectively
+  — most hits are unrelated prose; only reference-position hits (the bundled
+  agent file itself, tests enumerating agent names, `W2-agent-catalog.md`,
+  `docs/docs/guides/agent-catalog.md`, `implementation-plan.md`) are in
+  scope. Narrow with a more specific pattern
+  (`architect\b`/`bundled/agents/architect`/`name: architect`) before
+  editing each hit.
+- The other eight names are near-unique substrings; small, precise file
+  sets:
+  - code-explorer: 16 files (mostly `src/agents/*.test.ts`, `agent-catalogue-xref.test.ts`, `agents-catalog-commands.test.ts`, `W2-agent-catalog.md`, `agent-catalog.md`, `implementation-plan.md`, and `code-explorer.md` itself)
+  - tdd-guide: 6 files (`compile.model-tier.test.ts`, `agents-catalog-commands.test.ts`, `agent-catalog.md`, `W2-agent-catalog.md`, `implementation-plan.md`, `tdd-guide.md`)
+  - refactor-cleaner: 4 files
+  - silent-failure-hunter: 4 files
+  - doc-updater: 4 files
+  - security-reviewer: 4 files
+  - performance-reviewer: 3 files
+  - e2e-runner: 4 files
+- `docs/requirements/keryx-agent-platform-expansion/workstreams/W2-agent-catalog.md`
+  ("Initial catalogue" table, line ~216-231) lists all ten names with roles;
+  it is versioned (`Version: 0.1.3` at top) — bump on edit.
+- No `brainstorm.md`/`README.md` under that requirements package currently
+  names the ten agents beyond `implementation-plan.md` (per the rg hit
+  lists above); confirm at implementation time with the same search.

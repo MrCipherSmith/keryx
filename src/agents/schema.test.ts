@@ -102,7 +102,7 @@ describe("agent-definition.schema.json parses and the validator agrees with it (
 });
 
 const VALID_FRONTMATTER = {
-  name: "code-explorer",
+  name: "codebase-navigator",
   description: "Read-only location and cross-reference search. Use for finding where something lives.",
   role: "You locate code and cross-references; you never write.",
   tools: ["read_file", "search_code"],
@@ -189,7 +189,7 @@ describe("buildAgentDefinition", () => {
     expect(definition.stacks).toEqual([]);
     expect(definition.isolation).toBe("none");
     expect(definition.body).toBe("Body text.");
-    expect(definition.name).toBe("code-explorer");
+    expect(definition.name).toBe("codebase-navigator");
   });
 });
 

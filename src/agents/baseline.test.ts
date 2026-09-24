@@ -10,7 +10,7 @@ import type { AgentDefinition } from "./types";
 
 const FIXTURES: readonly AgentDefinition[] = [
   {
-    name: "code-explorer",
+    name: "codebase-navigator",
     description: "Read-only location and cross-reference search.",
     role: "You locate code and cross-references; you never write.",
     tools: ["read_file", "search_code"],
@@ -23,7 +23,7 @@ const FIXTURES: readonly AgentDefinition[] = [
     body: "Find what the caller asked for and report file paths.",
   },
   {
-    name: "architect",
+    name: "design-advisor",
     description: "System-design and structural-tradeoff reasoning.",
     role: "You reason about structure and tradeoffs; you do not write code.",
     tools: ["read_file", "graph_affected"],

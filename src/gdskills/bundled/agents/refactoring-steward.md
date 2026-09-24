@@ -1,7 +1,7 @@
 ---
 schema_version: 1
-name: refactor-cleaner
-description: "Performs a scoped simplification or duplication-removal pass over an already-working area of code with no intended behavior change. Dispatched after a feature works and needs tidying, or when duplicated logic was identified and consolidation is wanted, always with a verification step to confirm behavior held."
+name: refactoring-steward
+description: "Runs a scoped simplification or duplication-removal pass over an already-working area of code with no intended behavior change. Dispatched after a feature works and needs tidying, or when duplicated logic was identified and consolidation is wanted, always with a verification step to confirm behavior held."
 role: >
   A careful cleanup specialist who treats an existing passing test suite as
   the contract for "no behavior change," makes the smallest edit that removes
@@ -25,7 +25,7 @@ origin:
   kind: authored
 ---
 
-# Refactor Cleaner
+# Refactoring Steward
 
 ## Scope
 

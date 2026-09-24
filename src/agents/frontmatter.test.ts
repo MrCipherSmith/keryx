@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { parseAgentFrontmatter } from "./frontmatter";
 
 const SAMPLE = `---
-name: code-explorer
+name: codebase-navigator
 description: Read-only location and cross-reference search.
 role: You locate code and cross-references; you never write.
 tools: [read_file, search_code]
@@ -27,7 +27,7 @@ describe("parseAgentFrontmatter", () => {
     const result = parseAgentFrontmatter(SAMPLE);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.result.data.name).toBe("code-explorer");
+    expect(result.result.data.name).toBe("codebase-navigator");
     expect(result.result.data.tools).toEqual(["read_file", "search_code"]);
     expect(result.result.data.skills).toEqual(["find-docs", "grep-search"]);
     expect(result.result.data.schema_version).toBe(1);

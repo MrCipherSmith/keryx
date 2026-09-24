@@ -57,7 +57,7 @@ afterEach(() => {
 
 describe("verifyAgents", () => {
   test("a clean definition verifies ok with every export runtime resolved", () => {
-    writeAgent(bundledRoot, "code-explorer", agentMarkdown("code-explorer"));
+    writeAgent(bundledRoot, "codebase-navigator", agentMarkdown("codebase-navigator"));
     const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
     expect(report.catalogErrors).toEqual([]);
     expect(report.ok).toBe(true);
@@ -241,7 +241,7 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
   });
 
   test("an unknown --name resolves to a single not-found row", () => {
-    writeAgent(bundledRoot, "code-explorer", agentMarkdown("code-explorer"));
+    writeAgent(bundledRoot, "codebase-navigator", agentMarkdown("codebase-navigator"));
     const report = verifyAgents(projectRoot, { bundledRoot, name: "no-such-agent", skillExists: ALWAYS_SKILL_EXISTS });
     expect(report.ok).toBe(false);
     expect(report.agents).toHaveLength(1);
@@ -250,10 +250,10 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
   });
 
   test("--name narrows to just that one agent", () => {
-    writeAgent(bundledRoot, "code-explorer", agentMarkdown("code-explorer"));
-    writeAgent(bundledRoot, "architect", agentMarkdown("architect"));
-    const report = verifyAgents(projectRoot, { bundledRoot, name: "architect", skillExists: ALWAYS_SKILL_EXISTS });
-    expect(report.agents.map((a) => a.name)).toEqual(["architect"]);
+    writeAgent(bundledRoot, "codebase-navigator", agentMarkdown("codebase-navigator"));
+    writeAgent(bundledRoot, "design-advisor", agentMarkdown("design-advisor"));
+    const report = verifyAgents(projectRoot, { bundledRoot, name: "design-advisor", skillExists: ALWAYS_SKILL_EXISTS });
+    expect(report.agents.map((a) => a.name)).toEqual(["design-advisor"]);
   });
 
   test("a catalog load error (e.g. invalid schema) fails ok and is surfaced under catalogErrors, not as an agent row", () => {
