@@ -7,9 +7,9 @@
 // surface), not `.metaproject/data/integrations/install-state/<runtimeId>.json`
 // (W5-b's).
 
-import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isPathInside, pathExists } from "../../lib/fs";
+import { pathExists } from "../../lib/fs";
 import { sha256OfFile, type InstallState, type InstalledModuleRecord } from "../../integrations/install-state";
 import { validateAgainstSchemaObject } from "../../contracts/validator";
 import installManifestSchemaJson from "../../../docs/requirements/keryx-agent-platform-expansion/schemas/install-manifest.schema.json" with {
@@ -82,35 +82,70 @@ export async function skillsInstallStateIsUnreadable(repoRoot: string, target: s
 
 export type ContainedPathResult = { ok: true; abs: string } | { ok: false; reason: string };
 
-/** The nearest existing ancestor directory of `target` (including `target` itself if it exists). */
-async function nearestExistingAncestor(target: string): Promise<string> {
-  let dir = target;
-  for (;;) {
-    if (await pathExists(dir)) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return dir; // reached the filesystem root without finding anything
-    dir = parent;
-  }
+/** True when any `/`- or `\`-separated segment of `relPath` is literally `..`. */
+function hasDotDotSegment(relPath: string): boolean {
+  return relPath.split(/[\\/]/).some((segment) => segment === "..");
+}
+
+/** `rel` (posix-separated, project-relative, no leading/trailing slash) is `root` or a descendant of it — compared by whole path segments, never a raw string prefix (so `.claude/skillsX` never matches root `.claude/skills`). */
+function isUnderDestinationRoot(rel: string, root: string): boolean {
+  return rel === root || rel.startsWith(`${root}/`);
 }
 
 /**
- * F2/F3 class fix: the single containment guard for every place that turns a
- * path RECORDED in install-state (never one this process just computed
- * itself from the trusted destination table) into a filesystem operation —
- * `uninstall.ts`'s `rm`, `doctor.ts`'s re-hash/orphan-scan, and `apply.ts`'s
- * read of prior state. Refuses:
+ * R2-1/R2-2: walk every segment of `relPath` from `repoRoot` down to (and
+ * including) the leaf, `lstat`-ing each one that exists. Any segment that IS
+ * a symlink — an intermediate ancestor (e.g. a symlinked `.claude/`) or the
+ * leaf itself (e.g. a destination file that is itself a symlink to
+ * somewhere outside the project) — means the path this process would
+ * actually touch on disk cannot be trusted from the textual/resolved
+ * comparison alone, so the whole path is refused. A segment that does not
+ * exist yet ends the walk (nothing further down can exist either under
+ * normal filesystem semantics) and is not itself a violation.
+ */
+async function hasSymlinkSegment(repoRoot: string, posixRel: string): Promise<boolean> {
+  const segments = posixRel.split("/").filter((segment) => segment.length > 0);
+  let current = repoRoot;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    let stat;
+    try {
+      stat = await lstat(current);
+    } catch {
+      return false;
+    }
+    if (stat.isSymbolicLink()) return true;
+  }
+  return false;
+}
+
+/**
+ * F2/F3 class fix (hardened R2-1/R2-2): the single containment guard for
+ * every place that turns a path RECORDED in install-state (never one this
+ * process just computed itself from the trusted destination table) into a
+ * filesystem operation — `uninstall.ts`'s `rm`, `doctor.ts`'s
+ * re-hash/orphan-scan, and `apply.ts`'s read of prior state AND its own
+ * write of new files. Refuses:
  *   - an absolute path (a recorded path is always project-relative);
- *   - any path whose textual resolution against `repoRoot` escapes it (`..`);
- *   - a path that, once resolved through real symlinks (an intermediate
- *     directory — e.g. a symlinked `.claude/` — pointing outside the
- *     project), no longer resolves under `repoRoot`;
- *   - (when `destinationRoots` is given) a path not under any of the
- *     target's own known destination roots — a record naming a real,
- *     contained file OUTSIDE those roots is still not something this
- *     target's install/doctor/uninstall surface could ever have written.
+ *   - a raw path containing a `..` segment or a backslash at all — state is
+ *     Keryx-written, so either one means tampering, even if the path would
+ *     textually normalize to somewhere inside the root (R2-1);
+ *   - any path whose NORMALIZED resolution against `repoRoot`
+ *     (`path.relative` after `path.resolve`) is empty or escapes it (`..`)
+ *     or is itself absolute;
+ *   - (when `destinationRoots` is given) a normalized path not under any of
+ *     the target's own known destination roots, compared by whole path
+ *     segments rather than a raw string prefix — a record naming a real,
+ *     contained file OUTSIDE those roots (or under a same-prefixed sibling
+ *     directory, e.g. `.claude/skillsX`) is still not something this
+ *     target's install/doctor/uninstall surface could ever have written;
+ *   - a path where any existing segment from `repoRoot` down to the leaf —
+ *     including the leaf itself — is a symlink (R2-2): such a path can be
+ *     made to point anywhere on disk regardless of where it textually or
+ *     even real-path resolves to.
  * A record failing this check makes the WHOLE install-state document
- * untrustworthy (see callers): this function only classifies one path, it
- * never mutates or reads file content.
+ * untrustworthy (see callers): this function only classifies one path — it
+ * never mutates file content (it does `lstat` the path's own segments).
  */
 export async function resolveContainedPath(
   repoRoot: string,
@@ -123,13 +158,23 @@ export async function resolveContainedPath(
   if (path.isAbsolute(relPath)) {
     return { ok: false, reason: `absolute path "${relPath}" is not allowed in recorded install-state` };
   }
-  const abs = path.join(repoRoot, relPath);
-  if (!isPathInside(repoRoot, abs)) {
+  if (relPath.includes("\\") || hasDotDotSegment(relPath)) {
+    return {
+      ok: false,
+      reason: `path "${relPath}" contains a ".." segment or a backslash, which is never valid in recorded install-state`,
+    };
+  }
+
+  const resolvedRoot = path.resolve(repoRoot);
+  const abs = path.resolve(resolvedRoot, relPath);
+  const rel = path.relative(resolvedRoot, abs);
+  if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) {
     return { ok: false, reason: `path "${relPath}" escapes the project root` };
   }
+  const posixRel = rel.split(path.sep).join("/");
+
   if (destinationRoots !== undefined && destinationRoots.length > 0) {
-    const posixRel = relPath.split(path.sep).join("/");
-    const contained = destinationRoots.some((root) => posixRel === root || posixRel.startsWith(`${root}/`));
+    const contained = destinationRoots.some((root) => isUnderDestinationRoot(posixRel, root));
     if (!contained) {
       return {
         ok: false,
@@ -138,15 +183,11 @@ export async function resolveContainedPath(
     }
   }
 
-  // Symlink escape: an intermediate directory (e.g. a symlinked `.claude/`)
-  // can make a textually-contained path resolve outside `repoRoot` on disk.
-  // Walk up to the nearest existing ancestor and compare ITS real path
-  // against the real path of `repoRoot` — `abs` itself need not exist yet.
-  const resolvedRoot = await realpath(repoRoot).catch(() => repoRoot);
-  const ancestor = await nearestExistingAncestor(path.dirname(abs));
-  const resolvedAncestor = await realpath(ancestor).catch(() => ancestor);
-  if (!isPathInside(resolvedRoot, resolvedAncestor)) {
-    return { ok: false, reason: `path "${relPath}" resolves outside the project root through a symlink` };
+  if (await hasSymlinkSegment(resolvedRoot, posixRel)) {
+    return {
+      ok: false,
+      reason: `path "${relPath}" resolves through a symlink (an ancestor directory or the destination itself)`,
+    };
   }
 
   return { ok: true, abs };

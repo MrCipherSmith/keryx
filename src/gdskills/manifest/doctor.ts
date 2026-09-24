@@ -3,13 +3,16 @@
 // `orphaned` files found under this target's own destination roots that
 // install-state does not know about.
 //
-// "Orphaned" is bounded and deterministic by construction: only the fixed
-// destination ROOTS this target's v1 destination table can ever write under
-// (`.claude/skills`, `.claude/rules` for `claude`; `.metaproject/skills/gdskills`,
-// `.metaproject/rules/core` for `keryx-shell`) are walked — never the whole
-// project tree — so a file the module system never could have written is
-// never reported as orphaned, and the scan cost is bounded by those roots'
-// size alone.
+// The orphan SCAN is bounded and deterministic by construction: only the
+// fixed destination ROOTS this target's v1 destination table can ever write
+// under (`.claude/skills`, `.claude/rules` for `claude`;
+// `.metaproject/skills/gdskills`, `.metaproject/rules/core` for
+// `keryx-shell`) are walked — never the whole project tree — so the scan
+// cost is bounded by those roots' size alone. It does NOT mean every
+// orphaned entry is one Keryx itself could have written: a root can also
+// hold files the operator put there directly (e.g. a hand-authored
+// `.claude/rules/my-own.md`). R2-7: that is reported, but it is a WARNING,
+// not a failure — see `DoctorReport.ok`.
 
 import { readdir } from "node:fs/promises";
 import path from "node:path";
@@ -28,6 +31,13 @@ export interface DoctorEntry {
 export interface DoctorReport {
   target: string;
   entries: DoctorEntry[];
+  /**
+   * R2-7: true unless a RECORDED path is `drifted`/`missing`, or
+   * `invalidState` is non-empty. An `orphaned` entry never makes this
+   * false — it is a file under this target's destination roots that
+   * install-state doesn't know about, which is routinely the operator's
+   * own file (untouched by Keryx) rather than a problem to fix.
+   */
   ok: boolean;
   /**
    * F2/F17: non-empty when the recorded install-state itself could not be
@@ -122,5 +132,14 @@ export async function doctorInstall(repoRoot: string, target: string): Promise<D
   }
 
   entries.sort((a, b) => a.path.localeCompare(b.path));
-  return { target, entries, ok: entries.every((e) => e.status === "ok"), invalidState: [] };
+  // R2-7: `orphaned` is a WARNING, not a failure — the orphan scan walks
+  // this target's whole destination roots (see module docstring), so it
+  // necessarily also finds files Keryx never wrote there: a user's own
+  // `.claude/rules/my-own.md`, an editor swap file, etc. `ok` (and this
+  // command's exit code) reflects only the recorded install-state itself:
+  // every recorded path must be `ok` — `drifted`/`missing` (or an
+  // `invalidState`, handled above) are real problems; a file this target's
+  // manifest never produced sitting in its destination root is not one.
+  const ok = entries.every((e) => e.status === "ok" || e.status === "orphaned");
+  return { target, entries, ok, invalidState: [] };
 }

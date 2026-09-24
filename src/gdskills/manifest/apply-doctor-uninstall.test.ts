@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "bun:test";
@@ -314,6 +314,101 @@ test("F17: a corrupt/unparseable install-state file is reported as invalid, not 
   const applied = await applyInstall(plan, root);
   expect(applied.ok).toBe(false);
   expect(applied.errors.length).toBeGreaterThan(0);
+});
+
+/**
+ * R2-1 regression: review round 2's `trav2.ts` repro recorded
+ * `.claude/skills/../../package.json` — it resolves to `<root>/package.json`
+ * (inside root) and textually STARTS WITH `.claude/skills/`, which round
+ * 1's string-prefix destination-root check accepted. `doctor` then hashed
+ * `package.json` as "ok", and `uninstall`/`uninstall --force` deleted it.
+ * The repo-relative repository file used here stands in for `package.json`.
+ */
+test("R2-1: doctor refuses and uninstall (with or without --force) deletes nothing for a `..`-laundered path that textually starts with a destination root", async () => {
+  const targetFile = path.join(root, "package.json");
+  await writeFile(targetFile, '{"name":"victim"}\n', "utf8");
+  await writeUnsafeState("claude", [".claude/skills/../../package.json"]);
+
+  const doctor = await doctorInstall(root, "claude");
+  expect(doctor.ok).toBe(false);
+  expect(doctor.entries).toEqual([]);
+  expect(doctor.invalidState.length).toBeGreaterThan(0);
+
+  const result = await uninstallInstall(root, "claude");
+  expect(result.ok).toBe(false);
+  expect(result.removed).toEqual([]);
+  expect(result.error).toBeDefined();
+  await expect(readFile(targetFile, "utf8")).resolves.toBe('{"name":"victim"}\n');
+
+  const forced = await uninstallInstall(root, "claude", { force: true });
+  expect(forced.ok).toBe(false);
+  expect(forced.removed).toEqual([]);
+  await expect(readFile(targetFile, "utf8")).resolves.toBe('{"name":"victim"}\n');
+});
+
+test("R2-1: uninstall --force deletes nothing for a `..`-laundered path reaching .git/config", async () => {
+  await mkdir(path.join(root, ".git"), { recursive: true });
+  const gitConfig = path.join(root, ".git", "config");
+  await writeFile(gitConfig, "[core]\n", "utf8");
+  await writeUnsafeState("claude", [".claude/skills/../../.git/config"]);
+
+  const forced = await uninstallInstall(root, "claude", { force: true });
+  expect(forced.ok).toBe(false);
+  expect(forced.removed).toEqual([]);
+  await expect(readFile(gitConfig, "utf8")).resolves.toBe("[core]\n");
+});
+
+test("R2-1: doctor refuses a path under a same-prefixed sibling directory (`.claude/skillsX`) confused for the real destination root", async () => {
+  await mkdir(path.join(root, ".claude", "skillsX"), { recursive: true });
+  await writeFile(path.join(root, ".claude", "skillsX", "evil.mdc"), "x\n", "utf8");
+  await writeUnsafeState("claude", [".claude/skillsX/evil.mdc"]);
+  const doctor = await doctorInstall(root, "claude");
+  expect(doctor.ok).toBe(false);
+  expect(doctor.invalidState.length).toBeGreaterThan(0);
+});
+
+/**
+ * R2-2 regression: review round 2's `leaf.ts` repro showed `apply --force`
+ * writing THROUGH a destination file that is itself a symlink pointing
+ * outside the project — round 1's symlink guard only checked the nearest
+ * existing ANCESTOR directory, never the leaf. The plan's own destination
+ * must be refused (skipped, not force-written) when it is a symlink.
+ */
+test("R2-2: apply --force refuses to write through a symlinked destination leaf; the symlink's target is left untouched", async () => {
+  const outside = await mkdtemp(path.join(tmpdir(), "keryx-outside-"));
+  try {
+    const victim = path.join(outside, "victim.txt");
+    await writeFile(victim, "original outside content\n", "utf8");
+    await mkdir(path.join(root, ".claude", "rules"), { recursive: true });
+    await symlink(victim, path.join(root, ".claude", "rules", "a.mdc"));
+
+    const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+    expect(plan.ok).toBe(true);
+    const result = await applyInstall(plan, root, { force: true });
+
+    expect(result.ok).toBe(false);
+    expect(result.written).not.toContain(".claude/rules/a.mdc");
+    expect(result.skipped.some((s) => s.path === ".claude/rules/a.mdc")).toBe(true);
+    await expect(readFile(victim, "utf8")).resolves.toBe("original outside content\n");
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+/**
+ * R2-7 regression: the orphan scan is bounded to this target's destination
+ * roots, but those roots can legitimately hold files the operator authored
+ * by hand (never installed by Keryx). Such a file is reported `orphaned`
+ * but must not make `doctor` fail.
+ */
+test("R2-7: doctor reports a hand-authored file under a destination root as orphaned but stays ok", async () => {
+  await mkdir(path.join(root, ".claude", "rules"), { recursive: true });
+  await writeFile(path.join(root, ".claude", "rules", "my-own.md"), "the operator's own file\n", "utf8");
+
+  const doctor = await doctorInstall(root, "claude");
+  expect(doctor.ok).toBe(true);
+  const byPath = new Map(doctor.entries.map((e) => [e.path, e.status]));
+  expect(byPath.get(".claude/rules/my-own.md")).toBe("orphaned");
 });
 
 test("F17: doctor's orphan scan roots include the stack-pack-namespaced rules root for keryx-shell (shared with the planner's destination table)", async () => {

@@ -4,7 +4,7 @@
 // legacy profile id onto the manifest path.
 
 import { expect, test } from "bun:test";
-import { installNeedsManifestPreviewNote, installRoute } from "./skills";
+import { installNeedsManifestPreviewNote, installRoute, valuelessFlagError, valuelessRepeatedFlagError } from "./skills";
 
 test("a legacy profile id with no manifest flags at all stays on the legacy path", () => {
   expect(installRoute("minimal", false)).toBe("legacy");
@@ -69,4 +69,49 @@ test("F18: dry-run and a real apply of the SAME argv (minus --dry-run) select th
   // exists: the CLI cannot make --dry-run's preview and a flag-less apply
   // agree without inventing a legacy dry-run, so it names the divergence
   // instead of hiding it.
+});
+
+// R2-8: `install`/`doctor`/`uninstall`'s `--target` (and `--profile`,
+// `--module`, `--with`, `--without`) must error on a valueless occurrence
+// rather than silently falling back to the default — the same class F3/F9/
+// F13 already fixed for `--target`'s VALUE validation, `--trials`/
+// `--strictness`, and `--cwd`.
+test("R2-8: valuelessFlagError is undefined when the flag is absent entirely", () => {
+  expect(valuelessFlagError(["--json"], "--target")).toBeUndefined();
+  expect(valuelessFlagError([], "--target")).toBeUndefined();
+});
+
+test("R2-8: valuelessFlagError is undefined when the flag has a real value, either spelling", () => {
+  expect(valuelessFlagError(["--target", "claude"], "--target")).toBeUndefined();
+  expect(valuelessFlagError(["--target=claude"], "--target")).toBeUndefined();
+});
+
+test("R2-8: valuelessFlagError errors for a bare trailing flag", () => {
+  expect(valuelessFlagError(["--json", "--target"], "--target")).toBe("--target requires a value.");
+});
+
+test("R2-8: valuelessFlagError errors when the flag is immediately followed by another flag", () => {
+  expect(valuelessFlagError(["--target", "--json"], "--target")).toBe("--target requires a value.");
+});
+
+test("R2-8: valuelessFlagError errors for an empty `--flag=` value", () => {
+  expect(valuelessFlagError(["--target="], "--target")).toBe("--target requires a value.");
+});
+
+test("R2-8: valuelessRepeatedFlagError is undefined when --with is absent or has real values", () => {
+  expect(valuelessRepeatedFlagError(["--json"], "--with")).toBeUndefined();
+  expect(valuelessRepeatedFlagError(["--with", "lang:python", "--with", "lang:go"], "--with")).toBeUndefined();
+  expect(valuelessRepeatedFlagError(["--with=lang:python"], "--with")).toBeUndefined();
+});
+
+test("R2-8: valuelessRepeatedFlagError errors for a bare trailing --with, --with followed by a flag, or --with=", () => {
+  expect(valuelessRepeatedFlagError(["--with"], "--with")).toBe("--with requires a value.");
+  expect(valuelessRepeatedFlagError(["--with", "--json"], "--with")).toBe("--with requires a value.");
+  expect(valuelessRepeatedFlagError(["--with="], "--with")).toBe("--with requires a value.");
+});
+
+test("R2-8: a valueless --target in real argv is caught even alongside a valid --with", () => {
+  expect(valuelessFlagError(["--with", "lang:python", "--target", "--json"], "--target")).toBe(
+    "--target requires a value.",
+  );
 });

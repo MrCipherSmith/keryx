@@ -228,6 +228,37 @@ const LEGACY_INSTALL_PROFILES = new Set(["minimal", "recommended", "full", "cust
  * `recommended` profile, matching the pre-existing behaviour exactly.
  */
 /**
+ * R2-8: a flag present on the command line but with no usable value — a
+ * bare trailing token, one immediately followed by another flag
+ * (`--target --json`), or an empty `--flag=` value — must be a hard CLI
+ * error, not a silent fallback to the default (F3/F9/F13 fixed the same
+ * class for `--strictness`/`--trials`/`--cwd` elsewhere; this is the
+ * `install`/`doctor`/`uninstall` residual). Returns an error message, or
+ * `undefined` when the flag is genuinely absent, or present with a
+ * non-empty value. Exported for direct unit testing (skills-install-route.test.ts).
+ */
+export function valuelessFlagError(args: string[], name: string): string | undefined {
+  const value = optionValue(args, name);
+  if (value !== undefined && value.length > 0) return undefined;
+  const givenWithoutUsableValue = value === "" || args.includes(name);
+  return givenWithoutUsableValue ? `${name} requires a value.` : undefined;
+}
+
+/** Same as {@link valuelessFlagError}, for a repeatable flag such as `--with`/`--without` (see `collectRepeatedOption`). */
+export function valuelessRepeatedFlagError(args: string[], name: string): string | undefined {
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === name) {
+      const next = args[i + 1];
+      if (next === undefined || next.startsWith("--")) return `${name} requires a value.`;
+    } else if (arg === `${name}=`) {
+      return `${name} requires a value.`;
+    }
+  }
+  return undefined;
+}
+
+/**
  * F3: validate a raw `--target` string against the harness-id enum AND the
  * v1 destination table (`claude`, `keryx-shell`) before it reaches
  * `planInstall`/`doctorInstall`/`uninstallInstall` — those now refuse an
@@ -291,6 +322,23 @@ export function installNeedsManifestPreviewNote(
 }
 
 async function installSkillsCommand(args: string[]): Promise<void> {
+  // R2-8: check every flag this command reads for a valueless occurrence
+  // before any of it is used to decide legacy-vs-manifest routing — a
+  // silently-defaulted `--target`/`--profile`/`--with`/`--without` must
+  // never install a different, unintended plan.
+  for (const error of [
+    valuelessFlagError(args, "--profile"),
+    valuelessFlagError(args, "--target"),
+    valuelessRepeatedFlagError(args, "--with"),
+    valuelessRepeatedFlagError(args, "--without"),
+  ]) {
+    if (error !== undefined) {
+      console.error(error);
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   const profileArg = optionValue(args, "--profile");
   const withValues = collectRepeatedOption(args, "--with");
   const withoutValues = collectRepeatedOption(args, "--without");
@@ -521,6 +569,12 @@ async function installFromManifest(opts: {
 }
 
 async function doctorSkillsCommand(args: string[]): Promise<void> {
+  const targetFlagError = valuelessFlagError(args, "--target");
+  if (targetFlagError !== undefined) {
+    console.error(targetFlagError);
+    process.exitCode = 1;
+    return;
+  }
   const targetArg = optionValue(args, "--target");
   const json = args.includes("--json");
   const targetValidation = validateTargetArg(targetArg);
@@ -554,6 +608,13 @@ async function doctorSkillsCommand(args: string[]): Promise<void> {
 }
 
 async function uninstallSkillsCommand(args: string[]): Promise<void> {
+  for (const error of [valuelessFlagError(args, "--target"), valuelessFlagError(args, "--module")]) {
+    if (error !== undefined) {
+      console.error(error);
+      process.exitCode = 1;
+      return;
+    }
+  }
   const targetArg = optionValue(args, "--target");
   const moduleId = optionValue(args, "--module");
   const force = args.includes("--force");
@@ -1702,12 +1763,22 @@ Commands:
             --dry-run/--json/--include-deprecated, or a non-legacy profile id such as
             core|react|nestjs|python). --target only accepts claude|keryx-shell (the only
             targets with a v1 destination table) — any other value is a named error, never
-            an empty plan. NOTE: --dry-run/--json on a LEGACY profile id (minimal|full|...)
-            with no other manifest flag always previews the MANIFEST-driven installer's own
-            same-named profile, which can differ from the legacy install the same command
-            without --dry-run/--json would run; the CLI prints this note when it applies.
-  doctor    Compare recorded install-state to disk: ok/drifted/missing/orphaned per path
-  uninstall Remove only the paths recorded in install-state for a target (optionally one module)
+            an empty plan. --profile/--target/--with/--without given with no usable value
+            (a bare trailing flag, immediately followed by another flag, or --flag= with
+            nothing after it) is also a named error, never a silent default. NOTE:
+            --dry-run/--json on a LEGACY profile id (minimal|full|...) with no other
+            manifest flag always previews the MANIFEST-driven installer's own same-named
+            profile, which can differ from the legacy install the same command without
+            --dry-run/--json would run; the CLI prints this note when it applies.
+  doctor    Compare recorded install-state to disk: ok/drifted/missing/orphaned per path.
+            orphaned is a file under this target's destination roots that install-state
+            doesn't know about (often the operator's own file, e.g. .claude/rules/my-own.md)
+            — it is reported but never fails the command; only a drifted/missing recorded
+            path, or an unreadable/unsafe install-state file, sets a non-zero exit code.
+            --target with no usable value is a named error, never a silent default.
+  uninstall Remove only the paths recorded in install-state for a target (optionally one
+            module). --target/--module with no usable value is a named error, never a
+            silent default.
   create    Create a canonical project skill package
   generate  Alias for create
   import    Copy a SKILL.md or overlay tree into project-skills

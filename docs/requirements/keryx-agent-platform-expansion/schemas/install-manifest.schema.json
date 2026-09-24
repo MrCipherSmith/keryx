@@ -285,7 +285,7 @@
             "minLength": 1
           },
           "minItems": 1,
-          "description": "Absolute or project-relative paths Keryx wrote for this module on this target."
+          "description": "Project-relative, normalized paths Keryx wrote for this module on this target — never absolute, and never containing a \"..\" segment (R2-1/R2-10: an absolute path or one with a \"..\" segment is refused by every reader of install-state, not merely discouraged)."
         },
         "sha256": {
           "type": "object",

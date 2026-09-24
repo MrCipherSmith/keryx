@@ -464,20 +464,48 @@ history is inspectable without guessing from a git blame.
   resolving to an empty `ok` plan — and every module `kind` other than
   `rule`/`skill` (`agent-ref`, `hook-runtime`, `schema`, `doc`) still fails
   the plan with a named error per module, exactly as before.
-- **Install-state path safety (review round 1, F2/F3).** `state.ts`'s
-  `resolveContainedPath` is the one guard every place that turns a path
-  RECORDED in install-state into a filesystem operation goes through
-  (`uninstall.ts`'s removal, `doctor.ts`'s re-hash/orphan-exclusion,
-  `apply.ts`'s prior-state read) — it rejects an absolute path, a `..`
-  escape, a path outside the target's own destination roots, and a symlink
-  escape (e.g. a symlinked `.claude/`); a record failing it makes the WHOLE
-  install-state document untrustworthy for that call (`doctor` reports
-  `invalidState`, `uninstall`/`apply` refuse the whole operation and mutate
-  nothing). `state.ts`'s `readSkillsInstallState` validates a parsed document
-  against install-manifest.schema.json's own `$defs/installState` (not a
-  hand-rolled shape check), and `skillsInstallStatePath` rejects any target
-  id that is not a bare `^[a-z][a-z0-9-]*$` component before it can reach a
-  `path.join` at all.
+- **Install-state path safety (review round 1 F2/F3, hardened round 2
+  R2-1/R2-2).** `state.ts`'s `resolveContainedPath` is the one guard every
+  place that turns a path RECORDED in install-state into a filesystem
+  operation goes through (`uninstall.ts`'s removal, `doctor.ts`'s
+  re-hash/orphan-exclusion, `apply.ts`'s prior-state read AND its own file
+  writes). It rejects, in order: an absolute path; a raw path containing a
+  literal `..` segment or a backslash at all (state is Keryx-written, so
+  either means tampering, even when the path would textually normalize to
+  somewhere inside the root — round 1's guard compared the raw, un-normalized
+  path against the destination roots by string prefix, which let
+  `.claude/skills/../../<file>` pass because it textually starts with
+  `.claude/skills/`); a path whose `path.resolve`+`path.relative` normalized
+  form is empty, escapes the root, or is itself absolute; a normalized path
+  not under any of the target's own destination roots, compared by whole
+  path segments rather than a string prefix (so `.claude/skillsX` is never
+  confused with the root `.claude/skills`); and a path where ANY existing
+  segment from the project root down to and including the leaf itself is a
+  symlink (round 1's guard only checked the nearest existing ANCESTOR
+  directory, so a destination FILE that was itself a symlink — e.g. shipped
+  as `.claude/rules/<rule>.md -> ~/.bashrc` — was not caught, and `apply
+  --force` would write through it to whatever it pointed at). A record
+  failing this check makes the WHOLE install-state document untrustworthy
+  for that call (`doctor` reports `invalidState`, `uninstall`/`apply` refuse
+  the whole operation and mutate nothing). `state.ts`'s
+  `readSkillsInstallState` validates a parsed document against
+  install-manifest.schema.json's own `$defs/installState` (not a hand-rolled
+  shape check), and `skillsInstallStatePath` rejects any target id that is
+  not a bare `^[a-z][a-z0-9-]*$` component before it can reach a `path.join`
+  at all.
+- **`doctor`'s `orphaned` status is a warning, not a failure (R2-7).** The
+  orphan scan is bounded to this target's own destination roots (never the
+  whole project tree), but those roots can legitimately hold files Keryx
+  never wrote — an operator's own `.claude/rules/my-own.md`, for example.
+  `DoctorReport.ok` (and `keryx skills doctor`'s exit code) reflects only the
+  RECORDED paths: `drifted`/`missing` (or an unreadable/unsafe
+  `invalidState`) fail the command; an `orphaned` entry is reported but never
+  does.
+- **`install`/`doctor`/`uninstall` flag parsing (R2-8).** `--profile`,
+  `--target`, `--module`, `--with`, and `--without` are hard CLI errors when
+  given with no usable value — a bare trailing flag, one immediately
+  followed by another flag (e.g. `--target --json`), or an empty `--flag=`
+  — rather than silently falling back to a default target/profile.
 - **`eval` runner requirement.** `keryx skills eval` scenarios that need a
   headless agent run report `status: "not-run"` with a reason when no runner
   capability is configured (`--runner`), rather than failing or being

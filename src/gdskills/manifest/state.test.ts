@@ -66,6 +66,65 @@ test("resolveContainedPath rejects a path that escapes repoRoot through a symlin
   }
 });
 
+// R2-1: round 1's destination-root check compared the RAW, un-normalized
+// relPath against destinationRoots by string prefix. A recorded
+// `.claude/skills/../../package.json` resolves to `<root>/package.json`
+// (inside root) and textually starts with `.claude/skills/`, so it passed
+// both checks even though it is nowhere near `.claude/skills`.
+test("resolveContainedPath rejects a recorded path with a `..` segment even when it textually starts with a destination root (R2-1)", async () => {
+  const result = await resolveContainedPath(root, ".claude/skills/../../package.json", [".claude/skills", ".claude/rules"]);
+  expect(result.ok).toBe(false);
+});
+
+test("resolveContainedPath rejects a `..` escape into .git even under a destination-root prefix (R2-1)", async () => {
+  const result = await resolveContainedPath(root, ".claude/skills/../../.git/config", [".claude/skills", ".claude/rules"]);
+  expect(result.ok).toBe(false);
+});
+
+test("resolveContainedPath rejects a raw path containing a `..` segment outright, even though path.resolve would keep it inside root (R2-1)", async () => {
+  // `.claude/skills/foo/../bar.mdc` resolves to `.claude/skills/bar.mdc`,
+  // which is fine — but state is Keryx-written, so a literal `..` segment
+  // anywhere in a RECORDED path means tampering and is refused regardless.
+  const result = await resolveContainedPath(root, ".claude/skills/foo/../bar.mdc", [".claude/skills"]);
+  expect(result.ok).toBe(false);
+});
+
+test("resolveContainedPath rejects a backslash in a recorded path", async () => {
+  const result = await resolveContainedPath(root, ".claude\\skills\\..\\..\\package.json", [".claude/skills"]);
+  expect(result.ok).toBe(false);
+});
+
+// R2-1: destination-root containment must compare whole path segments, not
+// a raw string prefix — `.claude/skillsX/...` must never be confused with
+// the root `.claude/skills`.
+test("resolveContainedPath rejects a path under a same-prefixed sibling directory, not the actual destination root (R2-1)", async () => {
+  const result = await resolveContainedPath(root, ".claude/skillsX/evil.mdc", [".claude/skills"]);
+  expect(result.ok).toBe(false);
+});
+
+test("resolveContainedPath accepts a path exactly equal to a destination root's own directory entry name", async () => {
+  const result = await resolveContainedPath(root, ".claude/skills", [".claude/skills"]);
+  expect(result.ok).toBe(true);
+});
+
+// R2-2: round 1's symlink guard only realpath'd the nearest existing
+// ANCESTOR directory of the destination — a destination FILE that is
+// itself a symlink (the leaf) was never checked, so `apply --force` could
+// write through it to wherever it pointed.
+test("resolveContainedPath rejects a path whose LEAF is a symlink, even though its parent directory is real (R2-2)", async () => {
+  const outside = await mkdtemp(path.join(tmpdir(), "keryx-outside-"));
+  try {
+    await mkdir(path.join(root, ".claude", "rules"), { recursive: true });
+    const victim = path.join(outside, "victim.txt");
+    await writeFile(victim, "original", "utf8");
+    await symlink(victim, path.join(root, ".claude", "rules", "a.mdc"));
+    const result = await resolveContainedPath(root, ".claude/rules/a.mdc", [".claude/rules"]);
+    expect(result.ok).toBe(false);
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
 test("readSkillsInstallState rejects a hand-crafted file that violates the schema (bad sha256 hex) — F19 is a real schema check, not a shape check", async () => {
   const file = skillsInstallStatePath(root, "claude");
   await mkdir(path.dirname(file), { recursive: true });
