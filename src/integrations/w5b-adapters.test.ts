@@ -50,9 +50,12 @@ describe("AC1 (W5-b): gemini-cli, kiro, github-copilot-agent each have block + i
       expect(adapter!.adapterKind).toBe("host-hook");
 
       const block = surfacesOf(adapter!, { flag: "block" });
+      // Flow 313 (W4 portability), T9: `instructions` now also carries the
+      // opt-in `rules-export` surface (`surfaces-rules.ts`) alongside the
+      // pre-existing markdown-block pointer surface — 2, not 1.
       const instructions = surfacesOf(adapter!, { flag: "instructions" });
       expect(block.length).toBe(1);
-      expect(instructions.length).toBe(1);
+      expect(instructions.length).toBe(2);
 
       for (const surface of [...block, ...instructions]) {
         expect({ id, surface: surface.id, confidence: surface.confidence }).toEqual({

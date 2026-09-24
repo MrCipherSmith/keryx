@@ -59,6 +59,25 @@ export const INSTRUCTIONS_START_MARKER = "<!-- keryx:instructions -->";
 export const INSTRUCTIONS_END_MARKER = "<!-- /keryx:instructions -->";
 
 /**
+ * Flow 313 (W4 portability), T9: parameterises this module's managed-block
+ * contract over an arbitrary marker pair + renderer, so a SECOND, independent
+ * managed block (the `keryx:rules` block a rules-export surface writes) can
+ * share every byte-exactness guarantee below without touching the
+ * `keryx:instructions` block that may already sit in the same file
+ * (GEMINI.md, `.github/copilot-instructions.md`). Every parse/splice
+ * operation below reads ONLY `spec.startMarker`/`spec.endMarker` — never the
+ * `INSTRUCTIONS_*` constants directly — so a file holding both block kinds
+ * keeps whichever one is NOT named by the caller's `spec` byte-for-byte
+ * untouched, including when the two blocks are adjacent or nested-looking in
+ * raw text (each block's own parse only ever pairs its own markers).
+ */
+export interface ManagedBlockSpec {
+  readonly startMarker: string;
+  readonly endMarker: string;
+  render(): string;
+}
+
+/**
  * Thrown (review round 1, F1) when a file's markers cannot be parsed safely:
  * a start marker with no matching end marker, an end marker with no
  * preceding start, a start marker superseded by another start before its own
@@ -135,6 +154,13 @@ ${INSTRUCTIONS_END_MARKER}
 `;
 }
 
+/** The default spec every pre-existing call site implicitly used before `ManagedBlockSpec` existed — the `keryx:instructions` pointer block. */
+export const INSTRUCTIONS_BLOCK_SPEC: ManagedBlockSpec = {
+  startMarker: INSTRUCTIONS_START_MARKER,
+  endMarker: INSTRUCTIONS_END_MARKER,
+  render: renderInstructionsBlock,
+};
+
 function allIndices(haystack: string, needle: string): number[] {
   const out: number[] = [];
   let i = haystack.indexOf(needle);
@@ -207,16 +233,16 @@ function unclosedFenceMessage(relativePath: string): string {
  * never silently drops or guesses — the moment it finds a marker it cannot
  * pair up safely.
  */
-function parseBlocks(content: string, relativePath: string): Block[] {
+function parseBlocks(content: string, relativePath: string, spec: ManagedBlockSpec): Block[] {
   const fail = (): never => {
     throw new UnterminatedInstructionsBlockError(
-      `${relativePath}: unterminated ${INSTRUCTIONS_START_MARKER} block — fix it by hand`,
+      `${relativePath}: unterminated ${spec.startMarker} block — fix it by hand`,
     );
   };
 
   const { ranges: fenced } = computeFencedRanges(content);
-  const starts = allIndices(content, INSTRUCTIONS_START_MARKER);
-  const ends = allIndices(content, INSTRUCTIONS_END_MARKER);
+  const starts = allIndices(content, spec.startMarker);
+  const ends = allIndices(content, spec.endMarker);
 
   // A marker literally quoted inside a fenced code block (e.g. a doc example)
   // is not trustworthy either way — refuse rather than treat it as real or
@@ -235,7 +261,7 @@ function parseBlocks(content: string, relativePath: string): Block[] {
     const end = ends[ei]!;
     // Another start begins before this end closes the current one.
     if (si + 1 < starts.length && starts[si + 1]! < end) fail();
-    blocks.push({ start, end: end + INSTRUCTIONS_END_MARKER.length });
+    blocks.push({ start, end: end + spec.endMarker.length });
     si += 1;
     ei += 1;
   }
@@ -322,11 +348,16 @@ function fileFor(root: string, relativePath: string): string {
  * Refuses — leaving the file completely untouched — when a block cannot be
  * parsed safely; see `UnterminatedInstructionsBlockError`.
  */
-export async function installMarkdownBlock(root: string, relativePath: string, frontMatter?: string): Promise<string[]> {
+export async function installMarkdownBlock(
+  root: string,
+  relativePath: string,
+  frontMatter?: string,
+  spec: ManagedBlockSpec = INSTRUCTIONS_BLOCK_SPEC,
+): Promise<string[]> {
   const file = fileFor(root, relativePath);
   if (!(await pathExists(file))) {
     await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, `${frontMatter ?? ""}${renderInstructionsBlock()}`, "utf8");
+    await writeFile(file, `${frontMatter ?? ""}${spec.render()}`, "utf8");
     return [];
   }
   const raw = await readFile(file, "utf8");
@@ -334,7 +365,7 @@ export async function installMarkdownBlock(root: string, relativePath: string, f
 
   let blocks: Block[];
   try {
-    blocks = parseBlocks(raw, relativePath);
+    blocks = parseBlocks(raw, relativePath, spec);
   } catch (error) {
     if (error instanceof UnterminatedInstructionsBlockError) return [error.message];
     throw error;
@@ -347,7 +378,7 @@ export async function installMarkdownBlock(root: string, relativePath: string, f
   // unterminated. Caught here, up front, with a precise error instead.
   if (endsInsideOpenFence(raw)) return [unclosedFenceMessage(relativePath)];
 
-  const block = applyEol(renderInstructionsBlock(), eol);
+  const block = applyEol(spec.render(), eol);
   const next = blocks.length === 0 ? appendBlock(raw, block, eol) : collapseBlocks(raw, blocks, block);
   if (next !== raw) await writeFile(file, next, "utf8");
   return [];
@@ -378,11 +409,16 @@ export async function installMarkdownBlock(root: string, relativePath: string, f
  * JSON — is how this surface refuses; `installer.ts` (N1) catches it into a
  * `failed` `SurfaceResult` rather than letting it escape.
  */
-export async function uninstallMarkdownBlock(root: string, relativePath: string, frontMatter?: string): Promise<boolean> {
+export async function uninstallMarkdownBlock(
+  root: string,
+  relativePath: string,
+  frontMatter?: string,
+  spec: ManagedBlockSpec = INSTRUCTIONS_BLOCK_SPEC,
+): Promise<boolean> {
   const file = fileFor(root, relativePath);
   if (!(await pathExists(file))) return false;
   const raw = await readFile(file, "utf8");
-  const blocks = parseBlocks(raw, relativePath);
+  const blocks = parseBlocks(raw, relativePath, spec);
   if (blocks.length === 0) return false;
 
   const remainder = removeBlocksAndSeparators(raw, blocks);
@@ -409,13 +445,17 @@ export interface MarkdownBlockInspection {
  * presence checks both build on, so dry-run and the real install/uninstall
  * can never disagree about what state a markdown-block surface's file is in.
  */
-export async function inspectMarkdownBlock(root: string, relativePath: string): Promise<MarkdownBlockInspection> {
+export async function inspectMarkdownBlock(
+  root: string,
+  relativePath: string,
+  spec: ManagedBlockSpec = INSTRUCTIONS_BLOCK_SPEC,
+): Promise<MarkdownBlockInspection> {
   const file = fileFor(root, relativePath);
   if (!(await pathExists(file))) return { state: "absent-file" };
   const raw = await readFile(file, "utf8");
   let blocks: Block[];
   try {
-    blocks = parseBlocks(raw, relativePath);
+    blocks = parseBlocks(raw, relativePath, spec);
   } catch (error) {
     if (error instanceof UnterminatedInstructionsBlockError) return { state: "malformed", message: error.message };
     throw error;
@@ -430,21 +470,30 @@ export async function inspectMarkdownBlock(root: string, relativePath: string): 
     // a dry-run install (built on this same inspection) predicts the real
     // install's refusal instead of promising success it cannot deliver.
     if (endsInsideOpenFence(raw)) return { state: "malformed", message: unclosedFenceMessage(relativePath) };
-    return { state: "no-block", message: `${relativePath}: missing the keryx:instructions block` };
+    return { state: "no-block", message: `${relativePath}: missing the ${markerLabel(spec)} block` };
   }
   const first = blocks[0]!;
   // Normalised to LF for comparison only — never written back — so a CRLF
   // file's block still compares equal to the LF-rendered canonical text.
   const block = raw.slice(first.start, first.end).replace(/\r\n/g, "\n");
-  if (`${block}\n`.trim() !== renderInstructionsBlock().trim()) {
-    return { state: "stale", message: `${relativePath}: keryx:instructions block is stale — re-run the install` };
+  if (`${block}\n`.trim() !== spec.render().trim()) {
+    return { state: "stale", message: `${relativePath}: ${markerLabel(spec)} block is stale — re-run the install` };
   }
   return { state: "present" };
 }
 
+/** `<!-- keryx:rules -->` -> `keryx:rules` — a short human label for a spec's marker, for probe/inspect messages. */
+function markerLabel(spec: ManagedBlockSpec): string {
+  return spec.startMarker.replace(/^<!--\s*/, "").replace(/\s*-->$/, "");
+}
+
 /** Health check for a markdown-block surface: missing file / missing block / stale block content / unterminated block. */
-export async function probeMarkdownBlock(root: string, relativePath: string): Promise<string[]> {
-  const inspection = await inspectMarkdownBlock(root, relativePath);
+export async function probeMarkdownBlock(
+  root: string,
+  relativePath: string,
+  spec: ManagedBlockSpec = INSTRUCTIONS_BLOCK_SPEC,
+): Promise<string[]> {
+  const inspection = await inspectMarkdownBlock(root, relativePath, spec);
   switch (inspection.state) {
     case "absent-file":
       return [`${relativePath}: file is missing`];

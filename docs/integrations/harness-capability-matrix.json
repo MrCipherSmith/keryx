@@ -28,6 +28,11 @@
           "surface": "agents",
           "state": "native",
           "settingsFile": ".claude/agents"
+        },
+        {
+          "surface": "instructions",
+          "state": "native",
+          "settingsFile": "CLAUDE.md"
         }
       ],
       "surfaces_unsupported": [],
@@ -36,6 +41,7 @@
       "risk_notes": "",
       "last_verified": "2026-09-23",
       "source_docs": [
+        "https://code.claude.com/docs/en/memory",
         "https://code.claude.com/docs/en/sub-agents",
         "src/ctx/orient-runtimes.ts",
         "src/ctx/runtimes.ts",
@@ -63,6 +69,11 @@
           "surface": "agents",
           "state": "adapter",
           "settingsFile": ".codex/agents"
+        },
+        {
+          "surface": "instructions",
+          "state": "native",
+          "settingsFile": "AGENTS.md"
         }
       ],
       "surfaces_unsupported": [],
@@ -72,6 +83,8 @@
       "last_verified": "2026-09-23",
       "source_docs": [
         "docs/docs/harness.md",
+        "https://agents.md/",
+        "https://developers.openai.com/codex/",
         "https://developers.openai.com/codex/subagents",
         "src/ctx/orient-runtimes.ts",
         "src/ctx/runtimes.ts"
@@ -98,14 +111,20 @@
           "surface": "inject-context",
           "state": "native",
           "settingsFile": ".cursor/hooks.json"
+        },
+        {
+          "surface": "instructions",
+          "state": "adapter",
+          "settingsFile": ".cursor/rules/keryx-rules.mdc"
         }
       ],
       "surfaces_unsupported": [],
       "install_command": "keryx integrations install --runtime cursor",
       "verification_command": "keryx integrations doctor --runtime cursor",
-      "risk_notes": "`securityHooks` matches no documented hook contract for this harness; it is keryx's own invention (tracked as OQ-3).",
+      "risk_notes": "`securityHooks` matches no documented hook contract for this harness; it is keryx's own invention (tracked as OQ-3). Cursor's exact tolerance for extra/unknown .mdc front-matter keys alongside description/alwaysApply is not independently confirmed here — verify on a live install.",
       "last_verified": "2026-09-23",
       "source_docs": [
+        "https://docs.cursor.com/context/rules",
         "src/ctx/orient-runtimes.ts",
         "src/ctx/runtimes.ts",
         "src/security/agent-hooks/runtimes.ts"
@@ -127,6 +146,11 @@
           "surface": "prompt-gate",
           "state": "adapter",
           "settingsFile": ".windsurf/hooks.json"
+        },
+        {
+          "surface": "instructions",
+          "state": "adapter",
+          "settingsFile": ".windsurf/rules/keryx-rules.md"
         }
       ],
       "surfaces_unsupported": [
@@ -137,9 +161,10 @@
       ],
       "install_command": "keryx integrations install --runtime windsurf",
       "verification_command": "keryx integrations doctor --runtime windsurf",
-      "risk_notes": "`securityHooks` matches no documented hook contract for this harness; it is keryx's own invention (tracked as OQ-3).",
+      "risk_notes": "`securityHooks` matches no documented hook contract for this harness; it is keryx's own invention (tracked as OQ-3). Windsurf's exact handling of an unrecognised trigger value or extra front-matter keys is not independently confirmed here — verify on a live install.",
       "last_verified": "2026-09-23",
       "source_docs": [
+        "https://docs.windsurf.com/windsurf/cascade/memories",
         "src/ctx/orient-runtimes.ts",
         "src/ctx/runtimes.ts",
         "src/security/agent-hooks/runtimes.ts"
@@ -284,7 +309,7 @@
         },
         {
           "surface": "instructions",
-          "state": "instruction-only",
+          "state": "adapter",
           "settingsFile": "GEMINI.md"
         }
       ],
@@ -319,8 +344,8 @@
         },
         {
           "surface": "instructions",
-          "state": "instruction-only",
-          "settingsFile": ".kiro/steering/keryx.md"
+          "state": "adapter",
+          "settingsFile": ".kiro/steering/keryx-rules.md"
         }
       ],
       "surfaces_unsupported": [],
@@ -351,7 +376,7 @@
         },
         {
           "surface": "instructions",
-          "state": "instruction-only",
+          "state": "adapter",
           "settingsFile": ".github/copilot-instructions.md"
         }
       ],

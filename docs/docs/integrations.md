@@ -213,6 +213,57 @@ Registered with every surface flag present but `unsupported` — this is W6's
 future `keryx shell` hook runtime. No surface here is installed by `keryx
 integrations` yet; every cell is a target for that later workstream.
 
+## rules-export surface
+
+`rules-export` (flow 313, W4 portability) renders the canonical
+`.metaproject/rules/**` library — an index of path + one-line description per
+rule, never a rule's body — into a harness's own instruction file, as a
+second managed block distinct from the `keryx:instructions` pointer block
+above:
+
+```
+<!-- keryx:rules -->
+## Project rules (Keryx)
+
+Canonical source: `.metaproject/rules/` (managed by keryx; edit the rules
+there, not this block). Read the rule that matches your task before acting:
+
+- `.metaproject/rules/core/git-concurrency.mdc` — No git stash in a shared
+  tree; explicit pathspecs instead of `git add -A`; commit at task
+  boundaries.
+<!-- /keryx:rules -->
+```
+
+It is **opt-in** (`optIn: true`) — `keryx integrations install --runtime
+<id>` with no `--surface` never writes it; reach it explicitly with `--surface
+rules-export` (or its flag, `--surface instructions`, which also matches the
+pre-existing pointer surface on harnesses that have one). Registered for
+`claude` (`CLAUDE.md`), `codex` (`AGENTS.md`), `gemini-cli` (`GEMINI.md`),
+`github-copilot-agent` (`.github/copilot-instructions.md`, appended with no
+front matter), `cursor` (`.cursor/rules/keryx-rules.mdc`, created with
+`alwaysApply: true` front matter), `kiro` (`.kiro/steering/keryx-rules.md`,
+`inclusion: always`), and `windsurf` (`.windsurf/rules/keryx-rules.md`,
+`trigger: always_on`).
+
+The block is written through the same `markdown-block.ts` contract every
+`instructions` surface above uses — install only ever touches its OWN
+`<!-- keryx:rules -->`/`<!-- /keryx:rules -->` span, so a file already
+carrying a `keryx:index` or `keryx:instructions` block (CLAUDE.md/AGENTS.md's
+Metaproject bootstrap, or GEMINI.md/`.github/copilot-instructions.md`'s
+pointer block) keeps that other block byte-for-byte. Re-running install after
+a rule changes updates only the block; `keryx integrations uninstall
+--runtime <id> --surface rules-export` removes it and restores the
+surrounding file exactly as it was before install. A rule's own title/
+description text is neutralised before rendering (HTML comment delimiters and
+backticks are stripped/rewritten) so a rule file can never forge or close the
+marker itself.
+
+`src/integrations/rules-export.ts`'s `renderRulesForHarnesses`/
+`installedRulesExportHarnesses` are the programmatic entry points a later
+task (`keryx bundle import --render-for`) drives; they go through the same
+installer core and install-state as every other surface, rather than a
+second bookkeeping layer.
+
 ## Legacy command aliases
 
 `keryx ctx install-hook`/`uninstall-hook`, `keryx orient install-hook`, and

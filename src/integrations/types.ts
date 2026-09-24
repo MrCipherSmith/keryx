@@ -117,6 +117,14 @@ export const SUBSYSTEM_AGENTS = "agents";
 // (`src/harness/hooks/`) — a `policy-travels-with-agent` capability like
 // `SUBSYSTEM_ACP_PERMISSION`, not a settings file keryx installs into.
 export const SUBSYSTEM_SHELL_HOOKS = "shell-hooks";
+// Flow 313 (W4 portability), T9: the canonical `.metaproject/rules/**`
+// library rendered into a harness's own instruction file as an index (title +
+// description per rule, never the rule bodies themselves). Distinct from
+// `SUBSYSTEM_INSTRUCTIONS` (the short, fixed Keryx bootstrap pointer every
+// `markdown-block.ts` surface writes) — this subsystem actually reflects
+// project content (the rule list), so it is deliberately NOT special-cased by
+// `matrix.ts`'s `classifySurfaceState` as `instruction-only`.
+export const SUBSYSTEM_RULES_EXPORT = "rules-export";
 
 /**
  * T17: the richer `customUninstall` return shape for a surface that may keep
