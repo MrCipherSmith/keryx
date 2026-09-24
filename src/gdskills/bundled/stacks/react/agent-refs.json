@@ -1,3 +1,4 @@
 {
-  "agents": ["react-code-auditor", "react-build-fixer"]
+  "agents": [],
+  "note": "no pair until the react pack clears the eval gate (react-code-review behavior eval below the 0.8 floor in flow 314)"
 }

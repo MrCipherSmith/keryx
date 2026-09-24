@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { generateStackAgentPair } from "./generate";
-import { verifyAgents } from "./verify";
+import { checkStackPackGateCleared, verifyAgents } from "./verify";
 
 let root: string;
 let bundledRoot: string;
@@ -353,12 +353,15 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
   });
 
   test("every bundled shipped agent verifies ok against the real skill/bundled trees, with the per-stack packs' gate stubbed cleared", () => {
-    // Flow 314 W4 T10: the eight generated per-stack agents (T10) resolve
-    // their `origin.sourceRef` against real stack packs that are currently
-    // `stability: "experimental"` (W1's gates flip them to "stable" in a
-    // later task) — `stackPackGateCleared` is stubbed here exactly as the
-    // dispatch note directs, so this guard still proves everything OTHER
-    // than pack gate status (schema, tools, skills, drift) is clean.
+    // Flow 314 W4 T13a: `go` and `python` are real, on-disk `stable` packs
+    // with a passing `governance/eval.json`, so they verify clean with NO
+    // stub too (see the next test). `react`'s generated pair was deleted
+    // from disk entirely (T13a) because its pack stays `experimental`, so it
+    // no longer appears in the catalog at all. `ts-js-node` is still
+    // `experimental`, owned by a different concurrent worker on this same
+    // flow — `stackPackGateCleared` is stubbed here so this guard still
+    // proves everything OTHER than that one pack's gate status (schema,
+    // tools, skills, drift) is clean.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {
       stackPackGateCleared: () => ({ cleared: true }),
     });
@@ -366,29 +369,22 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
     for (const agent of report.agents) {
       expect(agent.problems).toEqual([]);
     }
-    expect(report.agents.length).toBeGreaterThanOrEqual(18);
+    expect(report.agents.length).toBeGreaterThanOrEqual(16);
     expect(report.ok).toBe(true);
+    expect(report.agents.some((agent) => agent.name.startsWith("react-"))).toBe(false);
   });
 
-  test("every bundled shipped agent against the real trees with NO stub: only stack-pack-not-gate-cleared appears, for exactly the 8 generated per-stack agents", () => {
+  test("every bundled shipped agent against the real trees with NO stub: only stack-pack-not-gate-cleared appears, for exactly the still-ungated ts-js-node pair", () => {
+    // go and python are real, on-disk "stable" packs with a passing
+    // governance/eval.json gate (flow 314 T13a), so they verify clean even
+    // with no stub. react has no generated pair on disk any more.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {});
     expect(report.catalogErrors).toEqual([]);
     const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
     for (const agent of withProblems) {
       expect(agent.problems.map((p) => p.reason)).toEqual(["stack-pack-not-gate-cleared"]);
     }
-    expect(withProblems.map((agent) => agent.name).sort()).toEqual(
-      [
-        "go-build-fixer",
-        "go-code-auditor",
-        "python-build-fixer",
-        "python-code-auditor",
-        "react-build-fixer",
-        "react-code-auditor",
-        "ts-js-node-build-fixer",
-        "ts-js-node-code-auditor",
-      ].sort(),
-    );
+    expect(withProblems.map((agent) => agent.name).sort()).toEqual(["ts-js-node-build-fixer", "ts-js-node-code-auditor"].sort());
   });
 
   // Flow 314 W4 T10 (W2 §"Initial catalogue": "a hand edit to a generated
@@ -489,5 +485,102 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       const agent = report.agents.find((a) => a.name === "unmatchable-agent");
       expect(agent?.problems.some((p) => p.reason === "generated-drift")).toBe(false);
     });
+  });
+});
+
+// `checkStackPackGateCleared` — the shared function this module now exports
+// (flow 314 T13a) so `keryx agents generate` (src/commands/agents-catalog.ts)
+// refuses the same not-gate-cleared packs `agents verify` flags, via the ONE
+// definition of "cleared" rather than two independently-drifting copies.
+// `defaultStackPackGateCleared` above already exercises this indirectly
+// through `verifyAgents`; these tests call it directly, on a `packDir` with
+// no path-safety wrapping (that is the caller's job — see this function's
+// own doc comment), to prove its pack.json/eval-gate logic in isolation.
+describe("checkStackPackGateCleared", () => {
+  let fixtureRoot: string;
+
+  function makeFixturePackDir(stability: string): string {
+    fixtureRoot = mkdtempSync(path.join(tmpdir(), "check-stack-pack-gate-"));
+    const packDir = path.join(fixtureRoot, "fixture-lang");
+    mkdirSync(path.join(packDir, "governance"), { recursive: true });
+    writeFileSync(path.join(packDir, "pack.json"), JSON.stringify({ id: "fixture-lang", stability }, null, 2), "utf8");
+    return packDir;
+  }
+
+  function writePassingEval(packDir: string): void {
+    const report = {
+      schemaVersion: "1.0.0",
+      skillId: "fixture-lang/fixture-skill",
+      strictness: "low",
+      trials: 3,
+      triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+      evidence: "authored",
+      scenarios: [
+        {
+          id: "trigger-positive-1",
+          kind: "trigger-positive",
+          prompt: "p",
+          strictness: "low",
+          trials: 1,
+          passes: 1,
+          passRate: 1,
+          passAtK: 1,
+          grader: "trigger-rank-fork-family",
+          status: "ran",
+          deterministic: true,
+        },
+        {
+          id: "trigger-negative-1",
+          kind: "trigger-negative",
+          prompt: "n",
+          strictness: "low",
+          trials: 1,
+          passes: 1,
+          passRate: 1,
+          passAtK: 1,
+          grader: "trigger-rank-fork-family",
+          status: "ran",
+          deterministic: true,
+        },
+      ],
+      verdict: "pass",
+    };
+    writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(report, null, 2), "utf8");
+  }
+
+  afterEach(() => {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  });
+
+  test("an 'experimental' pack is never cleared, regardless of its eval.json", () => {
+    const packDir = makeFixturePackDir("experimental");
+    writePassingEval(packDir);
+    const result = checkStackPackGateCleared(packDir);
+    expect(result.cleared).toBe(false);
+    expect(result.reason).toContain("experimental");
+  });
+
+  test("a 'stable' pack with no governance/eval.json is not cleared", () => {
+    const packDir = makeFixturePackDir("stable");
+    const result = checkStackPackGateCleared(packDir);
+    expect(result.cleared).toBe(false);
+    expect(result.reason).toBeDefined();
+  });
+
+  test("a 'stable' pack with a passing governance/eval.json is cleared", () => {
+    const packDir = makeFixturePackDir("stable");
+    writePassingEval(packDir);
+    const result = checkStackPackGateCleared(packDir);
+    expect(result.cleared).toBe(true);
+    expect(result.reason).toBeUndefined();
+  });
+
+  test("an unreadable/missing pack.json is not cleared", () => {
+    fixtureRoot = mkdtempSync(path.join(tmpdir(), "check-stack-pack-gate-"));
+    const packDir = path.join(fixtureRoot, "no-pack-json");
+    mkdirSync(packDir, { recursive: true });
+    const result = checkStackPackGateCleared(packDir);
+    expect(result.cleared).toBe(false);
+    expect(result.reason).toContain("pack.json");
   });
 });

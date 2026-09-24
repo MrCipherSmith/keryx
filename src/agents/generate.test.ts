@@ -143,7 +143,11 @@ describe("generateStackAgentPair", () => {
     const fs = require("node:fs") as typeof import("node:fs");
     const stacksRoot = path.join(import.meta.dir, "..", "gdskills", "bundled", "stacks");
     const agentsRoot = path.join(import.meta.dir, "..", "gdskills", "bundled", "agents");
-    for (const id of ["ts-js-node", "react", "python", "go"]) {
+    // "react" is deliberately excluded: flow 314 T13a removed its generated
+    // pair from disk (agent-refs.json now `{ agents: [] }`) because the pack
+    // is not gate-cleared — `agents generate` itself now refuses to produce
+    // one, so there is nothing on disk for `react` to compare against here.
+    for (const id of ["ts-js-node", "python", "go"]) {
       const pack = JSON.parse(fs.readFileSync(path.join(stacksRoot, id, "pack.json"), "utf8")) as StackPackForAgentGeneration;
       const pair = generateStackAgentPair(pack);
       for (const file of [pair.auditor, pair.fixer]) {

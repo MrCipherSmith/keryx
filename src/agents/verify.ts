@@ -191,6 +191,38 @@ interface StackPackJsonShape {
 }
 
 /**
+ * Shared gate-cleared check (flow 314, W4 T13a: `agents generate` must
+ * refuse the same packs `agents verify` flags via `stack-pack-not-gate-cleared`,
+ * so both go through this ONE function rather than each re-deriving the
+ * definition of "cleared"). Takes an already-resolved, already-path-validated
+ * `packDir` — path-safety (id shape, symlink/traversal checks) is the
+ * caller's job (`defaultStackPackGateCleared` below, and
+ * `agents-catalog.ts`'s `generate` command); this function only answers
+ * whether the pack AT that directory is gate-cleared: `pack.json` parses,
+ * declares `stability: "stable"`, and clears
+ * `checkStablePackGate(packDir, "stable")`. Fails closed — any read/parse
+ * failure, non-"stable" stability, or non-"pass" gate status returns
+ * `{ cleared: false, reason }`, never `{ cleared: true }` by omission.
+ */
+export function checkStackPackGateCleared(packDir: string): { readonly cleared: boolean; readonly reason?: string } {
+  const packJsonPath = path.join(packDir, "pack.json");
+  let pack: StackPackJsonShape;
+  try {
+    pack = JSON.parse(readFileSync(packJsonPath, "utf8")) as StackPackJsonShape;
+  } catch (error) {
+    return { cleared: false, reason: `pack.json could not be read/parsed: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  if (pack.stability !== "stable") {
+    return { cleared: false, reason: `pack stability is "${String(pack.stability)}", not "stable"` };
+  }
+  const gate = checkStablePackGate(packDir, "stable");
+  if (gate.status !== "pass") {
+    return { cleared: false, reason: gate.reason ?? `stable-pack eval gate status is "${gate.status}"` };
+  }
+  return { cleared: true };
+}
+
+/**
  * Default gate-cleared resolver (flow 314, W4 Wave 4, W2-AC6): a real
  * (non-symlink) directory at `<stacksRoot>/<sourceRef>` whose `pack.json`
  * parses, declares `stability: "stable"`, and clears
@@ -199,7 +231,8 @@ interface StackPackJsonShape {
  * enforced by `verifyOne` before this is ever called, `lstat` never follows a
  * symlink, resolved path confirmed contained under `stacksRoot`) rather than
  * assuming `stackPackExists` already ran — this resolver is independently
- * injectable and must fail closed on its own.
+ * injectable and must fail closed on its own. Delegates the actual
+ * pack.json/gate check to the shared `checkStackPackGateCleared` above.
  */
 function defaultStackPackGateCleared(
   bundledAgentsRoot: string,
@@ -223,21 +256,7 @@ function defaultStackPackGateCleared(
     if (!stats.isDirectory() || stats.isSymbolicLink()) {
       return { cleared: false, reason: `pack directory "${sourceRef}" is not a real directory` };
     }
-    const packJsonPath = path.join(packDir, "pack.json");
-    let pack: StackPackJsonShape;
-    try {
-      pack = JSON.parse(readFileSync(packJsonPath, "utf8")) as StackPackJsonShape;
-    } catch (error) {
-      return { cleared: false, reason: `pack.json could not be read/parsed: ${error instanceof Error ? error.message : String(error)}` };
-    }
-    if (pack.stability !== "stable") {
-      return { cleared: false, reason: `pack stability is "${String(pack.stability)}", not "stable"` };
-    }
-    const gate = checkStablePackGate(packDir, "stable");
-    if (gate.status !== "pass") {
-      return { cleared: false, reason: gate.reason ?? `stable-pack eval gate status is "${gate.status}"` };
-    }
-    return { cleared: true };
+    return checkStackPackGateCleared(packDir);
   };
 }
 

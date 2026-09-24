@@ -10,7 +10,7 @@
 // or verification logic itself (D-2). `export` is the one subcommand that
 // writes a file; `list`/`show`/`verify` are read-only.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   compileAgentDefinition,
@@ -26,6 +26,7 @@ import {
   type VerifyAgentsReport,
   generateStackAgentPair,
   type StackPackForAgentGeneration,
+  checkStackPackGateCleared,
 } from "../agents/service";
 import { defaultBundledRoot } from "../gdskills/bundled-eval";
 import { optionValue } from "../lib/args";
@@ -36,6 +37,14 @@ export interface AgentsCatalogDeps {
   readonly cwd?: string;
   readonly log?: (line: string) => void;
   readonly error?: (line: string) => void;
+  /**
+   * Flow 314 T13a: `generate`-only seam mirroring `verifyAgents`'s own
+   * `bundledRoot` option (`verify.ts`) — overrides `defaultBundledRoot()` so
+   * a test can point `generate` at an isolated fixture `<root>/agents` +
+   * `<root>/stacks/<id>` tree instead of the real shipped one. Every other
+   * subcommand ignores this field.
+   */
+  readonly bundledRoot?: string;
 }
 
 function resolveDeps(deps: AgentsCatalogDeps): { cwd: string; log: (line: string) => void; error: (line: string) => void } {
@@ -452,13 +461,51 @@ function generateCommand(args: string[], depsIn: AgentsCatalogDeps): void {
     return;
   }
 
-  const bundledAgentsRoot = path.join(defaultBundledRoot(), "agents");
+  const bundledAgentsRoot = path.join(depsIn.bundledRoot ?? defaultBundledRoot(), "agents");
   const stacksRoot = path.join(bundledAgentsRoot, "..", "stacks");
   const packDir = path.join(stacksRoot, stackId);
   const packJsonPath = path.join(packDir, "pack.json");
 
   if (!existsSync(packJsonPath)) {
     error(`No stack pack "${stackId}" found at ${packJsonPath}.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Flow 314 T13a (W2 "Per-stack pairs" + AC6): generation is refused for a
+  // pack that is not gate-cleared — same definition `agents verify` uses via
+  // the shared `checkStackPackGateCleared` (stability "stable" AND
+  // `checkStablePackGate(packDir, "stable").status === "pass"`). `packDir`
+  // itself is path-safe by construction here (built from a `--stack` value
+  // already matched against `STACK_ID_PATTERN`, joined under the fixed
+  // `stacksRoot`), but mirror `verify.ts`'s `defaultStackPackGateCleared`
+  // defense-in-depth: refuse a symlinked or non-directory `packDir` before
+  // ever reading `pack.json` through it.
+  //
+  // Deliberate choice for `--check`: refusal applies BEFORE the `--check`
+  // branch is reached, so `--check` on a non-cleared pack refuses the same
+  // way the write path does (named `stack-pack-not-gate-cleared` error, exit
+  // 1) rather than reporting "no generated pair expected" and passing. A
+  // gate-cleared/not-cleared distinction is a precondition for generation
+  // existing at all, not a drift question `--check` is meant to answer — so
+  // there is exactly one refusal path for both modes, and nothing is ever
+  // written or compared for an ungated pack.
+  let packDirStats: ReturnType<typeof lstatSync>;
+  try {
+    packDirStats = lstatSync(packDir);
+  } catch {
+    error(`No stack pack "${stackId}" found at ${packDir}.`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!packDirStats.isDirectory() || packDirStats.isSymbolicLink()) {
+    error(`stack-pack-not-gate-cleared: pack directory "${stackId}" is not a real directory`);
+    process.exitCode = 1;
+    return;
+  }
+  const gate = checkStackPackGateCleared(packDir);
+  if (!gate.cleared) {
+    error(`stack-pack-not-gate-cleared: ${gate.reason ?? `stack pack "${stackId}" is not gate-cleared`}`);
     process.exitCode = 1;
     return;
   }
