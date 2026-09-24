@@ -189,6 +189,49 @@ function decodeUtf16WithBom(buffer: Buffer): string | undefined {
   return new TextDecoder(isLittleEndianBom ? "utf-16le" : "utf-16be", { fatal: false }).decode(buffer.subarray(2));
 }
 
+/**
+ * R7-F1 (flow 313 W4, review round 7): the BOM-aware dual decode above used
+ * to exist ONLY on the `skill` entry path — every other imported-bundle kind
+ * (`rule`, `agent`, `memory-entry`, `learned-pattern`, `hook-config`) was
+ * still read with `safeReadText`, a plain UTF-8 decode. A genuine UTF-16
+ * `rule` or `memory-entry` file (real `FF FE`/`FE FF` bytes, NUL-interleaved
+ * content) carrying an injection directive decoded to noise no text check
+ * matched, and imported with ZERO findings — the exact class `decodeUtf16WithBom`
+ * exists to close, just at a sibling site the original fix's scope missed.
+ * This is the ONE shared helper every scanned text kind now goes through
+ * (never a per-kind copy): a BOM-marked buffer yields BOTH the BOM-decoded
+ * view and the plain lossy UTF-8 view of the same bytes; a non-BOM buffer
+ * yields only the lossy view. Callers run their checks against every variant
+ * and union the findings, deduplicated by `findingId` (see
+ * `unionFindingsById` below), exactly like the skill path already did.
+ */
+function decodeTextVariants(buffer: Buffer): string[] {
+  const bomDecoded = decodeUtf16WithBom(buffer);
+  const lossyDecoded = lossyDecodeBytes(buffer);
+  return bomDecoded !== undefined ? [bomDecoded, lossyDecoded] : [lossyDecoded];
+}
+
+/**
+ * Shared dedup step for a per-variant finding scan: several decode variants
+ * of the same file can trip the same check at the same pointer (a genuine
+ * UTF-16 file whose lossy NUL-interleaved decode happens to also match), and
+ * this collapses those to one finding per `findingId`, same rule the `skill`
+ * path already applied inline.
+ */
+function unionFindingsById(variantFindings: ReadonlyArray<RawFinding[]>): RawFinding[] {
+  const seen = new Set<string>();
+  const result: RawFinding[] = [];
+  for (const findings of variantFindings) {
+    for (const finding of findings) {
+      const id = findingId(finding);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      result.push(finding);
+    }
+  }
+  return result;
+}
+
 type JsonRecord = Record<string, unknown>;
 
 /**
@@ -364,27 +407,47 @@ async function scanImportedBundle(
     }
 
     if (entry.kind === "hook-config") {
-      const content = await safeReadText(absolute);
-      if (content === undefined) {
+      // R7-F1: a hook-config is JSON, so it is parsed AFTER decoding rather
+      // than scanned as free text. The BOM-decoded variant (when a BOM is
+      // present) is tried first; the plain lossy-UTF-8 variant is tried
+      // next. A variant that fails `JSON.parse` contributes no findings —
+      // there is no JSON structure to walk `collectHookCommands` over — but
+      // this never goes silently clean: if EVERY variant fails to parse, the
+      // entry fails closed as `unreadable`, same as before this fix. If any
+      // variant parses, its hook commands are checked and unioned with any
+      // other parseable variant's, deduplicated by `findingId`.
+      const buffer = await safeReadBuffer(absolute);
+      if (buffer === undefined) {
         unreadable.push(entry.path);
         continue;
       }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(content);
-      } catch {
+      const contentVariants = decodeTextVariants(buffer);
+      const parsedVariants: unknown[] = [];
+      for (const content of contentVariants) {
+        try {
+          parsedVariants.push(JSON.parse(content));
+        } catch {
+          // this variant does not parse as JSON — try the next one.
+        }
+      }
+      if (parsedVariants.length === 0) {
         unreadable.push(entry.path);
         continue;
       }
       scanned.push(entry.path);
-      const commands: Array<{ command: string; pointer: string }> = [];
-      collectHookCommands(parsed, "", commands);
-      for (const { command, pointer } of commands) {
-        raw.push(...asBundleFindings(checkHookCommandInjection(entry.path, command, pointer), "bundle-hook-command-injection"));
-        raw.push(...asBundleFindings(checkHookExfiltrationShape(entry.path, command, pointer), "bundle-hook-exfiltration-shape"));
-        raw.push(...asBundleFindings(checkHookSilentSuppression(entry.path, command, pointer), "bundle-hook-silent-suppression"));
-        raw.push(...asBundleFindings(checkHookRemoteExec(entry.path, command, pointer), "bundle-hook-remote-exec"));
-      }
+      const perVariantFindings: RawFinding[][] = parsedVariants.map((parsed) => {
+        const commands: Array<{ command: string; pointer: string }> = [];
+        collectHookCommands(parsed, "", commands);
+        const findings: RawFinding[] = [];
+        for (const { command, pointer } of commands) {
+          findings.push(...asBundleFindings(checkHookCommandInjection(entry.path, command, pointer), "bundle-hook-command-injection"));
+          findings.push(...asBundleFindings(checkHookExfiltrationShape(entry.path, command, pointer), "bundle-hook-exfiltration-shape"));
+          findings.push(...asBundleFindings(checkHookSilentSuppression(entry.path, command, pointer), "bundle-hook-silent-suppression"));
+          findings.push(...asBundleFindings(checkHookRemoteExec(entry.path, command, pointer), "bundle-hook-remote-exec"));
+        }
+        return findings;
+      });
+      raw.push(...unionFindingsById(perVariantFindings));
       continue;
     }
 
@@ -424,129 +487,125 @@ async function scanImportedBundle(
         unreadable.push(entry.path);
         continue;
       }
-      const bomDecoded = decodeUtf16WithBom(buffer);
-      const lossyDecoded = lossyDecodeBytes(buffer);
-      const contentVariants = bomDecoded !== undefined ? [bomDecoded, lossyDecoded] : [lossyDecoded];
+      const contentVariants = decodeTextVariants(buffer);
       scanned.push(entry.path);
-      const seenFindingIds = new Set<string>();
-      for (const content of contentVariants) {
-        const variantFindings: RawFinding[] = [
-          ...asBundleFindings(
-            checkSecretsInText("skills", "skill-script-secret", entry.path, content, "high"),
-            "bundle-skill-script-secret",
-          ),
-          ...asBundleFindings(
-            checkInjectionInText("skills", "skill-script-injection", entry.path, content, "high"),
-            "bundle-skill-script-injection",
-          ),
-          ...asBundleFindings(checkAutoRunDirective("skills", entry.path, content), "bundle-auto-run-directive"),
-          ...asBundleFindings(
-            checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
-            "bundle-prompt-injection-in-instructions",
-          ),
-          ...asBundleFindings(checkRemoteExecInText("skills", entry.path, content), "bundle-hook-remote-exec"),
-        ];
-        for (const finding of variantFindings) {
-          const id = findingId(finding);
-          if (seenFindingIds.has(id)) continue;
-          seenFindingIds.add(id);
-          raw.push(finding);
-        }
-      }
+      const skillVariantFindings: RawFinding[][] = contentVariants.map((content) => [
+        ...asBundleFindings(
+          checkSecretsInText("skills", "skill-script-secret", entry.path, content, "high"),
+          "bundle-skill-script-secret",
+        ),
+        ...asBundleFindings(
+          checkInjectionInText("skills", "skill-script-injection", entry.path, content, "high"),
+          "bundle-skill-script-injection",
+        ),
+        ...asBundleFindings(checkAutoRunDirective("skills", entry.path, content), "bundle-auto-run-directive"),
+        ...asBundleFindings(
+          checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
+          "bundle-prompt-injection-in-instructions",
+        ),
+        ...asBundleFindings(checkRemoteExecInText("skills", entry.path, content), "bundle-hook-remote-exec"),
+      ]);
+      raw.push(...unionFindingsById(skillVariantFindings));
       continue;
     }
 
-    const content = await safeReadText(absolute);
-    if (content === undefined) {
+    // R7-F1: `rule`, `agent`, `learned-pattern` and `memory-entry` used to be
+    // read with `safeReadText` — a plain UTF-8 decode with no BOM awareness
+    // — the exact gap the skill path's `decodeUtf16WithBom` dual decode
+    // exists to close, just left open at this sibling site. Every one of
+    // these kinds is now read as raw bytes and scanned through the SAME
+    // shared `decodeTextVariants` helper the skill path uses, with findings
+    // from every variant unioned and deduplicated by `findingId`.
+    const buffer = await safeReadBuffer(absolute);
+    if (buffer === undefined) {
       unreadable.push(entry.path);
       continue;
     }
     scanned.push(entry.path);
+    const contentVariants = decodeTextVariants(buffer);
 
-    switch (entry.kind) {
-      case "rule": {
-        raw.push(
-          ...asBundleFindings(
-            checkSecretsInText("instructions", "secret-in-instructions", entry.path, content, "critical"),
-            "bundle-secret-in-instructions",
-          ),
-        );
-        raw.push(
-          ...asBundleFindings(
-            checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
-            "bundle-prompt-injection-in-instructions",
-          ),
-        );
-        raw.push(...asBundleFindings(checkAutoRunDirective("instructions", entry.path, content), "bundle-auto-run-directive"));
-        break;
-      }
-      case "agent": {
-        raw.push(...asBundleFindings(checkAgentUnrestrictedTools(entry.path, content), "bundle-agent-unrestricted-tools"));
-        raw.push(...asBundleFindings(checkAgentMissingModelTier(entry.path, content), "bundle-agent-missing-model-tier"));
-        raw.push(
-          ...asBundleFindings(checkAutoRunDirective("agent-definitions", entry.path, content), "bundle-auto-run-directive"),
-        );
-        break;
-      }
-      case "learned-pattern": {
-        // R2-F11: `learned-pattern` content is a JSON record (the same
-        // `learnedPatternSchemaJson` shape `plan.ts` validates), not free
-        // text — checking the raw SERIALIZED text meant a directive inside a
-        // JSON string value survived as its ESCAPED form (`\n` stayed the two
-        // characters `\` and `n`, never a real newline), which is enough to
-        // dodge the `[^.\n]{0,N}`-bounded auto-run/injection patterns above.
-        // Parsed and every string value re-joined (one per line) so the
-        // checks see the DECODED text a consumer of the pattern actually
-        // reads. A parse failure (plan.ts already refuses this before import
-        // reaches here — R1-F12 — so this is defense in depth only) falls
-        // back to the raw text rather than scanning nothing.
-        let decoded = content;
-        try {
-          const parsedJson: unknown = JSON.parse(content);
-          const strings: string[] = [];
-          collectJsonStrings(parsedJson, strings);
-          if (strings.length > 0) decoded = strings.join("\n");
-        } catch {
-          // not valid JSON — scan the raw text as a fallback.
+    const otherKindVariantFindings: RawFinding[][] = contentVariants.map((content) => {
+      switch (entry.kind) {
+        case "rule": {
+          return [
+            ...asBundleFindings(
+              checkSecretsInText("instructions", "secret-in-instructions", entry.path, content, "critical"),
+              "bundle-secret-in-instructions",
+            ),
+            ...asBundleFindings(
+              checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
+              "bundle-prompt-injection-in-instructions",
+            ),
+            ...asBundleFindings(checkAutoRunDirective("instructions", entry.path, content), "bundle-auto-run-directive"),
+          ];
         }
-        raw.push(
-          ...asBundleFindings(
-            checkSecretsInText("instructions", "secret-in-instructions", entry.path, decoded, "critical"),
-            "bundle-secret-in-instructions",
-          ),
-        );
-        raw.push(
-          ...asBundleFindings(
-            checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, decoded, "high"),
-            "bundle-prompt-injection-in-instructions",
-          ),
-        );
-        raw.push(...asBundleFindings(checkAutoRunDirective("instructions", entry.path, decoded), "bundle-auto-run-directive"));
-        break;
+        case "agent": {
+          return [
+            ...asBundleFindings(checkAgentUnrestrictedTools(entry.path, content), "bundle-agent-unrestricted-tools"),
+            ...asBundleFindings(checkAgentMissingModelTier(entry.path, content), "bundle-agent-missing-model-tier"),
+            ...asBundleFindings(checkAutoRunDirective("agent-definitions", entry.path, content), "bundle-auto-run-directive"),
+          ];
+        }
+        case "learned-pattern": {
+          // R2-F11: `learned-pattern` content is a JSON record (the same
+          // `learnedPatternSchemaJson` shape `plan.ts` validates), not free
+          // text — checking the raw SERIALIZED text meant a directive inside a
+          // JSON string value survived as its ESCAPED form (`\n` stayed the two
+          // characters `\` and `n`, never a real newline), which is enough to
+          // dodge the `[^.\n]{0,N}`-bounded auto-run/injection patterns above.
+          // Parsed and every string value re-joined (one per line) so the
+          // checks see the DECODED text a consumer of the pattern actually
+          // reads. A parse failure (plan.ts already refuses this before import
+          // reaches here — R1-F12 — so this is defense in depth only) falls
+          // back to the raw text rather than scanning nothing — R7-F1: this
+          // fallback is what keeps an unparseable variant from going silently
+          // clean, matching the hook-config fail-closed contract at the JSON
+          // level with a text-check floor instead.
+          let decoded = content;
+          try {
+            const parsedJson: unknown = JSON.parse(content);
+            const strings: string[] = [];
+            collectJsonStrings(parsedJson, strings);
+            if (strings.length > 0) decoded = strings.join("\n");
+          } catch {
+            // not valid JSON — scan the raw text as a fallback.
+          }
+          return [
+            ...asBundleFindings(
+              checkSecretsInText("instructions", "secret-in-instructions", entry.path, decoded, "critical"),
+              "bundle-secret-in-instructions",
+            ),
+            ...asBundleFindings(
+              checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, decoded, "high"),
+              "bundle-prompt-injection-in-instructions",
+            ),
+            ...asBundleFindings(checkAutoRunDirective("instructions", entry.path, decoded), "bundle-auto-run-directive"),
+          ];
+        }
+        case "memory-entry": {
+          // Memory entries are markdown (see `src/memory/store.ts`), not JSON
+          // — scanned as plain text, unchanged.
+          return [
+            ...asBundleFindings(
+              checkSecretsInText("instructions", "secret-in-instructions", entry.path, content, "critical"),
+              "bundle-secret-in-instructions",
+            ),
+            ...asBundleFindings(
+              checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
+              "bundle-prompt-injection-in-instructions",
+            ),
+            // R1-F8: a learned pattern or memory entry is loaded into agent
+            // context exactly like a rule/skill/agent file — it previously got
+            // no `checkAutoRunDirective` at all, so an auto-run directive
+            // smuggled in through learning/memory import evaded every check.
+            ...asBundleFindings(checkAutoRunDirective("instructions", entry.path, content), "bundle-auto-run-directive"),
+          ];
+        }
+        default:
+          return [];
       }
-      case "memory-entry": {
-        // Memory entries are markdown (see `src/memory/store.ts`), not JSON
-        // — scanned as plain text, unchanged.
-        raw.push(
-          ...asBundleFindings(
-            checkSecretsInText("instructions", "secret-in-instructions", entry.path, content, "critical"),
-            "bundle-secret-in-instructions",
-          ),
-        );
-        raw.push(
-          ...asBundleFindings(
-            checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
-            "bundle-prompt-injection-in-instructions",
-          ),
-        );
-        // R1-F8: a learned pattern or memory entry is loaded into agent
-        // context exactly like a rule/skill/agent file — it previously got
-        // no `checkAutoRunDirective` at all, so an auto-run directive
-        // smuggled in through learning/memory import evaded every check.
-        raw.push(...asBundleFindings(checkAutoRunDirective("instructions", entry.path, content), "bundle-auto-run-directive"));
-        break;
-      }
-    }
+    });
+    raw.push(...unionFindingsById(otherKindVariantFindings));
   }
 
   return { raw, surface: surfaceResult("imported-bundles", scanned, unreadable), notes };
