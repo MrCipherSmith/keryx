@@ -9,11 +9,13 @@ import { findDuplicates, type Candidate } from "./dedup";
 import { ingestMemory } from "./ingest";
 import { candidatePool, searchEntries } from "./search";
 import { createMemoryReportStore } from "./report";
-import { collectEntries, memoryRoot } from "./store";
+import { collectEntries, collectEntriesStrict, memoryRoot, memoryRootFor, type MemoryScanProblem } from "./store";
 import { supersedeEntry } from "./supersede";
 import { transitionMemoryStatus } from "./lifecycle";
 import { resolveCanonicalEntryPath, writeCanonicalEntry } from "./write";
 import { renderMemoryEntry } from "./templates";
+import { selectHandoffEntries } from "./handoff";
+import { isMemoryHarnessId, MEMORY_HARNESS_IDS } from "./harness-identity";
 import { memoryEmbeddingSpec, type Embedder } from "./embedding/adapter";
 import {
   buildEmbeddingIndex,
@@ -21,8 +23,13 @@ import {
   loadEmbeddingIndex,
   rerankByEmbedding,
 } from "./embedding/index";
-import { MEMORY_TYPES } from "./types";
+import { MEMORY_TYPES, MEMORY_TYPE_VALUES } from "./types";
 import type { MemoryConfig, MemoryEntry, ScoredEntry, SearchFilters } from "./types";
+
+// Flow 313 (W4): re-exported so `src/mcp/` (which may import only this
+// facade, never `./harness-identity` directly — M-3 boundary test) can
+// validate a harness id without a second cross-module import.
+export { isMemoryHarnessId, MEMORY_HARNESS_IDS, MEMORY_TYPE_VALUES };
 import type {
   MemoryCreateInput,
   MemoryCreateResult,
@@ -227,6 +234,106 @@ export function createMemoryService(): MemoryService {
       return checkMemory(input.cwd, config);
     },
   };
+}
+
+// --- Flow 313 (W4 portability): docs/requirements/keryx-agent-platform-
+// expansion/workstreams/W4-portability.md, "Cross-harness memory handoff".
+// Standalone functions (not on the `MemoryService` interface) so `src/mcp/`
+// tools can call them without importing `./store` / `./handoff` directly —
+// this facade (`./service`) is the only memory module import the M-3
+// boundary test allows into `src/mcp/`.
+
+export type MemoryHandoffInput = { cwd: string; from: string; target: string; scope?: "project" | "user" };
+export type MemoryHandoffEntrySummary = {
+  path: string;
+  title: string;
+  sourceHarness: string | null;
+  targetHarnesses: string[] | null;
+};
+export type MemoryHandoffResult = {
+  status: "complete" | "incomplete";
+  entries: MemoryHandoffEntrySummary[];
+  problems: MemoryScanProblem[];
+};
+
+export async function memoryHandoff(input: MemoryHandoffInput): Promise<MemoryHandoffResult> {
+  const root = memoryRootFor(input.scope ?? "project", input.cwd);
+  const scan = await collectEntriesStrict(root);
+  const selected = selectHandoffEntries(scan.entries, { from: input.from, target: input.target });
+  return {
+    status: scan.status,
+    entries: selected.map((entry) => ({
+      path: entry.relativePath,
+      title: entry.title,
+      sourceHarness: entry.sourceHarness ?? null,
+      targetHarnesses: entry.targetHarnesses ?? null,
+    })),
+    problems: scan.problems,
+  };
+}
+
+/**
+ * A relativePath -> targetHarnesses lookup over the project-scope memory
+ * store, for `src/mcp/` `memory.search` filtering (W4-AC6): the search
+ * result's own hit shape does not carry `targetHarnesses`, so the tool
+ * cross-references this map by path instead of importing `./store` itself.
+ */
+export async function memoryTargetHarnessesByPath(cwd: string): Promise<Map<string, string[] | null>> {
+  const entries = await collectEntries(cwd);
+  const map = new Map<string, string[] | null>();
+  for (const entry of entries) {
+    map.set(entry.relativePath, entry.targetHarnesses ?? null);
+  }
+  return map;
+}
+
+export type MemoryProposeInput = {
+  cwd: string;
+  title: string;
+  type: string;
+  summary: string;
+  details?: string;
+  sourceHarness?: string | null;
+  targetHarnesses?: string[];
+};
+export type MemoryProposeResult =
+  | { status: "written"; path: string }
+  | { status: "skipped"; path: string; securitySkipped: string }
+  | { status: "invalid-type"; message: string };
+
+export async function memoryPropose(input: MemoryProposeInput): Promise<MemoryProposeResult> {
+  const typeConfig = MEMORY_TYPES.find((t) => t.type === input.type);
+  if (!typeConfig) {
+    return { status: "invalid-type", message: `Unknown memory type: ${input.type}. Supported: ${MEMORY_TYPE_VALUES.join(", ")}` };
+  }
+  const slug = proposalSlug(input.title);
+  const date = new Date().toISOString().slice(0, 10);
+  const content = renderMemoryEntry({
+    title: input.title,
+    type: input.type,
+    date,
+    summary: input.summary,
+    ...(input.details && input.details.length > 0 ? { details: input.details } : {}),
+    ...(input.sourceHarness ? { sourceHarness: input.sourceHarness } : {}),
+    ...(input.targetHarnesses && input.targetHarnesses.length > 0 ? { targetHarnesses: input.targetHarnesses } : {}),
+  });
+  const write = await writeCanonicalEntry({
+    cwd: input.cwd,
+    relativePath: `${typeConfig.folder}/${slug}.md`,
+    content,
+  });
+  if (write.status === "error") {
+    throw new Error(write.error.message);
+  }
+  return write.status === "skipped"
+    ? { status: "skipped", path: write.path, securitySkipped: write.reason }
+    : { status: "written", path: write.path };
+}
+
+function proposalSlug(title: string): string {
+  const base = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return `${base.length > 0 ? base : "proposal"}-${suffix}`;
 }
 
 // Resolve the embedding capability to an `Embedder` (+ model id), or null when

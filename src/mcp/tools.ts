@@ -22,6 +22,13 @@ import { readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
+import {
+  isMemoryHarnessId,
+  memoryHandoff,
+  memoryPropose,
+  memoryTargetHarnessesByPath,
+  MEMORY_TYPE_VALUES,
+} from "../memory/service";
 import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, requireWorkspaceReference, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
@@ -104,6 +111,37 @@ async function loadGraphSafe(cwd: string): Promise<GraphData> {
   } catch {
     return { nodes: [], edges: [] };
   }
+}
+
+// Flow 313 (W4-AC6): drops `memory.search` hits whose entry has a non-null
+// `targetHarnesses` that does not include the bound `harnessIdentity`. An
+// unbound identity (`null`) filters out every restricted entry (there is no
+// caller identity a restricted entry could legitimately be shown to);
+// entries with a null/absent `targetHarnesses` ("all") are unaffected either
+// way. The adapter's structured hit shape does not itself carry
+// `targetHarnesses`, so this cross-references `memoryTargetHarnessesByPath`
+// (the `../memory/service` facade — the only memory-module import `src/mcp/`
+// may make, M-3) by relative path rather than duplicating the adapter's
+// ranking/validation logic here.
+async function filterMemorySearchHitsByHarness(
+  cwd: string,
+  result: Record<string, unknown>,
+  harnessIdentity: string | null,
+): Promise<Record<string, unknown>> {
+  const hits = Array.isArray(result.hits) ? (result.hits as Array<Record<string, unknown>>) : [];
+  if (hits.length === 0) {
+    return result;
+  }
+  const targetsByPath = await memoryTargetHarnessesByPath(cwd);
+  const filteredHits = hits.filter((hit) => {
+    const path = typeof hit.path === "string" ? hit.path : null;
+    if (path === null) return true;
+    const targets = targetsByPath.get(path);
+    if (targets === undefined || !targets || targets.length === 0) return true;
+    if (harnessIdentity === null) return false;
+    return targets.includes(harnessIdentity);
+  });
+  return { ...result, hits: filteredHits };
 }
 
 const OBJECT_SCHEMA = (
@@ -804,17 +842,136 @@ export function buildToolRegistry(): ToolEntry[] {
         ["query"],
       ),
       mutating: false,
-      async invoke(cwd, params) {
+      async invoke(cwd, params, context) {
         const query = stringParam(params, "query") ?? "";
         const module = stringParam(params, "module");
         const memoryClass = stringParam(params, "class");
         const limit = typeof params.limit === "number" ? params.limit : undefined;
-        return createMetaprojectAdapter(cwd).memorySearch({
+        const result = await createMetaprojectAdapter(cwd).memorySearch({
           query,
           ...(module !== undefined && module.length > 0 ? { module } : {}),
           ...(memoryClass !== undefined && memoryClass.length > 0 ? { class: memoryClass } : {}),
           ...(limit !== undefined ? { limit } : {}),
         });
+        return filterMemorySearchHitsByHarness(cwd, result as unknown as Record<string, unknown>, context?.harnessIdentity ?? null);
+      },
+    },
+    {
+      name: "memory.handoff",
+      module: "memory",
+      description:
+        "Explicit cross-harness memory read (flow 313, W4-AC6/AC7). Returns entries whose " +
+        "`Source-Harness` matches `from` and whose `Target-Harnesses` is unset or includes THIS " +
+        "server's bound harness identity — the target is always the identity this server was " +
+        "launched with (`keryx serve-mcp --harness <id>`), never a caller-supplied param. Fails " +
+        "closed on an incomplete underlying scan: `status: \"incomplete\"` means the result is not " +
+        "the full answer, not that fewer entries simply matched. Calling this on a server launched " +
+        "without `--harness`/`KERYX_HARNESS` returns an error result.",
+      inputSchema: OBJECT_SCHEMA(
+        {
+          from: { type: "string", description: "Source harness id (e.g. \"claude\", \"codex\")." },
+          scope: { type: "string", enum: ["project"], description: "Memory scope to read. Only \"project\" is supported here." },
+        },
+        ["from"],
+      ),
+      mutating: false,
+      async invoke(cwd, params, context) {
+        const harnessIdentity = context?.harnessIdentity ?? null;
+        if (harnessIdentity === null) {
+          return {
+            status: "error" as const,
+            error: "harness identity not bound at launch (keryx mcp serve --harness <id>)",
+          };
+        }
+        const from = stringParam(params, "from") ?? "";
+        if (!isMemoryHarnessId(from)) {
+          return { status: "error" as const, error: `unknown source harness: ${from}` };
+        }
+        const scopeParam = stringParam(params, "scope") ?? "project";
+        if (scopeParam !== "project") {
+          return { status: "error" as const, error: `unsupported scope: ${scopeParam}` };
+        }
+        const result = await memoryHandoff({ cwd, from, target: harnessIdentity, scope: "project" });
+        return {
+          status: result.status,
+          entries: result.entries.map((entry) => ({
+            path: entry.path,
+            title: entry.title,
+            source_harness: entry.sourceHarness,
+            target_harnesses: entry.targetHarnesses,
+          })),
+          problems: result.problems,
+        };
+      },
+    },
+    {
+      name: "memory.propose",
+      module: "memory",
+      description:
+        "Write a new `draft` memory entry (flow 313, W4-AC6). Its `Source-Harness` header is " +
+        "stamped from THIS server's bound `--harness`/`KERYX_HARNESS` launch identity — never a " +
+        "caller-supplied value: any of `source_harness`, `sourceHarness`, `harness`, or " +
+        "`Source-Harness` in params is refused as an unknown/disallowed field, and a " +
+        "`Source-Harness:` line smuggled into `summary`/`details` is refused rather than silently " +
+        "overriding the stamped value. Mutating.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          type: { type: "string", description: MEMORY_TYPE_VALUES.join(" | ") },
+          summary: { type: "string" },
+          details: { type: "string" },
+          target_harnesses: { type: "array", items: { type: "string" } },
+        },
+        required: ["title", "type", "summary"],
+        additionalProperties: false,
+      },
+      mutating: true,
+      async invoke(cwd, params, context) {
+        for (const disallowed of ["source_harness", "sourceHarness", "harness", "Source-Harness"]) {
+          if (Object.prototype.hasOwnProperty.call(params, disallowed)) {
+            throw new Error(`memory.propose does not accept "${disallowed}"; Source-Harness is stamped from the server's bound launch identity.`);
+          }
+        }
+        const title = stringParam(params, "title");
+        const type = stringParam(params, "type");
+        const summary = stringParam(params, "summary");
+        if (!title || !type || !summary) {
+          throw new Error("memory.propose requires title, type and summary.");
+        }
+        if (!MEMORY_TYPE_VALUES.includes(type)) {
+          throw new Error(`memory.propose: unknown type "${type}". Supported: ${MEMORY_TYPE_VALUES.join(", ")}`);
+        }
+        const details = stringParam(params, "details") ?? "";
+        const rawTargets = Array.isArray(params.target_harnesses) ? params.target_harnesses : undefined;
+        if (rawTargets !== undefined) {
+          for (const value of rawTargets) {
+            if (typeof value !== "string" || !isMemoryHarnessId(value)) {
+              throw new Error(`memory.propose: target_harnesses contains an unknown harness id: ${String(value)}`);
+            }
+          }
+        }
+        // A smuggled `Source-Harness:` header in free text must not be able to
+        // override the value stamped below — checked before anything is written.
+        if (/^Source-Harness:/im.test(summary) || /^Source-Harness:/im.test(details)) {
+          throw new Error("memory.propose: summary/details may not contain a Source-Harness: line.");
+        }
+        const harnessIdentity = context?.harnessIdentity ?? null;
+        const result = await memoryPropose({
+          cwd,
+          title,
+          type,
+          summary,
+          ...(details.length > 0 ? { details } : {}),
+          ...(harnessIdentity ? { sourceHarness: harnessIdentity } : {}),
+          ...(rawTargets ? { targetHarnesses: rawTargets as string[] } : {}),
+        });
+        if (result.status === "invalid-type") {
+          throw new Error(`memory.propose: ${result.message}`);
+        }
+        return result.status === "skipped"
+          ? { path: result.path, status: result.status, securitySkipped: result.securitySkipped }
+          : { path: result.path, status: result.status };
       },
     },
     {

@@ -16,7 +16,9 @@ import {
 } from "../forgetting/service";
 import { runAssetsSubcommand } from "../assets/command";
 import { MEMORY_CLASS_VALUES, MEMORY_TYPES } from "../memory/types";
-import { memoryRoot } from "../memory/store";
+import { collectEntriesStrict, memoryRoot, memoryRootFor } from "../memory/store";
+import { selectHandoffEntries } from "../memory/handoff";
+import { MEMORY_HARNESS_IDS, isMemoryHarnessId } from "../memory/harness-identity";
 import { isNotFound } from "../lib/fs";
 import { MemoryValidationError } from "../memory/validation";
 import type { MemoryClass, MemoryStatus, ScoredEntry, SearchFilters } from "../memory/types";
@@ -83,6 +85,10 @@ export async function memoryCommand(args: string[]): Promise<void> {
   }
   if (command === "reflect") {
     await runReflect(args.slice(1));
+    return;
+  }
+  if (command === "handoff") {
+    await runHandoff(args.slice(1));
     return;
   }
 
@@ -512,6 +518,88 @@ async function runReflect(args: string[] = []): Promise<void> {
   }
 }
 
+/**
+ * Flow 313 (W4) / W4-portability.md "Cross-harness memory handoff", W4-AC6/
+ * AC7: explicit cross-harness memory read. Fails closed on an incomplete
+ * scan (exit 1, `status: "incomplete"`) rather than silently returning
+ * whatever partial set the scan collected as if it were the whole answer.
+ */
+async function runHandoff(args: string[]): Promise<void> {
+  const json = args.includes("--json");
+  const from = optionValue(args, "--from");
+  const target = optionValue(args, "--target");
+  const scopeArg = optionValue(args, "--scope") ?? "project";
+
+  if (!from || !target) {
+    console.error("Usage: keryx memory handoff --from <harness> --target <harness> [--scope project|user] [--json]");
+    process.exitCode = 1;
+    return;
+  }
+  if (!isMemoryHarnessId(from)) {
+    printHandoffError(json, "unknown-source-harness", `Unknown --from harness: ${from}. Use one of: ${MEMORY_HARNESS_IDS.join(", ")}`);
+    return;
+  }
+  if (!isMemoryHarnessId(target)) {
+    printHandoffError(json, "unknown-target-harness", `Unknown --target harness: ${target}. Use one of: ${MEMORY_HARNESS_IDS.join(", ")}`);
+    return;
+  }
+  if (scopeArg !== "project" && scopeArg !== "user") {
+    printHandoffError(json, "invalid-scope", `Unknown --scope: ${scopeArg}. Use project or user.`);
+    return;
+  }
+
+  const root = memoryRootFor(scopeArg, process.cwd());
+  const scan = await collectEntriesStrict(root);
+  const selected = selectHandoffEntries(scan.entries, { from, target });
+
+  if (json) {
+    console.log(
+      JSON.stringify(
+        {
+          status: scan.status,
+          entries: selected.map((entry) => ({
+            path: entry.relativePath,
+            title: entry.title,
+            source_harness: entry.sourceHarness ?? null,
+            target_harnesses: entry.targetHarnesses ?? null,
+          })),
+          problems: scan.problems,
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    console.log(`# memory handoff: ${from} -> ${target} (${scopeArg} scope)`);
+    console.log("");
+    console.log(`status: ${scan.status}`);
+    console.log(`entries: ${selected.length}`);
+    for (const entry of selected) {
+      console.log(`- ${entry.relativePath}: ${entry.title} (source_harness=${entry.sourceHarness ?? "null"}, target_harnesses=${entry.targetHarnesses ? entry.targetHarnesses.join(",") : "null"})`);
+    }
+    if (scan.problems.length > 0) {
+      console.log("");
+      console.log("problems:");
+      for (const problem of scan.problems) {
+        console.log(`- [${problem.reason}] ${problem.path}`);
+      }
+    }
+  }
+
+  // Never label a smaller/partial result "complete": exit 1 whenever the
+  // underlying scan is incomplete, regardless of how many entries matched.
+  process.exitCode = scan.status === "complete" ? 0 : 1;
+}
+
+function printHandoffError(json: boolean, reason: string, message: string): void {
+  if (json) {
+    console.log(JSON.stringify({ error: { reason, message } }, null, 2));
+  } else {
+    console.error(`[${reason}] ${message}`);
+  }
+  process.exitCode = 2;
+}
+
 function printHelp(): void {
   console.log(`keryx memory
 
@@ -527,6 +615,7 @@ Usage:
   keryx memory ingest --from-<review|health|job|skill-verifier> <path>
   keryx memory check
   keryx memory reflect [--narrate] [--provider <p>]
+  keryx memory handoff --from <harness> --target <harness> [--scope project|user] [--json]
 
 Types:
   lesson, decision, constraint, known-mistake, historical-context, pattern,

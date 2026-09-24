@@ -1,6 +1,8 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { userStorePaths } from "../lib/keryx-home";
+import { isMemoryHarnessId, parseHarnessList } from "./harness-identity";
 import { MEMORY_CLASS_VALUES, MEMORY_TYPES, classForType } from "./types";
 import type { Confidence, MemoryClass, MemoryEntry, MemoryStatus } from "./types";
 
@@ -15,6 +17,21 @@ const CONFIDENCES = new Set<Confidence>(["low", "medium", "high"]);
 
 export function memoryRoot(cwd: string): string {
   return path.join(cwd, ".metaproject", "memory");
+}
+
+/**
+ * Flow 313 (W4): resolves the memory root for a given scope. `"project"` is
+ * the existing `memoryRoot(cwd)`; `"user"` is `~/.keryx/memory` via the
+ * shared `userStorePaths` resolver (same env/homeDir override semantics as
+ * every other user-store path).
+ */
+export function memoryRootFor(
+  scope: "project" | "user",
+  cwd: string,
+  env: NodeJS.ProcessEnv = process.env,
+  homeDir?: string,
+): string {
+  return scope === "user" ? userStorePaths(env, homeDir).memory : memoryRoot(cwd);
 }
 
 export async function collectEntries(cwd: string): Promise<MemoryEntry[]> {
@@ -37,6 +54,90 @@ export async function collectEntries(cwd: string): Promise<MemoryEntry[]> {
   }
 
   return entries.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+}
+
+export type MemoryScanProblemReason =
+  | "unreadable-folder"
+  | "unreadable-file"
+  | "missing-title"
+  | "invalid-source-harness"
+  | "invalid-target-harnesses"
+  | "not-a-regular-file";
+
+export type MemoryScanProblem = { path: string; reason: MemoryScanProblemReason };
+
+export type MemoryStrictScanResult = {
+  status: "complete" | "incomplete";
+  entries: MemoryEntry[];
+  problems: MemoryScanProblem[];
+};
+
+/**
+ * Flow 313 (W4) / W4-portability.md fail-closed rule 1: walks the same
+ * `MEMORY_TYPES` folders as `collectEntries`, but under an arbitrary memory
+ * `root` (project or user scope), and never silently drops a problem into a
+ * shorter-but-clean-looking result. Any folder it cannot list, any file it
+ * cannot read, any entry missing its title, or any entry whose
+ * `Source-Harness`/`Target-Harnesses` header does not parse is recorded as a
+ * named problem AND makes the overall `status` `"incomplete"` — the caller
+ * must not treat `entries` as a complete set when `status` is `"incomplete"`.
+ * `collectEntries`'s tolerant (folder-missing-is-fine, malformed-field-is-
+ * null) behaviour for the ordinary CLI/search path is unchanged; this is a
+ * separate, stricter function for the cross-harness handoff read path only.
+ */
+export async function collectEntriesStrict(root: string): Promise<MemoryStrictScanResult> {
+  const entries: MemoryEntry[] = [];
+  const problems: MemoryScanProblem[] = [];
+
+  for (const { type, folder } of MEMORY_TYPES) {
+    const dir = path.join(root, folder);
+    if (!(await pathExists(dir))) {
+      continue;
+    }
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch {
+      problems.push({ path: `${folder}/`, reason: "unreadable-folder" });
+      continue;
+    }
+    for (const name of names) {
+      if (!name.endsWith(".md")) {
+        continue;
+      }
+      const relativePath = `${folder}/${name}`;
+      const abs = path.join(dir, name);
+      let content: string;
+      try {
+        content = await readFile(abs, "utf8");
+      } catch {
+        problems.push({ path: relativePath, reason: "unreadable-file" });
+        continue;
+      }
+      const entry = parseEntry(abs, relativePath, type, content);
+      if (!content.split("\n").some((line) => line.startsWith("# "))) {
+        problems.push({ path: relativePath, reason: "missing-title" });
+      }
+      if (headerPresentButInvalid(content, "Source-Harness", entry.sourceHarness ?? null)) {
+        problems.push({ path: relativePath, reason: "invalid-source-harness" });
+      }
+      if (headerPresentButInvalid(content, "Target-Harnesses", entry.targetHarnesses ? "present" : null)) {
+        problems.push({ path: relativePath, reason: "invalid-target-harnesses" });
+      }
+      entries.push(entry);
+    }
+  }
+
+  entries.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  return { status: problems.length === 0 ? "complete" : "incomplete", entries, problems };
+}
+
+// True when the raw header line is present in `content` but the parsed value
+// came back null/falsy — i.e. the field exists but failed to parse, distinct
+// from the field simply being absent.
+function headerPresentButInvalid(content: string, name: string, parsed: string | null): boolean {
+  const raw = field(content.split("\n"), name);
+  return raw !== null && !parsed;
 }
 
 export function parseEntry(
@@ -72,6 +173,11 @@ export function parseEntry(
   const recordedAt = field(lines, "Recorded-At") ?? created;
   const supersedes = field(lines, "Supersedes");
   const supersededBy = field(lines, "Superseded-By");
+  // Flow 313 (W4): tolerant, matching this file's existing convention —
+  // absent or unparseable -> null, never thrown.
+  const rawSourceHarness = field(lines, "Source-Harness");
+  const sourceHarness = rawSourceHarness && isMemoryHarnessId(rawSourceHarness) ? rawSourceHarness : null;
+  const targetHarnesses = parseHarnessList(field(lines, "Target-Harnesses"));
 
   return {
     absolutePath,
@@ -100,6 +206,8 @@ export function parseEntry(
     recordedAt,
     supersedes,
     supersededBy,
+    sourceHarness,
+    targetHarnesses,
   };
 }
 

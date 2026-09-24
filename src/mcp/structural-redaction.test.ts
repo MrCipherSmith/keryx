@@ -31,6 +31,7 @@ function context(root: string, invoke: ToolEntry["invoke"]): McpContext {
     config: mergeMcpConfig({ redactToolOutput: true }),
     discovery: buildDiscovery({ modules: { mcp: { enabled: true } as never } }),
     transport: "in-process",
+    harnessIdentity: null,
     tools: [{
       name: "synthetic.output",
       module: "standard",

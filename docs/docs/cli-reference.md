@@ -2557,6 +2557,7 @@ keryx memory assets list | verify [<id>] | pull <id>
 keryx memory ingest --from-<source> <path>
 keryx memory check
 keryx memory reflect [--narrate] [--provider <p>]
+keryx memory handoff --from <harness> --target <harness> [--scope project|user] [--json]
 ```
 
 | Subcommand | Flags / args | Description |
@@ -2575,6 +2576,7 @@ never deletes files or changes the Git index automatically.
 | `ingest` | `--from-review\|--from-health\|--from-job\|--from-skill-verifier <path>` | Extract candidate insights from a source artifact into ADD/UPDATE entries. |
 | `check` | — | Integrity/lint pass (metadata, links, dedup, conflicts, index). Exit `1` on issues. |
 | `reflect` | `--narrate`, `--provider <p>` | Cluster entries by tag and create `pattern` drafts for clusters ≥ min size. `--narrate` adds a model-written summary of the memory and **needs a credential** — without one it exits `1`. |
+| `handoff` | `--from <harness>`, `--target <harness>` (both required), `--scope project\|user` (default `project`), `--json` | Explicit cross-harness memory read: entries whose `Source-Harness` matches `--from` and whose `Target-Harnesses` is unset or includes `--target`. Fails closed on an unreadable folder, unreadable file, or malformed entry — the result reports `status: "incomplete"` (exit `1`) rather than silently returning a partial set as if it were complete; a clean scan reports `status: "complete"` (exit `0`). An unknown harness id or scope exits `2` with a named reason. |
 
 Entry types: `lesson`, `decision`, `constraint`, `known-mistake`,
 `historical-context`, `pattern`, `task-note`, `review-note`, `incident`,
@@ -4156,13 +4158,18 @@ and prints a deprecation line.
 keryx serve-mcp [--cwd <project-root>]     # stdio JSON-RPC (default transport)
 keryx serve-mcp --http [--cwd <root>]      # HTTP/SSE, localhost only, opt-in
 keryx serve-mcp --read-only [--cwd <root>] # hide every tool marked mutating
+keryx serve-mcp --harness <id> [--cwd <root>] # bind a cross-harness memory identity (flow 313 / W4-AC6)
 ```
 
 `--cwd` names the project root whose `.metaproject` workspace is exposed; it
 defaults to the process working directory. `--http` requires
 `capabilities.http.enabled` in the workspace. `--read-only` drops every tool
 the registry marks `mutating` from `tools/list`, and a call to one by name
-answers "Unknown or unavailable tool." keryx launches its own server this way
+answers "Unknown or unavailable tool." `--harness <id>` (or the `KERYX_HARNESS`
+env var, when `--harness` is absent) binds this server process's harness
+identity once at launch — never per tool call — for `memory.search` filtering,
+`memory.handoff`, and the `Source-Harness` stamped on `memory.propose` writes.
+An unrecognised id refuses to start the server. keryx launches its own server this way
 when it hands it to a foreign agent it drives over ACP (see
 [agents external](#agents-external) and the
 [ACP client guide](guides/acp-client.md)): that agent's MCP calls go straight
@@ -4257,7 +4264,7 @@ keryx integrate --remove <cursor|claude|opencode|vscode|generic|all>
 
 | Command | Flags / args | Description |
 |---|---|---|
-| `serve-mcp` | `--http`, `--cwd <project-root>` | Start the MCP server over stdio (the default). `--cwd` selects the project root whose `.metaproject/` workspace is exposed; this is what makes editor/client launches independent from their process cwd. `--http` switches to the isolated localhost-only HTTP/SSE transport, which additionally requires `http.enabled=true` in the module's manifest entry. Bare `mcp` is an alias for `serve-mcp`. |
+| `serve-mcp` | `--http`, `--cwd <project-root>`, `--harness <id>` | Start the MCP server over stdio (the default). `--cwd` selects the project root whose `.metaproject/` workspace is exposed; this is what makes editor/client launches independent from their process cwd. `--http` switches to the isolated localhost-only HTTP/SSE transport, which additionally requires `http.enabled=true` in the module's manifest entry. `--harness <id>` (or `KERYX_HARNESS`) binds a cross-harness memory identity once at launch; an unrecognised id refuses to start. Bare `mcp` is an alias for `serve-mcp`. |
 | `integrate` | `<cursor\|claude\|opencode\|vscode\|generic\|all>` (comma-separated; default `all`), `--dry-run` | Merge-safely wire this project into an editor/agent's MCP client config: `cursor` → `.cursor/mcp.json`, `claude` → `.mcp.json`, `opencode` → `opencode.json` (all project root), `vscode` → `.vscode/mcp.json`, `generic` prints a ready snippet and writes no file. `all` targets cursor + claude + opencode only — `vscode` is deliberately opt-in and must be named explicitly. `cursor`/`claude` add `mcpServers.keryx = { command: "keryx", args: ["mcp","serve","--cwd","<absolute-project-root>"] }`; `opencode`'s shape differs — `mcp.keryx = { type: "local", command: ["keryx","mcp","serve","--cwd","<absolute-project-root>"], enabled: true }`; `vscode`'s shape differs again — VS Code's native MCP config uses a top-level `servers` key (not `mcpServers`), each entry requiring `"type": "stdio"`: `servers.keryx = { type: "stdio", command: "keryx", args: ["mcp","serve","--cwd","<absolute-project-root>"] }`. Every runtime's entry is marked with a managed sentinel, preserving existing servers/keys and staying idempotent. Also sets `modules.mcp.enabled=true` in `metaproject.json` and probes the optional SDK (printing `bun add @modelcontextprotocol/sdk` when absent — it never auto-installs or opens a network connection). `--dry-run` prints the planned change and writes nothing. |
 | `integrate --remove` | `<cursor\|claude\|opencode\|vscode\|generic\|all>` (default `all`) | Remove ONLY the managed `keryx` server (and its sentinel) from each runtime's client config, leaving other servers and user content intact. A no-op when nothing is installed. |
 

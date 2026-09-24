@@ -6,13 +6,30 @@ export function renderMemoryEntry({
   date,
   confidence = "medium",
   source = "manual",
+  summary,
+  details,
+  sourceHarness,
+  targetHarnesses,
 }: {
   title: string;
   type: string;
   date: string;
   confidence?: string;
   source?: string;
+  // Flow 313 (W4): optional overrides for the MCP `memory.propose` tool
+  // (and any future caller that needs real content, not the scaffold
+  // placeholders below). Absent -> the pre-existing scaffold text, so every
+  // existing caller of this function is byte-identical.
+  summary?: string;
+  details?: string;
+  sourceHarness?: string;
+  targetHarnesses?: string[];
 }): string {
+  const harnessHeaderLines = [
+    ...(sourceHarness ? [`Source-Harness: ${sourceHarness}`] : []),
+    ...(targetHarnesses && targetHarnesses.length > 0 ? [`Target-Harnesses: ${targetHarnesses.join(", ")}`] : []),
+  ];
+  const harnessHeader = harnessHeaderLines.length > 0 ? `${harnessHeaderLines.join("\n")}\n` : "";
   return `# ${title}
 
 Version: 0.2.0
@@ -20,14 +37,14 @@ Type: ${type}
 Status: draft
 Confidence: ${confidence}
 Caveat:
-
+${harnessHeader}
 ## Summary
 
-Short summary.
+${summary ?? "Short summary."}
 
 ## Details
 
-Main memory content.
+${details ?? "Main memory content."}
 
 ## Provenance
 

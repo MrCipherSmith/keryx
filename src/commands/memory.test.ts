@@ -360,3 +360,128 @@ describe("keryx memory search — a genuinely unreadable memory store (real chmo
     expect(payload.results.map((r) => r.path)).toContain("lessons/kept.md");
   });
 });
+
+// Flow 313 (W4) / W4-portability.md "Cross-harness memory handoff", W4-AC7:
+// `keryx memory handoff` against a temp memory root, exercised through the
+// real command function (same pattern as the search describe block above).
+describe("keryx memory handoff", () => {
+  let root = "";
+  let cwd = "";
+  let loggedOut: string[] = [];
+  let loggedErr: string[] = [];
+  let originalLog: typeof console.log;
+  let originalError: typeof console.error;
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-memory-handoff-cmd-"));
+    cwd = process.cwd();
+    process.chdir(root);
+
+    loggedOut = [];
+    loggedErr = [];
+    originalLog = console.log;
+    originalError = console.error;
+    console.log = (...parts: unknown[]) => {
+      loggedOut.push(parts.map(String).join(" "));
+    };
+    console.error = (...parts: unknown[]) => {
+      loggedErr.push(parts.map(String).join(" "));
+    };
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    console.log = originalLog;
+    console.error = originalError;
+    process.chdir(cwd);
+    process.exitCode = 0;
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("a clean root: complete, exit 0, correct source/target filtering", async () => {
+    await mkdir(path.join(root, ".metaproject", "memory", "decisions"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "memory", "decisions", "handoff-me.md"),
+      `# Ship the handoff feature
+
+Version: 0.1.0
+Type: decision
+Status: accepted
+Confidence: high
+Source-Harness: claude
+Target-Harnesses: codex
+
+## Summary
+
+A summary.
+
+## Provenance
+
+- Source: manual
+- Created: 2026-01-01
+- Updated: 2026-01-01
+`,
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, ".metaproject", "memory", "decisions", "not-for-codex.md"),
+      `# Not for codex
+
+Version: 0.1.0
+Type: decision
+Status: accepted
+Confidence: high
+Source-Harness: claude
+Target-Harnesses: cursor
+
+## Summary
+
+A summary.
+
+## Provenance
+
+- Source: manual
+- Created: 2026-01-01
+- Updated: 2026-01-01
+`,
+      "utf8",
+    );
+
+    await memoryCommand(["handoff", "--from", "claude", "--target", "codex", "--json"]);
+
+    expect(process.exitCode).toBe(0);
+    const payload = JSON.parse(loggedOut.join("\n")) as {
+      status: string;
+      entries: Array<{ path: string }>;
+    };
+    expect(payload.status).toBe("complete");
+    expect(payload.entries.map((e) => e.path)).toEqual(["decisions/handoff-me.md"]);
+  });
+
+  test("a malformed entry (no title) makes the scan incomplete, exit 1, named problem", async () => {
+    await mkdir(path.join(root, ".metaproject", "memory", "decisions"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "memory", "decisions", "malformed.md"),
+      "Version: 0.1.0\nType: decision\nStatus: accepted\nSource-Harness: claude\n\n## Summary\n\ntext\n",
+      "utf8",
+    );
+
+    await memoryCommand(["handoff", "--from", "claude", "--target", "codex", "--json"]);
+
+    expect(process.exitCode).toBe(1);
+    const payload = JSON.parse(loggedOut.join("\n")) as {
+      status: string;
+      problems: Array<{ path: string; reason: string }>;
+    };
+    expect(payload.status).toBe("incomplete");
+    expect(payload.problems).toContainEqual({ path: "decisions/malformed.md", reason: "missing-title" });
+  });
+
+  test("an unknown --from harness id refuses (exit 2, named reason)", async () => {
+    await memoryCommand(["handoff", "--from", "not-a-harness", "--target", "codex", "--json"]);
+
+    expect(process.exitCode).toBe(2);
+    const payload = JSON.parse(loggedOut.join("\n")) as { error: { reason: string } };
+    expect(payload.error.reason).toBe("unknown-source-harness");
+  });
+});
