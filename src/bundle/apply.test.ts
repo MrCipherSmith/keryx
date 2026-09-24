@@ -2,7 +2,7 @@
 // ok, updates the ledger (including identical entries), and rolls back
 // completely on a failing write or a precondition refusal (zero writes).
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -198,7 +198,7 @@ describe("applyBundlePlan", () => {
   // created along the way — pre-fix, `ensurePrivateDirGitignore` ran before
   // the TOCTOU re-check (so it survived a refusal there) and was never
   // rolled back on a later failure either.
-  test("R1-F21: a later write failure rolls back a .gitignore this apply created, and reports apply-failed", async () => {
+  test("R1-F21: a later write failure rolls back a .gitignore this apply created, and refuses by name", async () => {
     const memoryRoot = path.join(homeDir, ".keryx", "memory");
     const goodMemoryEntry = planEntry({
       path: "memory/lessons/a.md",
@@ -225,9 +225,46 @@ describe("applyBundlePlan", () => {
 
     const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {} });
     expect(result.refusals).toHaveLength(1);
-    expect(result.refusals[0]?.reason).toBe("apply-failed");
+    // R2-F20: reading `blockerPath/nested.md` (a path THROUGH a file) is a
+    // real read error, not "does not exist" — refused by name
+    // (`target-unreadable`) now, rather than falling through to the
+    // generic `apply-failed` catch-all this test originally asserted.
+    expect(result.refusals[0]?.reason).toBe("target-unreadable");
     expect(existsSync(goodMemoryEntry.targetPath)).toBe(false);
     // The .gitignore this very apply created must be rolled back too.
     expect(existsSync(path.join(memoryRoot, ".gitignore"))).toBe(false);
+  });
+
+  // Orchestrator coordination note (L4's `checkPrivateDirGitignore`/
+  // `ensurePrivateDirGitignore(dir, root?)` root parameter): apply.ts now
+  // passes the user store root, so a symlink ANYWHERE between it and
+  // `memory/` that escapes the store is refused too, not only a symlinked
+  // `memory/` itself. Here `~/.keryx/memory` is itself a symlink pointing
+  // outside `~/.keryx` — refused, and nothing is written.
+  test("user-scope memory-entry import refuses when memory/'s parent chain contains a symlink escaping the store root", async () => {
+    const storeRoot = path.join(homeDir, ".keryx");
+    mkdirSync(storeRoot, { recursive: true });
+    const outside = path.join(root, "outside-memory");
+    mkdirSync(outside, { recursive: true });
+    symlinkSync(outside, path.join(storeRoot, "memory"));
+
+    const entry = planEntry({
+      path: "memory/lessons/a.md",
+      kind: "memory-entry",
+      targetScope: "user",
+      targetRelative: "memory/lessons/a.md",
+      displayId: "user:memory/lessons/a.md",
+      targetPath: path.join(outside, "lessons", "a.md"),
+      bytes: Buffer.from("lesson"),
+      incomingSha256: sha256Hex(Buffer.from("lesson")),
+    });
+    const plan: BundlePlan = { ok: true, bundleId: "keryx-user-x", refusals: [], entries: [entry], projectRoot };
+
+    const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {} });
+    expect(result.written).toEqual([]);
+    expect(result.refusals).toHaveLength(1);
+    expect(result.refusals[0]?.reason).toBe("private-gitignore-conflict");
+    expect(existsSync(path.join(outside, "lessons", "a.md"))).toBe(false);
+    expect(existsSync(path.join(outside, ".gitignore"))).toBe(false);
   });
 });

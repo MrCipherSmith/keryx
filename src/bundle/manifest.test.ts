@@ -3,6 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { DEFAULT_BUNDLE_LIMITS } from "./archive";
 import { parseManifest, serializeManifest } from "./manifest";
 import { BUNDLE_FORMAT_VERSION, type BundleManifest } from "./types";
 
@@ -69,6 +70,53 @@ describe("parseManifest", () => {
     const result = parseManifest(Buffer.from(JSON.stringify(manifest), "utf8"));
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.refusals.some((r) => r.reason === "kind-path-mismatch")).toBe(true);
+  });
+
+  // R2-F21 (R1-F22 regression coverage): an ASCII case-only duplicate ("SAME
+  // file on a case-insensitive filesystem) must be refused even though the
+  // exact-string duplicate check above would not catch it.
+  test("refuses an ASCII case-only duplicate path", () => {
+    const manifest = validManifest();
+    manifest.contents.push({ ...manifest.contents[0], path: "agents/FOO.md" } as BundleManifest["contents"][number]);
+    const result = parseManifest(Buffer.from(JSON.stringify(manifest), "utf8"));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.refusals.some((r) => r.reason === "duplicate-path")).toBe(true);
+  });
+
+  // R2-F21 (R1-F22 regression coverage): a file/directory prefix collision —
+  // one entry's path IS another entry's parent directory — is refused, not
+  // silently allowed to write one path as both a file and a directory.
+  test("refuses a file/directory prefix collision between two entries", () => {
+    const manifest = validManifest();
+    manifest.contents = [
+      { path: "skills/a", kind: "skill", scope: "project", sha256: "a".repeat(64), sizeBytes: 1 },
+      { path: "skills/a/ref.md", kind: "skill", scope: "project", sha256: "b".repeat(64), sizeBytes: 1 },
+    ];
+    const result = parseManifest(Buffer.from(JSON.stringify(manifest), "utf8"));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.refusals.some((r) => r.reason === "duplicate-path")).toBe(true);
+  });
+
+  // R2-F4: `contents.length` is capped BEFORE the per-entry duplicate/prefix
+  // loop runs — a manifest claiming more entries than the archive's own
+  // entry cap (`DEFAULT_BUNDLE_LIMITS.maxEntries`) is refused outright,
+  // rather than paying for an O(n) (pre-fix: O(n^2)) pass over an
+  // attacker-controlled array size. Fails on the pre-fix code, which had no
+  // cap here at all (only `archive.ts`'s cap on the ARCHIVE's own entries,
+  // which this manifest-level array is independent of).
+  test("R2-F4: refuses a contents[] array over the entry cap before any per-entry work", () => {
+    const manifest = validManifest();
+    const over = DEFAULT_BUNDLE_LIMITS.maxEntries + 1;
+    manifest.contents = Array.from({ length: over }, (_, i) => ({
+      path: `memory/lessons/${i}.md`,
+      kind: "memory-entry" as const,
+      scope: "project" as const,
+      sha256: "a".repeat(64),
+      sizeBytes: 1,
+    }));
+    const result = parseManifest(Buffer.from(JSON.stringify(manifest), "utf8"));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.refusals[0]?.reason).toBe("archive-too-large");
   });
 });
 

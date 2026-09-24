@@ -93,6 +93,13 @@ export const BUNDLE_REFUSAL = {
   corruptLedger: "corrupt-ledger",
   applyFailed: "apply-failed",
   noMetaproject: "no-metaproject",
+  // R2-F1/R1-F1 (flow 313 W4 review round 2): ownership and read-error
+  // refusals the plan/apply/uninstall stages need to fail closed instead of
+  // silently taking over another bundle's file or treating an unreadable
+  // target as absent.
+  ownedByOtherBundle: "owned-by-other-bundle",
+  targetUnreadable: "target-unreadable",
+  emptyBundle: "empty-bundle",
 } as const;
 
 export type BundleRefusalReason = (typeof BUNDLE_REFUSAL)[keyof typeof BUNDLE_REFUSAL];

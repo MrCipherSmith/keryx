@@ -20,7 +20,7 @@ import learnedPatternSchemaJson from "../../docs/requirements/keryx-agent-platfo
 import { sha256Hex } from "./checksum";
 import { buildBundleArchive } from "./archive";
 import { serializeManifest } from "./manifest";
-import { scopeRoot, type PathCtx } from "./paths";
+import { normalizeBundlePath, scopeRoot, type PathCtx } from "./paths";
 import {
   BUNDLE_FORMAT_VERSION,
   BUNDLE_REFUSAL,
@@ -148,6 +148,18 @@ function defaultBundleId(scope: BundleScope, identity: string): string {
  * the export's own sorted `"<path>\t<sha256>"` content list, so two exports
  * with different content never collide on id, and the same content always
  * reproduces the same id (this export is still deterministic).
+ *
+ * Class "ownership" (R1-F1/R2-F1): because this id is derived from CONTENT,
+ * not from a stable per-source label, re-exporting the SAME logical bundle
+ * after its content changes produces a DIFFERENT bundleId — which plan.ts's
+ * ownership check (R1-F1) then reads as "a different bundle", requiring
+ * `--force` to update files the previous export already owns. `--id` (the
+ * `ExportOptions.bundleId` override, wired to `bundle export --id` in
+ * src/commands/bundle.ts) is the intended way to keep one bundle's identity
+ * stable across re-exports: pass the SAME `--id` every time you re-export
+ * the same logical bundle, and ownership carries forward without a forced
+ * takeover. This is documented behavior, not a gap — see docs/docs/cli-reference.md's
+ * `## bundle` section.
  */
 function contentDigestBundleId(scope: BundleScope, entries: readonly { path: string; sha256: string }[]): string {
   const sorted = [...entries].sort((a, b) => a.path.localeCompare(b.path));
@@ -389,6 +401,19 @@ export async function exportBundle(opts: ExportOptions): Promise<ExportOutcome> 
   const entries: BundleContentEntry[] = [];
 
   for (const candidate of filtered) {
+    // R2-F1/R2-F21 (class "path identity"): a source file/directory NAME on
+    // disk is not restricted to portable ASCII the way a bundle path is — a
+    // skill directory named with a non-ASCII character, or one that only
+    // differs from a sibling by case, would otherwise export successfully
+    // and then fail on every `bundle import` of the resulting bundle. Refuse
+    // it here, at the source, with a named reason instead of shipping an
+    // unimportable artifact.
+    const portable = normalizeBundlePath(candidate.bundlePath);
+    if (!portable.ok) {
+      refusals.push({ ...portable.refusal, message: `${candidate.bundlePath}: source name is not portable and cannot be exported: ${portable.refusal.message}` });
+      continue;
+    }
+
     let bytes = await readFile(candidate.absolutePath);
 
     if (candidate.kind === "hook-config") {
@@ -449,6 +474,17 @@ export async function exportBundle(opts: ExportOptions): Promise<ExportOutcome> 
 
   if (refusals.length > 0) {
     return { ok: false, refusals };
+  }
+
+  // R2-F18: zero matching entries produced a manifest that violates the
+  // schema's `contents` `minItems: 1` — `ok: true, entries: 0` looked like
+  // success, but the artifact could never be imported. Refuse before
+  // writing anything.
+  if (entries.length === 0) {
+    return {
+      ok: false,
+      refusals: [{ reason: BUNDLE_REFUSAL.emptyBundle, message: "export matched no content entries; refusing to write a bundle with an empty contents[]" }],
+    };
   }
 
   const manifest: BundleManifest = {

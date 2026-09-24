@@ -355,10 +355,20 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
     return;
   }
 
-  const writtenRuleEntries = plan.entries.filter((entry) => entry.kind === "rule" && applyResult.written.includes(entry.displayId));
+  // R2-F16: gating the render on `writtenRuleEntries.length > 0` alone means
+  // a re-import whose rule entries all landed in `identical` (nothing NEW to
+  // write, because the bytes already matched — e.g. a retry after an
+  // earlier render failure, where the import's own files are fine but the
+  // rendered CLAUDE.md/etc. is still missing) never re-attempts the render.
+  // The applied bundle DID bring rule content into this scope either way, so
+  // both written and unchanged rule entries count toward "there is rule
+  // content here to render".
+  const appliedRuleEntries = plan.entries.filter(
+    (entry) => entry.kind === "rule" && (applyResult.written.includes(entry.displayId) || applyResult.unchanged.includes(entry.displayId)),
+  );
 
   let rulesResult: RulesExportResult[] | undefined;
-  if (writtenRuleEntries.length > 0) {
+  if (appliedRuleEntries.length > 0) {
     const harnessIds = renderFor.length > 0 ? renderFor : await installedRulesExportHarnesses(projectRoot);
     if (harnessIds.length > 0) {
       rulesResult = await renderRulesForHarnesses(projectRoot, harnessIds, {});
@@ -395,6 +405,12 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
     console.log("Rendered rules:");
     for (const result of rulesResult) {
       console.log(`  ${result.harness}: ${result.status}${result.file !== undefined ? ` (${result.file})` : ""}`);
+      // R2-F16: a `failed` render's own messages were computed but never
+      // printed in the human-readable path — the only way to see WHY it
+      // failed was `--json`. Surface them here too.
+      if (result.status === "failed") {
+        for (const message of result.messages) console.log(`    ${message}`);
+      }
     }
   }
   process.exitCode = anyRenderFailed ? 1 : 0;

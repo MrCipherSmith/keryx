@@ -10,7 +10,7 @@
 // against a file another bundle's ledger record already claims, is never
 // claimed into this bundle's ownership.
 
-import { mkdir, readFile, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 
@@ -18,7 +18,7 @@ import { ensurePrivateDirGitignore } from "../lib/private-dir";
 import { userStorePaths } from "../lib/keryx-home";
 import { readAppliedState, writeAppliedState, type AppliedState } from "./applied-state";
 import { sha256Hex } from "./checksum";
-import { refuseSymlinkChain, scopeRoot, type PathCtx } from "./paths";
+import { readTargetFile, refuseSymlinkChain, scopeRoot, type PathCtx } from "./paths";
 import type { PlanEntry, BundlePlan } from "./plan";
 import type { AuditBundlePlanResult } from "./audit";
 import { BUNDLE_REFUSAL, type BundleRefusal } from "./types";
@@ -44,15 +44,6 @@ export interface ApplyBundlePlanResult {
 
 function writableEntries(plan: BundlePlan): PlanEntry[] {
   return plan.entries.filter((e) => e.bucket === "new" || e.bucket === "update" || (e.bucket === "conflict" && e.forced));
-}
-
-async function currentFileSha(absolutePath: string): Promise<string | undefined> {
-  try {
-    const bytes = await readFile(absolutePath);
-    return sha256Hex(bytes);
-  } catch {
-    return undefined;
-  }
 }
 
 async function atomicWrite(absolutePath: string, bytes: Buffer): Promise<void> {
@@ -90,7 +81,17 @@ export async function applyBundlePlan(
   // still means zero bytes were written anywhere, .gitignore included.
   const toctouRefusals: BundleRefusal[] = [];
   for (const entry of toWrite) {
-    const nowSha = await currentFileSha(entry.targetPath);
+    // R2-F20: an unreadable target (permissions changed between plan and
+    // apply) is a refusal in its own right, not silently "the file is now
+    // absent" — which would otherwise agree with a `new`-bucket entry's
+    // `currentSha256: undefined` and let apply write straight over/through
+    // it without ever re-checking the TOCTOU condition for real.
+    const nowFile = await readTargetFile(entry.targetPath);
+    if (!nowFile.ok) {
+      toctouRefusals.push({ ...nowFile.refusal, path: entry.path });
+      continue;
+    }
+    const nowSha = nowFile.bytes === undefined ? undefined : sha256Hex(nowFile.bytes);
     if (nowSha !== entry.currentSha256) {
       toctouRefusals.push({
         reason: BUNDLE_REFUSAL.unresolvedConflict,
@@ -125,7 +126,12 @@ export async function applyBundlePlan(
         if (!checkedGitignoreRoots.has(memoryRoot)) {
           checkedGitignoreRoots.add(memoryRoot);
           const createdDirs = await mkdirRecordingCreated(memoryRoot);
-          const check = await ensurePrivateDirGitignore(memoryRoot);
+          // `root` bounds the check's own ancestor-symlink walk to the user
+          // store root, matching plan.ts's `checkPrivateDirGitignore` call —
+          // a symlink anywhere between the store root and `memoryRoot` that
+          // escapes the store is refused, not only a symlinked `memory/`.
+          const ctx: PathCtx = { projectRoot: plan.projectRoot, env: opts.env, homeDir: opts.homeDir };
+          const check = await ensurePrivateDirGitignore(memoryRoot, scopeRoot("user", ctx));
           if (!check.ok) {
             throw new ApplyAbort({ reason: BUNDLE_REFUSAL.privateGitignoreConflict, message: check.message });
           }
@@ -153,12 +159,15 @@ export async function applyBundlePlan(
         throw new ApplyAbort(symlinkCheck.refusal);
       }
 
-      let previousBytes: Buffer | null = null;
-      try {
-        previousBytes = await readFile(entry.targetPath);
-      } catch {
-        previousBytes = null;
+      // R2-F20: an EACCES (or similar) here is not "the file didn't exist" —
+      // that misreading made rollback `unlink` a file that, in fact, still
+      // existed but merely could not be read at the moment of the write.
+      // Refuse before writing anything for this entry rather than guess.
+      const previousFile = await readTargetFile(entry.targetPath);
+      if (!previousFile.ok) {
+        throw new ApplyAbort({ ...previousFile.refusal, path: entry.path });
       }
+      const previousBytes: Buffer | null = previousFile.bytes ?? null;
       const createdDirs = await mkdirRecordingCreated(path.dirname(entry.targetPath));
       for (const dir of [...createdDirs].reverse()) rollback.push({ kind: "dir", absolutePath: dir });
       rollback.push({ kind: "file", absolutePath: entry.targetPath, previousBytes });

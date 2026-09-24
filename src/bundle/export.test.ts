@@ -151,4 +151,80 @@ describe("exportBundle", () => {
     if (!o1.ok || !o2.ok) return;
     expect(JSON.stringify(o1.result.manifest)).toBe(JSON.stringify(o2.result.manifest));
   });
+
+  // R2-F18: a match set of zero entries used to still write a
+  // schema-violating (`contents` `minItems: 1`) bundle and report `ok:
+  // true`. Fails on the pre-fix code, which had no `entries.length === 0`
+  // check at all.
+  test("R2-F18: refuses an export that matches zero content entries", async () => {
+    // metaRoot exists but is otherwise empty — nothing to collect.
+    const outDir = path.join(root, "out-empty");
+    const outcome = await exportBundle({
+      projectRoot,
+      scope: "project",
+      out: outDir,
+      keryxVersion: "0.2.999-test",
+      homeDir: path.join(root, "home"),
+      env: {},
+    });
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.refusals[0]?.reason).toBe("empty-bundle");
+  });
+
+  // R2-F1/R2-F21 (class "path identity"): a source directory/file name that
+  // is not portable ASCII must not silently export — the resulting bundle
+  // could never be imported (`normalizeBundlePath` refuses it on the way
+  // in). Fails on the pre-fix code, which exported it unchanged.
+  test("refuses a non-ASCII source skill directory name with a named reason", async () => {
+    mkdirSync(path.join(metaRoot, "skills", "skſll"), { recursive: true });
+    writeFileSync(path.join(metaRoot, "skills", "skſll", "SKILL.md"), "---\nname: x\ndescription: d\n---\nbody\n");
+    const outDir = path.join(root, "out-nonportable");
+    const outcome = await exportBundle({
+      projectRoot,
+      scope: "project",
+      out: outDir,
+      keryxVersion: "0.2.999-test",
+      homeDir: path.join(root, "home"),
+      env: {},
+    });
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.refusals.some((r) => r.reason === "path-escape")).toBe(true);
+  });
+
+  // R2-F21 (missing regression test for R1-F23): with no git remote,
+  // `defaultBundleId` used to be a FIXED label per scope
+  // (`keryx-<scope>-local`), so two unrelated exports collided on the same
+  // id — which, combined with R1-F1, let one bundle's uninstall delete
+  // another's files. The fix derives the id from the export's own content
+  // digest instead. Fails on the pre-R1-F23 code, which returned the same
+  // constant id for both exports below regardless of content.
+  test("R1-F23: two no-remote projects with different content get distinct default bundleIds", async () => {
+    mkdirSync(path.join(metaRoot, "rules"), { recursive: true });
+    writeFileSync(path.join(metaRoot, "rules", "a.md"), "# rule a\n");
+    const out1 = path.join(root, "out-distinct-1");
+    const outcome1 = await exportBundle({ projectRoot, scope: "project", out: out1, keryxVersion: "0.2.999-test", homeDir: path.join(root, "home"), env: {} });
+    expect(outcome1.ok).toBe(true);
+    if (!outcome1.ok) return;
+
+    const otherProjectRoot = path.join(root, "other-project");
+    const otherMetaRoot = path.join(otherProjectRoot, ".metaproject");
+    mkdirSync(path.join(otherMetaRoot, "rules"), { recursive: true });
+    writeFileSync(path.join(otherMetaRoot, "rules", "b.md"), "# a completely different rule\n");
+    const out2 = path.join(root, "out-distinct-2");
+    const outcome2 = await exportBundle({ projectRoot: otherProjectRoot, scope: "project", out: out2, keryxVersion: "0.2.999-test", homeDir: path.join(root, "home"), env: {} });
+    expect(outcome2.ok).toBe(true);
+    if (!outcome2.ok) return;
+
+    expect(outcome1.result.manifest.bundleId).not.toBe(outcome2.result.manifest.bundleId);
+
+    // Same content (re-exporting project 1 again) reproduces the SAME id —
+    // deterministic, not random per export.
+    const out1b = path.join(root, "out-distinct-1b");
+    const outcome1b = await exportBundle({ projectRoot, scope: "project", out: out1b, keryxVersion: "0.2.999-test", homeDir: path.join(root, "home"), env: {} });
+    expect(outcome1b.ok).toBe(true);
+    if (!outcome1b.ok) return;
+    expect(outcome1b.result.manifest.bundleId).toBe(outcome1.result.manifest.bundleId);
+  });
 });

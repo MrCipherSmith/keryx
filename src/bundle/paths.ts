@@ -8,7 +8,7 @@
 // skill mirrors `~/.keryx/skills/<name>/SKILL.md` directly, so `apply` is a
 // plain copy rather than a kind-specific rewrite.
 
-import { lstat } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { resolveContainedPath } from "../lib/contained-path";
@@ -45,9 +45,43 @@ const CONTROL_CHAR_RE = /[\x00-\x1f\x7f\u2028\u2029]/;
 const MARKER_FORGING_RE = /[<>`]|<!--|-->/;
 
 /**
+ * Portable segment shape (R2-F1/R2-F21, class "path identity"): ASCII
+ * letters, digits, `.`, `_`, `-` only, and never starting with `.`. No
+ * exceptions are carved out for bundle content \u2014 the reserved dotfile keys
+ * (`.external-imports.key` etc.) live outside any path a bundle's manifest
+ * can ever name, not as an allowed leading-dot segment here.
+ *
+ * This is the actual fix for the round-2 Unicode/case-folding class: rather
+ * than trying to enumerate every case-insensitive-filesystem alias of every
+ * reserved name (NFD, full-width, `\u00df`, `\u0130`, and \u2014 the one that slipped
+ * through round 1 \u2014 U+017F LATIN SMALL LETTER LONG S, which APFS folds to
+ * `s` but `String.prototype.toLowerCase()` does not), every bundle path
+ * segment is restricted to a portable ASCII subset up front. A path that
+ * cannot contain a non-ASCII character cannot contain a non-ASCII alias of a
+ * reserved name either, by construction, on any filesystem.
+ */
+const PORTABLE_SEGMENT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/**
+ * Every `/`-separated segment of `relPath` matches `PORTABLE_SEGMENT_RE`.
+ * `normalizeBundlePath` is the primary enforcement point (every production
+ * caller of `validateKindPath` normalizes first — `manifest.ts`,
+ * `targetFor`, `uninstall.ts`'s ledger-key check), but `validateKindPath`
+ * ALSO checks this itself, defense-in-depth: a reserved-path/kind-shape
+ * comparison must be safe against a non-portable string even if some future
+ * caller (or a unit test exercising it directly) skips normalization —
+ * "correct only because every caller was audited" is exactly the shape of
+ * gap round 2 found repeatedly.
+ */
+function isPortablePath(relPath: string): boolean {
+  return relPath.split("/").every((segment) => PORTABLE_SEGMENT_RE.test(segment));
+}
+
+/**
  * Normalize a bundle-relative path: POSIX separators only, no absolute path,
  * no backslash, no NUL byte, no control character, no marker-forging
- * character/sequence, no empty/`.`/`..` segment, no trailing slash.
+ * character/sequence, no empty/`.`/`..` segment, no trailing slash, and
+ * every segment portable ASCII (R2-F1).
  */
 export function normalizeBundlePath(candidate: string): NormalizeResult {
   if (candidate.length === 0) {
@@ -82,6 +116,16 @@ export function normalizeBundlePath(candidate: string): NormalizeResult {
         refusal: { reason: BUNDLE_REFUSAL.pathEscape, path: candidate, message: `path segment "${segment}" is not allowed` },
       };
     }
+    if (!PORTABLE_SEGMENT_RE.test(segment)) {
+      return {
+        ok: false,
+        refusal: {
+          reason: BUNDLE_REFUSAL.pathEscape,
+          path: candidate,
+          message: `path segment "${segment}" is not portable: only ASCII letters, digits, '.', '_', '-' are allowed, and a segment must not start with '.'`,
+        },
+      };
+    }
   }
   return { ok: true, path: segments.join("/") };
 }
@@ -92,22 +136,27 @@ const AGENT_NAME_SEGMENT = /^[^/]+\.md$/;
 const RULE_FILE = /\.(md|mdc)$/;
 
 /**
- * Case-folded, NFC-normalized form of a path segment/prefix comparison, so a
- * reserved-path guard behaves identically on a case-insensitive filesystem
- * (macOS/Windows) and a case-sensitive one (Linux CI) — R1-F2. `normalize`
- * before `toLowerCase` so composed and decomposed Unicode forms of the same
- * reserved name also collide.
+ * Canonical form for comparing a path/segment that has already passed
+ * `PORTABLE_SEGMENT_RE` (or is a fixed, hand-written portable-ASCII
+ * constant below): plain ASCII lower-casing. Because every bundle path is
+ * restricted to portable ASCII before it ever reaches a reserved-path,
+ * duplicate, or ledger-key comparison, a simple `toLowerCase` is already a
+ * complete, alias-free fold — there is no non-ASCII case variant left to
+ * miss (R2-F1). Exported so manifest duplicate/prefix checks and uninstall's
+ * ledger-key checks use the exact same canonical form as the reserved-path
+ * guard here.
  */
-function caseFold(value: string): string {
-  return value.normalize("NFC").toLowerCase();
+export function caseFold(value: string): string {
+  return value.toLowerCase();
 }
 
-const GLOBALLY_FORBIDDEN_EXACT = [caseFold("skills/external-imports.json"), caseFold("learning/index.json")];
+const GLOBALLY_FORBIDDEN_EXACT = [caseFold("skills/external-imports.json"), caseFold("learning/index.json"), caseFold("skills/.external-imports.key")];
 const GLOBALLY_FORBIDDEN_PREFIXES = [
   caseFold("learning/observations/"),
   caseFold("data/learning/observations/"),
   caseFold("bundles/"),
   caseFold("data/bundles/"),
+  caseFold("state/"),
 ];
 
 /**
@@ -126,6 +175,17 @@ function isGloballyForbidden(relPath: string): boolean {
 
 /** Does `relPath` (already normalized) match the allowed on-disk shape for `kind` at `scope`? */
 export function validateKindPath(kind: BundleContentKind, scope: BundleScope, relPath: string): KindPathCheck {
+  // R2-F1 defense-in-depth: see `isPortablePath`'s doc comment. A caller
+  // that skipped `normalizeBundlePath` (or a bare string with an
+  // already-normalized-looking shape, e.g. no `..`/control chars, but a
+  // non-ASCII alias character) still cannot slip a non-portable path past
+  // every kind/reserved-path shape check below.
+  if (!isPortablePath(relPath)) {
+    return {
+      ok: false,
+      refusal: { reason: BUNDLE_REFUSAL.pathEscape, path: relPath, message: `${relPath} is not portable: only ASCII letters, digits, '.', '_', '-' are allowed, and a segment must not start with '.'` },
+    };
+  }
   if (isGloballyForbidden(relPath)) {
     return {
       ok: false,
@@ -289,6 +349,33 @@ export async function refuseSymlinkChain(root: string, relPath: string): Promise
     }
   }
   return { ok: true };
+}
+
+export type TargetReadOutcome = { ok: true; bytes: Buffer | undefined } | { ok: false; refusal: BundleRefusal };
+
+/**
+ * Read a target file's bytes, distinguishing "does not exist" (`ENOENT` ->
+ * `bytes: undefined`) from any other read failure — permissions, a
+ * directory sitting where a file was expected, an I/O error (R2-F20). Every
+ * caller that used to swallow every error the same way (`currentFileSha` in
+ * plan.ts and apply.ts, the uninstall read in uninstall.ts) now goes
+ * through this one function, so an unreadable-but-present target is a named
+ * `target-unreadable` refusal everywhere instead of being planned `new`,
+ * silently clobbered by apply, or dropped from the uninstall ledger as
+ * though it had already been removed.
+ */
+export async function readTargetFile(absolutePath: string): Promise<TargetReadOutcome> {
+  try {
+    const bytes = await readFile(absolutePath);
+    return { ok: true, bytes };
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return { ok: true, bytes: undefined };
+    return {
+      ok: false,
+      refusal: { reason: BUNDLE_REFUSAL.targetUnreadable, path: absolutePath, message: `cannot read ${absolutePath}: ${err instanceof Error ? err.message : String(err)}` },
+    };
+  }
 }
 
 export { resolveContainedPath };

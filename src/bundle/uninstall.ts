@@ -4,12 +4,12 @@
 // a file a human has since edited is kept, with a warning, per the same
 // never-clobber-a-hand-edit discipline apply itself follows.
 
-import { readFile, rmdir, unlink } from "node:fs/promises";
+import { rmdir, unlink } from "node:fs/promises";
 import path from "node:path";
 
 import { appliedStatePath, readAppliedState, writeAppliedState } from "./applied-state";
 import { sha256Hex } from "./checksum";
-import { normalizeBundlePath, refuseSymlinkChain, scopeRoot, type PathCtx } from "./paths";
+import { caseFold, normalizeBundlePath, readTargetFile, refuseSymlinkChain, scopeRoot, validateKindPath, type PathCtx } from "./paths";
 import { BUNDLE_REFUSAL, type BundleRefusal, type BundleScope } from "./types";
 
 export interface UninstallBundleOptions {
@@ -78,6 +78,30 @@ export async function uninstallBundle(opts: UninstallBundleOptions): Promise<Uni
     return { ok: false, refusals: [{ reason: BUNDLE_REFUSAL.corruptLedger, message: ledgerRead.message }], removed: [], kept: [], missing: [] };
   }
 
+  // R1-F9: two ledger keys that fold to the SAME on-disk path (`rules/a.md`
+  // and `RULES/A.MD` are the same file on APFS/exFAT) let a planted or
+  // hand-edited ledger record steal another bundle's file: this bundle's
+  // own (attacker-controlled) key deletes the path a DIFFERENT bundleId's
+  // key also names, once that other key's sha256 happens to match current
+  // disk content. The whole ledger is untrusted the moment any one record
+  // is untrusted, so a fold collision anywhere refuses the whole uninstall
+  // rather than silently proceeding key-by-key.
+  const foldedKeys = new Map<string, string>();
+  for (const relPath of Object.keys(ledgerRead.state.entries)) {
+    const folded = caseFold(relPath);
+    const prior = foldedKeys.get(folded);
+    if (prior !== undefined && prior !== relPath) {
+      return {
+        ok: false,
+        refusals: [{ reason: BUNDLE_REFUSAL.corruptLedger, path: relPath, message: `applied-state ledger keys "${prior}" and "${relPath}" collide on a case-insensitive filesystem` }],
+        removed: [],
+        kept: [],
+        missing: [],
+      };
+    }
+    foldedKeys.set(folded, relPath);
+  }
+
   const removed: string[] = [];
   const kept: UninstallKept[] = [];
   const missing: string[] = [];
@@ -97,6 +121,17 @@ export async function uninstallBundle(opts: UninstallBundleOptions): Promise<Uni
     if (!normalized.ok) {
       return { ok: false, refusals: [{ reason: BUNDLE_REFUSAL.corruptLedger, path: relPath, message: `applied-state ledger key "${relPath}" is not a valid bundle path: ${normalized.refusal.message}` }], removed: [], kept: [], missing: [] };
     }
+    // R1-F9 (still open in round 2): normalize/containment/symlink checks
+    // alone accept ANY valid bundle path, not only one shaped like the
+    // ledger record's own RECORDED kind — a planted record
+    // `{"kind":"rule", ...}` under the key `.metaproject/index.md` passed
+    // every check above and reached `unlink`, deleting a file uninstall was
+    // never meant to be able to touch. Re-running `validateKindPath`
+    // rejects any key that is not shaped like its own recorded kind.
+    const kindCheck = validateKindPath(record.kind, opts.targetScope, normalized.path);
+    if (!kindCheck.ok) {
+      return { ok: false, refusals: [{ reason: BUNDLE_REFUSAL.corruptLedger, path: relPath, message: `applied-state ledger key "${relPath}" does not match its recorded kind "${record.kind}": ${kindCheck.refusal.message}` }], removed: [], kept: [], missing: [] };
+    }
     const absolute = path.resolve(rootResolved, normalized.path);
     if (!isContained(rootResolved, absolute)) {
       return { ok: false, refusals: [{ reason: BUNDLE_REFUSAL.corruptLedger, path: relPath, message: `applied-state ledger key "${relPath}" resolves outside the scope root` }], removed: [], kept: [], missing: [] };
@@ -106,12 +141,15 @@ export async function uninstallBundle(opts: UninstallBundleOptions): Promise<Uni
       return { ok: false, refusals: [symlinkCheck.refusal], removed: [], kept: [], missing: [] };
     }
 
-    let currentBytes: Buffer | undefined;
-    try {
-      currentBytes = await readFile(absolute);
-    } catch {
-      currentBytes = undefined;
+    // R2-F20: an unreadable-but-present target must refuse, not be treated
+    // as "missing" — dropping it from the ledger here would silently stop
+    // tracking a file that still exists (just not readable right now),
+    // defeating any future uninstall of it.
+    const currentFile = await readTargetFile(absolute);
+    if (!currentFile.ok) {
+      return { ok: false, refusals: [{ ...currentFile.refusal, path: relPath }], removed: [], kept: [], missing: [] };
     }
+    const currentBytes = currentFile.bytes;
 
     if (currentBytes === undefined) {
       missing.push(relPath);

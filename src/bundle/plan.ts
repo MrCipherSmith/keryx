@@ -5,8 +5,6 @@
 // learned-pattern scope rule (W4-AC11) and the private-dir `.gitignore`
 // fail-closed rule (W4-AC8) along the way.
 
-import { readFile } from "node:fs/promises";
-
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { parseAgentFrontmatter, validateAgentFrontmatter } from "../agents/service";
 import { checkPrivateDirGitignore } from "../lib/private-dir";
@@ -21,12 +19,15 @@ import { readAppliedState, appliedStatePath } from "./applied-state";
 import { sha256Hex } from "./checksum";
 import type { BundleSource } from "./archive";
 import { rewriteAgentOrigin } from "./export";
-import { targetFor, type PathCtx } from "./paths";
+import { readTargetFile, scopeRoot, targetFor, type PathCtx } from "./paths";
 import { verifyBundle } from "./verify";
 import { BUNDLE_REFUSAL, type BundleContentKind, type BundleManifest, type BundleRefusal, type BundleScope } from "./types";
 
 export type PlanBucket = "new" | "identical" | "update" | "conflict";
-export type PlanConflictReason = "user-modified" | "unmanaged-differs";
+// R1-F1: an entry that would otherwise bucket "update" (content unchanged
+// since it was last applied) but whose ledger record belongs to a DIFFERENT
+// bundleId is a conflict, not a silent takeover — "owned-by-other-bundle".
+export type PlanConflictReason = "user-modified" | "unmanaged-differs" | "owned-by-other-bundle";
 
 export interface PlanEntry {
   path: string;
@@ -64,6 +65,8 @@ export interface PlanBundleImportOptions {
   allowHooks?: boolean | undefined;
   env?: NodeJS.ProcessEnv | undefined;
   homeDir?: string | undefined;
+  /** Injectable clock for the learned-pattern TTL's `importDay` anchor (R2-F19); defaults to `() => new Date()`. */
+  now?: (() => Date) | undefined;
 }
 
 // --- learned-pattern candidate rewrite -------------------------------------
@@ -72,21 +75,30 @@ interface LearnedPatternTtl {
   expiresAt: string;
 }
 
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
 /**
- * Deterministic default TTL: 30 days from the bundle's own `manifest.createdAt`
- * (not wall-clock `now`) so the rewritten bytes — and therefore
- * `incomingSha256` — are identical on every plan of the same bundle. Using
- * `Date.now()` here made `inspect` report `update` right after a fresh
- * `import`, and every re-import silently pushed the TTL out another 30 days
- * (R1-F11). Falls back to the current time only if `createdAt` fails to
- * parse, so a malformed manifest (which `parseManifest`'s schema check should
- * already have refused) never throws here.
+ * Deterministic default TTL (R1-F11, then R2-F19): `max(createdAt, importDay)
+ * + 30d`, where `importDay` is `now` floored to the UTC calendar date (not
+ * the exact instant) — so replanning the same bundle within the same UTC day
+ * reproduces the identical `expiresAt`, and therefore the identical
+ * `incomingSha256` (R1-F11's determinism requirement still holds within a
+ * day). Anchoring on `createdAt` ALONE (the round-1 fix) meant a bundle
+ * older than 30 days imported patterns that were already expired the moment
+ * they landed (R2-F19); anchoring on `now` alone reintroduces R1-F11's bug.
+ * `max(...)` gives a floor of "at least 30 days from today", while still
+ * respecting a `createdAt` far enough in the FUTURE (clock skew) to push it
+ * out further. Falls back to `now` only if `createdAt` fails to parse, so a
+ * malformed manifest (which `parseManifest`'s schema check should already
+ * have refused) never throws here.
  */
-function defaultLearnedPatternTtl(manifestCreatedAt: string): LearnedPatternTtl {
+function defaultLearnedPatternTtl(manifestCreatedAt: string, now: () => Date): LearnedPatternTtl {
   const base = new Date(manifestCreatedAt);
-  const baseMs = Number.isNaN(base.getTime()) ? Date.now() : base.getTime();
-  const expires = new Date(baseMs + 30 * 24 * 60 * 60 * 1000);
-  return { expiresAt: expires.toISOString() };
+  const baseMs = Number.isNaN(base.getTime()) ? now().getTime() : base.getTime();
+  const nowDate = now();
+  const importDayMs = Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), nowDate.getUTCDate());
+  const expiresMs = Math.max(baseMs, importDayMs) + THIRTY_DAYS_MS;
+  return { expiresAt: new Date(expiresMs).toISOString() };
 }
 
 /**
@@ -97,25 +109,60 @@ function defaultLearnedPatternTtl(manifestCreatedAt: string): LearnedPatternTtl 
  * Stable JSON, 2-space indent + trailing newline — these bytes are what
  * `incomingSha256` covers.
  */
-function rewriteLearnedPatternCandidate(record: Record<string, unknown>, manifestCreatedAt: string): Buffer {
+function rewriteLearnedPatternCandidate(record: Record<string, unknown>, manifestCreatedAt: string, now: () => Date): Buffer {
   const rewritten: Record<string, unknown> = { ...record, status: "candidate", supersededBy: null };
   if (rewritten.ttl === undefined || rewritten.ttl === null) {
-    rewritten.ttl = defaultLearnedPatternTtl(manifestCreatedAt);
+    rewritten.ttl = defaultLearnedPatternTtl(manifestCreatedAt, now);
   }
   return Buffer.from(`${JSON.stringify(rewritten, null, 2)}\n`, "utf8");
 }
 
-async function currentFileSha(absolutePath: string): Promise<string | undefined> {
+/**
+ * `JSON.stringify` with object keys sorted recursively, so two independently
+ * parsed objects compare equal whenever their VALUES match, regardless of
+ * property insertion order.
+ */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * R2-F19 (the fix's side effect): the TTL is now day-granular and anchored
+ * partly on `now`, so the SAME on-disk file compared against a freshly
+ * rewritten candidate on a LATER day would otherwise differ only in
+ * `ttl.expiresAt`, breaking "inspect after import reports identical"
+ * (R1-F11). Two learned-pattern records are treated as identical content
+ * when they match on every field except `ttl.expiresAt`.
+ */
+function learnedPatternEqualModuloTtl(currentBytes: Buffer, candidateBytes: Buffer): boolean {
   try {
-    const bytes = await readFile(absolutePath);
-    return sha256Hex(bytes);
+    const strip = (raw: unknown): unknown => {
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
+      const obj = { ...(raw as Record<string, unknown>) };
+      if (typeof obj.ttl === "object" && obj.ttl !== null && !Array.isArray(obj.ttl)) {
+        const ttl = { ...(obj.ttl as Record<string, unknown>) };
+        delete ttl.expiresAt;
+        obj.ttl = ttl;
+      }
+      return obj;
+    };
+    const current = strip(JSON.parse(currentBytes.toString("utf8")));
+    const candidate = strip(JSON.parse(candidateBytes.toString("utf8")));
+    return stableStringify(current) === stableStringify(candidate);
   } catch {
-    return undefined;
+    return false;
   }
 }
 
 export async function planBundleImport(opts: PlanBundleImportOptions): Promise<BundlePlan> {
   const ctx: PathCtx = { projectRoot: opts.projectRoot, env: opts.env, homeDir: opts.homeDir };
+  const now = opts.now ?? (() => new Date());
 
   // Step 1: checksums first. Any failure -> ok:false, no further work.
   const verified = verifyBundle(opts.source, opts.manifest);
@@ -217,7 +264,7 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
         });
         continue;
       }
-      effectiveBytes = rewriteLearnedPatternCandidate(recordObj, opts.manifest.createdAt);
+      effectiveBytes = rewriteLearnedPatternCandidate(recordObj, opts.manifest.createdAt, now);
       // Validate AFTER the candidate rewrite — the rewrite is what actually
       // gets written, so that is what must be schema-valid (R1-F12).
       let rewrittenParsed: unknown;
@@ -297,7 +344,11 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
       const memoryRoot = userStorePaths(opts.env ?? process.env, opts.homeDir).memory;
       if (!gitignoreChecked.has(memoryRoot)) {
         gitignoreChecked.add(memoryRoot);
-        const check = await checkPrivateDirGitignore(memoryRoot);
+        // `root` bounds the check's own ancestor-symlink walk to the user
+        // store root, so a symlink ANYWHERE between it and `memoryRoot`
+        // that escapes the store is refused too, not only a symlinked
+        // `memory/` itself.
+        const check = await checkPrivateDirGitignore(memoryRoot, scopeRoot("user", ctx));
         if (!check.ok) {
           refusals.push({ reason: BUNDLE_REFUSAL.privateGitignoreConflict, path: contentEntry.path, message: check.message });
           continue;
@@ -307,8 +358,29 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
 
     const targetRelative = contentEntry.path;
     const displayId = `${targetScope}:${targetRelative}`;
+
+    // R2-F20: distinguish "target does not exist" from "target exists but
+    // could not be read" (permissions, an I/O error). Swallowing every error
+    // the same way planned an unreadable-but-present user file as `new`,
+    // which apply then clobbered and uninstall's rollback later deleted.
+    const currentFile = await readTargetFile(target.absolutePath);
+    if (!currentFile.ok) {
+      refusals.push({ ...currentFile.refusal, path: contentEntry.path });
+      continue;
+    }
+    const currentBytes = currentFile.bytes;
+
+    // R2-F19 (side effect of the TTL fix above): if this is the exact same
+    // learned-pattern content already on disk and it differs only in the
+    // now day-granular `ttl.expiresAt`, treat the file already there as the
+    // content to compare/apply — so re-planning the same import on a later
+    // UTC day still reports `identical`, not a spurious `update` (R1-F11).
+    if (contentEntry.kind === "learned-pattern" && currentBytes !== undefined && learnedPatternEqualModuloTtl(currentBytes, effectiveBytes)) {
+      effectiveBytes = currentBytes;
+    }
+
     const incomingSha256 = sha256Hex(effectiveBytes);
-    const currentSha256 = await currentFileSha(target.absolutePath);
+    const currentSha256 = currentBytes === undefined ? undefined : sha256Hex(currentBytes);
 
     const ledgerPath = appliedStatePath(targetScope, ctx);
     const ledgerState = await readAppliedState(ledgerPath);
@@ -318,6 +390,9 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     }
     const ledgerRecord = ledgerState.state.entries[targetRelative];
     const ledgerSha256 = ledgerRecord?.sha256;
+    // R1-F1: a ledger record that already exists but belongs to a DIFFERENT
+    // bundleId means some other bundle wrote (and still owns) this target.
+    const ledgerOwnedByOther = ledgerRecord !== undefined && ledgerRecord.bundleId !== opts.manifest.bundleId;
 
     let bucket: PlanBucket;
     let conflictReason: PlanConflictReason | undefined;
@@ -325,13 +400,28 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     if (currentSha256 === undefined) {
       bucket = "new";
     } else if (currentSha256 === incomingSha256) {
+      // Identical bytes: safe regardless of ownership — apply never writes
+      // an `identical` entry, and only claims the ledger record when it
+      // already belongs to this bundle (see apply.ts), so this can never
+      // silently transfer ownership.
       bucket = "identical";
     } else if (ledgerSha256 !== undefined && currentSha256 === ledgerSha256) {
-      bucket = "update";
+      if (ledgerOwnedByOther) {
+        // R1-F1: content unchanged since ANOTHER bundle applied it. Without
+        // this branch this bucketed "update" and a forced-by-default write
+        // silently transferred ownership; now it requires `--force <path>`
+        // like any other conflict, and the transfer is explicit.
+        bucket = "conflict";
+        conflictReason = "owned-by-other-bundle";
+      } else {
+        bucket = "update";
+      }
     } else if (ledgerSha256 !== undefined && currentSha256 !== ledgerSha256) {
       bucket = "conflict";
       conflictReason = "user-modified";
     } else {
+      // ledgerSha256 undefined here implies ledgerRecord is undefined too,
+      // so ledgerOwnedByOther is always false in this branch.
       bucket = "conflict";
       conflictReason = "unmanaged-differs";
     }

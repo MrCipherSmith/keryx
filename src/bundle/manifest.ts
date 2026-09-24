@@ -6,7 +6,8 @@ import manifestSchemaJson from "../../docs/requirements/keryx-agent-platform-exp
   type: "json",
 };
 import { validateAgainstSchemaObject } from "../contracts/validator";
-import { normalizeBundlePath, validateKindPath } from "./paths";
+import { DEFAULT_BUNDLE_LIMITS } from "./archive";
+import { caseFold, normalizeBundlePath, validateKindPath } from "./paths";
 import { BUNDLE_FORMAT_VERSION, BUNDLE_REFUSAL, type BundleContentEntry, type BundleManifest, type BundleRefusal } from "./types";
 
 export type ParseManifestResult = { ok: true; manifest: BundleManifest } | { ok: false; refusals: BundleRefusal[] };
@@ -48,20 +49,45 @@ export function parseManifest(bytes: Buffer | string): ParseManifestResult {
     };
   }
 
+  // R2-F4: `contents.length` is attacker-controlled (a hand-crafted
+  // bundle.json can claim far more entries than the archive itself holds —
+  // `verifyBundle`'s missing-entry check only runs AFTER this parse), so it
+  // must be capped BEFORE any per-entry loop below, not after. `inspect` is
+  // documented safe on untrusted bundles; without this cap a ~300KB manifest
+  // with ~100k entries made the O(n^2) prefix check (removed below) hang for
+  // over a minute, and even the O(n) replacement should not iterate an
+  // unbounded array on untrusted input.
+  if (manifest.contents.length > DEFAULT_BUNDLE_LIMITS.maxEntries) {
+    return {
+      ok: false,
+      refusals: [
+        {
+          reason: BUNDLE_REFUSAL.archiveTooLarge,
+          message: `manifest lists ${manifest.contents.length} contents entries, more than the ${DEFAULT_BUNDLE_LIMITS.maxEntries}-entry cap`,
+        },
+      ],
+    };
+  }
+
   const refusals: BundleRefusal[] = [];
   const seenPaths = new Set<string>();
-  // R1-F22: two entries whose paths differ only by case are the SAME file on
-  // a case-insensitive filesystem (`rules/a.md` and `rules/A.md` both write
-  // `rules/a.md` on APFS), so an exact-match duplicate check alone lets a
-  // bundle silently write one path twice under two different ledger keys —
-  // which later confuses conflict detection and uninstall. Compared
-  // case-folded + NFC-normalized, same as the reserved-path guard.
+  // R1-F22/R2-F1: two entries whose paths differ only by case are the SAME
+  // file on a case-insensitive filesystem (`rules/a.md` and `rules/A.md`
+  // both write `rules/a.md` on APFS), so an exact-match duplicate check
+  // alone lets a bundle silently write one path twice under two different
+  // ledger keys — which later confuses conflict detection and uninstall.
+  // Compared on the same canonical (portable-ASCII, lower-cased) form the
+  // reserved-path guard in paths.ts uses.
   const seenFolded = new Map<string, string>(); // folded path -> first original path that produced it
   // A path that is a PREFIX DIRECTORY of another entry (`skills/a` as a file
   // AND `skills/a/SKILL.md` as another entry) collides on disk too — the
   // second write needs `skills/a` to be a directory that the first entry
-  // already claimed as a file. Tracked case-folded as well.
-  const seenFoldedSorted: string[] = [];
+  // already claimed as a file. R2-F4: checked with two Sets keyed on the
+  // folded form — `seenFileKeys` (paths already claimed as a FILE) and
+  // `seenDirKeys` (path prefixes already claimed as a DIRECTORY) — so each
+  // entry costs O(depth) rather than comparing against every prior entry.
+  const seenFileKeys = new Set<string>();
+  const seenDirKeys = new Set<string>();
   for (const entry of manifest.contents) {
     if (seenPaths.has(entry.path)) {
       refusals.push({ reason: BUNDLE_REFUSAL.duplicatePath, path: entry.path, message: `duplicate contents[].path: ${entry.path}` });
@@ -69,7 +95,7 @@ export function parseManifest(bytes: Buffer | string): ParseManifestResult {
     }
     seenPaths.add(entry.path);
 
-    const folded = entry.path.normalize("NFC").toLowerCase();
+    const folded = caseFold(entry.path);
     const priorForFolded = seenFolded.get(folded);
     if (priorForFolded !== undefined) {
       refusals.push({
@@ -79,7 +105,12 @@ export function parseManifest(bytes: Buffer | string): ParseManifestResult {
       });
       continue;
     }
-    const collidesAsPrefix = seenFoldedSorted.some((other) => folded === other || folded.startsWith(`${other}/`) || other.startsWith(`${folded}/`));
+    const foldedSegments = folded.split("/");
+    const ancestorDirKeys: string[] = [];
+    for (let i = 1; i < foldedSegments.length; i += 1) {
+      ancestorDirKeys.push(foldedSegments.slice(0, i).join("/"));
+    }
+    const collidesAsPrefix = seenDirKeys.has(folded) || ancestorDirKeys.some((dirKey) => seenFileKeys.has(dirKey));
     if (collidesAsPrefix) {
       refusals.push({
         reason: BUNDLE_REFUSAL.duplicatePath,
@@ -89,7 +120,8 @@ export function parseManifest(bytes: Buffer | string): ParseManifestResult {
       continue;
     }
     seenFolded.set(folded, entry.path);
-    seenFoldedSorted.push(folded);
+    seenFileKeys.add(folded);
+    for (const dirKey of ancestorDirKeys) seenDirKeys.add(dirKey);
 
     const normalized = normalizeBundlePath(entry.path);
     if (!normalized.ok) {

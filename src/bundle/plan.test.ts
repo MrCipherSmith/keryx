@@ -1,7 +1,7 @@
 // Flow 313 (W4 portability), T6 — plan.ts: bucket assignment, force matching,
 // the learned-pattern scope rule (W4-AC11), and checksum-failure short-circuit.
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -68,7 +68,33 @@ describe("planBundleImport buckets", () => {
     expect(plan.entries[0]?.bucket).toBe("identical");
   });
 
-  test("existing file matches ledger but not incoming -> update", async () => {
+  test("existing file matches ledger, SAME bundle owns it, differs from incoming -> update", async () => {
+    const oldBytes = Buffer.from(JSON.stringify({ schemaVersion: "1.0.0", hooks: {}, _keryxManaged: { tool: "keryx", version: "0.1.0" } }));
+    const newBytes = Buffer.from(JSON.stringify({ schemaVersion: "1.0.0", hooks: {}, _keryxManaged: { tool: "keryx", version: "0.2.0" } }));
+    const dir = path.join(projectRoot, ".metaproject");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "hooks.json"), oldBytes);
+    // manifestOf() below fixes bundleId to "keryx-project-test" — the ledger
+    // record here uses the SAME id, so this is a genuine re-import of a
+    // bundle updating its own previously-written file.
+    await writeAppliedState(appliedStatePath("project", { projectRoot, homeDir, env: {} }), {
+      schemaVersion: 1,
+      entries: { "hooks.json": { bundleId: "keryx-project-test", sha256: sha256Hex(oldBytes), kind: "hook-config", appliedAt: "2026-01-01T00:00:00.000Z" } },
+    });
+    const entry = entryFor("hooks.json", "hook-config", "project", newBytes);
+    const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([["hooks.json", newBytes]]) };
+    const plan = await planBundleImport({ source, manifest: manifestOf([entry]), projectRoot, homeDir, env: {}, allowHooks: true });
+    expect(plan.ok).toBe(true);
+    expect(plan.entries[0]?.bucket).toBe("update");
+  });
+
+  // R1-F1 (round 2 "still open"): content on disk is unchanged since a
+  // DIFFERENT bundleId last applied it — this must NOT silently bucket
+  // "update" (which apply would write, unconditionally transferring
+  // ownership) but "conflict"/"owned-by-other-bundle", requiring --force.
+  // Fails on the pre-fix code, which ignored ledgerRecord.bundleId entirely
+  // here and bucketed "update".
+  test("R1-F1: existing file matches ledger, but a DIFFERENT bundle owns it -> conflict owned-by-other-bundle", async () => {
     const oldBytes = Buffer.from(JSON.stringify({ schemaVersion: "1.0.0", hooks: {}, _keryxManaged: { tool: "keryx", version: "0.1.0" } }));
     const newBytes = Buffer.from(JSON.stringify({ schemaVersion: "1.0.0", hooks: {}, _keryxManaged: { tool: "keryx", version: "0.2.0" } }));
     const dir = path.join(projectRoot, ".metaproject");
@@ -76,13 +102,32 @@ describe("planBundleImport buckets", () => {
     writeFileSync(path.join(dir, "hooks.json"), oldBytes);
     await writeAppliedState(appliedStatePath("project", { projectRoot, homeDir, env: {} }), {
       schemaVersion: 1,
-      entries: { "hooks.json": { bundleId: "prior", sha256: sha256Hex(oldBytes), kind: "hook-config", appliedAt: "2026-01-01T00:00:00.000Z" } },
+      entries: { "hooks.json": { bundleId: "keryx-project-other-bundle", sha256: sha256Hex(oldBytes), kind: "hook-config", appliedAt: "2026-01-01T00:00:00.000Z" } },
     });
     const entry = entryFor("hooks.json", "hook-config", "project", newBytes);
     const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([["hooks.json", newBytes]]) };
     const plan = await planBundleImport({ source, manifest: manifestOf([entry]), projectRoot, homeDir, env: {}, allowHooks: true });
-    expect(plan.ok).toBe(true);
-    expect(plan.entries[0]?.bucket).toBe("update");
+    expect(plan.ok).toBe(false);
+    expect(plan.entries[0]?.bucket).toBe("conflict");
+    expect(plan.entries[0]?.conflictReason).toBe("owned-by-other-bundle");
+    expect(plan.refusals[0]?.reason).toBe("unresolved-conflict");
+
+    // Forcing it through is still allowed (and would transfer ownership on
+    // apply, which apply.ts already records unconditionally for a forced
+    // write).
+    const forcedPlan = await planBundleImport({
+      source,
+      manifest: manifestOf([entry]),
+      projectRoot,
+      homeDir,
+      env: {},
+      allowHooks: true,
+      force: ["hooks.json"],
+    });
+    expect(forcedPlan.ok).toBe(true);
+    expect(forcedPlan.entries[0]?.bucket).toBe("conflict");
+    expect(forcedPlan.entries[0]?.conflictReason).toBe("owned-by-other-bundle");
+    expect(forcedPlan.entries[0]?.forced).toBe(true);
   });
 
   test("existing file differs from ledger sha -> conflict user-modified, refused without force", async () => {
@@ -218,21 +263,100 @@ describe("planBundleImport learned-pattern scope rule", () => {
   // of the SAME bundle produces different bytes (a different `expiresAt`
   // millisecond), so `inspect` never reports `identical` right after a fresh
   // `import`, and a re-import silently pushes the TTL out another 30 days.
+  // R2-F19 changed the formula to `max(createdAt, importDay) + 30d` — `now`
+  // is pinned to the SAME instant as `manifest.createdAt` here so this test
+  // stays deterministic regardless of the actual wall-clock date it runs on
+  // (otherwise `importDay` would exceed `createdAt` on any day after this
+  // fixture's date, and the fixed `expiresAt` assertion below would break).
   test("the rewritten ttl.expiresAt is derived from manifest.createdAt, deterministically across repeated plans", async () => {
     const record = learnedPatternRecord("user", "accepted");
     const bytes = Buffer.from(JSON.stringify(record));
     const entry = entryFor("learning/patterns/p1.json", "learned-pattern", "user", bytes);
     const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([[entry.path, bytes]]) };
     const manifest = manifestOf([entry]); // createdAt: "2026-09-24T00:00:00.000Z" (see manifestOf above)
+    const now = () => new Date("2026-09-24T00:00:00.000Z"); // same instant as createdAt
 
-    const plan1 = await planBundleImport({ source, manifest, projectRoot, homeDir, env: {}, targetScope: "user" });
+    const plan1 = await planBundleImport({ source, manifest, projectRoot, homeDir, env: {}, targetScope: "user", now });
     expect(plan1.ok).toBe(true);
     const written1 = JSON.parse(plan1.entries[0]?.bytes.toString("utf8") ?? "{}") as { ttl?: { expiresAt: string } };
     expect(written1.ttl?.expiresAt).toBe("2026-10-24T00:00:00.000Z"); // createdAt + 30 days, not wall-clock now.
 
     // A SECOND plan of the exact same bundle (e.g. `inspect` right after
     // import, or a re-import) must produce byte-IDENTICAL rewritten content.
-    const plan2 = await planBundleImport({ source, manifest, projectRoot, homeDir, env: {}, targetScope: "user" });
+    const plan2 = await planBundleImport({ source, manifest, projectRoot, homeDir, env: {}, targetScope: "user", now });
     expect(plan2.entries[0]?.incomingSha256).toBe(plan1.entries[0]?.incomingSha256);
+  });
+
+  // R2-F19: a bundle whose `createdAt` is already more than 30 days in the
+  // past must not import learned patterns that are expired the moment they
+  // land — `expiresAt` floors to `importDay + 30d`, not `createdAt + 30d`.
+  // Fails on the round-1 fix (which used `createdAt + 30d` unconditionally).
+  test("R2-F19: an old bundle's TTL floors to importDay + 30d, not createdAt + 30d", async () => {
+    const record = learnedPatternRecord("user", "accepted");
+    const bytes = Buffer.from(JSON.stringify(record));
+    const entry = entryFor("learning/patterns/p1.json", "learned-pattern", "user", bytes);
+    const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([[entry.path, bytes]]) };
+    const manifest = manifestOf([entry]); // createdAt: "2026-09-24T00:00:00.000Z"
+    const now = () => new Date("2027-01-15T12:34:56.000Z"); // ~113 days after createdAt
+
+    const plan = await planBundleImport({ source, manifest, projectRoot, homeDir, env: {}, targetScope: "user", now });
+    expect(plan.ok).toBe(true);
+    const written = JSON.parse(plan.entries[0]?.bytes.toString("utf8") ?? "{}") as { ttl?: { expiresAt: string } };
+    // importDay (2027-01-15, floored to UTC midnight) + 30 days.
+    expect(written.ttl?.expiresAt).toBe("2027-02-14T00:00:00.000Z");
+    expect(new Date(written.ttl?.expiresAt ?? "").getTime()).toBeGreaterThan(now().getTime());
+  });
+
+  // R2-F19 (fix side effect): re-planning the SAME already-imported
+  // learned-pattern content on a LATER day must still report `identical`,
+  // not `update` — the on-disk file (written on day 1) and a freshly
+  // rewritten candidate (computed on day 2) differ only in `ttl.expiresAt`.
+  // Fails without the modulo-ttl comparison: the two `expiresAt` values are
+  // one day apart, and a byte-for-byte sha comparison alone would bucket
+  // `update` even though the semantic content is unchanged.
+  test("R2-F19: re-planning identical content a day later still reports identical, not update", async () => {
+    const record = learnedPatternRecord("user", "accepted");
+    const bytes = Buffer.from(JSON.stringify(record));
+    const entry = entryFor("learning/patterns/p1.json", "learned-pattern", "user", bytes);
+    const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([[entry.path, bytes]]) };
+    const manifest = manifestOf([entry]);
+    const day1 = () => new Date("2026-09-24T00:00:00.000Z");
+    const day2 = () => new Date("2026-09-25T00:00:00.000Z");
+
+    const plan1 = await planBundleImport({ source, manifest, projectRoot, homeDir, env: {}, targetScope: "user", now: day1 });
+    expect(plan1.ok).toBe(true);
+    expect(plan1.entries[0]?.bucket).toBe("new");
+    mkdirSync(path.join(homeDir, ".keryx", "learning", "patterns"), { recursive: true });
+    writeFileSync(path.join(homeDir, ".keryx", "learning", "patterns", "p1.json"), plan1.entries[0]?.bytes ?? Buffer.from(""));
+
+    const plan2 = await planBundleImport({ source, manifest, projectRoot, homeDir, env: {}, targetScope: "user", now: day2 });
+    expect(plan2.ok).toBe(true);
+    expect(plan2.entries[0]?.bucket).toBe("identical");
+  });
+
+  // Orchestrator coordination note (L4's `checkPrivateDirGitignore(dir,
+  // root?)` root parameter): plan.ts now passes the user store root, so a
+  // symlink anywhere between it and `memory/` that escapes the store is
+  // refused, not only a symlinked `memory/` itself. In THIS plan.ts call
+  // site, `targetFor`'s own symlink-chain check (walking scope root ->
+  // "memory", the same single segment `memoryRoot` sits under) already
+  // refuses a symlinked `memory/` before the gitignore check is even
+  // reached — so the plan refuses regardless, with `symlink-refused`. The
+  // `root` parameter on `checkPrivateDirGitignore` is still wired here as
+  // defense-in-depth (matching apply.ts, where its own check runs FIRST and
+  // fires as `private-gitignore-conflict` — see apply.test.ts).
+  test("user-scope memory-entry plan refuses when memory/'s parent chain contains a symlink escaping the store root", async () => {
+    const storeRoot = path.join(homeDir, ".keryx");
+    mkdirSync(storeRoot, { recursive: true });
+    const outside = path.join(root, "outside-memory");
+    mkdirSync(outside, { recursive: true });
+    symlinkSync(outside, path.join(storeRoot, "memory"));
+
+    const bytes = Buffer.from("# lesson\n");
+    const entry = entryFor("memory/lessons/a.md", "memory-entry", "user", bytes);
+    const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([[entry.path, bytes]]) };
+    const plan = await planBundleImport({ source, manifest: manifestOf([entry]), projectRoot, homeDir, env: {}, targetScope: "user" });
+    expect(plan.ok).toBe(false);
+    expect(plan.refusals.some((r) => r.reason === "symlink-refused" || r.reason === "private-gitignore-conflict")).toBe(true);
   });
 });

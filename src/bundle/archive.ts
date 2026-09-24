@@ -197,11 +197,19 @@ export function buildBundleArchive(
   return { ok: true, value: gzipSync(tar, { level: 9 }) };
 }
 
+/**
+ * R2-I4: a ustar size/checksum field is meant to hold an unsigned octal
+ * value; `Number.parseInt(raw, 8)` on a crafted field starting with `-`
+ * happily returns a negative number instead of refusing, which a caller
+ * doing `Math.ceil(size / BLOCK)` or size-cap arithmetic on must not have to
+ * defend against separately. Negative (and non-finite) parses fold to `0`.
+ */
 function readOctal(buf: Buffer, start: number, len: number): number {
   const raw = buf.subarray(start, start + len).toString("ascii").replace(/\0.*$/, "").trim();
   if (raw.length === 0) return 0;
   const parsed = Number.parseInt(raw, 8);
-  return Number.isFinite(parsed) ? parsed : 0;
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return parsed;
 }
 
 function readCString(buf: Buffer, start: number, len: number): string {

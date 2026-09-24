@@ -252,6 +252,36 @@ describe("keryx bundle — refusal and usage exit codes", () => {
     }
   });
 
+  // R2-F21 (missing regression test for R1-F24): running `bundle export`
+  // from a SUBDIRECTORY of an already-initialized project must resolve to
+  // the project's REAL root — the one that already has `.metaproject/` and
+  // the content to export — not create a second, nested `.metaproject/`
+  // under the subdirectory (which would also export nothing, since there
+  // is no content there). Fails on the pre-R1-F24 code, which used `cwd`
+  // directly as the project root.
+  test("R1-F24: export run from a project subdirectory resolves to the project's real root, not a nested one", async () => {
+    const home = await makeTempDir("keryx-bundle-home-");
+    process.env.KERYX_HOME = home;
+    const sourceRoot = await makeSourceProject();
+    const deepCwd = path.join(sourceRoot, "src", "deep");
+    await mkdir(deepCwd, { recursive: true });
+    const bundleDir = path.join(await makeTempDir("keryx-bundle-out-"), "bundle-out");
+
+    install();
+    try {
+      await bundleCommand(["export", "--scope", "project", "--id", "test-bundle-deep", bundleDir, "--json"], deepCwd);
+      expect(process.exitCode).toBe(0);
+      const exportResult = lastJson() as { ok: boolean; entries: number };
+      expect(exportResult.ok).toBe(true);
+      // The skill under sourceRoot/.metaproject was found — proof the real
+      // root was used, not an empty nested one under deepCwd.
+      expect(exportResult.entries).toBe(1);
+    } finally {
+      restore();
+    }
+    expect(existsSync(path.join(deepCwd, ".metaproject"))).toBe(false);
+  });
+
   test("verify on a bundle with a tampered checksum fails closed, exit 1", async () => {
     const home = await makeTempDir("keryx-bundle-home-");
     process.env.KERYX_HOME = home;
