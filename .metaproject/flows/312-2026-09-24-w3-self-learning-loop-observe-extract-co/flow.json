@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "312",
   "slug": "w3-self-learning-loop-observe-extract-co",
   "title": "W3: self-learning loop — observe, extract, consent-gated learned patterns, reviewer profiles, promote and graduate",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T07:18:32.725Z",
-  "updatedAt": "2026-09-24T07:18:32.725Z",
+  "updatedAt": "2026-09-24T07:30:42.035Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,371 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T12 implementation tasks"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are part of each implementation task T5-T12 and verify tasks T13-T16"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Core learning module: types, schema validator, confidence, identity, paths, scan, store, decisions",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Observe: real LearningObservationSink, shell runtime wiring, ignore block + guard test",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Extract: five deterministic signals, candidate upsert, capability-gated model extractor port",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Consent CLI: keryx learn list/review/accept/reject/prune/observe/extract + index",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Apply + reviewer profiles: learn apply via applyLearningProposal, review learn --reviewer",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Promote + graduate: promote gate, graduation proposals, scout learned origin, agent candidate apply",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Host observer: opt-in Claude observe surface in W5 registry, matrix regenerated",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "D-3 skill-lifecycle amendment + learning docs + W3 doc amendments",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Verify: wave-3 exit guard test (no accepted without recorded human accept)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T9",
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Verify: end-to-end CLI run observe->extract->accept->apply in a temp project",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T9",
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Verify: deep review of Observe against the no-complete-transcript non-goal",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "Verify: targeted tests, typecheck and eslint on changed files",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T13",
+        "T14",
+        "T15",
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-24T07:18:32.725Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T07:30:28.241Z",
+      "event": "task-added",
+      "detail": "T5: Core learning module: types, schema validator, confidence, identity, paths, scan, store, decisions"
+    },
+    {
+      "at": "2026-09-24T07:30:28.362Z",
+      "event": "task-added",
+      "detail": "T6: Observe: real LearningObservationSink, shell runtime wiring, ignore block + guard test"
+    },
+    {
+      "at": "2026-09-24T07:30:28.486Z",
+      "event": "task-added",
+      "detail": "T7: Extract: five deterministic signals, candidate upsert, capability-gated model extractor port"
+    },
+    {
+      "at": "2026-09-24T07:30:28.608Z",
+      "event": "task-added",
+      "detail": "T8: Consent CLI: keryx learn list/review/accept/reject/prune/observe/extract + index"
+    },
+    {
+      "at": "2026-09-24T07:30:28.729Z",
+      "event": "task-added",
+      "detail": "T9: Apply + reviewer profiles: learn apply via applyLearningProposal, review learn --reviewer"
+    },
+    {
+      "at": "2026-09-24T07:30:28.853Z",
+      "event": "task-added",
+      "detail": "T10: Promote + graduate: promote gate, graduation proposals, scout learned origin, agent candidate apply"
+    },
+    {
+      "at": "2026-09-24T07:30:28.976Z",
+      "event": "task-added",
+      "detail": "T11: Host observer: opt-in Claude observe surface in W5 registry, matrix regenerated"
+    },
+    {
+      "at": "2026-09-24T07:30:29.094Z",
+      "event": "task-added",
+      "detail": "T12: D-3 skill-lifecycle amendment + learning docs + W3 doc amendments"
+    },
+    {
+      "at": "2026-09-24T07:30:29.220Z",
+      "event": "task-added",
+      "detail": "T13: Verify: wave-3 exit guard test (no accepted without recorded human accept)"
+    },
+    {
+      "at": "2026-09-24T07:30:29.339Z",
+      "event": "task-added",
+      "detail": "T14: Verify: end-to-end CLI run observe->extract->accept->apply in a temp project"
+    },
+    {
+      "at": "2026-09-24T07:30:29.455Z",
+      "event": "task-added",
+      "detail": "T15: Verify: deep review of Observe against the no-complete-transcript non-goal"
+    },
+    {
+      "at": "2026-09-24T07:30:29.570Z",
+      "event": "task-added",
+      "detail": "T16: Verify: targeted tests, typecheck and eslint on changed files"
+    },
+    {
+      "at": "2026-09-24T07:30:29.692Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T16 (was empty) — PR after verification"
+    },
+    {
+      "at": "2026-09-24T07:30:29.812Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (program owner per dispatch)"
+    },
+    {
+      "at": "2026-09-24T07:30:41.547Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T07:30:41.667Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T07:30:41.792Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T07:30:41.913Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T07:30:42.035Z",
+      "event": "started"
     }
-  ]
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  }
 }

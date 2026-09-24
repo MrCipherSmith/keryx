@@ -55,4 +55,19 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+Interface map (T1, Explore worker, 2026-09-24):
+
+- Hooks: `src/harness/hooks/builtins.ts` — `LearningObservation {kind, sessionId, runId, timestamp, payload}`, `LearningObservationSink {record(o)}`, `NOOP_LEARNING_OBSERVATION_SINK`, `LEARNING_OBSERVER_EVENTS` (7 events), builtin `keryx.learning-observer` class observe. Invoked in `runtime.ts` `runBuiltinHook` via `HookRuntimePorts.learningSink` (`CreateHookRuntimeOptions.ports`). GAP: `src/commands/agent-hooks.ts` `buildShellHookRuntime` passes only `impactEvidence` — no learning sink today.
+- Payload = hook stdin (`codec.ts` `buildHookStdin`; `PostToolUsePayload{toolCallId,toolName,toolInput,toolOutput}` + snake_case aliases).
+- Integrations: `src/integrations/surfaces-w5b.ts` keryx-shell `SHELL_HOOKS_OBSERVE` etc. (policy-travels-with-agent, no files). Matrix artifact `docs/integrations/harness-capability-matrix.json`, drift test `src/integrations/harness-capability-matrix.test.ts`. Agents surfaces are opt-in (`SurfaceAdapter.optIn`, `src/integrations/surfaces-agents.ts`).
+- learn.ts: `LearningProposal` {schemaVersion 1, proposalId, sourceType, sourcePath, skill{module,name,path,target}, confidence, lessons, suggestedSections, proposalPath, createdAt, dryRun}; `learnProjectSkill(root, opts)`, `applyLearningProposal(root, proposalPath, {dryRun})` (lock `.metaproject/data/gdskills/learn.lock`, `*.applied.json`). `parseHealthFindings`/`dominantHealthSkill` are internal.
+- review-learning.ts: `loadReviewLearningConfig(cwd)` → `{schemaVersion:1, skill, repo, authors[]}`; `selectLearnableComments(state, authors)`; `learningSourceLessons(selection)`. Comment records `.metaproject/reviews/pr-comments/<owner__repo>__<n>.json` (`PrCommentState.seen[]`). `src/commands/review.ts` `runLearn`, `LEARN_FLAGS`.
+- Security: `analyze(cwd, {content, source, target?, path?})` in `src/security/service.ts` → `{decision{findings[{category,...}]}}`; categories secret|pii|prompt-injection|egress|artifact-safety|raw-retention; `redactSensitiveText`.
+- fs: `isPathInside`, `writeFileAtomic`, `withFileLock` in `src/lib/fs.ts`. No ajv: schema conformance tests compare docs copy vs runtime copy (`src/harness/hooks/config.test.ts`).
+- Ignore block: `src/lib/metaproject-gitignore.ts` `renderMetaprojectGitignoreBlock()` (+ test), used by `src/commands/init.ts`; root `.gitignore` mirrors.
+- CLI: `src/cli.ts` `CLI_ROUTES`; drift tests `mcp-naming.test.ts`, `standard/command-registry.coverage.test.ts`, `cli-reference-coverage.test.ts`, `standard/help-groups.test.ts`, `cli-docs-structure.test.ts`. TTY pattern `src/commands/schedule.ts` (`deps.isTerminal ?? stdin.isTTY && stdout.isTTY`).
+- Home: `resolveHookHomeDir(env, homeDir?)` (`KERYX_HOME` replaces the home dir; store = `<home>/.keryx`).
+- W1 scout: `recordScout(packDir, entry)` / `ScoutRecordEntry {query, decision, topMatch, recordedAt, skillName, justification?}` — no origin field yet. W2: `OriginKind` includes `learned`; `AgentOrigin {kind, sourceRef?, generatedAt?}`; `parseAgentFrontmatter`, `validateAgentDefinition`, `buildAgentDefinition`.
+- D-3 targets: `.metaproject/rules/core/skill-lifecycle.mdc` "## Learn" / "## Never" + bundled copy `src/gdskills/bundled/rules/core/skill-lifecycle.mdc`.
+- No git-remote helper exists — new.
+- Tests: `bun test`, colocated, preload `src/lib/test-preload.ts` sets `KERYX_HOOKS=off`; fixtures inline via mkdtemp.

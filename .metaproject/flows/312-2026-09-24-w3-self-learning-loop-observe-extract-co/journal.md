@@ -1,3 +1,24 @@
 # Flow Journal
 
 - 2026-09-24T07:18:32.725Z - flow created
+- 2026-09-24T07:30:28.241Z - task-added: T5: Core learning module: types, schema validator, confidence, identity, paths, scan, store, decisions
+- 2026-09-24T07:30:28.362Z - task-added: T6: Observe: real LearningObservationSink, shell runtime wiring, ignore block + guard test
+- 2026-09-24T07:30:28.486Z - task-added: T7: Extract: five deterministic signals, candidate upsert, capability-gated model extractor port
+- 2026-09-24T07:30:28.608Z - task-added: T8: Consent CLI: keryx learn list/review/accept/reject/prune/observe/extract + index
+- 2026-09-24T07:30:28.729Z - task-added: T9: Apply + reviewer profiles: learn apply via applyLearningProposal, review learn --reviewer
+- 2026-09-24T07:30:28.853Z - task-added: T10: Promote + graduate: promote gate, graduation proposals, scout learned origin, agent candidate apply
+- 2026-09-24T07:30:28.976Z - task-added: T11: Host observer: opt-in Claude observe surface in W5 registry, matrix regenerated
+- 2026-09-24T07:30:29.094Z - task-added: T12: D-3 skill-lifecycle amendment + learning docs + W3 doc amendments
+- 2026-09-24T07:30:29.220Z - task-added: T13: Verify: wave-3 exit guard test (no accepted without recorded human accept)
+- 2026-09-24T07:30:29.339Z - task-added: T14: Verify: end-to-end CLI run observe->extract->accept->apply in a temp project
+- 2026-09-24T07:30:29.455Z - task-added: T15: Verify: deep review of Observe against the no-complete-transcript non-goal
+- 2026-09-24T07:30:29.570Z - task-added: T16: Verify: targeted tests, typecheck and eslint on changed files
+- 2026-09-24T07:30:29.692Z - task-depends-set: T4: dependsOn T16 (was empty) — PR after verification
+- 2026-09-24T07:30:29.812Z - owner-set: not set -> MrCipherSmith (program owner per dispatch)
+- 2026-09-24T07:30:41.547Z - task-done: T2: Implement per plan
+- 2026-09-24T07:30:41.667Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-24T07:30:41.792Z - task-done: T1: Collect remaining context
+- 2026-09-24T07:30:41.913Z - frozen: 15 criteria; checksum recorded
+- 2026-09-24T07:30:42.035Z - started
+- 2026-09-24 - flow-orchestrator (dispatched, operator_confirmed=true): completion_outcome=create-pr-and-merge from the dispatch brief, base feat/agent-platform-expansion. Execution-metrics and completion-choice questions skipped per brief.
+- 2026-09-24 - T1 context collected (Explore worker); interface map in context.md. Plan decisions D1-D6 in plan.md. T2/T3 scaffolds skipped (superseded by T5-T16).
