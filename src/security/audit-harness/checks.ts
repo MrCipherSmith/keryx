@@ -9,6 +9,7 @@ import { detectSecrets } from "../detect/secrets";
 import { scanMcpManifest } from "../detect/mcp";
 import { touchesAgentCredentials } from "../../lib/command-risk";
 import { redactSensitiveText } from "../redact";
+import { AGENT_SENTINEL_PREFIX } from "../../agents/compile";
 import type { AuditSeverity, FindingLocation, InternalProposal, RawFinding, SurfaceId } from "./types";
 
 function lineOfOffset(content: string, offset: number): number {
@@ -581,6 +582,25 @@ function parseJsonObject(content: string): Record<string, unknown> | undefined {
  */
 const MODEL_TIER_SENTINEL_RE = /\bmodel_tier=(?:light|standard|deep)\b/;
 
+/**
+ * R1-F12: the previous version of this fallback tested `MODEL_TIER_SENTINEL_RE`
+ * against the WHOLE file, so a hand-written host file that merely mentions
+ * `model_tier=deep` anywhere — including in body prose, a comment, or
+ * `developer_instructions` — suppressed `agent-missing-model-tier` even
+ * though it carries no actual keryx-managed sentinel. This helper isolates
+ * just the line(s) that start with `AGENT_SENTINEL_PREFIX`
+ * (`compile.ts`'s `"keryx-managed: keryx agents export ("`, the fixed,
+ * name/hash-independent prefix every managed sentinel this codebase writes
+ * begins with) and only THOSE lines are tested for the `model_tier=` value.
+ */
+function sentinelLines(content: string): string[] {
+  return content.split(/\r?\n/).filter((line) => line.includes(AGENT_SENTINEL_PREFIX));
+}
+
+function hasSentinelModelTier(content: string): boolean {
+  return sentinelLines(content).some((line) => MODEL_TIER_SENTINEL_RE.test(line));
+}
+
 export function checkAgentUnrestrictedTools(relativePath: string, content: string): RawFinding[] {
   const format = agentFileFormat(relativePath);
   let hasAllowlist: boolean;
@@ -599,8 +619,20 @@ export function checkAgentUnrestrictedTools(relativePath: string, content: strin
     // md: claude's `tools` frontmatter key, or opencode's `permission` block
     // (frontmatter `permission:` parses as a present-but-empty-value key
     // above, which is enough to detect the block exists).
+    //
+    // R1-F12: a PRESENT `tools` key is not by itself a restriction. Claude
+    // Code treats `tools:` with no value, or `tools: ""`, as "no allowlist
+    // declared" and grants the subagent every tool — the least-restricted
+    // outcome, not a restricted one — so those two shapes must still count
+    // as agent-unrestricted-tools rather than passing because the key
+    // exists. `permission:` has no such empty-means-unrestricted footgun
+    // documented for it, so its mere presence still counts as an allowlist.
     const fields = parseFrontmatter(content);
-    hasAllowlist = !!fields && ("tools" in fields || "permission" in fields);
+    const toolsValue = fields?.tools;
+    const toolsIsEmpty = toolsValue !== undefined && (toolsValue.length === 0 || toolsValue === '""' || toolsValue === "''");
+    const toolsIsAllowlist = toolsValue !== undefined && !toolsIsEmpty;
+    const hasPermissionBlock = !!fields && "permission" in fields;
+    hasAllowlist = toolsIsAllowlist || hasPermissionBlock;
   }
   if (hasAllowlist) return [];
   return [
@@ -620,13 +652,13 @@ export function checkAgentMissingModelTier(relativePath: string, content: string
   const format = agentFileFormat(relativePath);
   let hasTier: boolean;
   if (format === "toml") {
-    hasTier = tomlHasKey(content, "model") || MODEL_TIER_SENTINEL_RE.test(content);
+    hasTier = tomlHasKey(content, "model") || hasSentinelModelTier(content);
   } else if (format === "json") {
     const doc = parseJsonObject(content);
-    hasTier = typeof doc?.model === "string" || MODEL_TIER_SENTINEL_RE.test(content);
+    hasTier = typeof doc?.model === "string" || hasSentinelModelTier(content);
   } else {
     const fields = parseFrontmatter(content);
-    hasTier = !!(fields && ("model_tier" in fields || "model" in fields)) || MODEL_TIER_SENTINEL_RE.test(content);
+    hasTier = !!(fields && ("model_tier" in fields || "model" in fields)) || hasSentinelModelTier(content);
   }
   if (hasTier) return [];
   return [

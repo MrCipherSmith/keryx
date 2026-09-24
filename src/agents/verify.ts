@@ -15,7 +15,7 @@
 // cannot be checked at all (e.g. `--name` naming nothing in the catalog)
 // becomes a `not-found` problem row rather than an exception.
 
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { defaultBundledRoot } from "../gdskills/bundled-eval";
 import { BUNDLED_GDSKILLS } from "../gdskills/catalog";
@@ -24,8 +24,26 @@ import { PROMPT_DEFENSE_BASELINE } from "./baseline";
 import { loadAgentCatalog, type AgentCatalogError } from "./catalog";
 import { isAgentPolicyProfile } from "./policy";
 import { validateAgentDefinition } from "./schema";
-import { isAgentToolName } from "./tools";
+import { isAgentToolName, type AgentToolName } from "./tools";
 import type { AgentDefinition, AgentExportRuntime, AgentSource, ExportSupportLevel, LoadedAgent } from "./types";
+
+// R1-F7 (review 310 round 1): a W1 stack-pack id is a single safe path
+// segment — lowercase, starting with a letter, hyphen-separated (matches the
+// `<stack-id>` examples in
+// docs/requirements/keryx-agent-platform-expansion/workstreams/W1-stack-catalog.md,
+// e.g. `python`, `django`, `fastapi`). Validating this BEFORE any path join
+// closes the traversal: a `sourceRef` of `../agents` (or any absolute path,
+// `..`, or embedded separator) is rejected as `invalid-source-ref` and never
+// reaches `path.join`.
+const STACK_SOURCE_REF_RE = /^[a-z][a-z0-9-]*$/;
+
+// R1-F5 (review 310 round 1): the write/shell subset of `AGENT_TOOL_VOCABULARY`
+// a `read-only` definition must never name. Defined locally rather than
+// imported from `./tools.ts` — that module exports only the full vocabulary
+// and the per-target mapping, not a write/shell subset, and T14 is
+// concurrently editing `./tools.ts` and `./policy.ts` in a parallel task on
+// this same flow, so this stays a local, self-contained constant.
+const WRITE_OR_SHELL_TOOLS: ReadonlySet<AgentToolName> = new Set<AgentToolName>(["apply_patch", "shell_exec"]);
 
 export const AGENT_EXPORT_RUNTIMES: readonly AgentExportRuntime[] = [
   "claude",
@@ -40,7 +58,9 @@ export type AgentVerifyProblemReason =
   | "unknown-tool"
   | "unknown-skill"
   | "unknown-policy-profile"
+  | "policy-tool-conflict"
   | "origin-missing-source-ref"
+  | "invalid-source-ref"
   | "stack-pack-missing"
   | "baseline-in-body"
   | "no-export-support"
@@ -98,14 +118,32 @@ export interface VerifyAgentsReport {
   readonly catalogErrors: readonly AgentCatalogError[];
 }
 
-/** Default stack-pack resolver: a real directory under `<bundledRoot>/../stacks/<sourceRef>`. Fails closed. */
+/**
+ * Default stack-pack resolver: a real directory under
+ * `<bundledRoot>/../stacks/<sourceRef>`. Fails closed.
+ *
+ * R1-F7: `sourceRef` shape is validated by `verifyOne` (as `invalid-source-ref`)
+ * before this resolver is ever called, so by the time `sourceRef` reaches the
+ * `path.join` below it is already confirmed to be a single safe id segment —
+ * no `..`, no separators, no absolute path. This resolver adds a second,
+ * independent layer: it `lstat`s (never follows symlinks) and refuses
+ * anything that is not a real, non-symlinked directory, so a pack "id" that
+ * happens to collide with a symlink planted under `stacks/` still fails
+ * closed instead of resolving through it.
+ */
 function defaultStackPackExists(bundledAgentsRoot: string): (sourceRef: string) => boolean {
   const stacksRoot = path.join(path.dirname(bundledAgentsRoot), "stacks");
   return (sourceRef: string): boolean => {
-    if (sourceRef.length === 0) return false;
+    if (!STACK_SOURCE_REF_RE.test(sourceRef)) return false;
     const packDir = path.join(stacksRoot, sourceRef);
+    // Defense in depth: even though the id pattern already rules out
+    // traversal, confirm the resolved path is still contained under
+    // `stacksRoot` before trusting it.
+    const relative = path.relative(stacksRoot, packDir);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) return false;
     try {
-      return existsSync(packDir) && statSync(packDir).isDirectory();
+      const stats = lstatSync(packDir);
+      return stats.isDirectory() && !stats.isSymbolicLink();
     } catch {
       return false;
     }
@@ -194,6 +232,22 @@ function verifyOne(
       reason: "unknown-policy-profile",
       detail: `policy_profile "${definition.policy_profile}" is not a known profile`,
     });
+  } else if (definition.policy_profile === "read-only") {
+    // R1-F5: a `read-only` definition must not name a write/shell tool —
+    // `opencode`'s renderer already strips these via its `canWrite` gate, but
+    // nothing upstream of export stopped a definition from declaring the
+    // conflict in the first place. Fails here with a named reason so the
+    // inconsistency is caught at the source rather than silently diverging
+    // per host at export time.
+    const conflicting = definition.tools.filter((tool): tool is AgentToolName =>
+      WRITE_OR_SHELL_TOOLS.has(tool as AgentToolName),
+    );
+    if (conflicting.length > 0) {
+      problems.push({
+        reason: "policy-tool-conflict",
+        detail: `policy_profile "read-only" conflicts with write/shell tools[] entries: ${conflicting.join(", ")}`,
+      });
+    }
   }
 
   const origin = definition.origin;
@@ -204,7 +258,16 @@ function verifyOne(
         detail: `origin.kind "${origin.kind}" requires origin.sourceRef`,
       });
     } else if (origin.kind === "generated") {
-      if (!options.stackPackExists(origin.sourceRef)) {
+      // R1-F7: validate the shape of `sourceRef` BEFORE it is ever resolved
+      // against the filesystem (by this function's own default resolver, or
+      // by an injected one) — an id-shaped-only check that runs regardless
+      // of which `stackPackExists` ends up being used.
+      if (!STACK_SOURCE_REF_RE.test(origin.sourceRef)) {
+        problems.push({
+          reason: "invalid-source-ref",
+          detail: `origin.sourceRef "${origin.sourceRef}" is not a valid stack-pack id (expected ${STACK_SOURCE_REF_RE.source})`,
+        });
+      } else if (!options.stackPackExists(origin.sourceRef)) {
         problems.push({
           reason: "stack-pack-missing",
           detail: `origin.sourceRef "${origin.sourceRef}" does not resolve to an existing W1 stack pack`,

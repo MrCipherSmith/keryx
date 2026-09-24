@@ -2,7 +2,7 @@
 // temp-dir pattern (bundledRoot injectable) plus injected `stackPackExists`/
 // `skillExists` resolvers so AC5/AC6's fail-closed behavior is exercised
 // without touching the real bundled catalog on disk.
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -145,6 +145,79 @@ describe("verifyAgents", () => {
     expect(report.ok).toBe(true);
     const agent = report.agents.find((a) => a.name === "generated-agent");
     expect(agent?.problems).toEqual([]);
+  });
+
+  test("R1-F7: a generated definition with a path-traversal sourceRef fails closed with invalid-source-ref, never reaching the resolver", () => {
+    writeAgent(
+      bundledRoot,
+      "gen-trav",
+      agentMarkdown("gen-trav", {}, "\norigin:\n  kind: generated\n  sourceRef: ../agents"),
+    );
+    let resolverCalled = false;
+    const report = verifyAgents(projectRoot, {
+      bundledRoot,
+      skillExists: ALWAYS_SKILL_EXISTS,
+      stackPackExists: () => {
+        resolverCalled = true;
+        return true;
+      },
+    });
+    expect(report.ok).toBe(false);
+    const agent = report.agents.find((a) => a.name === "gen-trav");
+    expect(agent?.problems.some((p) => p.reason === "invalid-source-ref" && p.detail.includes("../agents"))).toBe(
+      true,
+    );
+    expect(agent?.problems.some((p) => p.reason === "stack-pack-missing")).toBe(false);
+    expect(resolverCalled).toBe(false);
+  });
+
+  test("R1-F7: the default stack-pack resolver rejects a symlinked pack directory even when its target is a real directory", () => {
+    const stacksRoot = path.join(path.dirname(bundledRoot), "stacks");
+    const realPackDir = path.join(root, "real-python-pack");
+    mkdirSync(realPackDir, { recursive: true });
+    mkdirSync(stacksRoot, { recursive: true });
+    symlinkSync(realPackDir, path.join(stacksRoot, "python"), "dir");
+    writeAgent(bundledRoot, "gen-symlink", agentMarkdown("gen-symlink", {}, "\norigin:\n  kind: generated\n  sourceRef: python"));
+    const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
+    expect(report.ok).toBe(false);
+    const agent = report.agents.find((a) => a.name === "gen-symlink");
+    expect(agent?.problems.some((p) => p.reason === "stack-pack-missing")).toBe(true);
+  });
+
+  test("R1-F5: policy_profile read-only conflicts with a write/shell tool and fails with policy-tool-conflict", () => {
+    writeAgent(
+      bundledRoot,
+      "ro-write",
+      agentMarkdown("ro-write", { tools: "[read_file, apply_patch]", policy_profile: "read-only" }),
+    );
+    const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
+    expect(report.ok).toBe(false);
+    const agent = report.agents.find((a) => a.name === "ro-write");
+    expect(
+      agent?.problems.some((p) => p.reason === "policy-tool-conflict" && p.detail.includes("apply_patch")),
+    ).toBe(true);
+  });
+
+  test("R1-F5: policy_profile read-only with only read tools passes", () => {
+    writeAgent(
+      bundledRoot,
+      "ro-clean",
+      agentMarkdown("ro-clean", { tools: "[read_file, search_code]", policy_profile: "read-only" }),
+    );
+    const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
+    const agent = report.agents.find((a) => a.name === "ro-clean");
+    expect(agent?.problems.some((p) => p.reason === "policy-tool-conflict")).toBe(false);
+  });
+
+  test("R1-F5: policy_profile workspace-write is unaffected by a shell tool", () => {
+    writeAgent(
+      bundledRoot,
+      "ww-shell",
+      agentMarkdown("ww-shell", { tools: "[read_file, shell_exec]", policy_profile: "workspace-write" }),
+    );
+    const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
+    const agent = report.agents.find((a) => a.name === "ww-shell");
+    expect(agent?.problems.some((p) => p.reason === "policy-tool-conflict")).toBe(false);
   });
 
   test("a definition whose body repeats the baseline text fails with baseline-in-body", () => {

@@ -22,11 +22,11 @@ of the inputs those already consume, not a new execution path.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schema_version` | string | yes | schema version the file was authored against |
+| `schema_version` | integer | no | when present, must be the literal `1`; absent is treated as `1` |
 | `name` | string | yes | unique id, `^[a-z][a-z0-9-]{1,63}$` |
 | `description` | string | yes | third person, what it does and when to use it |
 | `role` | string | yes | one-line persona summary injected into the compiled prompt header |
-| `tools` | string[] | yes | allowlist from the canonical tool vocabulary (below); empty means no tools beyond the harness's own read baseline |
+| `tools` | string[] | yes | allowlist from the canonical tool vocabulary (below); empty means only the target host's own read baseline — see "Empty `tools[]`" below |
 | `model_tier` | enum `light\|standard\|deep` | yes | resolved by `model-tier.ts` against the session's own model — never a model name |
 | `policy_profile` | string | yes | `read-only` or `workspace-write`; the compiler resolves it per export target |
 | `skills` | string[] | no | skill/module ids this agent should have preloaded, validated against the existing skill catalogue |
@@ -76,12 +76,33 @@ tool names. Each export target maps this vocabulary onto its own tool names
 with no mapping for a given target is dropped from that target's output and
 reported back, rather than silently disappearing.
 
+### Empty `tools[]`
+
+An empty (or fully-unmapped) `tools[]` does not mean "no tools at all" — it
+means the definition inherits only the target host's own read baseline, and
+that baseline is host-specific:
+
+- **Claude Code** — the host's implicit read tools (`Read`, `Grep`, `Glob`);
+  the exporter never emits a bare `tools:` line, since an omitted/empty
+  `tools:` in Claude Code's own frontmatter means "inherit every tool",
+  which would be the opposite of least privilege.
+- **OpenCode** — `edit`, `bash`, and `web*` tools explicitly denied via the
+  `permission` block; read tools remain available.
+- **Kiro** — the `read` tag only.
+- **Codex** — governed by `sandbox_mode` rather than a per-tool allowlist;
+  an empty `tools[]` maps to `sandbox_mode = "read-only"`.
+
 ## Policy profiles
 
 `policy_profile` takes one of two canonical values:
 
 - `read-only` — no mutation tools; on keryx-shell this is
-  `shellChildReadOnlyProfile` under `mode: read_only`.
+  `shellChildReadOnlyProfile` under `mode: read_only`. Every host exporter
+  strips write/shell tools (for example `apply_patch`, `shell_exec`) out of
+  a `read-only` definition's output — a dropped tool is reported the same
+  way an unmapped one is, never silently. `keryx agents verify` also flags a
+  `read-only` definition that still *names* a write/shell tool in `tools[]`
+  as a `policy-tool-conflict`, independent of what any exporter does with it.
 - `workspace-write` — mutation allowed, still bounded by the parent's own
   policy via `inheritPolicy` — a child can never exceed what its parent
   already permits.
@@ -90,6 +111,28 @@ Host export targets map these onto their own documented permission
 vocabulary, or emit nothing if the host has none. An unknown profile value
 fails `keryx agents verify` with a named reason rather than exporting
 something unenforced.
+
+## keryx-shell: only `mode` is enforced today
+
+For `target: keryx-shell`, the compiler produces two things: `input` (the
+actual `spawn_subagent` call — `task`, `mode`, `label`, `model_tier`, a
+subset of the tool's real input schema) and a `policy` sidecar (`profile`,
+`toolAllowlist`, `isolation`) describing what the definition *intends*.
+
+Only `input.mode` is enforced by `spawn_subagent` today: it selects between
+the read-only child profile and the parent-equivalent profile, and the child
+still goes through `inheritPolicy` so it can never exceed its own parent
+regardless of what the definition asked for. The `policy` sidecar's
+`toolAllowlist`, `isolation`, and the finer-grained write capability it
+implies are **advisory** — nothing in `spawn_subagent` currently consumes
+them, so a `workspace-write` definition naming `shell_exec` or requesting
+`isolation: worktree` gets a `general`-mode child, not a child with that
+specific tool allowlist or that specific isolation. This is a deliberate D-2
+boundary (a definition is a *producer* of `spawn_subagent` inputs, not a new
+execution path) rather than an oversight, but it means the sidecar describes
+intent, not a guarantee. `keryx agents show <name>` and `keryx agents export
+--runtime keryx-shell <name>` both print the sidecar labeled as advisory so
+this is visible before you rely on it.
 
 ## Model tier, not model name
 
@@ -126,10 +169,43 @@ keryx agents verify [<name>] [--json]
 `list` and `show` are read-only. `export` writes only the target's own
 managed file — the exact per-host file paths for a given name and runtime
 are listed by running `export --dry-run` rather than assumed here, since
-they follow each host's own current documented layout. `verify` checks
-schema validity, that every `tools[]`/`skills[]` reference resolves to
-something that exists, and that every export target named on a definition
-has a corresponding support record.
+they follow each host's own current documented layout. `export` refuses to
+write over a file that carries no keryx-managed sentinel at all, and over a
+sentinel-bearing file whose content no longer matches what the compiler
+would generate for it (a hand edit kept in place) — either case is reported
+rather than overwritten, unless `--force` is passed.
+
+`verify` never re-derives compile/export logic — it assembles named problem
+rows from the same checks `compile`/`export`/`schema` already run, plus a
+few checks that are verify's alone. A definition (or `--name`) can fail with
+any of:
+
+- `schema-invalid` — frontmatter fails `validateAgentDefinition`.
+- `unknown-tool` — a `tools[]` entry is outside the canonical vocabulary.
+- `unknown-skill` — a `skills[]` entry does not resolve in the skill
+  catalogue.
+- `unknown-policy-profile` — `policy_profile` is not `read-only` or
+  `workspace-write`.
+- `policy-tool-conflict` — `policy_profile: read-only` still names a
+  write/shell tool (`apply_patch`, `shell_exec`) in `tools[]`.
+- `origin-missing-source-ref` — a non-`authored` `origin.kind` has no
+  `origin.sourceRef`.
+- `invalid-source-ref` — `origin.sourceRef` is not a single safe stack-pack
+  id (fails closed before the id is ever resolved to a path).
+- `stack-pack-missing` — a `generated` origin's `sourceRef` does not resolve
+  to an existing W1 stack pack.
+- `baseline-in-body` — the body repeats the prompt-defense baseline text the
+  compiler already injects once.
+- `no-export-support` — the export-support lookup for a runtime could not be
+  resolved (surfaced rather than thrown).
+- `catalog-error` (reported separately, per definition) — the file failed to
+  load at all: unreadable, invalid frontmatter, a duplicate name, or a
+  file-stem/`name` mismatch.
+- `not-found` — `--name` named nothing in the catalog.
+
+Every runtime — `claude`, `codex`, `kiro`, `opencode`, `keryx-shell` — is
+resolved automatically for every checked definition; a definition never
+names its own export targets, so there is nothing for it to omit.
 
 These four subcommands are additions alongside the existing `keryx agents
 bootstrap`, `keryx agents external`, and `keryx agents monitor` — none of
@@ -146,8 +222,11 @@ instruction-only file with a visible provenance comment instead of a false
 claim of enforcement.
 
 Every file an exporter writes carries a keryx-managed sentinel. `export`
-refuses to overwrite a file that lacks that sentinel — it will not silently
-clobber a file you edited by hand.
+refuses to overwrite a file that lacks that sentinel, and refuses to
+overwrite a sentinel-bearing file whose content has drifted from what the
+compiler would regenerate (for example, a hand edit made after export) —
+either case is reported as a refusal, not silently clobbered, unless
+`--force` is passed.
 
 To export the whole catalogue for one harness at once rather than one
 definition at a time, use the bulk integrations path:
@@ -163,10 +242,15 @@ directory as a side effect.
 
 ## Auditing
 
-`keryx security audit-harness` scans both `.metaproject/agents/` and
-`.claude/agents/` as part of its normal sweep, the same way it scans other
-managed surfaces — an agent definition with unrestricted tools or no model
-tier is exactly the kind of finding it looks for.
+`keryx security audit-harness` scans every host directory an exporter can
+write agent files into — `.metaproject/agents/` (markdown, the project
+source tree itself), `.claude/agents/` (markdown), `.codex/agents/` (TOML),
+`.kiro/agents/` (JSON), and `.opencode/agents/` (markdown) — as part of its
+normal sweep, the same way it scans other managed surfaces. An agent
+definition with unrestricted tools (including an explicitly empty or null
+`tools` value in a Claude-shaped file, which Claude Code itself treats as
+"inherit everything") or no model tier is exactly the kind of finding it
+looks for.
 
 ## Where to go next
 

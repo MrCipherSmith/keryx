@@ -1027,3 +1027,45 @@ test("checkAgentMissingModelTier: a hand-written host agent file without model a
   expect(findings.length).toBe(1);
   expect(findings[0]!.check).toBe("agent-missing-model-tier");
 });
+
+// --- R1-F12 (review 310 round 1): sentinel-anchored model_tier fallback +
+// explicitly empty/null `tools` counts as unrestricted -----------------------
+
+test("checkAgentMissingModelTier: model_tier= mentioned OUTSIDE the keryx-managed sentinel line (e.g. in body prose) does not suppress the finding", () => {
+  const bodyMentionsTier =
+    "---\nname: x\ndescription: d\ntools: []\n---\nThis agent uses model_tier=deep for its work, but there is no real sentinel here.\n";
+  const findings = checkAgentMissingModelTier(".claude/agents/x.md", bodyMentionsTier);
+  expect(findings.length).toBe(1);
+  expect(findings[0]!.check).toBe("agent-missing-model-tier");
+
+  const tomlBodyMentionsTier = 'name = "x"\n# a random comment about model_tier=deep, not a real sentinel\n';
+  expect(checkAgentMissingModelTier(".codex/agents/x.toml", tomlBodyMentionsTier).length).toBe(1);
+
+  const jsonBodyMentionsTier = JSON.stringify({ name: "x", prompt: "uses model_tier=deep in prose, no sentinel" });
+  expect(checkAgentMissingModelTier(".kiro/agents/x.json", jsonBodyMentionsTier).length).toBe(1);
+});
+
+test("checkAgentMissingModelTier: model_tier= WITHIN the actual keryx-managed sentinel line still suppresses the finding", () => {
+  const withRealSentinel =
+    "---\nname: x\ndescription: d\ntools: []\n---\n<!-- keryx-managed: keryx agents export (x, sha256:abc, model_tier=deep) -->\nbody\n";
+  expect(checkAgentMissingModelTier(".claude/agents/x.md", withRealSentinel)).toEqual([]);
+});
+
+test("checkAgentUnrestrictedTools: claude md with an empty `tools:` value is flagged as unrestricted, not treated as an allowlist", () => {
+  const emptyTools = "---\nname: x\ndescription: d\ntools:\n---\nbody\n";
+  const findings = checkAgentUnrestrictedTools(".claude/agents/x.md", emptyTools);
+  expect(findings.length).toBe(1);
+  expect(findings[0]!.check).toBe("agent-unrestricted-tools");
+});
+
+test("checkAgentUnrestrictedTools: claude md with `tools: \"\"` is flagged as unrestricted", () => {
+  const quotedEmptyTools = '---\nname: x\ndescription: d\ntools: ""\n---\nbody\n';
+  const findings = checkAgentUnrestrictedTools(".claude/agents/x.md", quotedEmptyTools);
+  expect(findings.length).toBe(1);
+  expect(findings[0]!.check).toBe("agent-unrestricted-tools");
+});
+
+test("checkAgentUnrestrictedTools: claude md with a non-empty `tools:` value is still treated as an allowlist", () => {
+  const nonEmptyTools = "---\nname: x\ndescription: d\ntools: Read, Grep\n---\nbody\n";
+  expect(checkAgentUnrestrictedTools(".claude/agents/x.md", nonEmptyTools)).toEqual([]);
+});
