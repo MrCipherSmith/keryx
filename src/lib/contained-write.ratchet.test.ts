@@ -106,8 +106,8 @@ const ALLOWLIST: ReadonlyArray<{ readonly file: string; readonly reason: string 
     reason: "mkdirRecordingCreated's raw mkdir and the rollback's raw rmdir are mitigated: refuseSymlinkChain re-checks the scope root and every segment immediately before each write in the same loop, and rollback's rmdir only ever removes a directory this same apply just created and is a no-op if non-empty (R4-F1 allowlist, matches the round-4 site enumeration).",
   },
   {
-    file: "src/gdskills/install.ts",
-    reason: "Raw `unlink` (removeStaleRuntimeBuilds, removeUnmodifiedRetiredRules) and raw `cp` (skill/shared/rules directory copies) keep their own, more discriminating containment: unlink only ever fires after an `lstat`+`realpath` walk that refuses a symlinked skills root, category, or skill directory (see removeStaleRuntimeBuilds's doc comment) or an `lstat`-confirmed-regular-file retired rule; `cp` targets are directories `mkdirContained` (R1-F1 fix) just confirmed resolve inside metaprojectRoot with no escaping symlink on the way, immediately before each `cp` call. Every plain single-file write in this module (catalog.md, gdskills.md, contracts, per-skill SKILL.md, the mkdir tree) is routed through writeContained/mkdirContained (flow 315 T12 allowlist).",
+    file: "src/gdskills/guarded-fs-ops.ts",
+    reason: "R2-F3 fix: the raw `unlink` (removeStaleRuntimeBuilds, removeUnmodifiedRetiredRules) and raw `cp` (copyDirectoryContained) install.ts's whole-file entry used to cover for ANY raw write in that file now live in this small, dedicated module ALONE — install.ts itself carries no allowlist entry and is fully ratcheted, matching the R1-F3 fix already applied to init.ts/update.ts. Every export here keeps its own, more discriminating containment right next to the raw call: unlink only ever fires after an `lstat`+`realpath` walk that refuses a symlinked skills root, category, or skill directory (see removeStaleRuntimeBuilds's doc comment) or an `lstat`-confirmed-regular-file retired rule; copyDirectoryContained's callers `mkdirContained` (R1-F1 fix) the target immediately before calling it, confirming it resolves inside metaprojectRoot with no escaping symlink on the way (flow 315 T16 allowlist).",
   },
   {
     file: "src/lib/managed-git-hook.ts",
@@ -227,10 +227,25 @@ function detectRawWrites(source: string): string[] {
   return hits;
 }
 
-/** Every alias `source`'s `lib/fs` import block binds `name` to — the plain name (no `as`) or an aliased one. */
+/**
+ * Every alias `source`'s `lib/fs` import block binds `name` to — the plain
+ * name (no `as`) or an aliased one.
+ *
+ * R2-F4: the specifier half matches every relative form that resolves to
+ * `src/lib/fs.ts` — `"lib/fs"`, `"./lib/fs"`, `"../lib/fs"` (any number of
+ * leading `../` segments), AND the sibling-import form a file already inside
+ * `src/lib` uses to reach it, `"./fs"` / `"../fs"` — each with or without an
+ * explicit `.ts` extension. The old regex required a literal `lib/` path
+ * segment, so `metaproject-gitignore.ts`, `routing-entrypoint.ts`,
+ * `install-plan.ts`, and `project-sandbox-policy.ts` (all of which live in
+ * `src/lib` and import their sibling `fs.ts` as `"./fs"`) were never even
+ * checked for a raw `writeFileAtomic` import — this widens the check to
+ * cover them too, not just files reaching `lib/fs` from elsewhere in the
+ * tree.
+ */
 function libFsImportAliases(source: string, name: string): string[] {
   const aliases: string[] = [];
-  const importBlockRe = /import\s*\{([^}]*)\}\s*from\s*["'][./]*lib\/fs["']/g;
+  const importBlockRe = /import\s*\{([^}]*)\}\s*from\s*["'](?:\.\.?\/)*(?:lib\/)?fs(?:\.ts)?["']/g;
   let match: RegExpExecArray | null;
   while ((match = importBlockRe.exec(source)) !== null) {
     const names = (match[1] ?? "").split(",").map((n) => n.trim()).filter((n) => n.length > 0);
@@ -298,6 +313,18 @@ describe("contained-write ratchet: detection shapes (mutation coverage, R4-F1)",
       name: "aliased writeFileAtomic from lib/fs (R1-F7)",
       source: 'import { writeFileAtomic as w } from "../lib/fs";\nawait w(p, c);',
     },
+    {
+      name: "writeFileAtomic from sibling \"./fs\" (R2-F4)",
+      source: 'import { writeFileAtomic } from "./fs";\nawait writeFileAtomic(p, c);',
+    },
+    {
+      name: "writeFileAtomic from \"../fs.ts\" with an explicit extension (R2-F4)",
+      source: 'import { writeFileAtomic } from "../fs.ts";\nawait writeFileAtomic(p, c);',
+    },
+    {
+      name: "writeFileAtomic from \"../lib/fs.ts\" with an explicit extension (R2-F4)",
+      source: 'import { writeFileAtomic } from "../lib/fs.ts";\nawait writeFileAtomic(p, c);',
+    },
     { name: "createWriteStream", source: 'import { createWriteStream } from "node:fs";\ncreateWriteStream(p);' },
     { name: "rmSync", source: 'import { rmSync } from "node:fs";\nrmSync(p);' },
     { name: "namespace mkdir", source: 'import * as fs from "node:fs/promises";\nfs.mkdir(p, { recursive: true });' },
@@ -319,5 +346,56 @@ describe("contained-write ratchet: detection shapes (mutation coverage, R4-F1)",
 
   test("a type-only import(\"node:fs\") reference is never flagged", () => {
     expect(detectRawWrites('let entries: import("node:fs").Dirent[];')).toEqual([]);
+  });
+
+  test("R2-F4: an unrelated name imported from a sibling \"./fs\" is never flagged", () => {
+    // The widened specifier match (R2-F4) only matters for the `writeFileAtomic`
+    // name it looks for — an ordinary read-only helper reached the same way
+    // (e.g. `pathExists` from `./fs`, as metaproject-gitignore.ts does) must
+    // stay silent.
+    expect(detectRawWrites('import { pathExists } from "./fs";\nawait pathExists(p);')).toEqual([]);
+  });
+});
+
+describe("contained-write ratchet: R2-F3 (install.ts is no longer whole-file allowlisted)", () => {
+  test("src/gdskills/install.ts carries no allowlist entry of its own", () => {
+    expect(isAllowed("src/gdskills/install.ts")).toBe(false);
+  });
+
+  test("the new guarded-fs-ops.ts module is the only src/gdskills allowlist entry", () => {
+    const gdskillsEntries = ALLOWLIST.filter((entry) => entry.file.startsWith("src/gdskills/"));
+    expect(gdskillsEntries.map((entry) => entry.file)).toEqual(["src/gdskills/guarded-fs-ops.ts"]);
+  });
+
+  test("a raw writeFile reintroduced into install.ts's text would be caught", () => {
+    // Before this fix, `isAllowed("src/gdskills/install.ts")` was true — the
+    // whole-file allowlist entry that existed to keep install.ts's guarded
+    // `cp`/`unlink` calls also exempted every OTHER raw write shape in the
+    // same file, so this text would have been skipped before `detectRawWrites`
+    // ever ran on it (R2-F3). Now the file carries no allowlist entry, so the
+    // main ratchet test's loop actually scans it, and a reintroduced raw
+    // `writeFile` — the exact shape R1-F1 fixed — is flagged like any other
+    // covered file.
+    const reintroducedRawWrite = [
+      'import { writeFile } from "node:fs/promises";',
+      "",
+      "async function installSkillManifest(target: string, content: string) {",
+      "  await writeFile(target, content);",
+      "}",
+    ].join("\n");
+    expect(isAllowed("src/gdskills/install.ts")).toBe(false);
+    expect(detectRawWrites(reintroducedRawWrite).length).toBeGreaterThan(0);
+  });
+
+  test("a raw copyFile reintroduced into install.ts's text would be caught", () => {
+    const reintroducedRawCopy = [
+      'import { copyFile } from "node:fs/promises";',
+      "",
+      "async function installSkillFile(source: string, target: string) {",
+      "  await copyFile(source, target);",
+      "}",
+    ].join("\n");
+    expect(isAllowed("src/gdskills/install.ts")).toBe(false);
+    expect(detectRawWrites(reintroducedRawCopy).length).toBeGreaterThan(0);
   });
 });

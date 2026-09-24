@@ -6,17 +6,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { CONTRACTS, contractPath } from "./contracts";
+import { checkInstallDestination, checkInstallFile, installGdskills } from "./install";
 import {
-  checkInstallDestination,
-  checkInstallFile,
-  installGdskills,
   normalizeRetiredRuleContent,
   removeStaleRuntimeBuilds,
   removeUnmodifiedRetiredRules,
   retiredRuleWarning,
   staleRuntimeBuildMessage,
   staleRuntimeBuildSeverity,
-} from "./install";
+} from "./guarded-fs-ops";
 import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
 
 test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
