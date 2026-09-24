@@ -9,7 +9,7 @@
   "title": "W6: lifecycle hooks in keryx shell that can only tighten the policy engine",
   "status": "in-progress",
   "createdAt": "2026-09-24T00:56:52.772Z",
-  "updatedAt": "2026-09-24T04:42:00.777Z",
+  "updatedAt": "2026-09-24T04:42:38.408Z",
   "source": {
     "type": "description",
     "ref": null
@@ -236,7 +236,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 4,
+        "count": 5,
         "log": [
           {
             "at": "2026-09-24T03:04:44.322Z",
@@ -257,6 +257,11 @@
             "at": "2026-09-24T03:47:18.290Z",
             "outcome": "failed",
             "detail": "round 2: major 1 (hookAsk lost when hook ask does not change decision in default ask mode), minor 5, info 4; CI client matrix runtime: profile-literal/ranking-table guard test fails"
+          },
+          {
+            "at": "2026-09-24T04:42:38.408Z",
+            "outcome": "started",
+            "detail": "review round 3 (final) after rebase + T20"
           }
         ]
       },
@@ -672,6 +677,11 @@
       "at": "2026-09-24T04:42:00.777Z",
       "event": "task-done",
       "detail": "T20: Wave-1 integration after rebase onto feat: wire W8 createImpactEvidenceProvider into the keryx.impact-evidence slot, register W6 hook surfaces on the keryx-shell integrations adapter, regenerate the capability matrix"
+    },
+    {
+      "at": "2026-09-24T04:42:38.408Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 5) — review round 3 (final) after rebase + T20"
     }
   ]
 }
