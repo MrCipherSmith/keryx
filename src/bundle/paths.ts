@@ -34,9 +34,20 @@ export function scopeRoot(scope: BundleScope, ctx: PathCtx): string {
 
 export type NormalizeResult = { ok: true; path: string } | { ok: false; refusal: BundleRefusal };
 
+// Control characters (incl. CR, LF, TAB, DEL and the Unicode line/paragraph
+// separators) and the specific characters/sequences that can forge a
+// managed-block marker (`<!-- keryx:... -->`) when a bundle-supplied path is
+// interpolated into rendered output (R1-F7). Refused everywhere a bundle path
+// is normalized, not only for rule paths, since any kind's path can end up
+// rendered (display ids, ledger keys, error messages).
+// eslint-disable-next-line no-control-regex -- matching control characters is the point (R1-F7)
+const CONTROL_CHAR_RE = /[\x00-\x1f\x7f\u2028\u2029]/;
+const MARKER_FORGING_RE = /[<>`]|<!--|-->/;
+
 /**
  * Normalize a bundle-relative path: POSIX separators only, no absolute path,
- * no backslash, no NUL byte, no empty/`.`/`..` segment, no trailing slash.
+ * no backslash, no NUL byte, no control character, no marker-forging
+ * character/sequence, no empty/`.`/`..` segment, no trailing slash.
  */
 export function normalizeBundlePath(candidate: string): NormalizeResult {
   if (candidate.length === 0) {
@@ -47,6 +58,15 @@ export function normalizeBundlePath(candidate: string): NormalizeResult {
   }
   if (candidate.includes("\0")) {
     return { ok: false, refusal: { reason: BUNDLE_REFUSAL.pathEscape, path: candidate, message: "path contains a NUL byte" } };
+  }
+  if (CONTROL_CHAR_RE.test(candidate)) {
+    return { ok: false, refusal: { reason: BUNDLE_REFUSAL.pathEscape, path: candidate, message: "path contains a control character" } };
+  }
+  if (MARKER_FORGING_RE.test(candidate)) {
+    return {
+      ok: false,
+      refusal: { reason: BUNDLE_REFUSAL.pathEscape, path: candidate, message: "path contains a character or sequence that could forge a managed-block marker (<, >, `, <!--, -->)" },
+    };
   }
   if (candidate.startsWith("/")) {
     return { ok: false, refusal: { reason: BUNDLE_REFUSAL.pathEscape, path: candidate, message: "path must not be absolute" } };
@@ -72,18 +92,36 @@ const AGENT_NAME_SEGMENT = /^[^/]+\.md$/;
 const RULE_FILE = /\.(md|mdc)$/;
 
 /**
+ * Case-folded, NFC-normalized form of a path segment/prefix comparison, so a
+ * reserved-path guard behaves identically on a case-insensitive filesystem
+ * (macOS/Windows) and a case-sensitive one (Linux CI) — R1-F2. `normalize`
+ * before `toLowerCase` so composed and decomposed Unicode forms of the same
+ * reserved name also collide.
+ */
+function caseFold(value: string): string {
+  return value.normalize("NFC").toLowerCase();
+}
+
+const GLOBALLY_FORBIDDEN_EXACT = [caseFold("skills/external-imports.json"), caseFold("learning/index.json")];
+const GLOBALLY_FORBIDDEN_PREFIXES = [
+  caseFold("learning/observations/"),
+  caseFold("data/learning/observations/"),
+  caseFold("bundles/"),
+  caseFold("data/bundles/"),
+];
+
+/**
  * Forbidden regardless of kind: paths reserved for other subsystems that a
  * bundle must never be able to target (the W3 evidence index/observations,
- * or the bundle cache/ledger directories themselves).
+ * the bundle cache/ledger directories, or the external-imports registry
+ * itself). Compared case-folded and NFC-normalized so a case-variant path
+ * (`skills/External-Imports.json`) is caught even on a case-sensitive
+ * filesystem, since APFS/exFAT treat it as the same file (R1-F2).
  */
 function isGloballyForbidden(relPath: string): boolean {
-  return (
-    relPath === "learning/index.json" ||
-    relPath.startsWith("learning/observations/") ||
-    relPath.startsWith("data/learning/observations/") ||
-    relPath.startsWith("bundles/") ||
-    relPath.startsWith("data/bundles/")
-  );
+  const folded = caseFold(relPath);
+  if (GLOBALLY_FORBIDDEN_EXACT.includes(folded)) return true;
+  return GLOBALLY_FORBIDDEN_PREFIXES.some((prefix) => folded.startsWith(prefix));
 }
 
 /** Does `relPath` (already normalized) match the allowed on-disk shape for `kind` at `scope`? */
@@ -97,16 +135,24 @@ export function validateKindPath(kind: BundleContentKind, scope: BundleScope, re
 
   switch (kind) {
     case "skill": {
-      if (scope === "user" && relPath === "skills/external-imports.json") {
-        return {
-          ok: false,
-          refusal: { reason: BUNDLE_REFUSAL.pathNotValidForScope, path: relPath, message: "user-scope skills may never target skills/external-imports.json" },
-        };
-      }
+      // The reserved skills/external-imports.json path is refused by
+      // isGloballyForbidden above (case-folded, every kind/scope).
       const underSkills = relPath.startsWith("skills/") && relPath.length > "skills/".length;
       const underProjectSkills = scope === "project" && relPath.startsWith("project-skills/") && relPath.length > "project-skills/".length;
-      if (underSkills || underProjectSkills) return { ok: true };
-      return kindMismatch(kind, relPath);
+      if (!underSkills && !underProjectSkills) return kindMismatch(kind, relPath);
+      const basename = relPath.slice(relPath.lastIndexOf("/") + 1);
+      // A non-canonical casing of SKILL.md (skill.md, Skill.MD, ...) is the
+      // same file on a case-insensitive filesystem, so it must be refused
+      // rather than silently evading the SKILL.md-only checks that key on
+      // the exact basename elsewhere (audit-harness, agent-skills readers) —
+      // R1-F8.
+      if (caseFold(basename) === caseFold("SKILL.md") && basename !== "SKILL.md") {
+        return {
+          ok: false,
+          refusal: { reason: BUNDLE_REFUSAL.kindPathMismatch, path: relPath, message: `${relPath}: SKILL.md must use canonical casing (got "${basename}")` },
+        };
+      }
+      return { ok: true };
     }
     case "rule": {
       if (scope === "user") {
@@ -206,9 +252,28 @@ async function resolveContainedPathForWrite(root: string, relPath: string): Prom
   return { ok: true, absolutePath: absolute };
 }
 
-async function refuseSymlinkChain(root: string, relPath: string): Promise<{ ok: true } | { ok: false; refusal: BundleRefusal }> {
+/**
+ * Refuse when the scope root itself, any existing ancestor directory under
+ * it, or the target itself is a symlink. Exported so `apply` can re-run this
+ * exact check immediately before each write (R1-I1): the audit runs between
+ * plan and apply, and a parent directory (or the scope root) swapped for a
+ * symlink in that window must not be silently followed by `mkdir -p`/`rename`.
+ */
+export async function refuseSymlinkChain(root: string, relPath: string): Promise<{ ok: true } | { ok: false; refusal: BundleRefusal }> {
+  const rootResolved = path.resolve(root);
+  try {
+    const rootStat = await lstat(rootResolved);
+    if (rootStat.isSymbolicLink()) {
+      return {
+        ok: false,
+        refusal: { reason: BUNDLE_REFUSAL.symlinkRefused, path: relPath, message: `${relPath}: the scope root itself is a symlink` },
+      };
+    }
+  } catch {
+    // scope root does not exist yet — fine, apply's mkdir -p will create it
+  }
   const segments = relPath.split("/");
-  let current = path.resolve(root);
+  let current = rootResolved;
   for (const segment of segments) {
     current = path.join(current, segment);
     try {

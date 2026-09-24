@@ -59,6 +59,12 @@ export async function inspectBundle(bundlePath: string, opts: InspectBundleOptio
     targetScope: opts.targetScope,
     env: opts.env,
     homeDir: opts.homeDir,
+    // `bundle inspect` is read-only and never writes hooks.json (W4-AC5) —
+    // the `--allow-hooks` opt-in (R1-F13) guards `apply` actually writing
+    // into the live hook runtime, which a preview never does. Always true
+    // here so a hook-config entry still previews as new/identical/etc.
+    // instead of appearing as a refusal an inspect-only caller cannot act on.
+    allowHooks: true,
   });
 
   const entries: InspectPlanEntry[] = plan.entries.map((e) => ({

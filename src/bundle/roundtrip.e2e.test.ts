@@ -98,7 +98,7 @@ describe("W4 bundle round trip (Wave-3 exit)", () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
 
-    const plan1 = await planBundleImport({ source: opened.value, manifest: parsed.manifest, projectRoot: targetProjectRoot, homeDir: targetUserHome, env: {} });
+    const plan1 = await planBundleImport({ source: opened.value, manifest: parsed.manifest, projectRoot: targetProjectRoot, homeDir: targetUserHome, env: {}, allowHooks: true });
     expect(plan1.ok).toBe(true);
     expect(plan1.entries.every((e) => e.bucket === "new")).toBe(true);
 
@@ -125,7 +125,7 @@ describe("W4 bundle round trip (Wave-3 exit)", () => {
     const humanEdit = "human edit: this file was changed after import\n";
     writeFileSync(markedAbs, humanEdit);
 
-    const plan2 = await planBundleImport({ source: opened.value, manifest: parsed.manifest, projectRoot: targetProjectRoot, homeDir: targetUserHome, env: {} });
+    const plan2 = await planBundleImport({ source: opened.value, manifest: parsed.manifest, projectRoot: targetProjectRoot, homeDir: targetUserHome, env: {}, allowHooks: true });
     expect(plan2.ok).toBe(false);
     const markedEntry2 = plan2.entries.find((e) => e.targetRelative === markedPath);
     expect(markedEntry2?.bucket).toBe("conflict");
@@ -144,6 +144,7 @@ describe("W4 bundle round trip (Wave-3 exit)", () => {
       homeDir: targetUserHome,
       env: {},
       force: [markedPath],
+      allowHooks: true,
     });
     expect(plan3.ok).toBe(true);
     const audit3 = await auditBundlePlan(plan3, { runAudit: STUB_RUN_AUDIT });

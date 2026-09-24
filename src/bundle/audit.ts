@@ -41,10 +41,25 @@ export async function auditBundlePlan(
 
   const stagingDir = await mkdtemp(path.join(tmpdir(), "keryx-bundle-audit-"));
   try {
-    for (const entry of toStage) {
-      const abs = path.join(stagingDir, ...entry.path.split("/"));
-      await mkdir(path.dirname(abs), { recursive: true });
-      await writeFile(abs, entry.bytes);
+    // R1-F22: two entries that collide as a file/directory prefix inside ONE
+    // bundle (e.g. `skills/a` as a file and `skills/a/SKILL.md` as another
+    // entry) previously threw a raw `EEXIST` out of `mkdir`, which the docs
+    // do not list as a `BUNDLE_REFUSAL` reason. `parseManifest` now refuses
+    // this shape up front (manifest.ts), but staging still fails closed with
+    // a named reason rather than an uncaught exception, in case a caller
+    // reaches audit with an already-parsed, already-mutated plan.
+    try {
+      for (const entry of toStage) {
+        const abs = path.join(stagingDir, ...entry.path.split("/"));
+        await mkdir(path.dirname(abs), { recursive: true });
+        await writeFile(abs, entry.bytes);
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        refusals: [{ reason: BUNDLE_REFUSAL.auditIncomplete, message: `could not stage bundle contents for audit: ${err instanceof Error ? err.message : String(err)}` }],
+        report: null,
+      };
     }
 
     const report = await runAudit(stagingDir, {

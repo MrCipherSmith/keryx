@@ -7,11 +7,20 @@
 
 import { readFile } from "node:fs/promises";
 
+import { validateAgainstSchemaObject } from "../contracts/validator";
+import { parseAgentFrontmatter, validateAgentFrontmatter } from "../agents/service";
 import { checkPrivateDirGitignore } from "../lib/private-dir";
 import { userStorePaths } from "../lib/keryx-home";
+import hookConfigSchemaJson from "../../docs/requirements/keryx-agent-platform-expansion/schemas/hook-config.schema.json" with {
+  type: "json",
+};
+import learnedPatternSchemaJson from "../../docs/requirements/keryx-agent-platform-expansion/schemas/learned-pattern.schema.json" with {
+  type: "json",
+};
 import { readAppliedState, appliedStatePath } from "./applied-state";
 import { sha256Hex } from "./checksum";
 import type { BundleSource } from "./archive";
+import { rewriteAgentOrigin } from "./export";
 import { targetFor, type PathCtx } from "./paths";
 import { verifyBundle } from "./verify";
 import { BUNDLE_REFUSAL, type BundleContentKind, type BundleManifest, type BundleRefusal, type BundleScope } from "./types";
@@ -41,6 +50,8 @@ export interface BundlePlan {
   bundleId: string;
   refusals: BundleRefusal[];
   entries: PlanEntry[];
+  /** The project root every entry's scope root was resolved against — apply re-runs path/symlink checks against the same root (R1-I1). */
+  projectRoot: string;
 }
 
 export interface PlanBundleImportOptions {
@@ -49,6 +60,8 @@ export interface PlanBundleImportOptions {
   projectRoot: string;
   targetScope?: BundleScope | undefined;
   force?: string[] | undefined;
+  /** Required (`--allow-hooks`) before any `hook-config` entry may be planned (R1-F13). */
+  allowHooks?: boolean | undefined;
   env?: NodeJS.ProcessEnv | undefined;
   homeDir?: string | undefined;
 }
@@ -59,21 +72,35 @@ interface LearnedPatternTtl {
   expiresAt: string;
 }
 
-/** Deterministic default TTL for a rewritten candidate: 30 days from now. */
-function defaultLearnedPatternTtl(now: Date): LearnedPatternTtl {
-  const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+/**
+ * Deterministic default TTL: 30 days from the bundle's own `manifest.createdAt`
+ * (not wall-clock `now`) so the rewritten bytes — and therefore
+ * `incomingSha256` — are identical on every plan of the same bundle. Using
+ * `Date.now()` here made `inspect` report `update` right after a fresh
+ * `import`, and every re-import silently pushed the TTL out another 30 days
+ * (R1-F11). Falls back to the current time only if `createdAt` fails to
+ * parse, so a malformed manifest (which `parseManifest`'s schema check should
+ * already have refused) never throws here.
+ */
+function defaultLearnedPatternTtl(manifestCreatedAt: string): LearnedPatternTtl {
+  const base = new Date(manifestCreatedAt);
+  const baseMs = Number.isNaN(base.getTime()) ? Date.now() : base.getTime();
+  const expires = new Date(baseMs + 30 * 24 * 60 * 60 * 1000);
   return { expiresAt: expires.toISOString() };
 }
 
 /**
- * Rewrite a `scope: user` learned-pattern record to `status: "candidate"`,
- * adding a deterministic `ttl` only if it is absent. Stable JSON, 2-space
- * indent + trailing newline — these bytes are what `incomingSha256` covers.
+ * Rewrite a learned-pattern record to `status: "candidate"` (per the spec,
+ * `keryx learn accept` is the only command that may leave a record
+ * `accepted` — an imported record, project- or user-scope, always lands as a
+ * candidate, R1-F25), adding a deterministic `ttl` only if it is absent.
+ * Stable JSON, 2-space indent + trailing newline — these bytes are what
+ * `incomingSha256` covers.
  */
-function rewriteLearnedPatternCandidate(record: Record<string, unknown>, now: Date): Buffer {
+function rewriteLearnedPatternCandidate(record: Record<string, unknown>, manifestCreatedAt: string): Buffer {
   const rewritten: Record<string, unknown> = { ...record, status: "candidate", supersededBy: null };
   if (rewritten.ttl === undefined || rewritten.ttl === null) {
-    rewritten.ttl = defaultLearnedPatternTtl(now);
+    rewritten.ttl = defaultLearnedPatternTtl(manifestCreatedAt);
   }
   return Buffer.from(`${JSON.stringify(rewritten, null, 2)}\n`, "utf8");
 }
@@ -89,7 +116,6 @@ async function currentFileSha(absolutePath: string): Promise<string | undefined>
 
 export async function planBundleImport(opts: PlanBundleImportOptions): Promise<BundlePlan> {
   const ctx: PathCtx = { projectRoot: opts.projectRoot, env: opts.env, homeDir: opts.homeDir };
-  const now = new Date();
 
   // Step 1: checksums first. Any failure -> ok:false, no further work.
   const verified = verifyBundle(opts.source, opts.manifest);
@@ -107,7 +133,7 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     for (const p of verified.unlisted) {
       refusals.push({ reason: BUNDLE_REFUSAL.unlistedFile, path: p, message: `${p} is present in the bundle but not listed in the manifest` });
     }
-    return { ok: false, bundleId: opts.manifest.bundleId, refusals, entries: [] };
+    return { ok: false, bundleId: opts.manifest.bundleId, refusals, entries: [], projectRoot: opts.projectRoot };
   }
 
   const refusals: BundleRefusal[] = [];
@@ -117,6 +143,32 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
   for (const contentEntry of opts.manifest.contents) {
     const bytes = opts.source.files.get(contentEntry.path) as Buffer;
     const targetScope = opts.targetScope ?? contentEntry.scope;
+
+    // R1-F13: a bundle whose manifest claims one sourceScope must not
+    // silently write a DIFFERENT scope's entry unless the caller explicitly
+    // asked to retarget (`--target-scope`). Without that flag, a "project"
+    // bundle carrying a `scope: user` hooks.json entry would otherwise write
+    // straight into the global `~/.keryx/hooks.json`.
+    if (opts.targetScope === undefined && contentEntry.scope !== opts.manifest.provenance.sourceScope) {
+      refusals.push({
+        reason: BUNDLE_REFUSAL.scopeMismatch,
+        path: contentEntry.path,
+        message: `${contentEntry.path}: entry scope "${contentEntry.scope}" differs from the bundle's provenance.sourceScope "${opts.manifest.provenance.sourceScope}"; pass --target-scope to import it anyway`,
+      });
+      continue;
+    }
+
+    // R1-F13: hook-config entries write into a live, every-project-affecting
+    // config (`~/.keryx/hooks.json` or `.metaproject/hooks.json`, W6). Never
+    // import one silently — the caller must opt in explicitly.
+    if (contentEntry.kind === "hook-config" && opts.allowHooks !== true) {
+      refusals.push({
+        reason: BUNDLE_REFUSAL.hooksRequireOptIn,
+        path: contentEntry.path,
+        message: `${contentEntry.path}: importing a hook-config entry requires --allow-hooks`,
+      });
+      continue;
+    }
 
     // Learned-pattern scope rule (W4-AC11): never retarget; scope is immutable.
     if (contentEntry.kind === "learned-pattern") {
@@ -165,9 +217,73 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
         });
         continue;
       }
-      if (contentEntry.scope === "user") {
-        effectiveBytes = rewriteLearnedPatternCandidate(recordObj, now);
+      effectiveBytes = rewriteLearnedPatternCandidate(recordObj, opts.manifest.createdAt);
+      // Validate AFTER the candidate rewrite — the rewrite is what actually
+      // gets written, so that is what must be schema-valid (R1-F12).
+      let rewrittenParsed: unknown;
+      try {
+        rewrittenParsed = JSON.parse(effectiveBytes.toString("utf8"));
+      } catch {
+        refusals.push({ reason: BUNDLE_REFUSAL.contentInvalid, path: contentEntry.path, message: `${contentEntry.path}: candidate rewrite produced invalid JSON` });
+        continue;
       }
+      const patternValidation = validateAgainstSchemaObject(learnedPatternSchemaJson as Record<string, unknown>, rewrittenParsed);
+      if (!patternValidation.valid) {
+        refusals.push({
+          reason: BUNDLE_REFUSAL.contentInvalid,
+          path: contentEntry.path,
+          message: `${contentEntry.path} fails learned-pattern schema: ${patternValidation.errors[0]?.message ?? "invalid"}`,
+        });
+        continue;
+      }
+    }
+
+    // R1-F12: a hand-crafted (non-`keryx bundle export`) bundle must not be
+    // able to hand `apply` an unvalidated hook-config payload — a
+    // schema-invalid `hooks.json` would otherwise be written straight into
+    // the live W6 hook runtime.
+    if (contentEntry.kind === "hook-config") {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(bytes.toString("utf8"));
+      } catch {
+        refusals.push({ reason: BUNDLE_REFUSAL.contentInvalid, path: contentEntry.path, message: `${contentEntry.path} is not valid JSON` });
+        continue;
+      }
+      const validation = validateAgainstSchemaObject(hookConfigSchemaJson as Record<string, unknown>, parsed);
+      if (!validation.valid) {
+        refusals.push({
+          reason: BUNDLE_REFUSAL.contentInvalid,
+          path: contentEntry.path,
+          message: `${contentEntry.path} fails hook-config schema: ${validation.errors[0]?.message ?? "invalid"}`,
+        });
+        continue;
+      }
+    }
+
+    // R1-F12 (AC14): every imported agent's `origin` is forced to
+    // `{ kind: imported, sourceRef: <this bundle's id> }` regardless of what
+    // the bundle claims — the producer-side rewrite in export.ts is not a
+    // guarantee a hand-crafted bundle honors it. Re-validated afterward
+    // against the same W2 schema `keryx agents verify` uses.
+    if (contentEntry.kind === "agent") {
+      const text = bytes.toString("utf8");
+      const rewritten = rewriteAgentOrigin(text, opts.manifest.bundleId);
+      const parsedFrontmatter = parseAgentFrontmatter(rewritten);
+      if (!parsedFrontmatter.ok) {
+        refusals.push({ reason: BUNDLE_REFUSAL.contentInvalid, path: contentEntry.path, message: `${contentEntry.path}: ${parsedFrontmatter.error.message}` });
+        continue;
+      }
+      const validation = validateAgentFrontmatter(parsedFrontmatter.result.data);
+      if (!validation.ok) {
+        refusals.push({
+          reason: BUNDLE_REFUSAL.contentInvalid,
+          path: contentEntry.path,
+          message: `${contentEntry.path} fails agent-definition schema: ${validation.errors[0]?.message ?? "invalid"}`,
+        });
+        continue;
+      }
+      effectiveBytes = Buffer.from(rewritten, "utf8");
     }
 
     const target = await targetFor(contentEntry, targetScope, ctx);
@@ -197,7 +313,7 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     const ledgerPath = appliedStatePath(targetScope, ctx);
     const ledgerState = await readAppliedState(ledgerPath);
     if (!ledgerState.ok) {
-      refusals.push({ reason: BUNDLE_REFUSAL.notABundle, path: contentEntry.path, message: ledgerState.message });
+      refusals.push({ reason: BUNDLE_REFUSAL.corruptLedger, path: contentEntry.path, message: ledgerState.message });
       continue;
     }
     const ledgerRecord = ledgerState.state.entries[targetRelative];
@@ -255,5 +371,5 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     }
   }
 
-  return { ok: refusals.length === 0, bundleId: opts.manifest.bundleId, refusals, entries };
+  return { ok: refusals.length === 0, bundleId: opts.manifest.bundleId, refusals, entries, projectRoot: opts.projectRoot };
 }

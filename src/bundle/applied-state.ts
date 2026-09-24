@@ -38,12 +38,26 @@ export function appliedStatePath(scope: BundleScope, ctx: PathCtx): string {
   return path.join(scopeRoot(scope, ctx), "data", "bundles", "applied-state.json");
 }
 
+function isValidEntry(value: unknown): value is AppliedStateEntry {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.bundleId === "string" &&
+    v.bundleId.length > 0 &&
+    typeof v.sha256 === "string" &&
+    /^[0-9a-f]{64}$/.test(v.sha256) &&
+    typeof v.kind === "string" &&
+    typeof v.appliedAt === "string"
+  );
+}
+
+/** R1-F9: validate every record's shape, not just the container — a ledger with a malformed record (missing bundleId/sha256, or a non-hex sha) is corrupt, not merely "has records", and must fail closed the same way a structurally invalid file does. */
 function isValidState(value: unknown): value is AppliedState {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   if (v.schemaVersion !== 1) return false;
   if (typeof v.entries !== "object" || v.entries === null || Array.isArray(v.entries)) return false;
-  return true;
+  return Object.values(v.entries as Record<string, unknown>).every(isValidEntry);
 }
 
 export async function readAppliedState(ledgerPath: string): Promise<ReadAppliedStateResult> {

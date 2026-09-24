@@ -43,6 +43,27 @@ describe("normalizeBundlePath", () => {
     const result = normalizeBundlePath(input);
     expect(result.ok).toBe(false);
   });
+
+  // R1-F7: control characters and marker-forging sequences must be refused —
+  // pre-fix, none of these were checked at all, so a rule path could forge a
+  // `<!-- keryx:rules -->` marker and wedge the renderer / truncate human
+  // content on a later `ensureMetaprojectReference` run.
+  test.each([
+    ["a\rb", "CR"],
+    ["a\nb", "LF"],
+    ["a\tb", "TAB"],
+    ["a\u2028b", "U+2028 line separator"],
+    ["a\u2029b", "U+2029 paragraph separator"],
+    ["a<b", "<"],
+    ["a>b", ">"],
+    ["a`b", "backtick"],
+    ["rules/<!-- /keryx:rules -->.md", "<!-- marker open"],
+    ["rules/keryx:rules -->.md", "--> marker close"],
+  ])("refuses %s (%s)", (input) => {
+    const result = normalizeBundlePath(input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.refusal.reason).toBe("path-escape");
+  });
 });
 
 describe("validateKindPath", () => {
@@ -98,6 +119,43 @@ describe("validateKindPath", () => {
     expect(validateKindPath("learned-pattern", "user", "learning/index.json").ok).toBe(false);
     expect(validateKindPath("learned-pattern", "user", "learning/observations/a.json").ok).toBe(false);
   });
+
+  // R1-F2: pre-fix, `isGloballyForbidden`/the skill-kind guard compared
+  // `relPath === "skills/external-imports.json"` case-sensitively, so a
+  // case-variant path sailed through `validateKindPath` even though it is
+  // the SAME file as the reserved registry on a case-insensitive filesystem
+  // (APFS/exFAT/NTFS) — letting a bundle plant a forged, "vetted" registry.
+  test("skill: a case/Unicode-normalization variant of external-imports.json is refused too", () => {
+    for (const variant of ["skills/External-Imports.json", "skills/EXTERNAL-IMPORTS.JSON", "skills/external-imports.json"]) {
+      const result = validateKindPath("skill", "user", variant);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.refusal.reason).toBe("path-not-valid-for-scope");
+    }
+    // sanity: an ordinary skill path one character different is still fine.
+    expect(validateKindPath("skill", "user", "skills/external-imports-2.json").ok).toBe(true);
+  });
+
+  test("reserved-path guard is case-folded for every reserved prefix, not only external-imports.json", () => {
+    expect(validateKindPath("learned-pattern", "user", "Learning/Index.json").ok).toBe(false);
+    expect(validateKindPath("learned-pattern", "user", "LEARNING/OBSERVATIONS/a.json").ok).toBe(false);
+    expect(validateKindPath("hook-config", "project", "Data/Bundles/x").ok).toBe(false);
+  });
+
+  // R1-F8: pre-fix, a `skills/evil/skill.md` (lowercase) entry passed
+  // `validateKindPath` unchanged, so the SKILL.md-only audit checks
+  // (auto-run directive, prompt-injection-in-instructions, keyed on the
+  // exact basename) never ran on it — even though on a case-insensitive
+  // filesystem it IS the skill's SKILL.md.
+  test("skill: a non-canonical casing of SKILL.md is refused (kind-path-mismatch)", () => {
+    for (const variant of ["skills/evil/skill.md", "skills/evil/Skill.MD", "skills/evil/SKILL.MD", "skills/evil/Skill.md"]) {
+      const result = validateKindPath("skill", "user", variant);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.refusal.reason).toBe("kind-path-mismatch");
+    }
+    // canonical casing, and any OTHER filename under a skill dir, still work.
+    expect(validateKindPath("skill", "user", "skills/evil/SKILL.md").ok).toBe(true);
+    expect(validateKindPath("skill", "user", "skills/evil/reference.md").ok).toBe(true);
+  });
 });
 
 describe("scopeRoot", () => {
@@ -141,6 +199,19 @@ describe("targetFor", () => {
     mkdirSync(metaproject, { recursive: true });
     writeFileSync(path.join(root, "secret.md"), "x");
     symlinkSync(path.join(root, "secret.md"), path.join(metaproject, "foo.md"));
+
+    const result = await targetFor({ path: "agents/foo.md", kind: "agent", scope: "project" }, "project", ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.refusal.reason).toBe("symlink-refused");
+  });
+
+  // R1-I1: the scope root itself must be checked, not only the segments
+  // under it — a symlinked `.metaproject` swapped in between plan and apply
+  // must not be silently followed.
+  test("refuses when the scope root itself is a symlink", async () => {
+    const ctx = { projectRoot, env: {}, homeDir };
+    mkdirSync(path.join(root, "elsewhere-root"), { recursive: true });
+    symlinkSync(path.join(root, "elsewhere-root"), path.join(projectRoot, ".metaproject"));
 
     const result = await targetFor({ path: "agents/foo.md", kind: "agent", scope: "project" }, "project", ctx);
     expect(result.ok).toBe(false);

@@ -88,6 +88,11 @@ export const BUNDLE_REFUSAL = {
   notABundle: "not-a-bundle",
   archiveInvalid: "archive-invalid",
   archiveTooLarge: "archive-too-large",
+  scopeMismatch: "scope-mismatch",
+  hooksRequireOptIn: "hooks-require-opt-in",
+  corruptLedger: "corrupt-ledger",
+  applyFailed: "apply-failed",
+  noMetaproject: "no-metaproject",
 } as const;
 
 export type BundleRefusalReason = (typeof BUNDLE_REFUSAL)[keyof typeof BUNDLE_REFUSAL];

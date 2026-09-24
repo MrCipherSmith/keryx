@@ -13,6 +13,7 @@
 import path from "node:path";
 import { helpOptions, helpTitle, helpUsage, style } from "../lib/ui";
 import { optionValue } from "../lib/args";
+import { resolveProjectRoot } from "../lib/contained-path";
 import packageJson from "../../package.json" with { type: "json" };
 import {
   BUNDLE_CONTENT_KINDS,
@@ -134,6 +135,22 @@ function failUsage(message: string): void {
   process.exitCode = 2;
 }
 
+/**
+ * R1-F24: every bundle subcommand used `cwd` directly as the project root,
+ * so running one from a SUBDIRECTORY of an already-initialized project
+ * created a NESTED `.metaproject/` there instead of writing into the real
+ * one. Resolve the same way other metaproject commands do — walk up to the
+ * nearest `.metaproject`/`.git` — so a subdirectory finds the real root.
+ * When neither marker exists anywhere above `cwd` (a bare, not-yet-`keryx
+ * init`-ed directory), `resolveProjectRoot` falls back to `cwd` itself,
+ * preserving `bundle export`/`import`'s existing ability to bootstrap a
+ * fresh scope root from scratch — this only fixes WHICH existing root is
+ * used, it does not require one to already exist.
+ */
+function resolveBundleProjectRoot(cwd: string): string {
+  return resolveProjectRoot(cwd);
+}
+
 function printRefusals(refusals: readonly { reason: string; path?: string; message: string }[], json: boolean): void {
   if (json) {
     console.log(JSON.stringify({ ok: false, refusals }, null, 2));
@@ -187,8 +204,10 @@ async function handleExport(args: readonly string[], cwd: string): Promise<void>
     return;
   }
 
+  const projectRoot = resolveBundleProjectRoot(cwd);
+
   const outcome = await exportBundle({
-    projectRoot: cwd,
+    projectRoot,
     scope: scopeArg,
     out: path.resolve(cwd, out),
     include: include.length > 0 ? include : undefined,
@@ -232,7 +251,7 @@ async function handleExport(args: readonly string[], cwd: string): Promise<void>
 // ---------------------------------------------------------------------------
 
 const IMPORT_VALUE_FLAGS = ["--target-scope", "--render-for", "--force"] as const;
-const IMPORT_BOOL_FLAGS = ["--dry-run", "--json", "--external"] as const;
+const IMPORT_BOOL_FLAGS = ["--dry-run", "--json", "--external", "--allow-hooks"] as const;
 
 async function handleImport(args: readonly string[], cwd: string): Promise<void> {
   if (args.includes("--help") || args.includes("-h")) {
@@ -242,6 +261,7 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
   const json = args.includes("--json");
   const dryRun = args.includes("--dry-run");
   const external = args.includes("--external");
+  const allowHooks = args.includes("--allow-hooks");
 
   const positionals = extractPositionals(args, [...IMPORT_VALUE_FLAGS], [...IMPORT_BOOL_FLAGS]);
   const target = positionals[0];
@@ -250,8 +270,10 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
     return;
   }
 
+  const projectRoot = resolveBundleProjectRoot(cwd);
+
   if (external) {
-    await handleImportExternal(path.resolve(cwd, target), cwd, { dryRun, json });
+    await handleImportExternal(path.resolve(cwd, target), projectRoot, { dryRun, json });
     return;
   }
 
@@ -301,9 +323,10 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
   const plan = await planBundleImport({
     source: opened.value,
     manifest: parsed.manifest,
-    projectRoot: cwd,
+    projectRoot,
     targetScope,
     force: force.length > 0 ? force : undefined,
+    allowHooks,
   });
 
   if (dryRun) {
@@ -336,17 +359,22 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
 
   let rulesResult: RulesExportResult[] | undefined;
   if (writtenRuleEntries.length > 0) {
-    const harnessIds = renderFor.length > 0 ? renderFor : await installedRulesExportHarnesses(cwd);
+    const harnessIds = renderFor.length > 0 ? renderFor : await installedRulesExportHarnesses(projectRoot);
     if (harnessIds.length > 0) {
-      rulesResult = await renderRulesForHarnesses(cwd, harnessIds, {});
+      rulesResult = await renderRulesForHarnesses(projectRoot, harnessIds, {});
     }
   }
+
+  // R1-F28: a rules render that fails after a successful import must not
+  // silently exit 0 with `ok: true` — the caller (and any script gating on
+  // exit code) needs to know the import's files landed but a render did not.
+  const anyRenderFailed = (rulesResult ?? []).some((result) => result.status === "failed");
 
   if (json) {
     console.log(
       JSON.stringify(
         {
-          ok: true,
+          ok: !anyRenderFailed,
           bundleId: plan.bundleId,
           written: applyResult.written,
           unchanged: applyResult.unchanged,
@@ -356,6 +384,7 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
         2,
       ),
     );
+    process.exitCode = anyRenderFailed ? 1 : 0;
     return;
   }
 
@@ -368,6 +397,7 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
       console.log(`  ${result.harness}: ${result.status}${result.file !== undefined ? ` (${result.file})` : ""}`);
     }
   }
+  process.exitCode = anyRenderFailed ? 1 : 0;
 }
 
 function printPlan(plan: { ok: boolean; bundleId: string; refusals: readonly BundleRefusal[]; entries: readonly PlanEntry[] }, json: boolean): void {
@@ -411,8 +441,8 @@ function printPlan(plan: { ok: boolean; bundleId: string; refusals: readonly Bun
   if (plan.refusals.length > 0) printRefusals(plan.refusals, false);
 }
 
-async function handleImportExternal(catalogDir: string, cwd: string, opts: { dryRun: boolean; json: boolean }): Promise<void> {
-  const result = await vetExternalCatalog({ catalogPath: catalogDir, projectRoot: cwd });
+async function handleImportExternal(catalogDir: string, projectRoot: string, opts: { dryRun: boolean; json: boolean }): Promise<void> {
+  const result = await vetExternalCatalog({ catalogPath: catalogDir, projectRoot });
   const anyAccepted = result.candidates.some((candidate) => candidate.decision === "accepted");
 
   let applied: Awaited<ReturnType<typeof applyExternalImports>> | undefined;
@@ -485,8 +515,10 @@ async function handleInspect(args: readonly string[], cwd: string): Promise<void
     return;
   }
 
+  const projectRoot = resolveBundleProjectRoot(cwd);
+
   const result = await inspectBundle(path.resolve(cwd, bundlePath), {
-    projectRoot: cwd,
+    projectRoot,
     targetScope: targetScopeArg as BundleScope | undefined,
   });
 
@@ -588,7 +620,9 @@ async function handleUninstall(args: readonly string[], cwd: string): Promise<vo
     return;
   }
 
-  const result = await uninstallBundle({ bundleId, targetScope: targetScopeArg, projectRoot: cwd, dryRun });
+  const projectRoot = resolveBundleProjectRoot(cwd);
+
+  const result = await uninstallBundle({ bundleId, targetScope: targetScopeArg, projectRoot, dryRun });
 
   if (result.refusals.length > 0) {
     printRefusals(result.refusals, json);
@@ -615,7 +649,7 @@ export function printBundleHelp(): void {
   helpTitle("bundle", "Portable bundle export/import of skills, rules, agents, memory and hooks (W4)");
   helpUsage([
     "keryx bundle export --scope <project|team|user> [--include <glob>]... [--kind <k,...>] [--id <id>] [--target-harness <h,...>] <out> [--json]",
-    "keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--dry-run] [--json]",
+    "keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--allow-hooks] [--dry-run] [--json]",
     "keryx bundle import <catalog-dir> --external [--dry-run] [--json]",
     "keryx bundle inspect <bundle> [--target-scope <scope>] [--json]",
     "keryx bundle verify <bundle> [--json]",
@@ -640,13 +674,14 @@ function printExportHelp(): void {
 function printImportHelp(): void {
   helpTitle("bundle import", "Plan -> W8 audit -> apply a bundle into a target scope");
   helpUsage([
-    "keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--dry-run] [--json]",
+    "keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--allow-hooks] [--dry-run] [--json]",
     "keryx bundle import <catalog-dir> --external [--dry-run] [--json]",
   ]);
   helpOptions([
     { flag: "--target-scope <s>", desc: "retarget every entry to this scope" },
     { flag: "--render-for <h,...>", desc: "render imported rules into these harnesses (default: already-installed ones)" },
     { flag: "--force <path>", desc: "overwrite this conflicting entry anyway; repeatable" },
+    { flag: "--allow-hooks", desc: "required to import any hook-config (hooks.json) entry" },
     { flag: "--external", desc: "treat <bundle> as an Agent-Skills-standard catalog directory" },
     { flag: "--dry-run", desc: "plan/vet only; write nothing" },
     { flag: "--json", desc: "print the result as JSON" },

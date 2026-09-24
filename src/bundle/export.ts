@@ -143,6 +143,19 @@ function defaultBundleId(scope: BundleScope, identity: string): string {
   return `keryx-${scope}-${hash}`;
 }
 
+/**
+ * The no-remote (and always-for-user) default bundleId (R1-F23): a digest of
+ * the export's own sorted `"<path>\t<sha256>"` content list, so two exports
+ * with different content never collide on id, and the same content always
+ * reproduces the same id (this export is still deterministic).
+ */
+function contentDigestBundleId(scope: BundleScope, entries: readonly { path: string; sha256: string }[]): string {
+  const sorted = [...entries].sort((a, b) => a.path.localeCompare(b.path));
+  const content = sorted.map((e) => `${e.path}\t${e.sha256}`).join("\n");
+  const hash = sha256Hex(Buffer.from(content, "utf8")).slice(0, 12);
+  return `keryx-${scope}-${hash}`;
+}
+
 // --- collectors ---
 
 interface Candidate {
@@ -344,8 +357,32 @@ export async function exportBundle(opts: ExportOptions): Promise<ExportOutcome> 
 
   const filtered = allCandidates.filter((c) => matchesInclude(opts.include, c.bundlePath)).sort((a, b) => a.bundlePath.localeCompare(b.bundlePath));
 
-  const identity = resolveIdentity(opts.projectRoot, opts.scope);
-  const bundleId = opts.bundleId ?? defaultBundleId(opts.scope, identity.identity);
+  // R1-F23: `resolveIdentity`'s remote-based identity is scoped to project/
+  // team content — a user-scope export is not "this project's" content, so
+  // its identity/bundleId must never be derived from whatever directory it
+  // happens to run in (its git remote is unrelated to the exported bytes).
+  // And when there IS no remote (or the scope is user), every export from
+  // an unrelated source previously hashed to the SAME constant id
+  // (`keryx-<scope>-local`/`keryx-<scope>-user`), which — combined with
+  // R1-F1 — let one bundle's uninstall delete another's files. The no-remote
+  // (and always-for-user) default is instead a digest of the export's own
+  // content list, unique per actual content rather than per fixed label.
+  // Computed from the RAW (pre-agent-origin-rewrite) bytes, so it does not
+  // depend on the bundleId it is itself producing.
+  const identity = opts.scope === "user" ? undefined : resolveIdentity(opts.projectRoot, opts.scope);
+  let bundleId = opts.bundleId;
+  if (bundleId === undefined) {
+    if (identity !== undefined && identity.hasRemote) {
+      bundleId = defaultBundleId(opts.scope, identity.identity);
+    } else {
+      const rawDigestEntries: { path: string; sha256: string }[] = [];
+      for (const candidate of filtered) {
+        const bytes = await readFile(candidate.absolutePath);
+        rawDigestEntries.push({ path: candidate.bundlePath, sha256: sha256Hex(bytes) });
+      }
+      bundleId = contentDigestBundleId(opts.scope, rawDigestEntries);
+    }
+  }
 
   const refusals: BundleRefusal[] = [];
   const files = new Map<string, Buffer>();
@@ -421,7 +458,10 @@ export async function exportBundle(opts: ExportOptions): Promise<ExportOutcome> 
     sourceKeryxVersion: opts.keryxVersion,
     provenance: {
       producedBy: "keryx bundle export",
-      ...(identity.hasRemote ? { sourceProject: `sha256:${sha256Hex(Buffer.from(identity.identity, "utf8"))}` } : {}),
+      // sourceProject is never set for a user-scope export: `identity` is
+      // `undefined` for scope "user" precisely so this can never leak
+      // whatever project directory the export happened to run from (R1-F23).
+      ...(identity !== undefined && identity.hasRemote ? { sourceProject: `sha256:${sha256Hex(Buffer.from(identity.identity, "utf8"))}` } : {}),
       sourceScope: opts.scope,
     },
     compat: {

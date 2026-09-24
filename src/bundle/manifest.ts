@@ -50,12 +50,46 @@ export function parseManifest(bytes: Buffer | string): ParseManifestResult {
 
   const refusals: BundleRefusal[] = [];
   const seenPaths = new Set<string>();
+  // R1-F22: two entries whose paths differ only by case are the SAME file on
+  // a case-insensitive filesystem (`rules/a.md` and `rules/A.md` both write
+  // `rules/a.md` on APFS), so an exact-match duplicate check alone lets a
+  // bundle silently write one path twice under two different ledger keys —
+  // which later confuses conflict detection and uninstall. Compared
+  // case-folded + NFC-normalized, same as the reserved-path guard.
+  const seenFolded = new Map<string, string>(); // folded path -> first original path that produced it
+  // A path that is a PREFIX DIRECTORY of another entry (`skills/a` as a file
+  // AND `skills/a/SKILL.md` as another entry) collides on disk too — the
+  // second write needs `skills/a` to be a directory that the first entry
+  // already claimed as a file. Tracked case-folded as well.
+  const seenFoldedSorted: string[] = [];
   for (const entry of manifest.contents) {
     if (seenPaths.has(entry.path)) {
       refusals.push({ reason: BUNDLE_REFUSAL.duplicatePath, path: entry.path, message: `duplicate contents[].path: ${entry.path}` });
       continue;
     }
     seenPaths.add(entry.path);
+
+    const folded = entry.path.normalize("NFC").toLowerCase();
+    const priorForFolded = seenFolded.get(folded);
+    if (priorForFolded !== undefined) {
+      refusals.push({
+        reason: BUNDLE_REFUSAL.duplicatePath,
+        path: entry.path,
+        message: `contents[].path "${entry.path}" is a case-only duplicate of "${priorForFolded}" — the same file on a case-insensitive filesystem`,
+      });
+      continue;
+    }
+    const collidesAsPrefix = seenFoldedSorted.some((other) => folded === other || folded.startsWith(`${other}/`) || other.startsWith(`${folded}/`));
+    if (collidesAsPrefix) {
+      refusals.push({
+        reason: BUNDLE_REFUSAL.duplicatePath,
+        path: entry.path,
+        message: `contents[].path "${entry.path}" collides with another entry's path as a file/directory prefix`,
+      });
+      continue;
+    }
+    seenFolded.set(folded, entry.path);
+    seenFoldedSorted.push(folded);
 
     const normalized = normalizeBundlePath(entry.path);
     if (!normalized.ok) {

@@ -17,6 +17,21 @@ import { BUNDLE_REFUSAL, type BundleRefusal } from "./types";
 const BLOCK = 512;
 const MAX_ENTRIES = 10_000;
 const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+// R1-F10: caps applied BEFORE decompression/reading, not only after —
+// otherwise a hostile bundle can make the process allocate hundreds of MB to
+// GB decompressing/reading before the entry/byte caps below ever get a
+// chance to refuse it. A compressed archive over this size is refused
+// outright without attempting `gunzipSync`; the decompressed output itself
+// is separately capped via `maxOutputLength` so a small, highly-compressed
+// input (a "gzip bomb") cannot inflate past the same total-bytes budget the
+// tar parser enforces per-entry.
+const MAX_COMPRESSED_BYTES = 32 * 1024 * 1024;
+const MAX_DECOMPRESSED_BYTES = MAX_TOTAL_BYTES + 8 * 1024 * 1024; // headroom for ustar block padding/headers
+// A directory source has no compression to bound, so its own walk is capped
+// on entry count and total bytes as it goes (see `openBundle`'s directory
+// branch), matching the archive's caps.
+const MAX_DIRECTORY_ENTRIES = MAX_ENTRIES;
+const MAX_DIRECTORY_BYTES = MAX_TOTAL_BYTES;
 const BUNDLE_MANIFEST_NAME = "bundle.json";
 
 export interface BundleSource {
@@ -256,6 +271,8 @@ export async function openBundle(bundlePath: string): Promise<ArchiveResult<Bund
   if (stat.isDirectory()) {
     const files = new Map<string, Buffer>();
     let manifestBytes: Buffer | null = null;
+    let entryCount = 0;
+    let totalBytes = 0;
 
     async function walk(dir: string, relPrefix: string): Promise<BundleRefusal | null> {
       const entries = await readdir(dir, { withFileTypes: true });
@@ -273,6 +290,17 @@ export async function openBundle(bundlePath: string): Promise<ArchiveResult<Bund
         }
         if (!entryStat.isFile()) {
           return { reason: BUNDLE_REFUSAL.archiveInvalid, path: rel, message: `${rel} is not a regular file` };
+        }
+        // R1-F10: cap entry count and total bytes as the walk goes, BEFORE
+        // reading the file's contents — matching the archive branch's caps,
+        // so a directory source cannot be used to bypass the same limits.
+        entryCount += 1;
+        if (entryCount > MAX_DIRECTORY_ENTRIES) {
+          return { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `bundle directory has more than ${MAX_DIRECTORY_ENTRIES} entries` };
+        }
+        totalBytes += entryStat.size;
+        if (totalBytes > MAX_DIRECTORY_BYTES) {
+          return { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `bundle directory exceeds ${MAX_DIRECTORY_BYTES} bytes total` };
         }
         const bytes = await readFile(abs);
         if (rel === BUNDLE_MANIFEST_NAME) {
@@ -293,12 +321,17 @@ export async function openBundle(bundlePath: string): Promise<ArchiveResult<Bund
   }
 
   if (stat.isFile()) {
+    // R1-F10: refuse an oversized compressed input BEFORE reading it fully
+    // into memory or attempting to decompress it.
+    if (stat.size > MAX_COMPRESSED_BYTES) {
+      return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `${bundlePath} is ${stat.size} bytes, over the ${MAX_COMPRESSED_BYTES}-byte compressed-size cap` } };
+    }
     const raw = await readFile(bundlePath);
     let tar: Buffer;
     try {
-      tar = gunzipSync(raw);
+      tar = gunzipSync(raw, { maxOutputLength: MAX_DECOMPRESSED_BYTES });
     } catch {
-      return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveInvalid, message: "not a valid gzip stream" } };
+      return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveInvalid, message: "not a valid gzip stream, or it decompresses past the size cap" } };
     }
     const parsed = parseUstar(tar);
     if (!parsed.ok) return parsed;
