@@ -255,11 +255,42 @@ function decodeUtf32WithBom(buffer: Buffer): string | undefined {
  * split-view case and R5-F4's bare-UTF-16 case), not regressions from this
  * fix, and R8's bypass matrix (`bom8.out` R4/M2) confirms they are the only
  * misses left.
+ *
+ * R1-F2 (flow 315, review round 1): `FF FE 00 00` is genuinely AMBIGUOUS, not
+ * just a UTF-16LE-BOM lookalike to rule out — it is simultaneously a valid
+ * UTF-32LE BOM and a valid UTF-16LE BOM immediately followed by a literal
+ * U+0000 code unit (a real, if unusual, first character). Returning only the
+ * UTF-32 + lossy views for this prefix (the R8-F2 fix) silently dropped the
+ * UTF-16LE reading: a genuine UTF-16LE file that happens to start with a NUL
+ * character decodes to U+FFFD-run noise under UTF-32 and to NUL-interleaved
+ * garbage under lossy UTF-8, so a positive-match check (injection, auto-run,
+ * secret) that would have matched the real UTF-16LE text now matches nothing
+ * in ANY view — the exact "decoded to noise, zero findings" class this whole
+ * dual-decode mechanism exists to close, reopened by the encoding this prefix
+ * collides with. The fix: when the UTF-32 BOM matches, also try
+ * `decodeUtf16WithBom` on the same buffer — for the little-endian `FF FE`
+ * prefix this is always defined (it decodes `buffer.subarray(2)`, i.e. the
+ * bytes after `FF FE`, as UTF-16LE — exactly the ambiguous reading); for the
+ * big-endian UTF-32 BOM (`00 00 FE FF`) `decodeUtf16WithBom` returns
+ * `undefined` since `00 00` is neither UTF-16 BOM, so no spurious 3rd view is
+ * added there (there is no UTF-16 ambiguity on that prefix). The UTF-32 view
+ * stays first/primary: callers that run absence-type checks (the expected key
+ * is MISSING, e.g. `checkAgentUnrestrictedTools`/`checkAgentMissingModelTier`)
+ * use only `contentVariants[0]`, and these exact 4 bytes are the canonical,
+ * unambiguous UTF-32LE BOM — U+0000 as the literal first character of real
+ * UTF-16 text is the rare reading, and it is still fully covered because
+ * every POSITIVE-match check (injection/auto-run/secrets) already unions
+ * findings across all of `contentVariants` at every call site
+ * (`unionFindingsById`), so the added UTF-16LE view is scanned there without
+ * any call-site change.
  */
 function decodeTextVariants(buffer: Buffer): string[] {
   const utf32Decoded = decodeUtf32WithBom(buffer);
   if (utf32Decoded !== undefined) {
-    return [utf32Decoded, lossyDecodeBytes(buffer)];
+    const ambiguousUtf16Decoded = decodeUtf16WithBom(buffer);
+    return ambiguousUtf16Decoded !== undefined
+      ? [utf32Decoded, ambiguousUtf16Decoded, lossyDecodeBytes(buffer)]
+      : [utf32Decoded, lossyDecodeBytes(buffer)];
   }
   const bomDecoded = decodeUtf16WithBom(buffer);
   const lossyDecoded = lossyDecodeBytes(buffer);
