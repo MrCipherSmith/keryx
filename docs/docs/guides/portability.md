@@ -120,16 +120,21 @@ with. Safe to run on an unvetted bundle from an untrusted source.
 ## Import lifecycle
 
 ```
-keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--dry-run]
+keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--allow-hooks] [--dry-run]
 ```
 
 Three fixed stages, always in this order, never skippable:
 
 1. **Plan.** Every `contents[].sha256` is recomputed and compared against the
    manifest. **Any mismatch fails the whole import closed** — zero files
-   written, no partial apply. Each remaining entry is then diffed against
-   disk and the target scope's applied-state ledger into one of four
-   buckets:
+   written, no partial apply. An entry whose own `scope` differs from the
+   bundle's `provenance.sourceScope` is refused (`scope-mismatch`) unless you
+   pass `--target-scope` — this stops a bundle labeled `project` from
+   silently writing a `scope: user` entry into `~/.keryx/`. A `hook-config`
+   entry is refused (`hooks-require-opt-in`) unless `--allow-hooks` is also
+   passed, since it writes into a live, every-project-affecting config file.
+   Each surviving entry is then diffed against disk and the target scope's
+   applied-state ledger into one of four buckets:
 
    | Bucket | Meaning |
    |---|---|
@@ -144,15 +149,19 @@ Three fixed stages, always in this order, never skippable:
    before a single byte is written to the real target. An unsuppressed
    high/critical finding, or a staged surface that could not be scanned at
    all, refuses the whole import.
-3. **Apply.** Only `new` entries and `conflict` entries explicitly named in
-   `--force <path>` are written — atomically (temp file + rename), with a
-   re-check of every target's current sha256 immediately before writing and
-   a full rollback if any single write fails partway through. A file the
-   ledger doesn't recognize as Keryx-managed, or one whose current bytes
-   diverge from what the ledger last recorded, is never silently
-   overwritten. `--force` takes exact bundle-relative paths (or
-   `<scope>:<path>` display ids from `--dry-run`/`inspect` output) — there is
-   no blanket "force everything" flag.
+3. **Apply.** Only `new` entries, `update` entries, and `conflict` entries
+   explicitly named in `--force <path>` are written — atomically (temp file +
+   rename), with a re-check of every target's current sha256 AND its symlink
+   chain immediately before writing, and a full rollback (every file written
+   so far, every directory `mkdir -p` created for them, and a
+   newly-created private-dir `.gitignore`) if any single write, or the
+   ledger update that follows, fails partway through — a refusal at any
+   stage genuinely means zero bytes were left behind. A file the ledger
+   doesn't recognize as Keryx-managed, or one whose current bytes diverge
+   from what the ledger last recorded, is never silently overwritten.
+   `--force` takes exact bundle-relative paths (or `<scope>:<path>` display
+   ids from `--dry-run`/`inspect` output) — there is no blanket "force
+   everything" flag.
 
 `--dry-run` runs plan (and, implicitly, the checks that gate it) and prints
 the bucketed result without touching disk or the ledger.
@@ -160,9 +169,18 @@ the bucketed result without touching disk or the ledger.
 **Applied-state ledger.** Every scope keeps its own ledger of "the last
 sha256 Keryx itself wrote at this path": `~/.keryx/bundles/applied-state.json`
 for user scope, `<project>/.metaproject/data/bundles/applied-state.json` for
-project/team. `identical` entries are recorded too, so a bundle re-exported
-and re-imported later is still recognized as Keryx-managed. Corrupt ledger
-JSON fails closed rather than being treated as empty.
+project/team. Every entry actually WRITTEN this apply is recorded
+unconditionally. An `identical` entry — one whose bytes already matched
+before this import ran — is recorded only when the ledger already lists that
+exact path as owned by this same `bundleId` (a re-import refreshing its own
+record); an `identical` match against a file that predates any bundle import,
+or against a path another bundle's ledger record already owns, is left
+untouched. This matters for `uninstall`: claiming an unowned `identical`
+match would let this bundle's later uninstall delete a file it never wrote,
+or steal ownership away from whichever bundle actually did write it. Corrupt
+ledger JSON fails closed (`corrupt-ledger`) rather than being treated as
+empty — treating it as empty on write would silently erase every other
+bundle's records.
 
 **Uninstall.**
 
@@ -211,26 +229,48 @@ checks about it.
 frontmatter `name`/`description`) as read-only vetting input, not content to
 copy in wholesale:
 
-1. Every candidate skill runs through `keryx skills scout`'s dedupe gate —
-   an existing local skill judged a duplicate or an overlap rejects the
-   candidate, so an operator authors a fork through the normal path instead
-   of the catalog quietly growing near-duplicates.
-2. Every candidate that survives scout also runs through the W8 security
-   audit for unsafe shell/network/credential behavior in its scripts, the
-   same check locally-authored skill scripts get.
-3. A skill that passes both gates is **referenced, not copied**: recorded by
+Every candidate directory's files are read exactly once into an in-memory
+snapshot; that same snapshot is both hashed for the registry and handed to
+the audit below, so the bytes that get pinned can never differ from the
+bytes that were actually scanned.
+
+1. A candidate that is itself a symlink, or contains one anywhere under it,
+   is rejected (`symlink-refused`) rather than silently skipped. A name
+   shared with another candidate in the same import batch rejects BOTH
+   candidates (`duplicate-name`) — the later one never silently wins.
+2. Every remaining candidate skill runs through `keryx skills scout`'s
+   dedupe gate — an existing local skill judged a duplicate or an overlap
+   rejects the candidate, so an operator authors a fork through the normal
+   path instead of the catalog quietly growing near-duplicates.
+3. Every candidate that survives scout also runs through the W8 security
+   audit for secrets, prompt-injection text, and auto-run directives, over
+   EVERY file in the snapshot — `SKILL.md` and any other markdown/reference
+   file included, not just script files. A markdown-only skill (no scripts
+   at all, the normal Agent Skills shape) is accepted rather than rejected
+   as inapplicable, as long as its text passes.
+4. A skill that passes every gate is **referenced, not copied**: recorded by
    reference in `~/.keryx/skills/external-imports.json` (source path,
    description, per-file sha256, the scout/audit decisions, the vetting
-   timestamp). No file is copied into `.metaproject/skills/`, into
-   `~/.keryx/skills/<name>/`, or into any bundle. A rejected candidate leaves
-   no trace in that registry at all.
+   timestamp, and an HMAC-SHA256 integrity tag over the whole registry, keyed
+   by a per-user secret at `~/.keryx/skills/.external-imports.key`). No file
+   is copied into `.metaproject/skills/`, into `~/.keryx/skills/<name>/`, or
+   into any bundle. A rejected candidate leaves no trace in that registry at
+   all.
+
+Reading the registry (`import --external`, `verify --external-imports`,
+`skills scout --include-imports`) recomputes that HMAC and refuses the whole
+registry (`corrupt-external-imports-registry`) if it doesn't match, and
+separately refuses if a case-variant sibling of `external-imports.json`
+exists in the same directory — both close the path a bundle could otherwise
+use to plant a forged "already vetted" registry directly.
 
 `keryx skills scout --include-imports` additionally searches this registry
 when checking for a near-duplicate before a new skill is authored.
 `keryx bundle verify --external-imports` reports each recorded import as
 `ok`, `unresolvable` (the source path or one of its files is gone —
-distinct from a checksum failure), or `checksum-mismatch` (the upstream file
-changed since it was vetted).
+distinct from a checksum failure), `checksum-mismatch` (the upstream file
+changed since it was vetted), or `unlisted-file` (a file now present under
+the source that was not part of the recorded set).
 
 ## Cross-harness memory handoff
 
@@ -341,3 +381,10 @@ verified; each surface's own risk note says exactly what is unconfirmed.
   `unresolvable` if the source moved, or `checksum-mismatch` if it changed
   upstream — check both before trusting an old import is still what it was
   vetted as.
+- **A `.tar.gz` bundle has a bounded size before it is ever fully
+  decompressed.** `bundle inspect`/`verify`/`import` refuse an archive whose
+  compressed file is over 32 MiB, or whose decompressed content would exceed
+  roughly 264 MiB or 10,000 entries, without inflating past those limits
+  first — this is what keeps `inspect` safe to run on an untrusted, unvetted
+  bundle (see [Inspect](#inspect) above). A directory-source bundle enforces
+  the same entry-count and total-byte caps as it walks.

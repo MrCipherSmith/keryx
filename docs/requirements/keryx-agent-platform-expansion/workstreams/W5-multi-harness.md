@@ -371,20 +371,20 @@ and in the `harnessId` enums of `install-manifest.schema.json` and
 `gemini-cli`, `kiro`, `github-copilot-agent`, `zed`, `antigravity`,
 `opencode`, `generic-mcp`, `keryx-shell`.
 
-| Harness | block | prompt-gate | pre-tool-context | inject-context | observe | post-tool | session-start | stop | skills | agents | instructions | mcp |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| claude | V | V (cited) | E (to verify) | V | E (to verify) | E (to verify) | E (to verify) | E (to verify) | V | V | E (to verify) | E (to verify) |
-| codex | V | E (to verify) | E (to verify) | V | I | I | I (to verify) | U | I (to verify) | I (to verify) | E (to verify) | E (to verify) |
-| cursor | V (OQ-3 for security-check-output) | E (OQ-3) | E (to verify) | V | E (to verify) | E (to verify) | E (to verify) | I (to verify) | I (to verify) | I (to verify) | E (to verify) | E (to verify) |
-| windsurf | V (OQ-3 for security-check-output) | E (OQ-3) | E (to verify) | U | E (to verify) | E (to verify) | U | U | I (to verify) | I (to verify) | E (to verify) | E (to verify) |
-| gemini-cli | E (to verify) | E (to verify) | E (to verify) | I (to verify) | E (to verify) | E (to verify) | E (to verify) | E (to verify) | I (to verify) | I (to verify) | E (to verify) | I (to verify) |
-| kiro | E (to verify) | E (to verify) | E (to verify) | I (to verify) | E (to verify) | E (to verify) | I (to verify) | I (to verify) | I (to verify) | I (to verify) | E (to verify, steering) | I (to verify) |
-| github-copilot-agent | E (to verify) | E (to verify) | E (to verify) | I (to verify) | I (to verify) | I (to verify) | I (to verify) | I (to verify) | I (to verify) | I (to verify) | E (to verify) | E (to verify) |
-| zed (ACP) | V (policy-travels-with-agent) | U | — | U | — | — | — | — | I (to verify) | — | E (to verify, AGENTS.md not via ACP) | I (to verify) |
-| antigravity | E | E (to verify) | E (to verify) | U (unverified propagation) | E | E | E (to verify) | U | I (to verify) | I (to verify) | I (to verify) | I (to verify) |
-| opencode | E | E (to verify) | E (to verify) | U (undocumented/buggy) | E | E | I (to verify) | I (to verify) | I (to verify) | I (to verify) | E (to verify) | E (to verify) |
-| generic-mcp | U | U | U | U | U | U | U | U | U | U | U | E (to verify) |
-| keryx-shell | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | I (to verify) | I (to verify) | I (to verify) | E (to verify, W6) |
+| Harness | block | prompt-gate | pre-tool-context | inject-context | observe | post-tool | session-start | stop | skills | agents | instructions | mcp | rules |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| claude | V | V (cited) | E (to verify) | V | E (to verify) | E (to verify) | E (to verify) | E (to verify) | V | V | E (to verify) | E (to verify) | V |
+| codex | V | E (to verify) | E (to verify) | V | I | I | I (to verify) | U | I (to verify) | I (to verify) | E (to verify) | E (to verify) | V |
+| cursor | V (OQ-3 for security-check-output) | E (OQ-3) | E (to verify) | V | E (to verify) | E (to verify) | E (to verify) | I (to verify) | I (to verify) | I (to verify) | E (to verify) | E (to verify) | E (to verify) |
+| windsurf | V (OQ-3 for security-check-output) | E (OQ-3) | E (to verify) | U | E (to verify) | E (to verify) | U | U | I (to verify) | I (to verify) | E (to verify) | E (to verify) | E (to verify) |
+| gemini-cli | E (to verify) | E (to verify) | E (to verify) | I (to verify) | E (to verify) | E (to verify) | E (to verify) | E (to verify) | I (to verify) | I (to verify) | E (to verify) | I (to verify) | E (to verify) |
+| kiro | E (to verify) | E (to verify) | E (to verify) | I (to verify) | E (to verify) | E (to verify) | I (to verify) | I (to verify) | I (to verify) | I (to verify) | E (to verify, steering) | I (to verify) | E (to verify, steering) |
+| github-copilot-agent | E (to verify) | E (to verify) | E (to verify) | I (to verify) | I (to verify) | I (to verify) | I (to verify) | I (to verify) | I (to verify) | I (to verify) | E (to verify) | E (to verify) | E (to verify) |
+| zed (ACP) | V (policy-travels-with-agent) | U | — | U | — | — | — | — | I (to verify) | — | E (to verify, AGENTS.md not via ACP) | I (to verify) | — |
+| antigravity | E | E (to verify) | E (to verify) | U (unverified propagation) | E | E | E (to verify) | U | I (to verify) | I (to verify) | I (to verify) | I (to verify) | — |
+| opencode | E | E (to verify) | E (to verify) | U (undocumented/buggy) | E | E | I (to verify) | I (to verify) | I (to verify) | I (to verify) | E (to verify) | E (to verify) | — |
+| generic-mcp | U | U | U | U | U | U | U | U | U | U | U | E (to verify) | — |
+| keryx-shell | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | E (to verify, W6) | I (to verify) | I (to verify) | I (to verify) | E (to verify, W6) | — |
 
 Rows for `claude`, `codex`, `cursor`, `windsurf`, `antigravity`, `opencode`
 `block`/`inject-context` cells reproduce exactly the confidence already
@@ -409,6 +409,20 @@ cells are `E (OQ-3)` for the identical reason — the same unverified
 code-proven, gate-authority entry point, distinct from the unverified
 `securityHooks` path Cursor/Windsurf use. OQ-3 (Open questions) is not
 resolved by W5.
+The `rules` column (flow 313, W4 portability's `rules-export` surface —
+distinct from the pre-existing `instructions` column, which is a different,
+opt-out-by-default block) is sourced directly from
+`docs/integrations/harness-capability-matrix.json`'s own `rules` surface
+entries, not asserted here: `V` for `claude`/`codex`, whose matrix rows carry
+`confidence: "verified"` and a `native` `rules` surface
+(`CLAUDE.md`/`AGENTS.md`); `E (to verify)` for `cursor`, `windsurf`,
+`gemini-cli`, `kiro`, and `github-copilot-agent`, whose matrix rows carry
+`confidence: "experimental"` and an `adapter`-state `rules` surface; `—` for
+`zed`, `antigravity`, `opencode`, `generic-mcp`, and `keryx-shell`, none of
+which has a `rules` entry in the matrix at all (no rules-export adapter is
+implemented for them). See `docs/docs/guides/portability.md`'s own
+"Rules export to harness instruction files" confidence table for the
+identical claim in guide form.
 `skills`/`agents` columns are `to verify` for every harness except Claude
 because no code in this repository currently exports either surface to a
 non-Claude harness (`src/gdskills/catalog.ts:517`: the
