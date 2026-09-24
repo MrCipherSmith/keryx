@@ -568,9 +568,9 @@ export async function scoutImports(
 // `src/security/audit-harness/index.ts#scanImportedBundle`'s `"skill"` case,
 // which runs the full check set (secrets, injection, auto-run,
 // prompt-injection-in-instructions, remote-exec) over every TEXT file
-// regardless of name or extension, and fails the surface closed (reason
-// `binary-content`, `pathsUnreadable`) on anything that isn't valid UTF-8
-// text — never a silent skip. A markdown-only skill with nothing to flag now
+// regardless of name or extension. Since the flow 313 final pass every file,
+// binary or not, is decoded lossily and scanned in full (no binary skip, no
+// allowlist) — never a silent skip. A markdown-only skill with nothing to flag now
 // genuinely passes, instead of being rejected `audit-not-applicable` for
 // having "nothing scannable".
 //
@@ -735,8 +735,7 @@ export type SnapshotAuditResult =
  * `"skill"` (the cross-lane contract, flow 313 W4 review round 1 fix). A
  * caller must see `ok: true` before trusting `gate`/`findings` at all: `ok:
  * false` covers an empty snapshot, an `imported-bundles` surface that didn't
- * report `"scanned"`, any unreadable path (including a binary file, reason
- * `binary-content`) or a coverage reason naming that surface — every one of
+ * report `"scanned"`, any unreadable path or a coverage reason naming that surface — every one of
  * those used to read as indistinguishable from a genuinely clean pass
  * (R1-F6/R1-F16).
  */

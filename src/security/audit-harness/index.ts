@@ -120,40 +120,52 @@ async function safeReadBuffer(absolute: string): Promise<Buffer | undefined> {
 }
 
 /**
- * R1-F6/R1-F8 (flow 313 W4 review round 1): whether `buffer` is text content
- * a bundle `skill` entry's checks can run against. Node's `Buffer#toString
- * ("utf8")` is NEVER fatal — it silently replaces invalid byte sequences
- * with U+FFFD — so a binary payload (an actual binary, or bytes crafted to
- * dodge the secret/injection/auto-run regexes as raw bytes) used to decode
- * to *something* and pass straight through the text checks. Decode with a
- * FATAL `TextDecoder` instead: any invalid UTF-8 byte sequence throws. A NUL
- * byte is refused separately — valid one-byte UTF-8, but never legitimate in
- * a markdown/script skill file, and a NUL is exactly the kind of "make the
- * later text checks misbehave" payload this guards against.
+ * R4-F(R3-F1 final, flow 313 W4 final surgical pass, lane F-B): every byte
+ * string a bundle `skill` entry carries is scanned as text — there is no
+ * binary/text classification left to bypass. A previous version FATAL-
+ * decoded as UTF-8 and refused (`unreadable`, surface `error`) anything that
+ * was not valid UTF-8, then grew a magic-bytes + extension + structural-
+ * trailer allowlist so common binary assets (an icon, a screenshot, a font)
+ * would not hard-fail an otherwise-clean skill. Round 3 (R3-F1) showed that
+ * allowlist is itself the vulnerability: a polyglot file (real GIF/PDF/PNG/
+ * WEBP bytes with an embedded `curl | sh` line or an injection directive
+ * appended before the format's own trailer) satisfies every one of those
+ * checks and skips the text scan entirely — SKILL.md instructing "run `sh
+ * assets/logo.gif`" then imports with ZERO findings. There is no format,
+ * extension or trailer check that can distinguish a real image from a
+ * polyglot carrying one, so the fix removes the classification step rather
+ * than trying to harden it further: EVERY skill-kind file is lossy-decoded
+ * (invalid UTF-8 byte sequences become U+FFFD, never thrown) and run through
+ * the full check set, exactly like a `.md`/`.sh` file always was.
+ *
+ * Trade-off, accepted and documented here rather than suppressed in code: a
+ * real, non-malicious image/font asset can decode to noise that coincidental-
+ * ly matches a low-confidence heuristic (an injection phrase, a secret-shaped
+ * run of base64-ish bytes) and produce a false-positive finding. That is
+ * strictly preferable to the zero-finding false negative above — a spurious
+ * `medium`/`high` finding on a genuine icon is reviewable and suppressible
+ * through the normal baseline path; content that imports with NO finding at
+ * all cannot be caught by any downstream step. No bundle content is skipped,
+ * and nothing here decides "this looks like a real image, skip it" ever
+ * again.
  */
-function isTextContent(buffer: Buffer): boolean {
-  if (buffer.includes(0)) return false;
-  try {
-    new TextDecoder("utf-8", { fatal: true }).decode(buffer);
-    return true;
-  } catch {
-    return false;
-  }
+function lossyDecodeBytes(buffer: Buffer): string {
+  return new TextDecoder("utf-8", { fatal: false }).decode(buffer);
 }
 
 /**
  * R2-F12 residual (flow 313 W4 review round 2/3): a UTF-16 file (a BOM-
  * marked `.md`/`.txt` from a Windows-authored skill, for instance) contains
- * a NUL byte after every ASCII character by construction — `isTextContent`
- * above refuses it outright as binary-content, so it was never text-scanned
- * at all (`audit-not-applicable`-shaped skip), silently bypassing every
- * secret/injection/auto-run check rather than failing closed OR being
- * scanned. A leading UTF-16 BOM (`FF FE` little-endian, `FE FF` big-endian)
- * is decoded and returned as ordinary text BEFORE the binary/text branch
- * runs at all, so this content gets the full check set like any other text
- * file; a NON-BOM-marked buffer still goes through the UTF-8 branch exactly
- * as before (bare UTF-16 with no BOM is indistinguishable from binary
- * without a declared encoding, and stays refused).
+ * a NUL byte after every ASCII character by construction — a plain lossy
+ * UTF-8 decode of those bytes is mostly replacement characters, which would
+ * bury the real content under noise even though nothing here refuses it
+ * outright any more (see `lossyDecodeBytes` above). A leading UTF-16 BOM
+ * (`FF FE` little-endian, `FE FF` big-endian) is decoded and returned as
+ * ordinary text instead, so this content gets the full check set against its
+ * REAL text, not a wall of U+FFFD; a non-BOM-marked buffer falls through to
+ * the plain lossy UTF-8 decode below (bare UTF-16 with no BOM is
+ * indistinguishable from arbitrary bytes without a declared encoding, and is
+ * scanned as whatever that lossy decode produces, same as any other file).
  */
 function decodeUtf16WithBom(buffer: Buffer): string | undefined {
   if (buffer.length < 2) return undefined;
@@ -164,100 +176,6 @@ function decodeUtf16WithBom(buffer: Buffer): string | undefined {
     return new TextDecoder(isLittleEndianBom ? "utf-16le" : "utf-16be", { fatal: true }).decode(buffer.subarray(2));
   } catch {
     return undefined;
-  }
-}
-
-/**
- * R2-F12: a small, explicitly documented magic-bytes allowlist of common
- * BINARY asset types a skill can legitimately carry (an icon, a screenshot in
- * its docs, a bundled font) — `isTextContent` above already refuses any
- * OTHER binary payload outright (reason: binary-content, surface `error`,
- * import fails closed). An allowlisted asset is instead recorded as `scanned`
- * (its bytes are already hashed/checksummed by the bundle manifest layer)
- * with a coverage NOTE that it was not text-scanned — that note never fails
- * the W8 gate (`auditGate` only looks at severity counts), it only keeps
- * `coverage.status` honest about what was and was not scanned.
- * Deliberately excludes ZIP-based container formats (docx/pptx/xlsx and
- * plain .zip all share the `PK\x03\x04` magic) — those can smuggle arbitrary
- * nested content and stay unscanned-binary refused, same as before this fix.
- */
-function knownBinaryAssetType(buffer: Buffer): string | undefined {
-  const ascii = (start: number, end: number): string => (buffer.length >= end ? buffer.toString("latin1", start, end) : "");
-  if (buffer.length >= 8 && buffer[0] === 0x89 && ascii(1, 4) === "PNG") return "png";
-  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "jpeg";
-  if (buffer.length >= 6 && (ascii(0, 6) === "GIF87a" || ascii(0, 6) === "GIF89a")) return "gif";
-  if (buffer.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "webp";
-  if (buffer.length >= 4 && buffer[0] === 0x00 && buffer[1] === 0x00 && buffer[2] === 0x01 && buffer[3] === 0x00) return "ico";
-  if (buffer.length >= 4 && ascii(0, 4) === "%PDF") return "pdf";
-  if (buffer.length >= 4 && ascii(0, 4) === "wOFF") return "woff";
-  if (buffer.length >= 4 && ascii(0, 4) === "wOF2") return "woff2";
-  return undefined;
-}
-
-/**
- * R3-F1 (flow 313 W4 review round 3, choke point c): several of the magic
- * prefixes above are plain ASCII (`GIF89a`, `%PDF`) — a script's first bytes
- * can spell one of those prefixes on purpose, with one invalid UTF-8 byte
- * appended later just to fail `isTextContent` and fall into the "binary
- * asset, not text-scanned" branch. Matching the prefix alone is therefore not
- * enough to skip every text check on a file; the extension must also name
- * that same format, so an attacker would need to both name the file `*.gif`/
- * `*.pdf`/etc AND make it byte-for-byte structurally valid for that format —
- * neither alone is sufficient, and a `.sh`/`.md`/`.js`/extensionless file
- * with a forged magic prefix is refused (reason: binary-content) exactly as
- * an arbitrary non-allowlisted binary already was.
- */
-const BINARY_ASSET_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
-  png: [".png"],
-  jpeg: [".jpg", ".jpeg"],
-  gif: [".gif"],
-  webp: [".webp"],
-  ico: [".ico"],
-  pdf: [".pdf"],
-  woff: [".woff"],
-  woff2: [".woff2"],
-};
-
-function hasAllowlistedBinaryExtension(relativePath: string, binaryType: string): boolean {
-  const ext = path.extname(relativePath).toLowerCase();
-  return (BINARY_ASSET_EXTENSIONS[binaryType] ?? []).includes(ext);
-}
-
-/**
- * R3-F1: beyond a matching extension, the content must also be structurally
- * consistent with the claimed format — not just start with its magic bytes.
- * These are deliberately cheap, format-native trailer/length checks (never a
- * full spec-conformant parse), but each one requires bytes an attacker who
- * only forges the 3-12 byte magic prefix would not otherwise produce, so the
- * "magic prefix + wrong extension" and "magic prefix + no valid trailer"
- * evasions from R3-F1 both fail closed (reason: binary-content).
- */
-function isStructurallyValidBinaryAsset(buffer: Buffer, binaryType: string): boolean {
-  switch (binaryType) {
-    case "png": {
-      const trailer = Buffer.from([0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
-      return buffer.length >= trailer.length && buffer.subarray(buffer.length - trailer.length).equals(trailer);
-    }
-    case "jpeg":
-      return buffer.length >= 2 && buffer[buffer.length - 2] === 0xff && buffer[buffer.length - 1] === 0xd9;
-    case "gif":
-      return buffer.length >= 1 && buffer[buffer.length - 1] === 0x3b;
-    case "webp":
-      return buffer.length >= 12 && buffer.readUInt32LE(4) === buffer.length - 8;
-    case "ico": {
-      if (buffer.length < 6) return false;
-      const reserved = buffer.readUInt16LE(0);
-      const type = buffer.readUInt16LE(2);
-      const count = buffer.readUInt16LE(4);
-      return reserved === 0 && type === 1 && count > 0 && buffer.length >= 6 + count * 16;
-    }
-    case "pdf":
-      return buffer.subarray(Math.max(0, buffer.length - 1024)).toString("latin1").includes("%%EOF");
-    case "woff":
-    case "woff2":
-      return buffer.length >= 12 && buffer.readUInt32BE(8) === buffer.length;
-    default:
-      return false;
   }
 }
 
@@ -461,40 +379,27 @@ async function scanImportedBundle(
     }
 
     // R1-F6/R1-F8: a `skill` entry used to only be text-decoded via
-    // `safeReadText`, which never fails (Node's utf8 decode replaces invalid
-    // bytes rather than throwing), and only its EXACT-CASE `SKILL.md`
-    // basename got the auto-run/injection-in-instructions checks — so a
-    // `skill.md`/`Skill.MD` case variant (identical file on a case-
-    // insensitive filesystem), or any other file in the skill (a
-    // `reference.md`, a `notes.txt`), evaded both checks entirely. Every
-    // file of kind `skill` is now read as raw bytes first: a binary payload
-    // is refused outright (reason: binary-content) so the surface reports
-    // `error` and the caller (`bundle/audit.ts#auditBundlePlan`) fails
-    // closed rather than silently skipping unscanned content; every TEXT
-    // file — any name, any extension — gets the full check set, not just a
-    // canonically-cased `SKILL.md`.
+    // `safeReadText`, and only its EXACT-CASE `SKILL.md` basename got the
+    // auto-run/injection-in-instructions checks — so a `skill.md`/`Skill.MD`
+    // case variant (identical file on a case-insensitive filesystem), or any
+    // other file in the skill (a `reference.md`, a `notes.txt`), evaded both
+    // checks entirely. Every file of kind `skill` is now read as raw bytes
+    // and every TEXT file — any name, any extension — gets the full check
+    // set, not just a canonically-cased `SKILL.md`.
+    //
+    // R3-F1 (final pass, lane F-B): there is deliberately no binary/text
+    // classification step here any more — see `lossyDecodeBytes` above for
+    // why an allowlist of "known binary formats" was itself the hole (a
+    // format-valid polyglot skipped the text scan entirely). Every skill
+    // file is scanned; only a genuine filesystem read failure (permissions,
+    // a symlink race) lands in `unreadable`.
     if (entry.kind === "skill") {
       const buffer = await safeReadBuffer(absolute);
       if (buffer === undefined) {
         unreadable.push(entry.path);
         continue;
       }
-      const utf16Content = decodeUtf16WithBom(buffer);
-      if (utf16Content === undefined && !isTextContent(buffer)) {
-        const binaryType = knownBinaryAssetType(buffer);
-        if (
-          binaryType !== undefined &&
-          hasAllowlistedBinaryExtension(entry.path, binaryType) &&
-          isStructurallyValidBinaryAsset(buffer, binaryType)
-        ) {
-          scanned.push(entry.path);
-          notes.push(`${entry.path}: recorded as hashed but not text-scanned (binary asset: ${binaryType})`);
-          continue;
-        }
-        unreadable.push(entry.path);
-        continue;
-      }
-      const content = utf16Content ?? buffer.toString("utf8");
+      const content = decodeUtf16WithBom(buffer) ?? lossyDecodeBytes(buffer);
       scanned.push(entry.path);
       raw.push(
         ...asBundleFindings(
