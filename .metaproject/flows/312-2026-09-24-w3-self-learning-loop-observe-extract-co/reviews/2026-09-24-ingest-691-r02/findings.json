@@ -21,7 +21,17 @@
       ],
       "enumeration_method": "keryx ctx rg over observe.ts/scan.ts for scrub/redact call sites; each shape probed via buildObservationLine on head vs f55e59de"
     },
-    "global_id": "2026-09-24-ingest-691-r02#R2-F1"
+    "global_id": "2026-09-24-ingest-691-r02#R2-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c237291 (after fixing commit 04779534) by the round-r03 opus verification: embedded-path probes (stack frame, JSON path, redirects, file://) scrubbed",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 04779534; re-checked by round-r03 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R2-F2",
@@ -45,7 +55,17 @@
       ],
       "enumeration_method": "every parseLearnArgs call site"
     },
-    "global_id": "2026-09-24-ingest-691-r02#R2-F2"
+    "global_id": "2026-09-24-ingest-691-r02#R2-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c237291 (after fixing commit f66a5e8d) by the round-r03 opus verification: round r03 re-ran the round-2 probe (scratchpad/r691/r2) and reported it fixed",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f66a5e8d; re-checked by round-r03 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R2-F3",
@@ -67,7 +87,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'createPattern\\(' src"
     },
-    "global_id": "2026-09-24-ingest-691-r02#R2-F3"
+    "global_id": "2026-09-24-ingest-691-r02#R2-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c237291 (after fixing commit f66a5e8d) by the round-r03 opus verification: round r03 re-ran the round-2 probe (scratchpad/r691/r2) and reported it fixed",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f66a5e8d; re-checked by round-r03 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R2-F4",
@@ -90,7 +120,17 @@
       ],
       "enumeration_method": "read of guard test; S7 regex probe"
     },
-    "global_id": "2026-09-24-ingest-691-r02#R2-F4"
+    "global_id": "2026-09-24-ingest-691-r02#R2-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c237291 (after fixing commit f66a5e8d) by the round-r03 opus verification: round r03 re-ran the round-2 probe (scratchpad/r691/r2) and reported it fixed",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f66a5e8d; re-checked by round-r03 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R2-F5",
@@ -111,7 +151,17 @@
       ],
       "enumeration_method": "read of updatePattern and consumers"
     },
-    "global_id": "2026-09-24-ingest-691-r02#R2-F5"
+    "global_id": "2026-09-24-ingest-691-r02#R2-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c237291 (after fixing commit f66a5e8d) by the round-r03 opus verification: round r03 re-ran the round-2 probe (scratchpad/r691/r2) and reported it fixed",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f66a5e8d; re-checked by round-r03 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R2-F6",
@@ -133,7 +183,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'generalizeLesson|Attributed|authors|login' over learning writers"
     },
-    "global_id": "2026-09-24-ingest-691-r02#R2-F6"
+    "global_id": "2026-09-24-ingest-691-r02#R2-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c237291 (after fixing commit f66a5e8d) by the round-r03 opus verification: round r03 re-ran the round-2 probe (scratchpad/r691/r2) and reported it fixed",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f66a5e8d; re-checked by round-r03 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R2-F7",
@@ -155,7 +215,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'args.includes' in runLearn"
     },
-    "global_id": "2026-09-24-ingest-691-r02#R2-F7"
+    "global_id": "2026-09-24-ingest-691-r02#R2-F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c237291 (after fixing commit f66a5e8d) by the round-r03 opus verification: round r03 re-ran the round-2 probe (scratchpad/r691/r2) and reported it fixed",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f66a5e8d; re-checked by round-r03 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R2-F8",

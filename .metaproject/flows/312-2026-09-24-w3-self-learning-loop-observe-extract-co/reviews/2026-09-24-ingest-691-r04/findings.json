@@ -18,7 +18,17 @@
       ],
       "enumeration_method": "every writer of proposal.summary/suggestedName into renderAgentMarkdown; probe r8/p.ts D"
     },
-    "global_id": "2026-09-24-ingest-691-r04#R6-F1"
+    "global_id": "2026-09-24-ingest-691-r04#R6-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 5afd4380 (after fixing commit 8b1047cc) by the round-r05 opus verification: probe D: alice-style no longer yields a standalone alice",
+      "verifier": "round-r05"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8b1047cc; re-checked by round-r05 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R6-F2",
@@ -37,7 +47,17 @@
       ],
       "enumeration_method": "every writeFileAtomic in src/learning checked for a login gate; probe C3"
     },
-    "global_id": "2026-09-24-ingest-691-r04#R6-F2"
+    "global_id": "2026-09-24-ingest-691-r04#R6-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 5afd4380 (after fixing commit 8b1047cc) by the round-r05 opus verification: probe C3: runGraduate refuses the cluster, no proposal with the login",
+      "verifier": "round-r05"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8b1047cc; re-checked by round-r05 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R6-F3",
@@ -78,6 +98,16 @@
       ],
       "enumeration_method": "12 trigger/action templates in src/learning/signals/*.ts cross-checked against gate inputs"
     },
-    "global_id": "2026-09-24-ingest-691-r04#R6-F4"
+    "global_id": "2026-09-24-ingest-691-r04#R6-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a77e6d23 (after fixing commit 96a539ee) by the round-r06 opus verification: reverted-edit cluster with login 'edit' proposed and applied",
+      "verifier": "round-r06"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 96a539ee; re-checked by round-r06 (refuted = no longer reproduces)"
+    }
   }
 ]

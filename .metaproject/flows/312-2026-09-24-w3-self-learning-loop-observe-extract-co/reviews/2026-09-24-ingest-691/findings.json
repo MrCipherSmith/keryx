@@ -23,7 +23,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'writePattern\\(|readPattern\\(|listPatterns\\(' src/learning (non-test)"
     },
-    "global_id": "2026-09-24-ingest-691#R1-F1"
+    "global_id": "2026-09-24-ingest-691#R1-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: p1.ts P1a/P1b refused with learning-record-identity-mismatch; p5.ts planted file skipped, accepted user record intact",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R1-F2",
@@ -44,7 +54,17 @@
       ],
       "enumeration_method": "read of graduate.ts id-keyed structures"
     },
-    "global_id": "2026-09-24-ingest-691#R1-F2"
+    "global_id": "2026-09-24-ingest-691#R1-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: p1.ts P2 graduate [] (dedupeByIdPreferProject)",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R1-F3",
@@ -67,7 +87,17 @@
       ],
       "enumeration_method": "grep args.includes(\"--…\") in learn.ts and PR hunks of review.ts"
     },
-    "global_id": "2026-09-24-ingest-691#R1-F3"
+    "global_id": "2026-09-24-ingest-691#R1-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: c1.ts prune --dry-run=true refused, file kept; c2.ts review learn --dry-run=1 refused",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R1-F4",
@@ -88,7 +118,17 @@
       ],
       "enumeration_method": "traced consumers of generalizeLesson output"
     },
-    "global_id": "2026-09-24-ingest-691#R1-F4"
+    "global_id": "2026-09-24-ingest-691#R1-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c237291 (after fixing commit f66a5e8d) by the round-r03 opus verification: bot login stripped at r02; remaining '_' boundary and other-author cases fixed in f66a5e8d and re-checked by round r03",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f66a5e8d; re-checked by round-r03 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R1-F5",
@@ -101,7 +141,17 @@
     "confidence": "high",
     "file": "src/commands/learn.ts",
     "line": 142,
-    "global_id": "2026-09-24-ingest-691#R1-F5"
+    "global_id": "2026-09-24-ingest-691#R1-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: parseLearnArgs consumes flag values before positionals",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R1-F6",
@@ -114,7 +164,17 @@
     "confidence": "high",
     "file": "src/learning/identity.ts",
     "line": 21,
-    "global_id": "2026-09-24-ingest-691#R1-F6"
+    "global_id": "2026-09-24-ingest-691#R1-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: p4.ts https/scp/ssh spellings give one identity",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R1-F7",
@@ -127,7 +187,17 @@
     "confidence": "medium",
     "file": "src/learning/extract.ts",
     "line": 156,
-    "global_id": "2026-09-24-ingest-691#R1-F7"
+    "global_id": "2026-09-24-ingest-691#R1-F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: read-mutate-write under one lock (updatePattern/updateIndex)",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R1-F8",
@@ -140,7 +210,17 @@
     "confidence": "medium",
     "file": "src/learning/extract.ts",
     "line": 165,
-    "global_id": "2026-09-24-ingest-691#R1-F8"
+    "global_id": "2026-09-24-ingest-691#R1-F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: s1.ts S5 two 36h runs equal 0.4*0.98^3",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
   },
   {
     "id": "R1-F9",
@@ -153,6 +233,16 @@
     "confidence": "high",
     "file": "src/learning/schema.ts",
     "line": 1,
-    "global_id": "2026-09-24-ingest-691#R1-F9"
+    "global_id": "2026-09-24-ingest-691#R1-F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: s1.ts S6 record without supersededBy validates",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
   }
 ]

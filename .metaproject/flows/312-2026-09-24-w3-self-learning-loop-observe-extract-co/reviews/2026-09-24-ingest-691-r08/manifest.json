@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-24-ingest-691-r08",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "691",
@@ -75,8 +75,8 @@
       "source": "the finding's own title"
     }
   ],
-  "createdAt": "2026-09-24T14:41:28.305Z",
-  "updatedAt": "2026-09-24T14:41:28.305Z",
+  "createdAt": "2026-09-24T17:24:39.106Z",
+  "updatedAt": "2026-09-24T17:24:39.248Z",
   "flow": {
     "id": "312",
     "path": ".metaproject/flows/312-2026-09-24-w3-self-learning-loop-observe-extract-co"
