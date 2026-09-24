@@ -21,3 +21,69 @@
 - 2026-09-24T18:57:58.611Z - task-done: T2: Implement per plan
 - 2026-09-24T18:57:58.747Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-24T18:58Z - Formalized by the flow runner. The owner's decisions (from chat, relayed by the coordinator) are the design basis: a DeepSeek rubric judge, deterministic checks only for facts, mandatory anti-gaming tests, the gate unchanged (0.8 / high / >=5 / bundled / DeepSeek), no SKILL.md tuning, and the standing merge rule. The completion outcome is create-pr-and-merge (operator_confirmed, runner brief). The design contract is in plan.md. Decision: on catalog drift the gate re-scores triggers live instead of invalidating on any bundled edit, because a hard catalog digest would fail CI on unrelated PRs.
+- 2026-09-24T18:58:32.450Z - task-attempt: T5: started (attempt 1) — 316-T5 dispatch 1
+- 2026-09-24T18:58:32.586Z - task-attempt: T7: started (attempt 1) — 316-T7 dispatch 1
+- 2026-09-24T18:58:32.721Z - task-attempt: T8: started (attempt 1) — 316-T8 dispatch 1
+- 2026-09-24T18:58:32.858Z - task-attempt: T9: started (attempt 1) — 316-T9 dispatch 1
+- 2026-09-24T18:58:33.002Z - task-attempt: T10: started (attempt 1) — 316-T10 dispatch 1
+- 2026-09-24T19:05:12.316Z - task-done: T7: Migrate ts-js-node evals.json (5 skills) to rubric judge scenarios with calibration
+- 2026-09-24T19:05:18.290Z - task-done: T8: Migrate react evals.json (5 skills) to rubric judge scenarios with calibration
+- 2026-09-24T19:05:24.258Z - task-done: T9: Migrate python evals.json (4 skills) to rubric judge scenarios with calibration
+- 2026-09-24T19:05:30.453Z - task-done: T10: Migrate go evals.json (4 skills) to rubric judge scenarios with calibration
+- 2026-09-24T19:05:36.813Z - task-added: T19: Content audit: drop wording-type deterministic checks, make generic anti_pattern tokens specific
+- 2026-09-24T19:05:36.950Z - task-attempt: T19: started (attempt 1) — 316-T19 dispatch 1
+- 2026-09-24T19:05Z - T7-T10 content migrations committed (67168b73, 5cec7d6f, ebffb8ca, d5f494d3). The orchestrator audit found wording-type deterministic checks (e.g. go 'leak', 'go mod tidy', 'codemod') and the generic anti_pattern token 'any'. These go against the owner rule that deterministic checks cover only unambiguous facts. They are being fixed in T19 before any live calibration. No SKILL.md was touched.
+- 2026-09-24T19:08:59.840Z - task-done: T19: Content audit: drop wording-type deterministic checks, make generic anti_pattern tokens specific
+- 2026-09-24T19:26:33.210Z - task-done: T5: Judge core, eval engine trial records and regrade, gate hardening (judge.ts, eval.ts, gate-policy.ts + gate fixtures)
+- 2026-09-24T19:26Z - T5 accepted and committed. Concerns recorded: (1) The legacy 'model' grader keeps its own branch outside gradeScenarioAnswer. Accepted: stack packs are forced to judge scenarios (I9), and 'model' stays an injectable legacy path. (2) Four real-tree grader-floor assertions in stack-packs.test.ts still expect string graders. T11 fixes them.
+- 2026-09-24T19:26:33.357Z - task-attempt: T6: started (attempt 1) — 316-T6 dispatch 1
+- 2026-09-24T19:27:22.107Z - task-attempt: T11: started (attempt 1) — 316-T11 dispatch 1
+- 2026-09-24T19:37:25.273Z - task-done: T11: Integrity guard I6-I9 and anti-gaming harness over recorded verdicts, plus opt-in live test
+- 2026-09-24T19:41:34.932Z - task-done: T6: CLI judge adapter: model-eval-judge.ts, skills eval --judge, skills judge-check --record
+- 2026-09-24T19:41:35.110Z - task-attempt: T12: started (attempt 1) — live calibration round 1
+- 2026-09-24T19:44:44.972Z - task-done: T12: Live calibration: judge-check --record for all 18 skills, every canned verdict correct
+- 2026-09-24T19:44Z - T12 live calibration, round 1: 'skills judge-check --record' ran against deepseek:deepseek-chat for all 18 skills (36 scenarios x 6 canned answers). Every canned verdict matched its expectation on the first run, so no rubric edits were needed. empty/echo/known-wrong/injection/stuffed all FAIL and known-right PASSES. The integrity and anti-gaming guard is green: 624 pass, 0 fail. Recordings: src/gdskills/governance/judge-recordings/.
+- 2026-09-24T19:44:59.843Z - task-attempt: T13: started (attempt 1) — honest gate run at 57743671
+- 2026-09-24T19:59:07.700Z - task-done: T13: Honest gate run: 18 skills via real CLI with runner+judge DeepSeek, eval.json from raw outputs only
+- 2026-09-24T20:05Z - T13 honest gate run. Each skill ran once through the real CLI: `skills eval --scope bundled --runner deepseek:deepseek-chat --judge deepseek:deepseek-chat --strictness high --trials 5 --json`, at 57743671.
+  - HEAD and the stacks and governance trees were unchanged from start to end (run.meta).
+  - eval.json was built verbatim from the raw outputs, in the commit that follows 57743671.
+  - Outcome by pack:
+    - ts-js-node: all 5 skills pass, and every scenario is at or above 0.8 (no-ts-ignore-suppression 4/5, dirname-replacement 4/5). Gate PASS.
+    - react: all 5 skills pass (no-disable-hooks-lint 4/5, no-mobx-scope 4/5). Gate PASS.
+    - python: FAIL. python-build-fix mypy-error-no-blanket-suppress scored 0/5 and python-implementation resource-with-block 3/5. The trigger-positive "Add a new feature to this Python service that logs each request with the logging module" was not selected (6/7).
+    - go: FAIL. go-testing table-driven-subtests scored 2/5.
+- 2026-09-24T20:05Z - Diagnosis of the remaining failures, taken from the judge reasons recorded in eval.json. They are recorded here, not tuned, and there was no re-run.
+  - python mypy-error-no-blanket-suppress: the prompt ("mypy reports a type error on a function I touched. Fix it.") has no code and no error text. All 5 answers correctly ask for the error and refuse a blanket ignore. The rubric demands naming the exact mismatch and editing code, which cannot be done without the code, so the scenario is under-specified. This is a grader/scenario defect, not a skill defect.
+  - python resource-with-block: 2 of the 5 failures use Path.read_text() + json.loads, which is resource-safe. Pass criterion 1 demands a literal with-open block, which is too narrow. This is a grader defect.
+  - go table-driven-subtests: in 3 of the 5 failures the model emitted a shell/tool call instead of an answer. The skill says to inspect the function first, and the single-turn runner has no tools. This is a limitation of how the runner and the skill interact, not a rubric defect.
+  - python trigger-positive-6: unchanged since flow 314.
+  - Owner rule: packs that fail stay experimental and the reason is recorded. Fixing these scenarios is follow-up work for the next grader pass or B2. It is not done in this flow, because editing graders after seeing the run is tuning.
+- 2026-09-24T20:05Z - AC9 evidence (T14). The real DeepSeek outputs from this run were re-graded under the pre-migration expectations (`git show 8c7e50da`) with the probe scratchpad f316/ac9-regrade.ts.
+  - nodejs-build-fix no-ts-ignore-suppression: the old grader passes 1/5 and the judge 4/5.
+    - In 4 of the old failures, the only failing checks were not-contains "@ts-ignore" and "as any".
+    - Every mention of those tokens is inside a warning, for example "These all make the error disappear without fixing anything: ... // @ts-ignore".
+    - Trial 2 also failed the old wording regex.
+  - react-build-fix no-disable-hooks-lint: the old grader passes 0/5 and the judge 4/5.
+    - All 5 fail not-contains "eslint-disable", and 4 of them mention it only under "What not to do".
+    - 3 of them also fail the old wording regex "dependency array".
+  - python-build-fix mypy-error-no-blanket-suppress: the old grader passes 0/5 and the judge 0/5.
+    - 4 fail only on not-contains "# type: ignore", and each mention is a refusal ("I won't reach for # type: ignore").
+    - 1 fails the wording regex.
+  - Conclusion: the old graders were MIS-SPECIFIED. Penalising any mention of the suppression token failed correct answers that warn against it. For python, the new judge fails these answers for a different and real reason: the prompt is under-specified (see above).
+- 2026-09-24T19:59:43.695Z - task-done: T14: AC9 evidence: re-grade recorded DeepSeek outputs of the three zero-scoring suppression scenarios under the old graders
+- 2026-09-24T19:59:43.854Z - task-attempt: T15: started (attempt 1) — 316-T15 dispatch 1
+- 2026-09-24T20:00:06.598Z - task-attempt: T16: started (attempt 1) — 316-T16 dispatch 1
+- 2026-09-24T20:06:16.176Z - task-done: T15: Apply gate outcome: stability, agent pairs via agents generate, manifests, agent-refs notes, shipped-state tests
+- 2026-09-25T00:40Z - T15 accepted (d0c369e3).
+  - ts-js-node and react are stable in pack.json and the install manifest (src/gdskills/bundled/install-manifest.json; install.ts not touched).
+  - Their pairs were generated with `bun ./src/cli.ts agents generate --stack <id>`. `agents verify` reports ok:true.
+  - python and go stay experimental, with the honest reasons recorded in agent-refs.json.
+  - Follow-ups for the next grader pass. Each goes through a fresh honest re-run, never through a re-run in this flow:
+    - FU1: python-build-fix mypy-error-no-blanket-suppress. The prompt carries no code or error, so give it a concrete snippet and the mypy error. Alternatively, change the rubric so that asking for the error while refusing a blanket ignore is the correct behaviour.
+    - FU2: python-implementation resource-with-block. Pass criterion 1 wants a literal `with open`. Widen it to 'the handle is closed on every path (with-block or Path.read_text)'.
+    - FU3: python-implementation trigger-positive-6 (logging request feature) is not selected. Trigger/description work is needed.
+    - FU4: go-testing table-driven-subtests. The model emits a tool/shell call, because the skill says to inspect first and the single-turn runner has no tools. Add a runner system note telling the model to answer in text and not emit tool calls (`buildEvalRunner`), or give the prompt the function's code.
+    - FU5: `runModelTurn` has no temperature control for the judge. Add one if judge variance shows up.
+- 2026-09-25T00:55Z - T16 docs accepted (DONE_WITH_CONCERNS). Concern: mkdocs.yml was outside the file ownership but got a nav line for the new guide; kept, because the nav consistency test needs it. The orchestrator softened the W1 diagnosis of the python/go failures to working hypotheses; the T13 journal wording ("defect") is superseded, and the diagnoses are unproven until FU1-FU4 are re-run honestly.
+- 2026-09-24T20:08:26.057Z - task-done: T16: Docs: W1/W2, CLI reference, rubric-authoring and anti-gaming guide

@@ -10,7 +10,7 @@
   "title": "Grader reliability: rubric LLM judge with anti-gaming tests for skill evals, validated on batch 1",
   "status": "in-progress",
   "createdAt": "2026-09-24T18:51:50.333Z",
-  "updatedAt": "2026-09-24T18:57:58.747Z",
+  "updatedAt": "2026-09-24T20:08:26.057Z",
   "source": {
     "type": "description",
     "ref": null
@@ -96,120 +96,169 @@
       "id": "T5",
       "title": "Judge core, eval engine trial records and regrade, gate hardening (judge.ts, eval.ts, gate-policy.ts + gate fixtures)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:58:32.449Z",
+            "outcome": "started",
+            "detail": "316-T5 dispatch 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "CLI judge adapter: model-eval-judge.ts, skills eval --judge, skills judge-check --record",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:26:33.357Z",
+            "outcome": "started",
+            "detail": "316-T6 dispatch 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Migrate ts-js-node evals.json (5 skills) to rubric judge scenarios with calibration",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:58:32.586Z",
+            "outcome": "started",
+            "detail": "316-T7 dispatch 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Migrate react evals.json (5 skills) to rubric judge scenarios with calibration",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:58:32.721Z",
+            "outcome": "started",
+            "detail": "316-T8 dispatch 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Migrate python evals.json (4 skills) to rubric judge scenarios with calibration",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:58:32.858Z",
+            "outcome": "started",
+            "detail": "316-T9 dispatch 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Migrate go evals.json (4 skills) to rubric judge scenarios with calibration",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:58:33.002Z",
+            "outcome": "started",
+            "detail": "316-T10 dispatch 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Integrity guard I6-I9 and anti-gaming harness over recorded verdicts, plus opt-in live test",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:27:22.107Z",
+            "outcome": "started",
+            "detail": "316-T11 dispatch 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "Live calibration: judge-check --record for all 18 skills, every canned verdict correct",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6",
         "T7",
@@ -219,34 +268,48 @@
         "T11"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:41:35.110Z",
+            "outcome": "started",
+            "detail": "live calibration round 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Honest gate run: 18 skills via real CLI with runner+judge DeepSeek, eval.json from raw outputs only",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T12"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:44:59.843Z",
+            "outcome": "started",
+            "detail": "honest gate run at 57743671"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
       "title": "AC9 evidence: re-grade recorded DeepSeek outputs of the three zero-scoring suppression scenarios under the old graders",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13"
       ],
@@ -256,40 +319,55 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T15",
       "title": "Apply gate outcome: stability, agent pairs via agents generate, manifests, agent-refs notes, shipped-state tests",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:59:43.854Z",
+            "outcome": "started",
+            "detail": "316-T15 dispatch 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T16",
       "title": "Docs: W1/W2, CLI reference, rubric-authoring and anti-gaming guide",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T14",
         "T15"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T20:00:06.598Z",
+            "outcome": "started",
+            "detail": "316-T16 dispatch 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T17",
@@ -322,6 +400,32 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T19",
+      "title": "Content audit: drop wording-type deterministic checks, make generic anti_pattern tokens specific",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T8",
+        "T9",
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:05:36.950Z",
+            "outcome": "started",
+            "detail": "316-T19 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -422,6 +526,136 @@
       "at": "2026-09-24T18:57:58.747Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T18:58:32.450Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 316-T5 dispatch 1"
+    },
+    {
+      "at": "2026-09-24T18:58:32.586Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 316-T7 dispatch 1"
+    },
+    {
+      "at": "2026-09-24T18:58:32.721Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 316-T8 dispatch 1"
+    },
+    {
+      "at": "2026-09-24T18:58:32.858Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 316-T9 dispatch 1"
+    },
+    {
+      "at": "2026-09-24T18:58:33.002Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 316-T10 dispatch 1"
+    },
+    {
+      "at": "2026-09-24T19:05:12.316Z",
+      "event": "task-done",
+      "detail": "T7: Migrate ts-js-node evals.json (5 skills) to rubric judge scenarios with calibration"
+    },
+    {
+      "at": "2026-09-24T19:05:18.290Z",
+      "event": "task-done",
+      "detail": "T8: Migrate react evals.json (5 skills) to rubric judge scenarios with calibration"
+    },
+    {
+      "at": "2026-09-24T19:05:24.258Z",
+      "event": "task-done",
+      "detail": "T9: Migrate python evals.json (4 skills) to rubric judge scenarios with calibration"
+    },
+    {
+      "at": "2026-09-24T19:05:30.453Z",
+      "event": "task-done",
+      "detail": "T10: Migrate go evals.json (4 skills) to rubric judge scenarios with calibration"
+    },
+    {
+      "at": "2026-09-24T19:05:36.813Z",
+      "event": "task-added",
+      "detail": "T19: Content audit: drop wording-type deterministic checks, make generic anti_pattern tokens specific"
+    },
+    {
+      "at": "2026-09-24T19:05:36.950Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 316-T19 dispatch 1"
+    },
+    {
+      "at": "2026-09-24T19:08:59.840Z",
+      "event": "task-done",
+      "detail": "T19: Content audit: drop wording-type deterministic checks, make generic anti_pattern tokens specific"
+    },
+    {
+      "at": "2026-09-24T19:26:33.210Z",
+      "event": "task-done",
+      "detail": "T5: Judge core, eval engine trial records and regrade, gate hardening (judge.ts, eval.ts, gate-policy.ts + gate fixtures)"
+    },
+    {
+      "at": "2026-09-24T19:26:33.357Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 316-T6 dispatch 1"
+    },
+    {
+      "at": "2026-09-24T19:27:22.107Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 316-T11 dispatch 1"
+    },
+    {
+      "at": "2026-09-24T19:37:25.273Z",
+      "event": "task-done",
+      "detail": "T11: Integrity guard I6-I9 and anti-gaming harness over recorded verdicts, plus opt-in live test"
+    },
+    {
+      "at": "2026-09-24T19:41:34.932Z",
+      "event": "task-done",
+      "detail": "T6: CLI judge adapter: model-eval-judge.ts, skills eval --judge, skills judge-check --record"
+    },
+    {
+      "at": "2026-09-24T19:41:35.110Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — live calibration round 1"
+    },
+    {
+      "at": "2026-09-24T19:44:44.972Z",
+      "event": "task-done",
+      "detail": "T12: Live calibration: judge-check --record for all 18 skills, every canned verdict correct"
+    },
+    {
+      "at": "2026-09-24T19:44:59.843Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — honest gate run at 57743671"
+    },
+    {
+      "at": "2026-09-24T19:59:07.700Z",
+      "event": "task-done",
+      "detail": "T13: Honest gate run: 18 skills via real CLI with runner+judge DeepSeek, eval.json from raw outputs only"
+    },
+    {
+      "at": "2026-09-24T19:59:43.695Z",
+      "event": "task-done",
+      "detail": "T14: AC9 evidence: re-grade recorded DeepSeek outputs of the three zero-scoring suppression scenarios under the old graders"
+    },
+    {
+      "at": "2026-09-24T19:59:43.854Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 316-T15 dispatch 1"
+    },
+    {
+      "at": "2026-09-24T20:00:06.598Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 316-T16 dispatch 1"
+    },
+    {
+      "at": "2026-09-24T20:06:16.176Z",
+      "event": "task-done",
+      "detail": "T15: Apply gate outcome: stability, agent pairs via agents generate, manifests, agent-refs notes, shipped-state tests"
+    },
+    {
+      "at": "2026-09-24T20:08:26.057Z",
+      "event": "task-done",
+      "detail": "T16: Docs: W1/W2, CLI reference, rubric-authoring and anti-gaming guide"
     }
   ]
 }
