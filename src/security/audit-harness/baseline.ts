@@ -78,15 +78,46 @@ export async function readBaseline(baselinePath: string): Promise<LoadedBaseline
   };
 }
 
-/** Whether a baseline entry currently suppresses its finding (not expired). */
+const STRICT_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Strict `YYYY-MM-DD` validation over a REAL calendar date (F9). The `Date`
+ * constructor normalizes an out-of-range date instead of refusing it (e.g.
+ * `new Date("2024-02-30")` rolls over to March 1st rather than failing), so
+ * a regex shape check alone is not enough — this re-derives the same
+ * year/month/day from the parsed UTC date and requires them to match the
+ * input exactly.
+ */
+export function isValidCalendarDateString(value: string): boolean {
+  const match = STRICT_DATE_RE.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+/**
+ * Whether a baseline entry currently suppresses its finding (not expired).
+ *
+ * F9: an unparseable `expiresAt` (e.g. `"never"`) used to fall into an
+ * explicit `Number.isNaN(...) -> return true` branch, meaning a GARBAGE
+ * expiry value suppressed its finding PERMANENTLY — the opposite of the
+ * fail-safe behavior every other unreadable/invalid state in this file has.
+ * A value that is not a real, strictly-`YYYY-MM-DD` calendar date is now
+ * treated as never active: it does not suppress anything. It is still
+ * visible in `state.entries` (and so in the report's `baseline.entries`), so
+ * the malformed value is reported, not silently dropped.
+ */
 export function entryIsActive(entry: BaselineEntry, now: Date): boolean {
   if (!entry.expiresAt) {
     return true;
   }
-  const expires = new Date(entry.expiresAt);
-  if (Number.isNaN(expires.getTime())) {
-    return true;
+  if (!isValidCalendarDateString(entry.expiresAt)) {
+    return false;
   }
+  const expires = new Date(`${entry.expiresAt}T00:00:00.000Z`);
   return expires.getTime() >= now.getTime();
 }
 
@@ -126,22 +157,53 @@ export function indefiniteSuppressionFindings(applicableEntries: readonly Baseli
     }));
 }
 
-/** Write (or reseal) the baseline file with an added entry. Only writing path for this file. */
+export type AddBaselineEntryResult = { resealed: boolean };
+
+/**
+ * Write (or reseal) the baseline file with an added entry. Only writing path
+ * for this file.
+ *
+ * F8: `baseline add` used to read the file's raw `entries` and rewrite it
+ * with a freshly-computed checksum unconditionally — including when the
+ * CURRENT file's checksum did not match its own contents (`tamperState`
+ * `mismatch`/`unreadable`). That reseals a tampered baseline with a valid
+ * checksum, laundering the tamper: the next audit run reports `ok` as if
+ * nothing had happened, and every entry the tamperer added along with the
+ * legitimate one is now silently trusted too. Adding to a non-`ok` baseline
+ * is refused unless the caller explicitly passes `reseal: true`, in which
+ * case the reseal is real (a fresh, valid checksum is written) but is not
+ * silent — the caller is told it happened (`result.resealed`) so it can be
+ * logged/printed.
+ */
 export async function addBaselineEntry(
   root: string,
   entry: BaselineEntry,
-  options: { baselinePath?: string } = {},
-): Promise<void> {
+  options: { baselinePath?: string; reseal?: boolean } = {},
+): Promise<AddBaselineEntryResult> {
   const filePath = options.baselinePath ?? defaultBaselinePath(root);
   let entries: BaselineEntry[] = [];
+  let resealed = false;
   if (await pathExists(filePath)) {
-    const read = await readJsonObjectFile(filePath);
-    if (read.state === "object" && Array.isArray(read.value.entries)) {
-      entries = read.value.entries as BaselineEntry[];
+    const loaded = await readBaseline(filePath);
+    if (loaded && loaded.state.tamperState !== "ok") {
+      if (options.reseal !== true) {
+        throw new Error(
+          `Refusing to add to baseline ${filePath}: it is currently "${loaded.state.tamperState}" ` +
+            `(tampered or unreadable). Pass --reseal to explicitly reseal it and add anyway.`,
+        );
+      }
+      // `state.entries` is the raw, schema-valid entry list even when the
+      // checksum mismatches (only an "unreadable" file — failed schema
+      // validation entirely — has none to recover).
+      entries = loaded.state.entries;
+      resealed = true;
+    } else if (loaded) {
+      entries = loaded.applicableEntries;
     }
   }
   const next = [...entries.filter((existing) => existing.findingId !== entry.findingId), entry];
   const checksum = computeObjectChecksum(next);
   const payload = { schemaVersion: 1, entries: next, checksum };
   await writeFileAtomic(filePath, `${JSON.stringify(payload, null, 2)}\n`);
+  return { resealed };
 }

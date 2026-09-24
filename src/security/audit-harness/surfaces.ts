@@ -7,10 +7,36 @@
 // `pathsUnreadable` fields read directly off these.
 
 import path from "node:path";
-import { readdir } from "node:fs/promises";
-import { pathExists, toPosix } from "../../lib/fs";
+import { readdir, realpath } from "node:fs/promises";
+import { isPathInside, pathExists, toPosix } from "../../lib/fs";
 import { SETTINGS_FILE_OWNERS, HARNESS_ADAPTERS } from "../../integrations/index";
 import type { SurfaceId } from "./types";
+
+/** A directory or file discovery result that distinguishes "found" from
+ * "discovered but could not be read/resolved" — the latter must surface as
+ * `pathsUnreadable`, never be silently dropped (flow 308 W8 review F7/F21). */
+export type DiscoveryResult = { found: string[]; unreadable: string[] };
+
+/**
+ * Whether `absolute` is safe to report as a found file: it resolves (via
+ * realpath, so a symlink is followed) to somewhere INSIDE `root`. A symlink
+ * that resolves outside root, or a dangling one, is never silently skipped —
+ * the caller reports it under `unreadable` instead (F21).
+ */
+async function resolvesInsideRoot(root: string, absolute: string): Promise<boolean> {
+  try {
+    // Resolve `root` too, not just `absolute` — `root` itself commonly sits
+    // behind a symlink (e.g. macOS's `/tmp` -> `/private/tmp`), and comparing
+    // a realpath'd `absolute` against a NOT-realpath'd `root` would flag
+    // every ordinary, perfectly-contained symlink target as "outside root"
+    // purely from the string mismatch, not from anything actually escaping.
+    const rootReal = await realpath(root).catch(() => path.resolve(root));
+    const real = await realpath(absolute);
+    return isPathInside(rootReal, real);
+  } catch {
+    return false;
+  }
+}
 
 export type SurfaceFiles = {
   surface: SurfaceId;
@@ -105,65 +131,111 @@ export async function discoverHookSurfaceFiles(root: string): Promise<string[]> 
 
 // --- agent-definitions ---------------------------------------------------
 
-async function listMarkdownFiles(root: string, dirRelative: string): Promise<string[]> {
+async function listMarkdownFiles(root: string, dirRelative: string): Promise<DiscoveryResult> {
   const dirAbsolute = path.join(root, dirRelative);
   if (!(await pathExists(dirAbsolute))) {
-    return [];
+    // Genuinely absent: not-applicable, not an error (F7).
+    return { found: [], unreadable: [] };
   }
   let entries: import("node:fs").Dirent[];
   try {
     entries = await readdir(dirAbsolute, { withFileTypes: true });
   } catch {
-    return [];
+    // Exists but could not be listed (e.g. permission denied) — a coverage
+    // gap, not silence (F7): report the directory itself as unreadable.
+    return { found: [], unreadable: [toPosix(dirRelative)] };
   }
-  return entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
-    .map((entry) => toPosix(path.join(dirRelative, entry.name)))
-    .sort();
+  const found: string[] = [];
+  const unreadable: string[] = [];
+  for (const entry of entries) {
+    if (!entry.name.endsWith(".md")) continue;
+    const childRelative = path.join(dirRelative, entry.name);
+    if (entry.isFile()) {
+      found.push(toPosix(childRelative));
+      continue;
+    }
+    if (entry.isSymbolicLink()) {
+      // F21: a symlinked entry was previously skipped in total silence
+      // (`entry.isFile()` is false for a symlink dirent). Follow it, but
+      // only report it found when it resolves to somewhere inside root.
+      const absolute = path.join(root, childRelative);
+      if (await resolvesInsideRoot(root, absolute)) {
+        found.push(toPosix(childRelative));
+      } else {
+        unreadable.push(toPosix(childRelative));
+      }
+    }
+  }
+  return { found: found.sort(), unreadable: unreadable.sort() };
 }
 
-export async function discoverAgentDefinitions(root: string): Promise<string[]> {
+export async function discoverAgentDefinitions(root: string): Promise<DiscoveryResult> {
   const [canonical, exported] = await Promise.all([
     listMarkdownFiles(root, ".metaproject/agents"),
     listMarkdownFiles(root, ".claude/agents"),
   ]);
-  return [...new Set([...canonical, ...exported])].sort();
+  return {
+    found: [...new Set([...canonical.found, ...exported.found])].sort(),
+    unreadable: [...new Set([...canonical.unreadable, ...exported.unreadable])].sort(),
+  };
 }
 
 // --- skills ----------------------------------------------------------------
 
 const SCRIPT_EXTENSIONS = new Set([".sh", ".py", ".js", ".ts"]);
 
-async function walkScripts(root: string, dirRelative: string, depth = 0): Promise<string[]> {
-  if (depth > 8) return [];
+async function walkScripts(root: string, dirRelative: string, depth = 0): Promise<DiscoveryResult> {
+  if (depth > 8) return { found: [], unreadable: [] };
   const dirAbsolute = path.join(root, dirRelative);
   if (!(await pathExists(dirAbsolute))) {
-    return [];
+    return { found: [], unreadable: [] };
   }
   let entries: import("node:fs").Dirent[];
   try {
     entries = await readdir(dirAbsolute, { withFileTypes: true });
   } catch {
-    return [];
+    // Exists but unreadable (F7): a coverage gap, not a silent empty result.
+    return { found: [], unreadable: [toPosix(dirRelative)] };
   }
   const found: string[] = [];
+  const unreadable: string[] = [];
   for (const entry of entries) {
     const childRelative = path.join(dirRelative, entry.name);
     if (entry.isDirectory()) {
-      found.push(...(await walkScripts(root, childRelative, depth + 1)));
-    } else if (entry.isFile() && SCRIPT_EXTENSIONS.has(path.extname(entry.name))) {
+      const nested = await walkScripts(root, childRelative, depth + 1);
+      found.push(...nested.found);
+      unreadable.push(...nested.unreadable);
+      continue;
+    }
+    if (entry.isFile() && SCRIPT_EXTENSIONS.has(path.extname(entry.name))) {
       found.push(toPosix(childRelative));
+      continue;
+    }
+    if (entry.isSymbolicLink() && SCRIPT_EXTENSIONS.has(path.extname(entry.name))) {
+      // F21: a symlinked script previously vanished silently — `entry.isFile()`
+      // is false for a symlink dirent, so it never reached the extension
+      // check at all. Follow it; report it unreadable rather than dropping it
+      // when it resolves outside root (or not at all).
+      const absolute = path.join(root, childRelative);
+      if (await resolvesInsideRoot(root, absolute)) {
+        found.push(toPosix(childRelative));
+      } else {
+        unreadable.push(toPosix(childRelative));
+      }
     }
   }
-  return found;
+  return { found, unreadable };
 }
 
-export async function discoverSkillScripts(root: string): Promise<string[]> {
+export async function discoverSkillScripts(root: string): Promise<DiscoveryResult> {
   const [metaSkills, claudeSkills] = await Promise.all([
     walkScripts(root, ".metaproject/skills"),
     walkScripts(root, ".claude/skills"),
   ]);
-  return [...new Set([...metaSkills, ...claudeSkills])].sort();
+  return {
+    found: [...new Set([...metaSkills.found, ...claudeSkills.found])].sort(),
+    unreadable: [...new Set([...metaSkills.unreadable, ...claudeSkills.unreadable])].sort(),
+  };
 }
 
 export { rel };

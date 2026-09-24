@@ -60,9 +60,34 @@ export { addBaselineEntryImpl as addBaselineEntry };
 
 function findingId(f: RawFinding): string {
   const pointerOrLine = f.location?.pointer ?? (f.location?.line !== undefined ? `line:${f.location.line}` : "");
-  const token = f.evidence.matchedToken ?? f.evidence.policyId ?? "";
-  const key = `${f.surface}|${f.check}|${f.path ?? ""}|${token}|${pointerOrLine}`;
+  // F10: `policyId` and `matchedToken` are two DIFFERENT signals (e.g. an MCP
+  // poisoning policy id vs. the tool name it matched on) — folding them into
+  // one slot with `??` meant two distinct poisoning policies matching the
+  // same tool on the same manifest collided onto one id, silently dropping
+  // one finding as a "duplicate". Both are always included now, even when
+  // one of the two is absent (as an empty segment, so the key shape stays
+  // stable either way).
+  const policyId = f.evidence.policyId ?? "";
+  const matchedToken = f.evidence.matchedToken ?? "";
+  const key = `${f.surface}|${f.check}|${f.path ?? ""}|${policyId}|${matchedToken}|${pointerOrLine}`;
   return createHash("sha256").update(key).digest("hex").slice(0, 16);
+}
+
+/**
+ * F3: the proposal id embedded in a `<id>.applied.json` marker filename used
+ * to be `${findingId}-${internalProposal.proposal.id}`, and several checks'
+ * internal proposal ids are built directly from ATTACKER-CONTROLLED JSON
+ * content (an MCP server name, an allow-list entry string) — e.g. an
+ * `mcpServers` key of `../../../../tmp/evil` flowed straight into the marker
+ * path `proposals.ts#applyAuditProposal` builds and writes to, a path
+ * traversal. The proposal id exposed in the report (and required by `apply
+ * --proposal <id>`) is now always a hash — no attacker-controlled substring
+ * survives into it — and `proposals.ts` additionally validates the format and
+ * asserts every write path stays inside root, defense in depth.
+ */
+function proposalId(findingIdValue: string, internalId: string): string {
+  const hash = createHash("sha256").update(`${findingIdValue}|${internalId}`).digest("hex").slice(0, 16);
+  return `p-${hash}`;
 }
 
 function compareFindings(a: AuditFinding, b: AuditFinding): number {
@@ -169,25 +194,30 @@ export async function computeAuditInternal(
   const settingsJsonByPath = new Map<string, JsonRecord>();
   {
     const files = await discoverSettings(root);
+    const scanned: string[] = [];
     const unreadable: string[] = [];
     for (const relativePath of files) {
+      // F16: a `.codex/config.toml` is not JSON at all — it is discovered
+      // (for the mcp-configs surface, which parses and checks it below) but
+      // no settings check ever runs on it here. It used to still land in
+      // `pathsScanned` for the SETTINGS surface anyway (via the unfiltered
+      // `files` list), which is a false claim of coverage. It is listed only
+      // under `mcp-configs`, never here.
+      if (relativePath.endsWith(".toml")) {
+        continue;
+      }
       const read = await readJsonObjectFile(path.join(root, relativePath));
       if (read.state !== "object") {
-        // A `.codex/config.toml` is not JSON at all — it is discovered but not
-        // parsed as a settings object here; that is a coverage gap, not a
-        // scan failure, so it is recorded scanned rather than unreadable.
-        if (relativePath.endsWith(".toml")) {
-          continue;
-        }
         unreadable.push(relativePath);
         continue;
       }
       settingsJsonByPath.set(relativePath, read.value);
+      scanned.push(relativePath);
       raw.push(...checkOverPermissiveAllowlist(relativePath, read.value));
       raw.push(...checkMissingDenyList(relativePath, read.value));
       raw.push(...checkBypassFlagPresent(relativePath, read.value));
     }
-    surfaces.push(surfaceResult("settings", files, unreadable));
+    surfaces.push(surfaceResult("settings", scanned, unreadable));
   }
 
   // --- mcp-configs -------------------------------------------------------------
@@ -321,8 +351,12 @@ export async function computeAuditInternal(
 
   // --- agent-definitions -------------------------------------------------------
   {
-    const files = await discoverAgentDefinitions(root);
-    const unreadable: string[] = [];
+    // F7: `discoverAgentDefinitions` now distinguishes "no such directory"
+    // (genuinely not-applicable) from "the directory exists but could not be
+    // listed" (a coverage gap) — the latter comes back as `unreadable` and
+    // must count toward this surface's `pathsUnreadable`, not disappear.
+    const { found: files, unreadable: discoveryUnreadable } = await discoverAgentDefinitions(root);
+    const unreadable: string[] = [...discoveryUnreadable];
     for (const relativePath of files) {
       const content = await safeReadText(path.join(root, relativePath));
       if (content === undefined) {
@@ -338,8 +372,8 @@ export async function computeAuditInternal(
 
   // --- skills ------------------------------------------------------------------
   {
-    const files = await discoverSkillScripts(root);
-    const unreadable: string[] = [];
+    const { found: files, unreadable: discoveryUnreadable } = await discoverSkillScripts(root);
+    const unreadable: string[] = [...discoveryUnreadable];
     for (const relativePath of files) {
       const content = await safeReadText(path.join(root, relativePath));
       if (content === undefined) {
@@ -361,7 +395,7 @@ export async function computeAuditInternal(
     const id = findingId(f);
     let fixProposal: AuditFinding["fixProposal"];
     if (f.internalProposal) {
-      const scopedId = `${id}-${f.internalProposal.proposal.id}`;
+      const scopedId = proposalId(id, f.internalProposal.proposal.id);
       const proposal = { ...f.internalProposal.proposal, id: scopedId };
       proposalsById.set(scopedId, { proposal, edit: f.internalProposal.edit });
       fixProposal = options.fixProposals ? proposal : null;
@@ -386,23 +420,28 @@ export async function computeAuditInternal(
   const baselinePath = options.baselinePath ?? defaultBaselinePath(root);
   const loaded = await readBaseline(baselinePath);
   let baseline: BaselineState | null = null;
-  let findings = withIds;
+  let allFindings = withIds;
   if (loaded) {
     baseline = loaded.state;
-    findings = applySuppression(findings, loaded.applicableEntries, now);
-    findings = [...findings, ...indefiniteSuppressionFindings(loaded.applicableEntries)];
+    allFindings = applySuppression(allFindings, loaded.applicableEntries, now);
+    allFindings = [...allFindings, ...indefiniteSuppressionFindings(loaded.applicableEntries)];
   }
+  allFindings = [...allFindings].sort(compareFindings);
 
-  // --- severity floor ----------------------------------------------------------
+  // F6: `--severity-floor` is a DISPLAY/listing filter only — it used to
+  // filter `findings` before the score/gate were computed from it, so
+  // `--ci --severity-floor critical` silently hid an unsuppressed `high`
+  // finding from both the score and the pass/fail gate ("passing" a report
+  // that has one). The summary (score, grade, countsBySeverity) and
+  // `totalFindings` are always computed from the COMPLETE unsuppressed set,
+  // regardless of the floor; `auditGate` reads `report.summary`, not
+  // `report.findings`, for exactly this reason. The floor only trims which
+  // findings are actually listed in the returned/printed `findings` array.
+  const unsuppressed = allFindings.filter((f) => !f.suppressed.value);
+  const summary = scoreFindings(unsuppressed, allFindings.length);
+
   const floor = options.severityFloor;
-  const floorRank = floor ? severityRank(floor) : -1;
-  if (floor) {
-    findings = findings.filter((f) => severityRank(f.severity) >= floorRank);
-  }
-  findings = [...findings].sort(compareFindings);
-
-  const unsuppressed = findings.filter((f) => !f.suppressed.value);
-  const summary = scoreFindings(unsuppressed, findings.length);
+  const findings = floor ? allFindings.filter((f) => severityRank(f.severity) >= severityRank(floor)) : allFindings;
 
   const coverage: CoverageStatus = {
     status: surfaces.some((s) => s.status === "error") || coverageReasons.length > 0 ? "incomplete" : "complete",
@@ -446,11 +485,16 @@ export async function runHarnessAudit(root: string, options: RunAuditOptions = {
  * critical/high finding, or a configured baseline whose `tamperState` is not
  * `ok`. Mirrors `security.ts`'s `isPassGate` allowlist shape (T7 wires this
  * into the same vocabulary once `isPassGate` is exported from `./security`).
+ *
+ * F6: reads `report.summary.countsBySeverity`, never `report.findings` —
+ * `findings` can be trimmed by `--severity-floor` (a display filter, see
+ * `computeAuditInternal` above), but `summary` is always computed over the
+ * COMPLETE unsuppressed set, so the gate (and the CI exit code derived from
+ * it) cannot be bypassed by a floor that hides the blocking finding from the
+ * listing.
  */
 export function auditGate(report: AuditReport): "pass" | "fail" {
-  const hasBlockingFinding = report.findings.some(
-    (f) => !f.suppressed.value && (f.severity === "critical" || f.severity === "high"),
-  );
+  const hasBlockingFinding = report.summary.countsBySeverity.critical > 0 || report.summary.countsBySeverity.high > 0;
   const baselineTampered = report.baseline !== null && report.baseline.tamperState !== "ok";
   return hasBlockingFinding || baselineTampered ? "fail" : "pass";
 }

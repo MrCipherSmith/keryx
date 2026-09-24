@@ -8,6 +8,7 @@ import { detectInjection } from "../detect/injection";
 import { detectSecrets } from "../detect/secrets";
 import { scanMcpManifest } from "../detect/mcp";
 import { touchesAgentCredentials } from "../../lib/command-risk";
+import { redactSensitiveText } from "../redact";
 import type { AuditSeverity, FindingLocation, InternalProposal, RawFinding, SurfaceId } from "./types";
 
 function lineOfOffset(content: string, offset: number): number {
@@ -413,7 +414,15 @@ export function checkHookSilentSuppression(relativePath: string, hookCommand: st
         proposal: {
           id: `remove-suppression-${pointer}`,
           rationale: "Remove the suppression so a failing hook actually reports failure.",
-          patch: `- ${hookCommand}\n+ ${hookCommand.replace(/\s*\|\|\s*true\b/, "").replace(/\s*2>\/dev\/null/, "")}`,
+          // F4: the raw hook command can embed a secret (a token baked into a
+          // curl/wget flag, for instance) — this `patch` is advisory display
+          // text (never what `applyTextEdit` actually writes; that uses
+          // `edit.from`/`edit.to` below, unredacted, since it has to match the
+          // file byte-for-byte), so it goes through the same redaction floor
+          // used to sanitize tool output before it reaches a report/log.
+          patch: redactSensitiveText(
+            `- ${hookCommand}\n+ ${hookCommand.replace(/\s*\|\|\s*true\b/, "").replace(/\s*2>\/dev\/null/, "")}`,
+          ),
         },
         edit: {
           kind: "text-replace",
