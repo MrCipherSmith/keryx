@@ -1,0 +1,189 @@
+[
+  {
+    "id": "R1-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "keryx init still overwrites files outside the project through in-repo symlinks, via helpers in other modules (seedAssetsLock, installGdskills)",
+    "impact": "The R5-F1 hostile-clone attack still overwrites arbitrary user files. AC1 is not met on the init path.",
+    "suggested_fix": "Route seedAssetsLock and installGdskills (catalog, manifest, mkdirs, skill copies, contracts) through writeContained/mkdirContained with the project root as the root; add both files to the ratchet; add init tests for the assets.lock.json and catalog.md links.",
+    "evidence": "review315-r1/init-escape.ts -> init-escape.head.out: WROTE-OUTSIDE for 5 cases, all init=ok (victim is now 1376 bytes of JSON)",
+    "confidence": "high",
+    "file": "src/assets/seed.ts",
+    "line": 95,
+    "class_scope": {
+      "sites": [
+        "src/assets/seed.ts:95-96",
+        "src/gdskills/install.ts:71-79,93,104,106,123,126,467,569,773",
+        "src/mcp/client-config.ts:453-454,587-588,595-596,669 (init --mcp, interactive only)",
+        "src/capability/registry.ts:74,84,129,139 (latent: registry is empty)",
+        "src/lib/routing-entrypoint.ts:165"
+      ],
+      "enumeration_method": "Listed init.ts's imports of helpers that write, grepped each helper module at HEAD for raw fs write verbs, then ran a 17-case symlink matrix of keryx init --yes with before/after snapshots of the outside dir, on HEAD and pre-fix"
+    },
+    "global_id": "2026-09-24-ingest-695-r01#R1-F1"
+  },
+  {
+    "id": "R1-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "UTF-32LE BOM detection hides UTF-16LE text that starts with U+0000; an injection rule now imports",
+    "impact": "Bypasses the W8 import audit gate. The injection rule is written to project rules with exit 0; pre-fix it was refused as bundle-prompt-injection-in-instructions. The auto-run finding for memory entries and agents is lost the same way.",
+    "suggested_fix": "For FF FE 00 00, return [utf32, utf16le(subarray(2)), lossy] and union the positive checks; add a regression test.",
+    "evidence": "bom315.head.out U1 'AUDIT pass [] | IMPORT exit 0'; bom315.pre.out U1 'Refused: audit-failed'",
+    "confidence": "high",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 259,
+    "class_scope": {
+      "sites": [
+        "src/security/audit-harness/index.ts:259-266 decodeTextVariants",
+        "~479 scanImportedBundle (all text kinds)",
+        "~582 agent auto-run union",
+        "~920 direct agent-definitions surface"
+      ],
+      "enumeration_method": "Every decodeTextVariants call site (keryx ctx rg); bom315.ts on HEAD vs pre for the rule, memory-entry and agent kinds, plus a CLI bundle import"
+    },
+    "global_id": "2026-09-24-ingest-695-r01#R1-F2"
+  },
+  {
+    "id": "R1-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "The ratchet does not scan init.ts at all: its allowlist matches whole files",
+    "impact": "A reintroduced raw write in init.ts ships with the ratchet green.",
+    "suggested_fix": "Move installManagedHook/removeManagedHook into a shared module (e.g. src/lib/managed-git-hook.ts), allowlist only that module, and drop init.ts and update.ts from ALLOWLIST.",
+    "evidence": "ratchet-mut.out: all 3 init.ts mutations MISSED; the service.ts and gitignore mutations were CAUGHT",
+    "confidence": "high",
+    "file": "src/lib/contained-write.ratchet.test.ts",
+    "line": 107,
+    "class_scope": {
+      "sites": [
+        "contained-write.ratchet.test.ts:107 (init entry)",
+        "~101 (update entry)",
+        "isAllowed"
+      ],
+      "enumeration_method": "ratchet-mut.sh on a scratch export: 8 mutations"
+    },
+    "global_id": "2026-09-24-ingest-695-r01#R1-F3"
+  },
+  {
+    "id": "R1-F4",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "R10-F1 residue: a refused or orphaned proposal keeps the later-configured login on disk",
+    "impact": "The login stays in the graduation/*.json and *.md files, which is the exact case AC6 targets.",
+    "suggested_fix": "On refusal, delete or redact the stale pair. Also sweep graduation/*.json files that are not in the current cluster set whenever logins are configured.",
+    "evidence": "probe315-learning-L1b.head.out 'refused=[attribution]' then '.json containsBob=true', '.md containsBob=true'; L2 'grad-agent-c1fe43cf33e0.json containsAlice=true'",
+    "confidence": "high",
+    "file": "src/learning/graduate.ts",
+    "line": 488,
+    "class_scope": {
+      "sites": [
+        "graduate.ts:486-490",
+        "graduate.ts:~455-465 (loop over current clusters only)"
+      ],
+      "enumeration_method": "PROBE315-L1 and L2 appended to a scratch copy of graduate.test.ts, run on HEAD and pre"
+    },
+    "global_id": "2026-09-24-ingest-695-r01#R1-F4"
+  },
+  {
+    "id": "R1-F5",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "The model-backed draft's reviewerProfile.reviewerId is persisted unguarded (same class as R10-F2)",
+    "impact": "A careless model-backed extractor can store a configured login in a project record.",
+    "suggested_fix": "For model-backed drafts, drop reviewerProfile, or require reviewerId to match /^rv-[0-9a-f]{16}$/ and pass the gate.",
+    "evidence": "probe315-learning.head.out 'reviewerProfile=alice: created=1 storedContainsAlice=true'; the case, '_' and '/' variants are refused",
+    "confidence": "high",
+    "file": "src/learning/extract.ts",
+    "line": 420,
+    "class_scope": {
+      "sites": [
+        "extract.ts:420",
+        "extract.ts:386-401",
+        "reviewer-id.ts containsConfiguredLogin lookarounds"
+      ],
+      "enumeration_method": "Enumerated every draft field that reaches LearnedPattern; PROBE315-L3 ran 6 variants on HEAD and pre"
+    },
+    "global_id": "2026-09-24-ingest-695-r01#R1-F5"
+  },
+  {
+    "id": "R1-F6",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "The .git/hooks allowlist rationale is false: resolveGitHooksRoot has no symlink check",
+    "impact": "A file outside the project gets the keryx block appended and is made executable. This needs control of .git, which already gives hook execution.",
+    "suggested_fix": "Fix the comment and the ratchet reason, or check with lstat/realpath that the hooks directory and hook file resolve inside the git common dir.",
+    "evidence": "hooks-escape.out: 'hooks-dir-link outside=[post-commit,pre-push]'; 'post-commit-file-link victimLen=10764'",
+    "confidence": "high",
+    "file": "src/lib/git-hooks.ts",
+    "line": 4,
+    "class_scope": {
+      "sites": [
+        "git-hooks.ts:4-25",
+        "init.ts:1604-1629,1640-1659",
+        "update.ts:1506,1543,1567"
+      ],
+      "enumeration_method": "Read the function and its callers; hooks-escape.ts probe"
+    },
+    "global_id": "2026-09-24-ingest-695-r01#R1-F6"
+  },
+  {
+    "id": "R1-F7",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "The ratchet misses an aliased writeFileAtomic import",
+    "impact": "A raw write can reach service.ts without the ratchet failing.",
+    "suggested_fix": "Parse the lib/fs import block to catch aliases.",
+    "evidence": "ratchet-mut.out 'MISSED service.ts writeFileAtomic aliased'",
+    "confidence": "high",
+    "file": "src/lib/contained-write.ratchet.test.ts",
+    "line": 200,
+    "class_scope": {
+      "sites": [
+        "detectRawWrites writeFileAtomic branch"
+      ],
+      "enumeration_method": "ratchet-mut.sh"
+    },
+    "global_id": "2026-09-24-ingest-695-r01#R1-F7"
+  },
+  {
+    "id": "R1-F8",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "The reports-dir init test fails on pre-fix only through its error-type assertion; the AC1 rules-directory test is absent",
+    "impact": "The test guards a path that could not escape anyway. The real directory escapes (R1-F1) are untested.",
+    "suggested_fix": "Point the test at a directory init writes files into (e.g. core, modules), and note under AC1 that the rules-directory case was already contained.",
+    "evidence": "pre/: 2 fail 'Received value: undefined'",
+    "confidence": "medium",
+    "file": "src/commands/init.test.ts",
+    "line": 270,
+    "class_scope": {
+      "sites": [
+        "init.test.ts reports-dir test",
+        "AC1"
+      ],
+      "enumeration_method": "Ran the new tests on the pre/ export (all 4 fail); init-escape.pre.out shows the rules link is CLEAN"
+    },
+    "global_id": "2026-09-24-ingest-695-r01#R1-F8"
+  },
+  {
+    "id": "R1-F9",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "T11: writeContained's exclusive mode is not atomic, despite the 'no TOCTOU gap' comment",
+    "impact": "Only a narrow local race; no escape.",
+    "suggested_fix": "Use open(target,'wx') or link() for the exclusive path, or reword the comment.",
+    "evidence": "sandbox-policy.out: all escape variants give wrote=false with the outside dir unchanged; pre-fix wrote sandbox-policy.json outside",
+    "confidence": "high",
+    "file": "src/lib/project-sandbox-policy.ts",
+    "line": 135,
+    "class_scope": {
+      "sites": [
+        "contained-write.ts writeContained exclusive branch",
+        "project-sandbox-policy.ts:135-148"
+      ],
+      "enumeration_method": "Code read; sandbox-policy.ts probe on 64e862a2 and pre"
+    },
+    "global_id": "2026-09-24-ingest-695-r01#R1-F9"
+  }
+]

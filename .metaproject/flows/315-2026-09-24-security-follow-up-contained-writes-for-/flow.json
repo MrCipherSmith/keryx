@@ -9,7 +9,7 @@
   "title": "Security follow-up: contained writes for init, testing service and .gitignore, plus deferred W3/W4 minors",
   "status": "in-progress",
   "createdAt": "2026-09-24T18:05:52.943Z",
-  "updatedAt": "2026-09-24T18:09:13.329Z",
+  "updatedAt": "2026-09-24T19:05:52.521Z",
   "source": {
     "type": "description",
     "ref": null
@@ -92,49 +92,70 @@
       "id": "T5",
       "title": "Lane A: contained writes for init.ts, testing/service.ts, metaproject-gitignore.ts + ratchet + symlink regression tests (R5-F1, R5-F3)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:09:23.133Z",
+            "outcome": "started",
+            "detail": "315-T5 dispatch 1 (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Lane B: audit-harness R8-F1 UTF-16 BOM auto-run agent test; R8-F2 UTF-32 BOM, R8-F3 direct-path false positive (fix or document)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:09:23.218Z",
+            "outcome": "started",
+            "detail": "315-T6 dispatch 1 (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Lane C: learning R10-F1 re-gate stale graduation proposals + nextSteps at apply; R10-F2 gate model-backed extractor label/sourceRef",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:09:23.301Z",
+            "outcome": "started",
+            "detail": "315-T7 dispatch 1 (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Verify: targeted tests, pre-fix failure proof per regression test, typecheck + eslint on changed files",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -146,7 +167,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -157,8 +179,19 @@
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T18:24:34.864Z",
+            "outcome": "started",
+            "detail": "review round 1 (opus) on PR #695 lanes A/B/C"
+          },
+          {
+            "at": "2026-09-24T18:39:04.059Z",
+            "outcome": "failed",
+            "detail": "round 1 (r01 @64e862a2): 0 blocker, 2 major (R1-F1 init helpers raw writes, R1-F2 UTF-32 shadows UTF-16LE view), 4 minor, 3 info; CI green; fix attempt 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -179,6 +212,90 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Lane A2: route project-sandbox-policy skeleton writer (called by init) through contained-write + ratchet + symlink regression test (R5-F1 class)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:23:35.817Z",
+            "outcome": "started",
+            "detail": "315-T11 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Fix r01 lane a: init helpers (seed, gdskills install, routing-entrypoint, mcp client-config, capability registry) via contained-write + ratchet; shared managed-git-hook module with containment check (R1-F1, R1-F3, R1-F6, R1-F7, R1-F8, R1-F9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:39:04.402Z",
+            "outcome": "started",
+            "detail": "315-T12 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Fix r01 lane b: UTF-32LE BOM also yields UTF-16LE view, union findings (R1-F2)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:39:04.491Z",
+            "outcome": "started",
+            "detail": "315-T13 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix r01 lane c: delete stale graduation pair on refusal + orphan sweep; drop/validate reviewerProfile on model-backed drafts (R1-F4, R1-F5)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T18:39:04.575Z",
+            "outcome": "started",
+            "detail": "315-T14 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -244,6 +361,111 @@
     {
       "at": "2026-09-24T18:09:13.329Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-24T18:09:23.133Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 315-T5 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:09:23.219Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 315-T6 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:09:23.301Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 315-T7 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:17:14.166Z",
+      "event": "task-done",
+      "detail": "T6: Lane B: audit-harness R8-F1 UTF-16 BOM auto-run agent test; R8-F2 UTF-32 BOM, R8-F3 direct-path false positive (fix or document)"
+    },
+    {
+      "at": "2026-09-24T18:21:20.361Z",
+      "event": "task-done",
+      "detail": "T7: Lane C: learning R10-F1 re-gate stale graduation proposals + nextSteps at apply; R10-F2 gate model-backed extractor label/sourceRef"
+    },
+    {
+      "at": "2026-09-24T18:23:29.808Z",
+      "event": "task-done",
+      "detail": "T5: Lane A: contained writes for init.ts, testing/service.ts, metaproject-gitignore.ts + ratchet + symlink regression tests (R5-F1, R5-F3)"
+    },
+    {
+      "at": "2026-09-24T18:23:35.723Z",
+      "event": "task-added",
+      "detail": "T11: Lane A2: route project-sandbox-policy skeleton writer (called by init) through contained-write + ratchet + symlink regression test (R5-F1 class)"
+    },
+    {
+      "at": "2026-09-24T18:23:35.817Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 315-T11 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:24:34.864Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — review round 1 (opus) on PR #695 lanes A/B/C"
+    },
+    {
+      "at": "2026-09-24T18:29:00.316Z",
+      "event": "task-done",
+      "detail": "T11: Lane A2: route project-sandbox-policy skeleton writer (called by init) through contained-write + ratchet + symlink regression test (R5-F1 class)"
+    },
+    {
+      "at": "2026-09-24T18:30:01.756Z",
+      "event": "task-done",
+      "detail": "T8: Verify: targeted tests, pre-fix failure proof per regression test, typecheck + eslint on changed files"
+    },
+    {
+      "at": "2026-09-24T18:39:04.059Z",
+      "event": "task-attempt",
+      "detail": "T9: failed (attempt 2) — round 1 (r01 @64e862a2): 0 blocker, 2 major (R1-F1 init helpers raw writes, R1-F2 UTF-32 shadows UTF-16LE view), 4 minor, 3 info; CI green; fix attempt 1"
+    },
+    {
+      "at": "2026-09-24T18:39:04.144Z",
+      "event": "task-added",
+      "detail": "T12: Fix r01 lane a: init helpers (seed, gdskills install, routing-entrypoint, mcp client-config, capability registry) via contained-write + ratchet; shared managed-git-hook module with containment check (R1-F1, R1-F3, R1-F6, R1-F7, R1-F8, R1-F9)"
+    },
+    {
+      "at": "2026-09-24T18:39:04.227Z",
+      "event": "task-added",
+      "detail": "T13: Fix r01 lane b: UTF-32LE BOM also yields UTF-16LE view, union findings (R1-F2)"
+    },
+    {
+      "at": "2026-09-24T18:39:04.316Z",
+      "event": "task-added",
+      "detail": "T14: Fix r01 lane c: delete stale graduation pair on refusal + orphan sweep; drop/validate reviewerProfile on model-backed drafts (R1-F4, R1-F5)"
+    },
+    {
+      "at": "2026-09-24T18:39:04.402Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 315-T12 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:39:04.491Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 315-T13 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:39:04.575Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 315-T14 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T18:42:35.871Z",
+      "event": "task-done",
+      "detail": "T13: Fix r01 lane b: UTF-32LE BOM also yields UTF-16LE view, union findings (R1-F2)"
+    },
+    {
+      "at": "2026-09-24T18:47:58.414Z",
+      "event": "task-done",
+      "detail": "T14: Fix r01 lane c: delete stale graduation pair on refusal + orphan sweep; drop/validate reviewerProfile on model-backed drafts (R1-F4, R1-F5)"
+    },
+    {
+      "at": "2026-09-24T19:05:52.521Z",
+      "event": "task-done",
+      "detail": "T12: Fix r01 lane a: init helpers (seed, gdskills install, routing-entrypoint, mcp client-config, capability registry) via contained-write + ratchet; shared managed-git-hook module with containment check (R1-F1, R1-F3, R1-F6, R1-F7, R1-F8, R1-F9)"
     }
   ]
 }
