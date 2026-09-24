@@ -41,3 +41,4 @@
 - 2026-09-24T03:30:25.497Z - task-attempt: T4: started (attempt 7) — review round 4 (opus): post-replan verification of e3752a36
 - 2026-09-24T03:39:32.420Z - task-attempt: T4: failed (attempt 8) — round 4: 1 minor (R4-1) fixed in follow-up commit and verified by repro; no open finding >= minor
 - 2026-09-24 - Review round 4 (opus, post-replan): M1-M3 fixed; one pre-existing minor R4-1 (unclosed code fence) fixed by a narrow follow-up and verified by orchestrator repro + 303 targeted tests; remaining findings info only (R4-2, R4-3, F12, I1, I2). Review loop closed at threshold minor.
+- 2026-09-24 - CI all green on 62e88ad4 (typecheck-and-tests incl. the matrix drift gate, client matrix, standard, mkdocs, ...). Review clean at threshold minor. T4 left open: awaiting owner merge of PR #677 (stacked on stack/wave0; retarget to feat/agent-platform-expansion after #674/#675 merge). Flow close (implemented / ac confirm / complete) deferred to after the merge.
