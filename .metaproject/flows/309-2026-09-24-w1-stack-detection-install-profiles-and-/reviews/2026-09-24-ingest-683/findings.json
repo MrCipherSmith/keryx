@@ -1,0 +1,183 @@
+[
+  {
+    "id": "R3-1",
+    "reviewer": "opus-verification",
+    "severity": "major",
+    "problem": "A behavior scenario whose expectations cannot actually be checked is graded as a 100% pass. gradeDeterministic returns undefined for any grader string other than contains/not-contains/regex/model (e.g. a typo 'regexp' or 'llm'), and the trial loop only fails on === false, so the expectation is silently treated as met. An empty expected_behavior array also passes every trial. readEvalSpec casts evals.json without validating grader names or requiring at least one expectation. The scenario reports status 'ran', passRate 1, and the report verdict is 'pass'.",
+    "impact": "The same 'pass without evidence' class as F10/R2-4 is still reachable through the behavior half. An authored eval with a mistyped grader or no expectations produces fabricated behavior evidence that validateEvalReport and checkStablePackGate accept, so a stable stack pack could ship an eval.json whose behavior results verified nothing.",
+    "suggested_fix": "Validate evals.json on read: every expected_behavior entry needs grader in {contains, not-contains, regex, model} and a string value, and every scenario needs at least one expectation. Otherwise throw EvalContractError naming the scenario, or mark the scenario 'skipped' with a reason so the verdict becomes 'incomplete'. In the trial loop, treat gradeDeterministic() === undefined for a non-model grader as a failure, never a pass. Add tests: a typo grader and an empty expected_behavior must never yield passRate 1 or verdict 'pass'.",
+    "evidence": "scratchpad/r3/ev3/ev3.ts, run with an authored skill (triggers pass genuinely) and runner output 'garbage': \"typo grader 'regexp' => pass authored ... behavior:ran:1\"; \"empty expected_behavior => pass authored ... behavior:ran:1\". The expected value 'MUST_APPEAR' never appears in the output.",
+    "confidence": "high",
+    "file": "src/gdskills/governance/eval.ts",
+    "line": 402,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/governance/eval.ts:241 (gradeDeterministic default returns undefined)",
+        "src/gdskills/governance/eval.ts:395-403 (trial loop only fails on === false; empty expectation list passes)",
+        "src/gdskills/governance/eval.ts:168 (readEvalSpec casts JSON without validation)",
+        "src/gdskills/governance/eval.ts:441 (behaviorOk trusts status 'ran' scenarios)"
+      ],
+      "enumeration_method": "Traced every path by which a behavior scenario's passes counter is incremented, and every evals.json field consumed without validation, in evalSkill."
+    },
+    "global_id": "2026-09-24-ingest-683#R3-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-checked at 88753c5e: round 4 (review-309-r4.md): regression tests for unknown grader/empty expectations fail on pre-fix code and pass after 88753c5e; r3 repro no longer reaches pass",
+      "verifier": "opus-narrow-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 88753c5e; refuted by round-4 execution"
+    }
+  },
+  {
+    "id": "R3-2",
+    "reviewer": "opus-verification",
+    "severity": "minor",
+    "problem": "R2-6 is only partly fixed: neither validateEvalReport nor checkStablePackGate recomputes the verdict from triggerAccuracy or the scenario passRates. A hand-edited eval.json with evidence 'authored', one ran trigger-positive and one ran trigger-negative (both passRate 0), triggerAccuracy TP 0 / FP 1, and verdict 'pass' is accepted. The test block is named 'checkStablePackGate recomputes, does not just trust', but only evidence and the ran-count are checked.",
+    "impact": "The stable-pack gate trusts a self-declared verdict that its own data contradicts.",
+    "suggested_fix": "In validateEvalReport, when verdict is 'pass', also require truePositive === positives, falsePositive === 0, every trigger scenario passRate === 1, and every ran behavior scenario passRate >= 0.5, i.e. the same expression evalSkill uses. Also require triggerAccuracy TP/FP to agree with the scenario passes. Add the forged TP0/FP1 fixture as a gate test.",
+    "evidence": "scratchpad/r3/ev3/ev3.ts: 'forged gate (TP0/FP1, passRate 0, verdict pass): {\"status\":\"pass\"}'",
+    "confidence": "high",
+    "file": "src/gdskills/governance/eval.ts",
+    "line": 533,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/governance/eval.ts:533",
+        "src/gdskills/governance/eval.ts:607-628"
+      ],
+      "enumeration_method": "Every check in validateEvalReport and checkStablePackGate that inspects verdict"
+    },
+    "global_id": "2026-09-24-ingest-683#R3-2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-checked at 88753c5e: round 4: forged-pass report now rejected by validateEvalReport (test executed)",
+      "verifier": "opus-narrow-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 88753c5e; refuted by round-4 execution"
+    }
+  },
+  {
+    "id": "R3-3",
+    "reviewer": "opus-verification",
+    "severity": "minor",
+    "problem": "sha256OfFile throws EISDIR when the path is a directory, and doctor, uninstall and apply call it without a guard. resolveContainedPath explicitly accepts a path equal to a destination root (state.test.ts asserts '.claude/skills' is ok), so a recorded writtenPaths entry of '.claude/skills' passes containment. A recorded file that the user later replaced with a directory, or a planned destination that exists as a directory, also triggers it.",
+    "impact": "doctor, uninstall and uninstall --force crash with a raw EISDIR stack trace instead of reporting drifted or invalidState. No data is deleted, because the rm is never reached.",
+    "suggested_fix": "Have resolveContainedPath reject rel === root for recorded paths, since Keryx only records files. In doctor, uninstall and apply, lstat the path and report a non-regular file as drifted or invalidState (uninstall: refuse) rather than hashing it.",
+    "evidence": "scratchpad/r3/rootdir.ts: state with writtenPaths ['.claude/skills'] → doctor THREW / uninstall THREW / uninstall --force THREW 'EISDIR: illegal operation on a directory, read'; the user's .claude/skills/user-skill/SKILL.md survives.",
+    "confidence": "high",
+    "file": "src/integrations/install-state.ts",
+    "line": 58,
+    "class_scope": {
+      "sites": [
+        "src/integrations/install-state.ts:58",
+        "src/gdskills/manifest/doctor.ts:118",
+        "src/gdskills/manifest/uninstall.ts:127",
+        "src/gdskills/manifest/apply.ts:129",
+        "src/gdskills/manifest/apply.ts:158",
+        "src/gdskills/manifest/state.ts:92 (rel === root accepted)"
+      ],
+      "enumeration_method": "Every sha256OfFile call in src/gdskills/manifest, plus the containment predicate that admits a root-equal path"
+    },
+    "global_id": "2026-09-24-ingest-683#R3-3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-checked at 88753c5e: round 4: root-equal / directory recorded paths refused, no EISDIR (tests executed)",
+      "verifier": "opus-narrow-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 88753c5e; refuted by round-4 execution"
+    }
+  },
+  {
+    "id": "R3-4",
+    "reviewer": "opus-verification",
+    "severity": "minor",
+    "problem": "loadSkillCatalog with scope 'all' calls readFileSync and readdirSync on project-controlled trees without error handling. A single unreadable .metaproject/project-skills/*/SKILL.md (EACCES), or an unreadable directory, throws out of loadSkillCatalog.",
+    "impact": "`keryx skills stocktake --scope all` exits 1 with a raw 'EACCES: permission denied' and no report for any skill. The same happens for eval and scout with --scope all. This is the robustness gap round 2 asked about for --scope all.",
+    "suggested_fix": "Wrap the per-entry read and the per-directory readdir in try/catch. Skip the entry and surface it in the report (e.g. an 'unreadable' list, or a stocktake verdict 'improve' with the error as its reason) instead of aborting the run. Add a chmod-000 fixture test.",
+    "evidence": "scratchpad/r3/stk: project-skills/{ok,bad(chmod 000),nofm} → `keryx skills stocktake --scope all --json` exit 1, stderr 'EACCES: permission denied, open …/project-skills/bad/SKILL.md'; after removing 'bad' → exit 0.",
+    "confidence": "high",
+    "file": "src/gdskills/governance/catalog-index.ts",
+    "line": 72,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/governance/catalog-index.ts:65",
+        "src/gdskills/governance/catalog-index.ts:72",
+        "src/gdskills/governance/catalog-index.ts:120"
+      ],
+      "enumeration_method": "Every fs call in catalog-index.ts reachable with scope 'all'"
+    },
+    "global_id": "2026-09-24-ingest-683#R3-4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-checked at 88753c5e: round 4: unreadable SKILL.md recorded in unreadable list, stocktake --scope all exits 0 (test executed)",
+      "verifier": "opus-narrow-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 88753c5e; refuted by round-4 execution"
+    }
+  },
+  {
+    "id": "R3-5",
+    "reviewer": "opus-verification",
+    "severity": "minor",
+    "problem": "Some round-2 regression tests do not discriminate. All three tests in the 'R2-5 leave-one-out' describe pass against the pre-fix (description-only) eval.ts, because the fixture skill is named 'sample-widget-skill' and the name alone supplies the 'widget' token. The R2-9 test for '[' inside a \"\"\" string uses balanced brackets ('[docs](…)'), so the pre-fix heuristic already accepted it.",
+    "impact": "The R2-5 fix, and the R2-9 multi-line-string case, could regress without any test failing.",
+    "suggested_fix": "R2-5: name the fixture skill so that it shares no token with the prompt (e.g. 'helper'), as in scratchpad/r3/loo.ts, which gives HEAD pass (TP 1) and pre-fix fail (TP 0). R2-9: use an unbalanced bracket inside the \"\"\" body ('See [docs'), matching the round-2 repro.",
+    "evidence": "Temp copy with eval.ts restored from dd4f9318: `bun test eval.test.ts -t R2-5` → 3 pass, 0 fail. Temp copy with detect.ts restored from 358c8d70: the \"'[' inside a triple-quoted string\" test passes (only the other 3 R2-9/R2-8 tests fail).",
+    "confidence": "high",
+    "file": "src/gdskills/governance/eval.test.ts",
+    "line": 454,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/governance/eval.test.ts:461",
+        "src/gdskills/governance/eval.test.ts:505",
+        "src/gdskills/governance/eval.test.ts:541",
+        "src/stack/detect.test.ts:106"
+      ],
+      "enumeration_method": "Ran every round-2 regression test against the pre-fix source in a temp copy and listed those that still pass"
+    },
+    "global_id": "2026-09-24-ingest-683#R3-5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-checked at 88753c5e: round 4: rewritten fixtures verified discriminating by scratch-copy runs on pre-fix code",
+      "verifier": "opus-narrow-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 88753c5e; refuted by round-4 execution"
+    }
+  },
+  {
+    "id": "R3-6",
+    "reviewer": "opus-verification",
+    "severity": "info",
+    "problem": "Leftovers. (1) A malformed evals.json (triggers.positive given as a string, or an invalid regex value) throws a raw TypeError or SyntaxError rather than EvalContractError; the CLI still exits 1 through the catch. (2) `error instanceof EvalContractError ? 1 : 1` is unchanged (skills-governance.ts:306). (3) stripSkillIdentity's \\b match on a hyphenated name also matches a sibling id's prefix ('review-frontend' inside 'review-frontend-conventions'), which can mark or hide a duplicateReasonOf tag incorrectly; this only affects tagging and never crashes.",
+    "impact": "Cosmetic and diagnostic only.",
+    "suggested_fix": "Fold into the evals.json validation from R3-1. Drop the no-op ternary. Anchor the name match on a non-[A-Za-z0-9-] boundary.",
+    "evidence": "scratchpad/r3/ev3/ev3.ts: 'positive is a string THREW TypeError …map is not a function'; 'invalid regex THREW SyntaxError'. Source reading for (2) and (3).",
+    "confidence": "medium",
+    "file": "src/gdskills/governance/eval.ts",
+    "line": 322,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/governance/eval.ts:322",
+        "src/gdskills/governance/eval.ts:248",
+        "src/commands/skills-governance.ts:306",
+        "src/gdskills/governance/stocktake.ts:358"
+      ],
+      "enumeration_method": "Residuals found while tracing R3-1/R2-3"
+    },
+    "global_id": "2026-09-24-ingest-683#R3-6"
+  }
+]
