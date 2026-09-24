@@ -34,12 +34,7 @@ it is out of scope unless the failure is caused by a React API removal.
 2. Read the official React upgrade guide for that version range (the
    project's own `CHANGELOG`/release notes if vendored, otherwise the
    canonical upgrade guide) before touching code — do not rely on memory
-   of a prior major's migration for a different jump. When asked where to
-   start a version upgrade, your first sentence names this step
-   explicitly: start with the official React upgrade guide for that
-   version, then run the codemods it points to -- state both the
-   "upgrade guide" and "codemod" steps up front, before any API-removal
-   checklist.
+   of a prior major's migration for a different jump.
 3. Inventory usage of the APIs the target major removes or changes (grep
    the codebase; see Step 2 per-API list) so the scope of the change is
    known before starting, not discovered file-by-file.
@@ -68,9 +63,10 @@ it is out of scope unless the failure is caused by a React API removal.
   older React Testing Library that still expects it) — check the
   project's RTL version compatibility before changing the import broadly.
 - **Any other removed API the upgrade guide lists for this specific
-  version jump** (e.g. `ReactDOM.unmountComponentAtNode`,
-  `ReactDOM.findDOMNode` deprecation) — do not assume the 18->19 list
-  above is exhaustive for a different version range.
+  version jump** (e.g. `ReactDOM.unmountComponentAtNode` and
+  `ReactDOM.findDOMNode`, both fully removed in React 19, not merely
+  deprecated) — do not assume the 18->19 list above is exhaustive for a
+  different version range.
 
 ### Step 3: Apply codemods, then hand-fix the rest
 
@@ -89,10 +85,15 @@ it is out of scope unless the failure is caused by a React API removal.
 
 ### Step 4: Stage the rollout
 
-- For a large codebase, migrate in slices (by directory/feature) with each
-  slice green (type-check, lint, test, build) before moving to the next,
-  rather than one large flip that leaves the tree red for an extended
-  period.
+- The React/react-dom version bump itself is one atomic dependency change
+  — `package.json` cannot pin two React majors for different directories
+  at once, so there is no per-directory rollout of the runtime version.
+  What can be sliced by directory/feature is the code-preparation work
+  that precedes the bump: removing legacy APIs, running codemods, and
+  fixing type errors slice-by-slice with each slice green (type-check,
+  lint, test, build) — so that when the dependency bump itself lands, the
+  whole tree is already compatible and the bump is a single, low-risk
+  commit rather than a large flip that leaves the tree red.
 - Keep the previous major's peer dependencies (libraries pinned to the old
   React major) identified before starting — a library incompatible with
   the new major blocks the upgrade at that dependency, not in app code;

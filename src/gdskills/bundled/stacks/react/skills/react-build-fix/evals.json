@@ -24,7 +24,7 @@
       "strictness": "high",
       "expected_behavior": [
         { "grader": "not-contains", "value": "eslint-disable" },
-        { "grader": "regex", "value": "dependency|add" }
+        { "grader": "regex", "value": "dependency array" }
       ]
     },
     {
@@ -33,7 +33,7 @@
       "strictness": "high",
       "expected_behavior": [
         { "grader": "not-contains", "value": "cast it to any" },
-        { "grader": "regex", "value": "React\\.(Change|Mouse|Form)?Event|type" }
+        { "grader": "regex", "value": "React\\.(Change|Mouse|Form)?Event<" }
       ]
     }
   ]

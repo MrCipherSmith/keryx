@@ -41,11 +41,20 @@ only the sinks React's rendering model makes reachable.
   bundler inlines into client output) ships in the browser bundle in plain
   text — never put an API secret, private key, or unscoped token behind
   one of these prefixes. A value that must stay server-only belongs in a
-  server component, a route handler/API route, or a server action, never
-  a client component or a plain (non-prefixed-and-still-bundled) constant
-  imported into client code.
+  server component, a route handler/API route, or a server function/
+  action, never a client component or a plain (non-prefixed-and-still-
+  bundled) constant imported into client code.
 - Grep a diff for the project's public-env prefix before approving a new
   environment variable used inside a client component.
+- A Server Function/Action is not merely a safe home for a server-only
+  value — calling it from the client turns it into a public, directly
+  reachable HTTP endpoint (its own route, invocable by anything that can
+  reach the app, not only through the form/button that references it in
+  the source). It gets none of the caller-identity or authorization
+  checks a UI-only flow implies; each Server Function/Action must
+  authenticate the caller, authorize the specific operation, and validate
+  every argument itself, exactly as a hand-written API route would,
+  before it touches data or a mutation.
 
 ## Third-party scripts and client-side auth
 

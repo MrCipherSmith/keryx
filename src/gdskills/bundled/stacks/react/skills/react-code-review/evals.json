@@ -24,7 +24,7 @@
       "strictness": "high",
       "expected_behavior": [
         { "grader": "regex", "value": "[Rr]ules of [Hh]ooks|conditional" },
-        { "grader": "regex", "value": "early return|before|above (any|every|all)|ahead of" }
+        { "grader": "regex", "value": "early return|before" }
       ]
     },
     {
@@ -32,8 +32,8 @@
       "prompt": "Review this component diff: it uses a MobX observer wrapping a component with a useEffect that has a missing dependency, and the store action mutates an array in place. What do you flag, and what do you leave to another reviewer?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "store|MobX" },
-        { "grader": "regex", "value": "out of scope|separate|another review" }
+        { "grader": "regex", "value": "add (the )?missing dependency|dependency array" },
+        { "grader": "regex", "value": "store-review|separate (review|skill)|defer (it )?to|not this skill" }
       ]
     }
   ]
