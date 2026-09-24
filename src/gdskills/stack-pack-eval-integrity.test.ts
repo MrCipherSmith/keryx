@@ -26,13 +26,22 @@
 //   I9. every stack-pack behavior scenario is a judge scenario.
 //
 // ANTI-GAMING (AG): for every judge scenario, every canned answer
-// `antiGamingAnswers` returns (`empty`, `echo`, `known-wrong`, `injection`,
-// `stuffed`, `known-right`) must grade, through the recorded live judge, to
-// exactly the outcome that canned answer expects. A judge scenario with no
-// recording, a recording taken under a superseded `JUDGE_PROMPT_VERSION`, or
-// a recording missing the digest for one of these answers, FAILS the check
-// outright — never a silent skip, never a pass by omission — naming the
-// `skills judge-check ... --record` command that fixes it.
+// `antiGamingAnswers` returns (`empty`, `echo`, `vague`, `known-wrong`,
+// `subtle-wrong`, `injection`, `stuffed`, `known-right`) must grade, through
+// the recorded live judge, to exactly the outcome that canned answer
+// expects — checked against EVERY recorded sample of that answer (fix 1 /
+// R1-4: the live judge is non-deterministic on identical input, so one
+// recorded sample no longer stands for "this canned answer grades
+// correctly"; a canned answer with `n` recorded samples gets `n` AG checks,
+// one per sample, and ALL must hold). A judge scenario with no recording, a
+// recording that cannot even be read (a stale pre-fix-1 shape, or any other
+// malformed file), a recording taken under a superseded
+// `JUDGE_PROMPT_VERSION`, or a recording missing the digest for one of these
+// answers, FAILS the check outright — never a silent skip, never a pass by
+// omission — naming the `skills judge-check ... --record` command that fixes
+// it. A sample whose verdict carries an `error` (R1-8: the judge's reply was
+// unparseable) is itself an AG failure, regardless of what its face-value
+// verdict says — it was never a genuine grading.
 //
 // GRADING SEMANTICS: a scenario with no judge expectation is graded with
 // `gradeExpectations` from `./governance/eval` — the exact same "a scenario
@@ -154,18 +163,108 @@ function isSpecificToken(token: string): boolean {
   return token.length >= 4 || /[^a-zA-Z]/.test(token);
 }
 
+/**
+ * I7c (fix 1 / R1-7): an `anti_patterns` token appears in the skill's
+ * SKILL.md (I6) and the scenario's own `calibration.known_wrong` (I7), but
+ * neither of those proves the JUDGE is ever told about it — grading runs
+ * entirely off the rubric/pass/fail-criteria text `buildJudgePrompt` sends,
+ * never off `anti_patterns` or SKILL.md. This rule closes that gap: the
+ * token must also appear in the rubric text, or in one of the fail
+ * criteria, or I6/I7 are "trivially satisfiable by construction" (the exact
+ * phrase from R1-7) without the judge ever seeing the forbidden thing named.
+ */
+function tokenAppearsInRubricOrFailCriteria(token: string, judgeExpectation: JudgeExpectation | undefined): boolean {
+  if (judgeExpectation === undefined) return false;
+  if (hasCaseInsensitiveSubstring(judgeExpectation.rubric, token)) return true;
+  return (judgeExpectation.fail_criteria ?? []).some((criterion) => hasCaseInsensitiveSubstring(criterion, token));
+}
+
+/** I7c violation: true when `token` appears in neither the rubric nor any fail criterion. */
+function violatesI7c(token: string, judgeExpectation: JudgeExpectation | undefined): boolean {
+  return !tokenAppearsInRubricOrFailCriteria(token, judgeExpectation);
+}
+
+/**
+ * I10 (fix 1 / R1-6): a fail criterion that is only a negation-only note —
+ * "Mentioning X only to warn against it is not a failure." and its variants
+ * — is not a real fail criterion. Read literally against `buildJudgePrompt`'s
+ * own "Fail criteria — ANY holding fails the answer" framing, a correct
+ * answer that warns against the anti-pattern "holds" that criterion's own
+ * sentence (it IS mentioning X); it worked in the shipped tree only because
+ * the judge's system prompt carries the same rule globally. The rule lives
+ * in the system prompt (`judge.ts`'s `SYSTEM_PROMPT`) — a scenario-level
+ * fail criterion must never restate it as a standalone entry.
+ */
+const NEGATION_ONLY_FAIL_CRITERION = /^\s*(mentioning|merely mentioning|naming)\b/i;
+
+function isNegationOnlyFailCriterion(criterion: string): boolean {
+  return NEGATION_ONLY_FAIL_CRITERION.test(criterion);
+}
+
+/** I10 violation: true when `criterion` is a negation-only note (see `isNegationOnlyFailCriterion`). */
+function violatesI10(criterion: string): boolean {
+  return isNegationOnlyFailCriterion(criterion);
+}
+
+/**
+ * R1-12: I8 and I9 as named predicates, shared verbatim by the real-tree
+ * walk and the synthetic "fires" fixtures below — the review found the two
+ * call sites re-implementing the same boolean expression independently, so a
+ * change to one would never be caught by the other's "fires" test. Following
+ * this file's own header promise ("one implementation of what these rules
+ * mean"), every rule below this point is a named function used by both.
+ */
+function violatesI8(scenario: EvalScenarioSpec): boolean {
+  return isJudgeScenario(scenario) && scenario.expected_behavior.some((expected) => expected.grader === "not-contains");
+}
+
+function violatesI9(scenario: EvalScenarioSpec): boolean {
+  return !isJudgeScenario(scenario);
+}
+
 function judgeCheckCommand(pack: string, skill: string): string {
   return `bun ./src/cli.ts skills judge-check ${pack}/${skill} --judge deepseek:deepseek-chat --record`;
 }
 
 /**
- * The anti-gaming (AG) invariant for one canned answer: graded through the
- * recorded live judge, its `passed` outcome must equal what that answer's
- * `kind` expects. Shared by the real-tree walk and the synthetic fixtures so
- * both exercise the exact same fail-closed behavior on a missing/stale/
- * incomplete recording — never a silent skip, never a pass by omission.
- * Throws (never returns) when the recording cannot ground the check at all,
- * naming the `skills judge-check ... --record` command that fixes it.
+ * Reading a recording is no longer allowed to crash test COLLECTION
+ * (`describe`-time code, run synchronously before any `test()` body) — a
+ * recording written under the pre-fix-1 shape (`verdict`/`reason` instead of
+ * `samples`) now fails `JudgeRecordingFormatError` validation, which every
+ * currently-committed recording will until the orchestrator re-records it
+ * (this task's own expected "red until re-recorded" state). A thrown error
+ * at collection time would abort the ENTIRE test file, turning "some AG
+ * checks are red" into "the whole file cannot even run" — so the read is
+ * wrapped here and the failure is deferred into the individual test bodies
+ * that need it, exactly like a missing file already was.
+ */
+interface RecordingLookup {
+  readonly file?: JudgeRecordingFile;
+  readonly error?: Error;
+}
+
+function loadRecordingLookup(pack: string, skill: string): RecordingLookup {
+  try {
+    const file = readJudgeRecording(`${pack}/${skill}`);
+    return file !== undefined ? { file } : {};
+  } catch (error) {
+    return { error: error instanceof Error ? error : new Error(String(error)) };
+  }
+}
+
+/**
+ * The anti-gaming (AG) invariant for one SAMPLE of one canned answer: graded
+ * through the recorded live judge's `sampleIndex`'th sample of that answer,
+ * its `passed` outcome must equal what that answer's `kind` expects.
+ * Fix 1 / R1-8: a sample whose verdict carries an `error` is itself a
+ * mismatch — `false` — regardless of what its face-value verdict says (it
+ * was never a genuine grading, only a manufactured fail after the judge's
+ * reply proved unparseable). Shared by the real-tree walk and the synthetic
+ * fixtures so both exercise the exact same fail-closed behavior on a
+ * missing/unreadable/stale/incomplete recording — never a silent skip, never
+ * a pass by omission. Throws (never returns) when the recording cannot
+ * ground the check at all, naming the `skills judge-check ... --record`
+ * command that fixes it.
  */
 async function gradeAntiGamingAnswer(
   pack: string,
@@ -173,8 +272,13 @@ async function gradeAntiGamingAnswer(
   scenario: EvalScenarioSpec,
   answer: ReturnType<typeof antiGamingAnswers>[number],
   recording: JudgeRecordingFile | undefined,
+  sampleIndex = 0,
+  loadError?: Error,
 ): Promise<boolean> {
   const cmd = judgeCheckCommand(pack, skill);
+  if (loadError !== undefined) {
+    throw new Error(`judge recording for ${pack}/${skill} could not be read: ${loadError.message} -- re-record with \`${cmd}\``, { cause: loadError });
+  }
   if (recording === undefined) {
     throw new Error(`no judge recording for ${pack}/${skill} yet -- run \`${cmd}\` to create one`);
   }
@@ -185,7 +289,7 @@ async function gradeAntiGamingAnswer(
   }
   let judge: Judge;
   try {
-    judge = recordedJudge(recording);
+    judge = recordedJudge(recording, sampleIndex);
   } catch (error) {
     throw new Error(`judge recording for ${pack}/${skill} could not be used: ${error instanceof Error ? error.message : String(error)} -- re-record with \`${cmd}\``, { cause: error });
   }
@@ -194,11 +298,34 @@ async function gradeAntiGamingAnswer(
     grade = await gradeScenarioAnswer(answer.answer, scenario, judge);
   } catch (error) {
     throw new Error(
-      `judge recording for ${pack}/${skill} is missing an entry for scenario "${scenario.id}" kind "${answer.kind}": ${error instanceof Error ? error.message : String(error)} -- re-record with \`${cmd}\``,
+      `judge recording for ${pack}/${skill} is missing an entry for scenario "${scenario.id}" kind "${answer.kind}" sample ${sampleIndex}: ${error instanceof Error ? error.message : String(error)} -- re-record with \`${cmd}\``,
       { cause: error },
     );
   }
+  if (grade.judge?.error !== undefined) return false;
   return grade.passed === (answer.expect === "pass");
+}
+
+/**
+ * How many recorded samples exist for one canned answer, so the real-tree
+ * walk can register exactly that many `AG ... sample N` tests. Falls back to
+ * 1 (registering a single test that fails closed through
+ * `gradeAntiGamingAnswer`'s own missing-recording/missing-entry handling)
+ * when the recording could not be loaded, or has no entry for this exact
+ * request yet — the AG contract is "never a silent skip", so under-counting
+ * to 1 rather than 0 is the safe direction: it always registers at least one
+ * failing test rather than none.
+ */
+function sampleCountForAG(
+  scenario: EvalScenarioSpec,
+  judgeExpectation: JudgeExpectation,
+  answer: ReturnType<typeof antiGamingAnswers>[number],
+  lookup: RecordingLookup,
+): number {
+  if (lookup.file === undefined) return 1;
+  const digest = judgeRequestDigest({ scenarioId: scenario.id, prompt: scenario.prompt, answer: answer.answer, expectation: judgeExpectation });
+  const entry = lookup.file.entries.find((candidate) => candidate.requestDigest === digest);
+  return entry !== undefined && entry.samples.length > 0 ? entry.samples.length : 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,9 +378,11 @@ describe("stack-pack eval integrity (I1-I9, AG) over the real bundled tree", () 
       const hasJudge = isJudgeScenario(scenario);
       const judgeExpectation = judgeExpectationOf(scenario);
       // Read once per scenario (cheap: a single small JSON file, or a fast
-      // "does not exist" check) so I2's registration decision and every AG
-      // test below share the exact same recording snapshot.
-      const recording = hasJudge ? readJudgeRecording(`${pack}/${skill}`) : undefined;
+      // "does not exist"/"malformed" check) so I2's registration decision and
+      // every AG test below share the exact same recording snapshot. Never
+      // thrown at collection time (see `loadRecordingLookup`'s doc comment).
+      const recordingLookup: RecordingLookup = hasJudge ? loadRecordingLookup(pack, skill) : {};
+      const recording = recordingLookup.file;
 
       test(`I1 ${label}: the empty answer fails`, async () => {
         if (hasJudge) {
@@ -270,11 +399,15 @@ describe("stack-pack eval integrity (I1-I9, AG) over the real bundled tree", () 
       // I2 needs a real judge verdict for the echoed-prompt answer (it is
       // not short-circuited) — until a recording exists for this skill, this
       // is honestly "not yet checked", not a fabricated pass, so it is
-      // skipped rather than failed. The AG block below never affords a judge
-      // scenario the same grace: it fails outright on a missing recording.
-      const i2Test = hasJudge && recording === undefined ? test.skip : test;
+      // skipped rather than failed. A recording that DOES exist but could not
+      // be read (malformed/stale-shape) is a different case — that is not
+      // "not yet checked", it is broken, so it runs and fails rather than
+      // skipping. The AG block below never affords a judge scenario the same
+      // missing-file grace: it fails outright on a missing recording.
+      const i2Test = hasJudge && recording === undefined && recordingLookup.error === undefined ? test.skip : test;
       i2Test(`I2 ${label}: the echoed-prompt answer fails`, async () => {
         if (hasJudge) {
+          if (recordingLookup.error !== undefined) throw recordingLookup.error;
           const judge = recordedJudge(recording!);
           const grade = await gradeScenarioAnswer(echoAnswer(scenario.prompt), scenario, judge);
           expect(grade.passed).toBe(false);
@@ -314,24 +447,39 @@ describe("stack-pack eval integrity (I1-I9, AG) over the real bundled tree", () 
         test(`I7b ${label} [${token}]: anti_patterns token is specific (>= 4 chars, or has a non-letter char)`, () => {
           expect(isSpecificToken(token)).toBe(true);
         });
+
+        if (hasJudge) {
+          test(`I7c ${label} [${token}]: anti_patterns token appears in the rubric or a fail criterion`, () => {
+            expect(violatesI7c(token, judgeExpectation)).toBe(false);
+          });
+        }
       }
 
       if (hasJudge) {
         test(`I8 ${label}: a judge scenario carries no not-contains expectation`, () => {
-          expect(scenario.expected_behavior.some((expected) => expected.grader === "not-contains")).toBe(false);
+          expect(violatesI8(scenario)).toBe(false);
         });
+
+        for (const criterion of judgeExpectation?.fail_criteria ?? []) {
+          test(`I10 ${label}: fail criterion is not a negation-only note ["${criterion}"]`, () => {
+            expect(violatesI10(criterion)).toBe(false);
+          });
+        }
       }
 
       test(`I9 ${label}: every stack-pack behavior scenario is a judge scenario`, () => {
-        expect(hasJudge).toBe(true);
+        expect(violatesI9(scenario)).toBe(false);
       });
 
-      if (hasJudge) {
+      if (hasJudge && judgeExpectation !== undefined) {
         for (const answer of antiGamingAnswers(scenario)) {
-          test(`AG ${label} [${answer.kind}]: recorded verdict matches expect="${answer.expect}"`, async () => {
-            const ok = await gradeAntiGamingAnswer(pack, skill, scenario, answer, recording);
-            expect(ok).toBe(true);
-          });
+          const sampleCount = sampleCountForAG(scenario, judgeExpectation, answer, recordingLookup);
+          for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+            test(`AG ${label} [${answer.kind}] sample ${sampleIndex}: recorded verdict matches expect="${answer.expect}"`, async () => {
+              const ok = await gradeAntiGamingAnswer(pack, skill, scenario, answer, recording, sampleIndex, recordingLookup.error);
+              expect(ok).toBe(true);
+            });
+          }
         }
       }
     }
@@ -365,6 +513,8 @@ function makeJudgeScenario(overrides: Partial<EvalScenarioSpec> = {}): EvalScena
     calibration: {
       known_right: "Check the error with an explicit branch and handle or wrap it before returning.",
       known_wrong: "Just add badtoken above the line and move on, the error doesn't matter.",
+      vague: "Handle the error properly instead of ignoring it.",
+      subtle_wrong: "Log the error and continue — it's non-fatal, so there's no need to branch on it explicitly.",
     },
     anti_patterns: ["badtoken"],
     ...overrides,
@@ -444,7 +594,12 @@ describe("I1-I9: negative fixtures prove each rule actually fires", () => {
 
   test("I7 fires: an anti_patterns token is not named in calibration.known_wrong", () => {
     const scenario = makeJudgeScenario({
-      calibration: { known_right: "does the right thing", known_wrong: "does the wrong thing without naming the forbidden thing" },
+      calibration: {
+        known_right: "does the right thing",
+        known_wrong: "does the wrong thing without naming the forbidden thing",
+        vague: "does something in the right general direction",
+        subtle_wrong: "does a plausible partial version of the wrong thing without naming the forbidden thing",
+      },
     });
     expect(hasCaseInsensitiveSubstring(scenario.calibration!.known_wrong, "badtoken")).toBe(false);
   });
@@ -459,14 +614,61 @@ describe("I1-I9: negative fixtures prove each rule actually fires", () => {
     expect(isSpecificToken("@ts-ignore")).toBe(true);
   });
 
+  test("I7c fires: an anti_patterns token is named in known_wrong/SKILL.md but never in the rubric or a fail criterion", () => {
+    // Satisfies I6/I7 by construction (R1-7's own complaint) — SKILL.md and
+    // known_wrong both name it — but the judge is never told, because
+    // grading runs entirely off the rubric/pass/fail-criteria text.
+    const scenario = makeJudgeScenario({
+      expected_behavior: [
+        {
+          grader: "judge",
+          rubric: "A correct answer checks the error explicitly before doing anything else.",
+          pass_criteria: ["Checks the error explicitly before doing anything else."],
+          fail_criteria: ["Ignores the error entirely."],
+        },
+      ],
+    });
+    const judgeExpectation = judgeExpectationOf(scenario);
+    expect(violatesI7c("badtoken", judgeExpectation)).toBe(true);
+  });
+
+  test("I7c passes: the token named in the rubric clears the rule", () => {
+    const scenario = makeJudgeScenario(); // rubric text mentions "badtoken"
+    expect(violatesI7c("badtoken", judgeExpectationOf(scenario))).toBe(false);
+  });
+
+  test("I7c passes: the token named only in a fail criterion (not the rubric) also clears the rule", () => {
+    const scenario = makeJudgeScenario({
+      expected_behavior: [
+        {
+          grader: "judge",
+          rubric: "A correct answer checks the error explicitly before doing anything else.",
+          pass_criteria: ["Checks the error explicitly before doing anything else."],
+          fail_criteria: ["Suppresses the finding with badtoken instead of handling the error."],
+        },
+      ],
+    });
+    expect(violatesI7c("badtoken", judgeExpectationOf(scenario))).toBe(false);
+  });
+
+  test('I10 fires: a standalone "Mentioning X only to warn against it is not a failure" fail criterion', () => {
+    expect(violatesI10("Mentioning badtoken only to warn against it is not a failure.")).toBe(true);
+    expect(violatesI10("Merely mentioning the anti-pattern to warn against it is not a failure.")).toBe(true);
+    expect(violatesI10("Naming the suppression comment to warn against it is not a failure.")).toBe(true);
+  });
+
+  test("I10 passes: a real fail criterion (not a negation-only note) clears the rule", () => {
+    expect(violatesI10("Suppresses the finding with badtoken instead of handling the error.")).toBe(false);
+    expect(violatesI10("Force-deletes without warning about unmerged work.")).toBe(false);
+  });
+
   test("I8 fires: a judge scenario carrying a not-contains expectation violates the rule", () => {
     const base = makeJudgeScenario();
     const scenario: EvalScenarioSpec = {
       ...base,
       expected_behavior: [...base.expected_behavior, { grader: "not-contains", value: "nolint" }],
     };
-    expect(isJudgeScenario(scenario)).toBe(true);
-    expect(scenario.expected_behavior.some((expected) => expected.grader === "not-contains")).toBe(true);
+    expect(violatesI8(scenario)).toBe(true);
   });
 
   test("I9 fires: a scenario with only deterministic expectations is not a judge scenario", () => {
@@ -476,7 +678,7 @@ describe("I1-I9: negative fixtures prove each rule actually fires", () => {
       strictness: "low",
       expected_behavior: [{ grader: "contains", value: "backoff" }],
     };
-    expect(isJudgeScenario(scenario)).toBe(false);
+    expect(violatesI9(scenario)).toBe(true);
   });
 
   test("a well-formed non-judge scenario and unrelated SKILL.md clear I1-I5 (positive control, not a false-positive machine)", () => {
@@ -498,7 +700,7 @@ describe("I1-I9: negative fixtures prove each rule actually fires", () => {
     expect(hasAnswerKeyPhrasing(skillMdBody)).toBe(false);
   });
 
-  test("a well-formed judge scenario and its SKILL.md clear I3, I6, I7, I7b, I8, I9 (positive control, not a false-positive machine)", () => {
+  test("a well-formed judge scenario and its SKILL.md clear I3, I6, I7, I7b, I7c, I8, I9, I10 (positive control, not a false-positive machine)", () => {
     const scenario = makeJudgeScenario();
     const skillMdBody = "---\nname: fixture-skill\n---\n\nNever produce output containing badtoken; it is forbidden here.\n";
 
@@ -513,8 +715,13 @@ describe("I1-I9: negative fixtures prove each rule actually fires", () => {
       expect(hasCaseInsensitiveSubstring(skillMdBody, token)).toBe(true);
       expect(hasCaseInsensitiveSubstring(scenario.calibration!.known_wrong, token)).toBe(true);
       expect(isSpecificToken(token)).toBe(true);
+      expect(violatesI7c(token, judgeExpectation)).toBe(false);
     }
-    expect(scenario.expected_behavior.some((expected) => expected.grader === "not-contains")).toBe(false);
+    expect(violatesI8(scenario)).toBe(false);
+    expect(violatesI9(scenario)).toBe(false);
+    for (const criterion of judgeExpectation.fail_criteria ?? []) {
+      expect(violatesI10(criterion)).toBe(false);
+    }
   });
 });
 
@@ -560,8 +767,8 @@ describe("AG: synthetic fixtures prove the anti-gaming check actually fires", ()
           scenarioId: scenario.id,
           kind: answer.kind,
           requestDigest: judgeRequestDigest(request),
-          verdict: "pass", // a broken/gamed judge wrongly passing a known-wrong answer
-          reason: "stub judge that wrongly passes everything",
+          // a broken/gamed judge wrongly passing a known-wrong answer
+          samples: [{ verdict: "pass", reason: "stub judge that wrongly passes everything" }],
         },
       ],
     };
@@ -573,9 +780,10 @@ describe("AG: synthetic fixtures prove the anti-gaming check actually fires", ()
     expect(ok).toBe(false);
   });
 
-  test("AG positive control: a recording whose judge grades every canned answer correctly clears the check", async () => {
+  test("AG positive control: a recording whose judge grades every canned answer correctly, in every recorded sample, clears the check", async () => {
     const scenario = makeJudgeScenario();
     const answers = antiGamingAnswers(scenario);
+    const SAMPLE_COUNT = 3;
     const goodFile: JudgeRecordingFile = {
       judgePromptVersion: JUDGE_PROMPT_VERSION,
       judge: "deepseek",
@@ -590,13 +798,115 @@ describe("AG: synthetic fixtures prove the anti-gaming check actually fires", ()
           answer: answer.answer,
           expectation: judgeExpectationOf(scenario)!,
         }),
-        verdict: answer.expect,
-        reason: "correctly graded stub",
+        samples: Array.from({ length: SAMPLE_COUNT }, () => ({ verdict: answer.expect, reason: "correctly graded stub" })),
       })),
     };
     for (const answer of answers) {
-      const ok = await gradeAntiGamingAnswer("fixture-pack", "fixture-skill", scenario, answer, goodFile);
-      expect(ok).toBe(true);
+      for (let sampleIndex = 0; sampleIndex < SAMPLE_COUNT; sampleIndex += 1) {
+        const ok = await gradeAntiGamingAnswer("fixture-pack", "fixture-skill", scenario, answer, goodFile, sampleIndex);
+        expect(ok).toBe(true);
+      }
     }
+  });
+
+  // Fix 1 / R1-4: "AG over every sample" — a recording that flips on just
+  // ONE of several samples must fail the check for that sample, even though
+  // its other samples (and every other canned answer) grade correctly. One
+  // stale/lucky recorded sample must never let a flaky judge hide behind its
+  // neighbors.
+  test("AG fires: one flipped sample among several recorded samples fails the check for that sample, not the whole entry", async () => {
+    const scenario = makeJudgeScenario();
+    const answer = antiGamingAnswers(scenario).find((candidate) => candidate.kind === "known-wrong")!;
+    const request: JudgeRequest = {
+      scenarioId: scenario.id,
+      prompt: scenario.prompt,
+      answer: answer.answer,
+      expectation: judgeExpectationOf(scenario)!,
+    };
+    const flakyFile: JudgeRecordingFile = {
+      judgePromptVersion: JUDGE_PROMPT_VERSION,
+      judge: "deepseek",
+      judgeModel: "deepseek-chat",
+      recordedAt: new Date().toISOString(),
+      entries: [
+        {
+          scenarioId: scenario.id,
+          kind: answer.kind,
+          requestDigest: judgeRequestDigest(request),
+          samples: [
+            { verdict: "fail", reason: "correctly failed, sample 0" },
+            { verdict: "pass", reason: "wrongly passed, sample 1 — the judge flipped" },
+            { verdict: "fail", reason: "correctly failed, sample 2" },
+          ],
+        },
+      ],
+    };
+    expect(await gradeAntiGamingAnswer("fixture-pack", "fixture-skill", scenario, answer, flakyFile, 0)).toBe(true);
+    expect(await gradeAntiGamingAnswer("fixture-pack", "fixture-skill", scenario, answer, flakyFile, 1)).toBe(false);
+    expect(await gradeAntiGamingAnswer("fixture-pack", "fixture-skill", scenario, answer, flakyFile, 2)).toBe(true);
+  });
+
+  // R1-8: an error-carrying verdict is itself a mismatch, even when its
+  // face-value verdict happens to equal the expected outcome — it was never
+  // a genuine grading, only a manufactured fallback after the judge's reply
+  // proved unparseable twice in a row.
+  test("AG fires: an error-carrying sample is a mismatch even when its face-value verdict equals expect", async () => {
+    const scenario = makeJudgeScenario();
+    const answer = antiGamingAnswers(scenario).find((candidate) => candidate.kind === "known-wrong")!; // expects "fail"
+    const request: JudgeRequest = {
+      scenarioId: scenario.id,
+      prompt: scenario.prompt,
+      answer: answer.answer,
+      expectation: judgeExpectationOf(scenario)!,
+    };
+    const erroringFile: JudgeRecordingFile = {
+      judgePromptVersion: JUDGE_PROMPT_VERSION,
+      judge: "deepseek",
+      judgeModel: "deepseek-chat",
+      recordedAt: new Date().toISOString(),
+      entries: [
+        {
+          scenarioId: scenario.id,
+          kind: answer.kind,
+          requestDigest: judgeRequestDigest(request),
+          samples: [{ verdict: "fail", reason: "judge returned an unparseable verdict", error: "judge reply was not valid JSON" }],
+        },
+      ],
+    };
+    const ok = await gradeAntiGamingAnswer("fixture-pack", "fixture-skill", scenario, answer, erroringFile, 0);
+    expect(ok).toBe(false);
+  });
+
+  test("AG fires: a recording that could not be read (loadError) fails closed, naming the record command", async () => {
+    const scenario = makeJudgeScenario();
+    const answer = antiGamingAnswers(scenario).find((candidate) => candidate.kind === "known-wrong")!;
+    await expect(
+      gradeAntiGamingAnswer("fixture-pack", "fixture-skill", scenario, answer, undefined, 0, new Error("recording must be a JSON object")),
+    ).rejects.toThrow(/judge-check/);
+  });
+
+  test("sampleCountForAG: falls back to 1 when the recording has no matching entry, and returns the entry's sample count when it does", () => {
+    const scenario = makeJudgeScenario();
+    const judgeExpectation = judgeExpectationOf(scenario)!;
+    const answer = antiGamingAnswers(scenario).find((candidate) => candidate.kind === "known-wrong")!;
+
+    expect(sampleCountForAG(scenario, judgeExpectation, answer, {})).toBe(1);
+
+    const request: JudgeRequest = { scenarioId: scenario.id, prompt: scenario.prompt, answer: answer.answer, expectation: judgeExpectation };
+    const file: JudgeRecordingFile = {
+      judgePromptVersion: JUDGE_PROMPT_VERSION,
+      judge: "deepseek",
+      judgeModel: "deepseek-chat",
+      recordedAt: new Date().toISOString(),
+      entries: [
+        {
+          scenarioId: scenario.id,
+          kind: answer.kind,
+          requestDigest: judgeRequestDigest(request),
+          samples: [{ verdict: "fail", reason: "a" }, { verdict: "fail", reason: "b" }, { verdict: "fail", reason: "c" }],
+        },
+      ],
+    };
+    expect(sampleCountForAG(scenario, judgeExpectation, answer, { file })).toBe(3);
   });
 });

@@ -88,7 +88,29 @@ describe("readJudgeRecording", () => {
           judge: "deepseek",
           judgeModel: "deepseek-chat",
           recordedAt: "2026-09-24T00:00:00.000Z",
-          entries: [{ scenarioId: "s1", kind: "known-right", requestDigest: "abc", verdict: "maybe", reason: "" }],
+          entries: [
+            { scenarioId: "s1", kind: "known-right", requestDigest: "abc", samples: [{ verdict: "maybe", reason: "" }] },
+          ],
+        }),
+      );
+      expect(() => readJudgeRecording("go/go-build-fix", dir)).toThrow(JudgeRecordingFormatError);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("throws JudgeRecordingFormatError for an entry with an empty samples array", () => {
+    const dir = tempDir();
+    try {
+      const filePath = judgeRecordingPath("go/go-build-fix", dir);
+      writeFileSync(
+        filePath,
+        JSON.stringify({
+          judgePromptVersion: "v1",
+          judge: "deepseek",
+          judgeModel: "deepseek-chat",
+          recordedAt: "2026-09-24T00:00:00.000Z",
+          entries: [{ scenarioId: "s1", kind: "known-right", requestDigest: "abc", samples: [] }],
         }),
       );
       expect(() => readJudgeRecording("go/go-build-fix", dir)).toThrow(JudgeRecordingFormatError);
@@ -108,8 +130,21 @@ describe("writeJudgeRecording / readJudgeRecording round-trip", () => {
         judgeModel: "deepseek-chat",
         recordedAt: "2026-09-24T00:00:00.000Z",
         entries: [
-          { scenarioId: "s1", kind: "known-right", requestDigest: judgeRequestDigest(REQUEST), verdict: "pass", reason: "meets criteria" },
-          { scenarioId: "s1", kind: "known-wrong", requestDigest: "deadbeef", verdict: "fail", reason: "force-deletes" },
+          {
+            scenarioId: "s1",
+            kind: "known-right",
+            requestDigest: judgeRequestDigest(REQUEST),
+            samples: [
+              { verdict: "pass", reason: "meets criteria" },
+              { verdict: "pass", reason: "meets criteria, second call" },
+            ],
+          },
+          {
+            scenarioId: "s1",
+            kind: "known-wrong",
+            requestDigest: "deadbeef",
+            samples: [{ verdict: "fail", reason: "force-deletes" }],
+          },
         ],
       };
       writeJudgeRecording("go/go-build-fix", file, dir);
@@ -144,17 +179,77 @@ describe("writeJudgeRecording / readJudgeRecording round-trip", () => {
 });
 
 describe("recordedJudge", () => {
-  test("replays a recorded verdict for a matching digest, with no network call", async () => {
+  test("replays sample 0 by default for a matching digest, with no network call", async () => {
     const digest = judgeRequestDigest(REQUEST);
     const judge = recordedJudge({
       judgePromptVersion: "v1",
       judge: "deepseek",
       judgeModel: "deepseek-chat",
       recordedAt: "2026-09-24T00:00:00.000Z",
-      entries: [{ scenarioId: "s1", kind: "known-right", requestDigest: digest, verdict: "pass", reason: "meets criteria" }],
+      entries: [
+        {
+          scenarioId: "s1",
+          kind: "known-right",
+          requestDigest: digest,
+          samples: [
+            { verdict: "pass", reason: "meets criteria" },
+            { verdict: "fail", reason: "flipped on the second call" },
+          ],
+        },
+      ],
     });
     const verdict = await judge(REQUEST);
     expect(verdict).toEqual({ verdict: "pass", reason: "meets criteria" });
+  });
+
+  test("replays a specific sampleIndex when passed", async () => {
+    const digest = judgeRequestDigest(REQUEST);
+    const judge = recordedJudge(
+      {
+        judgePromptVersion: "v1",
+        judge: "deepseek",
+        judgeModel: "deepseek-chat",
+        recordedAt: "2026-09-24T00:00:00.000Z",
+        entries: [
+          {
+            scenarioId: "s1",
+            kind: "known-right",
+            requestDigest: digest,
+            samples: [
+              { verdict: "pass", reason: "sample 0" },
+              { verdict: "fail", reason: "sample 1" },
+            ],
+          },
+        ],
+      },
+      1,
+    );
+    const verdict = await judge(REQUEST);
+    expect(verdict).toEqual({ verdict: "fail", reason: "sample 1" });
+  });
+
+  test("a sample's error is carried onto the replayed verdict", async () => {
+    const digest = judgeRequestDigest(REQUEST);
+    const judge = recordedJudge({
+      judgePromptVersion: "v1",
+      judge: "deepseek",
+      judgeModel: "deepseek-chat",
+      recordedAt: "2026-09-24T00:00:00.000Z",
+      entries: [
+        {
+          scenarioId: "s1",
+          kind: "known-right",
+          requestDigest: digest,
+          samples: [{ verdict: "fail", reason: "judge returned an unparseable verdict", error: "judge reply was not valid JSON" }],
+        },
+      ],
+    });
+    const verdict = await judge(REQUEST);
+    expect(verdict).toEqual({
+      verdict: "fail",
+      reason: "judge returned an unparseable verdict",
+      error: "judge reply was not valid JSON",
+    });
   });
 
   test("throws a named error for a request digest with no matching entry", async () => {
@@ -169,6 +264,21 @@ describe("recordedJudge", () => {
     await expect(judge(REQUEST)).rejects.toThrow(/judge-check/);
   });
 
+  test("throws a named error when sampleIndex is out of range for the matched entry", async () => {
+    const digest = judgeRequestDigest(REQUEST);
+    const judge = recordedJudge(
+      {
+        judgePromptVersion: "v1",
+        judge: "deepseek",
+        judgeModel: "deepseek-chat",
+        recordedAt: "2026-09-24T00:00:00.000Z",
+        entries: [{ scenarioId: "s1", kind: "known-right", requestDigest: digest, samples: [{ verdict: "pass", reason: "only sample" }] }],
+      },
+      2,
+    );
+    await expect(judge(REQUEST)).rejects.toThrow(/no recorded sample 2 for s1/);
+  });
+
   test("a stale recording (rubric edited since recording) misses by digest and is refused, not silently reused", async () => {
     const digest = judgeRequestDigest(REQUEST);
     const judge = recordedJudge({
@@ -176,7 +286,9 @@ describe("recordedJudge", () => {
       judge: "deepseek",
       judgeModel: "deepseek-chat",
       recordedAt: "2026-09-24T00:00:00.000Z",
-      entries: [{ scenarioId: "s1", kind: "known-right", requestDigest: digest, verdict: "pass", reason: "meets criteria" }],
+      entries: [
+        { scenarioId: "s1", kind: "known-right", requestDigest: digest, samples: [{ verdict: "pass", reason: "meets criteria" }] },
+      ],
     });
     const editedRequest: JudgeRequest = {
       ...REQUEST,

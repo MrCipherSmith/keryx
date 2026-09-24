@@ -20,7 +20,7 @@ import {
   type AntiGamingKind,
   type JudgeExpectation,
 } from "../gdskills/governance/judge";
-import { writeJudgeRecording, type JudgeRecordingEntry } from "../gdskills/governance/judge-recordings";
+import { writeJudgeRecording, type JudgeRecordingEntry, type JudgeRecordingSample } from "../gdskills/governance/judge-recordings";
 import { recordScout, scoutImports, scoutSkill, scoutVetCandidate } from "../gdskills/governance/scout";
 import { runStocktake } from "../gdskills/governance/stocktake";
 import { defaultModelFor } from "../harness/provider/single-turn";
@@ -539,12 +539,27 @@ async function evalCommand(args: readonly string[], deps: SkillsGovernanceDeps =
 // judge-check
 // ---------------------------------------------------------------------------
 
+/** Fix 1 / R1-4: the owner default for `judge-check --samples <n>` — the live judge is non-deterministic on identical input (review round 1 caught it flipping verdicts across calls), so a single sample can no longer stand for "this canned answer grades correctly". */
+const JUDGE_CHECK_DEFAULT_SAMPLES = 3;
+
+/** One independent judge call's outcome against one canned answer — mirrors `JudgeRecordingSample`, this command's own in-memory shape before it is (optionally) persisted via `--record`. */
+interface JudgeCheckSample {
+  readonly verdict: "pass" | "fail";
+  readonly reason: string;
+  /** Set when this sample's verdict was manufactured after a judge parse failure (mirrors `JudgeVerdict.error`) — an error-carrying sample is itself a mismatch (R1-8), never silently treated as a genuine grading. */
+  readonly error?: string;
+}
+
 interface JudgeCheckRow {
   readonly scenarioId: string;
   readonly kind: AntiGamingKind;
   readonly expect: "pass" | "fail";
-  readonly got: "pass" | "fail";
-  readonly reason: string;
+  /** `samples.length` independent judge calls against this exact canned answer (n = `--samples`, or 1 for the `empty` kind, which never reaches the judge). Empty when `skipped` is true. */
+  readonly samples: readonly JudgeCheckSample[];
+  /** True when ANY sample's verdict disagrees with `expect`, or ANY sample carries an `error` (R1-8: an error-carrying verdict is a mismatch even when its face-value verdict happens to equal `expect`). Always false when `skipped`. */
+  readonly mismatch: boolean;
+  /** True when this canned answer's calibration text is missing (empty) from the scenario — `vague`/`subtle_wrong` may not exist yet on every scenario's `evals.json` while content authoring is in progress. Never counts toward `mismatch`, is never graded, and is never recorded. */
+  readonly skipped?: boolean;
 }
 
 /**
@@ -570,7 +585,9 @@ async function judgeCheckCommand(args: readonly string[], deps: SkillsGovernance
   const buildJudge = deps.buildJudge ?? buildEvalJudge;
   const skillId = args[0];
   if (skillId === undefined || skillId.startsWith("--")) {
-    console.error("Usage: keryx skills judge-check <skill-id> --judge <provider>[:<model>] [--scope bundled|all] [--record] [--json]");
+    console.error(
+      "Usage: keryx skills judge-check <skill-id> --judge <provider>[:<model>] [--scope bundled|all] [--samples <n>] [--record] [--json]",
+    );
     process.exitCode = 1;
     return;
   }
@@ -597,6 +614,14 @@ async function judgeCheckCommand(args: readonly string[], deps: SkillsGovernance
   const scope = scopeResult.scope;
   const record = args.includes("--record");
   const json = args.includes("--json");
+
+  const samplesFlag = positiveIntegerFlag(args, "--samples");
+  if (samplesFlag === "invalid") {
+    console.error("--samples must be a positive integer");
+    process.exitCode = 1;
+    return;
+  }
+  const samples = samplesFlag ?? JUDGE_CHECK_DEFAULT_SAMPLES;
 
   let judge: ReturnType<typeof buildEvalJudge>;
   try {
@@ -656,15 +681,47 @@ async function judgeCheckCommand(args: readonly string[], deps: SkillsGovernance
     if (judgeExpectation === undefined) continue; // unreachable — filtered above; narrows the type for the digest call below.
 
     for (const answer of antiGamingAnswers(scenario)) {
-      const grade = await gradeScenarioAnswer(answer.answer, scenario, judge);
-      // `grade.judge` is always set here: every scenario in `judgeScenarios`
-      // carries a judge expectation, and `gradeScenarioAnswer` always returns
-      // one (either the real judge's verdict, or its own "empty answer"
-      // fail) whenever a judge expectation is present.
-      const got = grade.judge?.verdict ?? "fail";
-      const reason = grade.judge?.reason ?? "empty answer";
-      if (got !== answer.expect) anyMismatch = true;
-      rows.push({ scenarioId: scenario.id, kind: answer.kind, expect: answer.expect, got, reason });
+      // Fix 1 / R1-11: `vague`/`subtle_wrong` are authored per scenario via
+      // `calibration.vague`/`calibration.subtle_wrong` — a scenario whose
+      // evals.json has not been migrated to carry them yet (content
+      // authoring is a separate, parallel task) yields the empty-string
+      // fallback `antiGamingAnswers` uses for a missing calibration field.
+      // Grading an empty string here would silently collapse into the SAME
+      // "empty answer" short-circuit the real `empty` kind already covers,
+      // which would prove nothing about THIS kind and must never be
+      // recorded as if it were a genuine calibration answer — so it is
+      // skipped outright, named as such, rather than graded or recorded.
+      const isAuthoredCalibrationKind = answer.kind === "vague" || answer.kind === "subtle-wrong";
+      if (isAuthoredCalibrationKind && answer.answer.trim().length === 0) {
+        rows.push({ scenarioId: scenario.id, kind: answer.kind, expect: answer.expect, samples: [], mismatch: false, skipped: true });
+        continue;
+      }
+
+      // The `empty` kind never reaches the judge (`gradeScenarioAnswer`'s
+      // own documented short-circuit) and is fully deterministic — sampling
+      // it `samples` times would just repeat the same offline "empty
+      // answer" fail, so it is graded once regardless of `--samples`.
+      const sampleCount = answer.kind === "empty" ? 1 : samples;
+      const graded: JudgeCheckSample[] = [];
+      for (let i = 0; i < sampleCount; i += 1) {
+        const grade = await gradeScenarioAnswer(answer.answer, scenario, judge);
+        // `grade.judge` is always set here: every scenario in
+        // `judgeScenarios` carries a judge expectation, and
+        // `gradeScenarioAnswer` always returns one (either the real judge's
+        // verdict, or its own "empty answer" fail) whenever a judge
+        // expectation is present.
+        const verdict = grade.judge?.verdict ?? "fail";
+        const reason = grade.judge?.reason ?? "empty answer";
+        graded.push({ verdict, reason, ...(grade.judge?.error !== undefined ? { error: grade.judge.error } : {}) });
+      }
+
+      // R1-8: an error-carrying verdict (the judge's reply was unparseable
+      // twice) is itself a mismatch, regardless of what its face-value
+      // `verdict` happens to be — it was never a genuine grading, and must
+      // not be able to accidentally "pass" the anti-gaming proof.
+      const mismatch = graded.some((sample) => sample.verdict !== answer.expect || sample.error !== undefined);
+      if (mismatch) anyMismatch = true;
+      rows.push({ scenarioId: scenario.id, kind: answer.kind, expect: answer.expect, samples: graded, mismatch });
 
       if (record && answer.kind !== "empty") {
         const digest = judgeRequestDigest({
@@ -673,7 +730,12 @@ async function judgeCheckCommand(args: readonly string[], deps: SkillsGovernance
           answer: answer.answer,
           expectation: judgeExpectation,
         });
-        recordingEntries.push({ scenarioId: scenario.id, kind: answer.kind, requestDigest: digest, verdict: got, reason });
+        const recordedSamples: JudgeRecordingSample[] = graded.map((sample) => ({
+          verdict: sample.verdict,
+          reason: sample.reason,
+          ...(sample.error !== undefined ? { error: sample.error } : {}),
+        }));
+        recordingEntries.push({ scenarioId: scenario.id, kind: answer.kind, requestDigest: digest, samples: recordedSamples });
       }
     }
   }
@@ -689,20 +751,27 @@ async function judgeCheckCommand(args: readonly string[], deps: SkillsGovernance
   }
 
   if (json) {
-    console.log(JSON.stringify({ skillId, judge: provider, judgeModel, recorded: record, rows }, null, 2));
+    console.log(JSON.stringify({ skillId, judge: provider, judgeModel, samples, recorded: record, rows }, null, 2));
   } else {
-    console.log(`Skill: ${skillId}  Judge: ${provider}/${judgeModel}`);
+    console.log(`Skill: ${skillId}  Judge: ${provider}/${judgeModel}  Samples: ${samples}`);
     const header = ["SCENARIO", "KIND", "EXPECT", "GOT", "REASON"];
-    const cellsFor = (row: JudgeCheckRow): readonly string[] => [row.scenarioId, row.kind, row.expect, row.got, row.reason];
+    const gotFor = (row: JudgeCheckRow): string =>
+      row.skipped ? "skipped" : row.samples.map((sample) => (sample.error !== undefined ? `${sample.verdict}!` : sample.verdict)).join(",");
+    const reasonFor = (row: JudgeCheckRow): string => {
+      if (row.skipped) return "calibration answer missing from evals.json (not yet authored)";
+      const worst = row.samples.find((sample) => sample.verdict !== row.expect || sample.error !== undefined) ?? row.samples[0];
+      return worst?.reason ?? "";
+    };
+    const cellsFor = (row: JudgeCheckRow): readonly string[] => [row.scenarioId, row.kind, row.expect, gotFor(row), reasonFor(row)];
     const widths = header.map((title, col) => Math.max(title.length, ...rows.map((row) => cellsFor(row)[col]?.length ?? 0)));
     const printRow = (cells: readonly string[]): void => console.log(cells.map((cell, i) => cell.padEnd(widths[i] as number)).join("  "));
     printRow(header);
     for (const row of rows) {
       printRow(cellsFor(row));
-      if (row.got !== row.expect) console.log(`  <-- MISMATCH (${row.scenarioId}/${row.kind})`);
+      if (row.mismatch) console.log(`  <-- MISMATCH (${row.scenarioId}/${row.kind})`);
     }
     if (record) {
-      console.log(`Recorded ${recordingEntries.length} verdict(s) to ${skillId}'s judge recording.`);
+      console.log(`Recorded ${recordingEntries.length} verdict(s) (${samples} sample(s) each) to ${skillId}'s judge recording.`);
     }
   }
 

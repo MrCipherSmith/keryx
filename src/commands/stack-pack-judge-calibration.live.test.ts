@@ -80,7 +80,22 @@ describe("stack-pack judge anti-gaming, LIVE against DeepSeek (KERYX_LIVE_JUDGE=
     for (const { pack, skill, scenarios } of packSkillScenarios) {
       for (const scenario of scenarios) {
         const label = `${pack}/${skill}#${scenario.id}`;
+        // `antiGamingAnswers` returns all eight kinds — `empty`, `echo`,
+        // `vague`, `known-wrong`, `subtle-wrong`, `injection`, `stuffed`,
+        // `known-right` — unconditionally, iterated here exactly as
+        // `stack-pack-eval-integrity.test.ts`'s offline AG block does. A
+        // scenario whose `evals.json` has not yet been migrated to carry
+        // `calibration.vague`/`calibration.subtle_wrong` (content authoring
+        // is a separate, parallel task) yields the empty-string fallback for
+        // those two kinds — grading that live would only re-prove the
+        // `empty` kind's own short-circuit (no network call at all, since
+        // `gradeScenarioAnswer` never reaches the judge for an empty
+        // answer) under a misleading kind label, and burn no real request
+        // either way, so it is skipped here the same way `judge-check`
+        // itself skips it (`skills-governance.ts`'s own `judgeCheckCommand`).
         for (const answer of antiGamingAnswers(scenario)) {
+          const isAuthoredCalibrationKind = answer.kind === "vague" || answer.kind === "subtle-wrong";
+          if (isAuthoredCalibrationKind && answer.answer.trim().length === 0) continue;
           test(
             `AG(live) ${label} [${answer.kind}]: live verdict matches expect="${answer.expect}"`,
             async () => {

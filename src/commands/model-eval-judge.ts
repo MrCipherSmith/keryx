@@ -109,6 +109,13 @@ export function buildEvalJudge(judgeSpec: string, options: BuildEvalJudgeOptions
       user,
       env,
       maxOutputTokens: JUDGE_MAX_OUTPUT_TOKENS,
+      // Fix 1 / R1-4: a judge grading the same input must not flip verdicts
+      // on sampling noise — temperature 0 is the closest a provider gets to
+      // deterministic decoding. Only reaches the wire for providers that
+      // serialize `options.temperature` (see `single-turn.ts`'s own note);
+      // still requested uniformly so the judge is as stable as the provider
+      // allows.
+      temperature: 0,
       ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
       ...(options.providerFactory !== undefined ? { providerFactory: options.providerFactory } : {}),
       requestId,

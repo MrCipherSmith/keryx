@@ -597,6 +597,80 @@ describe("flow 316: keryx skills eval --judge / judge-check", () => {
       });
       expect(process.exitCode).toBe(0);
     });
+
+    // Fix 1 / R1-4: `--samples <n>` (default 3) — the live judge is
+    // non-deterministic on identical input, so `judge-check` must call it
+    // `n` times per canned answer, not once.
+    test("--samples defaults to 3 calls per non-empty canned answer", async () => {
+      let calls = 0;
+      const countingJudge: Judge = async () => {
+        calls += 1;
+        return { verdict: "fail", reason: "counted" };
+      };
+      const { loadSkillCatalog } = await import("../gdskills/governance/catalog-index");
+      const { readSkillEvalSpec } = await import("../gdskills/governance/eval");
+      const { antiGamingAnswers } = await import("../gdskills/governance/judge");
+      const catalog = loadSkillCatalog(process.cwd(), { scope: "bundled" });
+      const skill = catalog.find((entry) => entry.id === GO_BUILD_FIX_SKILL)!;
+      const spec = readSkillEvalSpec(skill.path);
+      const judgeScenarios = (spec?.scenarios ?? []).filter((scenario) =>
+        scenario.expected_behavior.some((expected) => expected.grader === "judge"),
+      );
+      // Every non-empty, non-skipped canned answer calls the judge once per
+      // sample: count them the same way the command itself will.
+      let expectedCalls = 0;
+      for (const scenario of judgeScenarios) {
+        for (const answer of antiGamingAnswers(scenario)) {
+          if (answer.kind === "empty") continue;
+          if ((answer.kind === "vague" || answer.kind === "subtle-wrong") && answer.answer.trim().length === 0) continue;
+          expectedCalls += 3;
+        }
+      }
+      expect(expectedCalls).toBeGreaterThan(0);
+
+      await skillsGovernanceCommand(["judge-check", GO_BUILD_FIX_SKILL, "--judge", "deepseek"], {
+        buildJudge: fakeJudgeBuilder(countingJudge),
+      });
+      expect(calls).toBe(expectedCalls);
+    });
+
+    test("--samples 1 calls the judge exactly once per non-empty canned answer", async () => {
+      let calls = 0;
+      const countingJudge: Judge = async () => {
+        calls += 1;
+        return { verdict: "fail", reason: "counted" };
+      };
+      await skillsGovernanceCommand(["judge-check", GO_BUILD_FIX_SKILL, "--judge", "deepseek", "--samples", "1"], {
+        buildJudge: fakeJudgeBuilder(countingJudge),
+      });
+      expect(calls).toBeGreaterThan(0);
+    });
+
+    test("--samples 0 is refused", async () => {
+      await skillsGovernanceCommand(["judge-check", GO_BUILD_FIX_SKILL, "--judge", "deepseek", "--samples", "0"]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.some((line) => line.includes("--samples must be a positive integer"))).toBe(true);
+    });
+
+    test("--samples abc (non-numeric) is refused", async () => {
+      await skillsGovernanceCommand(["judge-check", GO_BUILD_FIX_SKILL, "--judge", "deepseek", "--samples", "abc"]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.some((line) => line.includes("--samples must be a positive integer"))).toBe(true);
+    });
+
+    // R1-8: an error-carrying verdict is a mismatch, never a silent pass.
+    test("an error-carrying judge verdict counts as a mismatch even when its face-value verdict equals expect", async () => {
+      // `known-right` expects "pass" — a judge that reports "pass" but with
+      // `error` set (the shape `buildEvalJudge` produces after two
+      // unparseable replies is always fail+error, but nothing stops an
+      // injected test Judge from returning this combination) must still be
+      // treated as a mismatch, not a lucky pass.
+      const erroringJudge: Judge = async () => ({ verdict: "pass", reason: "manufactured", error: "judge returned an unparseable verdict" });
+      await skillsGovernanceCommand(["judge-check", GO_BUILD_FIX_SKILL, "--judge", "deepseek", "--samples", "1"], {
+        buildJudge: fakeJudgeBuilder(erroringJudge),
+      });
+      expect(process.exitCode).toBe(1);
+    });
   });
 
   describe("judge-check --record", () => {
@@ -657,6 +731,47 @@ describe("flow 316: keryx skills eval --judge / judge-check", () => {
             expect(replayed.passed).toBe(live.passed);
           }
         }
+      } finally {
+        if (savedEnv === undefined) {
+          delete process.env.KERYX_JUDGE_RECORDINGS_DIR;
+        } else {
+          process.env.KERYX_JUDGE_RECORDINGS_DIR = savedEnv;
+        }
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    // Fix 1 / R1-4, R1-8: each recorded entry now carries `samples`
+    // (`--samples` independent calls, default 3), and an error-carrying
+    // verdict persists its `error` rather than being dropped.
+    test("--record with --samples 2 writes exactly 2 samples per entry, error included", async () => {
+      const dir = fixtureRecordingsDir();
+      const savedEnv = process.env.KERYX_JUDGE_RECORDINGS_DIR;
+      process.env.KERYX_JUDGE_RECORDINGS_DIR = dir;
+
+      let call = 0;
+      // Every other call reports an error-carrying "fail" — proves both
+      // that N distinct samples are actually taken (not the same call
+      // reused) and that `error` survives into the recording.
+      const flakyJudge: Judge = async () => {
+        call += 1;
+        return call % 2 === 0
+          ? { verdict: "fail", reason: "judge returned an unparseable verdict", error: "judge reply was not valid JSON" }
+          : { verdict: "fail", reason: "force-deletes without warning" };
+      };
+
+      try {
+        await skillsGovernanceCommand(["judge-check", GO_BUILD_FIX_SKILL, "--judge", "deepseek", "--record", "--samples", "2", "--json"], {
+          buildJudge: fakeJudgeBuilder(flakyJudge),
+        });
+
+        const recording = readJudgeRecording(GO_BUILD_FIX_SKILL, dir);
+        expect(recording).not.toBeUndefined();
+        expect((recording?.entries.length ?? 0) > 0).toBe(true);
+        for (const entry of recording!.entries) {
+          expect(entry.samples.length).toBe(2);
+        }
+        expect(recording!.entries.some((entry) => entry.samples.some((sample) => sample.error !== undefined))).toBe(true);
       } finally {
         if (savedEnv === undefined) {
           delete process.env.KERYX_JUDGE_RECORDINGS_DIR;

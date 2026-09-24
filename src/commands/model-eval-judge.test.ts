@@ -14,7 +14,10 @@ import { saveApiKey } from "../lib/shell-config";
 import { buildEvalJudge, JudgeBuildError } from "./model-eval-judge";
 import { RunnerBuildError } from "./model-eval-runner";
 
-function stubProvider(reply: string | (() => string), capture?: { system?: string; user?: string; requestId?: string }): ProviderPort {
+function stubProvider(
+  reply: string | (() => string),
+  capture?: { system?: string; user?: string; requestId?: string; options?: unknown },
+): ProviderPort {
   return {
     describe() {
       return {
@@ -37,6 +40,7 @@ function stubProvider(reply: string | (() => string), capture?: { system?: strin
         capture.system = request.systemInstruction;
         capture.user = request.messages[0]?.content ?? "";
         capture.requestId = request.requestId;
+        capture.options = request.options;
       }
       const text = typeof reply === "function" ? reply() : reply;
       yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text };
@@ -113,6 +117,14 @@ describe("buildEvalJudge: the built Judge", () => {
     expect(capture.system).toContain("grading judge");
     expect(capture.user).toContain(REQUEST.prompt);
     expect(capture.user).toContain(REQUEST.answer);
+  });
+
+  test("Fix 1 / R1-4: calls the provider with temperature 0, so identical input cannot flip the verdict on sampling noise", async () => {
+    const capture: { options?: unknown } = {};
+    const factory: ProviderFactory = () => stubProvider('{"verdict":"pass","reason":"ok"}', capture);
+    const judge = buildEvalJudge("anthropic", { env: {}, providerFactory: factory });
+    await judge(REQUEST);
+    expect(capture.options).toEqual({ temperature: 0 });
   });
 
   test("stamps requestId as skills-eval-judge-<skillId>, distinct from the runner's own stem", async () => {

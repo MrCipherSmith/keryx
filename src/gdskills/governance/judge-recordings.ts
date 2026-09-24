@@ -32,14 +32,29 @@ function defaultRecordingsDir(): string {
   return override !== undefined && override.length > 0 ? override : JUDGE_RECORDINGS_DIR;
 }
 
-/** One canned anti-gaming answer's recorded live-judge verdict. */
+/**
+ * One live-judge call's recorded verdict, taken as one of several samples of
+ * the SAME canned answer against the SAME scenario (fix 1 / R1-4: the live
+ * judge is non-deterministic on identical input, so a single recorded sample
+ * cannot characterize it — `judge-check --samples <n>` records `n` of these
+ * per canned answer, and the AG test requires every one of them to give the
+ * expected result).
+ */
+export interface JudgeRecordingSample {
+  readonly verdict: "pass" | "fail";
+  readonly reason: string;
+  /** Set when this sample's verdict was manufactured after a parse failure (mirrors `JudgeVerdict.error`) rather than genuinely reasoned by the judge — an error-carrying sample is itself a mismatch in `judge-check` (R1-8) and is persisted here rather than dropped. */
+  readonly error?: string;
+}
+
+/** One canned anti-gaming answer's recorded live-judge verdicts — `samples.length` independent judge calls against the identical request. */
 export interface JudgeRecordingEntry {
   readonly scenarioId: string;
   readonly kind: AntiGamingKind;
-  /** `judgeRequestDigest(request)` for the exact request this verdict answered — `recordedJudge` refuses a replay whose freshly-built digest disagrees (a stale rubric/prompt-version edit is detectable, never silently reused). Absent for an entry recorded WITHOUT a live judge call (see `writeJudgeRecording`'s "empty answer" note) — such an entry can never be looked up by digest, only by a caller that already knows it never reaches the judge. */
+  /** `judgeRequestDigest(request)` for the exact request every sample below answered — `recordedJudge` refuses a replay whose freshly-built digest disagrees (a stale rubric/prompt-version edit is detectable, never silently reused). Absent for an entry recorded WITHOUT a live judge call (see `writeJudgeRecording`'s "empty answer" note) — such an entry can never be looked up by digest, only by a caller that already knows it never reaches the judge. */
   readonly requestDigest: string;
-  readonly verdict: "pass" | "fail";
-  readonly reason: string;
+  /** One or more independent judge calls against this exact request, in call order. Never empty. */
+  readonly samples: readonly JudgeRecordingSample[];
 }
 
 /** One skill's full recording file — `<pack>__<skill>.json` under `JUDGE_RECORDINGS_DIR`. */
@@ -103,12 +118,24 @@ function validateRecordingFile(value: unknown, filePath: string): asserts value 
     if (typeof entry.requestDigest !== "string") {
       throw new JudgeRecordingFormatError(`${filePath}: entries[${index}].requestDigest must be a string`);
     }
-    if (!isJudgeVerdictString(entry.verdict)) {
-      throw new JudgeRecordingFormatError(`${filePath}: entries[${index}].verdict must be "pass" or "fail"`);
+    if (!Array.isArray(entry.samples) || entry.samples.length === 0) {
+      throw new JudgeRecordingFormatError(`${filePath}: entries[${index}].samples must be a non-empty array`);
     }
-    if (typeof entry.reason !== "string") {
-      throw new JudgeRecordingFormatError(`${filePath}: entries[${index}].reason must be a string`);
-    }
+    entry.samples.forEach((sampleValue, sampleIndex) => {
+      if (typeof sampleValue !== "object" || sampleValue === null || Array.isArray(sampleValue)) {
+        throw new JudgeRecordingFormatError(`${filePath}: entries[${index}].samples[${sampleIndex}] must be an object`);
+      }
+      const sample = sampleValue as Record<string, unknown>;
+      if (!isJudgeVerdictString(sample.verdict)) {
+        throw new JudgeRecordingFormatError(`${filePath}: entries[${index}].samples[${sampleIndex}].verdict must be "pass" or "fail"`);
+      }
+      if (typeof sample.reason !== "string") {
+        throw new JudgeRecordingFormatError(`${filePath}: entries[${index}].samples[${sampleIndex}].reason must be a string`);
+      }
+      if (sample.error !== undefined && typeof sample.error !== "string") {
+        throw new JudgeRecordingFormatError(`${filePath}: entries[${index}].samples[${sampleIndex}].error must be a string when present`);
+      }
+    });
   });
 }
 
@@ -150,8 +177,11 @@ export function writeJudgeRecording(skillId: string, file: JudgeRecordingFile, r
       scenarioId: entry.scenarioId,
       kind: entry.kind,
       requestDigest: entry.requestDigest,
-      verdict: entry.verdict,
-      reason: entry.reason,
+      samples: entry.samples.map((sample) => ({
+        verdict: sample.verdict,
+        reason: sample.reason,
+        ...(sample.error !== undefined ? { error: sample.error } : {}),
+      })),
     })),
   };
   writeFileSync(filePath, `${JSON.stringify(stable, null, 2)}\n`, "utf8");
@@ -160,14 +190,18 @@ export function writeJudgeRecording(skillId: string, file: JudgeRecordingFile, r
 /**
  * Turns a recording file back into a `Judge` value — `judgeRequestDigest`
  * over the incoming `request` is looked up against `file.entries`; a match
- * returns its recorded verdict/reason, offline, with no network call. There
- * is no entry for a digest that does not appear in the recording (a stale
- * rubric edit, a scenario added since the recording was taken, or a request
- * this recording never covered) — `recordedJudge` throws rather than
- * fabricating a verdict, naming the scenario and digest and the exact command
- * to re-record.
+ * replays sample `sampleIndex` (default 0) of that entry's `samples`,
+ * offline, with no network call. There is no entry for a digest that does
+ * not appear in the recording (a stale rubric edit, a scenario added since
+ * the recording was taken, or a request this recording never covered) —
+ * `recordedJudge` throws rather than fabricating a verdict, naming the
+ * scenario and digest and the exact command to re-record. It also throws
+ * when `sampleIndex` is out of range for the matched entry's `samples`,
+ * rather than silently wrapping around or falling back to sample 0 — a
+ * caller (the AG test) iterating every recorded sample must know when it has
+ * run past the last one.
  */
-export function recordedJudge(file: JudgeRecordingFile): Judge {
+export function recordedJudge(file: JudgeRecordingFile, sampleIndex = 0): Judge {
   const byDigest = new Map(file.entries.map((entry) => [entry.requestDigest, entry] as const));
   return async (request: JudgeRequest): Promise<JudgeVerdict> => {
     const digest = judgeRequestDigest(request);
@@ -177,6 +211,13 @@ export function recordedJudge(file: JudgeRecordingFile): Judge {
         `no recorded judge verdict for ${request.scenarioId} (digest ${digest}); re-record with keryx skills judge-check <id> --judge ... --record`,
       );
     }
-    return { verdict: entry.verdict, reason: entry.reason };
+    const sample = entry.samples[sampleIndex];
+    if (sample === undefined) {
+      throw new Error(
+        `no recorded sample ${sampleIndex} for ${request.scenarioId} (digest ${digest}); entry has ${entry.samples.length} sample(s); re-record with keryx skills judge-check <id> --judge ... --record --samples ${sampleIndex + 1}`,
+      );
+    }
+    const verdict: JudgeVerdict = { verdict: sample.verdict, reason: sample.reason };
+    return sample.error !== undefined ? { ...verdict, error: sample.error } : verdict;
   };
 }

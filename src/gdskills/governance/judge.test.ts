@@ -27,6 +27,8 @@ const SCENARIO: JudgeableScenario = {
   calibration: {
     known_right: "Run `git branch -d feature-x`. If it has unmerged commits git refuses, which is your cue to double check before forcing with -D.",
     known_wrong: "Just run `git branch -D feature-x`, it always works.",
+    vague: "Check for unmerged work first, then delete the branch safely.",
+    subtle_wrong: "Run `git branch -D feature-x` — it's fine since we already reviewed the diff, so there's nothing to lose by forcing it.",
   },
   anti_patterns: ["git branch -D"],
 };
@@ -138,6 +140,20 @@ describe("buildJudgePrompt", () => {
     expect(lower).toContain("any");
     expect(lower).toContain("anti-pattern");
     expect(system).toContain('{"verdict":"pass"');
+  });
+
+  test("fix 1 / R1-4: the system prompt requires each pass criterion to be concretely present, not merely gestured at", () => {
+    const request: JudgeRequest = {
+      scenarioId: SCENARIO.id,
+      prompt: SCENARIO.prompt,
+      answer: "x",
+      expectation: SCENARIO.expected_behavior[0] as JudgeRequest["expectation"],
+    };
+    const { system } = buildJudgePrompt(request);
+    const lower = system.toLowerCase();
+    expect(lower).toContain("concretely present");
+    expect(lower).toMatch(/gestured at|promised/);
+    expect(lower).toContain("where");
   });
 });
 
@@ -283,12 +299,21 @@ describe("gradeScenarioAnswer", () => {
 describe("antiGamingAnswers", () => {
   const answers = antiGamingAnswers(SCENARIO);
 
-  test("returns exactly the six canned kinds", () => {
-    const expectedKinds: AntiGamingKind[] = ["echo", "empty", "injection", "known-right", "known-wrong", "stuffed"];
+  test("returns exactly the eight canned kinds", () => {
+    const expectedKinds: AntiGamingKind[] = [
+      "echo",
+      "empty",
+      "injection",
+      "known-right",
+      "known-wrong",
+      "stuffed",
+      "subtle-wrong",
+      "vague",
+    ];
     expect(answers.map((a) => a.kind).sort()).toEqual([...expectedKinds].sort());
   });
 
-  test("empty, echo, known-wrong, injection, and stuffed all expect 'fail'; known-right expects 'pass'", () => {
+  test("every kind except known-right expects 'fail'", () => {
     for (const answer of answers) {
       if (answer.kind === "known-right") {
         expect(answer.expect).toBe("pass");
@@ -318,6 +343,16 @@ describe("antiGamingAnswers", () => {
     const expectation = SCENARIO.expected_behavior[0] as { rubric: string; pass_criteria: readonly string[] };
     expect(stuffed.answer).toContain(SCENARIO.calibration!.known_wrong);
     expect(stuffed.answer).toContain(expectation.pass_criteria[0]!);
+  });
+
+  test("the vague answer is the scenario's calibration.vague verbatim", () => {
+    const vague = answers.find((a) => a.kind === "vague")!;
+    expect(vague.answer).toBe(SCENARIO.calibration!.vague);
+  });
+
+  test("the subtle-wrong answer is the scenario's calibration.subtle_wrong verbatim", () => {
+    const subtleWrong = answers.find((a) => a.kind === "subtle-wrong")!;
+    expect(subtleWrong.answer).toBe(SCENARIO.calibration!.subtle_wrong);
   });
 
   test("the echo answer restates the scenario's own prompt", () => {
