@@ -90,3 +90,11 @@
 - 2026-09-24T11:51:53.518Z - task-done: T21: Fix R2-F1: classify absolute paths embedded inside tokens (stack traces, JSON, redirects, file://)
 - 2026-09-24T12:00:13.100Z - task-done: T22: Fix R2-F2..F8 + CI gates (core-gate test coverage list, facade-bypass ratchet)
 - 2026-09-24 - PR review round 2 ingested (R2-F1 major, R2-F2..F7 minor, R2-F8 info); CI failed on the core-gate test list and the facade ratchet (152>150). T21 fixed R2-F1 (paths embedded in tokens; 12 discriminating tests). T22 fixed R2-F2..F8 and both CI gates (learning in test:core, ratchet back to <=150). R2-F5 test added separately. Next: review round 3, the last of the three-attempt budget.
+- 2026-09-24T12:02:31.922Z - task-attempt: T4: started (attempt 5) — PR review round 3 (opus), final attempt
+- 2026-09-24 - The health run surfaced a P0 TS2322 in the haiku-added R2-F5 test fixture (store.test.ts:526). The orchestrator fixed it with a one-line type edit because the fix was trivial; tsc is clean. The health run will be redone at close.
+- 2026-09-24T12:12:33.687Z - task-attempt: T4: failed (attempt 6) — PR review round 3 (final): 0 blocker/major, 4 minor, 1 info; consent invariant confirmed
+- 2026-09-24T12:12:33.824Z - task-added: T23: Narrow re-plan: fix R3-F1..F5 with pre-fix-failing tests
+- 2026-09-24T12:12:33.965Z - task-attempt: T23: started (attempt 1) — 312-T23 sonnet
+- 2026-09-24 - PR review round 3 (final attempt) ingested: 0 blocker/major, R3-F1..F4 minor, R3-F5 info; consent invariant intact. The attempt budget (3) is spent and the threshold is minor, so per skill step 5 this is a narrow re-plan rather than another broad round. Scope is only the 5 listed items, in a single T23, each with a test proven to fail pre-fix on the r3 probes. Then a targeted verification of that diff only, CI green, merge.
+- 2026-09-24T12:42:00.354Z - task-done: T23: Narrow re-plan: fix R3-F1..F5 with pre-fix-failing tests
+- 2026-09-24 - T23 DONE: R3-F1..F5 fixed, each new test proven to fail pre-fix. Decision on the R3-F2 hybrid rule: logins of 5+ characters also match as a plain substring. This is deliberate fail-closed attribution safety (privacy over availability): a lesson containing a longer login inside another word is dropped rather than risk an attribution leak. A narrow verification of the T23 diff follows.

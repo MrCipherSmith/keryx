@@ -9,7 +9,7 @@
   "title": "W3: self-learning loop — observe, extract, consent-gated learned patterns, reviewer profiles, promote and graduate",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:32.725Z",
-  "updatedAt": "2026-09-24T12:00:13.100Z",
+  "updatedAt": "2026-09-24T12:42:00.354Z",
   "source": {
     "type": "description",
     "ref": null
@@ -81,7 +81,7 @@
         "T16"
       ],
       "attempts": {
-        "count": 4,
+        "count": 6,
         "log": [
           {
             "at": "2026-09-24T10:59:24.782Z",
@@ -102,6 +102,16 @@
             "at": "2026-09-24T11:42:17.954Z",
             "outcome": "failed",
             "detail": "PR review round 2: 1 major (R2-F1 path-in-token regression), 6 minor, 1 info; CI typecheck-and-tests: test-coverage gate + facade ratchet 152>150"
+          },
+          {
+            "at": "2026-09-24T12:02:31.922Z",
+            "outcome": "started",
+            "detail": "PR review round 3 (opus), final attempt"
+          },
+          {
+            "at": "2026-09-24T12:12:33.687Z",
+            "outcome": "failed",
+            "detail": "PR review round 3 (final): 0 blocker/major, 4 minor, 1 info; consent invariant confirmed"
           }
         ]
       },
@@ -563,6 +573,29 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "Narrow re-plan: fix R3-F1..F5 with pre-fix-failing tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T22"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:12:33.965Z",
+            "outcome": "started",
+            "detail": "312-T23 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -923,6 +956,31 @@
       "at": "2026-09-24T12:00:13.100Z",
       "event": "task-done",
       "detail": "T22: Fix R2-F2..F8 + CI gates (core-gate test coverage list, facade-bypass ratchet)"
+    },
+    {
+      "at": "2026-09-24T12:02:31.922Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 5) — PR review round 3 (opus), final attempt"
+    },
+    {
+      "at": "2026-09-24T12:12:33.687Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 6) — PR review round 3 (final): 0 blocker/major, 4 minor, 1 info; consent invariant confirmed"
+    },
+    {
+      "at": "2026-09-24T12:12:33.824Z",
+      "event": "task-added",
+      "detail": "T23: Narrow re-plan: fix R3-F1..F5 with pre-fix-failing tests"
+    },
+    {
+      "at": "2026-09-24T12:12:33.965Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 312-T23 sonnet"
+    },
+    {
+      "at": "2026-09-24T12:42:00.354Z",
+      "event": "task-done",
+      "detail": "T23: Narrow re-plan: fix R3-F1..F5 with pre-fix-failing tests"
     }
   ],
   "owner": {

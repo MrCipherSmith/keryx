@@ -1,0 +1,96 @@
+[
+  {
+    "id": "R3-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "findUnbalancedQuoteRun treats any lone apostrophe as an unclosed quote: path with apostrophe leaks a directory name (regression: 'cp /Users/bob/it's-secret/y.txt /tmp/z' → 'cp it's-secret/y.txt z'); scrubUnclosedRun collapses everything after a prose apostrophe into one basename ('don't: /tmp/a/b then 2 fail and 3 pass in src/x/y.test.ts' → 'don't: y.test.ts'), destroying failure counts extraction reads; ';', '|', '&', '@' prefixes still not delimiters ('make&&/Users/bob/secret/run.sh' unchanged)",
+    "impact": "findUnbalancedQuoteRun treats any lone apostrophe as an unclosed quote: path with apostrophe leaks a directory name (regression: 'cp /Users/bob/it's-secret/y.txt /tmp/z' → 'cp it's-secret/y.txt z'); scrubUnclosedRun collapses everything after a prose apostrophe into one basename ('don't: /tmp/a/b then 2 fail and 3 pass in src/x/y.test.ts' → 'don't: y.test.ts'), destroying failure counts extraction reads; ';', '|', '&', '@' prefixes still not delimiters ('make&&/Users/bob/secret/run.sh' unchanged)",
+    "suggested_fix": "' opens a quote only at token start (start/whitespace/= ( [ {), not between word chars; limit unclosed-run collapse to the path-shaped run up to the next non-continuing whitespace token; add ; | & @ to delimiters; tests for it's-secret, can't … N fail, &&/abs/path",
+    "evidence": "findUnbalancedQuoteRun treats any lone apostrophe as an unclosed quote: path with apostrophe leaks a directory name (regression: 'cp /Users/bob/it's-secret/y.txt /tmp/z' → 'cp it's-secret/y.txt z'); scrubUnclosedRun collapses everything after a prose apostrophe into one basename ('don't: /tmp/a/b then 2 fail and 3 pass in src/x/y.test.ts' → 'don't: y.test.ts'), destroying failure counts extraction reads; ';', '|', '&', '@' prefixes still not delimiters ('make&&/Users/bob/secret/run.sh' unchanged)",
+    "confidence": "high",
+    "file": "src/learning/preview-scrub.ts",
+    "line": 265,
+    "class_scope": {
+      "sites": [
+        "preview-scrub.ts:265 findUnbalancedQuoteRun",
+        "preview-scrub.ts:287 scrubUnclosedRun",
+        "preview-scrub.ts:205 EMBEDDED_PATH_RE",
+        "preview-scrub.ts:313 scrubPathsInText",
+        "observe.ts:163/189/213/226"
+      ],
+      "enumeration_method": "every function added in 04779534, probed pre vs head in r3/v1.ts, r3/v2.ts"
+    },
+    "global_id": "2026-09-24-ingest-691-r03#R3-F1"
+  },
+  {
+    "id": "R3-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "containsConfiguredLogin is a plain substring match: short logins (rob, ed, al, max, dev) drop ordinary lessons and hard-refuse apply/graduate apply; graduate role template contains 'graduated' so author 'ed' blocks every graduate apply",
+    "impact": "containsConfiguredLogin is a plain substring match: short logins (rob, ed, al, max, dev) drop ordinary lessons and hard-refuse apply/graduate apply; graduate role template contains 'graduated' so author 'ed' blocks every graduate apply",
+    "suggested_fix": "bounded match (?<![A-Za-z0-9-])login(?![A-Za-z0-9-]) for refusal gates; substring caution only for logins ≥5 chars if wanted; graduate check over member trigger/action only, not the fixed template; tests with a short login",
+    "evidence": "containsConfiguredLogin is a plain substring match: short logins (rob, ed, al, max, dev) drop ordinary lessons and hard-refuse apply/graduate apply; graduate role template contains 'graduated' so author 'ed' blocks every graduate apply",
+    "confidence": "high",
+    "file": "src/learning/reviewer-id.ts",
+    "line": 49,
+    "class_scope": {
+      "sites": [
+        "reviewer-id.ts:49",
+        "reviewer-id.ts:96",
+        "extract.ts:267",
+        "apply.ts:194",
+        "graduate.ts:549-552 (templates 480-496)",
+        "reviewer-profile.ts:127 refuseIfAttributed"
+      ],
+      "enumeration_method": "keryx ctx rg 'containsConfiguredLogin|refuseIfAttributed' src/learning; r3/p4.ts"
+    },
+    "global_id": "2026-09-24-ingest-691-r03#R3-F2"
+  },
+  {
+    "id": "R3-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "login gates load review-learning config unguarded: a malformed config breaks extract (any domain), apply and graduate apply; extract throws after decay already wrote (half-done run)",
+    "impact": "login gates load review-learning config unguarded: a malformed config breaks extract (any domain), apply and graduate apply; extract throws after decay already wrote (half-done run)",
+    "suggested_fix": "catch config validation errors for the attribution gate (fall back to raw authors if readable, or refuse only review-conventions work); load config before decayExistingRecords",
+    "evidence": "login gates load review-learning config unguarded: a malformed config breaks extract (any domain), apply and graduate apply; extract throws after decay already wrote (half-done run)",
+    "confidence": "high",
+    "file": "src/learning/extract.ts",
+    "line": 418,
+    "class_scope": {
+      "sites": [
+        "extract.ts:418",
+        "graduate.ts:549",
+        "apply.ts:~190"
+      ],
+      "enumeration_method": "keryx ctx rg 'loadReviewLearningConfig' src/learning; r3/e1.ts pre vs head"
+    },
+    "global_id": "2026-09-24-ingest-691-r03#R3-F3"
+  },
+  {
+    "id": "R3-F4",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "no regression tests for: per-verb -h/arity and single-dash refusal, review learn parsing (--pr … --dry-run=1, repeated/empty --reviewer), prune dry-run wording, extract/apply/graduate login gates, writeRecordUnlocked accepted-text check",
+    "impact": "no regression tests for: per-verb -h/arity and single-dash refusal, review learn parsing (--pr … --dry-run=1, repeated/empty --reviewer), prune dry-run wording, extract/apply/graduate login gates, writeRecordUnlocked accepted-text check",
+    "suggested_fix": "add learn.test.ts, review.test.ts, extract/apply/graduate and store.test.ts cases as listed",
+    "evidence": "no regression tests for: per-verb -h/arity and single-dash refusal, review learn parsing (--pr … --dry-run=1, repeated/empty --reviewer), prune dry-run wording, extract/apply/graduate login gates, writeRecordUnlocked accepted-text check",
+    "confidence": "high",
+    "file": "src/commands/learn.test.ts",
+    "line": 1,
+    "global_id": "2026-09-24-ingest-691-r03#R3-F4"
+  },
+  {
+    "id": "R3-F5",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "embedded '~' alternative rewrites semver ranges ('~4.17.21' → [home]) and bash '=~'",
+    "impact": "embedded '~' alternative rewrites semver ranges ('~4.17.21' → [home]) and bash '=~'",
+    "suggested_fix": "treat '~' as home only when followed by '/', '\\\\' or end of run",
+    "evidence": "embedded '~' alternative rewrites semver ranges ('~4.17.21' → [home]) and bash '=~'",
+    "confidence": "medium",
+    "file": "src/learning/preview-scrub.ts",
+    "line": 205,
+    "global_id": "2026-09-24-ingest-691-r03#R3-F5"
+  }
+]
