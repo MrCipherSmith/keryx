@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "306",
   "slug": "w6-lifecycle-hooks-in-keryx-shell-that-c",
   "title": "W6: lifecycle hooks in keryx shell that can only tighten the policy engine",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T00:56:52.772Z",
-  "updatedAt": "2026-09-24T00:56:52.772Z",
+  "updatedAt": "2026-09-24T01:02:35.114Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:4a701b3524b8a511c0e72fb5af5fc0b4784487860c25c8db13bd0ae462ba868b",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,254 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the detailed tasks T5-T12"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the detailed tasks T5-T12"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the detailed tasks T5-T12"
+    },
+    {
+      "id": "T5",
+      "title": "Core hook runtime module src/harness/hooks (types, schema copy, config load/merge/validate, builtin declarations+ports, codec, failure semantics, composition, process runner, dispatcher) with unit tests",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Integrate hooks into run.ts (all run-loop events, hook_invocation session records, schema) and subagent start/stop on external and internal spawn paths",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Guard and failure-semantics tests: hook never loosens deny/hard deny, ask floor, headless, class x failure x profile matrix, subagent inheritance",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "keryx hooks CLI (list/test/validate/enable/disable --user) with tests, registered in cli and help",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Wire hooks into keryx shell runAgentTurn (PreToolUse tighten-only, UserPromptSubmit, Post*, Stop, PreCompact), trigger/schedule interactive false, production deps",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Docs: hooks user doc + extension points for W3/W8 + spec status note",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Verification: run bun ./src/cli.ts hooks list/validate/test end to end in a temp project and a real sandboxed hook process",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Local checks (targeted tests, typecheck, lint), open draft PR on stack/wave0, adversarial review/fix loop, CI green",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-24T00:56:52.772Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T01:02:04.788Z",
+      "event": "task-added",
+      "detail": "T5: Core hook runtime module src/harness/hooks (types, schema copy, config load/merge/validate, builtin declarations+ports, codec, failure semantics, composition, process runner, dispatcher) with unit tests"
+    },
+    {
+      "at": "2026-09-24T01:02:04.867Z",
+      "event": "task-added",
+      "detail": "T6: Integrate hooks into run.ts (all run-loop events, hook_invocation session records, schema) and subagent start/stop on external and internal spawn paths"
+    },
+    {
+      "at": "2026-09-24T01:02:04.945Z",
+      "event": "task-added",
+      "detail": "T7: Guard and failure-semantics tests: hook never loosens deny/hard deny, ask floor, headless, class x failure x profile matrix, subagent inheritance"
+    },
+    {
+      "at": "2026-09-24T01:02:05.030Z",
+      "event": "task-added",
+      "detail": "T8: keryx hooks CLI (list/test/validate/enable/disable --user) with tests, registered in cli and help"
+    },
+    {
+      "at": "2026-09-24T01:02:05.110Z",
+      "event": "task-added",
+      "detail": "T9: Wire hooks into keryx shell runAgentTurn (PreToolUse tighten-only, UserPromptSubmit, Post*, Stop, PreCompact), trigger/schedule interactive false, production deps"
+    },
+    {
+      "at": "2026-09-24T01:02:05.188Z",
+      "event": "task-added",
+      "detail": "T10: Docs: hooks user doc + extension points for W3/W8 + spec status note"
+    },
+    {
+      "at": "2026-09-24T01:02:05.270Z",
+      "event": "task-added",
+      "detail": "T11: Verification: run bun ./src/cli.ts hooks list/validate/test end to end in a temp project and a real sandboxed hook process"
+    },
+    {
+      "at": "2026-09-24T01:02:05.350Z",
+      "event": "task-added",
+      "detail": "T12: Local checks (targeted tests, typecheck, lint), open draft PR on stack/wave0, adversarial review/fix loop, CI green"
+    },
+    {
+      "at": "2026-09-24T01:02:34.713Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T01:02:34.791Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T01:02:34.869Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T01:02:34.947Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T01:02:35.033Z",
+      "event": "frozen",
+      "detail": "16 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T01:02:35.114Z",
+      "event": "started"
     }
   ]
 }
