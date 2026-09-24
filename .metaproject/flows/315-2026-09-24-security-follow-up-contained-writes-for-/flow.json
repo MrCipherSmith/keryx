@@ -9,7 +9,7 @@
   "title": "Security follow-up: contained writes for init, testing service and .gitignore, plus deferred W3/W4 minors",
   "status": "in-progress",
   "createdAt": "2026-09-24T18:05:52.943Z",
-  "updatedAt": "2026-09-24T19:05:52.521Z",
+  "updatedAt": "2026-09-24T19:32:14.890Z",
   "source": {
     "type": "description",
     "ref": null
@@ -179,7 +179,7 @@
         "T8"
       ],
       "attempts": {
-        "count": 2,
+        "count": 4,
         "log": [
           {
             "at": "2026-09-24T18:24:34.864Z",
@@ -190,6 +190,16 @@
             "at": "2026-09-24T18:39:04.059Z",
             "outcome": "failed",
             "detail": "round 1 (r01 @64e862a2): 0 blocker, 2 major (R1-F1 init helpers raw writes, R1-F2 UTF-32 shadows UTF-16LE view), 4 minor, 3 info; CI green; fix attempt 1"
+          },
+          {
+            "at": "2026-09-24T19:06:05.911Z",
+            "outcome": "started",
+            "detail": "round 2 narrow verification (opus) of fix attempt 1 at 80efe992"
+          },
+          {
+            "at": "2026-09-24T19:17:59.246Z",
+            "outcome": "failed",
+            "detail": "round 2 (r02 @80efe992): 0 blocker, 0 major, 3 minor (R2-F1 sweep domain scope, R2-F2 in-project hook symlink aborts init, R2-F3 install.ts allowlist granularity), 4 info; all r01 fixed; CI green; fix attempt 2"
           }
         ]
       },
@@ -289,6 +299,69 @@
             "at": "2026-09-24T18:39:04.575Z",
             "outcome": "started",
             "detail": "315-T14 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix r02 lane x: managed-git-hook accepts in-project targets, warn+skip otherwise, named dangling-link refusal, realpath hooksRoot; managed-hook.ts (trigger) routing (R2-F2, R2-F6, R2-F5)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:17:59.564Z",
+            "outcome": "started",
+            "detail": "315-T15 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Fix r02 lane y: install.ts raw unlink/cp into a dedicated allowlisted module; ratchet catches ./fs and .ts specifiers (R2-F3, R2-F4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:17:59.644Z",
+            "outcome": "started",
+            "detail": "315-T16 dispatch 1 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix r02 lane z: orphan sweep respects --domain and mayCarryReviewerText scoping (R2-F1)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T19:17:59.722Z",
+            "outcome": "started",
+            "detail": "315-T17 dispatch 1 (sonnet)"
           }
         ]
       },
@@ -466,6 +539,61 @@
       "at": "2026-09-24T19:05:52.521Z",
       "event": "task-done",
       "detail": "T12: Fix r01 lane a: init helpers (seed, gdskills install, routing-entrypoint, mcp client-config, capability registry) via contained-write + ratchet; shared managed-git-hook module with containment check (R1-F1, R1-F3, R1-F6, R1-F7, R1-F8, R1-F9)"
+    },
+    {
+      "at": "2026-09-24T19:06:05.912Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 3) — round 2 narrow verification (opus) of fix attempt 1 at 80efe992"
+    },
+    {
+      "at": "2026-09-24T19:17:59.246Z",
+      "event": "task-attempt",
+      "detail": "T9: failed (attempt 4) — round 2 (r02 @80efe992): 0 blocker, 0 major, 3 minor (R2-F1 sweep domain scope, R2-F2 in-project hook symlink aborts init, R2-F3 install.ts allowlist granularity), 4 info; all r01 fixed; CI green; fix attempt 2"
+    },
+    {
+      "at": "2026-09-24T19:17:59.324Z",
+      "event": "task-added",
+      "detail": "T15: Fix r02 lane x: managed-git-hook accepts in-project targets, warn+skip otherwise, named dangling-link refusal, realpath hooksRoot; managed-hook.ts (trigger) routing (R2-F2, R2-F6, R2-F5)"
+    },
+    {
+      "at": "2026-09-24T19:17:59.403Z",
+      "event": "task-added",
+      "detail": "T16: Fix r02 lane y: install.ts raw unlink/cp into a dedicated allowlisted module; ratchet catches ./fs and .ts specifiers (R2-F3, R2-F4)"
+    },
+    {
+      "at": "2026-09-24T19:17:59.483Z",
+      "event": "task-added",
+      "detail": "T17: Fix r02 lane z: orphan sweep respects --domain and mayCarryReviewerText scoping (R2-F1)"
+    },
+    {
+      "at": "2026-09-24T19:17:59.564Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 315-T15 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T19:17:59.644Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 315-T16 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T19:17:59.722Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 315-T17 dispatch 1 (sonnet)"
+    },
+    {
+      "at": "2026-09-24T19:22:07.967Z",
+      "event": "task-done",
+      "detail": "T17: Fix r02 lane z: orphan sweep respects --domain and mayCarryReviewerText scoping (R2-F1)"
+    },
+    {
+      "at": "2026-09-24T19:28:40.798Z",
+      "event": "task-done",
+      "detail": "T16: Fix r02 lane y: install.ts raw unlink/cp into a dedicated allowlisted module; ratchet catches ./fs and .ts specifiers (R2-F3, R2-F4)"
+    },
+    {
+      "at": "2026-09-24T19:32:14.890Z",
+      "event": "task-done",
+      "detail": "T15: Fix r02 lane x: managed-git-hook accepts in-project targets, warn+skip otherwise, named dangling-link refusal, realpath hooksRoot; managed-hook.ts (trigger) routing (R2-F2, R2-F6, R2-F5)"
     }
   ]
 }

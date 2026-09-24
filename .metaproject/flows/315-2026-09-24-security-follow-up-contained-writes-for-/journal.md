@@ -99,3 +99,27 @@
     - It runs only on the next graduate run while logins are configured.
 - 2026-09-24T19:05:52.521Z - task-done: T12: Fix r01 lane a: init helpers (seed, gdskills install, routing-entrypoint, mcp client-config, capability registry) via contained-write + ratchet; shared managed-git-hook module with containment check (R1-F1, R1-F3, R1-F6, R1-F7, R1-F8, R1-F9)
 - 2026-09-24 - T12 committed (R1-F1/F3/F6/F7/F8/F9): init helpers contained + ratcheted (install.ts one allowlist entry for its separately guarded unlink/cp), managed-git-hook.ts with lstat/realpath containment (core.hooksPath not consulted, pre-existing, documented), aliased writeFileAtomic detection, O_EXCL exclusive write. Local fails: install.test.ts read-only rules/core test (fails on base install.ts too, local env), new linked-worktree hook test (local author-email git hook) — CI arbiter.
+- 2026-09-24T19:06:05.912Z - task-attempt: T9: started (attempt 3) — round 2 narrow verification (opus) of fix attempt 1 at 80efe992
+- 2026-09-24T19:17:59.246Z - task-attempt: T9: failed (attempt 4) — round 2 (r02 @80efe992): 0 blocker, 0 major, 3 minor (R2-F1 sweep domain scope, R2-F2 in-project hook symlink aborts init, R2-F3 install.ts allowlist granularity), 4 info; all r01 fixed; CI green; fix attempt 2
+- 2026-09-24T19:17:59.324Z - task-added: T15: Fix r02 lane x: managed-git-hook accepts in-project targets, warn+skip otherwise, named dangling-link refusal, realpath hooksRoot; managed-hook.ts (trigger) routing (R2-F2, R2-F6, R2-F5)
+- 2026-09-24T19:17:59.403Z - task-added: T16: Fix r02 lane y: install.ts raw unlink/cp into a dedicated allowlisted module; ratchet catches ./fs and .ts specifiers (R2-F3, R2-F4)
+- 2026-09-24T19:17:59.483Z - task-added: T17: Fix r02 lane z: orphan sweep respects --domain and mayCarryReviewerText scoping (R2-F1)
+- 2026-09-24T19:17:59.564Z - task-attempt: T15: started (attempt 1) — 315-T15 dispatch 1 (sonnet)
+- 2026-09-24T19:17:59.644Z - task-attempt: T16: started (attempt 1) — 315-T16 dispatch 1 (sonnet)
+- 2026-09-24T19:17:59.722Z - task-attempt: T17: started (attempt 1) — 315-T17 dispatch 1 (sonnet)
+- 2026-09-24 - Review round 2 (opus, narrow verification at 80efe992) ingested as 2026-09-24-ingest-695-r02.
+  - Totals: 0 blocker, 0 major, 3 minor, 4 info.
+  - Every r01 finding verified fixed, and each new bypass attempt came back clean.
+  - `keryx review loop` found no repetition.
+  - CI green at 80efe992, and `keryx health run` PASS.
+  - Minors:
+    - R2-F1: the orphan sweep ignores --domain.
+    - R2-F2: an in-project hook symlink aborts init/update.
+    - R2-F3: the install.ts allowlist is file-granular.
+  - Info: R2-F4 (ratchet specifiers), R2-F5 (managed-hook.ts for trigger), R2-F6 (realpath hooksRoot), R2-F7 (no action).
+  - Fix attempt 2 of 3, in parallel lanes: T15 (R2-F2, F5, F6), T16 (R2-F3, F4), T17 (R2-F1).
+  - After this attempt, the standing rule applies.
+- 2026-09-24T19:22:07.967Z - task-done: T17: Fix r02 lane z: orphan sweep respects --domain and mayCarryReviewerText scoping (R2-F1)
+- 2026-09-24T19:28:40.798Z - task-done: T16: Fix r02 lane y: install.ts raw unlink/cp into a dedicated allowlisted module; ratchet catches ./fs and .ts specifiers (R2-F3, R2-F4)
+- 2026-09-24T19:32:14.890Z - task-done: T15: Fix r02 lane x: managed-git-hook accepts in-project targets, warn+skip otherwise, named dangling-link refusal, realpath hooksRoot; managed-hook.ts (trigger) routing (R2-F2, R2-F6, R2-F5)
+- 2026-09-24 - Fix attempt 2 committed: T17 (R2-F1 sweep domain + mayCarryReviewerText scoping), T16 (R2-F3 guarded-fs-ops.ts sole allowlisted gdskills module; R2-F4 ./fs and .ts specifiers), T15 (R2-F2 in-project hook symlinks accepted, escapes warn+skip via installManagedHookOrWarn/removeManagedHookOrWarn, dangling link named refusal; R2-F6 hooksRoot realpath; R2-F5 managed-hook.ts (trigger) uses resolveContainedHookPath). tsc clean, ratchet 28/0. Follow-up note: keryx trigger install now throws on an escaping hook link (no warn wrapper in trigger.ts).
