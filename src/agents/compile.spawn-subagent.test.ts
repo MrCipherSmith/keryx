@@ -126,6 +126,18 @@ test("every AgentDefinition field is projected into input or the policy sidecar 
   expect(policy.isolation).toBe(DEFINITION.isolation);
 });
 
+test("R1-F6: the policy sidecar is honest about what spawn_subagent actually enforces — only `mode`, never the tool allowlist or isolation", () => {
+  const result = compileAgentDefinition(DEFINITION, "keryx-shell");
+  if (!result.ok || result.result.target !== "keryx-shell") {
+    throw new Error("expected a keryx-shell compile result");
+  }
+  const { enforcement } = result.result.policy;
+  expect(enforcement.enforced).toEqual(["mode"]);
+  expect(enforcement.advisory).toContain("toolAllowlist");
+  expect(enforcement.advisory).toContain("isolation");
+  expect(enforcement.note.toLowerCase()).toContain("not enforced");
+});
+
 test("workspace-write policy_profile resolves to mode=general and shellParentProfile", () => {
   const result = compileAgentDefinition({ ...DEFINITION, policy_profile: "workspace-write" }, "keryx-shell");
   if (!result.ok || result.result.target !== "keryx-shell") {

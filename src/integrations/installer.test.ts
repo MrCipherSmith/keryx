@@ -4,7 +4,7 @@
 // records. AC5/AC6.
 
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -724,6 +724,81 @@ describe("F7 (round 2): a malformed RECORD inside installedModules invalidates t
       // Must not throw.
       const doctor = await doctorIntegration(root, "claude");
       expect(doctor.problems).toEqual([]);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R1-F2/F8 (review round 1, flow 310 W2): the `agents` surface is
+// directory-backed (`.claude/agents`), unlike every other surface's single
+// settings file — `recordSurfaceInstalled` hashing that directory used to
+// throw EISDIR in any project WITH a `.metaproject/` (the only case the
+// pre-fix test suite never exercised), after the agent files were already
+// written to disk. F8: the surface is also opt-in, so the default,
+// no-selector `doctor` must not report it "invalid" merely because nobody
+// has opted in yet, and a dry-run uninstall must judge presence off actual
+// managed files, not bare directory existence.
+// ---------------------------------------------------------------------------
+
+describe("R1-F2/F8: the agents surface (directory-backed, opt-in)", () => {
+  test("install --surface agents in a project WITH .metaproject/ succeeds, records state, and doctor/uninstall round-trip cleanly", async () => {
+    await withMetaproject(async (root) => {
+      const installed = await installIntegration(root, "claude", { surfaces: ["agents"] });
+      expect(installed.errors, JSON.stringify(installed)).toEqual([]);
+      expect(installed.results.some((r) => r.surfaceId === "agents" && r.status === "installed")).toBe(true);
+      expect(existsSync(path.join(root, ".claude", "agents"))).toBe(true);
+      const writtenFiles = await readdir(path.join(root, ".claude", "agents"));
+      expect(writtenFiles.length).toBeGreaterThan(0);
+
+      // R1-F2: this used to throw EISDIR here — the install-state write is
+      // the very thing that crashed, and nothing was recorded on failure.
+      const state = await readInstallState(root, "claude");
+      expect(state?.installedModules.some((r) => r.moduleId === "agents")).toBe(true);
+
+      const doctor = await doctorIntegration(root, "claude", { surfaces: ["agents"] });
+      expect(doctor.ok, JSON.stringify(doctor)).toBe(true);
+      const agentsDoctor = doctor.surfaces.find((s) => s.surfaceId === "agents");
+      expect(agentsDoctor?.live).toBe("valid");
+
+      const uninstalled = await uninstallIntegration(root, "claude", { surfaces: ["agents"] });
+      expect(uninstalled.errors, JSON.stringify(uninstalled)).toEqual([]);
+      expect(uninstalled.results.some((r) => r.surfaceId === "agents" && r.status === "removed")).toBe(true);
+    });
+  });
+
+  test("R1-F8: doctor with NO selector does not report a never-installed agents surface as invalid", async () => {
+    await withMetaproject(async (root) => {
+      const doctor = await doctorIntegration(root, "claude");
+      expect(doctor.ok, JSON.stringify(doctor)).toBe(true);
+      expect(doctor.surfaces.some((s) => s.surfaceId === "agents")).toBe(false);
+    });
+  });
+
+  test("R1-F8: doctor still reports an INSTALLED agents surface even with no selector (drift stays visible once opted in)", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["agents"] });
+      const doctor = await doctorIntegration(root, "claude");
+      expect(doctor.surfaces.some((s) => s.surfaceId === "agents")).toBe(true);
+    });
+  });
+
+  test("R1-F8: a dry-run uninstall reports nothing-to-remove for a directory holding only unmanaged files", async () => {
+    await withMetaproject(async (root) => {
+      await mkdir(path.join(root, ".claude", "agents"), { recursive: true });
+      await writeFile(path.join(root, ".claude", "agents", "hand-authored.md"), "# not keryx's\n", "utf8");
+
+      const dryRun = await uninstallIntegration(root, "claude", { surfaces: ["agents"], dryRun: true });
+      const agentsResult = dryRun.results.find((r) => r.surfaceId === "agents");
+      expect(agentsResult?.status).toBe("nothing-to-remove");
+    });
+  });
+
+  test("R1-F8: a dry-run uninstall reports would-remove once at least one managed file exists", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["agents"] });
+      const dryRun = await uninstallIntegration(root, "claude", { surfaces: ["agents"], dryRun: true });
+      const agentsResult = dryRun.results.find((r) => r.surfaceId === "agents");
+      expect(agentsResult?.status).toBe("would-remove");
     });
   });
 });

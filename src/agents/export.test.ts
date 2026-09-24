@@ -3,7 +3,7 @@
 // refuse-unmanaged/dry-run lifecycle `planAgentExport`/`writeAgentExport`
 // implement, and the every-bundled-agent-x-every-host-runtime guard (AC3/
 // AC7 applied to the exporter's own output, not just compile.ts's).
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -193,6 +193,119 @@ describe("removeManagedAgentExports", () => {
 
   test("an absent directory removes nothing, without throwing", async () => {
     expect(await removeManagedAgentExports(root, "opencode")).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R1-F3: symlink / containment safety. `writeAgentExport`/
+// `removeManagedAgentExports` must never follow a symlink into or out of the
+// project root — a dangling file symlink or a symlinked agents directory
+// previously let a write/delete escape `root` entirely.
+// ---------------------------------------------------------------------------
+
+describe("R1-F3: symlink safety", () => {
+  test("a dangling file symlink at the export path is refused, not created-through", async () => {
+    const outsideDir = mkdtempSync(path.join(tmpdir(), "keryx-agents-outside-"));
+    const outsideTarget = path.join(outsideDir, "outside-target.txt");
+    mkdirSync(path.join(root, ".claude", "agents"), { recursive: true });
+    symlinkSync(outsideTarget, path.join(root, ".claude", "agents", "code-explorer.md"));
+
+    const plan = await planAgentExport(root, DEFINITION, "claude");
+    expect(plan.action).toBe("refuse-unmanaged");
+    expect(plan.reason).toContain("symlink");
+    const { written } = await writeAgentExport(root, plan);
+    expect(written).toBe(false);
+    expect(() => readFileSync(outsideTarget, "utf8")).toThrow();
+
+    rmSync(outsideDir, { recursive: true, force: true });
+  });
+
+  test("a symlinked agents directory is refused, not written into", async () => {
+    const outsideDir = mkdtempSync(path.join(tmpdir(), "keryx-agents-outside-dir-"));
+    mkdirSync(path.join(root, ".claude"), { recursive: true });
+    symlinkSync(outsideDir, path.join(root, ".claude", "agents"));
+
+    const plan = await planAgentExport(root, DEFINITION, "claude");
+    expect(plan.action).toBe("refuse-unmanaged");
+    const { written } = await writeAgentExport(root, plan);
+    expect(written).toBe(false);
+    expect(readFileSync !== undefined).toBe(true);
+    expect(() => readFileSync(path.join(outsideDir, "code-explorer.md"), "utf8")).toThrow();
+
+    rmSync(outsideDir, { recursive: true, force: true });
+  });
+
+  test("removeManagedAgentExports never descends into a symlinked agents directory", async () => {
+    const outsideDir = mkdtempSync(path.join(tmpdir(), "keryx-agents-outside-rm-"));
+    writeFileSync(path.join(outsideDir, "sentinel-bearing.md"), "keryx-managed: keryx agents export (evil, sha256:x, model_tier=light)\n", "utf8");
+    mkdirSync(path.join(root, ".claude"), { recursive: true });
+    symlinkSync(outsideDir, path.join(root, ".claude", "agents"));
+
+    const removed = await removeManagedAgentExports(root, "claude");
+    expect(removed).toEqual([]);
+    expect(readFileSync(path.join(outsideDir, "sentinel-bearing.md"), "utf8")).toContain("keryx-managed");
+
+    rmSync(outsideDir, { recursive: true, force: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R1-F9: a hand-edited managed export is never silently overwritten; `--force`
+// (writeAgentExport's `force` option) is the only way to overwrite it.
+// ---------------------------------------------------------------------------
+
+describe("R1-F9: refuse-modified / --force", () => {
+  test("re-exporting after a hand edit to a managed file reports refuse-modified, not update", async () => {
+    const first = await planAgentExport(root, DEFINITION, "claude");
+    await writeAgentExport(root, first);
+    const filePath = path.join(root, ".claude", "agents", "code-explorer.md");
+    const original = readFileSync(filePath, "utf8");
+    writeFileSync(filePath, `${original}\nhand-added line, sentinel left untouched\n`, "utf8");
+
+    const changed: AgentDefinition = { ...DEFINITION, description: "A different description now." };
+    const second = await planAgentExport(root, changed, "claude");
+    expect(second.action).toBe("refuse-modified");
+    expect(second.reason).toBeDefined();
+
+    const { written } = await writeAgentExport(root, second);
+    expect(written).toBe(false);
+    expect(readFileSync(filePath, "utf8")).toContain("hand-added line");
+  });
+
+  test("re-exporting an untouched managed file after a source change reports update, not refuse-modified", async () => {
+    const first = await planAgentExport(root, DEFINITION, "claude");
+    await writeAgentExport(root, first);
+    const changed: AgentDefinition = { ...DEFINITION, description: "A different description now." };
+    const second = await planAgentExport(root, changed, "claude");
+    expect(second.action).toBe("update");
+  });
+
+  test("--force overwrites a hand-edited managed file; a plain re-export without --force still refuses", async () => {
+    const first = await planAgentExport(root, DEFINITION, "claude");
+    await writeAgentExport(root, first);
+    const filePath = path.join(root, ".claude", "agents", "code-explorer.md");
+    writeFileSync(filePath, `${readFileSync(filePath, "utf8")}\nhand edit\n`, "utf8");
+
+    const changed: AgentDefinition = { ...DEFINITION, description: "A different description now." };
+    const plan = await planAgentExport(root, changed, "claude");
+    expect(plan.action).toBe("refuse-modified");
+
+    const withoutForce = await writeAgentExport(root, plan);
+    expect(withoutForce.written).toBe(false);
+
+    const withForce = await writeAgentExport(root, plan, { force: true });
+    expect(withForce.written).toBe(true);
+    expect(readFileSync(filePath, "utf8")).toContain("A different description now.");
+  });
+
+  test("--force never overwrites a plain refuse-unmanaged (no sentinel at all)", async () => {
+    mkdirSync(path.join(root, ".claude", "agents"), { recursive: true });
+    writeFileSync(path.join(root, ".claude", "agents", "code-explorer.md"), "# hand-authored, not keryx's\n", "utf8");
+    const plan = await planAgentExport(root, DEFINITION, "claude");
+    expect(plan.action).toBe("refuse-unmanaged");
+    const { written } = await writeAgentExport(root, plan, { force: true });
+    expect(written).toBe(false);
+    expect(readFileSync(path.join(root, ".claude", "agents", "code-explorer.md"), "utf8")).toBe("# hand-authored, not keryx's\n");
   });
 });
 

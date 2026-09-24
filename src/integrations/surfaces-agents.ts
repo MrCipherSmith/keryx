@@ -27,8 +27,16 @@
 // `probe` reports missing/stale/unmanaged agents as problem strings for
 // `keryx integrations doctor`.
 
-import { loadAgentCatalog } from "../agents/catalog";
-import { planAgentExport, removeManagedAgentExports, writeAgentExport } from "../agents/export";
+// R1-F10: `loadAgentCatalog`/`planAgentExport`/etc. are imported LAZILY
+// inside each async function below, never at module top level. This module
+// is imported eagerly by `registry.ts` (`HARNESS_ADAPTERS`'s array literal
+// references `AGENTS_CLAUDE` etc.), and `../agents/export.ts` imports back
+// into `registry.ts` (`getHarnessAdapter`/`surfacesOf`) — a top-level import
+// here would close that cycle and crash with a TDZ ReferenceError
+// (`Cannot access 'AGENTS_CLAUDE' before initialization`) the first time
+// something imports THIS module before `registry.ts`. `type`-only imports
+// are erased at compile time and never execute, so they cannot participate
+// in the cycle and stay at the top.
 import type { AgentExportRuntime } from "../agents/types";
 import { SUBSYSTEM_AGENTS, type SurfaceAdapter } from "./types";
 
@@ -53,11 +61,17 @@ const AGENTS_DIR: Readonly<Record<AgentExportRuntime, string>> = {
  * write.
  */
 async function installAgentsExports(root: string, runtime: AgentExportRuntime): Promise<string[]> {
+  const { loadAgentCatalog } = await import("../agents/catalog");
+  const { planAgentExport, writeAgentExport } = await import("../agents/export");
   const catalog = loadAgentCatalog(root);
   const errors: string[] = catalog.errors.map((e) => `agents catalog: ${e.path}: ${e.message}`);
   for (const agent of catalog.agents) {
     const plan = await planAgentExport(root, agent.definition, runtime);
-    if (plan.action === "refuse-unmanaged") {
+    // R1-F9: a bulk `integrations install --surface agents` never forces —
+    // a hand-edited managed export (`refuse-modified`) is reported exactly
+    // like `refuse-unmanaged`, never silently overwritten; `keryx agents
+    // export --force` is the explicit, one-at-a-time override for that.
+    if (plan.action === "refuse-unmanaged" || plan.action === "refuse-modified") {
       errors.push(
         `agents export ${runtime}/${agent.definition.name}: refused — ${plan.reason ?? "existing file is not keryx-managed"}`,
       );
@@ -75,8 +89,24 @@ async function installAgentsExports(root: string, runtime: AgentExportRuntime): 
 }
 
 async function uninstallAgentsExports(root: string, runtime: AgentExportRuntime): Promise<boolean> {
+  const { removeManagedAgentExports } = await import("../agents/export");
   const removed = await removeManagedAgentExports(root, runtime);
   return removed.length > 0;
+}
+
+/**
+ * R1-F8: structured dry-run state for `installer.ts`'s `customUninstallDryRun`
+ * — whether ANY sentinel-marked export currently exists for `runtime`,
+ * without touching the filesystem otherwise. `"present"` -> would-remove,
+ * `"no-block"` -> nothing-to-remove (including when the directory exists but
+ * holds only files this exporter does not own).
+ */
+async function inspectAgentsExports(
+  root: string,
+  runtime: AgentExportRuntime,
+): Promise<{ readonly state: "absent-file" | "no-block" | "present" | "stale" | "malformed"; readonly message?: string }> {
+  const { hasManagedAgentExports } = await import("../agents/export");
+  return { state: (await hasManagedAgentExports(root, runtime)) ? "present" : "no-block" };
 }
 
 /**
@@ -86,6 +116,8 @@ async function uninstallAgentsExports(root: string, runtime: AgentExportRuntime)
  * up to date for `runtime`.
  */
 async function probeAgentsExports(root: string, runtime: AgentExportRuntime): Promise<string[]> {
+  const { loadAgentCatalog } = await import("../agents/catalog");
+  const { planAgentExport } = await import("../agents/export");
   const catalog = loadAgentCatalog(root);
   const problems: string[] = catalog.errors.map((e) => `agents catalog: ${e.path}: ${e.message}`);
   for (const agent of catalog.agents) {
@@ -96,6 +128,8 @@ async function probeAgentsExports(root: string, runtime: AgentExportRuntime): Pr
       problems.push(`${runtime}/${agent.definition.name}: exported file is stale (${plan.relativePath})`);
     } else if (plan.action === "refuse-unmanaged") {
       problems.push(`${runtime}/${agent.definition.name}: existing file at ${plan.relativePath} is not keryx-managed`);
+    } else if (plan.action === "refuse-modified") {
+      problems.push(`${runtime}/${agent.definition.name}: exported file at ${plan.relativePath} was hand-edited since export`);
     }
   }
   return problems;
@@ -125,6 +159,7 @@ function agentsSurface(params: {
     customInstall: (root) => installAgentsExports(root, runtime),
     customUninstall: (root) => uninstallAgentsExports(root, runtime),
     probe: (root) => probeAgentsExports(root, runtime),
+    inspect: (root) => inspectAgentsExports(root, runtime),
   };
 }
 

@@ -671,7 +671,18 @@ function driftMessage(surface: SurfaceAdapter, recorded: InstalledModuleRecord, 
   return `${surface.id} (${surface.flag}) was installed by ${version} on ${when} and is now ${live}: ${detail}`;
 }
 
-export async function doctorIntegration(root: string, runtimeId: string): Promise<DoctorIntegrationResult> {
+export interface DoctorOptions {
+  /**
+   * R1-F8: surface flags/ids explicitly of interest — when given, an opt-in
+   * surface named here is doctored even with no install record (matching
+   * `resolveSurfaceSelection`'s "opt-in only when named explicitly" rule).
+   * Optional and additive: omitting it keeps every pre-flow-310 caller's
+   * behavior for every NON-opt-in surface unchanged.
+   */
+  readonly surfaces?: readonly string[];
+}
+
+export async function doctorIntegration(root: string, runtimeId: string, opts: DoctorOptions = {}): Promise<DoctorIntegrationResult> {
   const adapter = getHarnessAdapter(runtimeId);
   if (!adapter) {
     throw new Error(`unknown runtime "${runtimeId}" — valid runtimes: ${harnessAdapterIds().join(", ")}`);
@@ -691,10 +702,21 @@ export async function doctorIntegration(root: string, runtimeId: string): Promis
     problems.push(`install-state unreadable: ${installStatePath(root, runtimeId)}`);
   }
 
+  const explicitlySelected = new Set(opts.surfaces ?? []);
   const state = await readInstallState(root, runtimeId);
   const surfaces: DoctorSurfaceResult[] = [];
   for (const surface of adapter.surfaces) {
     const recorded = state?.installedModules.find((r) => r.moduleId === surface.id);
+    // R1-F8: a never-installed opt-in surface (e.g. `agents`, before anyone
+    // ran `--surface agents`) is not something the default, no-selector
+    // `doctor` should judge "invalid (not recorded)" — that regressed the
+    // default output for every runtime the moment this surface was
+    // registered. Skip it entirely unless it is already recorded (drift on
+    // an installed opt-in surface is still worth reporting) or the caller
+    // named it explicitly.
+    if (surface.optIn && !recorded && !explicitlySelected.has(surface.flag) && !explicitlySelected.has(surface.id)) {
+      continue;
+    }
     const { live, problems: surfaceProblems } = await liveStatusOf(root, surface);
 
     let drift: string | undefined;

@@ -20,15 +20,17 @@
 //   3. `writeAgentExport`/`removeManagedAgentExports` — the only code in
 //      this zone that actually touches the filesystem for an export.
 
-import { readFile, mkdir, writeFile, rm, readdir } from "node:fs/promises";
+import { readFile, mkdir, writeFile, rm, readdir, lstat, realpath } from "node:fs/promises";
 import path from "node:path";
-import { pathExists, isNotFound } from "../lib/fs";
+import { pathExists, isNotFound, isPathInside } from "../lib/fs";
 import { getHarnessAdapter, surfacesOf } from "../integrations/registry";
 import { classifySurfaceState, type MatrixSurfaceState } from "../integrations/matrix";
 import {
   compileAgentDefinition,
   compileAgentHeader,
   agentManagedSentinelText,
+  finalizeAgentContentHash,
+  verifyAgentContentHash,
   AGENT_SENTINEL_PREFIX,
   type HostAgentExport,
   type KeryxShellCompileResult,
@@ -88,7 +90,7 @@ export function agentExportSupport(
 // Plan
 // ---------------------------------------------------------------------------
 
-export type AgentExportAction = "create" | "update" | "unchanged" | "refuse-unmanaged" | "compiled-only";
+export type AgentExportAction = "create" | "update" | "unchanged" | "refuse-unmanaged" | "refuse-modified" | "compiled-only";
 
 export interface AgentExportPlan {
   readonly runtime: AgentExportRuntime;
@@ -126,19 +128,76 @@ async function readExistingFileContent(projectRoot: string, relativePath: string
   }
 }
 
+// ---------------------------------------------------------------------------
+// R1-F3: symlink/containment safety.
+//
+// `readFile`/`mkdir`/`writeFile` all follow symlinks. A dangling symlink at
+// `relativePath` (or a symlinked ancestor directory, e.g. `.codex/agents ->
+// <outside>`) made `writeAgentExport` write attacker-chosen content to an
+// attacker-chosen path outside the project root — reachable from a cloned
+// repo, since a project `.metaproject/agents/<name>.md` overrides a bundled
+// definition's body. Every write/plan-for-write below is checked through
+// this first: refuse when ANY path component (the leaf included) is itself a
+// symlink, or when the deepest existing ancestor's real path resolves
+// outside the project root's real path.
+// ---------------------------------------------------------------------------
+
+async function checkExportPathSafety(projectRoot: string, relativePath: string): Promise<string | undefined> {
+  const segments = relativePath.split("/");
+  let current = projectRoot;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    let stats;
+    try {
+      stats = await lstat(current);
+    } catch (error) {
+      if (isNotFound(error)) continue; // does not exist yet — fine, it will be created
+      throw error;
+    }
+    if (stats.isSymbolicLink()) {
+      return `refusing to write ${relativePath} — ${path.relative(projectRoot, current) || "."} is a symlink; this exporter never writes through a symlink`;
+    }
+  }
+
+  // Belt-and-braces: resolve the deepest existing ancestor and confirm it is
+  // still inside the project root's own real path (catches a symlink this
+  // process cannot `lstat` component-by-component, e.g. one introduced by a
+  // race, or a root itself reached through a symlinked parent).
+  let ancestor = path.dirname(path.join(projectRoot, ...segments));
+  for (let guard = 0; guard < segments.length + 1 && !(await pathExists(ancestor)); guard += 1) {
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) break;
+    ancestor = parent;
+  }
+  try {
+    const [resolvedRoot, resolvedAncestor] = await Promise.all([realpath(projectRoot), realpath(ancestor)]);
+    if (!isPathInside(resolvedRoot, resolvedAncestor)) {
+      return `refusing to write ${relativePath} — its resolved directory is outside the project root`;
+    }
+  } catch {
+    // Root or ancestor unreadable for some unrelated reason; the per-segment
+    // lstat loop above already ran and is the primary guard.
+  }
+  return undefined;
+}
+
 interface DecidedAction {
-  readonly action: "create" | "update" | "unchanged" | "refuse-unmanaged";
+  readonly action: "create" | "update" | "unchanged" | "refuse-unmanaged" | "refuse-modified";
   readonly reason?: string;
 }
 
 /**
- * create/update/unchanged/refuse-unmanaged, judged purely off what is
- * already on disk at `relativePath` versus the freshly generated `content`:
- * absent -> create; present but missing ANY keryx-managed sentinel ->
- * refuse-unmanaged (this exporter never overwrites a file it does not own);
- * present, sentinel-bearing, and byte-identical -> unchanged; present,
- * sentinel-bearing, and different -> update (a newer source version, or a
- * different target's render of the same source).
+ * create/update/unchanged/refuse-unmanaged/refuse-modified, judged purely
+ * off what is already on disk at `relativePath` versus the freshly generated
+ * `content`: absent -> create; present but missing ANY keryx-managed
+ * sentinel -> refuse-unmanaged (this exporter never overwrites a file it
+ * does not own); present, sentinel-bearing, and byte-identical -> unchanged;
+ * present, sentinel-bearing, different, AND its own `content-sha256:` no
+ * longer matches its own content (R1-F9 — it was hand-edited since it was
+ * exported) -> refuse-modified (only `--force` overwrites this, never a
+ * plain re-export); present, sentinel-bearing, different, and verified
+ * unedited -> update (a newer source version, or a different target's
+ * render of the same source).
  */
 function decideAction(existing: string | undefined, generated: string): DecidedAction {
   if (existing === undefined) return { action: "create" };
@@ -149,6 +208,13 @@ function decideAction(existing: string | undefined, generated: string): DecidedA
     };
   }
   if (existing === generated) return { action: "unchanged" };
+  if (!verifyAgentContentHash(existing)) {
+    return {
+      action: "refuse-modified",
+      reason:
+        "existing file's content no longer matches the content-sha256 recorded in its own sentinel — it appears to have been hand-edited since it was exported; re-run with --force to overwrite it",
+    };
+  }
   return { action: "update" };
 }
 
@@ -206,13 +272,25 @@ export async function planAgentExport(
       };
     }
     const relativePath = proseExportRelativePath(runtime, definition.name);
+    const safetyReason = await checkExportPathSafety(projectRoot, relativePath);
+    if (safetyReason !== undefined) {
+      return {
+        runtime,
+        name: definition.name,
+        supportLevel,
+        relativePath,
+        droppedTools: [],
+        action: "refuse-unmanaged",
+        reason: safetyReason,
+      };
+    }
     // Plain prose: no host-specific frontmatter/enforced fields — just the
     // sentinel (as a visible provenance comment naming the missing matrix
     // record) followed by the compiled header.
     const provenance =
       `<!-- ${agentManagedSentinelText(definition)}; instruction-only prose — ` +
       `no "agents" surface record for runtime "${runtime}" in the W5 capability matrix -->`;
-    const content = `${provenance}\n\n${headerResult.header}\n`;
+    const content = finalizeAgentContentHash(`${provenance}\n\n${headerResult.header}\n`);
     const existing = await readExistingFileContent(projectRoot, relativePath);
     const decided = decideAction(existing, content);
     return {
@@ -240,6 +318,18 @@ export async function planAgentExport(
     };
   }
   const hostResult = compiled.result as HostAgentExport;
+  const safetyReason = await checkExportPathSafety(projectRoot, hostResult.relativePath);
+  if (safetyReason !== undefined) {
+    return {
+      runtime,
+      name: definition.name,
+      supportLevel,
+      relativePath: hostResult.relativePath,
+      droppedTools: hostResult.droppedTools,
+      action: "refuse-unmanaged",
+      reason: safetyReason,
+    };
+  }
   const existing = await readExistingFileContent(projectRoot, hostResult.relativePath);
   const decided = decideAction(existing, hostResult.content);
   return {
@@ -260,6 +350,14 @@ export async function planAgentExport(
 
 export interface WriteAgentExportOptions {
   readonly dryRun?: boolean;
+  /**
+   * R1-F9: overwrite a `refuse-modified` plan (a managed, sentinel-bearing
+   * file whose content no longer matches its own recorded content hash —
+   * i.e. it was hand-edited since export). Never overrides
+   * `refuse-unmanaged` (a file with no sentinel at all, or an unsafe/
+   * symlinked path) — those are never something `--force` can push through.
+   */
+  readonly force?: boolean;
 }
 
 export interface WriteAgentExportResult {
@@ -269,8 +367,12 @@ export interface WriteAgentExportResult {
 
 /**
  * Apply a plan produced by `planAgentExport`. Never writes on
- * `refuse-unmanaged`, `unchanged`, `compiled-only`, or `dryRun: true` —
- * `written` reports which happened. Creates parent directories as needed.
+ * `refuse-unmanaged`, `unchanged`, `compiled-only`, or `dryRun: true`;
+ * `refuse-modified` is written only with `opts.force: true` — `written`
+ * reports which happened. Re-checks the target path's symlink safety
+ * immediately before writing (defense in depth alongside `planAgentExport`'s
+ * own check, in case the plan is stale relative to the filesystem). Creates
+ * parent directories as needed.
  */
 export async function writeAgentExport(
   projectRoot: string,
@@ -278,8 +380,14 @@ export async function writeAgentExport(
   opts: WriteAgentExportOptions = {},
 ): Promise<WriteAgentExportResult> {
   if (opts.dryRun) return { written: false, plan };
-  if (plan.action !== "create" && plan.action !== "update") return { written: false, plan };
+  const writable = plan.action === "create" || plan.action === "update" || (plan.action === "refuse-modified" && opts.force === true);
+  if (!writable) return { written: false, plan };
   if (plan.relativePath === undefined || plan.content === undefined) return { written: false, plan };
+
+  const safetyReason = await checkExportPathSafety(projectRoot, plan.relativePath);
+  if (safetyReason !== undefined) {
+    return { written: false, plan: { ...plan, action: "refuse-unmanaged", reason: safetyReason } };
+  }
 
   const absolute = path.join(projectRoot, ...plan.relativePath.split("/"));
   await mkdir(path.dirname(absolute), { recursive: true });
@@ -300,17 +408,30 @@ const HOST_AGENTS_DIR: Readonly<Record<HostToolTarget, string>> = {
 };
 
 /**
- * Delete every sentinel-marked file this exporter previously wrote for
- * `runtime` — never a file lacking the sentinel, whatever else sits in that
- * directory. `keryx-shell` writes no file (see `planAgentExport`), so this
- * always returns `[]` for it. Returns the removed files' project-relative
- * paths, sorted.
+ * R1-F3: read-only scan for sentinel-marked files under `runtime`'s agents
+ * directory — the shared, symlink-safe core `removeManagedAgentExports` and
+ * `hasManagedAgentExports` both build on. Never descends into a symlinked
+ * agents directory (an attacker-controlled `.codex/agents -> <outside-dir>`
+ * previously let a delete reach outside the project root), and never counts
+ * a symlinked entry inside it as managed — `readdir`'s `Dirent.isFile()`
+ * already reflects the directory ENTRY's own type (not the symlink target),
+ * so a symlinked file's `isFile()` is `false`; the extra `lstat` below is
+ * defense in depth for platforms where that is not guaranteed.
  */
-export async function removeManagedAgentExports(projectRoot: string, runtime: AgentExportRuntime): Promise<string[]> {
-  if (runtime === "keryx-shell") return [];
+async function scanManagedAgentExports(
+  projectRoot: string,
+  runtime: Exclude<AgentExportRuntime, "keryx-shell">,
+): Promise<string[]> {
   const dirRelative = HOST_AGENTS_DIR[runtime];
   const dirAbsolute = path.join(projectRoot, ...dirRelative.split("/"));
-  if (!(await pathExists(dirAbsolute))) return [];
+
+  let dirStats;
+  try {
+    dirStats = await lstat(dirAbsolute);
+  } catch {
+    return [];
+  }
+  if (dirStats.isSymbolicLink() || !dirStats.isDirectory()) return [];
 
   let entries: import("node:fs").Dirent[];
   try {
@@ -319,21 +440,56 @@ export async function removeManagedAgentExports(projectRoot: string, runtime: Ag
     return [];
   }
 
-  const removed: string[] = [];
+  const managed: string[] = [];
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const relativePath = `${dirRelative}/${entry.name}`;
     const absolute = path.join(projectRoot, ...relativePath.split("/"));
+    let entryStats;
+    try {
+      entryStats = await lstat(absolute);
+    } catch {
+      continue;
+    }
+    if (entryStats.isSymbolicLink()) continue;
     let content: string;
     try {
       content = await readFile(absolute, "utf8");
     } catch {
       continue;
     }
-    if (content.includes(AGENT_SENTINEL_PREFIX)) {
-      await rm(absolute);
-      removed.push(relativePath);
-    }
+    if (content.includes(AGENT_SENTINEL_PREFIX)) managed.push(relativePath);
   }
-  return removed.sort();
+  return managed.sort();
+}
+
+/**
+ * Delete every sentinel-marked file this exporter previously wrote for
+ * `runtime` — never a file lacking the sentinel, whatever else sits in that
+ * directory, and never anything reached through a symlink (R1-F3). `keryx-shell`
+ * writes no file (see `planAgentExport`), so this always returns `[]` for
+ * it. Returns the removed files' project-relative paths, sorted.
+ */
+export async function removeManagedAgentExports(projectRoot: string, runtime: AgentExportRuntime): Promise<string[]> {
+  if (runtime === "keryx-shell") return [];
+  const managed = await scanManagedAgentExports(projectRoot, runtime);
+  const removed: string[] = [];
+  for (const relativePath of managed) {
+    await rm(path.join(projectRoot, ...relativePath.split("/")));
+    removed.push(relativePath);
+  }
+  return removed;
+}
+
+/**
+ * R1-F8: read-only presence check for a runtime's managed agent exports —
+ * whether ANY sentinel-marked file currently exists, without deleting
+ * anything. `installer.ts`'s `customUninstallDryRun` uses this (via the
+ * `agents` surface's `inspect`) so a dry-run uninstall reports
+ * "nothing-to-remove" for a directory holding only unmanaged files, instead
+ * of "would-remove" merely because the directory exists.
+ */
+export async function hasManagedAgentExports(projectRoot: string, runtime: AgentExportRuntime): Promise<boolean> {
+  if (runtime === "keryx-shell") return false;
+  return (await scanManagedAgentExports(projectRoot, runtime)).length > 0;
 }

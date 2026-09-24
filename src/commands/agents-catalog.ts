@@ -214,6 +214,11 @@ function showCommand(args: string[], depsIn: AgentsCatalogDeps): void {
   log("");
   log(`mode: ${result.input.mode}  label: ${result.input.label}  model_tier: ${result.input.model_tier}`);
   log(`policy: profile=${result.policy.profile} isolation=${result.policy.isolation} toolAllowlist=[${result.policy.toolAllowlist.join(", ")}]`);
+  // R1-F6: never let the sidecar read as "applied" — `enforced` is what
+  // spawn_subagent actually acts on; everything else here is advisory only.
+  log(`  enforced by spawn_subagent: ${result.policy.enforcement.enforced.join(", ")}`);
+  log(`  advisory only (not enforced by spawn_subagent): ${result.policy.enforcement.advisory.join(", ")}`);
+  log(`  ${result.policy.enforcement.note}`);
 }
 
 function printShowHelp(): void {
@@ -232,7 +237,7 @@ async function exportCommand(args: string[], depsIn: AgentsCatalogDeps): Promise
     printExportHelp();
     return;
   }
-  const bad = unknownFlags(args, ["--runtime", "--dry-run", "--json"]);
+  const bad = unknownFlags(args, ["--runtime", "--dry-run", "--json", "--force"]);
   if (bad.length > 0) {
     error(`Unknown flag(s): ${bad.join(", ")}`);
     process.exitCode = 1;
@@ -240,6 +245,10 @@ async function exportCommand(args: string[], depsIn: AgentsCatalogDeps): Promise
   }
   const json = args.includes("--json");
   const dryRun = args.includes("--dry-run");
+  // R1-F9: overwrite a managed export this exporter finds hand-edited since
+  // it was written (`refuse-modified`) — never a file with no sentinel at
+  // all (`refuse-unmanaged`), which `--force` does not touch.
+  const force = args.includes("--force");
   const runtimeArg = optionValue(args, "--runtime");
   // Skip the value slot right after `--runtime` — plain `positional()` would
   // otherwise read the runtime id itself as the agent name.
@@ -265,15 +274,15 @@ async function exportCommand(args: string[], depsIn: AgentsCatalogDeps): Promise
   }
 
   const plan = await planAgentExport(cwd, loaded.definition, runtimeArg);
-  const outcome = await writeAgentExport(cwd, plan, { dryRun });
+  const outcome = await writeAgentExport(cwd, plan, { dryRun, force });
 
   if (json) {
-    log(JSON.stringify({ plan: outcome.plan, written: outcome.written, dryRun }, null, 2));
+    log(JSON.stringify({ plan: outcome.plan, written: outcome.written, dryRun, force }, null, 2));
   } else {
     for (const line of renderExportPlan(outcome.plan, outcome.written, dryRun)) log(line);
   }
 
-  if (outcome.plan.action === "refuse-unmanaged") {
+  if (outcome.plan.action === "refuse-unmanaged" || (outcome.plan.action === "refuse-modified" && !outcome.written)) {
     process.exitCode = 1;
   }
 }
@@ -294,10 +303,11 @@ function renderExportPlan(plan: AgentExportPlan, written: boolean, dryRun: boole
 
 function printExportHelp(): void {
   helpTitle("keryx agents export", "compile and write (or preview) one agent definition for one export runtime");
-  helpUsage([`keryx agents export --runtime <${AGENT_EXPORT_RUNTIMES.join("|")}> <name> [--dry-run] [--json]`]);
+  helpUsage([`keryx agents export --runtime <${AGENT_EXPORT_RUNTIMES.join("|")}> <name> [--dry-run] [--force] [--json]`]);
   helpOptions([
     { flag: "--runtime", desc: `Export target: ${AGENT_EXPORT_RUNTIMES.join(", ")}.` },
     { flag: "--dry-run", desc: "Plan and print the result without writing a file." },
+    { flag: "--force", desc: "Overwrite a managed export that was hand-edited since it was written (never a file with no keryx-managed sentinel at all)." },
     { flag: "--json", desc: "Emit the export plan and outcome as JSON." },
   ]);
 }

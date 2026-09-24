@@ -37,6 +37,39 @@ export interface CompileError {
 }
 
 /**
+ * R1-F6: what `spawn_subagent` actually enforces from the `policy` sidecar
+ * versus what is recorded only for a future dispatcher to honor. `mode` is
+ * the ONE field `spawn_subagent`'s own input schema carries (see
+ * `KeryxShellCompileResult.input.mode`) and the only one its tool-set
+ * construction reads (`spawn-subagent-tool.ts`'s `mode === "read_only" ? ... : ...`
+ * branch). `toolAllowlist`/`isolation` are carried in `policy` so a future
+ * caller CAN read the definition's intent, but nothing in `spawn_subagent`
+ * consumes them today — least of all `isolation: "worktree"`, which has no
+ * corresponding input slot at all.
+ */
+export interface KeryxShellEnforcement {
+  /** Sidecar fields `spawn_subagent` actually acts on. */
+  readonly enforced: readonly string[];
+  /** Sidecar fields recorded but not consumed by `spawn_subagent` today. */
+  readonly advisory: readonly string[];
+  readonly note: string;
+}
+
+const KERYX_SHELL_ENFORCEMENT: KeryxShellEnforcement = {
+  enforced: ["mode"],
+  advisory: ["toolAllowlist", "isolation"],
+  note:
+    "spawn_subagent enforces only `mode` (read_only vs general) as of v1 — see " +
+    "src/harness/tool/builtin/spawn-subagent-tool.ts's mode-to-tools construction. " +
+    "`general` mode currently grants the SAME tool set as `read_only` (the read-only " +
+    "+ metaproject builtin tools; still no shell_exec, apply_patch, web_fetch or " +
+    "web_search — \"v1 general: still no shell_exec\", parent owns mutations). " +
+    "toolAllowlist and isolation are carried here for a future dispatcher to read " +
+    "but are NOT enforced by spawn_subagent today; nothing is silently dropped (every " +
+    "field lands in input or here), but only `mode` actually constrains the child.",
+};
+
+/**
  * The `target="keryx-shell"` compiled result: `input`'s keys are always a
  * SUBSET of `spawn_subagent`'s `inputSchema.properties`
  * (`task`/`mode`/`label`/`max_tool_calls`/`max_rounds`/`model_tier`/
@@ -57,6 +90,8 @@ export interface KeryxShellCompileResult {
     readonly profile: string;
     readonly toolAllowlist: readonly string[];
     readonly isolation: IsolationMode;
+    /** R1-F6: which of the above `spawn_subagent` actually enforces today. */
+    readonly enforcement: KeryxShellEnforcement;
   };
 }
 
@@ -80,6 +115,42 @@ function renderHeader(definition: AgentDefinition): string {
 
 function formatValidationErrors(errors: readonly AgentSchemaError[]): readonly string[] {
   return errors.map((error) => `${error.field}: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// R1-F14: near-copy baseline guard.
+//
+// `body.includes(PROMPT_DEFENSE_BASELINE)` only ever catches a byte-exact
+// copy. A lightly reworded or re-wrapped copy (extra whitespace, rewrapped
+// line breaks, a word or two changed) carries the same long runs of baseline
+// words and is exactly the "divergent copy" the old guard test asserted
+// nothing about (it exercised only JS string equality, not this module). This
+// n-gram check catches that class: any run of `BASELINE_NGRAM_WORDS`
+// consecutive baseline words appearing consecutively (whitespace-normalized)
+// anywhere in the body fails compilation, the same as an exact copy.
+// ---------------------------------------------------------------------------
+
+const BASELINE_NGRAM_WORDS = 10;
+
+function ngramsOf(words: readonly string[], n: number): Set<string> {
+  const grams = new Set<string>();
+  for (let i = 0; i + n <= words.length; i += 1) {
+    grams.add(words.slice(i, i + n).join(" "));
+  }
+  return grams;
+}
+
+const BASELINE_WORDS = PROMPT_DEFENSE_BASELINE.split(/\s+/).filter((w) => w.length > 0);
+const BASELINE_NGRAMS = ngramsOf(BASELINE_WORDS, BASELINE_NGRAM_WORDS);
+
+/** True when `body` shares a long (>= `BASELINE_NGRAM_WORDS` word) consecutive run with the baseline, whitespace differences aside. Subsumes an exact copy. */
+function containsBaselineNearCopy(body: string): boolean {
+  const words = body.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length < BASELINE_NGRAM_WORDS) return false;
+  for (let i = 0; i + BASELINE_NGRAM_WORDS <= words.length; i += 1) {
+    if (BASELINE_NGRAMS.has(words.slice(i, i + BASELINE_NGRAM_WORDS).join(" "))) return true;
+  }
+  return false;
 }
 
 /**
@@ -115,16 +186,42 @@ export function definitionSourceHash(definition: AgentDefinition): string {
   return createHash("sha256").update(canonicalDefinitionSource(definition), "utf8").digest("hex");
 }
 
+// ---------------------------------------------------------------------------
+// R1-F9: content-hash sentinel.
+//
+// The sentinel's `sha256:` clause (above) hashes the SOURCE definition — it
+// tells a caller "this source changed since export", but says nothing about
+// whether the EXPORTED FILE itself was hand-edited afterward (the source
+// could be unchanged while the file was edited, or vice versa). A second
+// clause, `content-sha256:`, closes that gap: it hashes the file's own
+// rendered content (sentinel line included, via a fixed placeholder swapped
+// in before hashing so the hash does not have to depend on itself). A
+// well-formed sentinel line's `content-sha256:` therefore always answers "is
+// this file's content, right now, the exact content it claims to be" —
+// `export.ts`'s `decideAction` uses that to tell a stale-but-untouched export
+// (safe to overwrite) apart from a hand-edited one (refuse unless `--force`).
+// ---------------------------------------------------------------------------
+
+/** Fixed-width placeholder swapped for the real content hash before/after hashing — see {@link finalizeAgentContentHash}. */
+export const AGENT_CONTENT_HASH_PLACEHOLDER = "0".repeat(64);
+const CONTENT_HASH_MARKER = "content-sha256:";
+
 /**
  * The ONE managed-sentinel wording every host renderer below embeds (task
  * text, T7): `<!-- keryx-managed: keryx agents export (<name>,
- * sha256:<hash-of-canonical-source>, model_tier=<tier>) -->` for markdown,
- * `# keryx-managed: ...` for TOML (codex), and — for kiro's JSON, whose
+ * sha256:<hash-of-canonical-source>, model_tier=<tier>,
+ * content-sha256:<hash-of-rendered-content>) -->` for markdown, `#
+ * keryx-managed: ...` for TOML (codex), and — for kiro's JSON, whose
  * unknown-key tolerance is undocumented — the SAME text as the first line of
  * the `prompt` field instead of a new top-level key. Sharing this one string
  * (with only the comment delimiter varying) is what lets `export.ts`'s
  * refuse-unmanaged / unchanged detection substring-match ONE pattern across
  * every target.
+ *
+ * `content-sha256:` is always emitted here as {@link AGENT_CONTENT_HASH_PLACEHOLDER}
+ * — every renderer below MUST pass its finished content through
+ * {@link finalizeAgentContentHash} as its last step, which swaps the
+ * placeholder for the real hash of the rendered content (R1-F9).
  *
  * Flow 310 (W2) T13: `model_tier=<tier>` travels inside this sentinel on
  * EVERY target, including claude, so the canonical tier is always readable
@@ -138,7 +235,44 @@ export function definitionSourceHash(definition: AgentDefinition): string {
  * first), only as the one signal available where none does.
  */
 export function agentManagedSentinelText(definition: AgentDefinition): string {
-  return `keryx-managed: keryx agents export (${definition.name}, sha256:${definitionSourceHash(definition)}, model_tier=${definition.model_tier})`;
+  return (
+    `keryx-managed: keryx agents export (${definition.name}, sha256:${definitionSourceHash(definition)}, ` +
+    `model_tier=${definition.model_tier}, ${CONTENT_HASH_MARKER}${AGENT_CONTENT_HASH_PLACEHOLDER})`
+  );
+}
+
+/**
+ * The last step every renderer's `content` passes through: hash the
+ * placeholder-bearing draft content (the placeholder is a fixed constant, so
+ * this is deterministic — no circularity), then swap every occurrence of the
+ * placeholder for that hash. There is exactly one occurrence in practice (the
+ * sentinel line), but `split`/`join` rather than a single `replace` costs
+ * nothing and never under-replaces if a future renderer embeds it twice.
+ */
+export function finalizeAgentContentHash(draftContent: string): string {
+  const hash = createHash("sha256").update(draftContent, "utf8").digest("hex");
+  return draftContent.split(AGENT_CONTENT_HASH_PLACEHOLDER).join(hash);
+}
+
+/**
+ * R1-F9: true when `content`'s own embedded `content-sha256:` still matches
+ * a hash recomputed from `content` itself — i.e. `content` is exactly what
+ * some `finalizeAgentContentHash` call produced, unedited since. Reconstructs
+ * the placeholder-bearing draft by swapping the recorded hash back out, then
+ * re-hashes and compares. Content with no `content-sha256:` clause at all
+ * (no sentinel, or an older sentinel predating this field) is unverifiable —
+ * reported `false` (fail closed: the caller treats "cannot verify" the same
+ * as "hand-edited").
+ */
+export function verifyAgentContentHash(content: string): boolean {
+  const markerIndex = content.indexOf(CONTENT_HASH_MARKER);
+  if (markerIndex === -1) return false;
+  const hashStart = markerIndex + CONTENT_HASH_MARKER.length;
+  const recorded = content.slice(hashStart, hashStart + 64);
+  if (!/^[0-9a-f]{64}$/.test(recorded)) return false;
+  const reconstructed = content.slice(0, hashStart) + AGENT_CONTENT_HASH_PLACEHOLDER + content.slice(hashStart + 64);
+  const actual = createHash("sha256").update(reconstructed, "utf8").digest("hex");
+  return actual === recorded;
 }
 
 /**
@@ -171,10 +305,74 @@ function compileKeryxShell(definition: AgentDefinition, header: string): Compile
         profile: policyResolution.resolution.profileName,
         toolAllowlist: [...definition.tools],
         isolation: definition.isolation,
+        enforcement: KERYX_SHELL_ENFORCEMENT,
       },
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// R1-F1: YAML scalar quoting.
+//
+// `JSON.stringify` produces a valid YAML double-quoted scalar for any string:
+// YAML's double-quoted scalar escapes are a superset of JSON's (backslash,
+// double-quote, and C0 control characters all use the same `\...`/`\uXXXX`
+// forms), so wrapping every interpolated frontmatter value this way — rather
+// than interpolating it as a bare plain scalar — closes the whole class of
+// injection the round-1 review found: a `: ` inside the value no longer reads
+// as a new mapping key, a leading `- ` no longer reads as a sequence item, a
+// leading `#`/trailing ` #` no longer starts a comment, and an embedded
+// newline cannot inject a sibling frontmatter key (`permissionMode: ...` was
+// the round-1 probe). Never interpolate a definition-controlled string into
+// YAML frontmatter unquoted.
+// ---------------------------------------------------------------------------
+function yamlDoubleQuoted(value: string): string {
+  return JSON.stringify(value);
+}
+
+// ---------------------------------------------------------------------------
+// R1-F5: policy_profile enforcement in host exports whose tool vocabulary can
+// express mutation at all (claude/kiro name individual tools; opencode's
+// renderer already folds `policy_profile` in below; codex has no per-tool
+// allowlist to strip from — governed by `sandbox_mode` alone).
+// ---------------------------------------------------------------------------
+
+/** Vocabulary entries that grant a mutation capability (write or shell) on a host that can express one. */
+const MUTATION_TOOL_NAMES = new Set(["apply_patch", "shell_exec"]);
+
+/**
+ * Split `tools` into what a `read-only` definition is still allowed to
+ * declare and what must be stripped (`apply_patch`/`shell_exec`) — a no-op
+ * for `workspace-write` (or any other profile; `mapToolsForTarget`'s target
+ * mapping still governs everything else). The stripped names are folded into
+ * the renderer's `droppedTools` so a `read-only` definition naming a mutation
+ * tool is visibly downgraded, not silently exported with it, on every host
+ * whose vocabulary can name one.
+ */
+function stripMutationToolsForPolicy(
+  tools: readonly string[],
+  policyProfile: string,
+): { readonly allowed: readonly string[]; readonly strippedForPolicy: readonly string[] } {
+  if (policyProfile !== "read-only") return { allowed: tools, strippedForPolicy: [] };
+  const allowed: string[] = [];
+  const strippedForPolicy: string[] = [];
+  for (const tool of tools) {
+    (MUTATION_TOOL_NAMES.has(tool) ? strippedForPolicy : allowed).push(tool);
+  }
+  return { allowed, strippedForPolicy };
+}
+
+// R1-F4: the read baseline emitted when a target's mapped tool list would
+// otherwise be empty (empty `tools[]`, every entry unmapped for this target,
+// or every mutation tool stripped by R1-F5 above) — an omitted/empty `tools:`
+// is claude's own documented signal for "inherit every tool", the exact
+// least-privilege inversion R1-F4 found; kiro's own coarse vocabulary has no
+// "inherit" reading for `tools: []` but an explicit empty allowlist is still
+// the wrong default for a definition that named tools at all. Both baselines
+// grant read access only, matching every target's `policy_profile: read-only`
+// floor.
+const CLAUDE_READ_BASELINE: readonly string[] = ["Read", "Grep", "Glob"];
+const KIRO_READ_BASELINE: readonly string[] = ["read"];
 
 /**
  * Claude Code renderer (`.claude/agents/<name>.md`) — the one host renderer
@@ -193,24 +391,26 @@ function mdSentinelLine(definition: AgentDefinition): string {
 }
 
 function renderClaudeExport(definition: AgentDefinition, header: string): HostAgentExport {
-  const { mappedTools, droppedTools } = mapToolsForTarget(definition.tools, "claude");
+  const { allowed, strippedForPolicy } = stripMutationToolsForPolicy(definition.tools, definition.policy_profile);
+  const { mappedTools, droppedTools } = mapToolsForTarget(allowed, "claude");
+  const claudeTools = mappedTools.length > 0 ? mappedTools : CLAUDE_READ_BASELINE;
   const frontmatter = [
     "---",
-    `name: ${definition.name}`,
-    `description: ${definition.description}`,
-    `tools: ${mappedTools.join(", ")}`,
+    `name: ${yamlDoubleQuoted(definition.name)}`,
+    `description: ${yamlDoubleQuoted(definition.description)}`,
+    `tools: ${yamlDoubleQuoted(claudeTools.join(", "))}`,
     // Tier is never mapped to a model alias (AC7) — `inherit` never
     // downgrades and names no concrete model.
     "model: inherit",
     "---",
   ].join("\n");
-  const content = `${frontmatter}\n${mdSentinelLine(definition)}\n\n${header}\n`;
+  const draft = `${frontmatter}\n${mdSentinelLine(definition)}\n\n${header}\n`;
   return {
     target: "claude",
     supportLevel: "native",
     relativePath: `.claude/agents/${definition.name}.md`,
-    content,
-    droppedTools,
+    content: finalizeAgentContentHash(draft),
+    droppedTools: [...droppedTools, ...strippedForPolicy],
   };
 }
 
@@ -225,21 +425,30 @@ function tomlString(value: string): string {
     .replace(/"/g, '\\"')
     .replace(/\n/g, "\\n")
     .replace(/\r/g, "\\r")
-    .replace(/\t/g, "\\t");
+    .replace(/\t/g, "\\t")
+    // eslint-disable-next-line no-control-regex -- matching control characters is the point (R1-F1: TOML basic strings must escape them)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, (ch) => `\\u${ch.codePointAt(0)!.toString(16).padStart(4, "0")}`);
   return `"${escaped}"`;
 }
 
 /**
  * TOML multi-line basic string for `developer_instructions` (the compiled
  * header, which is always multi-line). Backslashes are escaped first, then
- * any run of 3+ quotes is broken up so it can never be mistaken for the
- * closing `"""` delimiter — the header is agent-authored prose, not
+ * `\r` (a lone carriage return is not itself a valid TOML newline), then any
+ * remaining C0/DEL control character (R1-F1: `Bun.TOML.parse` rejects an
+ * unescaped one, e.g. U+0007 BEL) is escaped as `\uXXXX` — real `\n`/`\t` are
+ * left literal, since TOML multiline basic strings allow both unescaped —
+ * and finally any run of 3+ quotes is broken up so it can never be mistaken
+ * for the closing `"""` delimiter. The header is agent-authored prose, not
  * TOML-aware input, so this guards against pathological content rather than
  * an expected shape.
  */
 function tomlMultilineString(value: string): string {
   const escapedBackslashes = value.replace(/\\/g, "\\\\");
-  const escapedQuoteRuns = escapedBackslashes.replace(/"{3,}/g, (run) => run.replace(/"/g, '\\"'));
+  const escapedCr = escapedBackslashes.replace(/\r/g, "\\r");
+  // eslint-disable-next-line no-control-regex -- matching control characters is the point (R1-F1: TOML multiline basic strings must escape them)
+  const escapedControls = escapedCr.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, (ch) => `\\u${ch.codePointAt(0)!.toString(16).padStart(4, "0")}`);
+  const escapedQuoteRuns = escapedControls.replace(/"{3,}/g, (run) => run.replace(/"/g, '\\"'));
   return `"""\n${escapedQuoteRuns}\n"""`;
 }
 
@@ -275,13 +484,14 @@ function renderCodexExport(definition: AgentDefinition, header: string): Compile
     `developer_instructions = ${tomlMultilineString(header)}`,
     `sandbox_mode = ${tomlString(sandboxMode)}`,
   ];
+  const draft = `${lines.join("\n")}\n`;
   return {
     ok: true,
     result: {
       target: "codex",
       supportLevel: "adapter",
       relativePath: `.codex/agents/${definition.name}.toml`,
-      content: `${lines.join("\n")}\n`,
+      content: finalizeAgentContentHash(draft),
       droppedTools: [],
     },
   };
@@ -293,28 +503,35 @@ function renderCodexExport(definition: AgentDefinition, header: string): Compile
  * carries the managed sentinel — it is the first line of `prompt` instead.
  * `tools` uses kiro's documented coarse tags (`read`/`write`/`shell`/`web`,
  * `tools.ts`'s kiro map) — every vocabulary entry maps onto one of the four,
- * so nothing is ever dropped here. `model` is omitted (omit = inherit).
- * `allowedTools` is deliberately NOT emitted: its interaction with `tools`
- * is not confirmed by first-party docs, and inventing a value would be a
- * guess this renderer refuses to make.
+ * so nothing is ever dropped here for an unmapped-vocabulary reason (R1-F5's
+ * policy-driven strip below is the one source of `droppedTools` on kiro).
+ * `model` is omitted (omit = inherit). `allowedTools` is deliberately NOT
+ * emitted: its interaction with `tools` is not confirmed by first-party
+ * docs, and inventing a value would be a guess this renderer refuses to
+ * make. The whole `content` (a JSON document) is emitted via
+ * `JSON.stringify`, which is inherently injection-safe (R1-F1) — no manual
+ * escaping needed here the way the md/TOML renderers need.
  */
 function renderKiroExport(definition: AgentDefinition, header: string): CompileResult {
-  const { mappedTools, droppedTools } = mapToolsForTarget(definition.tools, "kiro");
+  const { allowed, strippedForPolicy } = stripMutationToolsForPolicy(definition.tools, definition.policy_profile);
+  const { mappedTools, droppedTools } = mapToolsForTarget(allowed, "kiro");
+  const kiroTools = mappedTools.length > 0 ? mappedTools : KIRO_READ_BASELINE;
   const prompt = `${agentManagedSentinelText(definition)}\n\n${header}`;
   const doc = {
     name: definition.name,
     description: definition.description,
     prompt,
-    tools: mappedTools,
+    tools: kiroTools,
   };
+  const draft = `${JSON.stringify(doc, null, 2)}\n`;
   return {
     ok: true,
     result: {
       target: "kiro",
       supportLevel: "adapter",
       relativePath: `.kiro/agents/${definition.name}.json`,
-      content: `${JSON.stringify(doc, null, 2)}\n`,
-      droppedTools,
+      content: finalizeAgentContentHash(draft),
+      droppedTools: [...droppedTools, ...strippedForPolicy],
     },
   };
 }
@@ -329,7 +546,8 @@ function renderKiroExport(definition: AgentDefinition, header: string): CompileR
  * regardless of what `tools[]` names — the enforced policy always wins over
  * a merely-declared intent; `webfetch`/`websearch` are non-mutating and
  * follow tool presence alone, unaffected by the write/no-write distinction
- * `policy_profile` encodes). `mode: subagent` and an omitted `model` (=
+ * `policy_profile` encodes — this is already the reference implementation
+ * R1-F5 held claude/kiro to). `mode: subagent` and an omitted `model` (=
  * inherit) are both fixed per docs.
  */
 function renderOpencodeExport(definition: AgentDefinition, header: string): CompileResult {
@@ -344,7 +562,7 @@ function renderOpencodeExport(definition: AgentDefinition, header: string): Comp
   };
   const frontmatter = [
     "---",
-    `description: ${definition.description}`,
+    `description: ${yamlDoubleQuoted(definition.description)}`,
     "mode: subagent",
     "permission:",
     `  edit: ${permission.edit}`,
@@ -353,14 +571,14 @@ function renderOpencodeExport(definition: AgentDefinition, header: string): Comp
     `  websearch: ${permission.websearch}`,
     "---",
   ].join("\n");
-  const content = `${frontmatter}\n${mdSentinelLine(definition)}\n\n${header}\n`;
+  const draft = `${frontmatter}\n${mdSentinelLine(definition)}\n\n${header}\n`;
   return {
     ok: true,
     result: {
       target: "opencode",
       supportLevel: "adapter",
       relativePath: `.opencode/agents/${definition.name}.md`,
-      content,
+      content: finalizeAgentContentHash(draft),
       droppedTools,
     },
   };
@@ -424,7 +642,10 @@ export function compileAgentHeader(definition: AgentDefinition): CompileHeaderRe
       },
     };
   }
-  if (definition.body.includes(PROMPT_DEFENSE_BASELINE)) {
+  // R1-F14: an exact copy OR a long-enough near-copy (reworded/re-wrapped) of
+  // the baseline in the body is rejected the same way — see
+  // `containsBaselineNearCopy` above.
+  if (definition.body.includes(PROMPT_DEFENSE_BASELINE) || containsBaselineNearCopy(definition.body)) {
     return {
       ok: false,
       error: {
