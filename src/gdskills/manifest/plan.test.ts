@@ -229,6 +229,94 @@ test("a hook-runtime module whose target the capability matrix marks unsupported
   expect(plan.errors.some((e) => e.includes("hook-a") && e.includes("W1-AC5"))).toBe(true);
 });
 
+test("F4: a hook-runtime module's matrix check covers EVERY declared target, not only the install target", async () => {
+  // hook-a's own `targets` is only ["keryx-shell"] in FIXTURE_MANIFEST; build a
+  // manifest where a hook-runtime module also names a second, unsupported
+  // target, and plan for a DIFFERENT target than either — the matrix defect
+  // (checking only the requested install target) would miss this entirely.
+  const manifest: InstallManifest = {
+    ...FIXTURE_MANIFEST,
+    profiles: {
+      ...FIXTURE_MANIFEST.profiles,
+      withhook2: { description: "hook2", modules: ["hook-multi"], components: [] },
+    },
+    modules: {
+      ...FIXTURE_MANIFEST.modules,
+      "hook-multi": {
+        kind: "hook-runtime",
+        description: "hook multi-target",
+        paths: ["rules/a.mdc"],
+        targets: ["claude", "keryx-shell"],
+        dependencies: [],
+        defaultInstall: true,
+        cost: "light",
+        stability: "stable",
+      },
+    },
+  };
+  const plan = await planInstall({
+    manifest,
+    profileId: "withhook2",
+    target: "claude",
+    repoRoot: root,
+    matrix: UNSUPPORTED_MATRIX, // only declares keryx-shell, and marks it "unsupported"
+  });
+  expect(plan.ok).toBe(false);
+  expect(
+    plan.errors.some((e) => e.includes("hook-multi") && e.includes("keryx-shell") && e.includes("W1-AC5")),
+  ).toBe(true);
+});
+
+test("F3: an unrecognised target fails the plan by name instead of resolving to an ok, empty plan", async () => {
+  const plan = await planInstall({
+    manifest: FIXTURE_MANIFEST,
+    profileId: "base",
+    target: "../../victim" as unknown as Parameters<typeof planInstall>[0]["target"],
+    repoRoot: root,
+  });
+  expect(plan.ok).toBe(false);
+  expect(plan.modules).toEqual([]);
+  expect(plan.errors.some((e) => e.includes("unknown target"))).toBe(true);
+});
+
+test("F3: a recognised harness id with no v1 destination table entry fails the plan by name", async () => {
+  const plan = await planInstall({
+    manifest: FIXTURE_MANIFEST,
+    profileId: "base",
+    target: "codex",
+    repoRoot: root,
+  });
+  expect(plan.ok).toBe(false);
+  expect(plan.errors.some((e) => e.includes("codex") && e.includes("no destination table"))).toBe(true);
+});
+
+test("F15: an unknown --with/--without id fails the plan by name instead of being silently ignored", async () => {
+  const plan = await planInstall({
+    manifest: FIXTURE_MANIFEST,
+    profileId: "base",
+    target: "claude",
+    repoRoot: root,
+    with: ["does-not-exist"],
+    without: ["also-not-real"],
+  });
+  expect(plan.ok).toBe(false);
+  expect(plan.errors.some((e) => e.includes("does-not-exist") && e.includes("--with"))).toBe(true);
+  expect(plan.errors.some((e) => e.includes("also-not-real") && e.includes("--without"))).toBe(true);
+});
+
+test("F15: --without a dependency of an otherwise-selected module fails the plan naming the dependency chain", async () => {
+  const plan = await planInstall({
+    manifest: FIXTURE_MANIFEST,
+    profileId: "depcheck",
+    target: "claude",
+    repoRoot: root,
+    with: ["skill-c"], // pulls in rule-a as a dependency
+    without: ["rule-a"], // then tries to drop the dependency itself
+  });
+  expect(plan.ok).toBe(false);
+  expect(plan.errors.some((e) => e.includes("rule-a") && e.includes("skill-c"))).toBe(true);
+});
+
 test("a module whose paths resolve to zero files fails the plan with a named reason", async () => {
   const manifest: InstallManifest = {
     ...FIXTURE_MANIFEST,

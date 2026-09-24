@@ -38,7 +38,7 @@ import path from "node:path";
 import { sha256OfFile } from "../../integrations/install-state";
 import { generateCapabilityMatrix, type CapabilityMatrixDocument, type MatrixSurfaceState } from "../../integrations/matrix";
 import { resolveGlobs } from "./glob";
-import type { HarnessId, InstallManifest, ManifestModule, ModuleKind } from "./manifest";
+import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ModuleKind } from "./manifest";
 
 export interface StackDetectionInput {
   tags: Record<string, boolean>;
@@ -104,6 +104,34 @@ export interface PlanInstallInput {
 }
 
 const DEFAULT_TARGET: HarnessId = "claude";
+
+/**
+ * F3: the only targets `destinationFor`'s v1 table (below) actually resolves.
+ * A `target` outside this set previously fell through the per-module
+ * `!module.targets.includes(target)` skip for every real module (no module's
+ * `targets` array names a bogus/unsupported harness), producing an `ok`
+ * EMPTY plan instead of a named error — and the same unvalidated string then
+ * reached `skillsInstallStatePath` as a raw filename component. `planInstall`
+ * now refuses any `target` that is not one of these two, named, before the
+ * per-module loop runs at all.
+ */
+export const SUPPORTED_TARGETS: readonly HarnessId[] = ["claude", "keryx-shell"];
+
+/**
+ * F17: the exact set of directories `destinationFor` (below) can ever write
+ * under for `target`, shared by `doctor.ts`'s orphan scan so the two can
+ * never drift apart. Includes the pack-namespaced stack-rule root
+ * (`.metaproject/rules/stacks` / the `<pack>-` prefixed `.claude/rules`
+ * entries live inside the bare `.claude/rules` root already listed) even
+ * though no single stack-rule destination is enumerable ahead of time.
+ */
+export function destinationRootsForTarget(target: string): string[] {
+  if (target === "claude") return [".claude/skills", ".claude/rules"];
+  if (target === "keryx-shell") {
+    return [".metaproject/skills/gdskills", ".metaproject/rules/core", ".metaproject/rules/stacks"];
+  }
+  return [];
+}
 
 /** Deterministic sha256 of a stack-detection document, `detectedAt` excluded (Lane A's fingerprint convention). */
 function stackInputsSha256(stack: StackDetectionInput): string {
@@ -276,6 +304,53 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
       ? { source: "none", uncertain: true }
       : { source: "provided", uncertain: input.stack.uncertain, inputsSha256: stackInputsSha256(input.stack) };
 
+  // F3: reject an unrecognised or unsupported `target` before it can either
+  // silently plan zero modules (every module's `targets` legitimately never
+  // names a bogus harness, so the per-module skip below would just produce
+  // an empty `ok: true` plan) or reach `skillsInstallStatePath` as a raw,
+  // unvalidated filename component.
+  if (!HARNESS_IDS.includes(target)) {
+    return {
+      schemaVersion: "1.0.0",
+      profile: input.profileId,
+      target,
+      stackInput,
+      components: [],
+      modules: [],
+      errors: [`unknown target "${target}" (not a recognised harness id)`],
+      ok: false,
+    };
+  }
+  if (!SUPPORTED_TARGETS.includes(target)) {
+    return {
+      schemaVersion: "1.0.0",
+      profile: input.profileId,
+      target,
+      stackInput,
+      components: [],
+      modules: [],
+      errors: [
+        `target "${target}" has no destination table in the v1 install-manifest yet ` +
+          `(supported targets: ${SUPPORTED_TARGETS.join(", ")})`,
+      ],
+      ok: false,
+    };
+  }
+
+  // F15: an unknown `--with`/`--without` id was previously silently ignored
+  // (it simply never matched anything in the module/component lookups
+  // below) — name it instead of pretending the flag had no effect.
+  for (const id of withList) {
+    if (manifest.modules[id] === undefined && manifest.components[id] === undefined) {
+      errors.push(`unknown id "${id}" passed to --with (not a module or component id in this manifest)`);
+    }
+  }
+  for (const id of withoutList) {
+    if (manifest.modules[id] === undefined && manifest.components[id] === undefined) {
+      errors.push(`unknown id "${id}" passed to --without (not a module or component id in this manifest)`);
+    }
+  }
+
   if (profile === undefined) {
     return {
       schemaVersion: "1.0.0",
@@ -284,7 +359,7 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
       stackInput,
       components: [],
       modules: [],
-      errors: [`unknown profile "${input.profileId}"`],
+      errors: [...errors, `unknown profile "${input.profileId}"`],
       ok: false,
     };
   }
@@ -352,7 +427,27 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
   // --without at module granularity, plus stripping modules whose owning
   // component was excluded and that are not required unconditionally/by another
   // included module's dependency chain.
+  const beforeWithout = new Set(selectedModuleIds);
   selectedModuleIds = selectedModuleIds.filter((id) => !withoutList.includes(id));
+
+  // F15: --without must not silently drop a module something ELSE still
+  // selected depends on — `dependencyClosure` guaranteed every dependency was
+  // present before this filter ran, so any dependency missing from the
+  // filtered set was removed BY `--without` specifically. Refuse (name the
+  // dependency chain) rather than shipping a plan with a broken dependency.
+  const afterWithout = new Set(selectedModuleIds);
+  for (const id of selectedModuleIds) {
+    const module = manifest.modules[id];
+    if (module === undefined) continue;
+    for (const dep of module.dependencies ?? []) {
+      if (beforeWithout.has(dep) && !afterWithout.has(dep)) {
+        errors.push(
+          `--without "${dep}" also excludes it as a dependency of selected module "${id}" — ` +
+            `pass --without "${id}" too, or drop "${dep}" from --without`,
+        );
+      }
+    }
+  }
 
   if (input.profileId === "full") {
     selectedModuleIds = selectedModuleIds.filter((id) => {
@@ -368,23 +463,35 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
     const module = manifest.modules[moduleId];
     if (module === undefined) continue; // reported already
 
+    // F4 (W1-AC5/AC6): a hook-runtime module's EVERY declared target must be
+    // matrix-native/adapter, not just the one harness this particular plan
+    // happens to be installing for — `targets` is a standing claim about the
+    // module ("this hook runs on these harnesses"), so checking only the
+    // current install target let a module claim an unsupported harness
+    // (e.g. plan for "claude" while `targets` also lists an unsupported
+    // "zed") and never get caught until someone planned for THAT target.
+    if (module.kind === "hook-runtime") {
+      for (const declaredTarget of module.targets) {
+        const state = matrixStateFor(matrix, declaredTarget);
+        if (state !== "native" && state !== "adapter") {
+          errors.push(
+            `module "${moduleId}" (hook-runtime) targets harness "${declaredTarget}", whose capability-matrix state is ` +
+              `"${state ?? "unknown"}", not native or adapter (W1-AC5)`,
+          );
+        }
+      }
+      // hook-runtime has no install destination in v1 regardless of target —
+      // this fires in addition to (not instead of) the per-target matrix
+      // errors above, matching the "any module kind with no v1 destination
+      // table entry fails the plan" rule `destinationFor` documents.
+      errors.push(`module "${moduleId}" (hook-runtime) has no install destination in the v1 destination table`);
+      continue;
+    }
+
     if (!module.targets.includes(target)) {
       // This module is not written for the requested target — nothing to
       // install for it here, and not an error: `targets` names what a module
       // is FOR, not every harness that must accept it.
-      continue;
-    }
-
-    if (module.kind === "hook-runtime") {
-      const state = matrixStateFor(matrix, target);
-      if (state !== "native" && state !== "adapter") {
-        errors.push(
-          `module "${moduleId}" (hook-runtime) targets harness "${target}", whose capability-matrix state is ` +
-            `"${state ?? "unknown"}", not native or adapter (W1-AC5)`,
-        );
-        continue;
-      }
-      errors.push(`module "${moduleId}" (hook-runtime) has no install destination in the v1 destination table`);
       continue;
     }
 

@@ -14,7 +14,8 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
-import { readSkillsInstallState, sha256OfFile } from "./state";
+import { destinationRootsForTarget } from "./plan";
+import { readSkillsInstallState, resolveContainedPath, skillsInstallStateIsUnreadable, sha256OfFile } from "./state";
 
 export type DoctorStatus = "ok" | "drifted" | "missing" | "orphaned";
 
@@ -28,12 +29,15 @@ export interface DoctorReport {
   target: string;
   entries: DoctorEntry[];
   ok: boolean;
-}
-
-function destinationRootsFor(target: string): string[] {
-  if (target === "claude") return [".claude/skills", ".claude/rules"];
-  if (target === "keryx-shell") return [".metaproject/skills/gdskills", ".metaproject/rules/core"];
-  return [];
+  /**
+   * F2/F17: non-empty when the recorded install-state itself could not be
+   * trusted — either the `<target>.json` file exists but is not valid
+   * install-state JSON (corrupt/schema-invalid), or a recorded path escapes
+   * the project root or this target's own destination roots. `entries` is
+   * empty and `ok` is false whenever this is non-empty: doctor refuses to
+   * re-hash or orphan-scan against state it cannot trust.
+   */
+  invalidState: string[];
 }
 
 async function listFilesRecursive(dir: string): Promise<string[]> {
@@ -53,7 +57,42 @@ async function listFilesRecursive(dir: string): Promise<string[]> {
 }
 
 export async function doctorInstall(repoRoot: string, target: string): Promise<DoctorReport> {
+  // F17: a `<target>.json` that exists but fails schema validation (corrupt
+  // JSON, or well-formed JSON that isn't valid install-state) must be
+  // reported as a problem, not silently read as "nothing recorded" — that
+  // would make doctor report a clean `ok` next to a genuinely broken file.
+  if (await skillsInstallStateIsUnreadable(repoRoot, target)) {
+    return {
+      target,
+      entries: [],
+      ok: false,
+      invalidState: [
+        `install-state for target "${target}" exists but is not valid install-state JSON (corrupt or schema-invalid) — refusing to read it`,
+      ],
+    };
+  }
+
   const state = await readSkillsInstallState(repoRoot, target);
+  const destinationRoots = destinationRootsForTarget(target);
+
+  // F2: every recorded path must be contained under the project root AND
+  // under this target's own destination roots before doctor trusts it for
+  // ANY filesystem read (re-hash, missing-check, orphan-scan exclusion) — a
+  // record naming `../victim.txt` must never be silently hashed or treated
+  // as legitimately "missing"/"ok".
+  const invalidState: string[] = [];
+  for (const record of state?.installedModules ?? []) {
+    for (const filePath of record.writtenPaths) {
+      const result = await resolveContainedPath(repoRoot, filePath, destinationRoots);
+      if (!result.ok) {
+        invalidState.push(`module "${record.moduleId}" recorded path "${filePath}": ${result.reason}`);
+      }
+    }
+  }
+  if (invalidState.length > 0) {
+    return { target, entries: [], ok: false, invalidState };
+  }
+
   const entries: DoctorEntry[] = [];
   const recordedPaths = new Set<string>();
 
@@ -72,7 +111,7 @@ export async function doctorInstall(repoRoot: string, target: string): Promise<D
     }
   }
 
-  for (const root of destinationRootsFor(target)) {
+  for (const root of destinationRoots) {
     const files = await listFilesRecursive(path.join(repoRoot, root));
     for (const abs of files) {
       const rel = path.relative(repoRoot, abs).split(path.sep).join("/");
@@ -83,5 +122,5 @@ export async function doctorInstall(repoRoot: string, target: string): Promise<D
   }
 
   entries.sort((a, b) => a.path.localeCompare(b.path));
-  return { target, entries, ok: entries.every((e) => e.status === "ok") };
+  return { target, entries, ok: entries.every((e) => e.status === "ok"), invalidState: [] };
 }

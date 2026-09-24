@@ -8,7 +8,15 @@
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
-import { readSkillsInstallState, sha256OfFile, writeSkillsInstallState, type InstalledModuleRecord } from "./state";
+import { destinationRootsForTarget } from "./plan";
+import {
+  readSkillsInstallState,
+  resolveContainedPath,
+  skillsInstallStateIsUnreadable,
+  sha256OfFile,
+  writeSkillsInstallState,
+  type InstalledModuleRecord,
+} from "./state";
 
 const DIFF_HEAD_BYTES = 200;
 
@@ -32,6 +40,14 @@ export interface UninstallResult {
   removed: string[];
   refused: UninstallRefusal[];
   diffs: UninstallDiffNote[];
+  /**
+   * F2: set, and nothing removed, when the recorded install-state itself
+   * could not be trusted (corrupt/schema-invalid file, or a recorded path
+   * escaping the project root or this target's destination roots) — the
+   * whole operation is refused rather than acting on the trustworthy-looking
+   * records while skipping the bad one.
+   */
+  error?: string;
 }
 
 async function headSnippet(absPath: string): Promise<string> {
@@ -51,7 +67,40 @@ export async function uninstallInstall(
 ): Promise<UninstallResult> {
   const state = await readSkillsInstallState(repoRoot, target);
   if (state === undefined) {
+    if (await skillsInstallStateIsUnreadable(repoRoot, target)) {
+      return {
+        ok: false,
+        removed: [],
+        refused: [],
+        diffs: [],
+        error: `install-state for target "${target}" exists but is not valid install-state JSON (corrupt or schema-invalid) — refusing to uninstall; nothing was removed`,
+      };
+    }
     return { ok: true, removed: [], refused: [], diffs: [] };
+  }
+
+  // F2: refuse the WHOLE operation, deleting nothing, if ANY recorded path in
+  // this state escapes the project root or this target's own destination
+  // roots — a state file cannot be partially trusted: an attacker (or a bug)
+  // able to slip one bad record into it should never be able to make
+  // uninstall act on the trustworthy-looking records while quietly skipping
+  // the traversal.
+  const destinationRoots = destinationRootsForTarget(target);
+  for (const record of state.installedModules) {
+    for (const filePath of record.writtenPaths) {
+      const result = await resolveContainedPath(repoRoot, filePath, destinationRoots);
+      if (!result.ok) {
+        return {
+          ok: false,
+          removed: [],
+          refused: [],
+          diffs: [],
+          error:
+            `install-state for target "${target}" module "${record.moduleId}" records an unsafe path ` +
+            `"${filePath}" (${result.reason}) — refusing to uninstall; nothing was removed`,
+        };
+      }
+    }
   }
 
   const removed: string[] = [];

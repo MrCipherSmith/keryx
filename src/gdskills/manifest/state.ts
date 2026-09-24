@@ -7,69 +7,149 @@
 // surface), not `.metaproject/data/integrations/install-state/<runtimeId>.json`
 // (W5-b's).
 
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathExists } from "../../lib/fs";
+import { isPathInside, pathExists } from "../../lib/fs";
 import { sha256OfFile, type InstallState, type InstalledModuleRecord } from "../../integrations/install-state";
+import { validateAgainstSchemaObject } from "../../contracts/validator";
+import installManifestSchemaJson from "../../../docs/requirements/keryx-agent-platform-expansion/schemas/install-manifest.schema.json" with {
+  type: "json",
+};
 
 export const SKILLS_INSTALL_STATE_SCHEMA_VERSION = "1.0.0";
 
 export { sha256OfFile };
 export type { InstallState, InstalledModuleRecord };
 
+/**
+ * F19: real schema validation, not a hand-rolled shape check — a document is
+ * install-state only when it satisfies install-manifest.schema.json's own
+ * `$defs/installState` (id patterns, sha256 hex pattern, `writtenPaths`
+ * `minItems: 1`, the harness-id enum on `target`, `additionalProperties:
+ * false`, ...). The `$ref` is resolved against the full schema's `$defs` by
+ * making that object double as the local validation root (see
+ * `validateAgainstSchemaObject`: the schema argument IS the `$ref` root).
+ */
+const INSTALL_STATE_SCHEMA = {
+  $ref: "#/$defs/installState",
+  $defs: (installManifestSchemaJson as unknown as { $defs: Record<string, unknown> }).$defs,
+};
+
+function isValidInstallState(value: unknown): value is InstallState {
+  return validateAgainstSchemaObject(INSTALL_STATE_SCHEMA, value).valid;
+}
+
+/** F3: a target id is only ever used as a bare filename component (`<target>.json`); reject anything that could traverse (`/`, `..`, an absolute path) before it ever reaches a path.join. */
+const TARGET_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+
 export function skillsInstallStatePath(repoRoot: string, target: string): string {
+  if (!TARGET_ID_PATTERN.test(target)) {
+    throw new Error(`invalid install-state target id "${target}" (must match ${TARGET_ID_PATTERN})`);
+  }
   return path.join(repoRoot, ".metaproject", "data", "skills", "install-state", `${target}.json`);
 }
 
-function normalizeRecord(value: unknown): InstalledModuleRecord | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-  const record = value as Record<string, unknown>;
-  if (typeof record.moduleId !== "string") return undefined;
-  if (!Array.isArray(record.writtenPaths) || !record.writtenPaths.every((p) => typeof p === "string")) return undefined;
-  const sha256Raw = record.sha256;
-  if (sha256Raw !== undefined && (typeof sha256Raw !== "object" || sha256Raw === null || Array.isArray(sha256Raw))) {
-    return undefined;
-  }
-  return {
-    moduleId: record.moduleId,
-    writtenPaths: [...(record.writtenPaths as string[])],
-    sha256: { ...((sha256Raw as Record<string, string> | undefined) ?? {}) },
-    managedSentinel: record.managedSentinel === true,
-    ...(typeof record.keryxVersion === "string" ? { keryxVersion: record.keryxVersion } : {}),
-    ...(typeof record.installedAt === "string" ? { installedAt: record.installedAt } : {}),
-  };
-}
-
-function normalizeState(value: unknown): InstallState | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const record = value as Record<string, unknown>;
-  if (record.schemaVersion !== SKILLS_INSTALL_STATE_SCHEMA_VERSION) return undefined;
-  if (!Array.isArray(record.installedModules)) return undefined;
-  const installedModules: InstalledModuleRecord[] = [];
-  for (const entry of record.installedModules) {
-    const normalized = normalizeRecord(entry);
-    if (!normalized) return undefined;
-    installedModules.push(normalized);
-  }
-  return {
-    schemaVersion: SKILLS_INSTALL_STATE_SCHEMA_VERSION,
-    target: typeof record.target === "string" ? record.target : "",
-    ...(typeof record.profile === "string" ? { profile: record.profile } : {}),
-    installedModules,
-    recordedAt: typeof record.recordedAt === "string" ? record.recordedAt : "",
-  };
-}
-
-/** Reads `<target>.json`, or `undefined` when absent/unreadable/not valid install-state JSON. */
-export async function readSkillsInstallState(repoRoot: string, target: string): Promise<InstallState | undefined> {
+async function parseInstallStateFile(
+  repoRoot: string,
+  target: string,
+): Promise<{ state: InstallState | undefined; unreadable: boolean }> {
   const file = skillsInstallStatePath(repoRoot, target);
-  if (!(await pathExists(file))) return undefined;
+  if (!(await pathExists(file))) return { state: undefined, unreadable: false };
   try {
     const parsed = JSON.parse(await readFile(file, "utf8")) as unknown;
-    return normalizeState(parsed);
+    if (isValidInstallState(parsed)) return { state: parsed, unreadable: false };
+    return { state: undefined, unreadable: true };
   } catch {
-    return undefined;
+    return { state: undefined, unreadable: true };
   }
+}
+
+/** Reads `<target>.json`, or `undefined` when absent/unreadable/not valid install-state JSON (schema-checked, F19). */
+export async function readSkillsInstallState(repoRoot: string, target: string): Promise<InstallState | undefined> {
+  return (await parseInstallStateFile(repoRoot, target)).state;
+}
+
+/**
+ * True when `<target>.json` EXISTS but is not usable install-state (bad
+ * JSON, or valid JSON that fails install-manifest.schema.json's
+ * `$defs/installState`) — the case `doctor`/`uninstall` must report as a
+ * problem (F17), distinct from "nothing recorded yet" (no file at all),
+ * which is normal and silent.
+ */
+export async function skillsInstallStateIsUnreadable(repoRoot: string, target: string): Promise<boolean> {
+  return (await parseInstallStateFile(repoRoot, target)).unreadable;
+}
+
+export type ContainedPathResult = { ok: true; abs: string } | { ok: false; reason: string };
+
+/** The nearest existing ancestor directory of `target` (including `target` itself if it exists). */
+async function nearestExistingAncestor(target: string): Promise<string> {
+  let dir = target;
+  for (;;) {
+    if (await pathExists(dir)) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return dir; // reached the filesystem root without finding anything
+    dir = parent;
+  }
+}
+
+/**
+ * F2/F3 class fix: the single containment guard for every place that turns a
+ * path RECORDED in install-state (never one this process just computed
+ * itself from the trusted destination table) into a filesystem operation —
+ * `uninstall.ts`'s `rm`, `doctor.ts`'s re-hash/orphan-scan, and `apply.ts`'s
+ * read of prior state. Refuses:
+ *   - an absolute path (a recorded path is always project-relative);
+ *   - any path whose textual resolution against `repoRoot` escapes it (`..`);
+ *   - a path that, once resolved through real symlinks (an intermediate
+ *     directory — e.g. a symlinked `.claude/` — pointing outside the
+ *     project), no longer resolves under `repoRoot`;
+ *   - (when `destinationRoots` is given) a path not under any of the
+ *     target's own known destination roots — a record naming a real,
+ *     contained file OUTSIDE those roots is still not something this
+ *     target's install/doctor/uninstall surface could ever have written.
+ * A record failing this check makes the WHOLE install-state document
+ * untrustworthy (see callers): this function only classifies one path, it
+ * never mutates or reads file content.
+ */
+export async function resolveContainedPath(
+  repoRoot: string,
+  relPath: string,
+  destinationRoots?: readonly string[],
+): Promise<ContainedPathResult> {
+  if (typeof relPath !== "string" || relPath.length === 0) {
+    return { ok: false, reason: "empty path" };
+  }
+  if (path.isAbsolute(relPath)) {
+    return { ok: false, reason: `absolute path "${relPath}" is not allowed in recorded install-state` };
+  }
+  const abs = path.join(repoRoot, relPath);
+  if (!isPathInside(repoRoot, abs)) {
+    return { ok: false, reason: `path "${relPath}" escapes the project root` };
+  }
+  if (destinationRoots !== undefined && destinationRoots.length > 0) {
+    const posixRel = relPath.split(path.sep).join("/");
+    const contained = destinationRoots.some((root) => posixRel === root || posixRel.startsWith(`${root}/`));
+    if (!contained) {
+      return {
+        ok: false,
+        reason: `path "${relPath}" is not under any of this target's known destination roots (${destinationRoots.join(", ")})`,
+      };
+    }
+  }
+
+  // Symlink escape: an intermediate directory (e.g. a symlinked `.claude/`)
+  // can make a textually-contained path resolve outside `repoRoot` on disk.
+  // Walk up to the nearest existing ancestor and compare ITS real path
+  // against the real path of `repoRoot` — `abs` itself need not exist yet.
+  const resolvedRoot = await realpath(repoRoot).catch(() => repoRoot);
+  const ancestor = await nearestExistingAncestor(path.dirname(abs));
+  const resolvedAncestor = await realpath(ancestor).catch(() => ancestor);
+  if (!isPathInside(resolvedRoot, resolvedAncestor)) {
+    return { ok: false, reason: `path "${relPath}" resolves outside the project root through a symlink` };
+  }
+
+  return { ok: true, abs };
 }
 
 function sortedRecords(records: readonly InstalledModuleRecord[]): InstalledModuleRecord[] {

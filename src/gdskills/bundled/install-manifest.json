@@ -27,6 +27,7 @@
         "skill-lifecycle"
       ],
       "components": [
+        "capability:mobx",
         "framework:react",
         "lang:ts-js-node"
       ],

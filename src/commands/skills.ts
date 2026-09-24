@@ -27,6 +27,8 @@ import {
   loadBundledManifest,
   planInstall,
   uninstallInstall,
+  HARNESS_IDS,
+  SUPPORTED_TARGETS,
   type HarnessId,
   type InstallPlan,
 } from "../gdskills/manifest";
@@ -225,6 +227,69 @@ const LEGACY_INSTALL_PROFILES = new Set(["minimal", "recommended", "full", "cust
  * `--profile` with neither a value nor a manifest flag defaults to the legacy
  * `recommended` profile, matching the pre-existing behaviour exactly.
  */
+/**
+ * F3: validate a raw `--target` string against the harness-id enum AND the
+ * v1 destination table (`claude`, `keryx-shell`) before it reaches
+ * `planInstall`/`doctorInstall`/`uninstallInstall` — those now refuse an
+ * invalid target themselves too (defense in depth), but validating here
+ * gives a clean, named CLI error instead of a plan/report full of internal
+ * per-module errors, and keeps `doctor`/`uninstall` (which never call
+ * `planInstall`) from reaching `skillsInstallStatePath` with an unvalidated
+ * string at all. `undefined` (flag omitted) defaults to `"claude"`, matching
+ * existing behaviour.
+ */
+function validateTargetArg(targetArg: string | undefined): HarnessId | { error: string } {
+  if (targetArg === undefined) return "claude";
+  if (!HARNESS_IDS.includes(targetArg as HarnessId)) {
+    return { error: `Unknown --target "${targetArg}" (not a recognised harness id).` };
+  }
+  if (!SUPPORTED_TARGETS.includes(targetArg as HarnessId)) {
+    return {
+      error: `--target "${targetArg}" has no destination table in the v1 install-manifest yet (supported: ${SUPPORTED_TARGETS.join(", ")}).`,
+    };
+  }
+  return targetArg as HarnessId;
+}
+
+/**
+ * F18: which install path `keryx skills install` takes for this argv — LEGACY
+ * (`installGdskillsLegacy`) or MANIFEST (`installFromManifest`). Extracted so
+ * the SAME decision function drives both `installSkillsCommand` and its own
+ * test, instead of two copies of the routing condition drifting apart.
+ */
+export function installRoute(profileArg: string | undefined, usesManifestFlags: boolean): "legacy" | "manifest" {
+  const isLegacyProfileId = profileArg === undefined || LEGACY_INSTALL_PROFILES.has(profileArg);
+  return !usesManifestFlags && isLegacyProfileId ? "legacy" : "manifest";
+}
+
+/**
+ * F18: `--dry-run`/`--json` alone (no `--with`/`--without`/`--target`/
+ * `--include-deprecated`) are the only manifest-only flags that can route a
+ * LEGACY profile id (`minimal`/`full`/...) onto the manifest path while the
+ * SAME profile id with no flags at all still runs the legacy installer —
+ * `keryx skills install --profile minimal --dry-run` previews the
+ * MANIFEST's own `minimal` profile, which is a different (and possibly
+ * larger/smaller) file set than `keryx skills install --profile minimal`
+ * (no `--dry-run`) actually installs. Rather than silently diverge, this
+ * case prints a note naming exactly that. `--with`/`--without`/`--target`/
+ * `--include-deprecated` are excluded here because those flags have no
+ * legacy-installer equivalent at all — there is nothing for them to diverge
+ * FROM, so no note is needed once one of them is present.
+ */
+export function installNeedsManifestPreviewNote(
+  profileArg: string | undefined,
+  opts: { withValues: string[]; withoutValues: string[]; targetArg: string | undefined; includeDeprecated: boolean },
+): boolean {
+  const isLegacyProfileId = profileArg === undefined || LEGACY_INSTALL_PROFILES.has(profileArg);
+  return (
+    isLegacyProfileId &&
+    opts.withValues.length === 0 &&
+    opts.withoutValues.length === 0 &&
+    opts.targetArg === undefined &&
+    !opts.includeDeprecated
+  );
+}
+
 async function installSkillsCommand(args: string[]): Promise<void> {
   const profileArg = optionValue(args, "--profile");
   const withValues = collectRepeatedOption(args, "--with");
@@ -237,10 +302,25 @@ async function installSkillsCommand(args: string[]): Promise<void> {
 
   const usesManifestFlags =
     withValues.length > 0 || withoutValues.length > 0 || targetArg !== undefined || includeDeprecated || dryRun || json;
-  const isLegacyProfileId = profileArg === undefined || LEGACY_INSTALL_PROFILES.has(profileArg);
 
-  if (!usesManifestFlags && isLegacyProfileId) {
+  if (installRoute(profileArg, usesManifestFlags) === "legacy") {
     await installGdskillsLegacy(profileArg);
+    return;
+  }
+
+  if (installNeedsManifestPreviewNote(profileArg, { withValues, withoutValues, targetArg, includeDeprecated })) {
+    console.error(
+      `Note: "--profile ${profileArg ?? "recommended"}" is a legacy profile id; ${dryRun ? "--dry-run" : "--json"} ` +
+        `always resolves it through the manifest-driven installer instead, previewing THAT profile's plan. ` +
+        `Running "keryx skills install --profile ${profileArg ?? "recommended"}" without --dry-run/--json installs ` +
+        `the legacy curated subset, which may differ. Pass --with/--without/--target to use the manifest installer for real.`,
+    );
+  }
+
+  const targetValidation = validateTargetArg(targetArg);
+  if (typeof targetValidation !== "string") {
+    console.error(targetValidation.error);
+    process.exitCode = 1;
     return;
   }
 
@@ -248,7 +328,7 @@ async function installSkillsCommand(args: string[]): Promise<void> {
     profileId: profileArg ?? "core",
     withValues,
     withoutValues,
-    target: targetArg as HarnessId | undefined,
+    target: targetArg === undefined ? undefined : targetValidation,
     includeDeprecated,
     dryRun,
     json,
@@ -430,20 +510,38 @@ async function installFromManifest(opts: {
         console.log(`- ${skipped.path}: ${skipped.reason}`);
       }
     }
+    if (result.errors.length > 0) {
+      console.log("Errors:");
+      for (const error of result.errors) {
+        console.log(`- ${error}`);
+      }
+    }
   }
   if (!result.ok) process.exitCode = 1;
 }
 
 async function doctorSkillsCommand(args: string[]): Promise<void> {
-  const target = (optionValue(args, "--target") ?? "claude") as HarnessId;
+  const targetArg = optionValue(args, "--target");
   const json = args.includes("--json");
+  const targetValidation = validateTargetArg(targetArg);
+  if (typeof targetValidation !== "string") {
+    console.error(targetValidation.error);
+    process.exitCode = 1;
+    return;
+  }
+  const target = targetValidation;
   const report = await doctorInstall(process.cwd(), target);
 
   if (json) {
     console.log(JSON.stringify(report, null, 2));
   } else {
     banner("keryx skills doctor", `Target: ${target}`);
-    if (report.entries.length === 0) {
+    if (report.invalidState.length > 0) {
+      console.log("Invalid install-state (refusing to trust it):");
+      for (const reason of report.invalidState) {
+        console.log(`- ${reason}`);
+      }
+    } else if (report.entries.length === 0) {
       note("Nothing recorded for this target.");
     }
     for (const entry of report.entries) {
@@ -456,10 +554,17 @@ async function doctorSkillsCommand(args: string[]): Promise<void> {
 }
 
 async function uninstallSkillsCommand(args: string[]): Promise<void> {
-  const target = (optionValue(args, "--target") ?? "claude") as HarnessId;
+  const targetArg = optionValue(args, "--target");
   const moduleId = optionValue(args, "--module");
   const force = args.includes("--force");
   const json = args.includes("--json");
+  const targetValidation = validateTargetArg(targetArg);
+  if (typeof targetValidation !== "string") {
+    console.error(targetValidation.error);
+    process.exitCode = 1;
+    return;
+  }
+  const target = targetValidation;
 
   const result = await uninstallInstall(process.cwd(), target, { moduleId, force });
 
@@ -467,6 +572,9 @@ async function uninstallSkillsCommand(args: string[]): Promise<void> {
     console.log(JSON.stringify(result, null, 2));
   } else {
     banner("keryx skills uninstall", `Target: ${target}${moduleId !== undefined ? ` · Module: ${moduleId}` : ""}`);
+    if (result.error !== undefined) {
+      console.log(`  ${style.red(symbols.cross)} ${result.error}`);
+    }
     console.log(`  ${style.green(symbols.ok)} Removed ${result.removed.length} file(s).`);
     if (result.diffs.length > 0) {
       console.log("Force-removed drifted files:");
@@ -1592,7 +1700,12 @@ Commands:
   install   Install bundled gdskills into .metaproject (legacy profile), or resolve/apply a
             profile->modules/components install-manifest plan (--with/--without/--target/
             --dry-run/--json/--include-deprecated, or a non-legacy profile id such as
-            core|react|nestjs|python)
+            core|react|nestjs|python). --target only accepts claude|keryx-shell (the only
+            targets with a v1 destination table) — any other value is a named error, never
+            an empty plan. NOTE: --dry-run/--json on a LEGACY profile id (minimal|full|...)
+            with no other manifest flag always previews the MANIFEST-driven installer's own
+            same-named profile, which can differ from the legacy install the same command
+            without --dry-run/--json would run; the CLI prints this note when it applies.
   doctor    Compare recorded install-state to disk: ok/drifted/missing/orphaned per path
   uninstall Remove only the paths recorded in install-state for a target (optionally one module)
   create    Create a canonical project skill package

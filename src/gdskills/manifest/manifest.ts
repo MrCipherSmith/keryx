@@ -33,6 +33,22 @@ export type HarnessId =
   | "generic-mcp"
   | "keryx-shell";
 
+/** Every id `$defs/harnessId` in install-manifest.schema.json enumerates, in the schema's own order — the runtime-checkable mirror of the `HarnessId` type, used to validate an arbitrary `--target`/`target` string before it is trusted anywhere (e.g. `planInstall`, `skillsInstallStatePath`). */
+export const HARNESS_IDS: readonly HarnessId[] = [
+  "claude",
+  "codex",
+  "cursor",
+  "windsurf",
+  "gemini-cli",
+  "kiro",
+  "github-copilot-agent",
+  "zed",
+  "antigravity",
+  "opencode",
+  "generic-mcp",
+  "keryx-shell",
+];
+
 export type ModuleKind = "rule" | "skill" | "agent-ref" | "hook-runtime" | "schema" | "doc";
 export type ModuleCost = "light" | "medium" | "heavy";
 export type ModuleStability = "experimental" | "stable" | "deprecated";

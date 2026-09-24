@@ -11,8 +11,8 @@ content, and even those are review-only — there is no implementation skill for
 either stack. Nothing detects which stack a project uses at the catalog level;
 the only existing signal, `metadata.stack_requires`, is a narrow, manually
 authored tag consumed by exactly four review skills to gate dispatch, not to
-discover missing coverage or drive installation. This workstream is
-**planned**: it defines (1) a deterministic stack-detection contract, (2) a
+discover missing coverage or drive installation. This workstream defines
+(1) a deterministic stack-detection contract, (2) a
 "stack pack" content shape (rules + skills + agent references) covering the
 languages/frameworks Keryx has none for today, (3) an install
 profile→module→component model with plan/state/doctor/uninstall commands, (4)
@@ -439,12 +439,45 @@ history is inspectable without guessing from a git blame.
   `--include-deprecated`, `--dry-run`, `--json`, `--force`) or a non-legacy
   profile id (e.g. `core`, `python`) instead routes to
   `planInstall`/`applyInstall`.
+  - **`--dry-run`/`--json` on a legacy profile id (review round 1, F18).**
+    `--dry-run` or `--json` alone (no `--with`/`--without`/`--target`/
+    `--include-deprecated`) is itself a manifest-only flag, so
+    `keryx skills install --profile minimal --dry-run` routes to the
+    manifest path and previews the MANIFEST's own `minimal` profile — a
+    different, independently-maintained module set than what
+    `keryx skills install --profile minimal` (no `--dry-run`) actually
+    installs via the legacy curated-subset installer. Rather than build a
+    true legacy dry-run (no preview capability exists for that path) or
+    silently let the two diverge, `installSkillsCommand`
+    (`src/commands/skills.ts`) prints a note naming exactly this whenever a
+    legacy profile id combines with `--dry-run`/`--json` and nothing else
+    manifest-only; `--with`/`--without`/`--target`/`--include-deprecated`
+    need no note since the legacy installer has no equivalent for them to
+    diverge FROM.
 - **v1 install destinations.** The module→file destination table in
-  `src/gdskills/manifest/plan.ts` (`destinationFor`) resolves only for
-  `--target claude` and `--target keryx-shell`; every other `HarnessId` the
-  type permits, and every module `kind` other than `rule`/`skill`
-  (`agent-ref`, `hook-runtime`, `schema`, `doc`), has no destination yet and
-  fails the plan with a named error rather than installing silently.
+  `src/gdskills/manifest/plan.ts` (`destinationFor`, and the roots
+  `destinationRootsForTarget` shares with `doctor.ts`'s orphan scan) resolves
+  only for `--target claude` and `--target keryx-shell`
+  (`plan.ts`'s `SUPPORTED_TARGETS`); every other `HarnessId` the type permits
+  fails `planInstall` (and, at the CLI layer, `install`/`doctor`/`uninstall`)
+  with a named error before any module-level work runs, rather than
+  resolving to an empty `ok` plan — and every module `kind` other than
+  `rule`/`skill` (`agent-ref`, `hook-runtime`, `schema`, `doc`) still fails
+  the plan with a named error per module, exactly as before.
+- **Install-state path safety (review round 1, F2/F3).** `state.ts`'s
+  `resolveContainedPath` is the one guard every place that turns a path
+  RECORDED in install-state into a filesystem operation goes through
+  (`uninstall.ts`'s removal, `doctor.ts`'s re-hash/orphan-exclusion,
+  `apply.ts`'s prior-state read) — it rejects an absolute path, a `..`
+  escape, a path outside the target's own destination roots, and a symlink
+  escape (e.g. a symlinked `.claude/`); a record failing it makes the WHOLE
+  install-state document untrustworthy for that call (`doctor` reports
+  `invalidState`, `uninstall`/`apply` refuse the whole operation and mutate
+  nothing). `state.ts`'s `readSkillsInstallState` validates a parsed document
+  against install-manifest.schema.json's own `$defs/installState` (not a
+  hand-rolled shape check), and `skillsInstallStatePath` rejects any target
+  id that is not a bare `^[a-z][a-z0-9-]*$` component before it can reach a
+  `path.join` at all.
 - **`eval` runner requirement.** `keryx skills eval` scenarios that need a
   headless agent run report `status: "not-run"` with a reason when no runner
   capability is configured (`--runner`), rather than failing or being
