@@ -1,4 +1,5 @@
 import { splitLogicalLines } from "../lib/text-lines";
+import { extractHeaderKey, isHarnessHeaderKey } from "./store";
 import { MEMORY_TYPES } from "./types";
 
 // Flow 313 (W4) review R1-F3: the LAST line of defense against a
@@ -20,19 +21,6 @@ import { MEMORY_TYPES } from "./types";
 // must not itself depend on a tool treating those bytes as ordinary text.
 // eslint-disable-next-line no-control-regex -- matching control characters is the point of this guard.
 const CONTROL_OR_LINE_BREAK_RE = new RegExp("[\\u0000-\\u001F\\u007F\\u2028\\u2029]");
-// Flow 313 (W4) review R3-F8: leading whitespace uses `\s`, the SAME class
-// `./store.ts`'s `locateHeaderField` uses (`^\s*${name}\s*:`) — not the
-// narrower `[ \t]*` this guard used pre-fix. That mismatch let a header line
-// prefixed with a whitespace codepoint OUTSIDE `[ \t]` (NBSP U+00A0, vertical
-// tab, form feed, the U+FEFF BOM, the U+3000 ideographic space) slip past
-// this guard while the parser still read it as a real header once written —
-// the guard and the parser must agree on one whitespace class, not two.
-// The header NAME itself is also loosened to match `./store.ts`'s
-// R3-F7 near-key fold (optional hyphen/underscore/whitespace between the two
-// words), so a near-miss spelling is refused here too, not only left to be
-// caught as an "invalid" (not "absent") header after the fact.
-const HARNESS_HEADER_LINE_RE = /^\s*(?:Source[\s_-]*Harness|Target[\s_-]*Harnesses)\s*:/i;
-
 // Flow 313 (W4) review R3-F8, choke point d: exported (and re-exported
 // through `./service.ts`, the ONLY module `src/mcp/` may import — M-3) so
 // the MCP `memory.propose` boundary's early pre-check uses this SAME
@@ -40,8 +28,24 @@ const HARNESS_HEADER_LINE_RE = /^\s*(?:Source[\s_-]*Harness|Target[\s_-]*Harness
 // and the line-split rule. `renderMemoryEntry` below remains the real,
 // authoritative guard for every caller; the MCP boundary's use of this
 // export is only a friendlier, fail-fast duplicate of the same check.
+//
+// Round-4 review: this used to be its own regex (`HARNESS_HEADER_LINE_RE`),
+// independent of `./store.ts`'s parser-side near-miss fold — the two could
+// and did drift (`p7b`: a singular `Target-Harness:`, a `Target‐Harnesses`
+// with a U+2010 hyphen, a zero-width-space key, and other near misses all
+// passed this guard, then the parser read them as present-but-invalid and
+// hid the entry from every harness, wedging `memory handoff` incomplete
+// until a human deleted the proposal). It now extracts the candidate KEY
+// with the SAME `extractHeaderKey` and folds it with the SAME
+// `isHarnessHeaderKey` the parser's `locateHeaderField` uses — one shared
+// near-miss header key matcher for both call sites, so a spelling the
+// parser would flag as present-but-invalid is refused HERE too, before it
+// is ever written.
 export function containsHarnessHeaderLine(value: string): boolean {
-  return splitLogicalLines(value).some((line) => HARNESS_HEADER_LINE_RE.test(line.normalize("NFKC")));
+  return splitLogicalLines(value).some((line) => {
+    const key = extractHeaderKey(line);
+    return key !== null && isHarnessHeaderKey(key);
+  });
 }
 
 export function renderMemoryEntry({

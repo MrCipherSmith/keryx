@@ -215,7 +215,13 @@ export function buildBundleArchive(
  * doing `Math.ceil(size / BLOCK)` or size-cap arithmetic on must not have to
  * defend against separately. Negative (and non-finite) parses fold to `0`.
  */
-function readOctal(buf: Buffer, start: number, len: number): number {
+// Flow 313 (W4) round-4 review R2-F21: exported ONLY so `archive.test.ts`
+// can assert this guard directly and deterministically (R2-I4's "negative
+// readOctal" case had no regression test — a full round-trip archive test
+// exercising the same guard depends on `Math.ceil`'s sign behavior at the
+// tar-entry-size call site, which masks the very case this function alone
+// guards). Every real caller stays within this file.
+export function readOctal(buf: Buffer, start: number, len: number): number {
   const raw = buf.subarray(start, start + len).toString("ascii").replace(/\0.*$/, "").trim();
   if (raw.length === 0) return 0;
   const parsed = Number.parseInt(raw, 8);

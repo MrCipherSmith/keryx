@@ -6,7 +6,7 @@ import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { DEFAULT_BUNDLE_LIMITS, buildBundleArchive, openBundle } from "./archive";
+import { DEFAULT_BUNDLE_LIMITS, buildBundleArchive, openBundle, readOctal } from "./archive";
 
 let root: string;
 
@@ -331,5 +331,27 @@ describe("buildBundleArchive + openBundle round trip", () => {
     const built = buildBundleArchive(files, Buffer.from("{}"));
     expect(built.ok).toBe(false);
     if (!built.ok) expect(built.refusal.reason).toBe("archive-invalid");
+  });
+
+  // Flow 313 (W4) round-4 review R2-F21: R2-I4's comment on `readOctal`
+  // documented a "negative octal size/checksum field folds to 0" guard with
+  // no test ever asserting it. Fails on the pre-fix code, which returned
+  // `Number.parseInt("-1", 8)` (`-1`) unguarded for a `-`-prefixed field.
+  test("R2-I4: readOctal folds a `-`-prefixed field to 0 instead of returning a negative number", () => {
+    const buf = Buffer.alloc(12);
+    buf.write("-1234567\0", 0, "ascii");
+    expect(readOctal(buf, 0, 12)).toBe(0);
+  });
+
+  test("R2-I4: readOctal folds a non-octal-garbage field to 0 instead of NaN", () => {
+    const buf = Buffer.alloc(12);
+    buf.write("zzzzzzzz\0", 0, "ascii");
+    expect(readOctal(buf, 0, 12)).toBe(0);
+  });
+
+  test("R2-I4: readOctal parses an ordinary positive octal field", () => {
+    const buf = Buffer.alloc(12);
+    buf.write("00000000144\0", 0, "ascii"); // octal 144 = decimal 100
+    expect(readOctal(buf, 0, 12)).toBe(100);
   });
 });

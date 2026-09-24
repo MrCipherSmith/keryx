@@ -119,6 +119,53 @@ test("R3-F8: a fullwidth-colon Source-Harness line in summary is refused", () =>
   ).toThrow(/Source-Harness|Target-Harnesses/);
 });
 
+// Flow 313 (W4) round-4 review R3-F8/R4-F1's `p7b` probe: pre-fix, the
+// guard's OWN regex (`HARNESS_HEADER_LINE_RE`) did not recognise a singular
+// `Target-Harness:`, a `Target-Harnesses` spelled with a U+2010 hyphen, or a
+// key carrying a zero-width space — all three passed the guard and were
+// written to disk, where `./store.ts`'s parser then read them as
+// present-but-invalid and hid the whole entry, wedging every later
+// `memory handoff` `incomplete`. The guard must refuse the exact same near
+// misses the parser would flag, using the SAME shared matcher (R3-F8) —
+// discriminating against the pre-fix `HARNESS_HEADER_LINE_RE`, which did not
+// catch any of these three.
+const R3_F8_NEAR_MISS_KEYS: Array<[string, string]> = [
+  ["singular Target-Harness", "Target-Harness: zed"],
+  ["U+2010 hyphen in Target-Harnesses", "Target‐Harnesses: zed"],
+  ["zero-width space inside Source-Harness", "Source​Harness: codex"],
+];
+
+for (const [label, line] of R3_F8_NEAR_MISS_KEYS) {
+  test(`R3-F8: a near-miss header key (${label}) in details is refused, not silently written`, () => {
+    expect(() =>
+      renderMemoryEntry({
+        title: "T",
+        type: "lesson",
+        date: "2026-01-01",
+        summary: "s",
+        details: `Legit text\n${line}\nmore text`,
+      }),
+    ).toThrow(/Source-Harness|Target-Harnesses/);
+  });
+}
+
+// Flow 313 (W4) round-4 review R3-F7 (generic fold): the fold now strips
+// EVERY non-letter/non-digit codepoint, not a hand-maintained separator
+// list — a "." word separator (never previously enumerated) folds to the
+// same canonical key as the ASCII hyphen. Discriminating against the
+// pre-fix separator-enumeration fold, which left "." untouched.
+test("R3-F7: a dot-separated near-miss key (Source.Harness) in details is refused", () => {
+  expect(() =>
+    renderMemoryEntry({
+      title: "T",
+      type: "lesson",
+      date: "2026-01-01",
+      summary: "s",
+      details: "Legit text\nSource.Harness: codex\nmore text",
+    }),
+  ).toThrow(/Source-Harness|Target-Harnesses/);
+});
+
 test("R1-F3: an ordinary title/summary/details with no header lines renders normally", () => {
   const rendered = renderMemoryEntry({
     title: "An ordinary title",

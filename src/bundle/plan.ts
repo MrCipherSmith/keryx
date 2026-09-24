@@ -444,20 +444,33 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
       (ledgerRecord.bundleId !== opts.manifest.bundleId ||
         (ledgerRecord.sourceProject !== undefined && opts.manifest.provenance.sourceProject !== undefined && ledgerRecord.sourceProject !== opts.manifest.provenance.sourceProject));
 
-    // Same-bundle case-variant of an already-owned path: the ledger record
-    // exists, is owned by THIS bundle, but was recorded under a DIFFERENT
-    // case than this entry's incoming path. Treated as the SAME logical
-    // target: resolved to the ledger's own recorded path rather than the
-    // incoming one, so a case-sensitive filesystem can never end up with a
-    // second, case-variant file for what the ledger already considers one
-    // target — apply then writes (and uninstall then removes) at that one
-    // recorded path either way. A case-variant owned by a DIFFERENT bundle
-    // is deliberately left pointed at the incoming path below; that is an
-    // ownership conflict, not a retarget, and needs --force like any other
-    // conflict.
+    // Case-variant of an already-owned path: the ledger record exists but
+    // was recorded under a DIFFERENT case than this entry's incoming path.
+    // Treated as the SAME logical target and resolved to the ledger's own
+    // recorded path rather than the incoming one — apply then writes (and
+    // uninstall then removes) at that one recorded path either way, so a
+    // case-sensitive filesystem can never end up with a second, case-variant
+    // file for what the ledger already considers one target.
+    //
+    // Flow 313 (W4) round-4 review R4-F6: this retarget used to apply ONLY
+    // for a same-bundle case-variant (`!ledgerOwnedByOther`); a FORCED
+    // cross-bundle case-variant transfer was deliberately left pointed at
+    // the incoming path, which is exactly what stranded the previous
+    // owner's file — the ledger keeps one record (now for the incoming
+    // bundle, at the incoming case), but the previous owner's file, at its
+    // OWN recorded case, was never touched and had no record pointing at it
+    // any more. Retargeting a cross-bundle transfer too (the simpler of the
+    // two documented options; the alternative, removing the previous file as
+    // part of the transfer, was rejected because it would delete a file
+    // `--force` did not ask to delete) makes a forced takeover REPLACE the
+    // previous owner's file at its own path — one file, one record, exactly
+    // like the same-bundle case already guarantees. `ledgerOwnedByOther`
+    // still drives the conflict/ownership bookkeeping below (via
+    // `currentSha256`/`ledgerSha256` read from this retargeted path); only
+    // the WRITE location itself is unconditional here.
     let effectiveTargetPath = target.absolutePath;
     let effectiveTargetRelative = targetRelative;
-    if (ledgerRecord !== undefined && !ledgerOwnedByOther && ledgerRecord.path !== targetRelative) {
+    if (ledgerRecord !== undefined && ledgerRecord.path !== targetRelative) {
       const recordedTarget = await targetFor({ path: ledgerRecord.path, kind: contentEntry.kind, scope: contentEntry.scope }, targetScope, ctx);
       if (!recordedTarget.ok) {
         refusals.push(recordedTarget.refusal);

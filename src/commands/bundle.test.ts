@@ -5,7 +5,7 @@
 // with `KERYX_HOME` pointed at a temp home so nothing touches the real
 // `~/.keryx/`.
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -473,5 +473,118 @@ describe("keryx bundle import --render-for", () => {
 
     // Nothing was written: neither the imported rule file nor any harness file.
     expect(existsSync(path.join(targetRoot, ".metaproject", "rules", "core", "acme-rule.mdc"))).toBe(false);
+  });
+
+  // Flow 313 (W4) round-4 review R2-F21/R2-F16: no regression test asserted
+  // the retry behaviour the R2-F16 comment on `appliedRuleEntries` (bundle.ts)
+  // documents. Fails on the pre-fix code, which gated the render on
+  // `writtenRuleEntries.length > 0` alone: a re-import whose rule entry
+  // buckets `identical` (bytes already match — exactly what a retry after an
+  // earlier render failure looks like, since the import's own files are
+  // fine) never re-attempted the render, so `rendered` stayed `undefined`
+  // and the on-disk harness file, once removed, was never recreated.
+  test("R2-F16: re-importing an unchanged rule still re-renders a harness file that went missing", async () => {
+    const home = await makeTempDir("keryx-bundle-home-");
+    process.env.KERYX_HOME = home;
+
+    const sourceRoot = await makeSourceProjectWithRule();
+    const bundleDir = path.join(await makeTempDir("keryx-bundle-out-"), "bundle-out");
+
+    install();
+    try {
+      await bundleCommand(["export", "--scope", "project", "--id", "rule-bundle-retry", bundleDir, "--json"], sourceRoot);
+    } finally {
+      restore();
+    }
+
+    const targetRoot = await makeTempDir("keryx-bundle-target-");
+
+    // First import: writes the rule file AND renders the harness file.
+    install();
+    try {
+      await bundleCommand(["import", bundleDir, "--render-for", "cursor", "--json"], targetRoot);
+      expect(process.exitCode).toBe(0);
+    } finally {
+      restore();
+    }
+    const renderedPath = path.join(targetRoot, ".cursor", "rules", "keryx-rules.mdc");
+    expect(existsSync(renderedPath)).toBe(true);
+
+    // Simulate a retry after an earlier render failure: the harness file is
+    // gone, but the imported rule file and the ledger are untouched — a
+    // re-import of the SAME bundle therefore buckets the rule entry
+    // `identical`, never `new`/`update`.
+    await rm(renderedPath, { force: true });
+    expect(existsSync(renderedPath)).toBe(false);
+
+    install();
+    try {
+      await bundleCommand(["import", bundleDir, "--render-for", "cursor", "--json"], targetRoot);
+      expect(process.exitCode).toBe(0);
+      const result = lastJson() as {
+        ok: boolean;
+        written: string[];
+        unchanged: string[];
+        rendered?: Array<{ harness: string; status: string; file?: string }>;
+      };
+      expect(result.written).toEqual([]);
+      expect(result.unchanged).toContain("project:rules/core/acme-rule.mdc");
+      expect(result.rendered?.some((r) => r.harness === "cursor" && r.file === ".cursor/rules/keryx-rules.mdc")).toBe(true);
+    } finally {
+      restore();
+    }
+
+    expect(existsSync(renderedPath)).toBe(true);
+    const rendered = await readFile(renderedPath, "utf8");
+    expect(rendered).toContain("acme-rule.mdc");
+  });
+
+  // Flow 313 (W4) round-4 review R2-F21/R2-F16: the human-readable (non-JSON)
+  // path's own comment says a `failed` render's messages were computed but
+  // never printed — only `--json` surfaced them. Fails on the pre-fix code,
+  // which printed only the `harness: status` line with no message lines
+  // beneath a `failed` entry.
+  test("R2-F16: a failed render's messages are printed in the human-readable path, not only --json", async () => {
+    const home = await makeTempDir("keryx-bundle-home-");
+    process.env.KERYX_HOME = home;
+
+    const sourceRoot = await makeSourceProjectWithRule();
+    const bundleDir = path.join(await makeTempDir("keryx-bundle-out-"), "bundle-out");
+
+    install();
+    try {
+      await bundleCommand(["export", "--scope", "project", "--id", "rule-bundle-failed-render", bundleDir, "--json"], sourceRoot);
+    } finally {
+      restore();
+    }
+
+    const targetRoot = await makeTempDir("keryx-bundle-target-");
+    // A read-only `.cursor/rules/` directory makes the rules-export
+    // surface's own file WRITE fail (the file itself does not exist yet, so
+    // the "before" read this surface does first is skipped) — reported as
+    // `status: "failed"` with non-empty `messages`, rather than the
+    // exception a directory-in-place-of-the-file would throw from that
+    // "before" read, which is a different, pre-existing gap outside this
+    // lane's scope.
+    const rulesDir = path.join(targetRoot, ".cursor", "rules");
+    await mkdir(rulesDir, { recursive: true });
+    await chmod(rulesDir, 0o500);
+
+    install();
+    try {
+      await bundleCommand(["import", bundleDir, "--render-for", "cursor"], targetRoot);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      restore();
+      await chmod(rulesDir, 0o700);
+    }
+
+    const output = captured.join("\n");
+    expect(output).toContain("cursor: failed");
+    // At least one non-empty message line was printed beneath the `failed`
+    // line, not just the bare status.
+    const failedLineIndex = captured.findIndex((line) => line.includes("cursor: failed"));
+    expect(failedLineIndex).toBeGreaterThanOrEqual(0);
+    expect(captured[failedLineIndex + 1]?.trim().length).toBeGreaterThan(0);
   });
 });

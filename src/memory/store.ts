@@ -1,6 +1,6 @@
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { isNotFound, pathExists } from "../lib/fs";
+import { isNotFound } from "../lib/fs";
 import { userStorePaths } from "../lib/keryx-home";
 import { splitLogicalLines } from "../lib/text-lines";
 import { isMemoryHarnessId, parseHarnessList } from "./harness-identity";
@@ -69,7 +69,21 @@ export async function collectEntries(cwd: string): Promise<MemoryEntry[]> {
 
   for (const { type, folder } of MEMORY_TYPES) {
     const dir = path.join(root, folder);
-    if (!(await pathExists(dir))) {
+    // Flow 313 (W4) review R3-F10: `lstat`, never `pathExists`/`stat` (which
+    // follow a symlink) — a memory-type folder that is ITSELF a symlink
+    // (`decisions -> /outside`) must never be traversed, exactly like
+    // `collectEntriesStrict`'s own type-folder check a few lines above in
+    // this file. Pre-fix, this lenient path (which feeds `memory.search`,
+    // `wiki.ask` and the MCP resources list) followed such a link and served
+    // outside `*.md` content through every one of those callers even though
+    // the strict scan already refused it — the two paths must agree.
+    let dirStats;
+    try {
+      dirStats = await lstat(dir);
+    } catch {
+      continue; // Absent is fine — this scan's own pre-existing convention.
+    }
+    if (dirStats.isSymbolicLink() || !dirStats.isDirectory()) {
       continue;
     }
     for (const name of await readdir(dir)) {
@@ -403,47 +417,76 @@ async function collectUnexpectedTopLevel(root: string, problems: MemoryScanProbl
 
 type HeaderFieldLocation = { matches: string[]; misplaced: boolean; nearInvalid: boolean };
 
-// Flow 313 (W4) review R3-F7: characters that are invisible or purely
-// presentational and must be stripped before a header KEY is folded for
-// near-match comparison — a zero-width space/joiner/non-joiner, the
-// byte-order-mark-as-ZWNBSP, and the soft hyphen. None of these ever belongs
-// in a header key; their only effect pre-fix was to make an
-// otherwise-exact key fail the exact-match regex and read as absent.
-// eslint-disable-next-line no-misleading-character-class -- each codepoint is matched independently; U+200B/U+200C/U+200D are not meant to combine here.
-const HEADER_KEY_IGNORABLE_RE = new RegExp("[\u200B\u200C\u200D\uFEFF\u00AD]", "g");
-// Every codepoint this codebase treats as an interchangeable "word
-// separator" inside a header key: ASCII/Unicode whitespace (`\s`, which
-// already covers NBSP and U+3000), the underscore, the ASCII hyphen, and
-// the Unicode hyphen/dash family (HYPHEN, NON-BREAKING HYPHEN, FIGURE DASH,
-// EN DASH, EM DASH). Folding all of these to nothing before comparison is
-// what makes `Source_Harness`, `Source Harness` and `Source‐Harness`
-// (U+2010) all fold to the same canonical key as `Source-Harness`.
-const HEADER_KEY_SEPARATOR_RE = new RegExp("[\\s_\u2010\u2011\u2012\u2013\u2014-]", "g");
-
+// Flow 313 (W4) review R3-F7/R4 (round 4, generic fold): a header KEY is
+// folded to its canonical comparison form by NFKC-normalising, lower-casing,
+// then stripping EVERY codepoint that is not a Unicode letter or digit —
+// not a hand-maintained list of "known separator" characters. This is
+// deliberately broad rather than enumerating word separators (whitespace,
+// underscore, the hyphen/dash family) one codepoint at a time: it folds
+// those AND every other punctuation/markup wrapper the round-4 review found
+// still slipping through (a "." separator, a zero-width joiner/space, a
+// minus sign, a Markdown **bold**/backtick/blockquote/heading wrapper, an
+// HTML comment) to the same result, because none of those characters is a
+// letter or digit either. A true confusable homoglyph (a Cyrillic letter
+// that LOOKS like Latin) is not folded by this — NFKC does not merge
+// distinct scripts — and stays a known, documented gap (round-4 review
+// R3-F7, still open).
 function foldHeaderKey(rawKey: string): string {
   return rawKey
     .normalize("NFKC")
-    .replace(HEADER_KEY_IGNORABLE_RE, "")
-    .replace(HEADER_KEY_SEPARATOR_RE, "")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
-// Canonical folded forms for each header name, plus the one singular/plural
-// slip R3-F7's evidence named explicitly ("singular-key"). This is
-// deliberately a short, explicit list — not a Levenshtein-distance fuzzy
-// match — so it catches exactly the near-misses the finding demonstrated
-// without ever mistaking an unrelated "Name:" line (e.g. a `- Source:`
-// provenance bullet) for a harness header.
-const HEADER_NEAR_KEY_FOLDS: Readonly<Record<string, ReadonlySet<string>>> = {
+// Flow 313 (W4) review R3-F8 (choke point d): the ONE shared set of folded
+// forms that count as a `Source-Harness`/`Target-Harnesses` header key —
+// used by BOTH `locateHeaderField` below (the parser) and
+// `containsHarnessHeaderLine` (`./templates.ts`'s `memory.propose` guard),
+// via the exported `isHarnessHeaderKey` below. Before this fix the guard had
+// its own independent regex (`HARNESS_HEADER_LINE_RE` in `templates.ts`)
+// that could and did drift from this fold — round 4's `p7b` probe wrote a
+// singular `Target-Harness:`, a `Target-Harnesses` with a U+2010 hyphen and
+// other near misses THROUGH the guard, which the parser then read as
+// present-but-invalid and hid from every harness, wedging `memory handoff`
+// incomplete. One canonical key set for both call sites closes that drift.
+// Per-header-name folded forms — kept per-name (rather than one flat set)
+// because `locateHeaderField` below still needs to know WHICH header a near
+// miss belongs to. Each set includes the header's own canonical fold plus
+// the one singular/plural slip the review's evidence named explicitly, so a
+// well-formed `Source-Harness:`/`Target-Harnesses:` line and a near-miss
+// spelling of it are recognised by the exact same comparison.
+const HARNESS_HEADER_NAME_FOLDS: Readonly<Record<string, ReadonlySet<string>>> = {
   "Source-Harness": new Set(["sourceharness", "sourceharnesses"]),
   "Target-Harnesses": new Set(["targetharnesses", "targetharness"]),
 };
+
+const HARNESS_HEADER_FOLDED_KEYS: ReadonlySet<string> = new Set(
+  Object.values(HARNESS_HEADER_NAME_FOLDS).flatMap((set) => Array.from(set)),
+);
+
+// Flow 313 (W4) review R3-F8: exported so `./templates.ts`'s
+// `containsHarnessHeaderLine` guard folds a candidate header KEY through the
+// exact same comparison the parser (`locateHeaderField` below) uses, instead
+// of maintaining a second pattern that can silently drift from this one.
+export function isHarnessHeaderKey(rawKey: string): boolean {
+  return HARNESS_HEADER_FOLDED_KEYS.has(foldHeaderKey(rawKey));
+}
 
 // A generic "<key>: <value>" line shape, used only to extract the KEY text
 // for near-match folding — matched against the line after NFKC
 // normalisation, so a fullwidth colon (U+FF1A) is already an ASCII `:` by
 // the time this runs.
 const GENERIC_KEY_LINE_RE = /^\s*(.*?)\s*:\s*(.*)$/;
+
+// Flow 313 (W4) review R3-F8: exported alongside `isHarnessHeaderKey` so a
+// caller that only has a raw line (not yet split into key/value) — the
+// `memory.propose` guard — extracts the same KEY text `locateHeaderField`
+// extracts below, rather than re-deriving its own extraction regex.
+export function extractHeaderKey(line: string): string | null {
+  const generic = line.normalize("NFKC").match(GENERIC_KEY_LINE_RE);
+  const key = generic?.[1] ?? "";
+  return key.length > 0 ? key : null;
+}
 
 // Header-block-scoped scan: lines strictly before the first `## ` section
 // heading (Flow 313 (W4) review R1-F3). Returns every RAW match for
@@ -469,7 +512,7 @@ const GENERIC_KEY_LINE_RE = /^\s*(.*?)\s*:\s*(.*)$/;
 function locateHeaderField(lines: string[], name: string): HeaderFieldLocation {
   const sectionIndex = lines.findIndex((line) => /^##\s+/.test(line));
   const pattern = new RegExp(`^\\s*${name}\\s*:\\s*(.*)$`, "i");
-  const nearFolds = HEADER_NEAR_KEY_FOLDS[name] ?? new Set<string>();
+  const nearFolds = HARNESS_HEADER_NAME_FOLDS[name] ?? new Set<string>();
   const matches: string[] = [];
   let misplaced = false;
   let nearInvalid = false;
@@ -490,10 +533,12 @@ function locateHeaderField(lines: string[], name: string): HeaderFieldLocation {
     // colon, or the named singular/plural slip). A near-miss is NOT
     // "absent": it is present but invalid, and must hide the entry from
     // every harness the same way `misplaced` already does, rather than
-    // silently falling through to the unrestricted default.
-    const generic = line.normalize("NFKC").match(GENERIC_KEY_LINE_RE);
-    const key = generic?.[1] ?? "";
-    if (key.length === 0 || !nearFolds.has(foldHeaderKey(key))) {
+    // silently falling through to the unrestricted default. Uses the SAME
+    // `extractHeaderKey`/`foldHeaderKey` the `memory.propose` guard uses
+    // (R3-F8) — one shared near-miss matcher, not two independently
+    // drifting ones.
+    const key = extractHeaderKey(line);
+    if (!key || !nearFolds.has(foldHeaderKey(key))) {
       return;
     }
     nearInvalid = true;

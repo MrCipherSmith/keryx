@@ -233,6 +233,56 @@ describe("planBundleImport buckets", () => {
     expect(plan.entries[0]?.targetPath).toBe(path.join(dir, "rules", "team.md"));
   });
 
+  // Flow 313 (W4) round-4 review R4-F6: a FORCED cross-bundle case-variant
+  // transfer must retarget to the ledger's own recorded path, exactly like
+  // the same-bundle case above — not just conflict/allow-with-force while
+  // staying pointed at the incoming case. Pre-fix, `effectiveTargetRelative`
+  // stayed at the incoming path whenever `ledgerOwnedByOther` was true, so
+  // `apply` wrote a SECOND file at the incoming case (a case-sensitive
+  // filesystem never folds "OWNED.md" onto "owned.md") while the ledger kept
+  // only one record — for the new file. The previous owner's file, still on
+  // disk at its own recorded case, was left with no record pointing at it:
+  // stranded. Fails on pre-fix code (`targetRelative`/`targetPath` would be
+  // the incoming "rules/OWNED.md", a path that shares no on-disk file with
+  // the recorded "rules/owned.md" on a case-sensitive filesystem).
+  test("R4-F6: a forced cross-bundle case-variant transfer retargets to the recorded path, not the incoming case", async () => {
+    const bytesA = Buffer.from("# bundle A, recorded lower-case\n");
+    const bytesB = Buffer.from("# bundle B, forced takeover, different case\n");
+    const dir = path.join(projectRoot, ".metaproject");
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(path.join(dir, "rules"), { recursive: true });
+    writeFileSync(path.join(dir, "rules", "owned.md"), bytesA); // ONLY this exact case exists on disk
+    await writeAppliedState(appliedStatePath("project", { projectRoot, homeDir, env: {} }), {
+      schemaVersion: 2,
+      entries: { "rules/owned.md": { bundleId: "bundle-a", sha256: sha256Hex(bytesA), kind: "rule", appliedAt: "2026-01-01T00:00:00.000Z", path: "rules/owned.md" } },
+    });
+
+    const entryB = entryFor("rules/OWNED.md", "rule", "project", bytesB);
+    const manifestB: BundleManifest = { ...manifestOf([entryB]), bundleId: "bundle-b" };
+    const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([["rules/OWNED.md", bytesB]]) };
+    // `--force` matches the RETARGETED path (as reported by an unforced
+    // plan's conflict, both as `targetRelative` and `displayId`) — the same
+    // rule an unforced same-bundle retarget already follows.
+    const plan = await planBundleImport({
+      source,
+      manifest: manifestB,
+      projectRoot,
+      homeDir,
+      env: {},
+      force: ["rules/owned.md"],
+    });
+
+    expect(plan.ok).toBe(true);
+    expect(plan.entries[0]?.bucket).toBe("conflict");
+    expect(plan.entries[0]?.conflictReason).toBe("owned-by-other-bundle");
+    expect(plan.entries[0]?.forced).toBe(true);
+    // Retargeted to the previous owner's recorded case, so apply overwrites
+    // the SAME file rather than creating a second, case-variant one.
+    expect(plan.entries[0]?.targetRelative).toBe("rules/owned.md");
+    expect(plan.entries[0]?.displayId).toBe("project:rules/owned.md");
+    expect(plan.entries[0]?.targetPath).toBe(path.join(dir, "rules", "owned.md"));
+  });
+
   // R3-F18: a bundle DECLARING the same bundleId as a previously-applied
   // bundle is not proof it is the same producer — a hand-crafted bundle can
   // trivially spoof any bundleId string. When the ledger record carries a

@@ -434,6 +434,37 @@ test("R3-F9/R3-F10: collectEntries skips a symlinked *.md file instead of follow
   }
 });
 
+// Flow 313 (W4) round-4 review R3-F10: the round-3 fix above only covered a
+// symlinked *FILE* inside a type folder. A type folder that is ITSELF a
+// symlink (`decisions -> outside`) was still traversed by the lenient scan,
+// serving outside content through `memory.search`, `wiki.ask` and the MCP
+// resources list even though `collectEntriesStrict` already refused it —
+// the two paths must agree. Fails on pre-fix code (the outside entry was
+// served); passes once `collectEntries` `lstat`s the type folder itself.
+test("R3-F10: collectEntries does not follow a memory-type folder that is itself a symlink", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "keryx-store-lenient-dirlink-"));
+  try {
+    const root = memoryRoot(cwd);
+    await mkdir(root, { recursive: true });
+    const outsideDir = path.join(cwd, "outside-decisions");
+    await mkdir(outsideDir, { recursive: true });
+    await writeFile(
+      path.join(outsideDir, "secret.md"),
+      "# Secret\n\nVersion: 0.1.0\nType: decision\nStatus: accepted\n\n## Summary\n\nSECRET.\n",
+    );
+    await symlink(await realpath(outsideDir), path.join(root, "decisions"));
+
+    const entries = await collectEntries(cwd);
+    expect(entries).toEqual([]);
+
+    const strict = await collectEntriesStrict(root);
+    expect(strict.status).toBe("incomplete");
+    expect(strict.problems).toEqual([{ path: "decisions/", reason: "not-a-regular-file" }]);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 test("R3-F9: collectEntries skips a directory named *.md instead of throwing EISDIR", async () => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "keryx-store-lenient-dir-"));
   try {
