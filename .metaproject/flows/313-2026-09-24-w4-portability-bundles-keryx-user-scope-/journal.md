@@ -24,3 +24,12 @@
 - 2026-09-24T07:30:51.985Z - task-attempt: T7: started (attempt 1) — 313-T7 lane dispatch
 - 2026-09-24T07:30:52.087Z - task-attempt: T8: started (attempt 1) — 313-T8 lane dispatch
 - 2026-09-24T07:30:52.171Z - task-attempt: T9: started (attempt 1) — 313-T9 lane dispatch
+- 2026-09-24T07:37:09.500Z - task-done: T7: W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)
+- 2026-09-24T07:45:09.768Z - task-done: T9: Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)
+- 2026-09-24T07:45:09.850Z - task-added: T15: Exclude SUBSYSTEM_INSTRUCTIONS from audit NON_JSON_HOOK_SURFACE_PATHS (instructions files double-counted as hook files) + test
+- 2026-09-24T07:48:35.202Z - task-done: T15: Exclude SUBSYSTEM_INSTRUCTIONS from audit NON_JSON_HOOK_SURFACE_PATHS (instructions files double-counted as hook files) + test
+- 2026-09-24T07:51:39.036Z - task-done: T6: Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)
+- 2026-09-24T07:52:01.118Z - task-done: T8: Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)
+- 2026-09-24T07:52:08Z - T8 DONE_WITH_CONCERNS accepted: --harness lives in src/commands/serve-mcp.ts (mcp.ts is a deprecation alias); MCP tools route through src/memory/service.ts (M-3 boundary); memory.search filtering matches by relativePath instead of editing metaproject-adapter.ts. No fix task needed.
+- 2026-09-24T07:52:08Z - T6 concern for T10: callers must read refusals before treating empty written/removed as no-op; audit.ts local structural type to be swapped for security/service RunAuditOptions in T10.
+- 2026-09-24T07:52:08.401Z - task-attempt: T10: started (attempt 1) — 313-T10 dispatch

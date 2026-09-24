@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T07:30:52.171Z",
+  "updatedAt": "2026-09-24T07:52:08.401Z",
   "source": {
     "type": "description",
     "ref": null
@@ -101,7 +101,7 @@
       "id": "T6",
       "title": "Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -115,13 +115,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -135,13 +136,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -155,13 +157,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -175,7 +178,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -184,8 +188,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:52:08.401Z",
+            "outcome": "started",
+            "detail": "313-T10 dispatch"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -246,6 +256,21 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Exclude SUBSYSTEM_INSTRUCTIONS from audit NON_JSON_HOOK_SURFACE_PATHS (instructions files double-counted as hook files) + test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -341,6 +366,41 @@
       "at": "2026-09-24T07:30:52.171Z",
       "event": "task-attempt",
       "detail": "T9: started (attempt 1) — 313-T9 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:37:09.500Z",
+      "event": "task-done",
+      "detail": "T7: W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)"
+    },
+    {
+      "at": "2026-09-24T07:45:09.768Z",
+      "event": "task-done",
+      "detail": "T9: Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)"
+    },
+    {
+      "at": "2026-09-24T07:45:09.850Z",
+      "event": "task-added",
+      "detail": "T15: Exclude SUBSYSTEM_INSTRUCTIONS from audit NON_JSON_HOOK_SURFACE_PATHS (instructions files double-counted as hook files) + test"
+    },
+    {
+      "at": "2026-09-24T07:48:35.202Z",
+      "event": "task-done",
+      "detail": "T15: Exclude SUBSYSTEM_INSTRUCTIONS from audit NON_JSON_HOOK_SURFACE_PATHS (instructions files double-counted as hook files) + test"
+    },
+    {
+      "at": "2026-09-24T07:51:39.036Z",
+      "event": "task-done",
+      "detail": "T6: Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)"
+    },
+    {
+      "at": "2026-09-24T07:52:01.118Z",
+      "event": "task-done",
+      "detail": "T8: Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)"
+    },
+    {
+      "at": "2026-09-24T07:52:08.401Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 313-T10 dispatch"
     }
   ]
 }
