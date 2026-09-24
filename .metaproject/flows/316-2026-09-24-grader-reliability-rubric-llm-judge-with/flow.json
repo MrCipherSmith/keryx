@@ -10,7 +10,7 @@
   "title": "Grader reliability: rubric LLM judge with anti-gaming tests for skill evals, validated on batch 1",
   "status": "in-progress",
   "createdAt": "2026-09-24T18:51:50.333Z",
-  "updatedAt": "2026-09-24T20:08:26.057Z",
+  "updatedAt": "2026-09-24T21:51:23.894Z",
   "source": {
     "type": "description",
     "ref": null
@@ -378,8 +378,19 @@
         "T16"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T20:10:11.735Z",
+            "outcome": "started",
+            "detail": "review round 1 on PR #698"
+          },
+          {
+            "at": "2026-09-24T20:35:07.818Z",
+            "outcome": "failed",
+            "detail": "round 1: 0 blocker, 4 major, 8 minor, 3 info; fix attempt 1 dispatched (T20-T24)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -419,6 +430,146 @@
             "at": "2026-09-24T19:05:36.950Z",
             "outcome": "started",
             "detail": "316-T19 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Fix r1: gate (records/passRate/trials, always re-score triggers, prompt binding, error verdicts, test-only fixture)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T17"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T20:35:07.341Z",
+            "outcome": "started",
+            "detail": "316-T20 fix attempt 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Fix r1: judge prompt v2, vague+subtle-wrong kinds, temperature 0, 3-sample recordings, integrity I7c/I10",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T17"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T20:35:07.503Z",
+            "outcome": "started",
+            "detail": "316-T21 fix attempt 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "Fix r1: content — vague/subtle_wrong calibrations, concrete pass criteria, literal anti_patterns, R1-5/R1-6 (4 packs)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T17"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T20:35:07.671Z",
+            "outcome": "started",
+            "detail": "316-T22 fix attempt 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "Re-record calibration (3 samples) and re-run honest 18-skill gate under prompt v2; apply outcome",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T20",
+        "T21",
+        "T22"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T21:05:54.872Z",
+            "outcome": "started",
+            "detail": "calibration dry run: 2 known-right mismatches (ts no-ts-ignore-suppression, react no-disable-hooks-lint); calibration fix dispatched"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "Docs r1: threat model (consistency not provenance), R1-9 fixes, re-run results, AC9 probe in flow package",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T23"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T21:41:06.527Z",
+            "outcome": "started",
+            "detail": "316-T24"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T25",
+      "title": "Apply re-run outcome: react back to experimental, remove react pair, python/go notes, shipped-state tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T23"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T21:41:06.390Z",
+            "outcome": "started",
+            "detail": "316-T25"
           }
         ]
       },
@@ -656,6 +807,106 @@
       "at": "2026-09-24T20:08:26.057Z",
       "event": "task-done",
       "detail": "T16: Docs: W1/W2, CLI reference, rubric-authoring and anti-gaming guide"
+    },
+    {
+      "at": "2026-09-24T20:10:11.735Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — review round 1 on PR #698"
+    },
+    {
+      "at": "2026-09-24T20:35:06.593Z",
+      "event": "task-added",
+      "detail": "T20: Fix r1: gate (records/passRate/trials, always re-score triggers, prompt binding, error verdicts, test-only fixture)"
+    },
+    {
+      "at": "2026-09-24T20:35:06.739Z",
+      "event": "task-added",
+      "detail": "T21: Fix r1: judge prompt v2, vague+subtle-wrong kinds, temperature 0, 3-sample recordings, integrity I7c/I10"
+    },
+    {
+      "at": "2026-09-24T20:35:06.882Z",
+      "event": "task-added",
+      "detail": "T22: Fix r1: content — vague/subtle_wrong calibrations, concrete pass criteria, literal anti_patterns, R1-5/R1-6 (4 packs)"
+    },
+    {
+      "at": "2026-09-24T20:35:07.021Z",
+      "event": "task-added",
+      "detail": "T23: Re-record calibration (3 samples) and re-run honest 18-skill gate under prompt v2; apply outcome"
+    },
+    {
+      "at": "2026-09-24T20:35:07.183Z",
+      "event": "task-added",
+      "detail": "T24: Docs r1: threat model (consistency not provenance), R1-9 fixes, re-run results, AC9 probe in flow package"
+    },
+    {
+      "at": "2026-09-24T20:35:07.341Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 316-T20 fix attempt 1"
+    },
+    {
+      "at": "2026-09-24T20:35:07.503Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 316-T21 fix attempt 1"
+    },
+    {
+      "at": "2026-09-24T20:35:07.671Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 316-T22 fix attempt 1"
+    },
+    {
+      "at": "2026-09-24T20:35:07.818Z",
+      "event": "task-attempt",
+      "detail": "T17: failed (attempt 2) — round 1: 0 blocker, 4 major, 8 minor, 3 info; fix attempt 1 dispatched (T20-T24)"
+    },
+    {
+      "at": "2026-09-24T20:43:31.889Z",
+      "event": "task-done",
+      "detail": "T22: Fix r1: content — vague/subtle_wrong calibrations, concrete pass criteria, literal anti_patterns, R1-5/R1-6 (4 packs)"
+    },
+    {
+      "at": "2026-09-24T20:53:56.229Z",
+      "event": "task-done",
+      "detail": "T21: Fix r1: judge prompt v2, vague+subtle-wrong kinds, temperature 0, 3-sample recordings, integrity I7c/I10"
+    },
+    {
+      "at": "2026-09-24T21:01:24.116Z",
+      "event": "task-done",
+      "detail": "T20: Fix r1: gate (records/passRate/trials, always re-score triggers, prompt binding, error verdicts, test-only fixture)"
+    },
+    {
+      "at": "2026-09-24T21:05:54.872Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — calibration dry run: 2 known-right mismatches (ts no-ts-ignore-suppression, react no-disable-hooks-lint); calibration fix dispatched"
+    },
+    {
+      "at": "2026-09-24T21:40:59.697Z",
+      "event": "task-done",
+      "detail": "T23: Re-record calibration (3 samples) and re-run honest 18-skill gate under prompt v2; apply outcome"
+    },
+    {
+      "at": "2026-09-24T21:41:06.254Z",
+      "event": "task-added",
+      "detail": "T25: Apply re-run outcome: react back to experimental, remove react pair, python/go notes, shipped-state tests"
+    },
+    {
+      "at": "2026-09-24T21:41:06.390Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 316-T25"
+    },
+    {
+      "at": "2026-09-24T21:41:06.527Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 316-T24"
+    },
+    {
+      "at": "2026-09-24T21:46:40.469Z",
+      "event": "task-done",
+      "detail": "T25: Apply re-run outcome: react back to experimental, remove react pair, python/go notes, shipped-state tests"
+    },
+    {
+      "at": "2026-09-24T21:51:23.894Z",
+      "event": "task-done",
+      "detail": "T24: Docs r1: threat model (consistency not provenance), R1-9 fixes, re-run results, AC9 probe in flow package"
     }
   ]
 }
