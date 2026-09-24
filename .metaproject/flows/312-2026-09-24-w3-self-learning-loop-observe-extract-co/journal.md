@@ -81,3 +81,12 @@
 - 2026-09-24T11:16:06.790Z - task-done: T19: Re-plan path scrubbing (token-based) for O3-1..O3-4; fix mkdocs strict links in learning.md
 - 2026-09-24T11:33:50.346Z - task-done: T20: Fix PR review round 1 (R1-F1..F9): store choke point, single learn arg parser
 - 2026-09-24 - PR #691 review round 1 ingested (R1-F1 blocker, R1-F2..F4 major, R1-F5..F9 minor). Fix strategy: one store choke point (updatePattern/createPattern under the lock; identity binding; accepted text immutable) and one learn argument parser. T20 DONE with discriminating tests. T19 DONE: token-based path classifier and mkdocs link fix.
+- 2026-09-24T11:34:03.974Z - task-attempt: T4: started (attempt 3) — PR review round 2 (opus)
+- 2026-09-24T11:42:17.955Z - task-attempt: T4: failed (attempt 4) — PR review round 2: 1 major (R2-F1 path-in-token regression), 6 minor, 1 info; CI typecheck-and-tests: test-coverage gate + facade ratchet 152>150
+- 2026-09-24T11:42:25.189Z - task-added: T21: Fix R2-F1: classify absolute paths embedded inside tokens (stack traces, JSON, redirects, file://)
+- 2026-09-24T11:42:25.335Z - task-added: T22: Fix R2-F2..F8 + CI gates (core-gate test coverage list, facade-bypass ratchet)
+- 2026-09-24T11:42:25.472Z - task-attempt: T21: started (attempt 1) — 312-T21 sonnet
+- 2026-09-24T11:42:25.599Z - task-attempt: T22: started (attempt 1) — 312-T22 sonnet
+- 2026-09-24T11:51:53.518Z - task-done: T21: Fix R2-F1: classify absolute paths embedded inside tokens (stack traces, JSON, redirects, file://)
+- 2026-09-24T12:00:13.100Z - task-done: T22: Fix R2-F2..F8 + CI gates (core-gate test coverage list, facade-bypass ratchet)
+- 2026-09-24 - PR review round 2 ingested (R2-F1 major, R2-F2..F7 minor, R2-F8 info); CI failed on the core-gate test list and the facade ratchet (152>150). T21 fixed R2-F1 (paths embedded in tokens; 12 discriminating tests). T22 fixed R2-F2..F8 and both CI gates (learning in test:core, ratchet back to <=150). R2-F5 test added separately. Next: review round 3, the last of the three-attempt budget.

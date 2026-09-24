@@ -1,0 +1,179 @@
+[
+  {
+    "id": "R2-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "Token-based path classifier regressed: absolute paths not at a token start (stack traces, JSON stdout, shell redirects) are not scrubbed from observation previews",
+    "impact": "Home usernames and outside-project directory names persist in observation files for common error and JSON outputs.",
+    "suggested_fix": "Also classify embedded absolute paths inside a token (after ( < > \" ' ` = :), strip file:// then classify; regression tests for stack-trace, JSON, redirect, file:// shapes.",
+    "evidence": "scratchpad/r691/r2/v2.ts: old '(x.ts:10:5)' vs new '(/Users/bob/other-client/src/x.ts:10:5)'; JSON and redirect shapes likewise unchanged on head.",
+    "confidence": "high",
+    "file": "src/learning/preview-scrub.ts",
+    "line": 171,
+    "class_scope": {
+      "sites": [
+        "preview-scrub.ts:146 TOKEN_RE",
+        "preview-scrub.ts:160 matchPrefixedPath",
+        "preview-scrub.ts:171 classifyPathInToken",
+        "observe.ts:189 rawInputPreviewText",
+        "observe.ts:213/226 rawOutputPreviewText",
+        "observe.ts:163 sanitizeForPreview"
+      ],
+      "enumeration_method": "keryx ctx rg over observe.ts/scan.ts for scrub/redact call sites; each shape probed via buildObservationLine on head vs f55e59de"
+    },
+    "global_id": "2026-09-24-ingest-691-r02#R2-F1"
+  },
+  {
+    "id": "R2-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "learn verbs ignore stray positionals and single-dash args; 'learn prune -h' and 'extract -h' run the real mutation",
+    "impact": "A help request or mistyped dry-run performs an irreversible prune or extract.",
+    "suggested_fix": "Single-dash args (except '-') are bad; enforce per-verb positional arity; per-subcommand -h/--help prints help.",
+    "evidence": "c1.ts: 'prune -h exit=0 obsFilesLeft=0'; 'extract -h exit=0'.",
+    "confidence": "high",
+    "file": "src/learning/cli-args.ts",
+    "line": 69,
+    "class_scope": {
+      "sites": [
+        "learn.ts:569 runPrune",
+        "learn.ts:254 runExtractCommand",
+        "learn.ts:294 runList",
+        "learn.ts:501 runGraduateRun",
+        "learn.ts id verbs extra positionals",
+        "review.ts:1444 runLearnReviewer"
+      ],
+      "enumeration_method": "every parseLearnArgs call site"
+    },
+    "global_id": "2026-09-24-ingest-691-r02#R2-F2"
+  },
+  {
+    "id": "R2-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "createPattern replaces rejected records and extract's rejected-dedup check is a read before the lock",
+    "impact": "Narrow race can resurface a human-rejected pattern; misleading doc.",
+    "suggested_fix": "createPattern takes an explicit replaceable-status list (extract: none/expired as documented; promote: rejected/expired/superseded); fix the doc.",
+    "evidence": "s1.ts S1: createPattern over rejected -> candidate.",
+    "confidence": "medium",
+    "file": "src/learning/store.ts",
+    "line": 327,
+    "class_scope": {
+      "sites": [
+        "store.ts:322 createPattern",
+        "extract.ts:227-237 upsertDraft",
+        "extract.ts:280",
+        "promote.ts:139-175"
+      ],
+      "enumeration_method": "keryx ctx rg 'createPattern\\(' src"
+    },
+    "global_id": "2026-09-24-ingest-691-r02#R2-F3"
+  },
+  {
+    "id": "R2-F4",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Choke-point source audit is bypassable and raw writePattern is still public API",
+    "impact": "The guard will not stop the regression it exists to prevent.",
+    "suggested_fix": "Stop exporting writePattern/writeIndex from the facade; enforce identity + accepted-text checks inside the low-level write; widen the audit to src/** with a \\bwritePattern\\b match outside store.ts.",
+    "evidence": "s1.ts S7: four bypass forms not detected.",
+    "confidence": "high",
+    "file": "src/learning/store-choke-point.test.ts",
+    "line": 41,
+    "class_scope": {
+      "sites": [
+        "store-choke-point.test.ts:41",
+        "store-choke-point.test.ts:15",
+        "index.ts:97-98",
+        "service.ts:19",
+        "store.ts:209-217"
+      ],
+      "enumeration_method": "read of guard test; S7 regex probe"
+    },
+    "global_id": "2026-09-24-ingest-691-r02#R2-F4"
+  },
+  {
+    "id": "R2-F5",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "updatePattern lets domain and reviewerProfile of an accepted record change without the capability",
+    "impact": "An accepted convention could be re-routed without a new human accept.",
+    "suggested_fix": "For accepted records whitelist mutable fields: evidence, confidence, confidenceLevel, graduation, updatedAt.",
+    "evidence": "s1.ts S3: domain changed to security without capability.",
+    "confidence": "high",
+    "file": "src/learning/store.ts",
+    "line": 302,
+    "class_scope": {
+      "sites": [
+        "store.ts:302",
+        "reviewer-profile.ts:184-185",
+        "apply.ts:171"
+      ],
+      "enumeration_method": "read of updatePattern and consumers"
+    },
+    "global_id": "2026-09-24-ingest-691-r02#R2-F5"
+  },
+  {
+    "id": "R2-F6",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Reviewer logins still persist: only the comment's own author is stripped, '_' after a login defeats the boundary, no substring refusal in extract/graduate/apply",
+    "impact": "Violates 'No attribution, ever' for stored records, learn review output and graduated bodies.",
+    "suggested_fix": "Pass all configured authors + reviewerProfiles; boundary (?<![A-Za-z0-9-])login(?![A-Za-z0-9-]) ('_' counts as boundary) or drop lessons containing any configured login; add the substring refusal in extract upsert and graduate apply.",
+    "evidence": "p4.ts: generalizeLesson('alicedev_ prefers early returns …',['alicedev']) unchanged.",
+    "confidence": "high",
+    "file": "src/learning/signals/reviewer-comment.ts",
+    "line": 68,
+    "class_scope": {
+      "sites": [
+        "signals/reviewer-comment.ts:68",
+        "reviewer-id.ts:66",
+        "graduate.ts buildAgentCandidate",
+        "apply.ts proposal rendering"
+      ],
+      "enumeration_method": "keryx ctx rg 'generalizeLesson|Attributed|authors|login' over learning writers"
+    },
+    "global_id": "2026-09-24-ingest-691-r02#R2-F6"
+  },
+  {
+    "id": "R2-F7",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "review learn --pr reads --dry-run via args.includes and --reviewer via optionValue, disagreeing with the parser",
+    "impact": "Preview request writes a proposal file; ambiguous reviewer id applied silently.",
+    "suggested_fix": "Parse runLearn args once with parseLearnArgs, refuse bad and repeated --reviewer, read values from the parser.",
+    "evidence": "c2.ts: ['learn','--pr','3','--dry-run=1'] not refused.",
+    "confidence": "medium",
+    "file": "src/commands/review.ts",
+    "line": 1397,
+    "class_scope": {
+      "sites": [
+        "review.ts:1397",
+        "review.ts:1400",
+        "review.ts:1331",
+        "review.ts:1444"
+      ],
+      "enumeration_method": "keryx ctx rg 'args.includes' in runLearn"
+    },
+    "global_id": "2026-09-24-ingest-691-r02#R2-F7"
+  },
+  {
+    "id": "R2-F8",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "'learn prune --dry-run' prints 'deleted N' though nothing is deleted",
+    "impact": "Operator cannot tell whether prune happened.",
+    "suggested_fix": "Print 'would delete / would expire' and a 'dry run — nothing written' line.",
+    "evidence": "c1.ts: 'prune --dry-run … deleted 1 observation file(s)' with obsFilesLeft=1.",
+    "confidence": "high",
+    "file": "src/commands/learn.ts",
+    "line": 579,
+    "class_scope": {
+      "sites": [
+        "learn.ts:578-584"
+      ],
+      "enumeration_method": "read of runPrune"
+    },
+    "global_id": "2026-09-24-ingest-691-r02#R2-F8"
+  }
+]
