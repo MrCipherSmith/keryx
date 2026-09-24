@@ -38,3 +38,14 @@
 - 2026-09-24T05:06:44.707Z - task-done: T2: Implement per plan
 - 2026-09-24 - T3: targeted suites (src/agents, src/integrations, src/security/audit-harness, agents commands, src/gdskills, import-policy/zones, src/standard) 1141 pass; 1 local failure src/gdskills/install.test.ts read-only retired-rule (EACCES) reproduces identically on the base branch worktree — pre-existing, unrelated. tsc + eslint on changed files clean.
 - 2026-09-24T05:07:25.493Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-24T05:08:01.318Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-24T05:08:01.407Z - task-attempt: T12: started (attempt 1) — review round 1
+- 2026-09-24T05:18:05.432Z - task-added: T14: Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle
+- 2026-09-24T05:18:05.519Z - task-added: T15: Fix round 1 (B): verify sourceRef/policy-tool checks, audit sentinel-scoped tier annotation, guide accuracy
+- 2026-09-24T05:18:05.599Z - task-attempt: T14: started (attempt 1) — 310-T14
+- 2026-09-24T05:18:05.682Z - task-attempt: T15: started (attempt 1) — 310-T15
+- 2026-09-24 - PR #684 opened (draft). Review round 1 (opus, adversarial): 2 blocker, 4 major, 5 minor, 4 info — ingested (reviews/2026-09-24-ingest-684). Blockers: unescaped YAML frontmatter in claude/opencode exports (6/10 agents invalid YAML, newline key injection); `integrations install --surface agents` EISDIR. Majors: symlink-following writes, empty tools ⇒ unrestricted Claude agent, read-only policy not enforced in host exports, keryx-shell sidecar unenforced but reported as nothing dropped. Reviewer incident: a probe ran `integrations install` against the review worktree (unsupported --root flag ignored) and restored it; confirmed clean. Info R1-F15 (bundled agent names coincide with a third-party catalogue's) — names are set by the W2 spec; left for owner awareness, no change. Fix tasks T14 (code) and T15 (verify/audit/docs) dispatched in parallel.
+- 2026-09-24T05:25:43.770Z - task-done: T15: Fix round 1 (B): verify sourceRef/policy-tool checks, audit sentinel-scoped tier annotation, guide accuracy
+- 2026-09-24 - T15 DONE (verify invalid-source-ref + policy-tool-conflict, sentinel-scoped audit tier, empty tools flagged, guide corrected). Orchestrator fixed one doc anchor (D-2 link) that check:doc-links rejected; its slug collapses the em-dash gap to a single hyphen.
+- 2026-09-24T05:35:56.347Z - task-done: T14: Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle
+- 2026-09-24 - T14 DONE: R1-F1..F10, F14 fixed with regression tests (555 targeted pass). Left: frontmatter.ts read-side quote-doubling (info).

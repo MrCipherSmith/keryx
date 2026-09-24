@@ -9,7 +9,7 @@
   "title": "W2: agent definitions compiled into dispatch contracts, per-harness exporters, initial generic agent catalog",
   "status": "in-progress",
   "createdAt": "2026-09-24T04:09:02.681Z",
-  "updatedAt": "2026-09-24T05:07:25.493Z",
+  "updatedAt": "2026-09-24T05:35:56.347Z",
   "source": {
     "type": "description",
     "ref": null
@@ -74,7 +74,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -82,7 +82,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -226,8 +227,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T05:08:01.407Z",
+            "outcome": "started",
+            "detail": "review round 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -246,6 +253,48 @@
             "at": "2026-09-24T04:56:27.546Z",
             "outcome": "started",
             "detail": "310-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T05:18:05.599Z",
+            "outcome": "started",
+            "detail": "310-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix round 1 (B): verify sourceRef/policy-tool checks, audit sentinel-scoped tier annotation, guide accuracy",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T05:18:05.682Z",
+            "outcome": "started",
+            "detail": "310-T15"
           }
         ]
       },
@@ -398,6 +447,46 @@
       "at": "2026-09-24T05:07:25.493Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T05:08:01.318Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T05:08:01.407Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — review round 1"
+    },
+    {
+      "at": "2026-09-24T05:18:05.432Z",
+      "event": "task-added",
+      "detail": "T14: Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle"
+    },
+    {
+      "at": "2026-09-24T05:18:05.519Z",
+      "event": "task-added",
+      "detail": "T15: Fix round 1 (B): verify sourceRef/policy-tool checks, audit sentinel-scoped tier annotation, guide accuracy"
+    },
+    {
+      "at": "2026-09-24T05:18:05.599Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 310-T14"
+    },
+    {
+      "at": "2026-09-24T05:18:05.682Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 310-T15"
+    },
+    {
+      "at": "2026-09-24T05:25:43.770Z",
+      "event": "task-done",
+      "detail": "T15: Fix round 1 (B): verify sourceRef/policy-tool checks, audit sentinel-scoped tier annotation, guide accuracy"
+    },
+    {
+      "at": "2026-09-24T05:35:56.347Z",
+      "event": "task-done",
+      "detail": "T14: Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle"
     }
   ]
 }
