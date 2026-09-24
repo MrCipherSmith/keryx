@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import {
   containsConfiguredLogin,
+  gateReviewerText,
   generalizeLesson,
   mayCarryReviewerText,
   REVIEWER_COMMENT_TRIGGER_PREFIX,
@@ -241,56 +242,136 @@ describe("mayCarryReviewerText", () => {
   });
 });
 
-// R7-F3: a source-scan guard so a future attribution gate cannot reintroduce
-// the R7-F2/R7-F3 drift — a `containsConfiguredLogin` call site outside this
-// file that is NOT scoped by `mayCarryReviewerText` (i.e. an unconditional
-// gate, or one scoped only by a hand-rolled `extractor === "reviewer-comment"`
-// check that silently drops the model-backed case again). `reviewer-profile.ts`
-// is explicitly allowlisted: it operates only over `domain:
-// "review-conventions"` records, which today only the `reviewer-comment`
-// signal ever produces, so it has no `Provenance` in scope to gate with.
-describe("guard: every containsConfiguredLogin call site outside reviewer-id.ts is scoped by mayCarryReviewerText", () => {
-  const ALLOWLISTED_FILES = new Set(["reviewer-profile.ts"]);
+/**
+ * Strips `/* ... *\/` and `// ...` comments from TypeScript source while
+ * leaving string/template literals untouched (a naive "strip from `//` to
+ * end of line" pass would truncate any line containing a URL string like
+ * `"https://..."`). Matches a string OR a comment; only a comment match is
+ * replaced.
+ */
+function stripComments(source: string): string {
+  const STRING_OR_COMMENT = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\//g;
+  return source.replace(STRING_OR_COMMENT, (match) => (match.startsWith("//") || match.startsWith("/*") ? "" : match));
+}
 
-  const CALL_MARKER = "containsConfiguredLogin(";
-  // How far back from a call site to look for a `mayCarryReviewerText(`
-  // reference gating it. Wide enough to span the longest doc comment +
-  // enclosing `if` in this codebase today (measured: the farthest real gate
-  // is ~2000 chars from its call site, in `applyGraduation`'s member-text
-  // gate), but local enough that it cannot reach into a wholly unrelated
-  // function elsewhere in the same file (e.g. `graduate.ts`'s
-  // `keywordSourceFor`, which also compares
-  // `record.provenance.extractor === "reviewer-comment"` for an unrelated
-  // reason — keyword-source selection, not an attribution gate — but never
-  // itself references `mayCarryReviewerText(`, so it cannot satisfy this
-  // guard for any call site even if it fell inside the window).
-  const WINDOW = 2500;
+function walkTsFiles(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry);
+    const stat = statSync(full);
+    if (stat.isDirectory()) {
+      walkTsFiles(full, out);
+    } else if (entry.endsWith(".ts") && !entry.endsWith(".test.ts")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
 
-  test("source scan", () => {
-    const dir = path.join(import.meta.dir);
-    const files = readdirSync(dir).filter(
-      (name) => name.endsWith(".ts") && !name.endsWith(".test.ts") && name !== "reviewer-id.ts",
-    );
+// R8-F3: the old guard only scanned THIS directory's top-level files for a
+// `containsConfiguredLogin(` call textually preceded (within a char window)
+// by `mayCarryReviewerText(` — proven, against `r12/g`'s five injected
+// mutations, to miss: a nested file (`signals/newgate.ts` — top-level-only
+// scan), a comment inserted between an unscoped call and an unrelated
+// `mayCarryReviewerText(` mention elsewhere in the file (defeats the window
+// check without actually gating anything), and an aliased import
+// (`containsConfiguredLogin as ccl` — the call site then reads `ccl(...)`,
+// which never matches the literal call marker at all). Only the plainest
+// mutation (an unscoped call added to a fresh top-level file with the
+// literal, unaliased name) was ever caught.
+//
+// The structural fix (R8-F1/R8-F2/R8-F3) makes the whole class of guard
+// evasion moot: `containsConfiguredLogin` is no longer called anywhere
+// outside `reviewer-id.ts` at all — every learned-text sink gates through
+// `gateReviewerText` instead, which applies `mayCarryReviewerText`
+// internally. So the guard no longer needs to find a call and check it is
+// "gated nearby"; it bans any REFERENCE (import, aliased import, or call) to
+// `containsConfiguredLogin` from every non-test `.ts` file under `src/`
+// (recursively — not just this directory) other than this one. There is no
+// allowlist any more: `reviewer-profile.ts` now gates through
+// `gateReviewerText` like every other sink (see that file).
+describe("guard: containsConfiguredLogin is never imported or called outside reviewer-id.ts", () => {
+  const SRC_ROOT = path.join(import.meta.dir, "..");
+  const SELF = path.join(import.meta.dir, "reviewer-id.ts");
+  const IDENTIFIER = /\bcontainsConfiguredLogin\b/;
+
+  test("source scan (recursive, comments stripped)", () => {
+    const files = walkTsFiles(SRC_ROOT).filter((file) => file !== SELF);
     expect(files.length).toBeGreaterThan(0); // sanity: the scan actually looked at something
 
     const offenders: string[] = [];
     for (const file of files) {
-      const source = readFileSync(path.join(dir, file), "utf8");
-      if (!source.includes(CALL_MARKER)) continue;
-      if (ALLOWLISTED_FILES.has(file)) continue;
-
-      let searchFrom = 0;
-      for (;;) {
-        const callIndex = source.indexOf(CALL_MARKER, searchFrom);
-        if (callIndex < 0) break;
-        searchFrom = callIndex + CALL_MARKER.length;
-        const windowStart = Math.max(0, callIndex - WINDOW);
-        const before = source.slice(windowStart, callIndex);
-        if (!before.includes("mayCarryReviewerText(")) {
-          offenders.push(`${file}@${callIndex}: containsConfiguredLogin call is not preceded by a mayCarryReviewerText guard within ${WINDOW} chars`);
-        }
+      const stripped = stripComments(readFileSync(file, "utf8"));
+      if (IDENTIFIER.test(stripped)) {
+        offenders.push(path.relative(SRC_ROOT, file));
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  // R8-F1/R8-F2/R8-F3: every module that writes learned/generalized text
+  // must go through the one consolidated gate rather than hand-rolling its
+  // own check (which is what let `promote.ts` skip attribution entirely,
+  // R8-F2).
+  test("every learned-text sink module imports gateReviewerText", () => {
+    const SINKS = ["extract.ts", "apply.ts", "graduate.ts", "promote.ts", "reviewer-profile.ts"];
+    const missing = SINKS.filter((name) => {
+      const source = stripComments(readFileSync(path.join(import.meta.dir, name), "utf8"));
+      return !/\bgateReviewerText\b/.test(source);
+    });
+    expect(missing).toEqual([]);
+  });
+});
+
+describe("gateReviewerText", () => {
+  const LOGINS = ["alice"];
+
+  test("refuses when trigger/action carries a configured login and provenance may carry reviewer text", () => {
+    const result = gateReviewerText(
+      { provenance: { extractor: "reviewer-comment" }, trigger: "irrelevant", action: "@alice prefers early returns" },
+      LOGINS,
+    );
+    expect(result.refused).toBe(true);
+  });
+
+  test("does not inspect trigger/action when provenance may not carry reviewer text", () => {
+    const result = gateReviewerText(
+      { provenance: { extractor: "reverted-edit" }, trigger: "irrelevant", action: "@alice prefers early returns" },
+      LOGINS,
+    );
+    expect(result.refused).toBe(false);
+  });
+
+  test("strips REVIEWER_COMMENT_TRIGGER_PREFIX before checking trigger", () => {
+    const trigger = `${REVIEWER_COMMENT_TRIGGER_PREFIX}prefer early returns)`;
+    const result = gateReviewerText({ provenance: { extractor: "reviewer-comment" }, trigger, action: "keep it short" }, ["review"]);
+    expect(result.refused).toBe(false); // "review" only appears in the stripped fixed prefix, not the variable hint
+  });
+
+  // R8-F1: extraTokens are checked by TOKEN EQUALITY against
+  // `loginKeywordSet`, independent of provenance — this is what lets
+  // `applyGraduation` re-check a proposal's persisted `suggestedName`/summary
+  // keywords against logins configured after the proposal was written.
+  test("extraTokens are refused by token equality, regardless of provenance", () => {
+    const result = gateReviewerText(
+      { provenance: { extractor: "graduate-proposal" }, trigger: "", action: "", extraTokens: ["alice", "style"] },
+      LOGINS,
+    );
+    expect(result.refused).toBe(true);
+  });
+
+  test("extraTokens use token equality, not substring — a fixed-prose word containing a login substring is not refused", () => {
+    const result = gateReviewerText(
+      { provenance: { extractor: "graduate-proposal" }, trigger: "", action: "", extraTokens: ["accepted", "sharing"] },
+      ["ed"], // "accepted" contains "ed" as a substring, never as a standalone token
+    );
+    expect(result.refused).toBe(false);
+  });
+
+  test("empty logins never refuse", () => {
+    const result = gateReviewerText(
+      { provenance: { extractor: "reviewer-comment" }, trigger: "", action: "@alice said so", extraTokens: ["alice"] },
+      [],
+    );
+    expect(result.refused).toBe(false);
   });
 });

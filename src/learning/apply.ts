@@ -14,7 +14,7 @@ import { renderProposalMarkdown, resolveRegisteredSkillTarget, suggestedSections
 import type { ApplyLearningProposalResult, LearningProposal, LearningSourceType } from "../gdskills/learn";
 import { applyLearningProposal } from "../gdskills/learn";
 import { loadReviewLearningConfigSafe } from "../review/review-learning";
-import { containsConfiguredLogin, mayCarryReviewerText, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
+import { gateReviewerText } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { readPattern, type StoreEnvOptions } from "./store";
 import type { EvidenceSourceType, LearnedPattern, LearningDomain } from "./types";
@@ -182,12 +182,13 @@ export async function applyLearnedPattern(
     throw new LearningApplyError("learning-text-refused", `record "${id}" refused by the security scan: ${scan.findings.join(", ")}`);
   }
 
-  // R2-F6/R6-F4/R7-F3: same defense-in-depth as `graduate.ts`'s agent-candidate
-  // render and extract's upsert, scoped by `mayCarryReviewerText` to the
-  // records whose `trigger`/`action` text could actually carry a reviewer
-  // login: the deterministic `reviewer-comment` signal (the generalized
-  // lesson in `action`, the trigger hint after
-  // `REVIEWER_COMMENT_TRIGGER_PREFIX`), and any model-backed record
+  // R2-F6/R6-F4/R7-F3/R8-F3: same defense-in-depth as `graduate.ts`'s
+  // agent-candidate render and extract's upsert, via `gateReviewerText` —
+  // scoped internally by `mayCarryReviewerText` to the records whose
+  // `trigger`/`action` text could actually carry a reviewer login: the
+  // deterministic `reviewer-comment` signal (the generalized lesson in
+  // `action`, the trigger hint after `REVIEWER_COMMENT_TRIGGER_PREFIX`
+  // stripped by `gateReviewerText` itself), and any model-backed record
   // (`provenance.extractorKind === "model-backed"`) regardless of its
   // self-declared `extractor` label (R7-F3) — a model-backed extractor sees
   // the whole observation window and picks its own label, so it is gated
@@ -215,22 +216,11 @@ export async function applyLearnedPattern(
   }
   const configuredLogins =
     configResult.config === null ? [] : [...new Set([...configResult.config.authors, ...(configResult.config.reviewerProfiles ?? [])])];
-  if (mayCarryReviewerText(record.provenance)) {
-    // R4-F1: a record produced by the `reviewer-comment` extractor carries
-    // that signal's own FIXED trigger wording (`REVIEWER_COMMENT_TRIGGER_
-    // PREFIX`) around the variable keyword hint — strip it before the login
-    // gate inspects `record.trigger` (a no-op for any other gated record,
-    // i.e. a model-backed one, whose trigger never had that prefix), the
-    // same fix `extract.ts`'s upsert applies, so a boundary-matched
-    // configured login is checked only against the comment's own variable
-    // content.
-    const triggerForLoginCheck = stripReviewerCommentTriggerPrefix(record.trigger);
-    if (
-      configuredLogins.length > 0 &&
-      (containsConfiguredLogin(triggerForLoginCheck, configuredLogins) || containsConfiguredLogin(record.action, configuredLogins))
-    ) {
-      throw new LearningApplyError("learning-text-refused", `record "${id}" refused: contains a configured reviewer login`);
-    }
+  if (
+    configuredLogins.length > 0 &&
+    gateReviewerText({ provenance: record.provenance, trigger: record.trigger, action: record.action }, configuredLogins).refused
+  ) {
+    throw new LearningApplyError("learning-text-refused", `record "${id}" refused: contains a configured reviewer login`);
   }
 
   let skillEntry: { module: string; name: string; path: string; target: string };

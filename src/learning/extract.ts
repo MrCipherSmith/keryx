@@ -13,7 +13,7 @@ import { loadLearningConfig } from "./config";
 import { resolveProjectIdentity } from "./identity";
 import { observationsDir } from "./paths";
 import { pruneObservationFilesPass } from "./prune";
-import { containsConfiguredLogin, mayCarryReviewerText, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
+import { gateReviewerText } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { validateObservationEvent } from "./schema";
 import { FAILING_TO_PASSING_TEST_SIGNAL } from "./signals/failing-to-passing-test";
@@ -262,14 +262,14 @@ async function upsertDraft(
     return;
   }
 
-  // R2-F6/R6-F4: a `reviewer-comment` draft's trigger/action never reaches
-  // the store carrying any configured reviewer login at an identifier
-  // boundary (`containsConfiguredLogin` — boundary-matched only, see
-  // `reviewer-id.ts`) — this is the same check `generalizeLesson` already
-  // applies to its own output, run again here as extract's own choke point
-  // for the one signal that actually reads review text.
+  // R2-F6/R6-F4/R8-F3: a `reviewer-comment` draft's trigger/action never
+  // reaches the store carrying any configured reviewer login at an
+  // identifier boundary — this is the same check `generalizeLesson` already
+  // applies to its own output, run again here via `gateReviewerText` as
+  // extract's own choke point for the one signal that actually reads review
+  // text.
   //
-  // R6-F4/R7-F3: the gate runs only when `mayCarryReviewerText(draft)` holds
+  // `gateReviewerText` itself scopes by `mayCarryReviewerText` (R6-F4/R7-F3)
   // — the deterministic `reviewer-comment` signal, OR any model-backed draft
   // (`draft.extractorKind === "model-backed"`, regardless of its
   // self-declared `extractor` label). The other deterministic signals
@@ -285,19 +285,13 @@ async function upsertDraft(
   // so scoping by the literal string `"reviewer-comment"` let a
   // differently-labeled model-backed draft carry an unchecked login through.
   //
-  // R4-F1: a `reviewer-comment` draft's `trigger` carries the signal's own
-  // FIXED wording (`REVIEWER_COMMENT_TRIGGER_PREFIX`, "When preparing a
-  // change for review in this project (...)") around the variable keyword
-  // hint. Strip the known fixed prefix before checking the draft's trigger
-  // (a no-op for a draft whose trigger never had that prefix, i.e. every
-  // model-backed draft), leaving only the keyword hint a login could
-  // actually appear in.
-  if (mayCarryReviewerText({ extractor: draft.extractor, extractorKind: draft.extractorKind })) {
-    const triggerForLoginCheck = stripReviewerCommentTriggerPrefix(draft.trigger);
-    if (containsConfiguredLogin(triggerForLoginCheck, configuredLogins) || containsConfiguredLogin(draft.action, configuredLogins)) {
-      report.refused.push({ signal: draft.extractor, categories: ["attribution"] });
-      return;
-    }
+  // R4-F1: `gateReviewerText` strips `REVIEWER_COMMENT_TRIGGER_PREFIX` from
+  // `trigger` before checking it (a no-op for a draft whose trigger never
+  // had that prefix, i.e. every model-backed draft), leaving only the
+  // keyword hint a login could actually appear in.
+  if (gateReviewerText({ provenance: { extractor: draft.extractor, extractorKind: draft.extractorKind }, trigger: draft.trigger, action: draft.action }, configuredLogins).refused) {
+    report.refused.push({ signal: draft.extractor, categories: ["attribution"] });
+    return;
   }
 
   if (!existing) {

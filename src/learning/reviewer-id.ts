@@ -34,6 +34,30 @@ function escapeForRegExp(value: string): string {
 }
 
 /**
+ * R7-F3: the ONE scoping rule every attribution gate in `src/learning` uses
+ * to decide whether a record's/draft's `trigger`/`action` text needs a
+ * configured-login check at all. True for the deterministic
+ * `reviewer-comment` signal (the only deterministic signal that reads actual
+ * PR review text) and for ANY model-backed extractor
+ * (`extractorKind === "model-backed"`) — a model-backed extractor chooses its
+ * own `extractor` label (never necessarily `"reviewer-comment"`) and sees the
+ * whole observation window, so it could reference a login under any signal
+ * name. Every other deterministic signal's trigger/action comes from fixed
+ * templates plus non-review observation data (file paths, test names, commit
+ * messages) and never carries an attribution fragment, so gating those too
+ * would only reopen the fixed-wording/template false-refusal class
+ * (R4-F1/R5-F1/R5-F2/R6-F1/R7-F2) for text that could never have carried a
+ * login in the first place.
+ *
+ * R8-F3: `containsConfiguredLogin` is no longer imported or called outside
+ * this file at all - every learned-text sink gates through
+ * `gateReviewerText` below, which applies this predicate internally.
+ */
+export function mayCarryReviewerText(p: { extractor: string; extractorKind?: string | undefined }): boolean {
+  return p.extractor === "reviewer-comment" || p.extractorKind === "model-backed";
+}
+
+/**
  * True when `text` contains any of `logins` at an identifier boundary — the
  * last-resort check `generalizeLesson` runs on its OWN output (R2-F6):
  * regardless of how the strip pass above is tuned, a login that somehow
@@ -88,31 +112,6 @@ function escapeForRegExp(value: string): string {
  * self-learning loop silently refusing every lesson), while a login glued
  * with zero boundary characters on either side is a narrow, unlikely shape.
  */
-/**
- * R7-F3: the ONE scoping rule every attribution gate in `src/learning` uses
- * to decide whether a record's/draft's `trigger`/`action` text needs a
- * configured-login check at all. True for the deterministic
- * `reviewer-comment` signal (the only deterministic signal that reads actual
- * PR review text) and for ANY model-backed extractor
- * (`extractorKind === "model-backed"`) — a model-backed extractor chooses its
- * own `extractor` label (never necessarily `"reviewer-comment"`) and sees the
- * whole observation window, so it could reference a login under any signal
- * name. Every other deterministic signal's trigger/action comes from fixed
- * templates plus non-review observation data (file paths, test names, commit
- * messages) and never carries an attribution fragment, so gating those too
- * would only reopen the fixed-wording/template false-refusal class
- * (R4-F1/R5-F1/R5-F2/R6-F1/R7-F2) for text that could never have carried a
- * login in the first place.
- *
- * Every call site of `containsConfiguredLogin` outside this file must sit
- * behind this predicate (see `reviewer-id.test.ts`'s guard test), except
- * `reviewer-profile.ts`, which is explicitly allowlisted: it works only over
- * `domain: "review-conventions"` records, which today only the
- * `reviewer-comment` signal ever produces.
- */
-export function mayCarryReviewerText(p: { extractor: string; extractorKind?: string | undefined }): boolean {
-  return p.extractor === "reviewer-comment" || p.extractorKind === "model-backed";
-}
 
 export function containsConfiguredLogin(text: string, logins: readonly string[]): boolean {
   return logins.some((login) => {
@@ -201,4 +200,89 @@ export function generalizeLesson(text: string, logins: readonly string[]): strin
   if (value.length < MIN_LESSON_LEN || value.length > MAX_LESSON_LEN) return null;
   if (containsConfiguredLogin(value, logins)) return null;
   return value;
+}
+
+/**
+ * R6-F1 (moved from `graduate.ts` for R8-F1/R8-F2/R8-F3: `gateReviewerText`
+ * below needs the same set for its `extraTokens` check): a configured login,
+ * plus each hyphen/underscore-split piece of it, lowercased — every
+ * standalone keyword token a login could split into once a caller's own
+ * word tokenizer runs over derived text (a kebab-case suggested name split
+ * on `-`, a comma-separated keyword list). A login `alice` sitting glued to
+ * other text as `alice-style` passes `containsConfiguredLogin`'s boundary
+ * check clean (`-` is a login-class character, not a boundary — see above),
+ * but splitting on `-`/`_` still yields the standalone token `alice`, which
+ * is itself equal to the login. A login that itself contains a
+ * hyphen/underscore (`alice-reviewer`) is split the same way, so both
+ * `alice` and `reviewer` are forbidden too.
+ */
+export function loginKeywordSet(logins: readonly string[]): ReadonlySet<string> {
+  const forbidden = new Set<string>();
+  for (const login of logins) {
+    const trimmed = login.trim().toLowerCase();
+    if (trimmed.length === 0) continue;
+    forbidden.add(trimmed);
+    for (const part of trimmed.split(/[-_]+/)) {
+      if (part.length > 0) forbidden.add(part);
+    }
+  }
+  return forbidden;
+}
+
+export interface GateReviewerTextInput {
+  /** Decides (via `mayCarryReviewerText`) whether `trigger`/`action` are even inspected. */
+  readonly provenance: { readonly extractor: string; readonly extractorKind?: string | undefined };
+  readonly trigger: string;
+  readonly action: string;
+  /**
+   * Derived tokens ONLY — e.g. a kebab-case suggested name split on `-`, or a
+   * comma-separated keyword list already parsed out of fixed template prose
+   * (`runGraduate`'s `sharing: ...` summary). Never a fixed template word
+   * itself: checked by token EQUALITY against `loginKeywordSet(logins)`, not
+   * a substring test, so handing this a whole sentence (rather than
+   * pre-split tokens) would silently never match anything, and handing it
+   * Keryx's own constant wording would reopen the fixed-wording
+   * false-refusal class (R4-F1/R5-F1/R5-F2/R6-F1) this file's other checks
+   * exist to avoid.
+   */
+  readonly extraTokens?: readonly string[];
+}
+
+/**
+ * R8-F1/R8-F2/R8-F3: the ONE attribution gate every learned-text sink in
+ * `src/learning` calls — `extract.ts`'s upsert, `apply.ts`'s apply gate,
+ * `graduate.ts`'s cluster gate and `applyGraduation`'s member-text gate,
+ * `promote.ts`'s promote gate, and `reviewer-profile.ts`. Combines, in one
+ * place, the two checks that used to be hand-assembled at each call site:
+ *
+ *  1. `mayCarryReviewerText(input.provenance)` scopes whether `trigger`
+ *     (with `REVIEWER_COMMENT_TRIGGER_PREFIX` stripped first) and `action`
+ *     are checked with `containsConfiguredLogin` at all — see that
+ *     predicate's own doc for why un-scoped gating reopens the
+ *     fixed-wording false-refusal class.
+ *  2. `extraTokens`, when given, are checked by token equality against
+ *     `loginKeywordSet(logins)` — R8-F1: a login configured AFTER a
+ *     graduation proposal was written is still caught at apply time by
+ *     re-checking the proposal's own `suggestedName`/summary-keyword tokens
+ *     against the CURRENT configured-login list, the same token-equality
+ *     rule `graduate.ts`'s clustering already applies at proposal time.
+ *
+ * `containsConfiguredLogin` itself is no longer imported anywhere outside
+ * this file (see `reviewer-id.test.ts`'s import-ban guard) — every caller
+ * goes through this function instead.
+ */
+export function gateReviewerText(input: GateReviewerTextInput, logins: readonly string[]): { refused: boolean } {
+  if (mayCarryReviewerText(input.provenance)) {
+    const triggerForLoginCheck = stripReviewerCommentTriggerPrefix(input.trigger);
+    if (containsConfiguredLogin(triggerForLoginCheck, logins) || containsConfiguredLogin(input.action, logins)) {
+      return { refused: true };
+    }
+  }
+  if (input.extraTokens !== undefined && input.extraTokens.length > 0) {
+    const forbidden = loginKeywordSet(logins);
+    for (const token of input.extraTokens) {
+      if (forbidden.has(token.trim().toLowerCase())) return { refused: true };
+    }
+  }
+  return { refused: false };
 }

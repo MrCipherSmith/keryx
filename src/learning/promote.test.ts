@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createAcceptCapability } from "./accept-capability";
@@ -298,6 +298,110 @@ describe("promotePattern + accept --refresh combined (W3-AC5 second fixture)", (
       expect(entries.find((e) => e.projectIdentity === SHA_A)?.confidence).toBe(0.82);
       expect(entries.find((e) => e.projectIdentity === SHA_B)?.confidence).toBe(0.9);
       expect(entries.find((e) => e.projectIdentity === SHA_C)?.confidence).toBe(0.3);
+
+      const result = await promotePattern(root, record.id, { isTerminal: true, confirm: alwaysConfirm(), env, now: NOW });
+      expect(result.status).toBe("candidate");
+    });
+  });
+});
+
+// R8-F2 (review round 8, PR #691, minor, probe r12/s.ts S4): only
+// `scanLearnedText` ran before `promotePattern` copied a record into
+// `~/.keryx/learning/patterns/` — a login-carrying `review-conventions` (or
+// model-backed) record was promoted into the cross-project user store with
+// no attribution check at all. Proven pre-fix (scratch copy of HEAD, before
+// this task's edit, via `bun run r691/r13/s-prefix.ts`): a `model-summarizer`
+// / `model-backed` record whose `action` was `"@alice prefers early
+// returns"` and a `reviewer-comment` record with the same text were both
+// promoted verbatim, login and all — `PROMOTED; user-scope action: "@alice
+// prefers early returns"` for both. `promotePattern` now runs the same
+// `gateReviewerText` gate `apply.ts`/`applyGraduation`/extract's upsert use.
+describe("promotePattern: attribution refusal (R8-F2)", () => {
+  function twoIdentityIndex(id: string) {
+    return {
+      [id]: [indexEntry({ projectIdentity: SHA_A, confidence: 0.8 }), indexEntry({ projectIdentity: SHA_B, confidence: 0.9 })],
+    };
+  }
+
+  test("refuses to promote a model-backed record whose action carries a configured reviewer login", async () => {
+    await withTempHome(async (root, env) => {
+      const record = makeAccepted({
+        id: "code-style.p-aaaaaaaa",
+        trigger: "When writing a function in this project",
+        action: "@alice prefers early returns",
+        provenance: { extractor: "model-summarizer", extractorKind: "model-backed" },
+      });
+      await writeAccepted(root, record, env);
+      await writeIndex(twoIdentityIndex(record.id), { env });
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      await expect(
+        promotePattern(root, record.id, { isTerminal: true, confirm: alwaysConfirm(), env, now: NOW }),
+      ).rejects.toMatchObject({ reason: "learning-text-refused" });
+
+      const promoted = await readPattern(root, record.id, "user", { env });
+      expect(promoted).toBeUndefined();
+    });
+  });
+
+  test("refuses to promote a reviewer-comment record whose action carries a configured reviewer login", async () => {
+    await withTempHome(async (root, env) => {
+      const record = makeAccepted({
+        id: "review-conventions.p-bbbbbbbb",
+        domain: "review-conventions",
+        trigger: "When preparing a change for review in this project (prefer early returns)",
+        action: "@alice prefers early returns",
+        provenance: { extractor: "reviewer-comment", extractorKind: "deterministic" },
+      });
+      await writeAccepted(root, record, env);
+      await writeIndex(twoIdentityIndex(record.id), { env });
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      await expect(
+        promotePattern(root, record.id, { isTerminal: true, confirm: alwaysConfirm(), env, now: NOW }),
+      ).rejects.toMatchObject({ reason: "learning-text-refused" });
+
+      const promoted = await readPattern(root, record.id, "user", { env });
+      expect(promoted).toBeUndefined();
+    });
+  });
+
+  test("refuses with review-learning-config-invalid when the config is malformed", async () => {
+    await withTempHome(async (root, env) => {
+      const record = makeAccepted();
+      await writeAccepted(root, record, env);
+      await writeIndex(twoIdentityIndex(record.id), { env });
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(path.join(root, ".metaproject", "review-learning.config.json"), JSON.stringify({ schemaVersion: 99 }));
+
+      await expect(
+        promotePattern(root, record.id, { isTerminal: true, confirm: alwaysConfirm(), env, now: NOW }),
+      ).rejects.toMatchObject({ reason: "review-learning-config-invalid" });
+    });
+  });
+
+  // R6-F4-equivalent for promote: a non-reviewer-comment, non-model-backed
+  // record's text naming a configured login by coincidence is not gated —
+  // `gateReviewerText` scopes by `mayCarryReviewerText`, same as every other
+  // sink.
+  test("promotes cleanly when a non-attribution-scoped record's action names a configured login by coincidence", async () => {
+    await withTempHome(async (root, env) => {
+      const record = makeAccepted({ action: "octocat said to check the first edit's assumptions before writing a second one" });
+      await writeAccepted(root, record, env);
+      await writeIndex(twoIdentityIndex(record.id), { env });
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["octocat"] }),
+      );
 
       const result = await promotePattern(root, record.id, { isTerminal: true, confirm: alwaysConfirm(), env, now: NOW });
       expect(result.status).toBe("candidate");

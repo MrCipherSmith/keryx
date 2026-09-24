@@ -595,6 +595,61 @@ describe("runGraduate/applyGraduation: a login glued to member text via a hyphen
   });
 });
 
+// R8-F1 (review round 8, PR #691, minor, probe r12/s.ts S3): dropping R7-F1's
+// second token gate (above) reopened R6-F1 for a login configured AFTER
+// `runGraduate` ran. `runGraduate`'s `keywordsOf`/`topKeywords` filter a
+// glued member token (`alice-style`) out of `suggestedName`/`summary` using
+// only the logins known AT THAT TIME — a login configured afterward, before
+// `applyGraduation` runs, was never in that filter, so the standalone
+// keyword `alice` still reached the persisted proposal file and, unchecked,
+// the applied agent's own name/description. Proven pre-fix (scratch copy of
+// HEAD, before this task's edit, via `bun run r691/r13/s-prefix.ts`):
+// `APPLIED; name/desc: name: alice-early-returns | description: ... sharing:
+// alice, early, returns, style, nested.` `applyGraduation` now re-checks the
+// proposal's own `suggestedName`/summary-keyword tokens against the CURRENT
+// configured-login list, by token equality (`gateReviewerText`'s
+// `extraTokens`), not a substring test — the same rule R7-F1 established is
+// still required for the token check to avoid reopening the fixed-wording
+// false-refusal class.
+describe("applyGraduation: a login glued to member text and configured AFTER runGraduate still refuses at apply time (R8-F1)", () => {
+  test("authors ['alice'] configured only after runGraduate refuses applyGraduation for a proposal whose suggestedName/summary already carry the glued 'alice' keyword", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const rows: readonly [string, string, string][] = [
+        ["review-conventions.early-returns-aaaaaaaa", "prefer early returns alice-style", "Prefer early returns alice-style over nested conditionals"],
+        ["review-conventions.early-returns-bbbbbbbb", "prefer early returns alice-style always", "Prefer early returns alice-style to reduce nesting"],
+        ["review-conventions.early-returns-cccccccc", "use early returns alice-style", "Use early returns alice-style instead of nested if blocks"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+
+      // No config at all when runGraduate runs: the glued 'alice' keyword is
+      // not filtered out of suggestedName/summary — same setup as R6-F1's
+      // test, but WITHOUT the config in place yet.
+      const report = await runGraduate(root, { now: NOW, env });
+      const agentProposal = report.proposals.find((p) => p.target === "agent");
+      expect(agentProposal).toBeDefined();
+      expect(agentProposal!.suggestedName.toLowerCase()).toContain("alice");
+      expect(agentProposal!.summary.toLowerCase()).toContain("alice");
+
+      // The login is configured only AFTER runGraduate — before apply.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      await expect(
+        applyGraduation(root, agentProposal!.proposalId, { isTerminal: true, confirm: async () => true, env, now: NOW }),
+      ).rejects.toMatchObject({ reason: "learning-text-refused" });
+
+      expect(existsSync(path.join(root, ".metaproject", "agents"))).toBe(false);
+    });
+  });
+});
+
 // R6-F2 (review round 6, PR #691, minor): `runGraduate` wrote a proposal
 // file (and set `graduation` on every member) with no login gate at all —
 // only `applyGraduation` (a later, separate, human-confirmed step) checked

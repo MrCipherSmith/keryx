@@ -133,7 +133,11 @@ export {
 
 export { learningConfigPath, loadLearningConfig, type LearningConfig } from "./config";
 
-export { containsConfiguredLogin, generalizeLesson, mayCarryReviewerText, reviewerIdFor } from "./reviewer-id";
+// R8-F3: `containsConfiguredLogin` is deliberately NOT re-exported here (nor
+// importable from anywhere outside `reviewer-id.ts` — see that file's
+// `reviewer-id.test.ts` import-ban guard). Every learned-text sink gates
+// through `gateReviewerText` instead.
+export { gateReviewerText, generalizeLesson, mayCarryReviewerText, reviewerIdFor, type GateReviewerTextInput } from "./reviewer-id";
 
 // CI/import-policy: `src/commands/learn.ts` and `src/commands/review.ts`
 // (both "commands" zone, `client-imports-core-internal`-tracked) used to

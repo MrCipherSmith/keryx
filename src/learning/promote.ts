@@ -10,7 +10,9 @@
 // under `~/.keryx/learning/patterns/` — never `"accepted"`; promotion
 // re-enters Review/Consent at the new scope.
 import { spawnSync } from "node:child_process";
+import { loadReviewLearningConfigSafe } from "../review/review-learning";
 import { appendDecision } from "./decisions";
+import { gateReviewerText } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { createPattern, readIndex, readPattern, type StoreEnvOptions } from "./store";
 import type { LearnedPattern } from "./types";
@@ -92,7 +94,13 @@ function storeOptionsOf(opts: { env?: NodeJS.ProcessEnv; homeDir?: string }): St
  *  - `insufficient-project-identities` — fewer than 2 distinct indexed
  *    `project.identity` entries at (indexed) `confidence >= 0.8`.
  *  - `learning-text-refused` — the security scan found something in
- *    `trigger`/`action`.
+ *    `trigger`/`action`, OR (R8-F2) the record carries a configured reviewer
+ *    login (`gateReviewerText`) — a login-carrying record must not be copied
+ *    into the cross-project user store any more than it may be applied or
+ *    graduated.
+ *  - `review-learning-config-invalid` — `.metaproject/review-learning.config.json`
+ *    is malformed; the attribution gate needs a trustworthy config before it
+ *    can promote anything (same rule `apply.ts`/`applyGraduation` enforce).
  *  - `already-promoted` — a `scope: user` record for `id` already exists at
  *    `status: candidate` or `status: accepted`.
  *  - `promote-cancelled` — `confirm()` resolved `false`. Writes nothing.
@@ -134,6 +142,30 @@ export async function promotePattern(root: string, id: string, opts: PromotePatt
   const scan = await scanLearnedText(root, [record.trigger, record.action]);
   if (scan.findings.length > 0) {
     throw new LearningPromoteError("learning-text-refused", `record "${id}" refused by the security scan: ${scan.findings.join(", ")}`);
+  }
+
+  // R8-F2: only `scanLearnedText` ran here before this fix — a
+  // login-carrying `review-conventions` (or model-backed) record could be
+  // copied straight into the cross-project `~/.keryx/learning/` user store
+  // with no attribution check at all. Apply the same `gateReviewerText` gate
+  // `apply.ts`/`applyGraduation`/extract's upsert already run, loaded
+  // through the same guarded config loader (a malformed config refuses this
+  // gate outright, same as `apply.ts`, rather than silently degrading to "no
+  // configured logins" for a write into the shared user store).
+  const configResult = await loadReviewLearningConfigSafe(root);
+  if (!configResult.ok) {
+    throw new LearningPromoteError(
+      "review-learning-config-invalid",
+      `record "${id}" cannot be promoted: .metaproject/review-learning.config.json is invalid: ${configResult.error}`,
+    );
+  }
+  const configuredLogins =
+    configResult.config === null ? [] : [...new Set([...configResult.config.authors, ...(configResult.config.reviewerProfiles ?? [])])];
+  if (
+    configuredLogins.length > 0 &&
+    gateReviewerText({ provenance: record.provenance, trigger: record.trigger, action: record.action }, configuredLogins).refused
+  ) {
+    throw new LearningPromoteError("learning-text-refused", `record "${id}" refused: contains a configured reviewer login`);
   }
 
   const existingUser = await readPattern(root, id, "user", storeOptions);
