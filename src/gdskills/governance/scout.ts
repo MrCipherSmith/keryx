@@ -53,6 +53,7 @@ import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { normalizeRouteText, routeTokens } from "../../lib/route-tokens";
+import { userStorePaths } from "../../lib/keryx-home";
 import type { CatalogEntry } from "./catalog-index";
 
 /**
@@ -436,17 +437,96 @@ export function recordScout(packDir: string, entry: ScoutRecordEntry): void {
 }
 
 // ---------------------------------------------------------------------------
-// `--include-imports` (W4 not built yet)
+// `--include-imports` (flow 313, W4, T10) — searches
+// `~/.keryx/skills/external-imports.json`, the reference-only registry
+// `keryx bundle import --external` writes (`src/bundle/external.ts`). Read
+// directly here (not through `src/bundle/external.ts`'s own
+// `readExternalImports`) to avoid a module cycle: that file already imports
+// `scoutSkill`/`scoutVetCandidate` from this one.
 // ---------------------------------------------------------------------------
 
-export interface ScoutImportsReport {
-  readonly searched: boolean;
-  readonly reason: string;
+export interface ScoutImportMatch {
+  readonly name: string;
+  readonly overlapScore: number;
+  readonly sourceRef: string;
 }
 
-/** Honest "not built yet" answer for `--include-imports` — W4 (bundle import) ships no imported-bundle store this workstream can search. */
-export function scoutImports(): ScoutImportsReport {
-  return { searched: false, reason: "no imported bundles (W4 not installed)" };
+export type ScoutImportsReport =
+  | { readonly searched: true; readonly reason: string; readonly matches: readonly ScoutImportMatch[] }
+  | { readonly searched: false; readonly reason: string };
+
+interface ExternalImportsFileShape {
+  readonly imports: Record<string, { readonly sourceRef?: unknown; readonly description?: unknown }>;
+}
+
+function isExternalImportsFileShape(value: unknown): value is ExternalImportsFileShape {
+  if (typeof value !== "object" || value === null) return false;
+  const imports = (value as Record<string, unknown>).imports;
+  return typeof imports === "object" && imports !== null && !Array.isArray(imports);
+}
+
+/**
+ * Score `query` against every recorded external skill import, using the SAME
+ * lexical scorer `scoutSkill` uses. `{searched: false, reason}` when the
+ * registry is absent or corrupt — never a silently empty match list for a
+ * failure that isn't "nothing recorded yet".
+ */
+export function scoutImports(query: string, opts: { env?: NodeJS.ProcessEnv; homeDir?: string } = {}): ScoutImportsReport {
+  const filePath = userStorePaths(opts.env ?? process.env, opts.homeDir).externalSkillImports;
+  if (!existsSync(filePath)) {
+    return { searched: false, reason: "no external skill imports recorded" };
+  }
+
+  let raw: string;
+  try {
+    raw = readFileSync(filePath, "utf8");
+  } catch (error) {
+    return { searched: false, reason: `external-imports.json could not be read: ${error instanceof Error ? error.message : String(error)}` };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return { searched: false, reason: `external-imports.json is not valid JSON: ${error instanceof Error ? error.message : String(error)}` };
+  }
+
+  if (!isExternalImportsFileShape(parsed)) {
+    return { searched: false, reason: "external-imports.json has an unrecognized shape" };
+  }
+
+  const entries = Object.entries(parsed.imports)
+    .filter((entry): entry is [string, { sourceRef: string; description: string }] => {
+      const record = entry[1];
+      return typeof record.sourceRef === "string" && typeof record.description === "string";
+    })
+    .map(([name, record]) => ({ name, sourceRef: record.sourceRef, description: record.description }));
+
+  if (entries.length === 0) {
+    return { searched: true, reason: "no external skill imports recorded", matches: [] };
+  }
+
+  const asCatalog: CatalogEntry[] = entries.map((entry) => ({
+    id: entry.name,
+    category: "external-import",
+    name: entry.name,
+    description: entry.description,
+    triggers: [],
+    body: "",
+    bodyLines: 0,
+    sha256: "",
+    path: entry.sourceRef,
+  }));
+  const sourceRefById = new Map(entries.map((entry) => [entry.name, entry.sourceRef]));
+
+  const scored = scoutSkill(query, asCatalog);
+  const matches: ScoutImportMatch[] = scored.matches.map((match) => ({
+    name: match.skillId,
+    overlapScore: match.overlapScore,
+    sourceRef: sourceRefById.get(match.skillId) ?? "",
+  }));
+
+  return { searched: true, reason: `searched ${entries.length} external skill import(s)`, matches };
 }
 
 // ---------------------------------------------------------------------------

@@ -158,8 +158,57 @@ describe("scout record", () => {
 });
 
 describe("scoutImports", () => {
-  test("reports not searched, W4 absent", () => {
-    expect(scoutImports()).toEqual({ searched: false, reason: "no imported bundles (W4 not installed)" });
+  test("reports not searched when no registry file exists at this homeDir", () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), "scout-imports-home-"));
+    try {
+      expect(scoutImports("anything", { homeDir })).toEqual({ searched: false, reason: "no external skill imports recorded" });
+    } finally {
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  test("reports not searched with a named reason for a corrupt registry", () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), "scout-imports-home-"));
+    try {
+      const registryDir = path.join(homeDir, ".keryx", "skills");
+      mkdirSync(registryDir, { recursive: true });
+      writeFileSync(path.join(registryDir, "external-imports.json"), "not json", "utf8");
+      const result = scoutImports("anything", { homeDir });
+      expect(result.searched).toBe(false);
+      expect(result.reason).toContain("not valid JSON");
+    } finally {
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  test("scores a recorded external import with the same lexical scorer scoutSkill uses", () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), "scout-imports-home-"));
+    try {
+      const registryDir = path.join(homeDir, ".keryx", "skills");
+      mkdirSync(registryDir, { recursive: true });
+      const registry = {
+        schemaVersion: 1,
+        imports: {
+          "acme-widget": {
+            sourceRef: "/tmp/acme-widget",
+            description: "Build and validate acme widgets end to end",
+            files: {},
+            scoutDecision: "create",
+            auditGate: "pass",
+            vettedAt: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      };
+      writeFileSync(path.join(registryDir, "external-imports.json"), JSON.stringify(registry), "utf8");
+      const result = scoutImports("acme widget validation", { homeDir });
+      expect(result.searched).toBe(true);
+      if (!result.searched) return;
+      expect(result.matches[0]?.name).toBe("acme-widget");
+      expect(result.matches[0]?.sourceRef).toBe("/tmp/acme-widget");
+      expect(result.matches[0]?.overlapScore).toBeGreaterThan(0);
+    } finally {
+      rmSync(homeDir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -157,7 +157,7 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
   const root = process.cwd();
   const catalog = loadSkillCatalog(root, { scope });
   const result = scoutSkill(query, catalog);
-  const imports = includeImports ? scoutImports() : undefined;
+  const imports = includeImports ? scoutImports(query) : undefined;
   const vetting = candidate !== undefined ? await scoutVetCandidate(path.resolve(root, candidate)) : undefined;
 
   if (record !== undefined) {

@@ -8,16 +8,11 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { auditGate, runHarnessAudit, type AuditFinding, type AuditReport } from "../security/service";
+import { auditGate, runHarnessAudit, type AuditFinding, type AuditReport, type RunAuditOptions } from "../security/service";
 import type { PlanEntry } from "./plan";
-import { BUNDLE_REFUSAL, type BundleContentKind, type BundleRefusal } from "./types";
+import { BUNDLE_REFUSAL, type BundleRefusal } from "./types";
 
-interface ImportedBundleOptions {
-  importedBundle?: { entries: ReadonlyArray<{ path: string; kind: BundleContentKind | string }> };
-  now?: () => Date;
-}
-
-export type RunAuditFn = (root: string, options?: ImportedBundleOptions) => Promise<AuditReport>;
+export type RunAuditFn = (root: string, options?: RunAuditOptions) => Promise<AuditReport>;
 
 export interface AuditBundlePlanOptions {
   runAudit?: RunAuditFn;

@@ -53,3 +53,20 @@ export type { InspectBundleOptions, InspectResult, InspectPlanEntry } from "./in
 
 export { uninstallBundle } from "./uninstall";
 export type { UninstallBundleOptions, UninstallBundleResult, UninstallKept } from "./uninstall";
+
+// T10 — external Agent-Skills-standard catalog import (W4-AC9). Re-exported
+// here only; `src/bundle/external.ts` is T10's own module.
+export { vetExternalCatalog, applyExternalImports, readExternalImports, verifyExternalImports } from "./external";
+export type {
+  ExternalCandidate,
+  ExternalAuditGate,
+  ExternalImportRecord,
+  ExternalImportsRegistry,
+  ReadExternalImportsResult,
+  ApplyExternalImportsResult,
+  VetExternalCatalogOptions,
+  VetExternalCatalogResult,
+  VerifyExternalImportEntryStatus,
+  VerifyExternalImportsEntryResult,
+  VerifyExternalImportsResult,
+} from "./external";
