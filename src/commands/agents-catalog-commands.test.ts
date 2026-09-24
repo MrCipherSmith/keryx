@@ -726,6 +726,29 @@ describe("keryx agents generate — gate enforcement on fixture packs (flow 314 
       expect(readFileSync(outsideTarget, "utf8")).toBe("should never be overwritten\n");
       expect(lstatSync(path.join(agentsDir, "fixture-lang-code-auditor.md")).isSymbolicLink()).toBe(true);
     });
+
+    // R2-3 (review round 2, PR #692): the auditor and fixer targets used to be
+    // validated and written inside the same per-file loop, so a symlinked
+    // FIXER target (checked second) left the auditor already written to disk
+    // before the refusal fired — a half-written pair with exit 1. Both
+    // targets must now be validated in a first pass before either is
+    // written.
+    test("R2-3: a symlinked fixer target refuses the whole pair — no auditor file is written either", async () => {
+      const { bundledRoot, packDir, agentsDir } = makeFixtureStack("stable");
+      writePassingEval(packDir);
+      const outsideTarget = path.join(tmpRoot, "outside-fixer-target.md");
+      writeFileSync(outsideTarget, "should never be overwritten\n", "utf8");
+      symlinkSync(outsideTarget, path.join(agentsDir, "fixture-lang-build-fixer.md"));
+      const { errors, log, error } = collect();
+      await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+      expect(process.exitCode).toBe(1);
+      expect(errors.join("\n")).toContain("symlink");
+      expect(readFileSync(outsideTarget, "utf8")).toBe("should never be overwritten\n");
+      expect(lstatSync(path.join(agentsDir, "fixture-lang-build-fixer.md")).isSymbolicLink()).toBe(true);
+      // The bug: the auditor (validated/written first, before the fix) must
+      // NOT exist on disk — the refusal on the fixer must prevent it too.
+      expect(existsSync(path.join(agentsDir, "fixture-lang-code-auditor.md"))).toBe(false);
+    });
   });
 
   // R1-7 (review round 1, PR #692): a hostile skill name in pack.json's

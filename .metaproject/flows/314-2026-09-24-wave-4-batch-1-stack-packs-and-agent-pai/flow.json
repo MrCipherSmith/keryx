@@ -9,12 +9,12 @@
   "title": "Wave 4 batch 1: stack packs and agent pairs for ts-js-node, react, python, go",
   "status": "in-progress",
   "createdAt": "2026-09-24T11:38:46.681Z",
-  "updatedAt": "2026-09-24T18:03:15.529Z",
+  "updatedAt": "2026-09-24T18:26:39.122Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:4df79d661266383a81333d0caa50088b88b6f1183f16067eac2f82e46e36ddf2",
+  "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -79,7 +79,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 2,
+        "count": 3,
         "log": [
           {
             "at": "2026-09-24T16:21:38.587Z",
@@ -90,6 +90,11 @@
             "at": "2026-09-24T16:34:39.617Z",
             "outcome": "failed",
             "detail": "round 1: 1 blocker, 6 major, 7 minor, 1 info -> T17"
+          },
+          {
+            "at": "2026-09-24T18:16:22.656Z",
+            "outcome": "started",
+            "detail": "round 2: narrow verification of fix attempt 1"
           }
         ]
       },
@@ -356,12 +361,17 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 1,
+        "count": 2,
         "log": [
           {
             "at": "2026-09-24T16:34:39.536Z",
             "outcome": "started",
             "detail": "fix attempt 1: lanes A (gate code) + C1-C4 (pack content)"
+          },
+          {
+            "at": "2026-09-24T18:26:39.122Z",
+            "outcome": "started",
+            "detail": "fix attempt 2: R2-1 (AC rewrite, orchestrator) + R2-2..R2-5 (worker)"
           }
         ]
       },
@@ -623,6 +633,31 @@
       "at": "2026-09-24T18:03:15.529Z",
       "event": "ac-updated",
       "detail": "No pack cleared the honest gate, so the coverage count must not rise (metrics-and-validation: increases only after a batch passes its gate). The earlier 2 -> 5 journal entry was based on the grader-tuned run that review round 1 invalidated."
+    },
+    {
+      "at": "2026-09-24T18:16:22.656Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — round 2: narrow verification of fix attempt 1"
+    },
+    {
+      "at": "2026-09-24T18:26:02.479Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"`keryx skills eval <id> --runner ollama:llama3.1:latest --strictness high --trials 5` reports verdict pass with evidence authored, all positives selected, zero false positives and every behavior scenario passRate >= 0.8 for every pack skill; the reports are stored in each pack's governance/eval.json, those packs are marked stable and checkStablePackGate returns pass for them.\" -> \"Every one of the 18 batch-1 pack skills was evaluated once through the real CLI with `keryx skills eval <id> --scope bundled --runner deepseek:deepseek-chat --strictness high --trials 5` (DeepSeek deepseek-chat, the owner-chosen gate model), with no content edits during the run. Each pack's governance/eval.json holds those reports verbatim, bound by digest to the current SKILL.md and evals.json and stamped with runner, model, scope and recordedAt. checkStablePackGate decides stability: a pack is stable only if every skill passes and every behavior scenario is at or above 0.8. The recorded outcome for this batch is that all four packs (ts-js-node, react, python, go) stay experimental, with the failing scenarios named in the W1 spec and in each pack's agent-refs.json note.\" (Review round 1 found skills and graders tuned to each other; the owner moved the gate to deepseek-chat with the 0.8 floor and no tuning, and the honest run failed all four packs)"
+    },
+    {
+      "at": "2026-09-24T18:26:10.636Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"Eight generated agents (<stack>-code-auditor and <stack>-build-fixer for each pack) exist in src/gdskills/bundled/agents with origin.kind generated, origin.sourceRef = pack id and stacks [pack id]; auditors are read-only with no write/shell tools, fixers are workspace-write with worktree isolation; a test proves each file equals the generator's output; each pack's agent-refs.json lists its pair; `keryx agents verify` reports ok.\" -> \"Per-stack agent pairs (<stack>-code-auditor, read-only; <stack>-build-fixer, workspace-write with worktree isolation) are produced only by the deterministic generator through `keryx agents generate --stack <id>`. The generator refuses a pack that is not gate-cleared, refuses a pack.json id that differs from its directory, quotes every frontmatter value, validates identifiers, and checks containment and symlinks for both targets before writing, all covered by tests. Because no batch-1 pack cleared the gate, no generated pair ships, every pack's agent-refs.json is empty with a note naming the failing scenario, and `keryx agents verify` reports ok.\" (No pack cleared the honest gate, so under W2 D-7 no pair ships; the generator and its safety guarantees are the deliverable)"
+    },
+    {
+      "at": "2026-09-24T18:26:10.772Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"The W2 spec's per-stack table names the pair <stack>-code-auditor / <stack>-build-fixer with its Version bumped, the W1 spec records batch 1, and the journal records the stack-coverage count increase only after the gate passed.\" -> \"The W2 spec's per-stack table names the pair <stack>-code-auditor / <stack>-build-fixer, with a bumped Version and a batch-1 status of no pair shipped. The W1 spec records batch 1: the DeepSeek gate model, the per-pack results with the failing scenarios, and the llama3.1 run as a supplementary signal. The journal records that the stack-coverage count stays at 2, because no batch-1 pack cleared the gate, and corrects the earlier premature 2 -> 5 entry.\" (No pack cleared the gate, so the coverage count must not rise; the earlier 2 -> 5 entry came from the grader-tuned run that review round 1 invalidated)"
+    },
+    {
+      "at": "2026-09-24T18:26:39.122Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 2) — fix attempt 2: R2-1 (AC rewrite, orchestrator) + R2-2..R2-5 (worker)"
     }
   ]
 }

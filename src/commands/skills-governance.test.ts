@@ -290,10 +290,33 @@ describe("R1-14: keryx skills eval --runner / --scope CLI wiring", () => {
     expect(errors.some((line) => line.includes("unknown provider"))).toBe(true);
   });
 
+  // R2-5 (review round 2, PR #692): this test used to rely on
+  // `ANTHROPIC_API_KEY` being unset in whatever environment `bun test` runs
+  // in. On a machine/CI that exports a real key, `buildEvalRunner`'s
+  // build-time check (`hasCredential`, `src/harness/provider/single-turn.ts`)
+  // passes, and `skillsGovernanceCommand` proceeds to run a REAL,
+  // network-calling, spend-incurring eval of `core/reviewer-skill-creator`
+  // against Anthropic — inside a unit test. `hasCredential("anthropic", env)`
+  // checks only `env.ANTHROPIC_API_KEY` (no other provider key applies to
+  // "anthropic"); the saved-`auth.json` merge (`envWithSavedApiKeys`) is
+  // already isolated globally by `src/lib/test-preload.ts` setting
+  // `XDG_DATA_HOME` to a per-test-run temp dir, so only the raw env var needs
+  // isolating here. Save/delete/restore it around the call so this test is
+  // deterministic and never reaches the network regardless of the host env.
   test("eval --runner anthropic with no credential in env fails closed: exit 1, named reason", async () => {
-    await skillsGovernanceCommand(["eval", "core/reviewer-skill-creator", "--runner", "anthropic"]);
-    expect(process.exitCode).toBe(1);
-    expect(errors.some((line) => line.includes("no credential"))).toBe(true);
+    const savedKey = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      await skillsGovernanceCommand(["eval", "core/reviewer-skill-creator", "--runner", "anthropic"]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.some((line) => line.includes("no credential"))).toBe(true);
+    } finally {
+      if (savedKey === undefined) {
+        delete process.env.ANTHROPIC_API_KEY;
+      } else {
+        process.env.ANTHROPIC_API_KEY = savedKey;
+      }
+    }
   });
 
   test("eval --scope bogus is refused up front, not silently defaulted", async () => {

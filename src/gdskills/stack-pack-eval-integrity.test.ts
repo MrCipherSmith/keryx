@@ -1,9 +1,8 @@
 // Flow 314 review round 1 (dispatch 314-T17-A) — implements the "Eval
-// integrity rules" (I1-I5) from
-// scratchpad/f314/fix1-contract.md, driven by R1-1/R1-2's findings (skills
+// integrity rules" (I1-I5), driven by R1-1/R1-2's findings (skills
 // hand-edited to fit their own graders, and graders weak enough to pass an
-// empty or echoed answer). Every scenario in every
-// `stacks/*/skills/*/evals.json` must:
+// empty or echoed answer). These are permanent guarantees, enforced on every
+// scenario in every `stacks/*/skills/*/evals.json`, not a one-time repair:
 //
 //   I1. fail when graded against the empty answer "";
 //   I2. fail when graded against the echo answer "Sure. You asked: <prompt>";
@@ -24,12 +23,13 @@
 // rule `evalSkill`'s own trial loop applies — rather than a second,
 // independently-written grader that could quietly drift from the real one.
 //
-// CONTENT LANES ARE CONCURRENT: four other flow-314 workers are rewriting
-// `SKILL.md`/`evals.json` under `stacks/*` while this file lands. A
-// real-tree assertion below FAILING RIGHT NOW is expected — the important
-// property this file guarantees is that the RULES THEMSELVES are exact,
-// which the synthetic negative/positive fixtures (second describe block)
-// pin independently of whatever the real tree currently contains.
+// The real-tree assertions below (first describe block) hold on the current
+// shipped tree, and any future change to `stacks/*/skills/*/evals.json` or
+// `SKILL.md` that violates I1-I5 must fail them — that is the point of
+// running them against the real tree rather than only against fixtures. The
+// synthetic negative/positive fixtures (second describe block) pin the rules
+// themselves independently, so a rule's exactness is never only inferred
+// from the real tree happening to pass.
 
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";

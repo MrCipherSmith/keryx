@@ -574,8 +574,9 @@ history is inspectable without guessing from a git blame.
   independent of both: `deepseek` `deepseek-chat` at `--strictness high` /
   `--trials 5`,
   `--scope bundled`, `PACK_BEHAVIOR_PASS_FLOOR = 0.8`. Every report's
-  `skillDigest` binds it to the current skill directory contents, so the
-  gate re-runs whenever a skill changes. The honest run failed all four
+  `skillDigest` binds it to the current skill directory contents, so
+  editing a skill invalidates its recorded report rather than triggering a
+  re-run. The honest run failed all four
   batch-1 packs — every one stays `stability: experimental`, and no
   generated `<id>-code-auditor`/`<id>-build-fixer` agent pair ships for any
   of them (each pack's `agent-refs.json` lists `"agents": []` with a note):
@@ -593,9 +594,14 @@ history is inspectable without guessing from a git blame.
     only `go-testing` fails (`table-driven-subtests`, `passRate` `0.4`) —
     but a pack needs every report to pass, so the whole pack stays
     experimental.
-  - `react`: `react-implementation`, `react-testing`, `react-code-review`,
-    and `react-upgrade-migration` pass; only `react-build-fix` fails
-    (`no-disable-hooks-lint`, `passRate` 0).
+  - `react`: `react-implementation`, `react-code-review`, and
+    `react-upgrade-migration` pass. `react-build-fix` fails
+    (`no-disable-hooks-lint`, `passRate` 0). `react-testing`'s own report
+    verdict reads `pass` — `evalSkill`'s per-report verdict threshold is
+    `0.5`, and its `mock-network-boundary` behavior scenario scores
+    `passRate` `0.6`, which clears that — but `0.6` is below the pack gate's
+    `PACK_BEHAVIOR_PASS_FLOOR` of `0.8`, so `react-testing` fails the pack
+    gate too. That makes two failing react skills, not one.
 
   A local `ollama` `llama3.1:latest` run at the same strictness/trials is
   kept only as a supplementary signal, not a gate outcome (its raw

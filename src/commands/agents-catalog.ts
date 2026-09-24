@@ -547,8 +547,12 @@ function generateCommand(args: string[], depsIn: AgentsCatalogDeps): void {
     process.exitCode = 1;
     return;
   }
-  const outcomes: GenerateFileOutcome[] = [];
-
+  // R2-3: validate BOTH targets in a first pass before writing either one.
+  // The containment and lstat checks used to run inside the write loop, so a
+  // refusal on the fixer's target (e.g. a planted symlink) left the auditor
+  // already written to disk — a half-written pair with exit 1. Now nothing
+  // is written until both targets have cleared every check.
+  const prepared: { file: typeof pair.auditor; filePath: string; existed: boolean }[] = [];
   for (const file of [pair.auditor, pair.fixer]) {
     const filePath = path.join(bundledAgentsRoot, file.fileName);
 
@@ -557,8 +561,9 @@ function generateCommand(args: string[], depsIn: AgentsCatalogDeps): void {
     // containment check is a second, independent layer that does not rely on
     // that upstream validation staying correct. Refuse to write anywhere the
     // resolved path is not actually inside `bundledAgentsRoot`, and refuse to
-    // write through a symlinked target (an attacker-planted symlink at the
-    // destination name pointing elsewhere).
+    // write through a symlinked or otherwise non-regular target (an
+    // attacker-planted symlink, device file, FIFO, etc. at the destination
+    // name pointing elsewhere).
     const relative = path.relative(bundledAgentsRoot, filePath);
     if (relative.startsWith("..") || path.isAbsolute(relative)) {
       error(`Refusing to write "${file.fileName}": it resolves outside the bundled agents directory.`);
@@ -569,14 +574,19 @@ function generateCommand(args: string[], depsIn: AgentsCatalogDeps): void {
     try {
       const targetStats = lstatSync(filePath);
       existed = true;
-      if (targetStats.isSymbolicLink()) {
-        error(`Refusing to write "${file.fileName}": the target is a symlink.`);
+      if (targetStats.isSymbolicLink() || !targetStats.isFile()) {
+        error(`Refusing to write "${file.fileName}": the target is a symlink or not a regular file.`);
         process.exitCode = 1;
         return;
       }
     } catch {
       existed = false;
     }
+    prepared.push({ file, filePath, existed });
+  }
+
+  const outcomes: GenerateFileOutcome[] = [];
+  for (const { file, filePath, existed } of prepared) {
     const previous = existed ? readFileSync(filePath, "utf8") : undefined;
     const changed = previous !== file.content;
 
