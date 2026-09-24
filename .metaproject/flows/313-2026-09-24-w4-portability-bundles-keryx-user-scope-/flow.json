@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T14:19:31.697Z",
+  "updatedAt": "2026-09-24T17:36:22.174Z",
   "source": {
     "type": "description",
     "ref": null
@@ -426,6 +426,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T17:27:30.287Z",
+            "outcome": "started",
+            "detail": "313-T21 dispatch after merging W3 (0b983e7e)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -701,6 +722,21 @@
       "at": "2026-09-24T14:19:31.697Z",
       "event": "task-attempt",
       "detail": "T14: failed (attempt 8) — closure 2 check r07: R5-F2 and R3-F18 resolved; new minor R7-F1 (UTF-16 BOM non-skill kinds scanned UTF-8 only); stop"
+    },
+    {
+      "at": "2026-09-24T17:27:30.203Z",
+      "event": "task-added",
+      "detail": "T21: Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)"
+    },
+    {
+      "at": "2026-09-24T17:27:30.287Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 313-T21 dispatch after merging W3 (0b983e7e)"
+    },
+    {
+      "at": "2026-09-24T17:36:22.174Z",
+      "event": "task-done",
+      "detail": "T21: Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)"
     }
   ]
 }

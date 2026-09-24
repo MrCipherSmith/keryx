@@ -223,3 +223,6 @@ Source: the review-313-r5.md report, with probes in scratchpad/review313-r5/.
     - The flow stays in-progress.
     - No further fix round was started.
     - The decision passes to the owner. Options: authorize an R7-F1 fix plus a narrow check, merge with R7-F1 as an explicit exception, or move R7-F1 to the follow-up flow together with R5-F1/R5-F3.
+- 2026-09-24T17:27:30.203Z - task-added: T21: Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)
+- 2026-09-24T17:27:30.287Z - task-attempt: T21: started (attempt 1) — 313-T21 dispatch after merging W3 (0b983e7e)
+- 2026-09-24T17:36:22.174Z - task-done: T21: Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)
