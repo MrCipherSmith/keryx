@@ -9,7 +9,7 @@
   "title": "Wave 4 batch 1: stack packs and agent pairs for ts-js-node, react, python, go",
   "status": "in-progress",
   "createdAt": "2026-09-24T11:38:46.681Z",
-  "updatedAt": "2026-09-24T11:44:58.779Z",
+  "updatedAt": "2026-09-24T16:20:38.965Z",
   "source": {
     "type": "description",
     "ref": null
@@ -90,141 +90,253 @@
       "id": "T5",
       "title": "Gate plumbing: eval --runner wiring, multi-skill pack eval gate, pack guards, agents verify resolvers",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:46:43.824Z",
+            "outcome": "started",
+            "detail": "314-T5 wave A"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Pack ts-js-node: rules, skills (implement/test/review/build-fix/migrate), evals, scout records",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:46:43.913Z",
+            "outcome": "started",
+            "detail": "314-T6 wave A"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Pack react (extends ts-js-node): rules, skills (implement/test/review/build-fix/migrate), evals, scout records",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:46:44.002Z",
+            "outcome": "started",
+            "detail": "314-T7 wave A"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Pack python: complete rules and skills, evals incl. python-testing, scout records",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:46:44.083Z",
+            "outcome": "started",
+            "detail": "314-T8 wave A"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Pack go: rules, skills (implement/test/review/build-fix), evals, scout records",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:46:44.163Z",
+            "outcome": "started",
+            "detail": "314-T9 wave A"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Agent pair generator + 8 generated agents + agent-refs.json",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:06:01.628Z",
+            "outcome": "started",
+            "detail": "314-T10"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Install manifest: rule/skill modules, components, profiles for the four packs",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:06:01.723Z",
+            "outcome": "started",
+            "detail": "314-T11"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "Gate run: eval every pack skill with ollama runner (high, 5 trials), record governance/eval.json, mark stable",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:07:11.910Z",
+            "outcome": "started",
+            "detail": "314-T12"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Gate check: agents verify, stocktake vs baseline, guard tests, audit-harness on temp install+export, install dry-runs",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T15:53:27.199Z",
+            "outcome": "started",
+            "detail": "314-T13a generation refusal + react agents removal"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
       "title": "Docs: W1/W2 spec updates, coverage count in journal after gate",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T16:16:49.351Z",
+            "outcome": "started",
+            "detail": "314-T14"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Scout self-match: --record/--skill-name excludes the candidate's own catalog entry; re-record new pack skills' scout decisions",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:02:51.978Z",
+            "outcome": "started",
+            "detail": "314-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "ts-js-node trigger overlap: nodejs-code-review vs nodejs-testing routing, re-run evals, re-check pack gate",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T15:52:58.861Z",
+            "outcome": "started",
+            "detail": "314-T16"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -305,6 +417,146 @@
     {
       "at": "2026-09-24T11:44:58.779Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-24T11:46:43.824Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 314-T5 wave A"
+    },
+    {
+      "at": "2026-09-24T11:46:43.913Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 314-T6 wave A"
+    },
+    {
+      "at": "2026-09-24T11:46:44.002Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 314-T7 wave A"
+    },
+    {
+      "at": "2026-09-24T11:46:44.083Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 314-T8 wave A"
+    },
+    {
+      "at": "2026-09-24T11:46:44.163Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 314-T9 wave A"
+    },
+    {
+      "at": "2026-09-24T12:02:42.721Z",
+      "event": "task-done",
+      "detail": "T6: Pack ts-js-node: rules, skills (implement/test/review/build-fix/migrate), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T12:02:51.886Z",
+      "event": "task-added",
+      "detail": "T15: Scout self-match: --record/--skill-name excludes the candidate's own catalog entry; re-record new pack skills' scout decisions"
+    },
+    {
+      "at": "2026-09-24T12:02:51.978Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 314-T15"
+    },
+    {
+      "at": "2026-09-24T12:03:26.581Z",
+      "event": "task-done",
+      "detail": "T9: Pack go: rules, skills (implement/test/review/build-fix), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T12:03:37.692Z",
+      "event": "task-done",
+      "detail": "T7: Pack react (extends ts-js-node): rules, skills (implement/test/review/build-fix/migrate), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T12:05:20.356Z",
+      "event": "task-done",
+      "detail": "T8: Pack python: complete rules and skills, evals incl. python-testing, scout records"
+    },
+    {
+      "at": "2026-09-24T12:06:01.628Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 314-T10"
+    },
+    {
+      "at": "2026-09-24T12:06:01.723Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 314-T11"
+    },
+    {
+      "at": "2026-09-24T12:06:16.821Z",
+      "event": "task-done",
+      "detail": "T5: Gate plumbing: eval --runner wiring, multi-skill pack eval gate, pack guards, agents verify resolvers"
+    },
+    {
+      "at": "2026-09-24T12:07:11.911Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 314-T12"
+    },
+    {
+      "at": "2026-09-24T12:09:20.752Z",
+      "event": "task-done",
+      "detail": "T15: Scout self-match: --record/--skill-name excludes the candidate's own catalog entry; re-record new pack skills' scout decisions"
+    },
+    {
+      "at": "2026-09-24T12:11:22.377Z",
+      "event": "task-done",
+      "detail": "T11: Install manifest: rule/skill modules, components, profiles for the four packs"
+    },
+    {
+      "at": "2026-09-24T12:18:16.934Z",
+      "event": "task-done",
+      "detail": "T10: Agent pair generator + 8 generated agents + agent-refs.json"
+    },
+    {
+      "at": "2026-09-24T15:52:58.699Z",
+      "event": "task-done",
+      "detail": "T12: Gate run: eval every pack skill with ollama runner (high, 5 trials), record governance/eval.json, mark stable"
+    },
+    {
+      "at": "2026-09-24T15:52:58.783Z",
+      "event": "task-added",
+      "detail": "T16: ts-js-node trigger overlap: nodejs-code-review vs nodejs-testing routing, re-run evals, re-check pack gate"
+    },
+    {
+      "at": "2026-09-24T15:52:58.861Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 314-T16"
+    },
+    {
+      "at": "2026-09-24T15:53:27.199Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 314-T13a generation refusal + react agents removal"
+    },
+    {
+      "at": "2026-09-24T16:06:16.968Z",
+      "event": "task-done",
+      "detail": "T16: ts-js-node trigger overlap: nodejs-code-review vs nodejs-testing routing, re-run evals, re-check pack gate"
+    },
+    {
+      "at": "2026-09-24T16:06:26.919Z",
+      "event": "ac-updated",
+      "detail": "The model-backed gate (T12/T16) cleared go, python and ts-js-node; react-code-review scenario flag-rules-of-hooks reached 0.6 after two tuning passes, below the 0.8 floor, so react ships experimental rather than weakening the grader"
+    },
+    {
+      "at": "2026-09-24T16:06:27.013Z",
+      "event": "ac-updated",
+      "detail": "Per W2 D-7, per-stack pairs are generated only from gate-cleared packs; react stayed experimental (react-code-review behavior eval 0.6 < 0.8), so its pair was removed and generation now refuses non-cleared packs"
+    },
+    {
+      "at": "2026-09-24T16:16:39.188Z",
+      "event": "task-done",
+      "detail": "T13: Gate check: agents verify, stocktake vs baseline, guard tests, audit-harness on temp install+export, install dry-runs"
+    },
+    {
+      "at": "2026-09-24T16:16:49.351Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 314-T14"
+    },
+    {
+      "at": "2026-09-24T16:20:38.965Z",
+      "event": "task-done",
+      "detail": "T14: Docs: W1/W2 spec updates, coverage count in journal after gate"
     }
   ]
 }

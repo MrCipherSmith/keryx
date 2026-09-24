@@ -18,3 +18,52 @@
 - 2026-09-24T11:44:58.779Z - started
 - 2026-09-24T11:50Z - Phase 1 done: description/context/plan/AC written, T5-T14 added, T2/T3 skipped (superseded), frozen and started. completion_outcome=create-pr-and-merge and operator_confirmed=true come from the program dispatch (owner MrCipherSmith); base feat/agent-platform-expansion.
 - 2026-09-24T11:50Z - Decision: wire eval --runner to runModelTurn (ollama llama3.1:latest locally) so authored behavior scenarios can run for real; without it no pack skill can reach verdict pass.
+- 2026-09-24T11:46:43.824Z - task-attempt: T5: started (attempt 1) — 314-T5 wave A
+- 2026-09-24T11:46:43.913Z - task-attempt: T6: started (attempt 1) — 314-T6 wave A
+- 2026-09-24T11:46:44.002Z - task-attempt: T7: started (attempt 1) — 314-T7 wave A
+- 2026-09-24T11:46:44.083Z - task-attempt: T8: started (attempt 1) — 314-T8 wave A
+- 2026-09-24T11:46:44.163Z - task-attempt: T9: started (attempt 1) — 314-T9 wave A
+- 2026-09-24T12:30Z - Coordinator relay: T6 used the stale global keryx (0.2.154) and wrote no scout records. Told all pack workers to run `bun ./src/cli.ts skills scout|eval|stocktake`. T6 was resumed to record real scout decisions through the CLI.
+- 2026-09-24T12:30Z - Decision (applies to this batch and later ones): the gate is eval PASS through a REAL model runner. T5 wires `skills eval --runner <provider>[:<model>]` to single-turn runModelTurn, with local ollama llama3.1:latest, strictness high and 5 trials. It is not a deterministic grade of the SKILL.md text, because grading the skill's own text proves nothing about behavior. A pack whose skills cannot reach pass stays experimental, gets no generated agents, and its gate is reported as not passed. It is never relabelled as trigger+lint+scout+stocktake only.
+- 2026-09-24T12:02:42.721Z - task-done: T6: Pack ts-js-node: rules, skills (implement/test/review/build-fix/migrate), evals, scout records
+- 2026-09-24T12:02:51.886Z - task-added: T15: Scout self-match: --record/--skill-name excludes the candidate's own catalog entry; re-record new pack skills' scout decisions
+- 2026-09-24T12:02:51.978Z - task-attempt: T15: started (attempt 1) — 314-T15
+- 2026-09-24T12:50Z - T6 accepted (commit 36e7bd67). Concern: every scout record reads decision 'use' at 1.0 because scout scored the candidate against its own already-on-disk catalog entry, which makes the pre-creation dedupe record meaningless. Added T15: exclude the candidate's own id (<pack>/<skill-name>) when recording, then re-record every new pack skill. The go and react packs show the same pattern.
+- 2026-09-24T12:03:26.581Z - task-done: T9: Pack go: rules, skills (implement/test/review/build-fix), evals, scout records
+- 2026-09-24T12:03:37.692Z - task-done: T7: Pack react (extends ts-js-node): rules, skills (implement/test/review/build-fix/migrate), evals, scout records
+- 2026-09-24T12:05:20.356Z - task-done: T8: Pack python: complete rules and skills, evals incl. python-testing, scout records
+- 2026-09-24T13:20Z - T7 react (130a2faa), T8 python (043af9e2) and T9 go (91fe8220) accepted. T8 concern: nodejs-testing's exclusion clause pulled pytest vocabulary into its index. The current stocktake no longer shows a nodejs-testing/python-testing merge. install-manifest python-skills description is stale; that goes to T11.
+- 2026-09-24T13:20Z - Stocktake now shows a NEW merge on the pre-existing review/code-style-review (overlaps code-ai-review at 0.56, just over 0.55). This is an IDF shift from the larger catalog. It goes to T13, which must resolve it with a minimal distinguishing description tweak so AC8 holds.
+- 2026-09-24T12:06:01.628Z - task-attempt: T10: started (attempt 1) — 314-T10
+- 2026-09-24T12:06:01.723Z - task-attempt: T11: started (attempt 1) — 314-T11
+- 2026-09-24T12:06:16.821Z - task-done: T5: Gate plumbing: eval --runner wiring, multi-skill pack eval gate, pack guards, agents verify resolvers
+- 2026-09-24T12:07:11.911Z - task-attempt: T12: started (attempt 1) — 314-T12
+- 2026-09-24T12:09:20.752Z - task-done: T15: Scout self-match: --record/--skill-name excludes the candidate's own catalog entry; re-record new pack skills' scout decisions
+- 2026-09-24T12:11:22.377Z - task-done: T11: Install manifest: rule/skill modules, components, profiles for the four packs
+- 2026-09-24T14:00Z - T15 (602bb37b) accepted. Go and ts-js-node scout decisions were re-recorded with the candidate excluded; no use decisions. T11 (a53d4427) accepted. Install modules for the four packs stay experimental; T13 flips a pack's modules to stable only if that pack passes the T12 gate.
+- 2026-09-24T12:18:16.934Z - task-done: T10: Agent pair generator + 8 generated agents + agent-refs.json
+- 2026-09-24T14:40Z - T10 (381862f0) accepted. It adds a generator, 8 agents, a generated-drift check and the agents generate CLI. Concern checked: src/commands/agents-external-run.test.ts fails 1/12 on the base commit d9c7f4fa too, in a temporary detached worktree. The failure predates this flow and is unrelated (an author-email guard in a synthetic repo; CI decides whether it matters). Real-tree agents verify shows only stack-pack-not-gate-cleared on the 8 new agents until T12 flips packs to stable.
+- 2026-09-24T15:52:58.699Z - task-done: T12: Gate run: eval every pack skill with ollama runner (high, 5 trials), record governance/eval.json, mark stable
+- 2026-09-24T15:52:58.783Z - task-added: T16: ts-js-node trigger overlap: nodejs-code-review vs nodejs-testing routing, re-run evals, re-check pack gate
+- 2026-09-24T15:52:58.861Z - task-attempt: T16: started (attempt 1) — 314-T16
+- 2026-09-24T15:30Z - T12 (287310ee) accepted. go and python are stable (checkStablePackGate passes). react stays experimental: react-code-review scenario flag-rules-of-hooks reached 0.6 after two tuning passes, below the 0.8 floor. ts-js-node is blocked only by a trigger false positive: the negative prompt 'Write tests for this Node.js service's new endpoint' selects nodejs-code-review. Added T16 for one scoped routing fix with no further attempts; react stays experimental. T13 removes generated agents for any pack that is not gate-cleared and makes generation refuse non-stable packs.
+- 2026-09-24T15:53:27.199Z - task-attempt: T13: started (attempt 1) — 314-T13a generation refusal + react agents removal
+- 2026-09-24T16:10Z - T13a accepted. agents generate and agents verify now share checkStackPackGateCleared. --check refuses a pack that has not cleared the gate. The react pair is removed and react agent-refs.json is emptied with a note. The ts-js-node pair waits on T16.
+- 2026-09-24T16:06:16.968Z - task-done: T16: ts-js-node trigger overlap: nodejs-code-review vs nodejs-testing routing, re-run evals, re-check pack gate
+- 2026-09-24T16:06:26.919Z - ac-updated: The model-backed gate (T12/T16) cleared go, python and ts-js-node; react-code-review scenario flag-rules-of-hooks reached 0.6 after two tuning passes, below the 0.8 floor, so react ships experimental rather than weakening the grader
+- 2026-09-24T16:06:27.013Z - ac-updated: Per W2 D-7, per-stack pairs are generated only from gate-cleared packs; react stayed experimental (react-code-review behavior eval 0.6 < 0.8), so its pair was removed and generation now refuses non-cleared packs
+- 2026-09-24T16:40Z - T16 (b020e1a5) passed: ts-js-node is stable and keeps its pair. agents verify: ok true. AC3 and AC5 were updated through keryx flow ac update with reasons: three stable packs (go, python, ts-js-node) with six generated agents; react stays experimental because react-code-review's flag-rules-of-hooks behavior eval reached 0.6, below the 0.8 floor. T13b dispatched: set go and python manifest modules to stable, add a guard pinning pack.json stability to the manifest, resolve the code-style-review stocktake merge, run the gate checks and the audit-harness run.
+- 2026-09-24T16:16:39.188Z - task-done: T13: Gate check: agents verify, stocktake vs baseline, guard tests, audit-harness on temp install+export, install dry-runs
+- 2026-09-24T17:20Z - T13 (7071b26c, f595409d) accepted. Wave-4 batch-1 GATE PASSED for ts-js-node, python and go:
+  - every skill has eval verdict pass through the ollama runner (strictness high, 5 trials, behavior >= 0.8);
+  - agents verify ok with 18 agents, including the 6 generated ones;
+  - stocktake merge set equals the 6-skill baseline and all pack skills are keep;
+  - trigger TP is full with FP 0 for all 18 pack skills;
+  - install dry-runs ok;
+  - audit-harness on the temp install+export scored 100/A with 0 findings;
+  - 512 targeted tests pass;
+  - react stays experimental (react-code-review flag-rules-of-hooks 0.6 < 0.8) and has no agents.
+  Excluded run artifacts from commits: .metaproject/data/wiki/freshness-queue.jsonl and .metaproject/data/skills/stocktake/*.json.
+- 2026-09-24T17:20Z - STACK COVERAGE COUNT (metrics-and-validation.md W1): 2 -> 5, recorded after the gate passed. Previously NestJS/Prisma and React/MobX; added TS/JS-Node, Python and Go (gate-cleared stable packs). React's pack is experimental and adds nothing new beyond the pre-existing React/MobX coverage.
+- 2026-09-24T16:16:49.351Z - task-attempt: T14: started (attempt 1) — 314-T14
+- 2026-09-24T16:20:38.965Z - task-done: T14: Docs: W1/W2 spec updates, coverage count in journal after gate
