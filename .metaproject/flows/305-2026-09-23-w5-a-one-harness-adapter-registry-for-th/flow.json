@@ -9,7 +9,7 @@
   "title": "W5-a: one harness adapter registry for the ctx guard, orient injector and security hooks",
   "status": "in-progress",
   "createdAt": "2026-09-23T21:26:30.854Z",
-  "updatedAt": "2026-09-24T00:44:46.572Z",
+  "updatedAt": "2026-09-24T00:55:27.066Z",
   "source": {
     "type": "description",
     "ref": null
@@ -161,7 +161,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 5,
+        "count": 6,
         "log": [
           {
             "at": "2026-09-23T23:08:19.167Z",
@@ -187,6 +187,11 @@
             "at": "2026-09-24T00:44:46.572Z",
             "outcome": "started",
             "detail": "verification round after re-plan: 0 findings; CI all green on c36c788a"
+          },
+          {
+            "at": "2026-09-24T00:55:27.066Z",
+            "outcome": "blocked",
+            "detail": "review clean + CI 19/19 green on 3818321e; gh pr ready/merge denied by permission system (Merge Without Review) - handed to operator"
           }
         ]
       },
@@ -452,6 +457,11 @@
       "at": "2026-09-24T00:44:46.572Z",
       "event": "task-attempt",
       "detail": "T8: started (attempt 5) — verification round after re-plan: 0 findings; CI all green on c36c788a"
+    },
+    {
+      "at": "2026-09-24T00:55:27.066Z",
+      "event": "task-attempt",
+      "detail": "T8: blocked (attempt 6) — review clean + CI 19/19 green on 3818321e; gh pr ready/merge denied by permission system (Merge Without Review) - handed to operator"
     }
   ]
 }
