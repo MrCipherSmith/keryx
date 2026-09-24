@@ -380,9 +380,18 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/**
+ * sha256 (hex) of `value` under the same key-sorted canonical JSON the config
+ * checksum uses. Exported so other checksum-guarded config artifacts (flow 308:
+ * the harness-audit baseline file) reuse this one mechanism instead of a second.
+ */
+export function computeObjectChecksum(value: unknown): string {
+  return createHash("sha256").update(stableStringify(value)).digest("hex");
+}
+
 // §14: `configChecksum` = sha256 of the normalized `policies` block.
 export function computeConfigChecksum(config: SecurityConfig): string {
-  return createHash("sha256").update(stableStringify(config.policies)).digest("hex");
+  return computeObjectChecksum(config.policies);
 }
 
 export function verifyConfigChecksum(config: SecurityConfig): {
