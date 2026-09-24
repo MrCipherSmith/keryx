@@ -15,3 +15,5 @@ only via `keryx flow task done <id> <taskId>`.
 | T8 | verify | Run audit-harness on the labeled fixture set end to end; confirm --fix-proposals writes nothing |
 | T9 | verify | Confirm impact-evidence importers == `gdgraph affected --json` stdout byte for byte on this repo |
 | T10 | verify | Confirm no diff under src/harness and src/integrations (AC17) |
+| T11 | implement | Generalize hook-surface discovery to every non-JSON registry surface; codex config.toml mcp_servers scan |
+| T12 | implement | Fix import-policy regressions: no core->client TOML import; route new CLI imports through owner facades |

@@ -12,3 +12,30 @@
 - 2026-09-24T01:03:32.282Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-24T01:03:32.367Z - frozen: 17 criteria; checksum recorded
 - 2026-09-24T01:03:32.446Z - started
+- 2026-09-24T01:04:01.437Z - task-attempt: T5: started (attempt 1) — 308-T5 sonnet lane A
+- 2026-09-24T01:04:01.514Z - task-attempt: T6: started (attempt 1) — 308-T6 sonnet lane B
+- 2026-09-24 - Phase 1 done: description/context/plan/AC1-AC17 written, T2/T3 skipped (superseded by lanes T5/T6/T7), frozen and started. completion_outcome create-pr-and-merge from the dispatch (operator_confirmed=true); stacked addendum: PR base stack/wave0, no merge by this run.
+- 2026-09-24 - Orchestrator prep (shared seam, not a task): exported computeObjectChecksum from src/security/config.ts so Lane A's baseline and Lane B's config checksum share one mechanism without both lanes editing config.ts concurrently. security.test.ts green.
+- 2026-09-24 - Dispatched 308-T5 (Lane A, sonnet) and 308-T6 (Lane B, sonnet) in parallel with disjoint file ownership; security.ts wiring reserved for T7.
+- 2026-09-24T01:20:10.975Z - task-done: T5: Lane A: audit-harness engine, CLI handler, baseline, apply, labeled fixtures + tests
+- 2026-09-24 - T5 (Lane A) DONE_WITH_CONCERNS (relayed via coordinator): 23 tests pass, tsc/eslint clean. Concerns: (1) hook checks are regex heuristics; (2) mcp/hook discovery — verified settings discovery DOES walk SETTINGS_FILE_OWNERS; non-JSON hook surfaces are limited to .js paths → fix task T11 generalizes to every registry surface without merge/strip; (3) bundle-* deferred to W4, .codex/config.toml read as text not parsed; (4) local isPassGate pending T7; (5) secret fixtures generated at test time, not committed. Decision: continue; T11 added. Committed at boundary.
+- 2026-09-24T01:20:29.379Z - task-added: T11: Generalize hook-surface discovery to every non-JSON registry surface; codex config.toml mcp_servers scan
+- 2026-09-24T01:27:02.711Z - task-done: T6: Lane B: affected/related report builders, impact-evidence provider, config, CLI + tests
+- 2026-09-24 - T6 (Lane B) DONE (relayed via coordinator): 29 new tests pass, tsc clean, eslint clean. Judgment calls accepted: a denied file is not marked touched (dampening counts denials instead); 'not-applicable' event is in-memory only. Targeted run: 10 failures in gdgraph.test.ts/test-command.test.ts reproduce identically on a detached stack/wave0 checkout (git commit inside temp fixtures fails in this environment) — pre-existing, not caused by this flow. Committed at boundary.
+- 2026-09-24 - Dispatching T7 (haiku: wiring/docs) and T11 (sonnet: discovery generalization) in parallel, disjoint files.
+- 2026-09-24T01:27:11.793Z - task-attempt: T7: started (attempt 1) — 308-T7
+- 2026-09-24T01:27:11.871Z - task-attempt: T11: started (attempt 1) — 308-T11
+- 2026-09-24 - T9 verified: on this repo, computeImpactEvidence(root,f).importers.json is byte-identical to `bun ./src/cli.ts gdgraph affected f --json` stdout for src/lib/command-risk.ts (2587 B), src/security/config.ts (4320 B) and an unindexed src/nonexistent-file.ts (1603 B, target-not-indexed).
+- 2026-09-24T01:28:04.099Z - task-done: T9: Confirm impact-evidence importers equal gdgraph affected --json stdout byte for byte
+- 2026-09-24T01:32:38.699Z - task-done: T7: Wire subcommands into security.ts, export isPassGate, docs
+- 2026-09-24 - T7 DONE (relayed): subcommands wired, isPassGate moved to src/commands/security-gate.ts (shared by security.ts and security-audit-harness.ts, breaks circular import), help + cli-reference + modules docs; tsc/eslint/doc-links/cli-reference-coverage green. Committed.
+- 2026-09-24T01:35:55.526Z - task-done: T11: Generalize hook-surface discovery to every non-JSON registry surface; codex config.toml mcp_servers scan
+- 2026-09-24T01:37:01.104Z - task-added: T12: Fix import-policy regressions: no core->client TOML import; route new CLI imports through owner facades
+- 2026-09-24 - T11 DONE (relayed), committed. Orchestrator check found import-policy.live regressions (green on stack/wave0): security/audit-harness/index.ts -> mcp-servers/compat.ts (core->client, parseGrokToml) and 5 new facade bypasses (ceiling 150, now 155) from commands/{gdgraph,test,security-audit-harness,security-impact-evidence}.ts. Added T12.
+- 2026-09-24T01:37:01.193Z - task-attempt: T12: started (attempt 1) — 308-T12
+- 2026-09-24T01:47:18.797Z - task-done: T12: Fix import-policy regressions: no core->client TOML import; route new CLI imports through owner facades
+- 2026-09-24 - T12 DONE: own codex-toml reader (core), facade re-exports in security/gdgraph/testing service.ts; import-policy live suite green, avoidable bypasses back to 150. Committed.
+- 2026-09-24 - T8 verified via the CLI (bun ./src/cli.ts security audit-harness <copy> --json --fix-proposals, then --ci) on all 15 labeled fixtures: found check set == expected.json for every fixture, every run reports score+grade, --fix-proposals left each fixture's file hashes unchanged (writes=none). --ci exit 1 on critical/high fixtures and on baseline-tampered (0 findings), exit 0 on agents/baseline-indefinite/clean/claude-md-only. hook-injection: score 75 grade C (critical cap). Self-audit of this repo: 0 findings, coverage complete.
+- 2026-09-24 - T10 verified: git diff stack/wave0 -- src/harness src/integrations is empty.
+- 2026-09-24T01:47:55.267Z - task-done: T8: Run audit-harness on the labeled fixture set end to end; confirm --fix-proposals writes nothing
+- 2026-09-24T01:47:55.342Z - task-done: T10: Confirm no diff under src/harness and src/integrations (AC17)
