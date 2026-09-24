@@ -205,6 +205,191 @@ describe("bounded extension scan", () => {
   });
 });
 
+describe("F1: fail-open on a read error other than absent", () => {
+  /** An fs whose readTextFile/readDir throw a specific error `code` for one path, ENOENT otherwise. */
+  function faultyFs(faultyPath: string, code: string): StackDetectFs {
+    return {
+      async readTextFile(path: string): Promise<string> {
+        if (path === faultyPath) {
+          const error = new Error(`${code}: permission denied, open '${path}'`) as NodeJS.ErrnoException;
+          error.code = code;
+          throw error;
+        }
+        throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" });
+      },
+      async readDir(path: string): Promise<StackDirEntry[]> {
+        if (path === faultyPath) {
+          const error = new Error(`${code}: permission denied, scandir '${path}'`) as NodeJS.ErrnoException;
+          error.code = code;
+          throw error;
+        }
+        throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" });
+      },
+    };
+  }
+
+  test("EACCES on package.json marks the whole js family uncertain, not absent", async () => {
+    const fs = faultyFs("/repo/package.json", "EACCES");
+    const result = await detectStack("/repo", { fs });
+    expect(result.uncertain).toBe(true);
+    for (const tag of jsTags()) {
+      expect(result.tags[tag]).toBe(true);
+    }
+    const signal = result.perSignal.find((s) => s.signal === "manifest:package.json");
+    expect(signal?.uncertain).toBe(true);
+    expect(signal?.reason).toContain("EACCES");
+  });
+
+  test("ENOENT on package.json is absent, not uncertain (control case)", async () => {
+    const fs = faultyFs("/repo/nothing-matches-this-path", "EACCES");
+    const result = await detectStack("/repo", { fs });
+    expect(result.uncertain).toBe(false);
+    for (const tag of jsTags()) {
+      expect(result.tags[tag]).toBe(false);
+    }
+  });
+
+  test("EIO on pyproject.toml marks python family uncertain and names the code", async () => {
+    const fs = faultyFs("/repo/pyproject.toml", "EIO");
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(true);
+    expect(signal?.reason).toContain("EIO");
+    expect(result.tags.python).toBe(true);
+  });
+
+  test("EACCES on Cargo.toml (markerFileSignal) marks rust uncertain", async () => {
+    const fs = faultyFs("/repo/Cargo.toml", "EACCES");
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:Cargo.toml");
+    expect(signal?.uncertain).toBe(true);
+    expect(result.tags.rust).toBe(true);
+  });
+
+  test("EACCES on pom.xml (jvmManifestSignal) marks jvm-family tags uncertain", async () => {
+    const fs = faultyFs("/repo/pom.xml", "EACCES");
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pom.xml");
+    expect(signal?.uncertain).toBe(true);
+    expect(result.tags.java).toBe(true);
+  });
+
+  test("EACCES readDir on the repository root marks dotnet, terraform, and sql uncertain", async () => {
+    const fs = faultyFs("/repo", "EACCES");
+    const result = await detectStack("/repo", { fs });
+    for (const id of ["manifest:dotnet-project", "marker:terraform", "marker:sql"]) {
+      const signal = result.perSignal.find((s) => s.signal === id);
+      expect(signal?.uncertain).toBe(true);
+      expect(signal?.reason).toContain("EACCES");
+    }
+    expect(result.tags.csharp).toBe(true);
+    expect(result.tags.dotnet).toBe(true);
+    expect(result.tags.terraform).toBe(true);
+    expect(result.tags.sql).toBe(true);
+    // The extension scan also reads the repo root, so c-cpp goes uncertain too.
+    expect(result.tags["c-cpp"]).toBe(true);
+  });
+
+  test("EACCES readDir on .github/workflows marks github-actions uncertain", async () => {
+    const fs = faultyFs("/repo/.github/workflows", "EACCES");
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "marker:github-workflows");
+    expect(signal?.uncertain).toBe(true);
+    expect(result.tags["github-actions"]).toBe(true);
+  });
+
+  test("EACCES readDir on a nested subdirectory during the extension scan marks c-cpp uncertain", async () => {
+    const fs: StackDetectFs = {
+      async readTextFile(path: string): Promise<string> {
+        throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" });
+      },
+      async readDir(path: string): Promise<StackDirEntry[]> {
+        if (path === "/repo") {
+          return [{ name: "locked", isDirectory: true }];
+        }
+        if (path === "/repo/locked") {
+          const error = new Error(`EACCES: permission denied, scandir '${path}'`) as NodeJS.ErrnoException;
+          error.code = "EACCES";
+          throw error;
+        }
+        throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" });
+      },
+    };
+    const result = await detectStack("/repo", { fs });
+    expect(result.tags["c-cpp"]).toBe(true);
+    const signal = result.perSignal.find((s) => s.signal === "scan:extensions");
+    expect(signal?.uncertain).toBe(true);
+    expect(signal?.reason).toContain("EACCES");
+  });
+});
+
+describe("F12: empty repo reason has no absolute path", () => {
+  test("'no known stack signals' reason names no path at all", async () => {
+    const fs = fakeFs({});
+    const result = await detectStack("/repo", { fs });
+    expect(result.reason).toBe("no known stack signals found at the repository root");
+    expect(result.reason).not.toContain("/repo");
+  });
+});
+
+describe("F14: pyproject broken-TOML heuristic tolerates valid multi-line/nested arrays", () => {
+  test("a valid multi-line array of arrays is not flagged broken", async () => {
+    const fs = fakeFs({
+      "/repo/pyproject.toml":
+        '[tool.poetry]\nname = "app"\nmatrix = [\n    [1, 2],\n    [3, 4],\n]\n',
+    });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(false);
+    expect(result.uncertain).toBe(false);
+    expect(result.tags.python).toBe(true);
+  });
+
+  test("a valid multi-line array with an inline table element is not flagged broken", async () => {
+    const fs = fakeFs({
+      "/repo/pyproject.toml":
+        '[tool.poetry]\nname = "app"\nauthors = [\n    { name = "A", email = "a@example.com" },\n]\n',
+    });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(false);
+  });
+
+  test("a double quote inside a single-quoted string does not unbalance the quote count", async () => {
+    const fs = fakeFs({
+      "/repo/pyproject.toml": "[tool.poetry]\nname = 'a \"quoted\" word'\n",
+    });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(false);
+  });
+
+  test("a genuinely unterminated table header is still flagged uncertain", async () => {
+    const fs = fakeFs({ "/repo/pyproject.toml": '[tool.poetry\nname = "broken"\n' });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(true);
+    expect(signal?.reason).toMatch(/structurally broken/);
+  });
+
+  test("a genuinely unterminated array is still flagged uncertain", async () => {
+    const fs = fakeFs({
+      "/repo/pyproject.toml": '[tool.poetry]\nname = "app"\nmatrix = [\n    [1, 2],\n    [3, 4],\n',
+    });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(true);
+  });
+
+  test("an odd number of real unbalanced double quotes is still flagged uncertain", async () => {
+    const fs = fakeFs({ "/repo/pyproject.toml": '[tool.poetry]\nname = "unterminated\n' });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(true);
+    expect(signal?.reason).toMatch(/unbalanced quotes/);
+  });
+});
+
 describe("determinism of output shape", () => {
   test("tags object has every known tag key, and perSignal is sorted by signal id", async () => {
     const fs = fakeFs({

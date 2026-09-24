@@ -114,6 +114,77 @@ describe("keryx stack detect — basic behavior", () => {
     }
   });
 
+  test("F13: --cwd pointing at a nonexistent directory exits 1 with a clear error, no dirs created", async () => {
+    install();
+    try {
+      const base = await makeTempRepo();
+      const missing = path.join(base, "does-not-exist");
+
+      await stackCommand(["detect", "--cwd", "does-not-exist"], base);
+      expect(process.exitCode).toBe(1);
+      expect(capturedErr.join("\n")).toContain("does not exist");
+
+      let created = true;
+      try {
+        await statSync(missing);
+      } catch {
+        created = false;
+      }
+      expect(created).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  test("F13: --cwd pointing at a file (not a directory) exits 1", async () => {
+    install();
+    try {
+      const base = await makeTempRepo();
+      const filePath = path.join(base, "not-a-dir");
+      await writeFile(filePath, "hello");
+
+      await stackCommand(["detect", "--cwd", "not-a-dir"], base);
+      expect(process.exitCode).toBe(1);
+      expect(capturedErr.join("\n")).toContain("not a directory");
+    } finally {
+      restore();
+    }
+  });
+
+  test("F13: --cwd with no value exits 1 instead of silently using the process cwd", async () => {
+    install();
+    try {
+      const base = await makeTempRepo();
+
+      await stackCommand(["detect", "--cwd"], base);
+      expect(process.exitCode).toBe(1);
+      expect(capturedErr.join("\n")).toContain("--cwd requires a directory argument");
+
+      let existsErr: unknown;
+      try {
+        await readFile(stackJsonPath(base), "utf8");
+      } catch (error) {
+        existsErr = error;
+      }
+      expect(existsErr).toBeDefined();
+    } finally {
+      restore();
+    }
+  });
+
+  test("F13: --cwd followed immediately by another flag exits 1 (flag consumed as a directory would be wrong)", async () => {
+    install();
+    try {
+      const base = await makeTempRepo();
+
+      await stackCommand(["detect", "--cwd", "--json"], base);
+      expect(process.exitCode).toBe(1);
+      expect(capturedErr.join("\n")).toContain("--cwd requires a directory argument");
+    } finally {
+      restore();
+    }
+  });
+
   test("--cwd points detection at another directory", async () => {
     install();
     try {

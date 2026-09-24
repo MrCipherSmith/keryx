@@ -3,6 +3,7 @@
 // rules, or install state — only `.metaproject/data/stack/stack.json`.
 
 import path from "node:path";
+import { stat } from "node:fs/promises";
 import { helpOptions, helpTitle, helpUsage, heading, style } from "../lib/ui";
 import { optionValue } from "../lib/args";
 import { readStackDetection, runStackDetect, serializeStackDetection, stackJsonPath, type StackDetection } from "../stack/service";
@@ -30,10 +31,36 @@ async function handleDetect(args: string[], cwd: string): Promise<void> {
     return;
   }
 
+  // `--cwd` present but with no value (a trailing flag, or the next token is
+  // itself another `--flag`) must be refused, not silently fall back to the
+  // process cwd: `optionValue` returns `undefined` for both "absent" and
+  // "present but valueless", so the flag's presence has to be checked
+  // separately to tell those two apart.
+  const cwdFlagGiven = args.includes("--cwd") || args.some((arg) => arg.startsWith("--cwd="));
   const cwdOption = optionValue(args, "--cwd");
+  if (cwdFlagGiven && cwdOption === undefined) {
+    console.error("--cwd requires a directory argument");
+    process.exitCode = 1;
+    return;
+  }
+
   const root = cwdOption !== undefined ? path.resolve(cwd, cwdOption) : cwd;
   const json = args.includes("--json");
   const write = !args.includes("--no-write");
+
+  let rootStat: Awaited<ReturnType<typeof stat>>;
+  try {
+    rootStat = await stat(root);
+  } catch {
+    console.error(`--cwd directory does not exist: ${root}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!rootStat.isDirectory()) {
+    console.error(`--cwd is not a directory: ${root}`);
+    process.exitCode = 1;
+    return;
+  }
 
   const doc = await runStackDetect(root, { write });
 
