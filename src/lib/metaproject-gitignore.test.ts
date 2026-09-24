@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   findLegacyMemoryArtifacts,
   formatLegacyMemoryMigrationAdvisory,
+  renderMetaprojectGitignoreBlock,
 } from "./metaproject-gitignore";
 
 test("legacy memory migration diagnostics classify paths without mutating them", async () => {
@@ -32,4 +33,10 @@ test("legacy memory migration diagnostics classify paths without mutating them",
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("the managed block ignores W3's per-machine learning paths (W3-AC9)", () => {
+  const block = renderMetaprojectGitignoreBlock();
+  expect(block).toContain(".metaproject/data/learning/observations/\n");
+  expect(block).toContain(".metaproject/data/learning/candidates/\n");
 });

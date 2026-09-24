@@ -92,6 +92,12 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 .metaproject/data/forgetting/
 .metaproject/data/retention/
 .metaproject/reports/
+# W3 self-learning loop: passive observation events and not-yet-reviewed
+# candidate patterns are per-machine, never meant to be shared/committed
+# (W3-AC9). ".metaproject/data/" is not blanket-ignored, so these two get
+# their own entries rather than inheriting coverage that does not exist.
+.metaproject/data/learning/observations/
+.metaproject/data/learning/candidates/
 # keryx:end
 
 # mutation-sweep working state. The journal names the file that may still
