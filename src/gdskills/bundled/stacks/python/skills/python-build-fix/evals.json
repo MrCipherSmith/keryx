@@ -23,18 +23,48 @@
       "prompt": "Our Python project fails with `ModuleNotFoundError: No module named 'mypkg.util'` when running pytest. How do you diagnose and fix this?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "[Rr]oot [Cc]ause" },
-        { "grader": "not-contains", "value": "type: ignore" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct answer diagnoses the actual cause of the ModuleNotFoundError (the package not installed in the active environment, a wrong import path relative to the project's layout, or a circular import) before proposing a fix, and the fix addresses that cause rather than hiding the failure.",
+          "pass_criteria": [
+            "identifies a concrete root cause: the package/module is not installed or the wrong environment is active, the import path is wrong for the project's src/flat layout, or the failure is a circular import",
+            "applies a fix matched to that cause: install/declare the dependency, correct the import path or packaging config, or restructure the code to remove the circular import",
+            "distinguishes the root cause from the symptom in how it explains or reports the fix, instead of only restating the traceback"
+          ],
+          "fail_criteria": [
+            "recommends wrapping the failing import in try/except ImportError (e.g. `try/except ImportError: pass`) to hide the failure instead of fixing it. Mentioning the suppression only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "First check whether the environment ModuleNotFoundError is actually happening in has mypkg installed: run `pip show mypkg` (or `uv pip show mypkg`) in the same environment pytest uses. If it's missing or the wrong virtualenv is active, install it (`pip install -e .` from the project root) so the active env matches what's configured in pyproject.toml. If the package is installed, check whether mypkg/util.py actually exists at the path the import expects given the project's src/ or flat layout, and whether the package-discovery config in pyproject.toml (`[tool.setuptools.packages.find]` or `[tool.hatch.build]`) actually includes that subpackage. Also check for a circular import: does util.py import something that eventually imports back into util itself? If so, restructure by moving the shared symbol or importing inside the function, not by wrapping the import in try/except ImportError. Once fixed, rerun pytest and confirm the module imports cleanly and the report states the actual root cause found.",
+        "known_wrong": "Easiest fix: add a try/except ImportError around the import so pytest doesn't crash.\n\n```python\ntry:\n    from mypkg.util import helper\nexcept ImportError:\n    helper = None\n```\n\nThis way the module loads even if mypkg.util isn't available in this environment, and any code that calls helper() just gets None back instead of crashing at import time. You can leave the rest of the code as-is and run pytest again -- it should collect without the ModuleNotFoundError now. If something later needs helper for real, you can always properly install the package then, but for now this unblocks the test run without having to chase down whether it's a packaging config issue or an environment problem."
+      },
+      "anti_patterns": ["try/except ImportError"]
     },
     {
       "id": "mypy-error-no-blanket-suppress",
       "prompt": "mypy reports a type error on a function I touched. Fix it.",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "(signature|annotation|the actual (type|mismatch))" },
-        { "grader": "not-contains", "value": "# type: ignore" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct answer fixes the real type mismatch mypy reported -- by correcting the function's signature/annotation or the call site that violates it -- rather than making the error disappear with a blanket suppression.",
+          "pass_criteria": [
+            "names what mypy's exact mismatch is (the signature, the annotation, or the call site) as the thing being fixed",
+            "changes the actual code (annotation or call site) to resolve the mismatch, not just the checker's output",
+            "if a suppression is mentioned at all, it is narrow and justified inline for one specific line, never a blanket ignore of the error"
+          ],
+          "fail_criteria": [
+            "recommends adding `# type: ignore` (or `# noqa`) as a blanket suppression to make the error disappear without fixing or justifying it inline. Mentioning the suppression only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Read mypy's exact message first -- it names the mismatch, e.g. \"Argument 1 to 'process' has incompatible type 'str'; expected 'int'\". Look at the function's real contract: does `process` genuinely only make sense for `int`, or was the parameter always meant to accept both? If the function should accept `int`, fix the call site to pass an int (or convert it) instead of touching the signature. If the function's contract is actually broader than what's declared, widen the annotation to `int | str` and adjust the body to handle both cases correctly. Either way, don't add `# type: ignore` on the line just to quiet mypy -- that hides the real hole for every future caller. Once the annotation and the call sites agree with what the function actually does, rerun `mypy .` to confirm it's clean, and rerun pytest since a signature change can affect runtime behavior too.",
+        "known_wrong": "mypy is being overly strict here, the code works fine at runtime. Simplest fix is to just silence it:\n\n```python\ndef process(value) -> None:  # type: ignore\n    ...\n```\n\nThat clears the error mypy was reporting without needing to dig into why the annotation didn't match the call site -- the function still behaves the same, mypy just stops complaining. You can move on to the actual feature work instead of spending time chasing down whether the argument type or the annotation was the one that was wrong."
+      },
+      "anti_patterns": ["# type: ignore"]
     }
   ]
 }
