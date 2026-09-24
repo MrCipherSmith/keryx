@@ -65,3 +65,7 @@
 - 2026-09-24T06:43:08.258Z - task-attempt: T18: started (attempt 1) — 310-T18
 - 2026-09-24T06:50:34.695Z - task-done: T18: Fix R4: doctor lenient multi-runtime selectors; dry-run uninstall agrees with real run for hand-edited exports
 - 2026-09-24 - Round 4 (opus, narrow verification of 9e77c3d6 + merge 535f20af): R3 findings resolved, merge clean; 2 new minor (R4-F1 doctor strict selectors across runtimes, R4-F2 dry-run uninstall disagreement) — ingested r04; fixed in T18 (485 targeted pass). CI was green on bb521e75.
+- 2026-09-24T06:53:00.196Z - task-added: T19: Fix R5-F1: multi-runtime doctor still checks runtimes without the selected surface
+- 2026-09-24T06:53:00.278Z - task-attempt: T19: started (attempt 1) — 310-T19
+- 2026-09-24T06:58:45.046Z - task-done: T19: Fix R5-F1: multi-runtime doctor still checks runtimes without the selected surface
+- 2026-09-24 - Round 5 (opus, narrow on T18): R4-F2 resolved; R5-F1 minor (multi-runtime doctor skipped runtimes lacking the selected surface, hiding drift) — ingested r05; fixed in T19 (doctor --surface is additive; 486 targeted pass). CI green on 7fd965c5.

@@ -1,0 +1,23 @@
+[
+  {
+    "id": "R5-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "`integrations doctor --runtime <multi> --surface agents` skips runtimes without an agents surface entirely, so their recorded-surface drift is hidden and the command exits 0",
+    "impact": "In r-drift, `install --runtime claude,cursor` is run, then .cursor/hooks.json is corrupted. `doctor --runtime claude,cursor` exits 1 and names three invalid cursor surfaces. `doctor --runtime claude,cursor --surface agents` exits 0 and prints only '· cursor — no matching surface'. The natural follow-up to `install --runtime all --surface agents`, which is `doctor --runtime all --surface agents`, therefore reports a broken cursor, windsurf, gemini or other install as healthy.",
+    "suggested_fix": "For doctor, do not early-return under lenient selection. Drop the selectors this runtime does not declare and run the normal full doctor loop. `explicitlySelected` already ignores unknown names, so in practice this means removing the early return. Keep an 'error only if no selected runtime declares any selector' check in handleDoctor, computed from whether `resolveSurfaceSelectionLenient` matched on any runtime. If a per-runtime marker is still wanted, a note such as '· <id> — agents not declared' can sit alongside the normal doctor output instead of replacing it. Add a test with drift on an unmatched runtime under `--runtime all --surface agents` that expects exit 1, and adjust the cli-reference sentence.",
+    "evidence": "scratchpad/review310-r5/e2e.out lines 82-106: `doctor --runtime claude,cursor` gives [exit=1] with the cursor orient, security-check-input and security-check-output surfaces invalid ('file is not valid JSON'); `doctor --runtime claude,cursor --surface agents` gives '· cursor — no matching surface' and [exit=0]; `doctor --runtime cursor --surface block` gives [exit=1].",
+    "confidence": "high",
+    "file": "src/integrations/installer.ts",
+    "line": 750,
+    "class_scope": {
+      "sites": [
+        "src/integrations/installer.ts:748-752 (lenient early return with noMatchingSurface)",
+        "src/commands/integrations.ts:397-414 (handleDoctor treats noMatchingSurface as skip-only output, not counted toward exit 1)",
+        "docs/docs/cli-reference.md doctor row ('skipped for that runtime' plus 'Exits 1 when any requested runtime's doctor result is not ok')"
+      ],
+      "enumeration_method": "Found every lenientSelectors/noMatchingSurface/resolveSurfaceSelectionLenient site with `keryx ctx rg --all`. Only doctor combines a lenient skip with additive `--surface` semantics. Reproduced with the CLI in scratchpad/review310-r5/r-drift."
+    },
+    "global_id": "2026-09-24-ingest-684-r05#R5-F1"
+  }
+]

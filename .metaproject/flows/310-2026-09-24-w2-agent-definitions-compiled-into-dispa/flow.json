@@ -9,7 +9,7 @@
   "title": "W2: agent definitions compiled into dispatch contracts, per-harness exporters, initial generic agent catalog",
   "status": "in-progress",
   "createdAt": "2026-09-24T04:09:02.681Z",
-  "updatedAt": "2026-09-24T06:50:34.695Z",
+  "updatedAt": "2026-09-24T06:58:45.046Z",
   "source": {
     "type": "description",
     "ref": null
@@ -375,6 +375,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Fix R5-F1: multi-runtime doctor still checks runtimes without the selected surface",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T06:53:00.278Z",
+            "outcome": "started",
+            "detail": "310-T19"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -615,6 +636,21 @@
       "at": "2026-09-24T06:50:34.695Z",
       "event": "task-done",
       "detail": "T18: Fix R4: doctor lenient multi-runtime selectors; dry-run uninstall agrees with real run for hand-edited exports"
+    },
+    {
+      "at": "2026-09-24T06:53:00.196Z",
+      "event": "task-added",
+      "detail": "T19: Fix R5-F1: multi-runtime doctor still checks runtimes without the selected surface"
+    },
+    {
+      "at": "2026-09-24T06:53:00.278Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 310-T19"
+    },
+    {
+      "at": "2026-09-24T06:58:45.046Z",
+      "event": "task-done",
+      "detail": "T19: Fix R5-F1: multi-runtime doctor still checks runtimes without the selected surface"
     }
   ]
 }
