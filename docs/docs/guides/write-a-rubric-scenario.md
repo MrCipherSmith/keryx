@@ -29,10 +29,31 @@ A judge expectation carries no `value` — `rubric`/`pass_criteria`/
 ```json
 "calibration": {
   "known_right": "<hand-written correct answer>",
-  "known_wrong": "<hand-written plausible wrong answer that commits the forbidden anti-pattern>"
+  "known_wrong": "<hand-written plausible wrong answer that commits the forbidden anti-pattern>",
+  "vague": "<hand-written plausible answer that names the right direction but gives no concrete fix>",
+  "subtle_wrong": "<hand-written realistic-sounding answer that still commits the anti-pattern or misses required behaviour>"
 },
 "anti_patterns": ["@ts-ignore", "as any"]
 ```
+
+`vague` and `subtle_wrong` (fix 1 / R1-4, R1-11) are required alongside
+`known_right`/`known_wrong` — all four must be non-empty and pairwise
+different:
+
+- **`vague`** — a plausible, generic answer of 1-3 sentences that points in
+  the right direction ("fix the type instead of hiding the error", "add the
+  missing dependency") but gives no concrete fix. Must FAIL. This is the
+  leniency class review round 1 on PR #698 found the live judge passing
+  before this fix (R1-4): a one-sentence paraphrase of the rubric's own
+  direction, with nothing concrete shown, cleared some scenarios' judge
+  calls.
+- **`subtle_wrong`** — a reasonable-sounding, well-written answer that still
+  commits the anti-pattern or misses a required behaviour in a realistic way
+  — a partial fix, hedging, a non-`any` cast, log-and-continue, or a mock one
+  layer too deep. Must FAIL. `known_wrong` calibrations tend to be strawmen
+  ("Easiest fix: `<anti-pattern>`, no need to look further") that the judge
+  fails trivially; `subtle_wrong` is what actually exercises the judge
+  against a failure mode a real model might produce.
 
 `validateEvalSpec` (`src/gdskills/governance/eval.ts`) throws `EvalSpecError`,
 naming the file, for any malformed judge field: `calibration` missing, its
@@ -83,10 +104,27 @@ deterministic expectation is true AND the judge verdict is `pass`.
   one as something a grader can check against the answer's actual content
   ("names X as the first step", "wraps the error with %w"), not a
   restatement of the rubric.
+- **The concreteness rule (fix 1 / R1-4).** A pass criterion holds only when
+  it is *concretely* present in the answer — the specific change, code, or
+  step is actually shown or named, not merely gestured at or promised. An
+  answer that only names the right direction ("fix the type instead of
+  suppressing the error", "add the missing dependency") without showing what
+  the fix actually is does not satisfy that criterion; write your
+  `pass_criteria` so they require the concrete artefact, not just the
+  direction, and use the `vague` calibration answer above to prove it. This
+  is stated in the judge's own system prompt
+  (`src/gdskills/governance/judge.ts`, `JUDGE_PROMPT_VERSION 2026-09-25.1`),
+  which also requires the judge's "reason" to cite *where* in the answer each
+  pass criterion is satisfied, not just restate the criterion.
 - `fail_criteria` is optional; any single entry holding fails the answer
   regardless of how many pass criteria also hold. Use it for the specific
   wrong move the scenario exists to catch (reaching for a suppression,
-  skipping reproduction, mutating state in place).
+  skipping reproduction, mutating state in place). **Never write a
+  negation-only note as its own `fail_criteria` entry** — for example, a
+  standalone "Mentioning X only to warn against it is not a failure." Fold
+  that sentence into the fail criterion it qualifies instead (see "Warning is
+  not failure" below); integrity rule I10 (below) rejects a negation-only
+  note listed on its own.
 - **"Warning is not failure."** Mentioning an anti-pattern only to warn
   against it, or to explain why it must not be used, is not the same as
   committing it. Say so explicitly in the `fail_criteria` entry that names
@@ -120,11 +158,11 @@ fix" in a way a substring match cannot.
 
 ## Calibration and anti_patterns
 
-`calibration.known_right` and `calibration.known_wrong` are hand-written,
-not generated: `known_right` does what the skill teaches and must pass;
-`known_wrong` commits the specific anti-pattern the skill forbids and must
-fail. They drive both the anti-gaming harness (below) and two integrity
-rules:
+`calibration.known_right`, `calibration.known_wrong`, `calibration.vague`,
+and `calibration.subtle_wrong` are all hand-written, not generated:
+`known_right` does what the skill teaches and must pass; the other three
+must each fail, for different reasons (see "The anti-gaming requirement"
+below). They drive both the anti-gaming harness and these integrity rules:
 
 - **I6.** Every `anti_patterns` token appears (case-insensitive) in the
   skill's own `SKILL.md` — an anti-pattern the scenario checks for but the
@@ -137,6 +175,18 @@ rules:
   satisfy I6/I7 by accident (it will appear almost anywhere). Name the
   specific form instead: `` `any` `` (backtick-quoted) or `as any` reads as
   a real anti-pattern token; a bare `any` does not.
+- **I7c (fix 1 / R1-7).** Every `anti_patterns` token also appears
+  (case-insensitive) in the scenario's own judge expectation — its `rubric`
+  or a `fail_criteria` entry — not just in `known_wrong` or `SKILL.md` prose.
+  `anti_patterns` is authoring metadata for I6/I7; without I7c a token could
+  satisfy I6/I7 by construction while the judge itself is never actually told
+  about it, which makes the token a hint to the author, not something the
+  grading ever exercises. **`anti_patterns` tokens must be literal
+  constructs** the judge can check against the answer (a suppression
+  comment, a type name, an API call) — not a prose phrase copied from the
+  authored `known_wrong` text, which would trivially satisfy every one of
+  these rules by construction without the judge ever needing to recognize the
+  construct itself.
 
 `anti_patterns` itself is optional — a scenario with no clean single-token
 anti-pattern (for example, `go-implementation`'s `context-propagation`
@@ -144,14 +194,17 @@ scenario above) can omit it.
 
 ## The anti-gaming requirement
 
-Every judge scenario must be proven hard to game against six canned answers
-(`antiGamingAnswers`, `src/gdskills/governance/judge.ts`):
+Every judge scenario must be proven hard to game against eight canned
+answers (`antiGamingAnswers`, `src/gdskills/governance/judge.ts`; fix 1 /
+R1-4, R1-11 widened this from six kinds to eight):
 
 | Kind | Built from | Must grade |
 |---|---|---|
 | `empty` | `""` | FAIL — never reaches the judge; `gradeScenarioAnswer` short-circuits it |
 | `echo` | `"Sure. You asked: " + prompt` | FAIL |
+| `vague` | `calibration.vague` | FAIL — points in the right direction, shows no concrete fix |
 | `known-wrong` | `calibration.known_wrong` | FAIL |
+| `subtle-wrong` | `calibration.subtle_wrong` | FAIL — realistic-sounding, still wrong |
 | `injection` | `known_wrong` + a paragraph telling the grader to output pass | FAIL |
 | `stuffed` | `known_wrong` + the rubric and every pass/fail criterion pasted in | FAIL |
 | `known-right` | `calibration.known_right` | PASS |
@@ -162,18 +215,32 @@ and keyword-stuffing the rubric's own vocabulary into an otherwise-wrong
 answer. Both are built ON TOP OF `known_wrong`, so a scenario cannot pass
 them just by having a `known_wrong` that happens to already fail on its own
 merits — the judge has to resist the added attack text specifically.
+`vague` and `subtle-wrong` prove something different: not resistance to an
+attack, but that the judge actually enforces the concreteness rule and
+catches a realistic failure mode, rather than passing anything that gestures
+in the right direction or sounds confident. Review round 1 on PR #698 found
+the live judge passing some `vague` answers before this fix — see the
+concreteness rule above.
 
 ### Recording the calibration
 
 ```
-keryx skills judge-check <skill-id> --judge <provider>[:<model>] [--scope bundled|all] [--record] [--json]
+keryx skills judge-check <skill-id> --judge <provider>[:<model>] [--scope bundled|all] [--samples <n>] [--record] [--json]
 ```
 
-Runs all six canned answers for every judge scenario in the named skill
+Runs all eight canned answers for every judge scenario in the named skill
 through the **live** judge (not a stub) and exits `1` if any verdict does
-not match what that answer expects. `--record` writes the verdicts to
+not match what that answer expects. The live judge is not deterministic on
+identical input — review round 1 caught it flipping verdicts on the same
+canned answer across two calls — so each non-`empty` canned answer is graded
+`--samples` times (default **3**) rather than once, and a canned answer only
+counts as matching its expectation when **every** sample agrees and none
+errored. `--record` writes all of those samples (not a single verdict) to
 `src/gdskills/governance/judge-recordings/<pack>__<skill>.json` — a stable,
-diff-friendly JSON file the integrity guard replays offline.
+diff-friendly JSON file the integrity guard replays offline. Recordings, in
+other words, are **samples**: a recorded entry for a canned answer is proof
+that a live judge, checked at record time, agreed with itself `--samples`
+times in a row on that exact input — not proof that it always will.
 
 A recording goes stale, and the integrity guard's anti-gaming (AG) check
 fails closed rather than silently reusing it, when:
@@ -185,10 +252,23 @@ fails closed rather than silently reusing it, when:
   `JUDGE_PROMPT_VERSION`** (`src/gdskills/governance/judge.ts`) — the judge's
   own system/user prompt text changed;
 - **the recording is missing entirely** for a scenario that carries a judge
-  expectation.
+  expectation;
+- **any recorded sample for a canned answer disagrees with another**, or
+  carries a parse `error` — a recording is only trusted when its samples are
+  unanimous.
 
 Any of these names the exact fix in its failure message: re-run
 `skills judge-check <skill-id> --judge ... --record`.
+
+A recording is a **hand-writable file** — anyone with write access to the
+repository can compute a `judgeRequestDigest` and author the expected
+samples without ever calling a judge. Treat it like any other committed
+artifact whose truth depends on the process that produced it: the real
+control is reviewing the recording's diff in the pull request alongside the
+scenario it backs, not the recording's mere presence. See the gate's own
+threat-model note in `docs/requirements/keryx-agent-platform-expansion/
+workstreams/W1-stack-catalog.md` for the same point applied to `eval`'s
+trial records.
 
 ## The opt-in live check
 
@@ -210,8 +290,8 @@ on every scenario in the shipped tree:
 - **I3.** a scenario with no judge expectation carries at least one
   POSITIVE (`contains`/`regex`) expectation that does not already match the
   prompt text itself; a judge scenario instead carries at least one
-  non-empty pass criterion, a non-empty rubric, and a calibration pair whose
-  two answers differ.
+  non-empty pass criterion, a non-empty rubric, and a calibration set whose
+  four answers are all non-empty and pairwise different.
 - **I4.** shares no 6-word sequence with its own skill's `SKILL.md` body —
   the eval question must not be pasted into the skill as a worked example.
 - **I5.** its skill's `SKILL.md` contains no answer-key phrasing
@@ -223,14 +303,23 @@ on every scenario in the shipped tree:
   scenario's own `calibration.known_wrong`.
 - **I7b.** every `anti_patterns` token is at least 4 characters long, or
   contains a non-letter character.
+- **I7c (fix 1 / R1-7).** every `anti_patterns` token appears
+  (case-insensitive) in the scenario's own judge expectation — its `rubric`
+  or a `fail_criteria` entry.
 - **I8.** a judge scenario carries no `not-contains` expectation.
 - **I9.** every stack-pack behavior scenario is a judge scenario.
+- **I10 (fix 1 / R1-6).** no `fail_criteria` entry is a negation-only note
+  (for example, a standalone "Mentioning X only to warn against it is not a
+  failure.") — that sentence must be folded into the fail criterion it
+  qualifies, never listed as its own criterion.
 - **AG (anti-gaming).** for every judge scenario, every canned answer
-  (`empty`, `echo`, `known-wrong`, `injection`, `stuffed`, `known-right`)
-  grades, through the recorded live judge, to exactly the outcome that
-  answer expects. A missing recording, a stale `judgePromptVersion`, or a
-  recording missing the digest for one of these answers fails the check
-  outright — never a silent skip, never a pass by omission.
+  (`empty`, `echo`, `vague`, `known-wrong`, `subtle-wrong`, `injection`,
+  `stuffed`, `known-right`) grades, through the recorded live judge, to
+  exactly the outcome that answer expects — unanimously across all of a
+  recorded canned answer's samples. A missing recording, a stale
+  `judgePromptVersion`, a non-unanimous or errored sample, or a recording
+  missing the digest for one of these answers fails the check outright —
+  never a silent skip, never a pass by omission.
 
 ## How the stable-pack gate uses this
 
@@ -247,9 +336,28 @@ checks above:
 - `judgePromptVersion` equal to the current `JUDGE_PROMPT_VERSION`;
 - every ran behavior scenario's `passRate` at or above
   `PACK_BEHAVIOR_PASS_FLOOR` (`0.8`);
-- every ran behavior scenario carrying `trialRecords`, and
+- every ran behavior scenario carrying `trialRecords`, its recorded
+  `passes`/`passRate`/trial count matching what those records show, and
   `regradeRecordedReport` finding no discrepancy between the recorded
-  `passed` values and a fresh re-grade of those same records.
+  `passed` values and a re-derivation from those same records — the judge is
+  never re-run at gate time; "re-derive" means recomputing from the recorded
+  outputs and recorded verdicts, not re-judging them.
+
+**What the gate proves, and what it does not.** The checks above prove
+internal consistency of a recorded report against the skill's *current*
+files: the recorded outputs hash to their recorded digests, the counts and
+pass rate are re-derived from the trial records rather than trusted as
+self-declared fields, and trigger results are re-scored live against the
+current bundled catalog every time. The gate does **not** prove provenance —
+the trial outputs, the judge's verdicts, the runner/judge labels, and every
+AG recording described above are self-declared by whoever ran the eval, and
+nothing here re-runs the judge model against them. The actual control for
+provenance is review of the committed `eval.json` / recording diff in the
+pull request, the same way any other committed artifact is reviewed. See
+`docs/requirements/keryx-agent-platform-expansion/workstreams/
+W1-stack-catalog.md`, "Threat model: what the gate proves, and what it does
+not (fix 1, R1-2)", for the full statement and the planned follow-up (FU6, a
+live re-judge sampler).
 
 ## Never tune a SKILL.md to pass
 
@@ -265,3 +373,27 @@ for an unseen prompt. When flow 316's honest gate run found `python` and
 W1-stack-catalog.md`, "Implementation notes: grader reliability
 (flow 316)"), the fix was recorded as follow-up work on the grader, not
 applied mid-run — and no `SKILL.md` was touched.
+
+### The lesson from this flow: a prompt with no code needs a rubric that fits
+
+Two scenarios failed for the same underlying reason before fix 1:
+`python-build-fix`'s `mypy-error-no-blanket-suppress` (prompt: "mypy reports a
+type error on a function I touched. Fix it.") and, under the hardened judge,
+`react-build-fix`'s `no-disable-hooks-lint` (prompt carries no code either).
+**When a scenario's prompt contains no code, its rubric must not demand that
+the answer name code-level specifics it cannot possibly derive** — the exact
+type mismatch, the exact declaration to change — because a genuinely correct
+answer to an under-specified prompt is to ask for the missing information (or
+to state the fix in general terms) rather than invent a plausible-looking
+fake. The fix, in both cases, was not to weaken the rubric to accept a vague
+answer (the `vague` calibration must still fail): it was to accept either (a)
+asking for the missing concrete detail while correctly committing to the
+right kind of fix and refusing the anti-pattern, or (b) a **concrete
+illustrative example** — a corrected declaration or dependency array shown as
+code, invented for the purpose of demonstrating the mechanism, clearly framed
+as an example rather than claimed as the actual fix for code the answer never
+saw. Write your `pass_criteria` to accept a concrete illustrative example
+whenever the prompt itself supplies no code for the answer to quote from —
+otherwise a correct answer that plays it straight ("I don't have the actual
+error text — here's the pattern once you do") fails the concreteness rule for
+a reason that is really the prompt's fault, not the answer's.

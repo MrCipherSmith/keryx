@@ -1,5 +1,18 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.7
+Version: 0.1.8
+
+**Changelog (0.1.8, flow 316 fix attempt 1 / T25):** review round 1 (R1-4)
+found the live judge lenient on vague one-line answers; fix 1 hardened the
+judge (prompt v2, temperature 0, two new anti-gaming kinds) and content, then
+re-ran the honest gate. `react`'s `no-disable-hooks-lint` scored 3/5 (0.6)
+under the hardened judge — below the pack floor — so `react` is back to
+`stability: experimental` and its generated
+`react-code-auditor`/`react-build-fixer` pair is **removed**. `ts-js-node`
+still clears the gate and keeps its pair. Only the `ts-js-node` pair ships as
+of this flow; see `W1-stack-catalog.md`, "Implementation notes: fix attempt 1
+(flow 316, review round 1)" for the full honest re-run outcome. This
+supersedes the 0.1.7 changelog line below, which recorded the pre-fix-1
+(since-reverted) state of the same gate run.
 
 **Changelog (0.1.7, flow 316 T16):** flow 316 replaced the batch-1 stack-pack
 graders (string matching) with a rubric LLM judge and re-ran the honest
@@ -298,14 +311,41 @@ answers for merely mentioning an anti-pattern while warning against it (see
 (flow 316)"). Flow 316 replaced string graders with a rubric LLM judge,
 hardened the gate, and re-ran it honestly (DeepSeek `deepseek-chat` for both
 the runner and the judge, `--strictness high --trials 5 --scope bundled`).
-`ts-js-node` and `react` cleared the gate this time and each now has a
+`ts-js-node` and `react` cleared that first honest run, and each got a
 generated `<stack>-code-auditor`/`<stack>-build-fixer` pair under
-`src/gdskills/bundled/agents/`, produced by `keryx agents generate --stack
-ts-js-node` and `keryx agents generate --stack react`. `python` and `go`
-failed the re-run for scenario/runner-interaction reasons recorded in
-`W1-stack-catalog.md` (not a grader defect this time) and stay
-`stability: experimental` with no generated pair — each pack's
-`agent-refs.json` still lists `"agents": []` with a note naming why.
+`src/gdskills/bundled/agents/`. `python` and `go` failed for reasons recorded
+as working hypotheses in `W1-stack-catalog.md` — a scenario/rubric
+under-specification and a runner/skill interaction limitation, not proven
+grader defects at that point — and stayed `stability: experimental` with no
+generated pair.
+
+**Batch 1 status, fix attempt 1 (flow 316, review round 1 / T25):**
+adversarial review found the live judge lenient on vague one-line answers
+(R1-4). Fix 1 hardened the judge (prompt v2, temperature 0, `vague` and
+`subtle-wrong` anti-gaming kinds) and made the content corrections the
+recorded evidence justified (R1-5), then re-ran the honest gate a second
+time. The outcome changed:
+- **`ts-js-node`** still clears the gate under the hardened judge and keeps
+  its generated pair.
+- **`react`** no longer clears it: `no-disable-hooks-lint` scored 3/5 (0.6)
+  under judge prompt v2, below the pack floor. `react` is back to
+  `stability: experimental` and its generated pair (`react-code-auditor`,
+  `react-build-fixer`) is **removed** from `src/gdskills/bundled/agents/`.
+- **`python`** now clears every behavior scenario (the content corrections
+  fixed `mypy-error-no-blanket-suppress` and `resource-with-block`), but the
+  pack still fails on `python-implementation`'s trigger-positive-6 prompt not
+  being selected — an unrelated, pre-existing trigger/description gap, not a
+  behavior-scenario problem.
+- **`go`** still fails: `table-driven-subtests` (the model emits a tool call
+  instead of answering) and, newly observed under the hardened judge,
+  `no-sleep-sync` at 3/5.
+
+Only `ts-js-node` ships a generated pair as of this fix. `python` and `go`
+stay `stability: experimental` with no generated pair; `react`'s pair was
+generated once and is now withdrawn. Each affected pack's `agent-refs.json`
+lists `"agents": []` with a note naming why. See `W1-stack-catalog.md`,
+"Implementation notes: fix attempt 1 (flow 316, review round 1)" for the full
+per-scenario breakdown and the follow-up list (FU1-FU7).
 
 This covers 22 of W1's 23 stack packs; `mobx` (a capability that extends
 `react` rather than a standalone language/framework) gets no generated agent

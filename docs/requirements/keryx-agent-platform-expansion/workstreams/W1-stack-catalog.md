@@ -1,5 +1,5 @@
 # W1 — Stack-aware skills & rules catalog
-Version: 0.2.3
+Version: 0.2.4
 
 ## Summary
 
@@ -686,12 +686,38 @@ judge, hardened the stable-pack gate around it, and re-ran the honest gate.
   gate additionally requires every ran behavior scenario to carry
   `trialRecords` (one full record per trial: output, its sha256,
   deterministic results, judge verdict), and `regradeRecordedReport` to
-  re-derive the same pass/fail from those records with no discrepancy — a
-  recorded "pass" that does not survive a fresh re-grade fails the gate. A
+  re-derive the same pass/fail from those records with no discrepancy. A
   report's `catalogDigest` pins the bundled catalog it was scored against; on
   drift the gate re-scores the trigger scenarios live and fails only if a
   result actually changed, rather than invalidating every report on any
   unrelated bundled-skill edit.
+
+- **Threat model: what the gate proves, and what it does not (fix 1, R1-2).**
+  Review round 1 on PR #698 found the wording above, and the guide's own
+  wording, read as claiming more than the artifact delivers. Stated plainly:
+  the gate proves **internal consistency** of a recorded report against the
+  *current* files on disk — the recorded outputs hash to their recorded
+  digests, `passed`/`passes`/`passRate`/trial counts are re-derived from the
+  trial records rather than trusted as self-declared fields (R1-1), trigger
+  results are re-scored live against the current bundled catalog every time,
+  never conditionally on whether a self-computable `catalogDigest` still
+  matches (R1-3), and the `runner`/`model`/`judge`/`judgeModel` labels are
+  checked against an allowlist. The gate does **not** prove provenance. The
+  trial outputs, the judge's verdicts and reasons, the runner/judge labels,
+  and every AG (anti-gaming) recording are self-declared artifacts written by
+  whoever ran the eval — anyone with write access to the repository can
+  author a fully internally-consistent report or recording by hand, with no
+  model call at all (round 1's forgery probes, `forge.ts`, did exactly this
+  and cleared the gate). The control for provenance is not the gate; it is
+  **human review of the committed raw outputs and recordings in the pull
+  request** — the same way any other committed artifact is reviewed. Nothing
+  in this workstream, the rubric-authoring guide, or the CLI reference should
+  describe a recorded "pass" as surviving "a fresh re-grade" or a "re-judge"
+  — the gate re-derives from the *recorded* verdicts and outputs; it never
+  re-runs the judge model. A live re-judge sampler that would close this gap
+  (re-running the judge against a sample of recorded outputs when a judge
+  credential is available) is tracked as follow-up **FU6**, not done in this
+  flow.
 - **Honest DeepSeek runner+judge gate run (T13).** Each of the 18 batch-1
   skills ran once through the real CLI:
   `skills eval --scope bundled --runner deepseek:deepseek-chat --judge
@@ -750,11 +776,148 @@ judge, hardened the stable-pack gate around it, and re-ran the honest gate.
   - Conclusion: penalizing any mention of a suppression token failed correct
     answers that warn against using it. The old graders were mis-specified,
     not the skills.
-- **Stack coverage: 2 → 4.** ts-js-node and react cleared the honest gate and
-  now ship with generated pairs (`agents generate --stack <id>`). Counting
-  the pre-existing NestJS/Prisma and React/MobX review-only coverage plus
-  these two newly-cleared packs, stack coverage moves from 2 to 4. python and
-  go stay experimental, for the specific, recorded reasons above.
+- **Stack coverage: 2 → 4 (T13; superseded).** ts-js-node and react cleared
+  the honest gate and now ship with generated pairs (`agents generate --stack
+  <id>`). Counting the pre-existing NestJS/Prisma and React/MobX review-only
+  coverage plus these two newly-cleared packs, stack coverage moves from 2 to
+  4. python and go stay experimental, for the specific, recorded reasons
+  above. **This count is superseded** — review round 1 found the live judge
+  lenient on vague answers (R1-4), and the fix-1 re-run under judge prompt v2
+  found `react` no longer clears the gate. See "Implementation notes: fix
+  attempt 1 (flow 316, review round 1)" below for the corrected outcome
+  (stack coverage 2 → 3, ts-js-node only).
+
+## Implementation notes: fix attempt 1 (flow 316, review round 1)
+
+Adversarial review round 1 on PR #698 (0 blocker, 4 major, 8 minor, 3 info)
+found the gate trusted several self-declared fields at face value (R1-1,
+R1-3), the docs overclaimed what the gate proves (R1-2, see the threat-model
+note above), and the live judge was lenient on vague one-line answers and
+non-deterministic on identical input (R1-4). Fix attempt 1 addressed all of
+these before the honest gate was re-run.
+
+- **Judge prompt v2 and two new canned kinds.** `JUDGE_PROMPT_VERSION` was
+  bumped to `2026-09-25.1`. The judge's system prompt now states the
+  concreteness rule explicitly: a pass criterion holds only when it is
+  concretely present in the answer — the specific change, code, or step is
+  actually shown or named, not merely gestured at or promised — and the
+  judge's "reason" must cite where each pass criterion is satisfied. The
+  canned anti-gaming answer set (`antiGamingAnswers`,
+  `src/gdskills/governance/judge.ts`) grew from six kinds to eight: `vague`
+  (a plausible, generic 1-3 sentence answer that points in the right
+  direction but gives no concrete fix; must FAIL) and `subtle-wrong` (a
+  reasonable-sounding, well-written answer that still commits the
+  anti-pattern or misses a required behaviour realistically — a partial fix,
+  hedging, a non-`any` cast, log-and-continue; must FAIL) are authored per
+  scenario via two new required `calibration` fields, `vague` and
+  `subtle_wrong`.
+- **Judge determinism.** `runModelTurn`'s judge call now runs at
+  `temperature: 0` (follow-up FU5 from the T15 journal), the closest a
+  provider gets to deterministic scoring — review round 1 had caught the live
+  judge flipping verdicts on byte-identical input. `judge-check --samples <n>`
+  (default `3`) now runs each canned answer `n` times against the live judge
+  and treats the anti-gaming proof as a mismatch if **any** sample disagrees
+  with the expected verdict, or if any sample's reply was unparseable — one
+  recorded sample per canned answer no longer stands in for the judge's
+  actual behaviour. AG recordings under
+  `src/gdskills/governance/judge-recordings/` now store `samples`, requiring
+  every recorded sample to be unanimous.
+- **Integrity rules I7c and I10 (R1-6, R1-7).** I7c requires every
+  `anti_patterns` token to appear (case-insensitive) in the scenario's own
+  rubric or a fail criterion — not just in prose the grader never reads — so
+  an authored anti-pattern token is actually something the judge is told
+  about. I10 rejects a fail criterion that is only a negation-only note (for
+  example, a standalone "Mentioning X only to warn against it is not a
+  failure." entry) — that sentence belongs folded into the fail criterion it
+  qualifies, never listed as its own criterion under "ANY holding fails the
+  answer."
+- **Content corrections (R1-5), not skill tuning.** `python-implementation`'s
+  `resource-with-block` dropped its literal `with open(...)` regex and
+  criterion; the criterion now accepts any answer that closes the handle on
+  every path, including `Path.read_text()`. `python-build-fix`'s
+  `mypy-error-no-blanket-suppress` now accepts an answer that asks for the
+  missing mypy error while committing to fix the mismatch, or that names and
+  fixes it directly — the same under-specified-prompt class as FU1. These are
+  eval corrections backed by the recorded run's own evidence (a correct,
+  resource-safe answer was failing on wording alone), not skill tuning:
+  `SKILL.md` was not touched in any pack.
+- **Honest re-run under judge prompt v2 (T23).** One run per skill through
+  the real CLI, `skills eval --scope bundled --runner deepseek:deepseek-chat
+  --judge deepseek:deepseek-chat --strictness high --trials 5 --json`, HEAD
+  and the stacks/governance trees unchanged from start to end, `eval.json`
+  built verbatim from the raw outputs. This replaces the T13 outcome above:
+  - **ts-js-node — gate PASS, stable.** Every scenario clears the 0.8 floor.
+    `no-ts-ignore-suppression`, `reproduce-before-fix`, and
+    `dirname-replacement` are each exactly 4/5 (0.8); everything else is 5/5.
+    Ships with its generated pair.
+  - **react — gate FAIL, back to experimental.** `no-disable-hooks-lint`
+    scored 3/5 (0.6) — one failure recommended `eslint-disable-next-line`
+    inside the answer, the other gave no staleness explanation and asked for
+    the code instead of answering. `mock-network-boundary` and
+    `no-forced-resolution` are at the 0.8 floor (4/5), not below it, so
+    `no-disable-hooks-lint` is the only scenario blocking the pack. Its
+    generated `react-code-auditor`/`react-build-fixer` pair is removed —
+    tracked as follow-up **FU7**.
+  - **python — gate FAIL, but only on the trigger.** Every python behavior
+    scenario now clears 0.8 (`mypy-error-no-blanket-suppress` 5/5,
+    `resource-with-block` 4/5, after the content corrections above). The pack
+    still fails because `python-implementation`'s trigger-positive prompt
+    ("Add a new feature to this Python service that logs each request with
+    the logging module") is still not selected (6/7) — the pre-existing FU3
+    trigger/description gap, unchanged since flow 314.
+  - **go — gate FAIL.** `go-testing`'s `table-driven-subtests` is 2/5 — the
+    model still emits a tool/shell call instead of an answer (FU4, unchanged
+    from T13). `go-testing`'s `no-sleep-sync` is a newly-observed 3/5: the
+    judge failed one answer using a `select`/`time.After` timeout and one
+    using a bounded `time.Sleep` poll.
+  - **Stack coverage: 2 → 3.** Only `ts-js-node` clears the gate and ships a
+    pair this time — the count moves from 2 (pre-existing NestJS/Prisma and
+    React/MobX review-only coverage) to 3, not to 4: react's earlier pass was
+    the judge-leniency artifact R1-4 caught.
+- **Stability is marginal at the floor (R1-14).** Three `ts-js-node`
+  scenarios — `no-ts-ignore-suppression`, `reproduce-before-fix`, and
+  `dirname-replacement` — sit at exactly 4/5 (0.8), the pack floor itself.
+  Given the judge-variance evidence from review round 1 (before temperature
+  was pinned to 0), this is an honest result but fragile evidence for
+  "stable": one more judge flip on any of the three would fail the pack.
+  Nothing was changed to inflate these scores. The judge now runs at
+  temperature 0 and the anti-gaming proof requires 3 unanimous samples per
+  canned answer, both of which should reduce (not eliminate) this fragility
+  going forward; consider `trials >= 10` for graduation in a future pass.
+- **AC9 evidence is now reproducible from the repo (R1-13).** The AC9
+  re-grade probe and its raw output — previously scratchpad-only — are
+  committed under this flow's package,
+  `.metaproject/flows/316-2026-09-24-grader-reliability-rubric-llm-judge-with/evidence/ac9-regrade.ts`
+  and `evidence/ac9-regrade.out.txt`, so the "AC9 evidence" conclusion above
+  (the old graders were mis-specified, not the skills) can be reproduced by
+  anyone with the recorded DeepSeek outputs, not just from the journal's
+  prose.
+
+**Follow-ups**, tracked for the next grader pass — each validated only by a
+fresh honest re-run, never by tuning mid-flow:
+
+- **FU1** (python `mypy-error-no-blanket-suppress`, under-specified prompt) —
+  **done in this flow**, as an eval correction (the criterion now accepts
+  asking for the missing error while committing to fix it).
+- **FU2** (python `resource-with-block`, over-narrow `with open(...)`
+  criterion) — **done in this flow**, as an eval correction (the regex was
+  dropped; the criterion now accepts `Path.read_text()`).
+- **FU3** (python `python-implementation` trigger-positive-6 not selected) —
+  still open; trigger/description work is needed. This is what blocks
+  `python`'s gate today.
+- **FU4** (go `table-driven-subtests`, the model emits a tool/shell call
+  instead of an answer because the single-turn runner has no tools) — still
+  open; add a runner system note telling the model to answer in text, or give
+  the prompt the function's code.
+- **FU5** (judge temperature control) — **done in this flow**: the judge now
+  calls with `temperature: 0`.
+- **FU6** (a live re-judge sampler, opt-in, re-running the judge against a
+  sample of recorded outputs when a credential is available) — not done in
+  this flow; see the threat-model note above for why this is the actual
+  provenance control the gate itself cannot provide.
+- **FU7** (react `no-disable-hooks-lint`, 3/5 under judge prompt v2) — new
+  this round; react is back to `stability: experimental` and its generated
+  pair is removed until this scenario is fixed and re-run honestly.
 
 ## Data contracts
 
