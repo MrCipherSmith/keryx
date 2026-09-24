@@ -162,6 +162,7 @@ function fakeHookRuntime(opts: {
     interactive: opts.interactive ?? true,
     registrations: (): readonly HookRegistration[] => [],
     inheritedHookIds: () => [],
+    forChild: () => runtime,
     fire: async (event, payload): Promise<HookFireResult> => {
       fires.push({ event, payload });
       const tightened = opts.outcomeByEvent?.[event];

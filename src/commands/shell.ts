@@ -147,6 +147,7 @@ import {
   runAgentTurn,
 } from "./agent";
 import { buildShellHookRuntime, type ShellHookContext } from "./agent-hooks";
+import type { HookRuntime } from "../harness/hooks";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
 import type { ShellDeps, ShellIO, ShellModelParams, ShellSessionOpts } from "./shell-types";
 import {
@@ -3536,6 +3537,17 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       const spawnTool = createSpawnSubagentTool({
         cwd,
         onFleetEvent: emitSubagentFleet,
+        // Flow 306 (W6 T13): wire the TUI session's own hook runtime through
+        // so `SubagentStart`/`SubagentStop` actually fire for a real `keryx
+        // shell` TUI session, and — for the native/internal child path — so
+        // the child's own tool calls run under `hooks.forChild(...)` too.
+        // `getShellHooks()` is the same lazily-built-once runtime `deps.hooks`
+        // below is populated from; called here (not just later) is safe: it
+        // is idempotent (returns the cached `shellHooks` once built).
+        ...((): { hooks: HookRuntime } | Record<string, never> => {
+          const h = getShellHooks();
+          return h !== undefined ? { hooks: h.runtime } : {};
+        })(),
         onLedgerReady: (controls) => {
           resetSubagentBudget = controls.resetBudget;
         },
@@ -4072,6 +4084,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       let resetSubagentBudget: (() => void) | undefined;
       const spawnTool = createSpawnSubagentTool({
         cwd: agentCwd,
+        // Flow 306 (W6 T13): same `shellHooks` as `agentDepsBase.hooks` below.
+        ...(shellHooks !== undefined ? { hooks: shellHooks.runtime } : {}),
         getParentModel: () => ({
           providerId: provider,
           modelId: model,
@@ -4184,8 +4198,43 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             );
       // One REPL run per session opts: `runWithLeaseChoice` re-runs it with
       // `fork`/`takeOver`, or as a new session, after a leased refusal.
+      //
+      // Flow 306 (W6 T14): `SessionStart` fires once the session/agent deps
+      // are fully set up, before `runAgentRepl`'s first turn; `SessionEnd`
+      // fires on every exit (normal return, an operator abort surfacing as a
+      // thrown error, or any other error) via the `finally` below. Absent
+      // `shellHooks` (e.g. `KERYX_HOOKS=off`) both are no-ops, byte-identical
+      // to before this task.
       const runRepl = async (session: ShellSessionOpts): Promise<void> => {
-        await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
+        if (shellHooks !== undefined) {
+          await shellHooks.runtime
+            .fire("SessionStart", {
+              sessionId: shellHooks.sessionId,
+              runId: shellHooks.runId,
+              projectRoot: resolveProjectRoot(agentCwd),
+              policyProfile: "monitored-trusted-local",
+              provider,
+              model,
+            })
+            .catch(() => {
+              // Best-effort; a SessionStart hook failure must never block the shell.
+            });
+        }
+        let endReason = "normal";
+        try {
+          await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
+        } catch (cause) {
+          endReason = "error";
+          throw cause;
+        } finally {
+          if (shellHooks !== undefined) {
+            await shellHooks.runtime
+              .fire("SessionEnd", { sessionId: shellHooks.sessionId, runId: shellHooks.runId, endReason })
+              .catch(() => {
+                // Best-effort; a SessionEnd hook failure must never mask the real outcome.
+              });
+          }
+        }
       };
       try {
         finishLeased(

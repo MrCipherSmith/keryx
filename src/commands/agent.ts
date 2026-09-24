@@ -3566,7 +3566,11 @@ async function firePreToolUseHook(
       ...(risk !== undefined ? { risk } : {}),
       policyProfile: profileId,
     },
-    { toolName: aliasName },
+    // T14: select registrations against the LIVE profile (the runtime was
+    // constructed once for the whole session and cannot otherwise see a
+    // later `/plan` read-only toggle) — the same `profileId` this call
+    // already computed for the payload's own `policyProfile` field above.
+    { toolName: aliasName, profileId },
   );
 }
 

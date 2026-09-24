@@ -233,3 +233,112 @@ describe("createHookRuntime — built-in ports", () => {
     expect(observed).toContain("tool-start");
   });
 });
+
+describe("createHookRuntime — forChild (flow 306, W6, T13)", () => {
+  test("the child runtime's own registrations/inheritedHookIds equal exactly the parent's inheritedHookIds()", async () => {
+    const registrations: HookRegistration[] = [
+      commandReg({ id: "a", event: "PreToolUse", order: 0, appliesToChildAgents: true }),
+      commandReg({ id: "b", event: "PreToolUse", order: 1, appliesToChildAgents: false }),
+      commandReg({ id: "c", event: "PostToolUse", order: 2, enabled: false }),
+      commandReg({ id: "d", event: "PostToolUse", order: 3, appliesToChildAgents: true }),
+    ];
+    const parent = createHookRuntime(baseCtx({ registrations, runner: makeFakeRunner({}).runner }));
+    const parentInherited = parent.inheritedHookIds();
+    expect(parentInherited).toEqual(["a", "d"]);
+
+    const child = parent.forChild({ sessionId: "child-s1", runId: "child-r1" });
+    // The child's own inheritedHookIds() (its regs run back through the same
+    // filter) is exactly the parent's inheritedHookIds() — no more, no less.
+    expect(child.inheritedHookIds()).toEqual(parentInherited);
+    // The excluded registrations are ACTUALLY absent from the child's
+    // registration list, not merely excluded by inheritedHookIds' own filter.
+    expect(child.registrations().map((r) => r.id).sort()).toEqual(["a", "d"]);
+    expect(child.registrations().some((r) => r.id === "b")).toBe(false);
+    expect(child.registrations().some((r) => r.id === "c")).toBe(false);
+  });
+
+  test("a disabled or appliesToChildAgents:false registration never fires on the child runtime", async () => {
+    const { runner, calls } = makeFakeRunner({
+      a: { exitCode: 0, stdout: JSON.stringify({ decision: "allow" }), stderr: "", timedOut: false, durationMs: 1 },
+      b: { exitCode: 0, stdout: JSON.stringify({ decision: "deny" }), stderr: "", timedOut: false, durationMs: 1 },
+    });
+    const registrations: HookRegistration[] = [
+      commandReg({ id: "a", event: "PreToolUse", order: 0, appliesToChildAgents: true }),
+      commandReg({ id: "b", event: "PreToolUse", order: 1, appliesToChildAgents: false }),
+    ];
+    const parent = createHookRuntime(baseCtx({ registrations, runner }));
+    const child = parent.forChild({ sessionId: "child-s1", runId: "child-r1" });
+    const result = await child.fire(
+      "PreToolUse",
+      { sessionId: "child-s1", runId: "child-r1", toolCallId: "t1", toolName: "Bash", toolInput: {}, policyProfile: "monitored-trusted-local" },
+      { toolName: "Bash" },
+    );
+    expect(calls.map((c) => c.argv[1])).toEqual(["a"]); // "b" (parent-only) never ran
+    expect(result.decisions).toEqual([{ hookId: "a", decision: "allow" }]);
+  });
+
+  test("the child runtime is always non-interactive, regardless of the parent's own flag", async () => {
+    const parent = createHookRuntime(baseCtx({ registrations: [], runner: makeFakeRunner({}).runner, interactive: true }));
+    const child = parent.forChild({ sessionId: "child-s1", runId: "child-r1" });
+    expect(child.interactive).toBe(false);
+  });
+
+  test("the child runtime has fresh per-session state: impact-evidence's first-edit tracking does not inherit the parent's", async () => {
+    const { runner } = makeFakeRunner({});
+    let calls = 0;
+    const parent = createHookRuntime(
+      baseCtx({
+        registrations: BUILTIN_HOOK_REGISTRATIONS,
+        runner,
+        builtinArgvResolver: (argv) => [...argv],
+        ports: {
+          impactEvidence: {
+            evidenceFor: () => {
+              calls += 1;
+              return { additionalContext: "affected: foo.ts" };
+            },
+          },
+        },
+      }),
+    );
+    const payload = (sessionId: string, runId: string) => ({
+      sessionId,
+      runId,
+      toolCallId: "t1",
+      toolName: "Write",
+      toolInput: { filePath: "/a.ts" },
+      policyProfile: "monitored-trusted-local",
+    });
+    await parent.fire("PreToolUse", payload("s1", "r1"), { toolName: "Write" });
+    expect(calls).toBe(1);
+
+    const child = parent.forChild({ sessionId: "child-s1", runId: "child-r1" });
+    // Same file, but the CHILD runtime has never seen it before — its own
+    // `editedFiles` tracking is a fresh instance, not shared with the parent.
+    const childResult = await child.fire("PreToolUse", payload("child-s1", "child-r1"), { toolName: "Write" });
+    expect(calls).toBe(2);
+    expect(childResult.additionalContext).toContain("affected: foo.ts");
+  });
+});
+
+describe("createHookRuntime — per-fire profileId override (flow 306, W6, T14)", () => {
+  test("a registration scoped to one profile only fires when that profile is selected for THIS fire, not the runtime's constructed one", async () => {
+    const { runner, calls } = makeFakeRunner({
+      "read-only-guard": { exitCode: 0, stdout: JSON.stringify({ decision: "ask" }), stderr: "", timedOut: false, durationMs: 1 },
+    });
+    const registrations: HookRegistration[] = [
+      commandReg({ id: "read-only-guard", event: "PreToolUse", order: 0, profiles: ["read-only-review"] }),
+    ];
+    // Constructed under monitored-trusted-local (like the shell does).
+    const runtime = createHookRuntime(baseCtx({ registrations, runner, profileId: "monitored-trusted-local" }));
+
+    const payload = { sessionId: "s1", runId: "r1", toolCallId: "t1", toolName: "Write", toolInput: {}, policyProfile: "x" };
+    const withoutOverride = await runtime.fire("PreToolUse", payload, { toolName: "Write" });
+    expect(calls).toEqual([]); // registered for read-only-review only -> did not fire
+    expect(withoutOverride.decisions).toEqual([]);
+
+    const withOverride = await runtime.fire("PreToolUse", payload, { toolName: "Write", profileId: "read-only-review" });
+    expect(calls.map((c) => c.argv[1])).toEqual(["read-only-guard"]);
+    expect(withOverride.decisions).toEqual([{ hookId: "read-only-guard", decision: "ask" }]);
+  });
+});

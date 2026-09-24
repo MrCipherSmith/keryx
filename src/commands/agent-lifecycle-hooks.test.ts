@@ -103,6 +103,7 @@ function fakeHooks(interactive: boolean, handler?: FireHandler): { hooks: ShellH
     interactive,
     registrations: () => [],
     inheritedHookIds: () => [],
+    forChild: () => runtime,
     async fire(event, payload, ctx) {
       calls.push({ event, payload });
       return handler?.(event, payload, ctx) ?? EMPTY_RESULT;

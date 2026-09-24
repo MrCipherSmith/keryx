@@ -97,10 +97,16 @@ function createInvalidConfigRuntime(interactive: boolean): HookRuntime {
     durationMs: 0,
     changedOutcome: true,
   };
-  return {
+  const self: HookRuntime = {
     interactive,
     registrations: () => [],
     inheritedHookIds: () => [],
+    // T13: a child of an invalid-config runtime stays fail-closed too — there
+    // is nothing safe to inherit from a config that never loaded. `ids` is
+    // accepted (interface conformance) but unused: every `fire()` on this
+    // runtime denies purely from the event name, never from session/run
+    // identity.
+    forChild: (_ids) => createInvalidConfigRuntime(false),
     async fire(event, _payload, _ctx) {
       const isGate = event === "PreToolUse" || event === "UserPromptSubmit" || event === "Stop" || event === "SubagentStart";
       return {
@@ -113,6 +119,7 @@ function createInvalidConfigRuntime(interactive: boolean): HookRuntime {
       };
     },
   };
+  return self;
 }
 
 export interface BuildShellHookRuntimeOptions {

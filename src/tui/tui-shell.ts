@@ -3698,6 +3698,21 @@ export async function launchTuiAgentShell(opts: {
         // can run (and the process cannot exit) before the sweep actually
         // happened.
         liveJobs?.removeAll(); // store-side purge; synchronous, safe here
+        // Flow 306 (W6 T14): `SessionEnd` on every exit this callback covers
+        // (Ctrl+C, an exit signal, or a normal `r.destroy()` — `onDestroy` is
+        // `keryx shell`'s one TUI-wide teardown point, "session lifetime is
+        // scoped ... full stop"). `liveDeps` is read the same TDZ-safe way
+        // `sweepBackgroundJobs` below already reads it; a reason more precise
+        // than "shell-exit" is not reliably known from this synchronous
+        // callback alone. Absent `hooks`, a no-op.
+        if (liveDeps?.hooks !== undefined) {
+          const sessionEndHooks = liveDeps.hooks;
+          void sessionEndHooks.runtime
+            .fire("SessionEnd", { sessionId: sessionEndHooks.sessionId, runId: sessionEndHooks.runId, endReason: "shell-exit" })
+            .catch(() => {
+              // Best-effort; a SessionEnd hook failure must never block teardown.
+            });
+        }
         void (async () => {
           try {
             await liveDeps?.sweepBackgroundJobs?.();
@@ -3786,6 +3801,28 @@ export async function launchTuiAgentShell(opts: {
       startupIndicator.setStep("Loading agent tools and MCP servers…");
       deps = await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);
       liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
+      // Flow 306 (W6 T14): `SessionStart` fires once the session's agent deps
+      // (and its `HookRuntime`, via `commands/shell.ts`'s own `getShellHooks()`
+      // the makeAgentDeps closure reads from) are ready, before the first
+      // turn. Absent `deps.hooks` (e.g. `KERYX_HOOKS=off`) this is a no-op.
+      // Fire-and-forget, same posture as `onDestroy`'s own best-effort
+      // cleanup below — a hook failure here must never block the TUI from
+      // painting its first frame.
+      if (deps.hooks !== undefined) {
+        const sessionStartHooks = deps.hooks;
+        void sessionStartHooks.runtime
+          .fire("SessionStart", {
+            sessionId: sessionStartHooks.sessionId,
+            runId: sessionStartHooks.runId,
+            projectRoot: opts.session?.cwd ?? process.cwd(),
+            policyProfile: "monitored-trusted-local",
+            provider: sel.provider,
+            model: sel.model,
+          })
+          .catch(() => {
+            // Best-effort; a SessionStart hook failure must never block the shell.
+          });
+      }
 
       // The mode-agnostic chrome (flow 112, S1): layout, header, transcript,
       // choice dock, `/`-menu, composer, footer/spinner, toast, overlay guard

@@ -44,6 +44,15 @@ export interface FireContext {
   toolName?: string;
   /** The underlying `decide()` outcome this event is gating, when known (the gate malformed-output asymmetry). */
   decideOutcome?: PolicyOutcome;
+  /**
+   * Per-fire policy-profile override (flow 306, W6, T14). Absent ⇒ the
+   * runtime's own constructed `profileId` (byte-identical to before this
+   * field existed). Lets a caller that already knows the LIVE profile for
+   * this one fire (e.g. `keryx shell`'s `/plan` read-only toggle, resolved
+   * fresh per tool call via `derivePolicyProfileId`) select registrations
+   * against it without rebuilding the whole runtime.
+   */
+  profileId?: PolicyProfileId;
 }
 
 export interface HookWarning {
@@ -73,6 +82,22 @@ export interface HookRuntime {
   inheritedHookIds(): string[];
   registrations(): readonly HookRegistration[];
   interactive: boolean;
+  /**
+   * Derive a restricted runtime for a spawned child agent (flow 306, W6,
+   * T13). Contains only the registrations `inheritedHookIds()` names
+   * (enabled, `appliesToChildAgents !== false`) — so the child runtime's own
+   * `inheritedHookIds()` is exactly that same set, never a superset (a
+   * registration this runtime itself has already excluded, whether by
+   * `enabled: false` or `appliesToChildAgents: false`, can never reappear for
+   * a child derived from it). Same runner/clock/profileId/projectRoot/ports
+   * as the parent; fresh per-child invocation state (e.g. the
+   * `impact-evidence` first-edit-in-session tracking starts empty for the
+   * child rather than sharing the parent's). `interactive` is always `false`
+   * on the returned runtime — a spawned child never has an interactive
+   * approver at this layer (mirrors `spawnChildWithHooks`'s own "no
+   * interactive approver to resolve an `ask`" fail-closed posture).
+   */
+  forChild(ids: { sessionId: string; runId: string }): HookRuntime;
 }
 
 export interface CreateHookRuntimeOptions {
@@ -175,6 +200,34 @@ class HookRuntimeImpl implements HookRuntime {
     return result;
   }
 
+  forChild(ids: { sessionId: string; runId: string }): HookRuntime {
+    // Same filter `inheritedHookIds()` applies (enabled && appliesToChildAgents
+    // !== false), kept as a REGISTRATION LIST rather than just an id list so
+    // the child runtime can still actually run these hooks (matcher/order/
+    // class all need the full registration, not just its id). A registration
+    // this runtime has already excluded — disabled, or explicitly scoped
+    // parent-only — can never reappear on the derived runtime: filtering here
+    // is the only place child eligibility is decided, so the child's own
+    // later `inheritedHookIds()` call (were something to call it) reads back
+    // the identical set, in the identical order.
+    const childRegs = this.regs.filter((reg) => reg.enabled && reg.appliesToChildAgents !== false);
+    return new HookRuntimeImpl({
+      registrations: childRegs,
+      runner: this.runner,
+      clock: this.clock,
+      profileId: this.profileId,
+      // A spawned child never has an interactive approver at this layer
+      // (mirrors `spawnChildWithHooks`'s own fail-closed "ask reads as deny"
+      // posture) — hard-`false` regardless of the parent's own `interactive`.
+      interactive: false,
+      sessionId: ids.sessionId,
+      runId: ids.runId,
+      projectRoot: this.projectRoot,
+      ports: this.ports,
+      builtinArgvResolver: this.argvResolver,
+    });
+  }
+
   private matcherMatches(reg: HookRegistration, toolName: string, perTool: boolean): boolean {
     if (!perTool || reg.matcher === "*") return true;
     try {
@@ -186,11 +239,11 @@ class HookRuntimeImpl implements HookRuntime {
     }
   }
 
-  private selectCandidates(event: HookEventName, toolName: string): HookRegistration[] {
+  private selectCandidates(event: HookEventName, toolName: string, profileId: PolicyProfileId): HookRegistration[] {
     const perTool = PER_TOOL_EVENTS.includes(event);
     return this.regs
       .filter((reg) => reg.event === event && reg.enabled)
-      .filter((reg) => reg.profiles.length === 0 || reg.profiles.includes(this.profileId))
+      .filter((reg) => reg.profiles.length === 0 || reg.profiles.includes(profileId))
       .filter((reg) => this.matcherMatches(reg, toolName, perTool))
       .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
   }
@@ -388,7 +441,14 @@ class HookRuntimeImpl implements HookRuntime {
   }
 
   async fire(event: HookEventName, payload: Record<string, unknown>, ctx: FireContext = {}): Promise<HookFireResult> {
-    const candidates = this.selectCandidates(event, ctx.toolName ?? "");
+    // T14: a per-fire `ctx.profileId` overrides the runtime's own constructed
+    // `profileId` for SELECTION only (which registrations' `profiles` match)
+    // — never for failure semantics (`buildFailureOutcome` below still reads
+    // the base `this.profileId`, matching the failure-matrix tests pinned to
+    // construction-time profile). Absent ⇒ byte-identical to before this
+    // field existed.
+    const fireProfileId = ctx.profileId ?? this.profileId;
+    const candidates = this.selectCandidates(event, ctx.toolName ?? "", fireProfileId);
     const gateGroup = candidates.filter((r) => r.class === "gate" || r.class === "gate-advisory");
     const parallelGroup = candidates.filter((r) => r.class === "observe" || r.class === "context");
 

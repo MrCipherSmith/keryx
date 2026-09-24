@@ -23,6 +23,7 @@ import type { HookRuntime } from "../../hooks";
 import { shellChildReadOnlyProfile, shellParentProfile } from "../../policy/profiles";
 import type { Provenance } from "../../session/types";
 import { runAgentTurn, type AgentDeps, type AgentIO, type RunAgentTurnResult } from "../../../commands/agent";
+import type { ShellHookContext } from "../../../commands/agent-hooks";
 import type { ProviderPort } from "../../provider/types";
 import {
   readSlate,
@@ -318,6 +319,17 @@ export interface SpawnSubagentToolDeps {
    * other denial path in this file. `SubagentStop` fires, observe-only, once
    * the child's outcome is known on every exit branch (success, timeout,
    * error) of whichever path ran.
+   *
+   * T13 (flow 306 / W6): for the NATIVE/internal path only, `hooks.forChild(...)`
+   * also derives a restricted runtime (only `inheritedHookIds()`, fresh child
+   * session/run ids, a hard-`false` interactive flag) that is threaded into
+   * the child's own `runAgentTurn` deps — so `PreToolUse`/`PostToolUse`/etc
+   * actually fire for the CHILD's tool calls too, not just the
+   * `SubagentStart`/`SubagentStop` bracket around the whole dispatch. The
+   * EXTERNAL path (`deps.runExternal`) deliberately receives no hooks at
+   * all — it is a separate vendor CLI subprocess, governed the same way
+   * `--safe-mode` already keeps a host's ambient hooks out of it, not by this
+   * runtime.
    */
   hooks?: HookRuntime;
 }
@@ -910,11 +922,31 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         }
         throw cause;
       }
+      // T13 (flow 306, W6): give the native child's OWN `runAgentTurn` a
+      // restricted hook runtime — until now `deps.hooks` only fired
+      // `SubagentStart`/`SubagentStop` around this whole `invoke()` call; the
+      // child's own tool calls fired no `PreToolUse`/`PostToolUse`/etc at
+      // all, so a project's ctx-guard/security hooks silently never covered
+      // subagent tool calls. `forChild` restricts to `inheritedHookIds()`
+      // (already reported in the `SubagentStart` payload above via
+      // `fireSubagentStart`, so the two stay in sync by construction — both
+      // read the same `inheritedHookIds()`), with a fresh child session/run
+      // id so fired payloads/records are attributable to THIS child, never
+      // mixed into the parent's own hook invocation stream. Absent `deps.hooks`
+      // ⇒ `childDeps.hooks` stays undefined, byte-identical to before T13.
+      const childHooks: ShellHookContext | undefined =
+        deps.hooks === undefined
+          ? undefined
+          : (() => {
+              const childRunId = idSeq();
+              return { runtime: deps.hooks!.forChild({ sessionId: workerId, runId: childRunId }), sessionId: workerId, runId: childRunId };
+            })();
       const childDeps: AgentDeps = {
         provider,
         providerId: runModel.provider,
         modelId: runModel.model,
         tools,
+        ...(childHooks !== undefined ? { hooks: childHooks } : {}),
         systemInstruction:
           "You are a keryx subagent. Complete ONLY the assigned task. " +
           "Be concise. Use tools when needed. Do not spawn further subagents. " +
