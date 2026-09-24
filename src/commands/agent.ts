@@ -21,6 +21,8 @@ import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode }
 import { redactSensitiveText } from "../security/redact";
 import { aliasHookToolName, derivePolicyProfileId, type ShellHookContext } from "./agent-hooks";
 import { tightenOutcome } from "../harness/hooks/compose";
+import { IMPACT_EVIDENCE_HOOK_ID } from "../harness/hooks/builtins";
+import { extractFilePathsFromToolInput } from "../harness/hooks/runtime";
 import type { HookFireResult } from "../harness/hooks/runtime";
 import type { PolicyOutcome } from "../harness/policy/types";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
@@ -3986,6 +3988,20 @@ async function executeCall(
           output: card !== undefined ? `${call.name} not confirmed by the operator; nothing was written or installed` : `patch not approved by the user; not executed`,
           isError: true,
         };
+      }
+      // Fix round 4, F-001: an interactive operator's approval of a
+      // `keryx.impact-evidence` `ask` IS the acknowledgement W8 strict mode
+      // waits for — without recording it here, every later edit of the same
+      // file re-asks forever (round 4 review). Only recorded for an actual
+      // approval (this line only runs once `isApprovalFor` above has
+      // succeeded) and only when impact-evidence itself was the hook that
+      // asked — `hookAsked` can also be set by an unrelated gate hook's own
+      // `ask`, which has nothing to do with W8's acknowledgement contract.
+      // Unattended runs never reach here (no approver, so `response` above
+      // is `false` and the call already returned) — strict mode + unattended
+      // stays a hard deny by design, not a loosening.
+      if (hookResult?.decisions.some((d) => d.hookId === IMPACT_EVIDENCE_HOOK_ID && d.decision === "ask")) {
+        hooks?.runtime.acknowledgeImpactEvidence?.(extractFilePathsFromToolInput(input));
       }
     }
   } else if (risk === "read") {

@@ -23,6 +23,7 @@ import {
   buildHookEnv,
   buildHookStdin,
   createRealHookRunner,
+  extractFilePathsFromToolInput,
   failureEffect,
   isIsolationRequired,
   loadHookConfig,
@@ -379,6 +380,8 @@ export interface HooksTestReport {
   effect?: "deny" | "proceed" | "silent-approve";
   effectReason?: HookAnomalyName;
   additionalContext?: string;
+  /** W8 warnings that never rose to a decision (fix round 4, F-004) — e.g. a rejected out-of-root path. */
+  warnings?: string[];
   /**
    * The `runsIn` this invocation actually spawned with (flow 306, W6, T15) —
    * present only for a `command`-handler hook. For a built-in it reflects
@@ -509,13 +512,18 @@ async function runOneBuiltinHook(
 
   if (reg.handler.name === "impact-evidence") {
     const provider = deps.impactEvidence ?? NOOP_IMPACT_EVIDENCE_PROVIDER;
-    const filePath = typeof (payload.toolInput as Record<string, unknown> | undefined)?.filePath === "string"
-      ? ((payload.toolInput as Record<string, unknown>).filePath as string)
-      : "hooks-test-synthetic-file.ts";
+    // Fix round 4, F-004: the same extractor a live `PreToolUse` fire uses
+    // (`runtime.ts`'s `extractFilePathsFromToolInput`) — previously this read
+    // only `toolInput.filePath`, so a dry run of a real `apply_patch`-shaped
+    // payload (`{patch}`) or a `file_path`/`path`-shaped one tested a
+    // different (empty, falling back to a synthetic name) file set than the
+    // runtime would actually gate.
+    const extracted = extractFilePathsFromToolInput(payload.toolInput);
+    const files = extracted.length > 0 ? extracted : ["hooks-test-synthetic-file.ts"];
     try {
       const result = await provider.evidenceFor({
         sessionId: "hooks-test-session",
-        files: [filePath],
+        files,
         toolName: typeof payload.toolName === "string" ? payload.toolName : "Write",
         projectRoot: cwd,
         firstEditInSession: true,
@@ -525,6 +533,7 @@ async function runOneBuiltinHook(
         durationMs: Date.now() - startedAt,
         ...(result.decision !== undefined ? { decision: result.decision } : {}),
         ...(result.additionalContext !== undefined ? { additionalContext: result.additionalContext } : {}),
+        ...(result.warnings !== undefined && result.warnings.length > 0 ? { warnings: result.warnings } : {}),
       };
     } catch (err) {
       const effect = failureEffect({ cls: reg.class, event, failure: "crash", profileId });
@@ -632,6 +641,7 @@ async function runTest(args: readonly string[], deps: HooksCommandDeps): Promise
   if (report.failure !== undefined) console.log(`failure: ${report.failure} -> effect: ${report.effect} (${report.effectReason})`);
   console.log(`durationMs: ${report.durationMs}`);
   if (report.additionalContext !== undefined) console.log(`additionalContext: ${report.additionalContext}`);
+  if (report.warnings !== undefined && report.warnings.length > 0) console.log(`warnings: ${report.warnings.join("; ")}`);
   if (report.stdout !== undefined && report.stdout.length > 0) {
     console.log(`stdout:\n${report.stdout}${report.stdoutTruncated ? "\n…(truncated)" : ""}`);
   }

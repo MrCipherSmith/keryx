@@ -385,6 +385,57 @@ describe("keryx hooks test", () => {
     expect(report.event).toBe("Stop");
   });
 
+  // F-004 (fix round 4): `keryx hooks test keryx.impact-evidence` used to
+  // read only `toolInput.filePath`, so a dry run of a real `apply_patch`
+  // ({patch}) payload tested a synthetic fallback file instead of the
+  // patch's actual targets. It must use the same extractor the live runtime
+  // does (`extractFilePathsFromToolInput`), including a multi-file patch,
+  // and surface the provider's warnings.
+  test("F-004: keryx hooks test keryx.impact-evidence extracts files from an apply_patch-shaped payload, the same way the runtime does", async () => {
+    const seenFiles: string[][] = [];
+    const payloadPath = path.join(project, "payload.json");
+    const patch = [
+      "--- a/src/a.ts",
+      "+++ b/src/a.ts",
+      "@@ -1 +1 @@",
+      "-old a",
+      "+new a",
+      "--- a/src/b.ts",
+      "+++ b/src/b.ts",
+      "@@ -1 +1 @@",
+      "-old b",
+      "+new b",
+      "",
+    ].join("\n");
+    await writeFile(
+      payloadPath,
+      JSON.stringify({
+        sessionId: "s",
+        runId: "r",
+        toolCallId: "t1",
+        toolName: "Edit",
+        keryxToolName: "apply_patch",
+        toolInput: { patch },
+        policyProfile: "monitored-trusted-local",
+      }),
+      "utf8",
+    );
+    await hooksCommand(["test", "keryx.impact-evidence", "--payload-file", payloadPath, "--json"], {
+      cwd: project,
+      homeDir: home,
+      impactEvidence: {
+        evidenceFor: (input) => {
+          seenFiles.push(input.files);
+          return { warnings: ["skipped 1 path(s) outside the project root: ../secret.ts"] };
+        },
+      },
+    });
+    expect(process.exitCode).toBe(0);
+    expect(seenFiles).toEqual([["src/a.ts", "src/b.ts"]]);
+    const report = jsonOutput() as { warnings?: string[] };
+    expect(report.warnings).toEqual(["skipped 1 path(s) outside the project root: ../secret.ts"]);
+  });
+
   test("finding 18: a --payload-file that is a JSON ARRAY reports 'must contain a JSON object', not a bogus second 'not valid JSON' error", async () => {
     // Review finding 18: the shape check used to live inside the JSON.parse
     // try/catch, so its own `fail()` (which throws) was re-caught and

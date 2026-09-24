@@ -540,6 +540,145 @@ test("F-001: an agent-level apply_patch call touching two files reaches the impa
   expect(seenFiles).toEqual([["src/a.ts", "src/b.ts"]]);
 });
 
+function applyPatchTool(): { tool: InteractiveTool; invocations: () => number } {
+  let invocations = 0;
+  return {
+    invocations: () => invocations,
+    tool: {
+      definition: {
+        name: "apply_patch",
+        description: "test apply_patch",
+        inputSchema: { type: "object", properties: { patch: { type: "string" } }, required: ["patch"], additionalProperties: false },
+        risk: "write",
+      },
+      invoke: async () => {
+        invocations += 1;
+        return { output: "ran", isError: false };
+      },
+    },
+  };
+}
+
+// F-001 (fix round 4, T21 review round 4): an interactive operator's
+// approval of a `keryx.impact-evidence` `ask` IS the acknowledgement W8
+// strict mode waits for — without forwarding it, every LATER edit of the
+// same file re-asks forever (round 4's finding). Uses the real
+// `createHookRuntime` (only the `keryx.impact-evidence` registration, no
+// command hooks) with a FAKE provider that models W8's own acknowledgement
+// contract (ask when unacknowledged, allow once acknowledged) — the real W8
+// provider is out of scope for this fix (round 4's own instruction).
+test("F-001 (round 4): an interactive approval of an impact-evidence ask acknowledges it — the next edit of the same file is not asked again", async () => {
+  const { tool, invocations } = applyPatchTool();
+  const seenAcks: (string | undefined)[] = [];
+  const neverRunner: HookProcessRunner = {
+    run: async () => {
+      throw new Error("no command hook should run in this test");
+    },
+  };
+  const runtime = createHookRuntime({
+    registrations: BUILTIN_HOOK_REGISTRATIONS.filter((r) => r.id === "keryx.impact-evidence"),
+    runner: neverRunner,
+    clock: () => "2026-01-01T00:00:00.000Z",
+    profileId: "monitored-trusted-local",
+    interactive: true,
+    sessionId: "s1",
+    runId: "r1",
+    projectRoot: "/proj",
+    ports: {
+      impactEvidence: {
+        evidenceFor: (input) => {
+          seenAcks.push(input.acknowledgement);
+          return input.acknowledgement === undefined ? { decision: "ask" } : {};
+        },
+      },
+    },
+  });
+  const hooks: ShellHookContext = { runtime, sessionId: "s1", runId: "r1" };
+  const patchInput = JSON.stringify({ patch: ["--- a/src/a.ts", "+++ b/src/a.ts", "@@ -1 +1 @@", "-old", "+new", ""].join("\n") });
+  let approvals = 0;
+  const io: AgentIO = {
+    write: () => {},
+    permissionMode: () => "ask",
+    requestApproval: async () => {
+      approvals += 1;
+      return true;
+    },
+  };
+
+  // Two SEPARATE turns editing the same file — the second is where the fix
+  // matters: with the round-3-only code, W8 would ask again here too.
+  await runAgentTurn(
+    io,
+    { provider: scriptedProvider(callScript("apply_patch", patchInput)), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq, hooks },
+    [],
+    "go",
+  );
+  await runAgentTurn(
+    io,
+    { provider: scriptedProvider(callScript("apply_patch", patchInput)), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq, hooks },
+    [],
+    "go",
+  );
+
+  expect(invocations()).toBe(2);
+  expect(approvals).toBe(2); // `ask` permission mode asks every time regardless of the hook.
+  // The critical assertion: the SECOND call to the provider carries the
+  // acknowledgement from the FIRST call's approval — W8 never had to ask
+  // again about the same file.
+  expect(seenAcks).toEqual([undefined, "operator-approved"]);
+});
+
+test("F-001 (round 4): a refused impact-evidence ask does not acknowledge — the next edit still asks", async () => {
+  const { tool, invocations } = applyPatchTool();
+  const seenAcks: (string | undefined)[] = [];
+  const neverRunner: HookProcessRunner = {
+    run: async () => {
+      throw new Error("no command hook should run in this test");
+    },
+  };
+  const runtime = createHookRuntime({
+    registrations: BUILTIN_HOOK_REGISTRATIONS.filter((r) => r.id === "keryx.impact-evidence"),
+    runner: neverRunner,
+    clock: () => "2026-01-01T00:00:00.000Z",
+    profileId: "monitored-trusted-local",
+    interactive: true,
+    sessionId: "s1",
+    runId: "r1",
+    projectRoot: "/proj",
+    ports: {
+      impactEvidence: {
+        evidenceFor: (input) => {
+          seenAcks.push(input.acknowledgement);
+          // Never acknowledges — models a W8 provider the operator keeps refusing.
+          return { decision: "ask" };
+        },
+      },
+    },
+  });
+  const hooks: ShellHookContext = { runtime, sessionId: "s1", runId: "r1" };
+  const patchInput = JSON.stringify({ patch: ["--- a/src/a.ts", "+++ b/src/a.ts", "@@ -1 +1 @@", "-old", "+new", ""].join("\n") });
+  // `auto` mode: the ONLY reason an approval is requested at all is the
+  // hook's own `ask` — proves the refusal path, not the permission mode,
+  // gates the acknowledgement.
+  const io: AgentIO = { write: () => {}, permissionMode: () => "auto", requestApproval: async () => false };
+
+  await runAgentTurn(
+    io,
+    { provider: scriptedProvider(callScript("apply_patch", patchInput)), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq, hooks },
+    [],
+    "go",
+  );
+  await runAgentTurn(
+    io,
+    { provider: scriptedProvider(callScript("apply_patch", patchInput)), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq, hooks },
+    [],
+    "go",
+  );
+
+  expect(invocations()).toBe(0);
+  expect(seenAcks).toEqual([undefined, undefined]);
+});
+
 // --- Post*: observe-only, never alters the result -----------------------
 
 test("PostToolUse fires with the right event and does not alter a successful result", async () => {

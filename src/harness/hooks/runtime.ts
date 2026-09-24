@@ -153,6 +153,23 @@ export interface HookRuntime {
    * interactive approver to resolve an `ask`" fail-closed posture).
    */
   forChild(ids: { sessionId: string; runId: string }): HookRuntime;
+  /**
+   * Fix round 4, F-001: record an interactive operator's approval of an
+   * impact-evidence `ask` for `files` — called from `commands/agent.ts`'s
+   * write-risk approval branch right after `isApprovalFor` succeeds on a
+   * call the `keryx.impact-evidence` hook asked about. The NEXT time any of
+   * `files` reaches {@link runBuiltinHook}'s impact-evidence branch, this is
+   * forwarded to W8 as `ImpactEvidenceInput.acknowledgement` — without it,
+   * W8 strict mode re-asks every subsequent edit of the same file forever
+   * (round 4 F-001), because W6 has no other channel to tell it "the
+   * operator already saw and approved this".
+   *
+   * Optional so a fake/test `HookRuntime` and any future non-impact-evidence
+   * runtime implementation still satisfy the interface unchanged. A refused
+   * `ask` must NOT call this — only an actual operator approval counts as an
+   * acknowledgement.
+   */
+  acknowledgeImpactEvidence?(files: readonly string[]): void;
 }
 
 export interface CreateHookRuntimeOptions {
@@ -242,14 +259,61 @@ async function runWithTimeout<T>(fn: () => Promise<T> | T, timeoutMs: number): P
  * the caller's `runBuiltinHook` treats that as "nothing to gate", exactly
  * as the single-path-only version did.
  */
-function extractFilePaths(payload: Record<string, unknown>): string[] {
-  const toolInput = payload.toolInput;
+const RENAME_FROM_LINE = /^rename from (.+)$/;
+const COPY_FROM_LINE = /^copy from (.+)$/;
+
+/**
+ * Fix round 4, F-003: `parsePatchTargets` (`lib/patch-risk.ts`, shared with
+ * `classifyPatchRisk`'s escalation prompts — deliberately NOT changed here,
+ * since that would also change what `apply_patch`'s own approval card says)
+ * records only the `+++` side of each `---`/`+++` header pair. A rename's
+ * SOURCE path never becomes a target that way: a rename+modify patch reports
+ * only the new path, and a pure-rename section (no hunks — git's own `rename
+ * from`/`rename to` lines, with no `---`/`+++` at all) reports nothing.
+ * `apply_patch`'s own zero-target refusal only catches an ENTIRELY empty
+ * patch, so a pure-rename section riding along with any ordinary hunk in the
+ * same call still executes — and the rename source, whose importers are
+ * exactly what this gate exists to surface, would silently dodge it. This
+ * small, W6-local helper collects every `rename from`/`copy from` path (git
+ * never quotes/prefixes these with `a/`/`b/`) as an additional target,
+ * without touching `patch-risk.ts` itself.
+ */
+function extractRenameSourcePaths(patch: string): string[] {
+  const sources: string[] = [];
+  for (const line of patch.split(/\r?\n/)) {
+    const renameMatch = RENAME_FROM_LINE.exec(line);
+    if (renameMatch) {
+      const p = renameMatch[1]!.trim();
+      if (p.length > 0 && p !== "/dev/null") sources.push(p);
+      continue;
+    }
+    const copyMatch = COPY_FROM_LINE.exec(line);
+    if (copyMatch) {
+      const p = copyMatch[1]!.trim();
+      if (p.length > 0 && p !== "/dev/null") sources.push(p);
+    }
+  }
+  return sources;
+}
+
+/**
+ * Best-effort target-file extraction from a single tool call's raw input —
+ * fix round 4, F-004: factored out of {@link extractFilePaths} so
+ * `commands/hooks.ts`'s `keryx hooks test keryx.impact-evidence` can drive
+ * the exact same extraction a live `PreToolUse` fire would, from its own
+ * `payload.toolInput`, instead of a second, driftable "just read `filePath`"
+ * copy. Also reused by `commands/agent.ts`'s write-risk approval branch
+ * (fix round 4, F-001) to compute which files an approved `ask` acknowledges.
+ */
+export function extractFilePathsFromToolInput(toolInput: unknown): string[] {
   if (typeof toolInput !== "object" || toolInput === null) return [];
   const record = toolInput as Record<string, unknown>;
   if (typeof record.patch === "string") {
     const targets = parsePatchTargets(record.patch);
-    if (targets.length > 0) {
-      return targets.map((target) => target.path);
+    const renameSources = extractRenameSourcePaths(record.patch);
+    const paths = new Set<string>([...targets.map((target) => target.path), ...renameSources]);
+    if (paths.size > 0) {
+      return [...paths];
     }
     // A `patch` field that parses to zero targets (malformed/empty diff)
     // falls through to the single-path fields below rather than reporting
@@ -264,6 +328,10 @@ function extractFilePaths(payload: Record<string, unknown>): string[] {
   return [];
 }
 
+function extractFilePaths(payload: Record<string, unknown>): string[] {
+  return extractFilePathsFromToolInput(payload.toolInput);
+}
+
 class HookRuntimeImpl implements HookRuntime {
   readonly interactive: boolean;
   private readonly regs: readonly HookRegistration[];
@@ -276,6 +344,15 @@ class HookRuntimeImpl implements HookRuntime {
   private readonly ports: HookRuntimePorts;
   private readonly argvResolver: (argv: readonly string[]) => string[];
   private readonly editedFiles = new Set<string>();
+  /**
+   * Fix round 4, F-001: files an interactive operator has approved an
+   * impact-evidence `ask` for, via {@link acknowledgeImpactEvidence}. Fresh
+   * per runtime — `forChild` never carries it over (mirrors `editedFiles`'s
+   * own fresh-per-child posture), since a spawned child has no interactive
+   * approver of its own to have produced an acknowledgement in the first
+   * place.
+   */
+  private readonly acknowledgedImpactEvidenceFiles = new Set<string>();
   /**
    * Anomaly names already reported once for this runtime/session (flow 306,
    * W6, fix round 1, finding 13). `hook-attempted-input-rewrite` fires from
@@ -353,6 +430,10 @@ class HookRuntimeImpl implements HookRuntime {
       ports: this.ports,
       builtinArgvResolver: this.argvResolver,
     });
+  }
+
+  acknowledgeImpactEvidence(files: readonly string[]): void {
+    for (const f of files) this.acknowledgedImpactEvidenceFiles.add(f);
   }
 
   private matcherMatches(reg: HookRegistration, toolName: string, perTool: boolean): boolean {
@@ -545,6 +626,15 @@ class HookRuntimeImpl implements HookRuntime {
       }
       const provider = this.ports.impactEvidence ?? NOOP_IMPACT_EVIDENCE_PROVIDER;
       const toolName = typeof payload.toolName === "string" ? payload.toolName : "";
+      // Fix round 4, F-001: only when EVERY file in this call has an
+      // interactive approval on record does the request carry an
+      // acknowledgement — a batch mixing an already-approved file with a
+      // brand-new one must still ask about the new one, so the request must
+      // not claim a whole-batch acknowledgement it does not have.
+      const acknowledgement =
+        files.length > 0 && files.every((f) => this.acknowledgedImpactEvidenceFiles.has(f))
+          ? "operator-approved"
+          : undefined;
       const result = await runWithTimeout(
         () =>
           provider.evidenceFor({
@@ -553,6 +643,7 @@ class HookRuntimeImpl implements HookRuntime {
             toolName,
             projectRoot: this.projectRoot,
             firstEditInSession: true,
+            ...(acknowledgement !== undefined ? { acknowledgement } : {}),
           }),
         reg.timeoutMs,
       );
@@ -564,17 +655,43 @@ class HookRuntimeImpl implements HookRuntime {
         return this.buildFailureOutcome(reg, event, durationMs, result.failure, ctx.decideOutcome, fireProfileId);
       }
       const decision = result.value.decision;
-      if (decision === undefined) {
+      // F-003 (fix round 3): forward W8's warnings (e.g. a rejected
+      // out-of-root path) rather than dropping them — folded into the
+      // invocation record's `reason` so they land somewhere a caller/log can
+      // actually see them, without inventing a new anomaly taxonomy for a
+      // non-failure signal.
+      const warnings = result.value.warnings ?? [];
+      const reason = warnings.length > 0 ? warnings.join("; ") : undefined;
+      // F-005 (fix round 4, info): a supervised evidence-SERVICE failure
+      // returns W8 "allow" with a warning rather than a decision, precisely
+      // so a LATER request can retry evidence for the same file
+      // (`provider.ts`'s `computeDecision` deliberately skips
+      // `saveSessionState` on this path — the file is never marked
+      // `touched`). Treating it the same as every other decision-less
+      // outcome would mark it clean here too, permanently losing the retry
+      // W8 intended for the rest of this session. Recognized by W8's own
+      // fixed warning-text prefix — `ImpactEvidenceResult` carries no
+      // separate machine-readable signal for "the failure was the SERVICE,
+      // not the file" today (see `provider.ts`'s "proceeding without
+      // evidence" warning).
+      const serviceFailed = warnings.some((w) => w.startsWith("impact-evidence service failed:"));
+      if (decision === undefined && !serviceFailed) {
         // A clean, non-escalating outcome (W8 "allow") — NOW it is safe to
         // stop gating these files for the rest of the session (F-002).
         for (const f of files) this.editedFiles.add(f);
       }
-      // F-003: forward W8's warnings (e.g. a rejected out-of-root path)
-      // rather than dropping them — folded into the invocation record's
-      // `reason` so they land somewhere a caller/log can actually see them,
-      // without inventing a new anomaly taxonomy for a non-failure signal.
-      const warnings = result.value.warnings ?? [];
-      const reason = warnings.length > 0 ? warnings.join("; ") : undefined;
+      // F-002 (fix round 4): a non-deny outcome's warnings used to reach
+      // ONLY `record.reason`, whose one consumer (`commands/agent.ts`'s
+      // deny-message builder) never runs for an allow/ask outcome — so a
+      // supervised out-of-root warning on an otherwise-allowed edit was
+      // invisible. Folded into `additionalContext` too, which `executeCall`
+      // already appends to the tool result output for every non-deny
+      // outcome (a deny returns before that append site is ever reached, so
+      // `record.reason`-for-the-refusal-message is unaffected).
+      const additionalContextParts: string[] = [];
+      if (result.value.additionalContext !== undefined) additionalContextParts.push(result.value.additionalContext);
+      if (warnings.length > 0) additionalContextParts.push(`[keryx.impact-evidence] ${warnings.join("; ")}`);
+      const additionalContext = additionalContextParts.length > 0 ? additionalContextParts.join("\n\n") : undefined;
       return {
         record: {
           hookId: reg.id,
@@ -587,7 +704,7 @@ class HookRuntimeImpl implements HookRuntime {
           ...(reason !== undefined ? { reason } : {}),
         },
         ...(decision !== undefined ? { decision } : {}),
-        ...(result.value.additionalContext !== undefined ? { additionalContext: result.value.additionalContext } : {}),
+        ...(additionalContext !== undefined ? { additionalContext } : {}),
         anomalies: [],
       };
     }

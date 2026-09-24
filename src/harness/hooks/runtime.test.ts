@@ -448,6 +448,186 @@ describe("createHookRuntime — built-in ports", () => {
     expect(record?.reason).toContain("skipped 1 path(s) outside the project root");
   });
 
+  // F-002 (fix round 4): a non-deny outcome's warnings used to reach ONLY
+  // `record.reason`, whose one consumer (agent.ts's deny-message builder)
+  // never runs for an allow/ask outcome — invisible. They must also land in
+  // `additionalContext`, which `executeCall` already surfaces.
+  test("a non-deny impact-evidence outcome's warnings are folded into additionalContext, not just record.reason (F-002, round 4)", async () => {
+    const { runner } = makeFakeRunner({});
+    const runtime = createHookRuntime(
+      baseCtx({
+        registrations: BUILTIN_HOOK_REGISTRATIONS,
+        runner,
+        builtinArgvResolver: (argv) => [...argv],
+        ports: {
+          impactEvidence: {
+            evidenceFor: () => ({
+              warnings: ["skipped 1 path(s) outside the project root: ../secret.ts"],
+            }),
+          },
+        },
+      }),
+    );
+    const result = await runtime.fire(
+      "PreToolUse",
+      {
+        sessionId: "s1",
+        runId: "r1",
+        toolCallId: "t1",
+        toolName: "Write",
+        toolInput: { filePath: "/a.ts" },
+        policyProfile: "monitored-trusted-local",
+      },
+      { toolName: "Write" },
+    );
+    // gate-advisory allow: no decision at all.
+    expect(result.decisions).toEqual([]);
+    expect(result.additionalContext.some((c) => c.includes("skipped 1 path(s) outside the project root"))).toBe(true);
+    const record = result.records.find((r) => r.hookId === "keryx.impact-evidence");
+    expect(record?.reason).toContain("skipped 1 path(s) outside the project root");
+  });
+
+  // F-005 (fix round 4, info): W8 deliberately does not mark a file "touched"
+  // on a supervised evidence-SERVICE failure (so a later request can retry
+  // it) — W6 must not treat that allow as an ordinary clean outcome either,
+  // or the retry W8 intended is lost for the rest of the session.
+  test("a supervised evidence-service-failure allow does not mark the file clean — a retry still calls the provider (F-005, round 4)", async () => {
+    const { runner } = makeFakeRunner({});
+    let calls = 0;
+    const runtime = createHookRuntime(
+      baseCtx({
+        registrations: BUILTIN_HOOK_REGISTRATIONS,
+        runner,
+        builtinArgvResolver: (argv) => [...argv],
+        ports: {
+          impactEvidence: {
+            evidenceFor: () => {
+              calls += 1;
+              return {
+                additionalContext: "Impact evidence is unavailable for this change (the evidence service failed).",
+                warnings: ["impact-evidence service failed: boom — proceeding without evidence"],
+              };
+            },
+          },
+        },
+      }),
+    );
+    const payload = {
+      sessionId: "s1",
+      runId: "r1",
+      toolCallId: "t1",
+      toolName: "Write",
+      toolInput: { filePath: "/a.ts" },
+      policyProfile: "monitored-trusted-local",
+    };
+    const first = await runtime.fire("PreToolUse", payload, { toolName: "Write" });
+    expect(calls).toBe(1);
+    expect(first.decisions).toEqual([]);
+
+    await runtime.fire("PreToolUse", payload, { toolName: "Write" });
+    expect(calls).toBe(2); // NOT skipped, unlike an ordinary clean allow (see the "only consults on first edit" test above).
+  });
+
+  // F-003 (fix round 4): a rename's SOURCE path must reach the gate too, not
+  // just the new path — the source is effectively deleted and its importers
+  // are exactly what this gate exists to surface.
+  test("a rename+modify patch reaches the provider with both the old (source) and new path (F-003, round 4)", async () => {
+    const { runner } = makeFakeRunner({});
+    const seenFiles: string[][] = [];
+    const runtime = createHookRuntime(
+      baseCtx({
+        registrations: BUILTIN_HOOK_REGISTRATIONS,
+        runner,
+        builtinArgvResolver: (argv) => [...argv],
+        ports: {
+          impactEvidence: {
+            evidenceFor: (input) => {
+              seenFiles.push(input.files);
+              return {};
+            },
+          },
+        },
+      }),
+    );
+    const patch = [
+      "diff --git a/src/old.ts b/src/new.ts",
+      "similarity index 90%",
+      "rename from src/old.ts",
+      "rename to src/new.ts",
+      "--- a/src/old.ts",
+      "+++ b/src/new.ts",
+      "@@ -1 +1 @@",
+      "-old",
+      "+new",
+      "",
+    ].join("\n");
+    await runtime.fire(
+      "PreToolUse",
+      {
+        sessionId: "s1",
+        runId: "r1",
+        toolCallId: "t1",
+        toolName: "Edit",
+        keryxToolName: "apply_patch",
+        toolInput: { patch },
+        policyProfile: "monitored-trusted-local",
+      },
+      { toolName: "Edit" },
+    );
+    expect(seenFiles).toEqual([["src/new.ts", "src/old.ts"]]);
+  });
+
+  test("a pure rename section (no hunks) riding along with an unrelated file's hunk still reaches the rename source (F-003, round 4)", async () => {
+    const { runner } = makeFakeRunner({});
+    const seenFiles: string[][] = [];
+    const runtime = createHookRuntime(
+      baseCtx({
+        registrations: BUILTIN_HOOK_REGISTRATIONS,
+        runner,
+        builtinArgvResolver: (argv) => [...argv],
+        ports: {
+          impactEvidence: {
+            evidenceFor: (input) => {
+              seenFiles.push(input.files);
+              return {};
+            },
+          },
+        },
+      }),
+    );
+    // The rename section has NO `---`/`+++` lines at all (a pure rename, git's
+    // "similarity index 100%" shape) — riding along with an ordinary hunk on
+    // an unrelated file lets the whole patch pass `apply_patch`'s zero-target
+    // refusal, so the rename source must still be caught here.
+    const patch = [
+      "diff --git a/src/old.ts b/src/new.ts",
+      "similarity index 100%",
+      "rename from src/old.ts",
+      "rename to src/new.ts",
+      "diff --git a/src/other.ts b/src/other.ts",
+      "--- a/src/other.ts",
+      "+++ b/src/other.ts",
+      "@@ -1 +1 @@",
+      "-old other",
+      "+new other",
+      "",
+    ].join("\n");
+    await runtime.fire(
+      "PreToolUse",
+      {
+        sessionId: "s1",
+        runId: "r1",
+        toolCallId: "t1",
+        toolName: "Edit",
+        keryxToolName: "apply_patch",
+        toolInput: { patch },
+        policyProfile: "monitored-trusted-local",
+      },
+      { toolName: "Edit" },
+    );
+    expect(seenFiles).toEqual([["src/other.ts", "src/old.ts"]]);
+  });
+
   test("a learning-observer sink is invoked with the mapped observation kind", async () => {
     const { runner } = makeFakeRunner({});
     const observed: string[] = [];
@@ -467,6 +647,99 @@ describe("createHookRuntime — built-in ports", () => {
     );
     await runtime.fire("PreToolUse", { sessionId: "s1", runId: "r1", toolCallId: "t1", toolName: "Read", toolInput: {}, policyProfile: "monitored-trusted-local" }, { toolName: "Read" });
     expect(observed).toContain("tool-start");
+  });
+
+  // F-001 (fix round 4): `acknowledgeImpactEvidence` is the runtime-level
+  // half of the fix — `commands/agent.ts`'s own wiring (an interactive
+  // operator approval calling it) is covered separately in
+  // `agent-lifecycle-hooks.test.ts`. This is the narrower claim: once called
+  // for a file, the NEXT provider call for that same file carries a
+  // non-empty `acknowledgement`; a file never acknowledged does not.
+  test("acknowledgeImpactEvidence forwards a non-empty acknowledgement to the provider on the NEXT call for that file (F-001, round 4)", async () => {
+    const { runner } = makeFakeRunner({});
+    const seenAcks: (string | undefined)[] = [];
+    const runtime = createHookRuntime(
+      baseCtx({
+        registrations: BUILTIN_HOOK_REGISTRATIONS,
+        runner,
+        builtinArgvResolver: (argv) => [...argv],
+        ports: {
+          impactEvidence: {
+            evidenceFor: (input) => {
+              seenAcks.push(input.acknowledgement);
+              return input.acknowledgement === undefined ? { decision: "ask" } : {};
+            },
+          },
+        },
+      }),
+    );
+    const payloadA = {
+      sessionId: "s1",
+      runId: "r1",
+      toolCallId: "t1",
+      toolName: "Write",
+      toolInput: { filePath: "a.ts" },
+      policyProfile: "monitored-trusted-local",
+    };
+    const payloadAB = {
+      sessionId: "s1",
+      runId: "r1",
+      toolCallId: "t2",
+      toolName: "Edit",
+      keryxToolName: "apply_patch",
+      toolInput: {
+        patch: ["--- a/a.ts", "+++ b/a.ts", "@@ -1 +1 @@", "-x", "+y", "--- a/b.ts", "+++ b/b.ts", "@@ -1 +1 @@", "-x", "+y", ""].join("\n"),
+      },
+      policyProfile: "monitored-trusted-local",
+    };
+
+    // First call: no acknowledgement on record yet -> W8 asks.
+    const first = await runtime.fire("PreToolUse", payloadA, { toolName: "Write" });
+    expect(first.decisions).toEqual([{ hookId: "keryx.impact-evidence", decision: "ask" }]);
+
+    // Record the operator's approval for "a.ts" only.
+    runtime.acknowledgeImpactEvidence?.(["a.ts"]);
+
+    // A batch mixing the acknowledged "a.ts" with a brand-new "b.ts" must NOT
+    // claim a whole-batch acknowledgement it does not have.
+    const mixed = await runtime.fire("PreToolUse", payloadAB, { toolName: "Edit" });
+    expect(mixed.decisions).toEqual([{ hookId: "keryx.impact-evidence", decision: "ask" }]);
+
+    // Acknowledge "b.ts" too, then retry the same batch: now every file in
+    // the call has a recorded approval, so the request carries one.
+    runtime.acknowledgeImpactEvidence?.(["b.ts"]);
+    const retry = await runtime.fire("PreToolUse", payloadAB, { toolName: "Edit" });
+    expect(retry.decisions).toEqual([]);
+
+    expect(seenAcks).toEqual([undefined, undefined, "operator-approved"]);
+  });
+
+  test("a CHILD runtime never inherits the parent's impact-evidence acknowledgements (F-001, round 4)", async () => {
+    const { runner } = makeFakeRunner({});
+    const seenAcks: (string | undefined)[] = [];
+    const parent = createHookRuntime(
+      baseCtx({
+        registrations: BUILTIN_HOOK_REGISTRATIONS,
+        runner,
+        builtinArgvResolver: (argv) => [...argv],
+        ports: {
+          impactEvidence: {
+            evidenceFor: (input) => {
+              seenAcks.push(input.acknowledgement);
+              return {};
+            },
+          },
+        },
+      }),
+    );
+    parent.acknowledgeImpactEvidence?.(["a.ts"]);
+    const child = parent.forChild({ sessionId: "child-s1", runId: "child-r1" });
+    await child.fire(
+      "PreToolUse",
+      { sessionId: "child-s1", runId: "child-r1", toolCallId: "t1", toolName: "Write", toolInput: { filePath: "a.ts" }, policyProfile: "monitored-trusted-local" },
+      { toolName: "Write" },
+    );
+    expect(seenAcks).toEqual([undefined]);
   });
 });
 

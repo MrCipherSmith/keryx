@@ -68,6 +68,19 @@ export interface ImpactEvidenceInput {
   projectRoot: string;
   /** Whether at least one of `files` is the session's first (not-yet-cleanly-gated) edit. */
   firstEditInSession: boolean;
+  /**
+   * Fix round 4, F-001: forwarded to W8's `ImpactEvidenceRequest.acknowledgement`
+   * when the runtime has recorded an interactive operator approval of a prior
+   * `ask` for every file in THIS call (`HookRuntime.acknowledgeImpactEvidence`,
+   * called from `commands/agent.ts`'s write-risk approval branch). Absent
+   * whenever no such approval was recorded — byte-identical to before this
+   * field existed. This is a plain approval marker, never content the
+   * operator had to type (W8's own `acknowledgement` field accepts any
+   * non-empty string as a rollback-line OR a plain acknowledgement — see
+   * `security/impact-evidence/index.ts`'s F19 note on what today's PreToolUse
+   * delivery can and cannot round-trip).
+   */
+  acknowledgement?: string;
 }
 
 export interface ImpactEvidenceResult {
@@ -229,9 +242,12 @@ const LEARNING_OBSERVER: HookRegistration[] = LEARNING_OBSERVER_EVENTS.map((even
   ),
 );
 
+/** The `keryx.impact-evidence` builtin's own registration id, shared with `agent.ts`'s acknowledgement wiring (fix round 4, F-001). */
+export const IMPACT_EVIDENCE_HOOK_ID = "keryx.impact-evidence" as const;
+
 const IMPACT_EVIDENCE: HookRegistration = builtin(
   {
-    id: "keryx.impact-evidence",
+    id: IMPACT_EVIDENCE_HOOK_ID,
     event: "PreToolUse",
     matcher: "Write|Edit",
     class: "gate-advisory",

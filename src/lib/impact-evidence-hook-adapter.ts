@@ -31,6 +31,18 @@
 //     "defer to the host's own prompt", never as an auto-approve. W8's
 //     `warnings` (e.g. a rejected out-of-root path folded to a warning
 //     rather than a decision) are forwarded rather than dropped.
+//   - Fix round 4, F-001: `input.acknowledgement` (set only when
+//     `HookRuntime.acknowledgeImpactEvidence` recorded an interactive
+//     operator approval for every file in this call) is forwarded to W8's
+//     own `ImpactEvidenceRequest.acknowledgement`. Before this, strict mode
+//     re-asked about the same file on every subsequent edit for the rest of
+//     the session — an operator's approval of the hook's `ask` was never
+//     distinguishable, on W8's side, from a file nobody had ever been asked
+//     about. Still never a fabricated rollback line or any other content the
+//     operator would have to type (see the F19 note in
+//     `security/impact-evidence/index.ts`) — a plain approval marker only,
+//     which is all W8's `acknowledgement` field requires (any non-empty
+//     string).
 //   - A rejected/thrown provider call is NOT caught here: it propagates out
 //     of `evidenceFor`, so W6's `runOneHook` routes it through the same
 //     `buildFailureOutcome("crash", …)` gate-advisory-failure path every
@@ -104,6 +116,12 @@ function toImpactEvidenceRequest(
     files: input.files,
     profile: opts.profile,
     ...(opts.env !== undefined ? { env: opts.env } : {}),
+    // Fix round 4, F-001: forwards the runtime's own interactive-approval
+    // record (`HookRuntime.acknowledgeImpactEvidence`, `builtins.ts`'s
+    // `ImpactEvidenceInput.acknowledgement`) into W8's own acknowledgement
+    // field — without this an approved `ask` was never distinguishable from
+    // one that was never asked about, so W8 strict mode re-asked forever.
+    ...(input.acknowledgement !== undefined ? { acknowledgement: input.acknowledgement } : {}),
   };
 }
 
