@@ -179,12 +179,38 @@ export interface ParseJudgeVerdictError {
 }
 
 /**
+ * Some judge models (observed with DeepSeek) escape a single quote inside a
+ * JSON string as `\'`, which JSON does not allow (only `"` needs escaping,
+ * not `'`). Replaces every such invalid escape with a bare `'`, but only
+ * where the backslash is itself unescaped: a run of backslashes immediately
+ * before a `'` is only an attempted (invalid) escape of the quote when the
+ * run's length is odd — the trailing, unpaired backslash is the one
+ * "escaping" the quote, and dropping it is what makes the text valid JSON.
+ * An even-length run is already a sequence of fully-paired, valid `\\`
+ * escapes followed by a literal, unescaped `'`, so it is left untouched.
+ */
+function normalizeEscapedSingleQuotes(text: string): string {
+  return text.replace(/\\+'/g, (match) => {
+    const backslashCount = match.length - 1;
+    if (backslashCount % 2 === 1) {
+      return "\\".repeat(backslashCount - 1) + "'";
+    }
+    return match;
+  });
+}
+
+/**
  * Parses a judge model's raw text reply. Strict: the ENTIRE trimmed text
  * must be either one JSON object, or one JSON object inside a ```json (or
  * bare ```) fence — surrounding prose, multiple objects, or anything else
  * is refused rather than best-effort-extracted, since a judge that learned
  * to wrap its verdict in a persuasive paragraph is itself a gaming vector
- * this eval is meant to catch, not accommodate.
+ * this eval is meant to catch, not accommodate. As a narrow exception, a
+ * reply that fails to parse is retried once against a version with every
+ * invalid `\'` escape normalized (see `normalizeEscapedSingleQuotes`) —
+ * `\'` can never appear in valid JSON, so this retry can only turn an
+ * otherwise-rejected reply into a parseable one, never change the meaning
+ * of a reply that was already valid.
  */
 export function parseJudgeVerdict(text: string): JudgeVerdict | ParseJudgeVerdictError {
   const trimmed = text.trim();
@@ -195,7 +221,11 @@ export function parseJudgeVerdict(text: string): JudgeVerdict | ParseJudgeVerdic
   try {
     parsed = JSON.parse(candidate);
   } catch {
-    return { error: "judge reply was not valid JSON (and not a single fenced JSON object)" };
+    try {
+      parsed = JSON.parse(normalizeEscapedSingleQuotes(candidate));
+    } catch {
+      return { error: "judge reply was not valid JSON (and not a single fenced JSON object)" };
+    }
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return { error: "judge reply must be a single JSON object" };

@@ -202,6 +202,35 @@ describe("parseJudgeVerdict", () => {
     const result = parseJudgeVerdict('{"verdict":"pass","reason":"a"} {"verdict":"fail","reason":"b"}');
     expect("error" in result).toBe(true);
   });
+
+  test("a reply with an invalid \\' escape (observed from DeepSeek) still parses", () => {
+    const raw = `{"verdict":"fail","reason":"The answer recommends hardcoding the directory path ('const dirname = \\'/app/src/lib\\'') as the fix, which is exactly fail criterion 1."}`;
+    const result = parseJudgeVerdict(raw);
+    expect(result).toEqual({
+      verdict: "fail",
+      reason: "The answer recommends hardcoding the directory path ('const dirname = '/app/src/lib'') as the fix, which is exactly fail criterion 1.",
+    });
+  });
+
+  test("an escaped backslash followed by a quote is not corrupted by the \\' repair", () => {
+    // Invalid alongside a valid `\\'` (two backslashes then a quote — an
+    // escaped backslash followed by a literal apostrophe, already legal
+    // JSON) forces the repair path to run; the valid pair must survive it.
+    const raw = `{"verdict":"fail","reason":"see \\'x\\' and a\\\\'b"}`;
+    const result = parseJudgeVerdict(raw);
+    expect(result).toEqual({ verdict: "fail", reason: "see 'x' and a\\'b" });
+  });
+
+  test("prose around JSON is still refused even when the JSON contains a \\' escape", () => {
+    const raw = `Verdict: {"verdict":"pass","reason":"it\\'s fine"} — done.`;
+    const result = parseJudgeVerdict(raw);
+    expect("error" in result).toBe(true);
+  });
+
+  test("verdict \"PASS\" (wrong case) is still an error after the \\' repair path", () => {
+    const result = parseJudgeVerdict(`{"verdict":"PASS","reason":"it\\'s fine"}`);
+    expect("error" in result).toBe(true);
+  });
 });
 
 describe("judgeRequestDigest", () => {
