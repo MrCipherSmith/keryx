@@ -56,3 +56,19 @@ Use `keryx gdgraph affected <file>` for blast radius.
 ## Agent Findings
 
 _(flow-init skill appends here)_
+
+### Orchestrator findings (T1, 2026-09-24)
+
+- Base branch: `feat/agent-platform-expansion`; worktree `/Users/Goodea/goodea/keryx-ape-313-w4`, branch `flow/313-w4`.
+- Import zones (`src/lib/import-zones.ts`): new `src/bundle/` must be registered as `core`; `src/harness/**` is `client` (core may not import it) — hence a shared `src/lib/keryx-home.ts` instead of importing W6's `resolveHookHomeDir`.
+- W6 `resolveHookHomeDir(env, homeDir?)` (`src/harness/hooks/config.ts:65`): home = explicit arg > `KERYX_HOME` > `os.homedir()`; store = `<home>/.keryx/`. `validateHookConfigDocument(doc, scope, label)` (config.ts:139) validates a hook-config entry.
+- Memory: `src/memory/store.ts` `collectEntries`/`parseEntry` are fully tolerant (never throw; defaults on bad fields); `write.ts` `writeCanonicalEntry` validates + security-guards + atomic write; `templates.ts` `renderMemoryEntry`. Entries are markdown with `Name: value` header fields.
+- MCP: only `memory.search` exists (read-only, `src/mcp/tools.ts:779`, `invoke(cwd, params)`); `serveMcp(ServeOptions{cwd,http?,readOnly?})` (`src/mcp/server.ts:141`); no harness identity concept exists.
+- CLI: custom sub-dispatch (`memoryCommand(args)` in `src/commands/memory.ts`); top-level `CLI_ROUTES` + help map in `src/cli.ts`; `src/cli-reference-coverage.test.ts` requires a `## <verb>` section, the verb in `USAGE_BODY`, and every routed subcommand literal in that section.
+- W8: `runHarnessAudit(root, RunAuditOptions)` discovers fixed relative paths only; `imported-bundles` is a placeholder surface (`index.ts:394`); `auditGate(report)` fails on unsuppressed high/critical or tampered baseline; `CheckId` mirrors `harness-audit-report.schema.json` (enum must be extended for `bundle-*`).
+- W1 scout: `scoutImports()` stub returns `{searched:false}` (`scout.ts:438`); `scoutSkill(query, catalog, options)` → use/fork/create; `scoutVetCandidate(dir)` stages under temp `.claude/skills/<name>/` + audit (precedent for W4 staging).
+- W2: `origin.kind` already allows `imported`; `sourceRef` not enforced as required; `loadAgentCatalog` reads bundled + `.metaproject/agents` only (no user source).
+- W3: `learned-pattern.schema.json` requires `scope` (project|user), `status` (candidate|accepted|rejected|superseded|expired); `candidate` requires `ttl`; no src code yet (flow 312 in flight). Project store `.metaproject/data/learning/candidates/<id>.json`.
+- Schema validation: hand-rolled `validateAgainstSchemaObject` (`src/contracts/validator.ts:354`); `src/integrations/matrix.ts` imports its schema straight from `docs/requirements/.../schemas/`.
+- No tar/gzip support in the repo and no runtime dependencies → a small in-repo ustar reader/writer over `node:zlib`.
+- W5: only gemini-cli/kiro/github-copilot-agent have installable `instructions` surfaces (`markdown-block.ts`, fixed body, marker `keryx:instructions`); zed's is probe-only on AGENTS.md; claude/codex/cursor/windsurf have none. Opt-in surface precedent: `surfaces-agents.ts` (`optIn: true`).

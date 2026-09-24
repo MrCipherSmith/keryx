@@ -1,3 +1,21 @@
 # Flow Journal
 
 - 2026-09-24T07:18:33.548Z - flow created
+- 2026-09-24T07:26Z - Dispatched run: completion_outcome=create-pr-and-merge, operator_confirmed=true, base_branch=feat/agent-platform-expansion (answered by the dispatch brief from the program orchestrator on behalf of owner MrCipherSmith). Execution-metrics question skipped (dispatched).
+- 2026-09-24T07:26Z - T1: context collected (two read-only research agents + direct reads); description, plan, ACs written.
+- 2026-09-24T07:26Z - Decision: import is all-or-nothing (zero writes on any unresolved conflict or refusal) rather than writing new entries and skipping conflicts; `--force` is per path only. Reason: fail-closed invariant; a partial import is harder to reason about.
+- 2026-09-24T07:26Z - Decision: rules export uses a new `<!-- keryx:rules -->` managed block via opt-in `rules-export` surfaces, so the existing `keryx:index` / `keryx:instructions` blocks are never touched; bundle import re-renders only harnesses whose surface is already installed unless `--render-for` names them.
+- 2026-09-24T07:26Z - Decision: external catalog references live in `~/.keryx/skills/external-imports.json` (user scope, by reference with per-file sha256), read by `keryx skills scout --include-imports`.
+- 2026-09-24T07:26:34.410Z - task-added: T5: Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)
+- 2026-09-24T07:26:34.488Z - task-added: T6: Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)
+- 2026-09-24T07:26:34.569Z - task-added: T7: W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)
+- 2026-09-24T07:26:34.646Z - task-added: T8: Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)
+- 2026-09-24T07:26:34.726Z - task-added: T9: Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)
+- 2026-09-24T07:26:34.804Z - task-added: T10: keryx bundle CLI + --render-for + external catalog import + scout --include-imports wiring (AC9, AC15)
+- 2026-09-24T07:26:34.889Z - task-added: T11: CLI reference + portability guide + spec status notes (AC15)
+- 2026-09-24T07:26:34.970Z - task-added: T12: Verify Wave-3 exit: fixture bundle round trip byte-identical and user-modified file never overwritten (AC13)
+- 2026-09-24T07:26:35.048Z - task-added: T13: Verify every AC has passing automated evidence; targeted tests, typecheck, eslint (AC1-AC15)
+- 2026-09-24T07:26:35.126Z - task-added: T14: Adversarial PR review rounds + fix loop
+- 2026-09-24T07:26:40.127Z - task-done: T1: Collect remaining context
+- 2026-09-24T07:26:40.211Z - frozen: 15 criteria; checksum recorded
+- 2026-09-24T07:26:40.300Z - started

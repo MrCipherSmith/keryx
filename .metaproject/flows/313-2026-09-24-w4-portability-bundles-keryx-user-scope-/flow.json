@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "313",
   "slug": "w4-portability-bundles-keryx-user-scope-",
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T07:18:33.548Z",
+  "updatedAt": "2026-09-24T07:26:40.300Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:0909b194f5b2a50596de74e9f29e2dcc26e8397dc5fe0037d973a14b4a6bddc0",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,271 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "keryx bundle CLI + --render-for + external catalog import + scout --include-imports wiring (AC9, AC15)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "CLI reference + portability guide + spec status notes (AC15)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Verify Wave-3 exit: fixture bundle round trip byte-identical and user-modified file never overwritten (AC13)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Verify every AC has passing automated evidence; targeted tests, typecheck, eslint (AC1-AC15)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Adversarial PR review rounds + fix loop",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-24T07:18:33.548Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T07:26:34.410Z",
+      "event": "task-added",
+      "detail": "T5: Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.488Z",
+      "event": "task-added",
+      "detail": "T6: Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.569Z",
+      "event": "task-added",
+      "detail": "T7: W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.646Z",
+      "event": "task-added",
+      "detail": "T8: Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.726Z",
+      "event": "task-added",
+      "detail": "T9: Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.804Z",
+      "event": "task-added",
+      "detail": "T10: keryx bundle CLI + --render-for + external catalog import + scout --include-imports wiring (AC9, AC15)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.889Z",
+      "event": "task-added",
+      "detail": "T11: CLI reference + portability guide + spec status notes (AC15)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.970Z",
+      "event": "task-added",
+      "detail": "T12: Verify Wave-3 exit: fixture bundle round trip byte-identical and user-modified file never overwritten (AC13)"
+    },
+    {
+      "at": "2026-09-24T07:26:35.048Z",
+      "event": "task-added",
+      "detail": "T13: Verify every AC has passing automated evidence; targeted tests, typecheck, eslint (AC1-AC15)"
+    },
+    {
+      "at": "2026-09-24T07:26:35.126Z",
+      "event": "task-added",
+      "detail": "T14: Adversarial PR review rounds + fix loop"
+    },
+    {
+      "at": "2026-09-24T07:26:40.127Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T07:26:40.211Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T07:26:40.300Z",
+      "event": "started"
     }
   ]
 }
