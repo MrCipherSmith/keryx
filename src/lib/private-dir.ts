@@ -10,6 +10,7 @@
 import { lstat, mkdir, open, readFile } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound } from "./fs";
+import { refuseEscapingSymlink } from "./symlink-safety";
 
 export const PRIVATE_DIR_GITIGNORE =
   "# keryx:private-dir — managed by keryx; this directory stays out of version control\n*\n!.gitignore\n";
@@ -26,6 +27,14 @@ export type PrivateDirCheck =
  * - `dir` itself a symlink -> a named refusal (R1-F15/R1-F27 G5): keryx never
  *   manages a private directory reached through a link, even when the real
  *   directory it points at already holds a byte-identical `.gitignore`.
+ * - `root` given (R2-I1 G6) -> every path segment from `root` down to `dir`
+ *   (not just `dir` itself) is checked with `refuseEscapingSymlink`: a
+ *   symlinked PARENT directory (e.g. the user store root itself, or an
+ *   ancestor of `dir` under it) that resolves outside `root` is refused the
+ *   same way, before anything under `dir` is even looked at. `root` is
+ *   optional and defaults to skipping this parent-chain check entirely —
+ *   existing callers that pass only `dir` keep their current behavior
+ *   unchanged (they still get the direct `dir`-is-a-symlink check below).
  * - `<dir>/.gitignore` absent -> `{ ok: true, action: "create" }`.
  * - `<dir>/.gitignore` a symlink (live OR dangling) -> a named refusal
  *   (R1-F15 G1/G2), never followed to read what it points at — a dangling
@@ -42,7 +51,22 @@ export type PrivateDirCheck =
  *
  * Never mutates anything.
  */
-export async function checkPrivateDirGitignore(dir: string): Promise<PrivateDirCheck> {
+export async function checkPrivateDirGitignore(dir: string, root?: string): Promise<PrivateDirCheck> {
+  if (root !== undefined) {
+    const rootResolved = path.resolve(root);
+    const dirResolved = path.resolve(dir);
+    const relative = path.relative(rootResolved, dirResolved);
+    const relativePosix = relative.split(path.sep).join("/");
+    const refusal = await refuseEscapingSymlink(rootResolved, relativePosix);
+    if (refusal !== undefined) {
+      return {
+        ok: false,
+        reason: "private-gitignore-conflict",
+        message: `${dir}: ${refusal}`,
+      };
+    }
+  }
+
   let dirStats;
   try {
     dirStats = await lstat(dir);
@@ -129,10 +153,13 @@ export async function checkPrivateDirGitignore(dir: string): Promise<PrivateDirC
  * exclusive create (`wx`), so a concurrent writer racing this call is never
  * clobbered — whichever process wins the exclusive create keeps its file, and
  * the loser's write fails closed rather than silently overwriting it. Never
- * modifies an existing `.gitignore`.
+ * modifies an existing `.gitignore`. `root`, when given, is forwarded to
+ * `checkPrivateDirGitignore` (both the initial check and the post-EEXIST
+ * re-check below) so a symlinked ancestor of `dir` outside `root` is refused
+ * before `mkdir`/`open` ever runs.
  */
-export async function ensurePrivateDirGitignore(dir: string): Promise<PrivateDirCheck> {
-  const check = await checkPrivateDirGitignore(dir);
+export async function ensurePrivateDirGitignore(dir: string, root?: string): Promise<PrivateDirCheck> {
+  const check = await checkPrivateDirGitignore(dir, root);
   if (!check.ok || check.action === "present") {
     return check;
   }
@@ -154,7 +181,7 @@ export async function ensurePrivateDirGitignore(dir: string): Promise<PrivateDir
     // so a concurrent writer that raced us with a symlink (not a real file)
     // is refused here too, never silently reported back as "created".
     if (isExists(error)) {
-      const recheck = await checkPrivateDirGitignore(dir);
+      const recheck = await checkPrivateDirGitignore(dir, root);
       if (recheck.ok && recheck.action === "create") {
         // R1-F15/R1-F27: `open(..., "wx")` said something is already at
         // this path (EEXIST), but the re-check reports "absent" again — a

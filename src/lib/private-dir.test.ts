@@ -159,6 +159,52 @@ test("R1-F15 G5: a private dir that is itself a symlink is refused even when the
   expect(ensured.ok).toBe(false);
 });
 
+// R2-I1 G6: `dir` and its immediate `.gitignore` were already symlink-safe,
+// but an ancestor DIRECTORY between `root` and `dir` (e.g. the user store
+// root itself) that is a symlink escaping `root` was silently followed —
+// only caught when a `root` is passed for the parent-chain check.
+test("R2-I1 G6: a private dir reached through an escaping ancestor symlink refuses when root is given", async () => {
+  const root = path.join(tmpRoot, "keryx-home");
+  await mkdir(root, { recursive: true });
+  const outside = path.join(tmpRoot, "outside-real");
+  await mkdir(outside, { recursive: true });
+  // root/memory is itself a symlink pointing OUTSIDE root.
+  await symlink(outside, path.join(root, "memory"));
+  const dir = path.join(root, "memory", "private");
+
+  const check = await checkPrivateDirGitignore(dir, root);
+  expect(check.ok).toBe(false);
+  if (!check.ok) {
+    expect(check.reason).toBe("private-gitignore-conflict");
+  }
+
+  const ensured = await ensurePrivateDirGitignore(dir, root);
+  expect(ensured.ok).toBe(false);
+  // Nothing got created anywhere — not in the escaping target, not in root.
+  const { readdir } = await import("node:fs/promises");
+  expect(await readdir(outside)).toEqual([]);
+});
+
+// The counterpart: an ancestor symlink that resolves back INSIDE `root` is
+// an ordinary in-repo layout (mirrors symlink-safety.ts's CLAUDE.md ->
+// AGENTS.md rationale) and must still be allowed to create/report normally.
+test("R2-I1 G6: a private dir reached through an in-root ancestor symlink is allowed", async () => {
+  const root = path.join(tmpRoot, "keryx-home");
+  const real = path.join(root, "real-memory");
+  await mkdir(real, { recursive: true });
+  // root/memory is a symlink to root/real-memory — resolves back inside root.
+  await symlink(real, path.join(root, "memory"));
+  const dir = path.join(root, "memory", "private");
+
+  const check = await checkPrivateDirGitignore(dir, root);
+  expect(check).toEqual({ ok: true, action: "create" });
+
+  const ensured = await ensurePrivateDirGitignore(dir, root);
+  expect(ensured).toEqual({ ok: true, action: "create" });
+  const written = await readFile(path.join(real, "private", ".gitignore"), "utf8");
+  expect(written).toBe(PRIVATE_DIR_GITIGNORE);
+});
+
 // R1-F27 G4: an existing regular file that cannot be READ (mode 000) used to
 // throw a raw EACCES out of `checkPrivateDirGitignore`/`ensurePrivateDirGitignore`
 // instead of returning a named refusal — the caller had no way to catch this
