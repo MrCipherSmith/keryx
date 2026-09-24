@@ -13,8 +13,8 @@
 // duplicate full-registration id within one event — is an error diagnostic
 // and the whole load reports `ok: false`. Nothing is silently dropped.
 import { readFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { resolveKeryxHomeDir } from "../../lib/keryx-home";
 import { validateAgainstSchemaObject } from "../../contracts/validator";
 import { BUILTIN_HOOK_REGISTRATIONS } from "./builtins";
 import HOOK_CONFIG_SCHEMA from "./hook-config.schema.json";
@@ -61,11 +61,11 @@ export interface LoadHookConfigInput {
  * `serve-turn.ts` never honored a `KERYX_HOME` override at all).
  * `commands/agent-hooks.ts` and `commands/hooks.ts` both now call this one
  * function too, so all three call sites resolve the same home directory.
+ *
+ * Flow 313 (W4): delegates to the shared resolver in `src/lib/keryx-home.ts`.
  */
 export function resolveHookHomeDir(env: NodeJS.ProcessEnv, homeDir?: string): string {
-  if (homeDir !== undefined) return homeDir;
-  const fromEnv = env.KERYX_HOME;
-  return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : os.homedir();
+  return resolveKeryxHomeDir(env, homeDir);
 }
 
 /** Default `readFile`: absent file (ENOENT) reads as `undefined`; anything else rethrows. */
