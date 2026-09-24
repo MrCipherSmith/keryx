@@ -114,6 +114,16 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx hooks enable <id> [--user]              Flip a hook's enabled state (project file, or --user for ~/.keryx/hooks.json)\n",
     "  keryx hooks disable <id> [--user]\n",
     "  hooks     Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration\n",
+    // Flow 313 (W4 portability, T10): the new `keryx bundle` verb — seven
+    // USAGE_BODY lines plus its Commands: summary row.
+    "  keryx bundle export --scope <project|team|user> [--include <glob>]... [--kind <k,...>] [--id <id>] [--target-harness <h,...>] <out> [--json]\n",
+    "  keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--dry-run] [--json]\n",
+    "  keryx bundle import <catalog-dir> --external [--dry-run] [--json]\n",
+    "  keryx bundle inspect <bundle> [--target-scope <scope>] [--json]\n",
+    "  keryx bundle verify <bundle> [--json]\n",
+    "  keryx bundle verify --external-imports [--json]\n",
+    "  keryx bundle uninstall <bundleId> --target-scope <scope> [--dry-run] [--json]\n",
+    "  bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses\n",
     // Flow 312 (W3, T8): the new `keryx learn` verb — eleven USAGE_BODY lines
     // (three wrap onto a continuation line) plus its Commands: summary row.
     "  keryx learn observe [--hook claude]           Flush pending observations, or adapt one host-hook payload\n",
@@ -146,13 +156,28 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     expect(withoutVersion(reconstructed)).toBe(withoutVersion(preFlow));
   });
 
+  // The ONLY lines later flows may add to a rich help. Flow 313 (W4, T8):
+  // `serve-mcp --harness` binds the cross-harness memory identity at launch —
+  // one synopsis line and one flag line.
+  const RICH_NEW_LINES: Readonly<Record<string, readonly string[]>> = {
+    "serve-mcp": [
+      "  keryx serve-mcp --harness <id> [--cwd <project-root>]  # bind a cross-harness memory identity\n",
+      "  --harness    Bind this server process's cross-harness memory identity once at launch (or set KERYX_HARNESS; --harness wins). Used by memory.search filtering, memory.handoff, and the Source-Harness stamped on memory.propose writes. Unknown id refuses to start.\n",
+    ],
+  };
+
   test.each(["flow", "trigger", "serve-mcp", "governance"] as const)(
-    "the rich `%s --help` output is byte-identical to its pre-flow fixture (unchanged by this flow)",
+    "the rich `%s --help` output is its pre-flow fixture plus exactly the allowed added lines",
     async (verb) => {
       const cliPath = path.join(import.meta.dir, "cli.ts");
       const current = await runBun([cliPath, verb, "--help"]);
       const preFlow = readFileSync(path.join(FIXTURES_ROOT, `${verb}-help.txt`), "utf8");
-      expect(current).toBe(preFlow);
+      let reconstructed = current;
+      for (const line of RICH_NEW_LINES[verb] ?? []) {
+        expect(reconstructed).toContain(line);
+        reconstructed = reconstructed.replace(line, "");
+      }
+      expect(reconstructed).toBe(preFlow);
     },
   );
 });

@@ -74,6 +74,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx orient` | Emit a bounded graph + wiki startup block, or install it as a turn-start hook. |
 | `keryx skills` | Manage bundled Metaproject working skills. |
 | `keryx stack` | Deterministic, offline stack detection — keryx stack detect. |
+| `keryx bundle` | Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses (W4). |
 
 ## Managed work
 

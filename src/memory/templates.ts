@@ -1,4 +1,52 @@
+import { splitLogicalLines } from "../lib/text-lines";
+import { extractHeaderKey, isHarnessHeaderKey } from "./store";
 import { MEMORY_TYPES } from "./types";
+
+// Flow 313 (W4) review R1-F3: the LAST line of defense against a
+// `Source-Harness:`/`Target-Harnesses:` header smuggled through free text —
+// applied here rather than only at the MCP tool boundary (`src/mcp/tools.ts`)
+// so a caller that bypasses that boundary entirely (the CLI's `keryx memory
+// new --title`, or any future caller of this function) gets the same
+// guarantee. `title` is a SINGLE-LINE field rendered as `# ${title}` on the
+// file's first line: any control character or line-terminator codepoint in
+// it — not only `\n` — is refused outright, which also makes the header-line
+// guard below unreachable for `title` (kept anyway as defense-in-depth in
+// case that refusal is ever loosened). `summary`/`details` are legitimately
+// multi-line, so they are checked line-by-line instead.
+//
+// Built with `new RegExp` from escape sequences rather than a `/.../` literal
+// containing the raw codepoints: a literal U+2028/U+2029 inside a regex
+// literal is itself treated as a line terminator by some source tooling,
+// which is exactly the ambiguity this guard exists to close — the pattern
+// must not itself depend on a tool treating those bytes as ordinary text.
+// eslint-disable-next-line no-control-regex -- matching control characters is the point of this guard.
+const CONTROL_OR_LINE_BREAK_RE = new RegExp("[\\u0000-\\u001F\\u007F\\u2028\\u2029]");
+// Flow 313 (W4) review R3-F8, choke point d: exported (and re-exported
+// through `./service.ts`, the ONLY module `src/mcp/` may import — M-3) so
+// the MCP `memory.propose` boundary's early pre-check uses this SAME
+// function instead of a second, independently-drifting copy of the pattern
+// and the line-split rule. `renderMemoryEntry` below remains the real,
+// authoritative guard for every caller; the MCP boundary's use of this
+// export is only a friendlier, fail-fast duplicate of the same check.
+//
+// Round-4 review: this used to be its own regex (`HARNESS_HEADER_LINE_RE`),
+// independent of `./store.ts`'s parser-side near-miss fold — the two could
+// and did drift (`p7b`: a singular `Target-Harness:`, a `Target‐Harnesses`
+// with a U+2010 hyphen, a zero-width-space key, and other near misses all
+// passed this guard, then the parser read them as present-but-invalid and
+// hid the entry from every harness, wedging `memory handoff` incomplete
+// until a human deleted the proposal). It now extracts the candidate KEY
+// with the SAME `extractHeaderKey` and folds it with the SAME
+// `isHarnessHeaderKey` the parser's `locateHeaderField` uses — one shared
+// near-miss header key matcher for both call sites, so a spelling the
+// parser would flag as present-but-invalid is refused HERE too, before it
+// is ever written.
+export function containsHarnessHeaderLine(value: string): boolean {
+  return splitLogicalLines(value).some((line) => {
+    const key = extractHeaderKey(line);
+    return key !== null && isHarnessHeaderKey(key);
+  });
+}
 
 export function renderMemoryEntry({
   title,
@@ -6,13 +54,53 @@ export function renderMemoryEntry({
   date,
   confidence = "medium",
   source = "manual",
+  summary,
+  details,
+  sourceHarness,
+  targetHarnesses,
 }: {
   title: string;
   type: string;
   date: string;
   confidence?: string;
   source?: string;
+  // Flow 313 (W4): optional overrides for the MCP `memory.propose` tool
+  // (and any future caller that needs real content, not the scaffold
+  // placeholders below). Absent -> the pre-existing scaffold text, so every
+  // existing caller of this function is byte-identical.
+  summary?: string;
+  details?: string;
+  sourceHarness?: string;
+  targetHarnesses?: string[];
 }): string {
+  // Flow 313 (W4) review R1-F3: refused HERE, not only at the MCP tool
+  // boundary, so every caller — MCP `memory.propose` and the CLI's `keryx
+  // memory new --title` alike — gets the same guarantee that a rendered
+  // entry's header block can never carry an attacker-controlled
+  // `Source-Harness:`/`Target-Harnesses:` line.
+  if (CONTROL_OR_LINE_BREAK_RE.test(title)) {
+    throw new Error(
+      "memory entry title may not contain control characters or line separators (CR, LF, U+2028, U+2029).",
+    );
+  }
+  if (containsHarnessHeaderLine(title)) {
+    // Unreachable given the control-character refusal above (a title with no
+    // line break at all cannot itself be a multi-line header-line match) —
+    // kept as defense-in-depth in case that refusal is ever loosened.
+    throw new Error("memory entry title may not contain a Source-Harness:/Target-Harnesses: line.");
+  }
+  if (summary !== undefined && containsHarnessHeaderLine(summary)) {
+    throw new Error("memory entry summary may not contain a Source-Harness:/Target-Harnesses: line.");
+  }
+  if (details !== undefined && containsHarnessHeaderLine(details)) {
+    throw new Error("memory entry details may not contain a Source-Harness:/Target-Harnesses: line.");
+  }
+
+  const harnessHeaderLines = [
+    ...(sourceHarness ? [`Source-Harness: ${sourceHarness}`] : []),
+    ...(targetHarnesses && targetHarnesses.length > 0 ? [`Target-Harnesses: ${targetHarnesses.join(", ")}`] : []),
+  ];
+  const harnessHeader = harnessHeaderLines.length > 0 ? `${harnessHeaderLines.join("\n")}\n` : "";
   return `# ${title}
 
 Version: 0.2.0
@@ -20,14 +108,14 @@ Type: ${type}
 Status: draft
 Confidence: ${confidence}
 Caveat:
-
+${harnessHeader}
 ## Summary
 
-Short summary.
+${summary ?? "Short summary."}
 
 ## Details
 
-Main memory content.
+${details ?? "Main memory content."}
 
 ## Provenance
 

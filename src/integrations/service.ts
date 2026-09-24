@@ -29,6 +29,7 @@ export {
   SUBSYSTEM_INSTRUCTIONS,
   SUBSYSTEM_LEARNING,
   SUBSYSTEM_ORIENT,
+  SUBSYSTEM_RULES_EXPORT,
   SUBSYSTEM_SECURITY,
 } from "./types";
 
@@ -110,6 +111,12 @@ export {
   orientHookCommand,
   preToolUseMatcher,
 } from "./surfaces";
+
+export {
+  installedRulesExportHarnesses,
+  renderRulesForHarnesses,
+  type RulesExportResult,
+} from "./rules-export";
 
 export {
   ACP_PERMISSION_ZED,

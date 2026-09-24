@@ -248,6 +248,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Project knowledge",
     summary: "Deterministic, offline stack detection — keryx stack detect.",
   },
+  {
+    kind: "cli",
+    name: "bundle",
+    group: "Project knowledge",
+    summary: "Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses (W4).",
+  },
 
   // ---- Managed work -----------------------------------------------------
   { kind: "cli", name: "flow", group: "Managed work", summary: "Agent-first flow lifecycle (Task Manager)." },

@@ -50,6 +50,7 @@ import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
 import { hooksCommand, printHooksHelp } from "./commands/hooks";
+import { bundleCommand, printBundleHelp } from "./commands/bundle";
 import { learnCommand, printLearnHelp } from "./commands/learn";
 import { sandboxNetForwardCommand } from "./commands/sandbox-net-forward";
 import { helpCommand } from "./commands/help";
@@ -127,6 +128,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   schedule: scheduleCommand,
   governance: governanceCommand,
   hooks: hooksCommand,
+  bundle: bundleCommand,
   learn: learnCommand,
   // Flow 301 (AC5): internal helper only — `planUnattendedSandbox.wrap()` invokes this
   // from inside the sandbox; no operator ever types it. Excluded from the CLI
@@ -346,6 +348,13 @@ export const USAGE_BODY = `Usage:
                                                Run one hook once against a synthetic or captured payload
   keryx hooks enable <id> [--user]              Flip a hook's enabled state (project file, or --user for ~/.keryx/hooks.json)
   keryx hooks disable <id> [--user]
+  keryx bundle export --scope <project|team|user> [--include <glob>]... [--kind <k,...>] [--id <id>] [--target-harness <h,...>] <out> [--json]
+  keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--dry-run] [--json]
+  keryx bundle import <catalog-dir> --external [--dry-run] [--json]
+  keryx bundle inspect <bundle> [--target-scope <scope>] [--json]
+  keryx bundle verify <bundle> [--json]
+  keryx bundle verify --external-imports [--json]
+  keryx bundle uninstall <bundleId> --target-scope <scope> [--dry-run] [--json]
   keryx learn observe [--hook claude]           Flush pending observations, or adapt one host-hook payload
   keryx learn extract [--domain <d>] [--since <date>] [--json]
                                                Run deterministic signals over the observation window
@@ -410,6 +419,7 @@ Commands:
   schedule  Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove
   governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
   hooks     Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration
+  bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses
   learn     Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune
 `;
 
@@ -477,6 +487,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, () => void> = new Map([
   ["serve-mcp", printServeMcpHelp],
   ["governance", printGovernanceHelp],
   ["hooks", printHooksHelp],
+  ["bundle", printBundleHelp],
   ["learn", printLearnHelp],
 ]);
 

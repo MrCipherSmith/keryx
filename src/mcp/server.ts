@@ -19,6 +19,20 @@ import {
   dispatchReadResource,
   type McpContext,
 } from "./dispatch";
+import { isMemoryHarnessId } from "../memory/service";
+
+// Flow 313 (W4-AC6): "unknown harness id refuses to start the server" — fail
+// closed, named error, rather than silently launching unbound or with a
+// typo'd identity treated as valid.
+export class McpUnknownHarnessError extends Error {
+  constructor(harness: string) {
+    super(
+      `Unknown --harness/KERYX_HARNESS identity: "${harness}". ` +
+        "Refusing to start the MCP server rather than launch with an unrecognised cross-harness memory identity.",
+    );
+    this.name = "McpUnknownHarnessError";
+  }
+}
 
 export class McpSdkMissingError extends Error {
   constructor(cause?: unknown) {
@@ -133,14 +147,26 @@ export interface ServeOptions {
   http?: boolean;
   /** Expose only non-mutating tools (flow 292; `keryx serve-mcp --read-only`). */
   readOnly?: boolean;
+  /**
+   * Flow 313 (W4-AC6): the cross-harness memory identity to bind for this
+   * server process, resolved ONCE here at launch — `--harness` wins over
+   * `KERYX_HARNESS` (that precedence is the caller's job, e.g.
+   * `serveMcpCommand`). Unknown id -> `McpUnknownHarnessError` (fail closed,
+   * never launches unbound-but-silently-wrong). Absent/undefined -> unbound.
+   */
+  harness?: string;
 }
 
 // Entry point for `keryx mcp serve`. Loads the SDK (hard-fail if missing),
 // builds the server, and connects the default stdio transport — or the isolated
 // HTTP/SSE opt-in when `--http` is passed and the capability is enabled.
 export async function serveMcp(options: ServeOptions): Promise<void> {
+  if (options.harness !== undefined && !isMemoryHarnessId(options.harness)) {
+    throw new McpUnknownHarnessError(options.harness);
+  }
   const ctx = await buildMcpContext(options.cwd, options.http ? "http" : "stdio", {
     readOnly: options.readOnly === true,
+    harnessIdentity: options.harness ?? null,
   });
   const server = await createMcpServer(ctx);
 

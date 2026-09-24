@@ -8,6 +8,15 @@ import {
   renderMetaprojectGitignoreBlock,
 } from "./metaproject-gitignore";
 
+// Flow 313 (W4): the bundle ledger (applied-state.json) and any staged bundle
+// artifacts under .metaproject/data/bundles/ are local runtime state, not
+// something a project commits.
+test("the managed gitignore block covers the bundle ledger runtime state", () => {
+  const block = renderMetaprojectGitignoreBlock();
+
+  expect(block).toContain(".metaproject/data/bundles/");
+});
+
 test("legacy memory migration diagnostics classify paths without mutating them", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-memory-migration-"));
   try {

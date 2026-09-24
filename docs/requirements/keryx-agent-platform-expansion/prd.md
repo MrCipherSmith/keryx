@@ -222,8 +222,10 @@ owning workstream's acceptance criteria.
 - **R5.1** One harness adapter registry unifying the three existing hook
   registries, with the full W5 `SurfaceFlag` set (block, prompt-gate,
   inject-context, pre-tool-context, observe, post-tool, session-start, stop,
-  skills, agents, instructions, mcp) and a single merge/strip/validate
-  path per settings file, closing the `securityHooks` (OQ-3) clobbering class.
+  skills, agents, instructions, mcp, rules — the last added by flow 313 to
+  give the `rules-export` surface its own opt-in flag, separate from
+  `instructions`) and a single merge/strip/validate path per settings file,
+  closing the `securityHooks` (OQ-3) clobbering class.
 - **R5.2** New adapters for Gemini CLI, Kiro, GitHub Copilot (agent), and Zed
   via ACP (policy traveling with the Keryx agent through `src/acp/permission.ts`);
   Antigravity/OpenCode remain `experimental` until independently verified.

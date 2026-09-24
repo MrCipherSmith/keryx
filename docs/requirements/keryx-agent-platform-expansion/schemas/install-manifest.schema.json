@@ -274,6 +274,7 @@
             "skills",
             "agents",
             "instructions",
+            "rules",
             "mcp"
           ],
           "description": "Optional W5 surface discriminator for this record, letting a single target hold separately tracked install-state per surface (e.g. a `block` hook vs. an `instructions` file for the same harness)."

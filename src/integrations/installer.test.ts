@@ -681,19 +681,24 @@ describe("F4/N1 (round 2): a malformed (unterminated) markdown block — dry-run
     });
   });
 
-  test("a JSON surface in the SAME install call still gets written even when a custom surface in the call throws", async () => {
+  // R3-F12 (supersedes the earlier N1 decision this test used to pin): a
+  // JSON surface in the SAME install call must NOT be written when a custom
+  // surface in the same call is going to refuse — writing `.gemini/settings.json`
+  // (plus its install-state record) and THEN failing on `instructions` left the
+  // runtime half-installed with no way to tell from the exit code alone.
+  // Every selected surface is checked before the first write now, so a
+  // failing surface anywhere in the call means NOTHING in the call is
+  // written. This test fails on the pre-fix (N1) behavior, which wrote
+  // `.gemini/settings.json` regardless.
+  test("a failing custom surface in the call stops a JSON surface in the SAME call from being written (all-or-nothing)", async () => {
     await withMetaproject(async (root) => {
       await writeUnterminated(root, "GEMINI.md");
-      // gemini-cli only has ctx-guard (JSON) + instructions (custom) —
-      // install both in one call; instructions fails but ctx-guard must
-      // still be written (N1: JSON surfaces are processed BEFORE custom
-      // ones, and a custom-surface throw must not roll that back or stop it).
       const result = await installIntegration(root, "gemini-cli");
       const ctxGuard = result.results.find((r) => r.surfaceId === "ctx-guard");
       const instructions = result.results.find((r) => r.surfaceId === "instructions");
-      expect(ctxGuard?.status).toBe("installed");
+      expect(ctxGuard?.status).toBe("failed");
       expect(instructions?.status).toBe("failed");
-      expect(existsSync(path.join(root, ".gemini", "settings.json"))).toBe(true);
+      expect(existsSync(path.join(root, ".gemini", "settings.json"))).toBe(false);
     });
   });
 });

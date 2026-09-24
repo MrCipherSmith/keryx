@@ -9,7 +9,7 @@
 import path from "node:path";
 import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import { isPathInside, pathExists, toPosix } from "../../lib/fs";
-import { SETTINGS_FILE_OWNERS, HARNESS_ADAPTERS, SUBSYSTEM_AGENTS } from "../../integrations/index";
+import { SETTINGS_FILE_OWNERS, HARNESS_ADAPTERS, SUBSYSTEM_AGENTS, SUBSYSTEM_RULES_EXPORT, SUBSYSTEM_INSTRUCTIONS } from "../../integrations/index";
 import type { SurfaceId } from "./types";
 
 /** A directory or file discovery result that distinguishes "found" from
@@ -61,7 +61,25 @@ async function existingFiles(root: string, relativePaths: readonly string[]): Pr
 
 // --- instructions --------------------------------------------------------
 
-const INSTRUCTION_FILENAMES = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".github/copilot-instructions.md"];
+// Flow 313 (W4 portability), T9: extended with the `rules-export` surface's
+// own target files (`src/integrations/surfaces-rules.ts`) — a managed
+// `keryx:rules` index block can land in any of these, some of which
+// (`.cursor/rules/keryx-rules.mdc`, `.kiro/steering/keryx-rules.md`,
+// `.windsurf/rules/keryx-rules.md`) were not previously scanned by
+// `keryx security audit-harness` at all. `.github/copilot-instructions.md`
+// and `.kiro/steering/keryx.md` were already covered by the pre-existing list
+// (the latter via `INSTRUCTIONS_KIRO`'s markdown-block target) — kept
+// deduplicated below rather than listed twice.
+const INSTRUCTION_FILENAMES = [
+  "AGENTS.md",
+  "CLAUDE.md",
+  "GEMINI.md",
+  ".github/copilot-instructions.md",
+  ".cursor/rules/keryx-rules.mdc",
+  ".kiro/steering/keryx-rules.md",
+  ".kiro/steering/keryx.md",
+  ".windsurf/rules/keryx-rules.md",
+];
 
 export async function discoverInstructions(root: string): Promise<string[]> {
   return existingFiles(root, INSTRUCTION_FILENAMES);
@@ -125,12 +143,25 @@ export async function discoverMcpConfigCandidates(root: string): Promise<{
  * exclusion by subsystem, not by extension or shape, so a future non-JSON
  * hook artifact still lands here and a future non-agents custom surface is
  * unaffected.
+ *
+ * Flow 313 (W4 portability) T9: the `rules-export` SUBSYSTEM
+ * (`SUBSYSTEM_RULES_EXPORT` — `surfaces-rules.ts`) is excluded the same way:
+ * its target files (CLAUDE.md, AGENTS.md, GEMINI.md, ...) are managed
+ * INSTRUCTIONS artifacts, already covered by `discoverInstructions`'s own
+ * `INSTRUCTION_FILENAMES` list, not hook artifacts — without this exclusion
+ * a project whose CLAUDE.md/AGENTS.md already exists (the ordinary case) got
+ * that same file double-reported here as a "hook file", incorrectly turning
+ * `hooks` coverage `status: "scanned"` for a project with no hook artifacts
+ * at all. Additionally, the `instructions` SUBSYSTEM
+ * (`SUBSYSTEM_INSTRUCTIONS` — `surfaces-w5b.ts`) manages every instruction
+ * file that surfaces write directly and are already scanned by
+ * `discoverInstructions`, so they are excluded here the same way.
  */
 const NON_JSON_HOOK_SURFACE_PATHS = (() => {
   const paths = new Set<string>();
   for (const adapter of HARNESS_ADAPTERS) {
     for (const surface of adapter.surfaces) {
-      if (surface.subsystem === SUBSYSTEM_AGENTS) continue;
+      if (surface.subsystem === SUBSYSTEM_AGENTS || surface.subsystem === SUBSYSTEM_RULES_EXPORT || surface.subsystem === SUBSYSTEM_INSTRUCTIONS) continue;
       if (surface.relativePath && !(surface.merge && surface.strip)) {
         paths.add(surface.relativePath);
       }

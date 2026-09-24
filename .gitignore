@@ -100,6 +100,17 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 .metaproject/data/learning/candidates/
 # keryx:end
 
+# Flow 313 (W4 portability) — the per-scope bundle applied-state ledger is
+# local, per-machine state (R1-F9): a cloned/checked-out repo must never ship
+# one, or a planted ledger could make `keryx bundle uninstall` trust
+# attacker-controlled paths. Kept OUTSIDE the `keryx:begin`/`keryx:end`
+# managed block on purpose — `keryx update` regenerates that block from
+# `renderMetaprojectGitignoreBlock()` in src/lib/metaproject-gitignore.ts,
+# which does not (yet) know about this path, and a hand-edit placed inside
+# the block is wiped by the next `keryx update` (see the forgetting/retention
+# comment above, which hit the same issue).
+.metaproject/data/bundles/
+
 # mutation-sweep working state. The journal names the file that may still
 # be mutated if the run is killed; the progress file is how a backgrounded
 # run is watched, since Bun buffers stdout to a pipe.

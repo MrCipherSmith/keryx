@@ -14,6 +14,48 @@ honestly, and the adapter point where one canonical instruction source becomes `
 `planned`; nothing described here exists in the repository today except where a file path is cited as
 proof.
 
+## Implementation status (flow 313)
+
+Flow 313 implemented this workstream. Each row maps a W4 acceptance criterion
+to the module and test that proves it; see `docs/docs/guides/portability.md`
+for the task-oriented user-facing guide and `docs/docs/cli-reference.md`
+(`## bundle` section) for the full CLI flag reference.
+
+| AC | Implementing module | Test |
+|---|---|---|
+| W4-AC1 (export) | `src/bundle/export.ts` (`exportBundle`) | `src/bundle/export.test.ts` |
+| W4-AC2 (verify) | `src/bundle/verify.ts` (`verifyBundle`, `verifyBundlePath`) | `src/bundle/verify.test.ts` |
+| W4-AC3 (import fails closed on checksum mismatch) | `src/bundle/plan.ts` (`planBundleImport`) | `src/bundle/plan.test.ts` |
+| W4-AC4 (never overwrite a human-modified file; uninstall keeps modified files) | `src/bundle/apply.ts` (`applyBundlePlan`), `src/bundle/applied-state.ts`, `src/bundle/uninstall.ts` | `src/bundle/apply.test.ts`, `src/bundle/applied-state.test.ts`, `src/bundle/uninstall.test.ts` |
+| W4-AC5 (inspect is read-only) | `src/bundle/inspect.ts` (`inspectBundle`) | `src/bundle/inspect.test.ts` |
+| W4-AC6 (`source_harness` bound at MCP launch, never per-call) | `src/commands/serve-mcp.ts` (`resolveServeHarness`), `src/mcp/tools.ts` (`memory.search` / `memory.handoff` harness filtering) | `src/commands/serve-mcp.test.ts`, `src/mcp/memory-harness-identity.test.ts` |
+| W4-AC7 (incomplete scan fails closed) | `src/memory/store.ts` (`collectEntriesStrict`), `src/memory/handoff.ts` (`selectHandoffEntries`) | `src/memory/handoff.test.ts` |
+| W4-AC8 (private-dir `.gitignore` refusal) | `src/lib/private-dir.ts` (`checkPrivateDirGitignore`, `ensurePrivateDirGitignore`) | covered under `src/bundle/plan.test.ts`, `src/bundle/apply.test.ts` |
+| W4-AC9 (external catalog: scout + audit gates, referenced not copied) | `src/bundle/external.ts` (`vetExternalCatalog`, `applyExternalImports`) | `src/bundle/external.test.ts`; reported-by-scout coverage in `src/gdskills/governance/scout.test.ts` (`scoutImports`, backing `keryx skills scout --include-imports`) |
+| W4-AC10 (managed-block rendering, byte-identical elsewhere) | `src/integrations/surfaces-rules.ts`, `src/integrations/rules-export.ts` (`renderRulesForHarnesses`, `installedRulesExportHarnesses`) | covered under `src/integrations/markdown-block.test.ts`, `src/integrations/w5b-adapters.test.ts` |
+| W4-AC11 (learned-pattern scope immutable, always `candidate`) | `src/bundle/plan.ts` (learned-pattern candidate rewrite) | `src/bundle/plan.test.ts` |
+| W4-AC12 (W8 audit gates plan → apply) | `src/bundle/audit.ts` (`auditBundlePlan`), `src/security/audit-harness/index.ts` (`imported-bundles` surface) | `src/bundle/audit.test.ts`, `src/security/audit-harness/imported-bundles.test.ts` |
+| W4-AC13 (export → import → inspect round trip) | `src/bundle/service.ts` (public facade) | `src/bundle/roundtrip.e2e.test.ts` |
+| W4-AC14 (`~/.keryx/` resolver, imported-agent origin) | `src/lib/keryx-home.ts` (`resolveKeryxHomeDir`, `userStorePaths`), `src/bundle/export.ts` (`rewriteAgentOrigin`) | `src/bundle/export.test.ts` |
+
+**"Unverified" notes below resolved by this flow:** the "first-party harness
+documentation check" this document's Design section flagged as needed before
+implementing `AGENTS.md`/`CLAUDE.md`/`GEMINI.md` rendering was done for two of
+the three — Claude Code's own documented memory-file convention and Codex's
+`AGENTS.md`/agents.md convention are both marked `confidence: "verified"` in
+`src/integrations/surfaces-rules.ts`, backed by `sourceDocs` (a live URL each)
+and this repository's own `CLAUDE.md`/`AGENTS.md` bootstrap blocks as a
+working proof. `GEMINI.md`, Cursor, Kiro, Windsurf, and the GitHub Copilot
+coding agent surface remain `confidence: "experimental"` — each carries a
+`riskNotes` entry naming exactly what was not independently confirmed (see
+`docs/docs/guides/portability.md`, "Rules export to harness instruction
+files"). The separate "first-party Agent Skills documentation check" flagged
+for the external-catalog `SKILL.md` shape (Design → "Importing external
+Agent-Skills-standard catalogs") is outside `surfaces-rules.ts`'s scope and
+was not addressed by this flow; `src/bundle/external.ts` implements
+`vetExternalCatalog` against the frontmatter shape this document already
+specifies (`name`/`description`), unchanged.
+
 ## Current state
 
 Verified by reading the cited files directly (all paths confirmed to exist in this worktree).

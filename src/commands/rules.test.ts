@@ -1,8 +1,56 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
 import { rulesCommand } from "./rules";
+
+// R1-F20 (round 4 fix): the reviewer's cloned-repo reproduction —
+// `.metaproject -> ../../.claude`, a symlink pointing OUTSIDE the project
+// root. Before this fix, `rules sync` exited 0 and wrote the clone's own
+// (potentially attacker-controlled) AGENTS.md/CLAUDE.md content into the
+// symlink's target (`~/.claude/rules/*.md` in the real reproduction),
+// because `syncAgentRules`/`distillAgentEntrypoints` contained every write
+// against `metaprojectRoot` directly rather than against `projectRoot` (so a
+// symlinked `.metaproject` moved the containment boundary itself). This
+// fails on the pre-fix code: it does not throw, and the "outside" directory
+// ends up non-empty.
+test("R1-F20: rules sync refuses (writes nothing) when .metaproject itself is a symlink escaping the project", async () => {
+  const base = await mkdtemp(path.join(tmpdir(), "keryx-rules-r1f20-"));
+  try {
+    const projectRoot = path.join(base, "clone");
+    const outside = path.join(base, ".claude");
+    await mkdir(projectRoot, { recursive: true });
+    await mkdir(outside, { recursive: true });
+    await symlink(outside, path.join(projectRoot, ".metaproject"));
+    await writeFile(path.join(projectRoot, "AGENTS.md"), "# Agent Rules\n\nATTACKER PAYLOAD\n", "utf8");
+    await writeFile(path.join(projectRoot, "CLAUDE.md"), "# Claude Rules\n\nATTACKER PAYLOAD\n", "utf8");
+
+    await expect(rulesCommand(["sync"], projectRoot)).rejects.toThrow();
+
+    // Nothing was ever written through the symlink into the outside directory.
+    expect(await readdir(outside)).toEqual([]);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("R1-F20: rules distill refuses (writes nothing) when .metaproject itself is a symlink escaping the project", async () => {
+  const base = await mkdtemp(path.join(tmpdir(), "keryx-rules-distill-r1f20-"));
+  try {
+    const projectRoot = path.join(base, "clone");
+    const outside = path.join(base, ".claude");
+    await mkdir(projectRoot, { recursive: true });
+    await mkdir(outside, { recursive: true });
+    await symlink(outside, path.join(projectRoot, ".metaproject"));
+    await writeFile(path.join(projectRoot, "AGENTS.md"), "# Agent Rules\n\nATTACKER PAYLOAD\n", "utf8");
+
+    await expect(rulesCommand(["distill"], projectRoot)).rejects.toThrow();
+
+    expect(await readdir(outside)).toEqual([]);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
 
 test("rules sync imports AGENTS and CLAUDE as high-priority rules", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-rules-"));

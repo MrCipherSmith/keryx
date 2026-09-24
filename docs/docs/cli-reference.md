@@ -2089,6 +2089,60 @@ and friends, applied to Keryx's own two files.
 
 ---
 
+## bundle
+
+```
+keryx bundle export --scope <project|team|user> [--include <glob>]... [--kind <k,...>] [--id <id>] [--target-harness <h,...>] <out> [--json]
+keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--allow-hooks] [--dry-run] [--json]
+keryx bundle import <catalog-dir> --external [--dry-run] [--json]
+keryx bundle inspect <bundle> [--target-scope <scope>] [--json]
+keryx bundle verify <bundle> [--json]
+keryx bundle verify --external-imports [--json]
+keryx bundle uninstall <bundleId> --target-scope <scope> [--dry-run] [--json]
+```
+
+Flow 313 (W4 portability): move skills, rules, agents, memory entries,
+learned patterns and hook config between scopes and machines as a single
+sha256-content-addressed, manifest-described bundle — a directory (with
+`bundle.json` at its root) or a deterministic `.tar.gz`. This command never
+prints file contents, only paths/sha256/counts, and every write goes through
+one lifecycle: **plan -> W8 audit -> apply**, all-or-nothing. A refusal at any
+stage means zero bytes were written; `applyBundlePlan` itself re-checks every
+target's checksum immediately before writing (a TOCTOU guard) and rolls back
+every write it already made if any single one fails.
+
+**Scope roots.** `project`/`team` share `.metaproject/` at the project root
+(`team` is a labeling discipline over the same tree, not a separate
+directory); `user` resolves to `~/.keryx/` (`KERYX_HOME`, or an explicit
+`--home-dir`-style override in tests, wins over the real home directory —
+the same resolution `keryx hooks` uses for `~/.keryx/hooks.json`).
+
+| Subcommand | Description |
+|---|---|
+| `export` | Collect every matching skill/rule/agent/memory-entry/learned-pattern/hook-config under `--scope`'s root, filtered by `--include` glob(s) and/or `--kind`, and write a bundle to `<out>` (a `.tar.gz`/`.tgz` path, or an empty/absent directory). `--id` overrides the default deterministic `bundleId`: for `project`/`team` with a git remote, a hash of that remote's normalized identity (`keryx-<scope>-<hash>`); for `user` scope, or `project`/`team` with no remote, a hash of the export's own sorted `path\tsha256` content list instead — so two unrelated exports never collide on id, and the same content always reproduces the same id. Because that default id changes whenever content changes, re-exporting the SAME logical bundle across its lifetime should pass the SAME `--id` every time (persist it alongside the bundle) — that is what keeps `bundle import`'s ownership tracking (see `import` below) recognizing a re-export as an update from the same bundle rather than a takeover requiring `--force`. `--target-harness` records advisory harness ids in the manifest's `compat.targetHarnesses`, checked back against the capability matrix by `bundle inspect`. Refuses (no bytes written) on any invalid `hook-config`/`learned-pattern` content, an unparseable agent frontmatter, a source file/directory name that is not portable (`path-escape` — ASCII letters/digits/`.`/`_`/`-` only, no leading `.`), a match set of zero entries (`empty-bundle`), or an `<out>` that already exists non-empty. |
+| `import` | **Plan**: verify every entry's checksum against the bundle first (any mismatch refuses before anything else runs). An entry whose `scope` differs from the bundle's own `provenance.sourceScope` is refused (`scope-mismatch`) unless `--target-scope` is passed, so a bundle cannot silently write into a different scope than the one it claims to be from — e.g. a "project" bundle smuggling a `scope: user` `hooks.json` into `~/.keryx/`. A `hook-config` entry additionally requires `--allow-hooks`, or it is refused (`hooks-require-opt-in`). Each surviving entry is then diffed against the target scope's disk state and applied-state ledger into a bucket — `new`, `identical`, `update` (Keryx wrote the current bytes last time, AND this same bundleId owns that ledger record), or `conflict` (the current bytes match neither the incoming nor the ledger — a hand edit, an unmanaged pre-existing file, or content unchanged since a DIFFERENT bundleId last wrote it — `owned-by-other-bundle`, so one bundle can never silently take over a file another bundle still owns). Ownership is not decided by a matching `bundleId` alone — a hand-crafted bundle can declare any `bundleId` string it likes. When the ledger record for a target carries a `provenance.sourceProject` (recorded from the bundle that last wrote it) and this import's own manifest `provenance.sourceProject` differs from it — including either side simply lacking the field while the other has one — the target is `owned-by-other-bundle` too, even though the `bundleId` itself matches. `sourceProject` is trust-on-first-use, not a forgery barrier: it is a plain sha256 hash of the source project's normalized git remote identity, computed at export time, carried in cleartext in every `bundle.json`, and reproducible by anyone who knows (or can guess) that remote — a hand-crafted bundle can trivially populate it to match a prior record. What it protects against is *accidental* cross-project clobbering — two unrelated projects that happen to reuse the same `bundleId` — not a deliberate attacker who has seen an exported bundle or knows the source repository's remote. When NEITHER the recorded entry NOR the incoming manifest has ever declared a `sourceProject` (no git remote at either bundle's export time), the two cannot be distinguished this way and the plain `bundleId` match alone decides `update` vs `new` — this is the same trust-on-first-use: the FIRST bundle to write a path under a given `bundleId` is trusted, and Keryx has no way to later prove a same-`bundleId` re-import (with or without a matching `sourceProject`) is the same producer rather than a spoof. A `conflict` entry blocks the whole import unless its `targetRelative` or `displayId` (`scope:path`) is named in `--force`; forcing an `owned-by-other-bundle` conflict transfers ownership of that path to this import's `bundleId` (recorded in the ledger, and printed with its `(owned-by-other-bundle)` reason). Every such forced takeover is also reported as its own `transferred` entry — `{displayId, from: <previous bundleId>, fromSourceProject?: <previous sourceProject>}` in `--json`, a `transferred <path> from <bundleId>` line in human output — not merged into an ordinary `written`/`+` line. `--target-scope` retargets every entry to one scope, EXCEPT a `learned-pattern`, whose scope is immutable: a `project`-scope pattern may only import at `project` or `team` scope, a `user`-scope pattern only at `user` scope (any other target refuses `learned-pattern-scope`); every imported pattern is also rewritten to `status: "candidate"` regardless of what it carried in the bundle (`keryx learn accept` is the only command that may mark one `accepted`). `--dry-run` prints the plan grouped by kind, with each entry's bucket, and stops — no audit, no write, exit `0` only when the plan itself has no unresolved refusal. Otherwise: **W8 audit** stages every entry that would be written into a temp dir and runs `runHarnessAudit`'s `imported-bundles` surface; a `high`/`critical` unsuppressed finding refuses the whole import. **Apply**: atomic per-file writes (temp + rename) with a TOCTOU re-check (checksum and symlink chain) and full rollback — files, directories `mkdir -p` created, and a newly-created private-dir `.gitignore` — on any single write or ledger-update failure. Updates the target scope's applied-state ledger (`.metaproject/data/bundles/applied-state.json` or `~/.keryx/bundles/applied-state.json`) for every WRITTEN entry unconditionally, and for an `identical` entry only when the ledger already records that exact path as owned by this same `bundleId` AND `sourceProject` — an `identical` match against a user's own pre-existing file, against a file another bundle's ledger record already owns, or against a same-`bundleId` record whose `sourceProject` differs (including one side omitting it), is left completely untouched, so this bundle's own later `uninstall` cannot delete a file it never wrote, and identical bytes alone can never relabel or erase a recorded `sourceProject`. After a successful apply that wrote at least one `rule` entry into project scope, renders the canonical rules library into `--render-for`'s harnesses, or — when `--render-for` is omitted — every harness that already has the `rules-export` surface installed (`installedRulesExportHarnesses`); per-harness `installed`/`unchanged`/`failed`/`unsupported` is reported, and the command exits `1` (not `0`) if any harness's render failed even though the import itself wrote files. |
+| `import --external` | Vets an Agent-Skills-standard catalog directory (`<catalog-dir>`, not a Keryx bundle) instead: a candidate is the directory itself or an immediate subdirectory holding a `SKILL.md`. Every regular file under a candidate is read once into an in-memory snapshot; that same snapshot is both hashed (for the registry) and audited — `SKILL.md` and every other markdown/text file are scanned for secrets, prompt-injection and auto-run directives, not just script files, and a markdown-only skill (with no script files at all) is accepted rather than rejected as inapplicable. Rejects a candidate containing a symlink anywhere, or that is itself a symlink (`symlink-refused`); with invalid frontmatter — `name` must match `^[a-z0-9]+(-[a-z0-9]+)*$` (≤64 chars) and `description` must be non-empty (≤1024 chars) — (`invalid-skill-frontmatter`); a name shared with another candidate in the same batch, where BOTH are rejected (`duplicate-name`) rather than the later one silently winning; a scout `use`/`fork` decision against the project's own skill catalog (`scout-duplicate`/`scout-overlap` — fail closed; author a fork through the normal path instead); a name already recorded with different file hashes (`already-imported`); or a failing/inapplicable W8 audit (`audit-failed`/`audit-not-applicable`). An accepted candidate is recorded **by reference only** in `~/.keryx/skills/external-imports.json` (source directory + per-file sha256, plus an HMAC integrity tag keyed by a per-user secret at `~/.keryx/skills/.external-imports.key`) — no skill file is ever copied into `.metaproject/skills/`, `~/.keryx/skills/<name>/`, or any bundle. Reading the registry recomputes and checks that HMAC, and also refuses a case-variant sibling file (e.g. `External-Imports.json` next to `external-imports.json`) — both fail closed as `corrupt-external-imports-registry`, so a bundle cannot plant a forged, "pre-vetted" registry directly. `--dry-run` vets and prints without recording. Exit `1` only when every candidate was rejected. |
+| `inspect` | Read-only: verifies the bundle and runs the same plan diff `import` would (against `--target-scope`, or each entry's own recorded scope), without writing anything — no ledger touch, no temp files, no audit. Also warns, per `compat.targetHarnesses`, when the capability matrix does not report that harness `native`/`adapter` (advisory only). |
+| `verify` | Recomputes every `contents[].sha256`/`sizeBytes` in the manifest against the bundle's actual bytes; reports any file present in the bundle but not listed in the manifest (`unlisted`) too. Exit `0` only when every entry is `ok` and nothing is unlisted. |
+| `verify --external-imports` | Re-checks every entry in `~/.keryx/skills/external-imports.json` (after the same HMAC integrity/case-variant checks `import --external` applies on read) against its live source: `unresolvable` (the source directory or a recorded file is gone), `checksum-mismatch` (a recorded file's bytes changed upstream), or `unlisted-file` (a file now present under the source that was not part of the recorded set) — each a distinct status, never folded into a generic failure. |
+| `uninstall` | Removes only the files `<bundleId>`'s applied-state ledger for `--target-scope` records AND whose current sha256 still equals what Keryx last wrote — a file a person has since hand-edited is left in place and reported `kept` (reason `user-modified`), never overwritten or deleted. Every ledger key is re-validated (path normalization, containment under the scope root, and a symlink-chain check) before it is read or unlinked, so a tampered or corrupt ledger entry refuses (`corrupt-ledger`) instead of deleting outside the scope root. Removes now-empty parent directories up to (not including) the scope's fixed kind roots (`skills/`, `rules/`, `agents/`, `memory/`, `learning/`, `data/learning/`). `--dry-run` reports `removed`/`kept`/`missing` without writing; the ledger is updated only on a real run. |
+
+`--json` on any subcommand prints a structured result matching the table
+above, with a fixed, subcommand-specific set and order of top-level fields —
+NOT alphabetically key-sorted — but stable (the same fields, in the same
+order, for a given subcommand and outcome). A usage error (a missing
+required flag, or an invalid `--scope`/`--target-scope`/`--kind` value) exits
+`2` with a one-line reason on stderr, independent of `--json`. Every other
+refusal from bundle export/import/inspect/verify/uninstall (checksum
+mismatch, unresolved conflict, audit failure, a private-dir `.gitignore`
+conflict, a scope mismatch, an unrecorded hook-config opt-in, a corrupt
+ledger, …) is one of `src/bundle/types.ts`'s named `BUNDLE_REFUSAL` reasons
+and exits `1`. `import --external`/`verify --external-imports` use one
+additional reason outside that set, `corrupt-external-imports-registry`,
+for a tampered, unverifiable, or case-shadowed external-imports registry.
+
+---
+
 ## learn
 
 ```
@@ -2403,7 +2457,7 @@ keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 | `sync` | `--runtime codex\|claude`, `--target <dir>`, `--dry-run`, `--json` | Sync exported runtime skills to an explicit target dir. Requires both `--runtime` and `--target`. |
 | `contracts list` | — | Print name/path/description for all contract schemas. |
 | `contracts validate <file>` | `--schema <name>` | Validate a JSON file against a named contract schema. Exits `1` on failure. |
-| `scout <name-or-description>` | `--record <pack-dir>`, `--include-imports`, `--candidate <dir>`, `--scope bundled\|all`, `--json` | Flow 309 (W1): pre-creation dedupe gate — does an existing skill already cover this? Scores the query against the catalog (bundled by default, `--scope all` includes project-skills); `--candidate` vets a not-yet-created skill directory; `--record` persists the scout result under a pack directory. |
+| `scout <name-or-description>` | `--record <pack-dir>`, `--include-imports`, `--candidate <dir>`, `--scope bundled\|all`, `--json` | Flow 309 (W1): pre-creation dedupe gate — does an existing skill already cover this? Scores the query against the catalog (bundled by default, `--scope all` includes project-skills); `--candidate` vets a not-yet-created skill directory; `--record` persists the scout result under a pack directory. `--include-imports` (flow 313, W4) additionally scores the query against every recorded entry in `~/.keryx/skills/external-imports.json` (see [bundle import --external](#bundle)), with the same lexical scorer, reporting `searched: false` and a named reason when the registry is absent or corrupt rather than a silently empty match list. |
 | `eval <skill-id>` | `--strictness low\|medium\|high`, `--trials N`, `--runner <provider>`, `--model-grader`, `--json` | Flow 309 (W1): behavioral compliance eval — trigger accuracy + scenario pass rate. Scenarios that need a runner capability are reported `not-run`, not failed, when none is configured. |
 | `stocktake` | `--scope bundled\|all`, `--quick`, `--json` | Flow 309 (W1): periodic catalog health check — buckets each skill `keep\|improve\|update\|retire\|merge`. `--quick` skips the slower checks. |
 
@@ -2603,6 +2657,7 @@ keryx memory assets list | verify [<id>] | pull <id>
 keryx memory ingest --from-<source> <path>
 keryx memory check
 keryx memory reflect [--narrate] [--provider <p>]
+keryx memory handoff --from <harness> --target <harness> [--scope project|user] [--json]
 ```
 
 | Subcommand | Flags / args | Description |
@@ -2621,6 +2676,7 @@ never deletes files or changes the Git index automatically.
 | `ingest` | `--from-review\|--from-health\|--from-job\|--from-skill-verifier <path>` | Extract candidate insights from a source artifact into ADD/UPDATE entries. |
 | `check` | — | Integrity/lint pass (metadata, links, dedup, conflicts, index). Exit `1` on issues. |
 | `reflect` | `--narrate`, `--provider <p>` | Cluster entries by tag and create `pattern` drafts for clusters ≥ min size. `--narrate` adds a model-written summary of the memory and **needs a credential** — without one it exits `1`. |
+| `handoff` | `--from <harness>`, `--target <harness>` (both required), `--scope project\|user` (default `project`), `--json` | Explicit cross-harness memory read: entries whose `Source-Harness` matches `--from` and whose `Target-Harnesses` is unset or includes `--target`. Fails closed on an unreadable folder, unreadable file, or malformed entry — the result reports `status: "incomplete"` (exit `1`) rather than silently returning a partial set as if it were complete; a clean scan reports `status: "complete"` (exit `0`). An unknown harness id or scope exits `2` with a named reason. |
 
 Entry types: `lesson`, `decision`, `constraint`, `known-mistake`,
 `historical-context`, `pattern`, `task-note`, `review-note`, `incident`,
@@ -4213,13 +4269,18 @@ and prints a deprecation line.
 keryx serve-mcp [--cwd <project-root>]     # stdio JSON-RPC (default transport)
 keryx serve-mcp --http [--cwd <root>]      # HTTP/SSE, localhost only, opt-in
 keryx serve-mcp --read-only [--cwd <root>] # hide every tool marked mutating
+keryx serve-mcp --harness <id> [--cwd <root>] # bind a cross-harness memory identity (flow 313 / W4-AC6)
 ```
 
 `--cwd` names the project root whose `.metaproject` workspace is exposed; it
 defaults to the process working directory. `--http` requires
 `capabilities.http.enabled` in the workspace. `--read-only` drops every tool
 the registry marks `mutating` from `tools/list`, and a call to one by name
-answers "Unknown or unavailable tool." keryx launches its own server this way
+answers "Unknown or unavailable tool." `--harness <id>` (or the `KERYX_HARNESS`
+env var, when `--harness` is absent) binds this server process's harness
+identity once at launch — never per tool call — for `memory.search` filtering,
+`memory.handoff`, and the `Source-Harness` stamped on `memory.propose` writes.
+An unrecognised id refuses to start the server. keryx launches its own server this way
 when it hands it to a foreign agent it drives over ACP (see
 [agents external](#agents-external) and the
 [ACP client guide](guides/acp-client.md)): that agent's MCP calls go straight
@@ -4314,7 +4375,7 @@ keryx integrate --remove <cursor|claude|opencode|vscode|generic|all>
 
 | Command | Flags / args | Description |
 |---|---|---|
-| `serve-mcp` | `--http`, `--cwd <project-root>` | Start the MCP server over stdio (the default). `--cwd` selects the project root whose `.metaproject/` workspace is exposed; this is what makes editor/client launches independent from their process cwd. `--http` switches to the isolated localhost-only HTTP/SSE transport, which additionally requires `http.enabled=true` in the module's manifest entry. Bare `mcp` is an alias for `serve-mcp`. |
+| `serve-mcp` | `--http`, `--cwd <project-root>`, `--harness <id>` | Start the MCP server over stdio (the default). `--cwd` selects the project root whose `.metaproject/` workspace is exposed; this is what makes editor/client launches independent from their process cwd. `--http` switches to the isolated localhost-only HTTP/SSE transport, which additionally requires `http.enabled=true` in the module's manifest entry. `--harness <id>` (or `KERYX_HARNESS`) binds a cross-harness memory identity once at launch; an unrecognised id refuses to start. Bare `mcp` is an alias for `serve-mcp`. |
 | `integrate` | `<cursor\|claude\|opencode\|vscode\|generic\|all>` (comma-separated; default `all`), `--dry-run` | Merge-safely wire this project into an editor/agent's MCP client config: `cursor` → `.cursor/mcp.json`, `claude` → `.mcp.json`, `opencode` → `opencode.json` (all project root), `vscode` → `.vscode/mcp.json`, `generic` prints a ready snippet and writes no file. `all` targets cursor + claude + opencode only — `vscode` is deliberately opt-in and must be named explicitly. `cursor`/`claude` add `mcpServers.keryx = { command: "keryx", args: ["mcp","serve","--cwd","<absolute-project-root>"] }`; `opencode`'s shape differs — `mcp.keryx = { type: "local", command: ["keryx","mcp","serve","--cwd","<absolute-project-root>"], enabled: true }`; `vscode`'s shape differs again — VS Code's native MCP config uses a top-level `servers` key (not `mcpServers`), each entry requiring `"type": "stdio"`: `servers.keryx = { type: "stdio", command: "keryx", args: ["mcp","serve","--cwd","<absolute-project-root>"] }`. Every runtime's entry is marked with a managed sentinel, preserving existing servers/keys and staying idempotent. Also sets `modules.mcp.enabled=true` in `metaproject.json` and probes the optional SDK (printing `bun add @modelcontextprotocol/sdk` when absent — it never auto-installs or opens a network connection). `--dry-run` prints the planned change and writes nothing. |
 | `integrate --remove` | `<cursor\|claude\|opencode\|vscode\|generic\|all>` (default `all`) | Remove ONLY the managed `keryx` server (and its sentinel) from each runtime's client config, leaving other servers and user content intact. A no-op when nothing is installed. |
 

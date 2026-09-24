@@ -8,9 +8,9 @@
 // Nothing here knows about any particular harness or subsystem; every
 // function takes the sentinel/container/key/shape it needs as parameters.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { pathExists } from "../lib/fs";
+import { writeContained } from "../lib/contained-write";
 import type { Settings } from "./types";
 
 export const MANAGED_KEY = "_keryxManaged";
@@ -191,8 +191,12 @@ export async function readSettingsFile(file: string): Promise<Settings> {
   }
 }
 
-/** Writes `settings` as 2-space-indented JSON, newline-terminated, creating parent dirs. */
-export async function writeSettingsFile(file: string, settings: Settings): Promise<void> {
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+/**
+ * Writes `settings` as 2-space-indented JSON, newline-terminated, creating
+ * parent dirs. Routed through `writeContained` (flow 313 W4 lane C1): `root`
+ * + `relativePath`, not a pre-joined absolute path, so the containment check
+ * runs on the same segments the caller resolved the symlink refusal against.
+ */
+export async function writeSettingsFile(root: string, relativePath: string, settings: Settings): Promise<void> {
+  await writeContained(root, relativePath, `${JSON.stringify(settings, null, 2)}\n`);
 }

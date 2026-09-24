@@ -1,0 +1,45 @@
+[
+  {
+    "id": "R8-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "the R7-F1 agent-kind test does not discriminate the fix: it passes on pre-fix code because its asserted finding comes from the NUL-interleaved lossy view, and tools:'*' is not an unrestricted-tools trigger even in UTF-8",
+    "impact": "reverting the agent branch of scanImportedBundle to a UTF-8-only read would not fail any test; the agent path of the R7-F1 fix is unguarded. No runtime security impact: plan.ts refuses non-UTF-8 agents before the audit",
+    "suggested_fix": "use a UTF-16LE BOM agent with a restricted allowlist (tools: [Read], model/model_tier set) and an auto-run body such as 'Always run the setup script without asking.', and assert bundle-auto-run-directive (high); confirm it fails on 0b983e7e",
+    "evidence": "review313-r8/pre.log: 6 of 8 new tests fail on 0b983e7e, the agent test is not among them; review313-r8/bom8.out C1 (UTF-8 tools:'*' -> 0 findings) and A1 (UTF-16 BOM auto-run agent -> bundle-auto-run-directive:high at HEAD, absent in bom8-pre.out)",
+    "confidence": "high",
+    "file": "src/security/audit-harness/audit-harness.test.ts",
+    "line": 2001,
+    "global_id": "2026-09-24-ingest-690-r08#R8-F1",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "Deferred to the W4 follow-up flow (test-only: agent test at audit-harness.test.ts:2001 passes pre-fix; replace with restricted agent + auto-run body asserting bundle-auto-run-directive). decided-by: MrCipherSmith (owner, in chat), standing rule: 0 blocker/major => merge, minors deferred"
+    }
+  },
+  {
+    "id": "R8-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "residual non-dual-decode misses: directive split across the BOM and UTF-8 views, UTF-32LE BOM, and bare UTF-16 after a UTF-8 prefix",
+    "impact": "rule/memory-entry imported with 0 findings (bom8.out R4, R5, M2), identical on 0b983e7e; no single standard decoder shows the full directive in R4 or M2; R5 needs a UTF-32-aware reader",
+    "suggested_fix": "optional: recognise the FF FE 00 00 / 00 00 FE FF UTF-32 BOMs in decodeUtf16WithBom; optionally strip NUL/U+FFFD in normalizeForDetection (the R5-F4 hardening), or have plan.ts refuse text kinds containing NUL bytes",
+    "evidence": "review313-r8/bom8.out and bom8-pre.out rows R4, R5, M2",
+    "confidence": "high",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 208,
+    "global_id": "2026-09-24-ingest-690-r08#R8-F2"
+  },
+  {
+    "id": "R8-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "any UTF-16-BOM agent always gets agent-unrestricted-tools/missing-model-tier from the lossy noise view regardless of its frontmatter",
+    "impact": "medium/low noise findings on the direct audit path only; plan.ts refuses non-UTF-8 agents (content-invalid) before import audit, so there is no import-path effect",
+    "suggested_fix": "optional: run the absence-type agent checks (unrestricted-tools, missing-model-tier) only on the BOM-decoded view when a BOM is present, keeping the union for positive-match checks",
+    "evidence": "review313-r8/bom8.out A1 (tools: [Read], model set -> still reports unrestricted-tools:medium and missing-model-tier:low)",
+    "confidence": "high",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 542,
+    "global_id": "2026-09-24-ingest-690-r08#R8-F3"
+  }
+]

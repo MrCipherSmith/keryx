@@ -1203,6 +1203,9 @@ export function createMetaprojectAdapter(
           cwd,
           question: input.question,
           ...(input.k !== undefined ? { k: input.k } : {}),
+          // Flow 313 (W4) review R1-F4: threaded straight through; absent ->
+          // `null` (unbound), matching every pre-existing caller's behaviour.
+          harnessIdentity: input.harnessIdentity ?? null,
         });
         return {
           question: result.question,
