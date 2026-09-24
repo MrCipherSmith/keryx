@@ -19,7 +19,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F1"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: own.ts O1: after --force, uninstall of A leaves the file alone and uninstall of B removes it. Test: plan.test.ts \"R1-F1: … a DIFFERENT bundle owns it -> conflict owned-by-other-bundle\". fails-on-old: yes.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: own.ts O1: after --force, uninstall of A leaves the file alone and uninstall of B removes it. Test: plan.test.ts \"R1-F1: … a DIFFERENT bundle owns it -> conflict owned-by-other-bundle\". fails-on-old: yes."
+    }
   },
   {
     "id": "R1-F2",
@@ -42,7 +52,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F2"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/ext/pa.ts longs and keyonly: the key and the ſ registry are both refused as path-escape (not portable). The key cannot be planted, verify shows no entries, and scout lists nothing. fails-on-old: yes.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/ext/pa.ts longs and keyonly: the key and the ſ registry are both refused as path-escape (not portable). The key cannot be planted, verify shows no entries, and scout lists nothing. fails-on-old: yes."
+    }
   },
   {
     "id": "R1-F3",
@@ -65,7 +85,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F3"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 71049703) by the round-2 opus reviewer: memory.propose refuses LF, CRLF, lone CR, U+2028, U+2029, VT and FF in title, and CLI memory new does too (S2/mem/p1.ts).",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 71049703) by the round-2 opus reviewer: memory.propose refuses LF, CRLF, lone CR, U+2028, U+2029, VT and FF in title, and CLI memory new does too (S2/mem/p1.ts)."
+    }
   },
   {
     "id": "R1-F4",
@@ -89,7 +119,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F4"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 71049703) by the round-2 opus reviewer: memory.search, memory_search, wiki.ask, wiki_ask, wiki.evidence and the resource list and read are all filtered (S2/mem/p2.ts).",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 71049703) by the round-2 opus reviewer: memory.search, memory_search, wiki.ask, wiki_ask, wiki.evidence and the resource list and read are all filtered (S2/mem/p2.ts)."
+    }
   },
   {
     "id": "R1-F5",
@@ -111,7 +151,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F5"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 71049703) by the round-3 opus reviewer: S3/mem/p3.ts S1b: a root at mode 0300 gives incomplete with {\".\",\"unreadable-folder\"}. Test: store.test.ts \"R1-F5: a root at mode 0300 …\". fails-on-old: yes.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 71049703) by the round-3 opus reviewer: S3/mem/p3.ts S1b: a root at mode 0300 gives incomplete with {\".\",\"unreadable-folder\"}. Test: store.test.ts \"R1-F5: a root at mode 0300 …\". fails-on-old: yes."
+    }
   },
   {
     "id": "R1-F6",
@@ -133,7 +183,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F6"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 6f31c043) by the round-2 opus reviewer: S2/ext/pb.ts shows f6-inj and f6-mjs rejected as audit-failed, and a clean markdown-only skill accepted.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 6f31c043) by the round-2 opus reviewer: S2/ext/pb.ts shows f6-inj and f6-mjs rejected as audit-failed, and a clean markdown-only skill accepted."
+    }
   },
   {
     "id": "R1-F7",
@@ -155,7 +215,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F7"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit a00f8e7f) by the round-2 opus reviewer: forge, forge2 and nl now skip unsafe names. ensureMetaprojectReference refuses an unterminated block instead of truncating.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit a00f8e7f) by the round-2 opus reviewer: forge, forge2 and nl now skip unsafe names. ensureMetaprojectReference refuses an unterminated block instead of truncating."
+    }
   },
   {
     "id": "R1-F8",
@@ -177,7 +247,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F8"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 6f31c043) by the round-2 opus reviewer: Every skill text file is now audited, and check selection is case-insensitive (S2/ext/pe.ts). Tests in imported-bundles.test.ts.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 6f31c043) by the round-2 opus reviewer: Every skill text file is now audited, and check selection is case-insensitive (S2/ext/pe.ts). Tests in imported-bundles.test.ts."
+    }
   },
   {
     "id": "R1-F9",
@@ -199,7 +279,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F9"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/p7r2.ts: the index.md key is refused as corrupt-ledger, and the RULES/A.MD fold collision is refused.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/p7r2.ts: the index.md key is refused as corrupt-ledger, and the RULES/A.MD fold collision is refused."
+    }
   },
   {
     "id": "R1-F10",
@@ -220,7 +310,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F10"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 09958a44) by the round-2 opus reviewer: bomb.tar.gz is refused in 0.23 s at 365 MB RSS; round 1 measured 20.6 s at 2.5 GB. Tests: archive.test.ts gzip-bomb and entry-count.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 09958a44) by the round-2 opus reviewer: bomb.tar.gz is refused in 0.23 s at 365 MB RSS; round 1 measured 20.6 s at 2.5 GB. Tests: archive.test.ts gzip-bomb and entry-count."
+    }
   },
   {
     "id": "R1-F11",
@@ -241,7 +341,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F11"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: Inspect after import reports identical, and re-import reports unchanged. Test in plan.test.ts.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: Inspect after import reports identical, and re-import reports unchanged. Test in plan.test.ts."
+    }
   },
   {
     "id": "R1-F12",
@@ -262,7 +372,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F12"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F12",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: Agent origin is forced to imported, including flow-style, quoted and spaced variants (S2/bundle/porigin.ts).",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: Agent origin is forced to imported, including flow-style, quoted and spaced variants (S2/bundle/porigin.ts)."
+    }
   },
   {
     "id": "R1-F13",
@@ -284,7 +404,11 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F13"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F13",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
+    }
   },
   {
     "id": "R1-F14",
@@ -306,7 +430,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F14"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F14",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 71049703) by the round-2 opus reviewer: An invalid list matches no harness and is excluded from the strict entries (S2/mem/p4.ts). Tests exist.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 71049703) by the round-2 opus reviewer: An invalid list matches no harness and is excluded from the strict entries (S2/mem/p4.ts). Tests exist."
+    }
   },
   {
     "id": "R1-F15",
@@ -328,7 +462,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F15"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F15",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 71049703) by the round-2 opus reviewer: lstat refusal for the file and the directory (S2/mem/p3.ts G1, G2, G5). private-dir.test.ts now has a symlink to identical content.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 71049703) by the round-2 opus reviewer: lstat refusal for the file and the directory (S2/mem/p3.ts G1, G2, G5). private-dir.test.ts now has a symlink to identical content."
+    }
   },
   {
     "id": "R1-F16",
@@ -348,7 +492,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F16"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F16",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: Too-deep, too-many and too-large candidates are rejected in behaviour (R2-F21 tracks the missing test).",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: Too-deep, too-many and too-large candidates are rejected in behaviour (R2-F21 tracks the missing test)."
+    }
   },
   {
     "id": "R1-F17",
@@ -369,7 +523,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F17"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F17",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 2a46c2e5) by the round-3 opus reviewer: S3/ext/pf.ts: an appended line gives checksum-mismatch. A symlinked file, a symlinked directory and a symlinked sourceRef each give symlink-refused, and scout skips all of them. fails-on-old: yes.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 2a46c2e5) by the round-3 opus reviewer: S3/ext/pf.ts: an appended line gives checksum-mismatch. A symlinked file, a symlinked directory and a symlinked sourceRef each give symlink-refused, and scout skips all of them. fails-on-old: yes."
+    }
   },
   {
     "id": "R1-F18",
@@ -389,7 +553,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F18"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F18",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit b83fe593) by the round-2 opus reviewer: Duplicate names are rejected. Test in external.test.ts.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit b83fe593) by the round-2 opus reviewer: Duplicate names are rejected. Test in external.test.ts."
+    }
   },
   {
     "id": "R1-F19",
@@ -409,7 +583,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F19"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F19",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit a00f8e7f) by the round-2 opus reviewer: The new rules flag works: --surface instructions installs and uninstalls only the pointer, and --surface rules works on all 7 rules-export harnesses. integrations matrix --check passes.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit a00f8e7f) by the round-2 opus reviewer: The new rules flag works: --surface instructions installs and uninstalls only the pointer, and --surface rules works on all 7 rules-export harnesses. integrations matrix --check passes."
+    }
   },
   {
     "id": "R1-F20",
@@ -431,7 +615,17 @@
       ],
       "enumeration_method": "Reviewer grepped (keryx ctx rg) every call site of the offending primitive and reproduced each blocker/major with a probe script under scratchpad/review313-r1/; sites listed are every place holding the same shape that the reviewer checked."
     },
-    "global_id": "2026-09-24-ingest-690-r01#R1-F20"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F20",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: rules sync, rules distill, integrations install (claude and all) and bundle import are now CLEAN in all 21 escaping-ancestor variants, including the reviewer's .metaproject -> ../../.claude: exit 1 with a named escaping-symlink reason, or a no-op. The update writers that were routed are refused. The residual, scoped to `keryx init`, is tracked separately as R5-F1 (pre-existing on main).",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: rules sync, rules distill, integrations install (claude and all) and bundle import are now CLEAN in all 21 escaping-ancestor variants, including the reviewer's .metaproject -> ../../.claude: exit 1 with a named escaping-symlink reason, or a no-op. The update writers that were routed are refused. The residual, scoped to `keryx init`, is tracked separately as R5-F1 (pre-existing on main)."
+    }
   },
   {
     "id": "R1-F21",
@@ -444,7 +638,17 @@
     "confidence": "high",
     "file": "src/bundle/apply.ts",
     "line": 75,
-    "global_id": "2026-09-24-ingest-690-r01#R1-F21"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F21",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: p6b and p6r2 show an empty snapshot diff after rollback, and the reason is now named. Test in apply.test.ts.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: p6b and p6r2 show an empty snapshot diff after rollback, and the reason is now named. Test in apply.test.ts."
+    }
   },
   {
     "id": "R1-F22",
@@ -457,7 +661,17 @@
     "confidence": "high",
     "file": "src/bundle/audit.ts",
     "line": 44,
-    "global_id": "2026-09-24-ingest-690-r01#R1-F22"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F22",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/p10b.ts: rules/ſ.md is refused as path-escape.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/p10b.ts: rules/ſ.md is refused as path-escape."
+    }
   },
   {
     "id": "R1-F23",
@@ -470,7 +684,17 @@
     "confidence": "high",
     "file": "src/bundle/export.ts",
     "line": 133,
-    "global_id": "2026-09-24-ingest-690-r01#R1-F23"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F23",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: The id is a content digest, so two projects without remotes get distinct ids.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: The id is a content digest, so two projects without remotes get distinct ids."
+    }
   },
   {
     "id": "R1-F24",
@@ -483,7 +707,17 @@
     "confidence": "high",
     "file": "src/commands/bundle.ts",
     "line": 304,
-    "global_id": "2026-09-24-ingest-690-r01#R1-F24"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F24",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: Importing from src/deep writes the root .metaproject/.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: Importing from src/deep writes the root .metaproject/."
+    }
   },
   {
     "id": "R1-F25",
@@ -496,7 +730,17 @@
     "confidence": "high",
     "file": "src/bundle/plan.ts",
     "line": 168,
-    "global_id": "2026-09-24-ingest-690-r01#R1-F25"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F25",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: A project-scope accepted pattern is rewritten to a candidate. Test in plan.test.ts.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: A project-scope accepted pattern is rewritten to a candidate. Test in plan.test.ts."
+    }
   },
   {
     "id": "R1-F26",
@@ -509,7 +753,17 @@
     "confidence": "high",
     "file": "docs/docs/cli-reference.md",
     "line": 2110,
-    "global_id": "2026-09-24-ingest-690-r01#R1-F26"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F26",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit e40b6b3d) by the round-2 opus reviewer: Resolved for the ## bundle section: JSON key order, the refusal names (all present in BUNDLE_REFUSAL, src/bundle/types.ts:68-95), --allow-hooks, the default bundleId and the zero-bytes claim were all checked against the CLI.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit e40b6b3d) by the round-2 opus reviewer: Resolved for the ## bundle section: JSON key order, the refusal names (all present in BUNDLE_REFUSAL, src/bundle/types.ts:68-95), --allow-hooks, the default bundleId and the zero-bytes claim were all checked against the CLI."
+    }
   },
   {
     "id": "R1-F27",
@@ -522,7 +776,17 @@
     "confidence": "high",
     "file": "src/memory/store.ts",
     "line": 104,
-    "global_id": "2026-09-24-ingest-690-r01#R1-F27"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F27",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 71049703) by the round-2 opus reviewer: A named refusal for an unreadable .gitignore. The strict scan uses lstat, fatal UTF-8 and unexpected-file problems (S2/mem/p3.ts S2-S5, S9, S11, S12). Tests exist.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit 71049703) by the round-2 opus reviewer: A named refusal for an unreadable .gitignore. The strict scan uses lstat, fatal UTF-8 and unexpected-file problems (S2/mem/p3.ts S2-S5, S9, S11, S12). Tests exist."
+    }
   },
   {
     "id": "R1-F28",
@@ -535,7 +799,17 @@
     "confidence": "high",
     "file": "src/integrations/markdown-block.ts",
     "line": 321,
-    "global_id": "2026-09-24-ingest-690-r01#R1-F28"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F28",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 72d2bdd8) by the round-3 opus reviewer: The verify-side walk now uses the capped collectSkillDirectorySnapshot, which names symlinks, unreadable directories, unreadable files and FIFOs. pb.ts shows perm-dir, perm-file and fifo, each rejected with a named reason.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 72d2bdd8) by the round-3 opus reviewer: The verify-side walk now uses the capped collectSkillDirectorySnapshot, which names symlinks, unreadable directories, unreadable files and FIFOs. pb.ts shows perm-dir, perm-file and fifo, each rejected with a named reason."
+    }
   },
   {
     "id": "R1-F29",
@@ -548,7 +822,17 @@
     "confidence": "high",
     "file": "src/bundle/apply.ts",
     "line": 145,
-    "global_id": "2026-09-24-ingest-690-r01#R1-F29"
+    "global_id": "2026-09-24-ingest-690-r01#R1-F29",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: There is a corrupt-ledger reason, the plan-time ledger is carried into apply, and a ledger-write failure rolls back. Tests exist.",
+      "verifier": "round-2 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at cb09b7b2 (after fixing commit bbb4e170) by the round-2 opus reviewer: There is a corrupt-ledger reason, the plan-time ledger is carried into apply, and a ledger-write failure rolls back. Tests exist."
+    }
   },
   {
     "id": "R1-I1",

@@ -18,7 +18,17 @@
       ],
       "enumeration_method": "read every ledger-record write in apply.ts and every bucket decision in plan.ts"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R1-F1"
+    "global_id": "2026-09-24-ingest-690-r02#R1-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: own.ts O1: after --force, uninstall of A leaves the file alone and uninstall of B removes it. Test: plan.test.ts \"R1-F1: … a DIFFERENT bundle owns it -> conflict owned-by-other-bundle\". fails-on-old: yes.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: own.ts O1: after --force, uninstall of A leaves the file alone and uninstall of B removes it. Test: plan.test.ts \"R1-F1: … a DIFFERENT bundle owns it -> conflict owned-by-other-bundle\". fails-on-old: yes."
+    }
   },
   {
     "id": "R1-F2",
@@ -42,7 +52,17 @@
       ],
       "enumeration_method": "keryx ctx rg caseFold|toLowerCase over src/bundle; APFS alias scan over all BMP code points (fold.ts)"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R1-F2"
+    "global_id": "2026-09-24-ingest-690-r02#R1-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/ext/pa.ts longs and keyonly: the key and the ſ registry are both refused as path-escape (not portable). The key cannot be planted, verify shows no entries, and scout lists nothing. fails-on-old: yes.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/ext/pa.ts longs and keyonly: the key and the ſ registry are both refused as path-escape (not portable). The key cannot be planted, verify shows no entries, and scout lists nothing. fails-on-old: yes."
+    }
   },
   {
     "id": "R1-F5",
@@ -55,7 +75,17 @@
     "confidence": "high",
     "file": "src/memory/store.ts",
     "line": 287,
-    "global_id": "2026-09-24-ingest-690-r02#R1-F5"
+    "global_id": "2026-09-24-ingest-690-r02#R1-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 71049703) by the round-3 opus reviewer: S3/mem/p3.ts S1b: a root at mode 0300 gives incomplete with {\".\",\"unreadable-folder\"}. Test: store.test.ts \"R1-F5: a root at mode 0300 …\". fails-on-old: yes.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 71049703) by the round-3 opus reviewer: S3/mem/p3.ts S1b: a root at mode 0300 gives incomplete with {\".\",\"unreadable-folder\"}. Test: store.test.ts \"R1-F5: a root at mode 0300 …\". fails-on-old: yes."
+    }
   },
   {
     "id": "R1-F9",
@@ -68,7 +98,17 @@
     "confidence": "high",
     "file": "src/bundle/uninstall.ts",
     "line": 96,
-    "global_id": "2026-09-24-ingest-690-r02#R1-F9"
+    "global_id": "2026-09-24-ingest-690-r02#R1-F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/p7r2.ts: the index.md key is refused as corrupt-ledger, and the RULES/A.MD fold collision is refused.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/p7r2.ts: the index.md key is refused as corrupt-ledger, and the RULES/A.MD fold collision is refused."
+    }
   },
   {
     "id": "R1-F13",
@@ -81,7 +121,11 @@
     "confidence": "high",
     "file": "src/security/audit-harness/checks.ts",
     "line": 418,
-    "global_id": "2026-09-24-ingest-690-r02#R1-F13"
+    "global_id": "2026-09-24-ingest-690-r02#R1-F13",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
+    }
   },
   {
     "id": "R1-F17",
@@ -103,7 +147,17 @@
       ],
       "enumeration_method": "read every consumer of the recorded sourceRef in external.ts and scout.ts"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R1-F17"
+    "global_id": "2026-09-24-ingest-690-r02#R1-F17",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 2a46c2e5) by the round-3 opus reviewer: S3/ext/pf.ts: an appended line gives checksum-mismatch. A symlinked file, a symlinked directory and a symlinked sourceRef each give symlink-refused, and scout skips all of them. fails-on-old: yes.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 2a46c2e5) by the round-3 opus reviewer: S3/ext/pf.ts: an appended line gives checksum-mismatch. A symlinked file, a symlinked directory and a symlinked sourceRef each give symlink-refused, and scout skips all of them. fails-on-old: yes."
+    }
   },
   {
     "id": "R1-F20",
@@ -126,7 +180,17 @@
       ],
       "enumeration_method": "CLI probes with symlinked parents/files for claude, github-copilot-agent and rules sync; read every fs write in installer.ts and src/rules"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R1-F20"
+    "global_id": "2026-09-24-ingest-690-r02#R1-F20",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: rules sync, rules distill, integrations install (claude and all) and bundle import are now CLEAN in all 21 escaping-ancestor variants, including the reviewer's .metaproject -> ../../.claude: exit 1 with a named escaping-symlink reason, or a no-op. The update writers that were routed are refused. The residual, scoped to `keryx init`, is tracked separately as R5-F1 (pre-existing on main).",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: rules sync, rules distill, integrations install (claude and all) and bundle import are now CLEAN in all 21 escaping-ancestor variants, including the reviewer's .metaproject -> ../../.claude: exit 1 with a named escaping-symlink reason, or a no-op. The update writers that were routed are refused. The residual, scoped to `keryx init`, is tracked separately as R5-F1 (pre-existing on main)."
+    }
   },
   {
     "id": "R1-F22",
@@ -139,7 +203,17 @@
     "confidence": "high",
     "file": "src/bundle/manifest.ts",
     "line": 72,
-    "global_id": "2026-09-24-ingest-690-r02#R1-F22"
+    "global_id": "2026-09-24-ingest-690-r02#R1-F22",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/p10b.ts: rules/ſ.md is refused as path-escape.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/p10b.ts: rules/ſ.md is refused as path-escape."
+    }
   },
   {
     "id": "R1-F28",
@@ -152,7 +226,17 @@
     "confidence": "high",
     "file": "src/integrations/markdown-block.ts",
     "line": 321,
-    "global_id": "2026-09-24-ingest-690-r02#R1-F28"
+    "global_id": "2026-09-24-ingest-690-r02#R1-F28",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 72d2bdd8) by the round-3 opus reviewer: The verify-side walk now uses the capped collectSkillDirectorySnapshot, which names symlinks, unreadable directories, unreadable files and FIFOs. pb.ts shows perm-dir, perm-file and fifo, each rejected with a named reason.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 72d2bdd8) by the round-3 opus reviewer: The verify-side walk now uses the capped collectSkillDirectorySnapshot, which names symlinks, unreadable directories, unreadable files and FIFOs. pb.ts shows perm-dir, perm-file and fifo, each rejected with a named reason."
+    }
   },
   {
     "id": "R2-F1",
@@ -176,7 +260,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'caseFold|toLowerCase|normalize\\(' src/bundle; exhaustive BMP alias scan against APFS (fold.ts)"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R2-F1"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/vk.ts, p3r2.ts and p10b.ts all refuse. pid.ts covers 32 shapes, and no non-ASCII alias reaches a reserved file. fails-on-old: yes (9 of 48).",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/vk.ts, p3r2.ts and p10b.ts all refuse. pid.ts covers 32 shapes, and no non-ASCII alias reaches a reserved file. fails-on-old: yes (9 of 48)."
+    }
   },
   {
     "id": "R2-F2",
@@ -198,7 +292,17 @@
       ],
       "enumeration_method": "read every integrityKeyPathFor/loadIntegrityKey/loadOrCreateIntegrityKey use"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R2-F2"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 2a46c2e5) by the round-3 opus reviewer: pg.ts confirms an empty key is refused. external.ts:185-216 refuses a symlink, a non-regular file, a wrong size, a wrong mode and a wrong uid. The key is created with wx and mode 0600, and the MAC uses timingSafeEqual.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 2a46c2e5) by the round-3 opus reviewer: pg.ts confirms an empty key is refused. external.ts:185-216 refuses a symlink, a non-regular file, a wrong size, a wrong mode and a wrong uid. The key is created with wx and mode 0600, and the MAC uses timingSafeEqual."
+    }
   },
   {
     "id": "R2-F3",
@@ -221,7 +325,17 @@
       ],
       "enumeration_method": "read collectHookCommands callers and compare with the hook-config schema enforced in plan.ts:245-262"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R2-F3"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 8db6cb69) by the round-4 opus reviewer: pk env-var-indirection refused; index.ts:316-337 (review-313-r4.md Round-3 verification: R2-F3 resolved).",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 8db6cb69) by the round-4 opus reviewer: pk env-var-indirection refused; index.ts:316-337 (review-313-r4.md Round-3 verification: R2-F3 resolved)."
+    }
   },
   {
     "id": "R2-F4",
@@ -241,7 +355,17 @@
       ],
       "enumeration_method": "read parseManifest loops and the order of limit checks in openBundle"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R2-F4"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 72d2bdd8) by the round-3 opus reviewer: S3/bundle/pquad.ts: the 100k-entry archive is refused as archive-too-large in 0.43 s at 259 MB. In round 2 it took 95 s.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 72d2bdd8) by the round-3 opus reviewer: S3/bundle/pquad.ts: the 100k-entry archive is refused as archive-too-large in 0.43 s at 259 MB. In round 2 it took 95 s."
+    }
   },
   {
     "id": "R2-F5",
@@ -267,7 +391,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'split\\(\"\\\\n\"\\)|headerBlockMatches|field\\(' src/memory, then every consumer of parseEntry"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R2-F5"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 50d0e9e0) by the round-4 opus reviewer: p10: no leaks; handoff hands over nothing (review-313-r4.md Round-3 verification: R2-F5 resolved).",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 50d0e9e0) by the round-4 opus reviewer: p10: no leaks; handoff hands over nothing (review-313-r4.md Round-3 verification: R2-F5 resolved)."
+    }
   },
   {
     "id": "R2-F6",
@@ -289,7 +423,17 @@
       ],
       "enumeration_method": "read every rulesSpec consumer and the custom-install path installer.ts:442-478"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R2-F6"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: f6.out: the dry-run shows the unsafe-rule warning in human output, and --json warnings[] carries it, identical to the real run.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: f6.out: the dry-run shows the unsafe-rule warning in human output, and --json warnings[] carries it, identical to the real run."
+    }
   },
   {
     "id": "R2-F7",
@@ -311,7 +455,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'endMarker|END_MARKER|indexOf\\(' src/lib src/rules src/commands, read each replacer"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R2-F7"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 09d9f00f) by the round-3 opus reviewer: S3/rules/f7-distill.sh A and B: B is a copy of this repo's own CLAUDE.md, AGENTS.md and .metaproject. Every managed block stays 1/1 through sync, distill and sync, and is 0/0 after uninstall.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 09d9f00f) by the round-3 opus reviewer: S3/rules/f7-distill.sh A and B: B is a copy of this repo's own CLAUDE.md, AGENTS.md and .metaproject. Every managed block stays 1/1 through sync, distill and sync, and is 0/0 after uninstall."
+    }
   },
   {
     "id": "R2-F8",
@@ -333,7 +487,17 @@
       ],
       "enumeration_method": "diff of markdown-block.ts plus a CLI probe per harness"
     },
-    "global_id": "2026-09-24-ingest-690-r02#R2-F8"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 09d9f00f) by the round-3 opus reviewer: S3/rules/reg1.sh: CLAUDE.md -> AGENTS.md, GEMINI.md -> AGENTS.md and .github/copilot-instructions.md -> ../AGENTS.md. Init, default install, --surface rules, doctor and uninstall all exit 0 on all 11 runtimes, and AGENTS.md is byte-identical afterwards.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 09d9f00f) by the round-3 opus reviewer: S3/rules/reg1.sh: CLAUDE.md -> AGENTS.md, GEMINI.md -> AGENTS.md and .github/copilot-instructions.md -> ../AGENTS.md. Init, default install, --surface rules, doctor and uninstall all exit 0 on all 11 runtimes, and AGENTS.md is byte-identical afterwards."
+    }
   },
   {
     "id": "R2-F9",
@@ -346,7 +510,17 @@
     "confidence": "high",
     "file": "src/bundle/external.ts",
     "line": 463,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F9"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 2a46c2e5) by the round-3 opus reviewer: S3/ext/pd.ts: 15 of 15 trials give codes=0,0 verifyOk=true recorded=2.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 2a46c2e5) by the round-3 opus reviewer: S3/ext/pd.ts: 15 of 15 trials give codes=0,0 verifyOk=true recorded=2."
+    }
   },
   {
     "id": "R2-F10",
@@ -359,7 +533,11 @@
     "confidence": "high",
     "file": "src/security/audit-harness/checks.ts",
     "line": 69,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F10"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F10",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F10: unresolved. pc2 tag-chars still gives 0/0. Genuine ASCII smuggling in tag characters IS caught. Same class as R3-I5 (ZWJ). Re-listed, info. (review-313-r5.md)"
+    }
   },
   {
     "id": "R2-F11",
@@ -372,7 +550,17 @@
     "confidence": "high",
     "file": "src/security/audit-harness/index.ts",
     "line": 338,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F11"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 8db6cb69) by the round-3 opus reviewer: S3/ext/pi.ts: plain, \\n-escaped and \\u-escaped actions are all refused as bundle-auto-run-directive.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 8db6cb69) by the round-3 opus reviewer: S3/ext/pi.ts: plain, \\n-escaped and \\u-escaped actions are all refused as bundle-auto-run-directive."
+    }
   },
   {
     "id": "R2-F12",
@@ -385,7 +573,17 @@
     "confidence": "high",
     "file": "src/security/audit-harness/index.ts",
     "line": 172,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F12"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F12",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 8db6cb69) by the round-4 opus reviewer: json.tool prose is accepted; node -e is medium only; UTF-16 BOM is scanned. The allowlist residual is tracked under R3-F1 (review-313-r4.md Round-3 verification: R2-F12 resolved).",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 8db6cb69) by the round-4 opus reviewer: json.tool prose is accepted; node -e is medium only; UTF-16 BOM is scanned. The allowlist residual is tracked under R3-F1 (review-313-r4.md Round-3 verification: R2-F12 resolved)."
+    }
   },
   {
     "id": "R2-F13",
@@ -398,7 +596,17 @@
     "confidence": "high",
     "file": "src/gdskills/governance/scout.ts",
     "line": 661,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F13"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F13",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 2a46c2e5) by the round-3 opus reviewer: pg.ts: an unreadable file rejects only its own candidate (unreadable-file), and the other candidate is recorded.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 2a46c2e5) by the round-3 opus reviewer: pg.ts: an unreadable file rejects only its own candidate (unreadable-file), and the other candidate is recorded."
+    }
   },
   {
     "id": "R2-F14",
@@ -411,7 +619,17 @@
     "confidence": "medium",
     "file": "src/memory/store.ts",
     "line": 338,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F14"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F14",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit f9782935) by the round-3 opus reviewer: S3/mem/p3.ts S10 reports misplaced-harness-header. p5.ts shows the fenced, indented and in-fence ## variants all hidden.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit f9782935) by the round-3 opus reviewer: S3/mem/p3.ts S10 reports misplaced-harness-header. p5.ts shows the fenced, indented and in-fence ## variants all hidden."
+    }
   },
   {
     "id": "R2-F15",
@@ -424,7 +642,17 @@
     "confidence": "high",
     "file": "src/rules/agent-entrypoints.ts",
     "line": 157,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F15"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F15",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: Behaviour is fixed (f15). A: a fenced lone marker no longer refuses sync. B: the fenced example survives and the real block is replaced. agent-entrypoints and distill share src/rules/marker-matching.ts.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: Behaviour is fixed (f15). A: a fenced lone marker no longer refuses sync. B: the fenced example survives and the real block is replaced. agent-entrypoints and distill share src/rules/marker-matching.ts."
+    }
   },
   {
     "id": "R2-F16",
@@ -437,7 +665,17 @@
     "confidence": "high",
     "file": "src/commands/bundle.ts",
     "line": 360,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F16"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F16",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0401a79e) by the round-3 opus reviewer: S3/bundle/bC.ts: the failure message prints. After rm CLAUDE.md, the re-import (unchanged: 1) re-renders claude: installed, exit 0, and the block is present.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0401a79e) by the round-3 opus reviewer: S3/bundle/bC.ts: the failure message prints. After rm CLAUDE.md, the re-import (unchanged: 1) re-renders claude: installed, exit 0, and the block is present."
+    }
   },
   {
     "id": "R2-F17",
@@ -450,7 +688,17 @@
     "confidence": "high",
     "file": "docs/docs/integrations.md",
     "line": 259,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F17"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F17",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 09d9f00f) by the round-3 opus reviewer: The internal wording is removed, integrations.md:236-270 documents the caveats, skips and symlink rule, and the --surface help is corrected.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 09d9f00f) by the round-3 opus reviewer: The internal wording is removed, integrations.md:236-270 documents the caveats, skips and symlink rule, and the --surface help is corrected."
+    }
   },
   {
     "id": "R2-F18",
@@ -463,7 +711,17 @@
     "confidence": "high",
     "file": "src/bundle/export.ts",
     "line": 133,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F18"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F18",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: export --kind hook-config,memory-entry gives empty-bundle, exit 1, and no file. The test fails on old.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: export --kind hook-config,memory-entry gives empty-bundle, exit 1, and no file. The test fails on old."
+    }
   },
   {
     "id": "R2-F19",
@@ -476,7 +734,17 @@
     "confidence": "high",
     "file": "src/bundle/plan.ts",
     "line": 85,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F19"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F19",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: plan.ts:91-100 and :378-380. \"an old bundle's TTL floors to importDay + 30d\" fails on old.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: plan.ts:91-100 and :378-380. \"an old bundle's TTL floors to importDay + 30d\" fails on old."
+    }
   },
   {
     "id": "R2-F20",
@@ -489,7 +757,17 @@
     "confidence": "high",
     "file": "src/bundle/plan.ts",
     "line": 108,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F20"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F20",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/p8.ts: a mode-000 user file is refused as target-unreadable at inspect and import, and its bytes survive.",
+      "verifier": "round-3 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c4ad2a60 (after fixing commit 0d9b43da) by the round-3 opus reviewer: S3/bundle/p8.ts: a mode-000 user file is refused as target-unreadable at inspect and import, and its bytes survive."
+    }
   },
   {
     "id": "R2-F21",
@@ -502,7 +780,11 @@
     "confidence": "high",
     "file": "src/bundle/paths.test.ts",
     "line": 1,
-    "global_id": "2026-09-24-ingest-690-r02#R2-F21"
+    "global_id": "2026-09-24-ingest-690-r02#R2-F21",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F21: partial. Still missing: R1-F12 bundle content-validation test. No test asserts content-invalid; the behaviour itself works (f12.ts). Re-listed, info. (review-313-r5.md)"
+    }
   },
   {
     "id": "R2-I1",

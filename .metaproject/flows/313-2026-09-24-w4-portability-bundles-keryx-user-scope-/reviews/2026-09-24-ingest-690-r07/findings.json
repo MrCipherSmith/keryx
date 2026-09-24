@@ -18,7 +18,17 @@
       ],
       "enumeration_method": "read every entry.kind branch of scanImportedBundle after T20 and ran a genuine-UTF-16-BOM + injection file per kind (rule, memory-entry, agent, hook-config) through runHarnessAudit and CLI bundle import at HEAD and at ca745d67"
     },
-    "global_id": "2026-09-24-ingest-690-r07#R7-F1"
+    "global_id": "2026-09-24-ingest-690-r07#R7-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7b06de44 (after fixing commit 9c61a1e8) by the round-8 opus reviewer: R7-F1: resolved. A genuine UTF-16 BOM rule (LE and BE) or memory-entry carrying an injection, and a UTF-16BE memory-entry carrying an auto-run directive, are now refused audit-failed by keryx bundle import (bom7b.out, bom8.out M1/M3/R3). Before the fix they were written (bom8-pre.out).",
+      "verifier": "round-8 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7b06de44 (after fixing commit 9c61a1e8) by the round-8 opus reviewer: R7-F1: resolved. A genuine UTF-16 BOM rule (LE and BE) or memory-entry carrying an injection, and a UTF-16BE memory-entry carrying an auto-run directive, are now refused audit-failed by keryx bundle import (bom7b.out, bom8.out M1/M3/R3). Before the fix they were written (bom8-pre.out)."
+    }
   },
   {
     "id": "R7-F2",

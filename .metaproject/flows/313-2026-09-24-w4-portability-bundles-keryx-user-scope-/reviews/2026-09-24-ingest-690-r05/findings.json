@@ -22,7 +22,7 @@
     "global_id": "2026-09-24-ingest-690-r05#R5-F1",
     "disposition": {
       "state": "dismissed-out-of-scope",
-      "evidence": "Pre-existing on main (keryx init contained writes); deferred to a separate follow-up flow the program orchestrator will init; owner-approved W4 closure plan 2026-09-24"
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; So R5-F1 and R5-F3 are pre-existing on main, not regressions (review-313-r5.md, verified against main f4c72712). init.ts is untouched by this PR and was not in the final-pass lane ownership."
     }
   },
   {
@@ -43,7 +43,17 @@
       ],
       "enumeration_method": "read the only remaining decode-selection branch after the binary skip removal; ran BOM-LE, BOM-BE and NUL/control-split shapes through vetExternalCatalog, CLI bundle import and CLI bundle import --external"
     },
-    "global_id": "2026-09-24-ingest-690-r05#R5-F2"
+    "global_id": "2026-09-24-ingest-690-r05#R5-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R5-F2: resolved. Skill files with FF FE/FE FF + ASCII, and genuine UTF-16 + a lone surrogate or trailing byte, are rejected on audit, vetExternalCatalog, CLI --external (not recorded) and CLI bundle import (bom6.out h-/l- rows). The new tests fail on ca745d67.",
+      "verifier": "round-7 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R5-F2: resolved. Skill files with FF FE/FE FF + ASCII, and genuine UTF-16 + a lone surrogate or trailing byte, are rejected on audit, vetExternalCatalog, CLI --external (not recorded) and CLI bundle import (bom6.out h-/l- rows). The new tests fail on ca745d67."
+    }
   },
   {
     "id": "R5-F3",
@@ -59,7 +69,7 @@
     "global_id": "2026-09-24-ingest-690-r05#R5-F3",
     "disposition": {
       "state": "dismissed-out-of-scope",
-      "evidence": "Pre-existing on main (.gitignore append through a symlinked .gitignore in update/init); deferred to the same separate follow-up flow as R5-F1; owner-approved W4 closure plan 2026-09-24"
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; So R5-F1 and R5-F3 are pre-existing on main, not regressions (review-313-r5.md, verified against main f4c72712). The appended text is fixed by Keryx, not attacker-controlled, and existing content is kept."
     }
   },
   {
@@ -86,7 +96,17 @@
     "confidence": "high",
     "file": "src/bundle/plan.ts",
     "line": 442,
-    "global_id": "2026-09-24-ingest-690-r05#R3-F18"
+    "global_id": "2026-09-24-ingest-690-r05#R3-F18",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R3-F18: resolved. The identical-bucket laundering (round-6 L1/L2/L2b) is closed. Different-path, --force, --target-scope, case-variant and ledger-rewrite variants all conflict (own7.out B1-B5). The docs now describe provenance as trust-on-first-use and forgeable, and no \"unforgeable\" claim remains.",
+      "verifier": "round-7 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R3-F18: resolved. The identical-bucket laundering (round-6 L1/L2/L2b) is closed. Different-path, --force, --target-scope, case-variant and ledger-rewrite variants all conflict (own7.out B1-B5). The docs now describe provenance as trust-on-first-use and forgeable, and no \"unforgeable\" claim remains."
+    }
   },
   {
     "id": "R4-F1",
