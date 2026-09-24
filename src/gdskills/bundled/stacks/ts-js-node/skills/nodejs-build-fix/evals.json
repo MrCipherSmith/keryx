@@ -27,19 +27,20 @@
           "grader": "judge",
           "rubric": "A correct answer treats the tsc error as a genuine mismatch between the OrderDraft type and code that reads a total property from it, and fixes the type contract (or the code reading the wrong property) rather than silencing the checker.",
           "pass_criteria": [
-            "Adds/declares a total property on the OrderDraft type/interface, or identifies that the code is reading the wrong property/name and corrects that instead",
-            "Treats the error as a real type mismatch to resolve, not noise to suppress"
+            "Names the exact fix: adds a `total: number` (or the correctly-typed) property to the OrderDraft type/interface, or names the exact property the code should read instead of total",
+            "Shows the corrected type declaration or corrected property-access code, not just a statement of intent that the type will be fixed"
           ],
           "fail_criteria": [
             "Recommends @ts-ignore or an undocumented @ts-expect-error above the line as the fix",
-            "Recommends casting the value to any instead of fixing the type",
-            "Mentioning the suppression only to warn against it is not a failure."
+            "Recommends casting the value to `any` (e.g. `(order as any).total`) instead of fixing the type declaration -- naming @ts-ignore or `any` only to warn against them as part of a correct fix does not count as this failure"
           ]
         }
       ],
       "calibration": {
         "known_right": "The error means the OrderDraft type genuinely doesn't have a total property, but the code reads it. Don't reach for @ts-ignore or cast to any -- that just hides a real mismatch instead of fixing it. First check where total actually comes from: if every OrderDraft should carry a running total, add total: number to the OrderDraft interface/type definition so the type reflects what the object actually holds. If total is meant to be derived instead (e.g. summed from line items), don't add it to the type at all -- compute it with a helper function and use that value instead of reading a nonexistent property. Either way, trace the value back to where OrderDraft objects are constructed, confirm which case applies, then apply that fix. After the change, re-run tsc --noEmit and confirm it exits clean with no new suppressions added anywhere in the diff.",
-        "known_wrong": "Easiest fix: put // @ts-ignore on the line above order.total so tsc stops complaining, or just type it as `any` for now and cast it with (order as `any`).total if you want it inline. This unblocks the build immediately without having to touch the OrderDraft type definition. You can always come back and add the real property later once someone has time to figure out where total should come from -- for now this keeps CI green and doesn't risk breaking anything else in the type."
+        "known_wrong": "Easiest fix: put // @ts-ignore on the line above order.total so tsc stops complaining, or just type it as `any` for now and cast it with (order as any).total if you want it inline. This unblocks the build immediately without having to touch the OrderDraft type definition. You can always come back and add the real property later once someone has time to figure out where total should come from -- for now this keeps CI green and doesn't risk breaking anything else in the type.",
+        "vague": "Fix the OrderDraft type so it matches what the code expects, instead of hiding the error with a suppression. That keeps the checker honest and avoids papering over a real mismatch.",
+        "subtle_wrong": "The type checker is right that total doesn't exist on OrderDraft, so I widened the local usage with a cast: const draft = order as OrderDraft & { total: number }; and used draft.total at the call site. This avoids any and keeps most of the type safety while unblocking the build; I didn't touch the shared OrderDraft interface since I wasn't sure if other call sites expect total to be absent."
       },
       "anti_patterns": ["@ts-ignore", "`any`"]
     },
@@ -52,8 +53,8 @@
           "grader": "judge",
           "rubric": "A correct answer's first step is to reproduce the failure by actually running the project's build/lint/test commands and reading the exact error message, rather than guessing at a fix from the symptom alone.",
           "pass_criteria": [
-            "Names running tsc/eslint/the test command (or the project's own build/lint/test scripts) as the first step, before proposing any fix",
-            "States the goal of capturing the exact error message and file/line before changing code"
+            "Names the specific command to run first (e.g. npx tsc --noEmit, npx eslint ., npm test, or the project's own package.json build/lint/test script) before proposing any fix -- not just 'run the build' in the abstract",
+            "States the goal of capturing the exact error message and file:line before changing any code"
           ],
           "fail_criteria": [
             "Proposes a fix (dependency bump, config change, lockfile deletion) before running the failing command to see the actual error",
@@ -63,7 +64,9 @@
       ],
       "calibration": {
         "known_right": "Before touching any code, reproduce the failure yourself: run npx tsc --noEmit, npx eslint ., and npm test (or whatever the project's own package.json build/lint/test scripts wrap these with, since they may add path mapping or project references). Capture the exact error message and the file:line it points at -- don't guess at the cause from a vague description of 'the build is failing'. Once you have the real output, classify what kind of failure it is: a genuine tsc type error, a module resolution error (ESM/CJS interop, Cannot find module), an eslint rule violation, or a test failure. Only after you've seen the actual error and traced the value or import back to its source should you start forming a fix -- a type error is usually telling the truth about a real mismatch, not a checker false positive, so understanding it precisely first prevents a wrong fix or an unnecessary suppression.",
-        "known_wrong": "Since it's a Node build and these usually break from an outdated dependency, I'd just bump all the devDependencies to their latest versions and delete the lockfile, then reinstall -- that usually clears up whatever's stale. If it's still red after that, loosening tsconfig.json's moduleResolution to \"node\" or turning off strict mode is a quick way to get a clean build while you figure out the real problem later. No need to run anything first; these are the usual suspects for a broken Node build."
+        "known_wrong": "Since it's a Node build and these usually break from an outdated dependency, I'd just bump all the devDependencies to their latest versions and delete the lockfile, then reinstall -- that usually clears up whatever's stale. If it's still red after that, loosening tsconfig.json's moduleResolution to \"node\" or turning off strict mode is a quick way to get a clean build while you figure out the real problem later. No need to run anything first; these are the usual suspects for a broken Node build.",
+        "vague": "Before changing anything, I'd make sure to actually see what's failing and understand the error before jumping to a fix.",
+        "subtle_wrong": "First run the test suite to see what's currently broken. If the failure isn't immediately obvious from that output, it's usually faster to go ahead and bump the flagged dependency to its latest version, since an outdated package is the most common cause of a broken Node build -- you can always dig into the exact error afterward if the bump doesn't clear it up."
       }
     }
   ]
