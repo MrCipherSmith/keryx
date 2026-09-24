@@ -1,0 +1,62 @@
+[
+  {
+    "id": "R9-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Apply-time token re-check refuses the fixed fallback name learned-<domain>",
+    "impact": "Clean graduation permanently refused.",
+    "suggested_fix": "Do not re-check stored tokens; recompute name/summary from members with current logins at apply time.",
+    "evidence": "r14/p.ts RC_NOKW alice-review REFUSED",
+    "confidence": "high",
+    "file": "src/learning/graduate.ts",
+    "line": 730,
+    "class_scope": {
+      "sites": [
+        "graduate.ts:313",
+        "graduate.ts:723-739",
+        "reviewer-id.ts:282"
+      ],
+      "enumeration_method": "every extraTokens source traced; r14/p.ts RC_NOKW"
+    },
+    "global_id": "2026-09-24-ingest-691-r07#R9-F1"
+  },
+  {
+    "id": "R9-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "extraTokens re-check refuses ordinary keywords equal to a login piece, incl. non-review clusters",
+    "impact": "Clean graduations refused.",
+    "suggested_fix": "Recompute topKeywords/suggestedName from members with current logins at apply; use the recomputed values for the agent.",
+    "evidence": "r14/p.ts RC_REVIEW, CS_CODE; q.ts REVERTED_EDIT after → REFUSED",
+    "confidence": "high",
+    "file": "src/learning/reviewer-id.ts",
+    "line": 282,
+    "class_scope": {
+      "sites": [
+        "reviewer-id.ts:281-286",
+        "graduate.ts:723-739"
+      ],
+      "enumeration_method": "r14/p.ts + q.ts login × cluster matrix"
+    },
+    "global_id": "2026-09-24-ingest-691-r07#R9-F2"
+  },
+  {
+    "id": "R9-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "60-char slug cut can split a glued login into a standalone id segment",
+    "impact": "Narrow login fragment in ids.",
+    "suggested_fix": "Slug the prefix-stripped hint and cut at a word boundary.",
+    "evidence": "r14/t.ts id ends '-abc-alice-5199172c'",
+    "confidence": "medium",
+    "file": "src/learning/extract.ts",
+    "line": 107,
+    "class_scope": {
+      "sites": [
+        "extract.ts:102-117"
+      ],
+      "enumeration_method": "values derived from trigger/action persisted outside text fields; r14/t.ts"
+    },
+    "global_id": "2026-09-24-ingest-691-r07#R9-F3"
+  }
+]

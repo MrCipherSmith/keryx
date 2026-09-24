@@ -119,3 +119,7 @@
 - 2026-09-24T13:55:49.443Z - task-attempt: T28: started (attempt 1) — 312-T28 sonnet
 - 2026-09-24T14:10:57.210Z - task-done: T28: Fix R8-F1..F4: single gateReviewerText helper for every text sink (incl. promote, graduate apply derived tokens); import-ban guard
 - 2026-09-24 - R8 verification (3 minor, 1 info) ingested. T28 DONE: one gateReviewerText helper now guards every sink, including promote, and applyGraduation re-checks the derived tokens. The import-ban guard catches all 4 bypass mutations.
+- 2026-09-24T14:17:41.246Z - task-added: T29: Fix R9-F1..F3: recompute graduation name/summary from members with current logins at apply; word-boundary id slug
+- 2026-09-24T14:17:41.389Z - task-attempt: T29: started (attempt 1) — 312-T29 sonnet
+- 2026-09-24T14:31:39.342Z - task-done: T29: Fix R9-F1..F3: recompute graduation name/summary from members with current logins at apply; word-boundary id slug
+- 2026-09-24 - R9 verification (2 minor, 1 info) ingested. T29 DONE: applyGraduation recomputes name/summary from members with the current logins instead of re-checking stored tokens, and pattern-id slugs cut at word boundaries.

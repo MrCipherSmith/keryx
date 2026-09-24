@@ -9,7 +9,7 @@
   "title": "W3: self-learning loop — observe, extract, consent-gated learned patterns, reviewer profiles, promote and graduate",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:32.725Z",
-  "updatedAt": "2026-09-24T14:10:57.210Z",
+  "updatedAt": "2026-09-24T14:31:39.342Z",
   "source": {
     "type": "description",
     "ref": null
@@ -716,6 +716,29 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T29",
+      "title": "Fix R9-F1..F3: recompute graduation name/summary from members with current logins at apply; word-boundary id slug",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T28"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T14:17:41.389Z",
+            "outcome": "started",
+            "detail": "312-T29 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -1181,6 +1204,21 @@
       "at": "2026-09-24T14:10:57.210Z",
       "event": "task-done",
       "detail": "T28: Fix R8-F1..F4: single gateReviewerText helper for every text sink (incl. promote, graduate apply derived tokens); import-ban guard"
+    },
+    {
+      "at": "2026-09-24T14:17:41.246Z",
+      "event": "task-added",
+      "detail": "T29: Fix R9-F1..F3: recompute graduation name/summary from members with current logins at apply; word-boundary id slug"
+    },
+    {
+      "at": "2026-09-24T14:17:41.389Z",
+      "event": "task-attempt",
+      "detail": "T29: started (attempt 1) — 312-T29 sonnet"
+    },
+    {
+      "at": "2026-09-24T14:31:39.342Z",
+      "event": "task-done",
+      "detail": "T29: Fix R9-F1..F3: recompute graduation name/summary from members with current logins at apply; word-boundary id slug"
     }
   ],
   "owner": {
