@@ -20,7 +20,17 @@
       ],
       "enumeration_method": "flow.json ac-updated history, acceptance-criteria.md git log, grep of the flow package"
     },
-    "global_id": "2026-09-24-ingest-692#R2-1"
+    "global_id": "2026-09-24-ingest-692#R2-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 29dc906b (fix commit 29dc906b): acceptance-criteria.md AC3/AC5/AC11 state the DeepSeek outcome; flow.json records the text diffs",
+      "verifier": "review-round-3-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 29dc906b; refuted at 29dc906b by round 3"
+    }
   },
   {
     "id": "R2-2",
@@ -33,7 +43,17 @@
     "confidence": "high",
     "file": "docs/requirements/keryx-agent-platform-expansion/workstreams/W1-stack-catalog.md",
     "line": 596,
-    "global_id": "2026-09-24-ingest-692#R2-2"
+    "global_id": "2026-09-24-ingest-692#R2-2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 29dc906b (fix commit 29dc906b): W1 and react agent-refs list react-testing 0.6; cli-reference --scope default is all",
+      "verifier": "review-round-3-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 29dc906b; refuted at 29dc906b by round 3"
+    }
   },
   {
     "id": "R2-3",
@@ -46,7 +66,17 @@
     "confidence": "high",
     "file": "src/commands/agents-catalog.ts",
     "line": 552,
-    "global_id": "2026-09-24-ingest-692#R2-3"
+    "global_id": "2026-09-24-ingest-692#R2-3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 29dc906b (fix commit 29dc906b): gen-escape2 symlinked fixer leaves no auditor; test fails on the pre-fix code",
+      "verifier": "review-round-3-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 29dc906b; refuted at 29dc906b by round 3"
+    }
   },
   {
     "id": "R2-4",
@@ -59,7 +89,17 @@
     "confidence": "high",
     "file": "src/agents/generate.test.ts",
     "line": 236,
-    "global_id": "2026-09-24-ingest-692#R2-4"
+    "global_id": "2026-09-24-ingest-692#R2-4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 29dc906b (fix commit 29dc906b): real-tree test asserts gateCleared [] and no generated files; fixture regen path exercised",
+      "verifier": "review-round-3-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 29dc906b; refuted at 29dc906b by round 3"
+    }
   },
   {
     "id": "R2-5",
@@ -72,7 +112,17 @@
     "confidence": "high",
     "file": "src/commands/skills-governance.test.ts",
     "line": 293,
-    "global_id": "2026-09-24-ingest-692#R2-5"
+    "global_id": "2026-09-24-ingest-692#R2-5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 29dc906b (fix commit 29dc906b): ANTHROPIC_API_KEY isolated; integrity header cleaned",
+      "verifier": "review-round-3-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 29dc906b; refuted at 29dc906b by round 3"
+    }
   },
   {
     "id": "R2-6",
@@ -85,6 +135,10 @@
     "confidence": "high",
     "file": "src/gdskills/governance/eval.ts",
     "line": 858,
-    "global_id": "2026-09-24-ingest-692#R2-6"
+    "global_id": "2026-09-24-ingest-692#R2-6",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "deferred to the grader-reliability follow-up flow; decided-by: MrCipherSmith"
+    }
   }
 ]

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "R3-1",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "The fixture test comment overstates what it proves.",
+    "impact": "Cosmetic.",
+    "suggested_fix": "Reword the comment in a follow-up.",
+    "evidence": "review-r3.md",
+    "confidence": "high",
+    "file": "src/agents/generate.test.ts",
+    "global_id": "2026-09-24-ingest-692-r02#R3-1",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "info; deferred to the follow-up flow; decided-by: MrCipherSmith"
+    }
+  },
+  {
+    "id": "R3-2",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "The python agent-refs note omits the trigger-positive-6 miss.",
+    "impact": "Incomplete note; the eval.json holds the data.",
+    "suggested_fix": "Mention it in the follow-up.",
+    "evidence": "review-r3.md",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/python/agent-refs.json",
+    "global_id": "2026-09-24-ingest-692-r02#R3-2",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "info; deferred to the follow-up flow; decided-by: MrCipherSmith"
+    }
+  },
+  {
+    "id": "R3-3",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Some journal timestamps are local time labelled as UTC.",
+    "impact": "Cosmetic.",
+    "suggested_fix": "None; the journal is append-only.",
+    "evidence": "review-r3.md",
+    "confidence": "high",
+    "file": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/journal.md",
+    "global_id": "2026-09-24-ingest-692-r02#R3-3",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "info; the journal is append-only; decided-by: MrCipherSmith"
+    }
+  }
+]

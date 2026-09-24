@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-24-ingest-692-r04",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "692",
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-24T16:33:49.749Z",
-  "updatedAt": "2026-09-24T16:33:49.749Z",
+  "createdAt": "2026-09-24T18:44:16.976Z",
+  "updatedAt": "2026-09-24T18:44:32.675Z",
   "flow": {
     "id": "314",
     "path": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai"

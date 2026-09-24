@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-09-24-ingest-692",
+  "reviewId": "2026-09-24-ingest-692-r02",
   "mode": "ingest",
   "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "692",
-    "head": "54f59e71e670472e503ddbb4f4af83f0d7b27679"
+    "head": "29dc906bbdeac1f5c001080c89cda58ac793dbd9"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692/scope.md",
-    "coverage": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692/coverage.md",
-    "report": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692/report.md",
-    "findings": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692/findings.json",
-    "learning": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692/learning.md",
-    "decisions": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692/decisions.md"
+    "scope": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692-r02/scope.md",
+    "coverage": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692-r02/coverage.md",
+    "report": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692-r02/report.md",
+    "findings": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692-r02/findings.json",
+    "learning": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692-r02/learning.md",
+    "decisions": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai/reviews/2026-09-24-ingest-692-r02/decisions.md"
   },
   "coverage": [
     {
@@ -25,13 +25,13 @@
   ],
   "filter_stats": {
     "schema_version": 1,
-    "total": 6,
+    "total": 3,
     "dropped_prefilter": null,
     "dropped_low_confidence": null,
     "dropped_refuted": 0,
     "dropped_scope_b": null,
     "dropped_findings_cap": 0,
-    "retained": 6,
+    "retained": 3,
     "dismissed_by_round": null,
     "by_reason": {},
     "not_measured": [
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-24T18:44:23.777Z",
-  "updatedAt": "2026-09-24T18:44:32.806Z",
+  "createdAt": "2026-09-24T18:45:03.989Z",
+  "updatedAt": "2026-09-24T18:45:04.130Z",
   "flow": {
     "id": "314",
     "path": ".metaproject/flows/314-2026-09-24-wave-4-batch-1-stack-packs-and-agent-pai"
