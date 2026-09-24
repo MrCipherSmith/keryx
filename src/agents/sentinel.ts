@@ -140,11 +140,41 @@ function kiroPromptOf(content: string): string | undefined {
 const MD_COMMENT_RE = /^<!--\s(.*)\s-->$/;
 const TOML_COMMENT_RE = /^#\s(.*)$/;
 
-/** Strip the per-format comment/line wrapper off a structural candidate, returning the inner sentinel text — `undefined` when the candidate is not even shaped like a sentinel line for `format` (e.g. an md line that is not an HTML comment at all). kiro has no wrapper: the candidate IS the inner text already. */
-function innerSentinelText(candidate: string, format: AgentSentinelFormat): string | undefined {
+/** Strip the per-format comment/line wrapper off a structural candidate, returning the inner sentinel text — `undefined` when the candidate is not even shaped like a sentinel line for `format` (e.g. an md line that is not an HTML comment at all). kiro has no wrapper: the candidate IS the inner text already. Exported (R3-F1) so `compile.ts`'s content-hash blanking can locate the same inner text this module's own predicates anchor to, rather than re-deriving the wrapper-stripping rule a second time. */
+export function innerSentinelText(candidate: string, format: AgentSentinelFormat): string | undefined {
   if (format === "kiro-json") return candidate;
   if (format === "toml") return TOML_COMMENT_RE.exec(candidate)?.[1];
   return MD_COMMENT_RE.exec(candidate)?.[1];
+}
+
+/**
+ * R3-F1: the character span (`start`, `end` — `end` exclusive) of the
+ * sentinel's OWN `content-sha256:` VALUE within `text` (which must already be
+ * inner sentinel text — {@link innerSentinelText}'s output, or kiro's raw
+ * candidate line, which has no wrapper) — `undefined` when `text` does not
+ * even start with the sentinel prefix (SENTINEL_BODY_RE's match is anchored
+ * to the START of `text` only, deliberately NOT to its end — see this
+ * module's header comment — so a hand edit that appends text after the
+ * sentinel's closing `)` still resolves a span here; that trailing text is
+ * simply left outside `[start, end)`).
+ *
+ * `compile.ts`'s `finalizeAgentContentHash`/`verifyAgentContentHash` are the
+ * only callers: both blank (or splice into) EXACTLY this span and hash the
+ * rest of the file untouched — never the whole structural line/field, and
+ * never a global search-and-replace over the file (R2-F2's bug, and R3-F1's
+ * kiro fixed-four-key-projection bug, were both instances of the hash not
+ * covering a byte it should have; this makes the covered byte range exact
+ * and auditable in one place rather than reasoned about per-renderer).
+ */
+export function sentinelHashFieldSpan(text: string): { readonly start: number; readonly end: number } | undefined {
+  const match = SENTINEL_BODY_RE.exec(text);
+  if (!match) return undefined;
+  const hashLength = match[4]!.length;
+  const matchLength = match[0]!.length;
+  // `match[0]` ends in the literal `)` right after the hash value (the
+  // grammar's last two tokens are `content-sha256:(HEX64)`), so the hash
+  // occupies the `hashLength` characters immediately before that final `)`.
+  return { start: matchLength - 1 - hashLength, end: matchLength - 1 };
 }
 
 /**

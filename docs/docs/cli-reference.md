@@ -3100,7 +3100,7 @@ export-support levels, the content-hash sentinel `export` writes, and what
 ```
 keryx agents list [--stack <id>] [--json]
 keryx agents show <name>
-keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--dry-run] [--json]
+keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--force] [--dry-run] [--json]
 keryx agents verify [<name>] [--json]
 ```
 
@@ -3108,7 +3108,7 @@ keryx agents verify [<name>] [--json]
 |---|---|---|
 | `list` | `--stack <id>`, `--json` | List every catalog definition (bundled and project-local), optionally filtered to one stack pack. Read-only. |
 | `show` | `<name>` | Print one definition's fields and its resolved export-support level for every runtime. Read-only. |
-| `export` | `--runtime <id>`, `<name>`, `--dry-run`, `--json` | Compile one definition for one runtime and write its managed file (or, for `keryx-shell`, print the compiled dispatch input — nothing is written for that runtime). Refuses to overwrite a file with no keryx-managed sentinel, or a sentinel-bearing file that was hand-edited since export, unless `--force`. |
+| `export` | `--runtime <id>`, `<name>`, `--force`, `--dry-run`, `--json` | Compile one definition for one runtime and write its managed file (or, for `keryx-shell`, print the compiled dispatch input — nothing is written for that runtime). A file with no keryx-managed sentinel for this agent at all is never overwritten, even with `--force`. A managed file whose content-sha256 no longer matches its own recorded hash (hand-edited since export) is refused unless `--force` is passed. A managed, unedited file from an older source version is updated with no flag needed. |
 | `verify` | `[<name>]`, `--json` | Validate every definition (or just `<name>`) against the schema, tool/skill vocabularies, `policy_profile`, origin/sourceRef rules, and the baseline-in-body guard, and resolve its export support for every runtime. |
 
 To export the whole catalog for one harness at once, use
@@ -4175,15 +4175,15 @@ below). Full details, per-harness notes, and the legacy-alias table are in
 ```
 keryx integrations install --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]
 keryx integrations uninstall --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]
-keryx integrations doctor --runtime <id>[,<id>...|all] [--json]
+keryx integrations doctor --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--json]
 keryx integrations matrix [--check] [--write] [--json] [--file <path>]
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `install` | `--runtime <id>`, `--surface <flag\|id>...`, `--dry-run`, `--json` | Resolve every surface for `<id>` (or only the named ones), apply each surface's merge in deterministic order, and record what it wrote to install-state. `all` targets every adapter with at least one surface; `keryx-shell` (no surfaces yet) is reported as unsupported rather than silently skipped. `--dry-run` reports what it would write and changes nothing; `--json` prints the structured result objects only. |
-| `uninstall` | `--runtime <id>`, `--surface <flag\|id>...`, `--dry-run`, `--json` | Remove only the sentinel-tagged entries Keryx itself installed, leaving every other entry (including the operator's own) untouched. Same `--runtime`/`--surface`/`--dry-run`/`--json` shape as `install`. |
-| `doctor` | `--runtime <id>`, `--json` | Re-validate every surface recorded in install-state against the live settings file and report drift. Exits 1 when any requested runtime's doctor result is not ok. |
+| `uninstall` | `--runtime <id>`, `--surface <flag\|id>...`, `--dry-run`, `--json` | Remove only the sentinel-tagged entries Keryx itself installed, leaving every other entry (including the operator's own) untouched. Same `--runtime`/`--surface`/`--dry-run`/`--json` shape as `install`. The `agents` surface additionally never deletes a managed export file that was hand-edited since it was exported (its content-sha256 no longer matches) — it is kept, and reported as a warning; there is no `--force` override for this on uninstall. |
+| `doctor` | `--runtime <id>`, `--surface <flag\|id>...`, `--json` | Re-validate every surface recorded in install-state against the live settings file and report drift. `--surface` names an opt-in surface (e.g. `agents`) to doctor even before it has ever been installed, same selector syntax as `install`/`uninstall`; an unknown selector errors the same way it does there. Exits 1 when any requested runtime's doctor result is not ok. |
 | `matrix` | `--check`, `--write`, `--json`, `--file <path>` | With no flags, prints the generated capability matrix as a table (id, state, confidence, supported flags); `--json` prints the full document. `--check` regenerates and diffs against the checked-in artifact, exiting 1 on drift, writing nothing — this is what CI runs. `--write` regenerates and overwrites the artifact. `--file` overrides the artifact path (default `docs/integrations/harness-capability-matrix.json`). |
 
 `--runtime` accepts a comma-separated list or `all`; `--surface` is

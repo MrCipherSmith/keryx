@@ -14,6 +14,7 @@ import {
   defaultAgentSupportLookup,
   planAgentExport,
   removeManagedAgentExports,
+  removeManagedAgentExportsDetailed,
   writeAgentExport,
   type AgentSupportLookup,
 } from "./export";
@@ -193,6 +194,45 @@ describe("removeManagedAgentExports", () => {
 
   test("an absent directory removes nothing, without throwing", async () => {
     expect(await removeManagedAgentExports(root, "opencode")).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T17 (design pt. 3): removeManagedAgentExportsDetailed never deletes a
+// managed file whose content-sha256 no longer verifies (hand-edited since
+// export) — it is kept and reported, not silently destroyed the way a plain
+// `removeManagedAgentExports` scan (pre-T17: managed == deletable) would
+// have.
+// ---------------------------------------------------------------------------
+
+describe("T17: removeManagedAgentExportsDetailed keeps hand-edited managed files", () => {
+  test("a hand-edited managed file is kept (not deleted) and reported with a reason; an untouched one is still removed", async () => {
+    const editedDefinition: AgentDefinition = { ...DEFINITION, name: "edited-agent" };
+    const untouchedDefinition: AgentDefinition = { ...DEFINITION, name: "untouched-agent" };
+    await writeAgentExport(root, await planAgentExport(root, editedDefinition, "claude"));
+    await writeAgentExport(root, await planAgentExport(root, untouchedDefinition, "claude"));
+
+    const editedPath = path.join(root, ".claude", "agents", "edited-agent.md");
+    const original = readFileSync(editedPath, "utf8");
+    writeFileSync(editedPath, `${original}\nhand-added line, sentinel left untouched\n`, "utf8");
+
+    const result = await removeManagedAgentExportsDetailed(root, "claude");
+    expect(result.removed).toEqual([".claude/agents/untouched-agent.md"]);
+    expect(result.kept.map((k) => k.relativePath)).toEqual([".claude/agents/edited-agent.md"]);
+    expect(result.kept[0]?.reason).toContain("hand-edited");
+
+    expect(readFileSync(editedPath, "utf8")).toContain("hand-added line");
+    expect(() => readFileSync(path.join(root, ".claude/agents/untouched-agent.md"), "utf8")).toThrow();
+  });
+
+  test("removeManagedAgentExports (the plain list-returning wrapper) only ever reports what was actually removed, never a kept hand-edited file", async () => {
+    const plan = await planAgentExport(root, DEFINITION, "claude");
+    await writeAgentExport(root, plan);
+    const filePath = path.join(root, ".claude", "agents", "code-explorer.md");
+    writeFileSync(filePath, `${readFileSync(filePath, "utf8")}\nhand-added line\n`, "utf8");
+
+    expect(await removeManagedAgentExports(root, "claude")).toEqual([]);
+    expect(readFileSync(filePath, "utf8")).toContain("hand-added line");
   });
 });
 

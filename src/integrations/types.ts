@@ -119,6 +119,19 @@ export const SUBSYSTEM_AGENTS = "agents";
 export const SUBSYSTEM_SHELL_HOOKS = "shell-hooks";
 
 /**
+ * T17: the richer `customUninstall` return shape for a surface that may keep
+ * part of what it manages rather than deleting it (e.g. `agents`'s hand-edited
+ * managed files). `removed` carries the same meaning the plain `boolean`
+ * shape's value always has; `warnings`, when present, is folded into the
+ * surface's `SurfaceResult.warnings` by `installer.ts` so a kept file is
+ * visible in the CLI/JSON output alongside the uninstall's own status line.
+ */
+export interface CustomUninstallResult {
+  readonly removed: boolean;
+  readonly warnings?: readonly string[];
+}
+
+/**
  * One installable capability of one harness. `id` is unique within its
  * `HarnessAdapter`. JSON-config surfaces implement `merge`/`strip`/`validate`;
  * a surface that writes a non-JSON artifact (the OpenCode plugin) leaves those
@@ -172,7 +185,17 @@ export interface SurfaceAdapter {
   strip?(settings: Settings): Settings;
   validate?(settings: Settings): string[];
   customInstall?(projectRoot: string): Promise<string[]>;
-  customUninstall?(projectRoot: string): Promise<boolean>;
+  /**
+   * Uninstall this surface's artifact. The plain `boolean` shape (every
+   * pre-flow-310 surface) reports only whether anything was removed. T17: a
+   * surface that can legitimately REFUSE to delete part of what it manages —
+   * `agents`, which never deletes a hand-edited managed file even though it
+   * still carries a keryx sentinel — instead returns
+   * `CustomUninstallResult`, whose `warnings` (kept files, and why) `installer.ts`
+   * folds into the surface's `SurfaceResult.warnings` the same way an
+   * experimental surface's static risk notes already are.
+   */
+  customUninstall?(projectRoot: string): Promise<boolean | CustomUninstallResult>;
   /**
    * Health check for a surface that has no `merge`/`strip` to validate
    * against — a non-JSON artifact (a generated plugin file, a markdown

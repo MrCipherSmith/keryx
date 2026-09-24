@@ -22,7 +22,15 @@ import { PROMPT_DEFENSE_BASELINE } from "./baseline";
 import { validateAgentDefinition, type AgentSchemaError } from "./schema";
 import { mapToolsForTarget, type HostToolTarget } from "./tools";
 import { isAgentPolicyProfile, resolveKeryxShellPolicy, type AgentPolicyProfile, type KeryxShellMode } from "./policy";
-import { AGENT_SENTINEL_PREFIX, locateStructuralLine, structuralSentinelOf, type AgentSentinelFormat } from "./sentinel";
+import {
+  AGENT_SENTINEL_PREFIX,
+  innerSentinelText,
+  locateStructuralLine,
+  sentinelHashFieldSpan,
+  structuralSentinelCandidate,
+  structuralSentinelOf,
+  type AgentSentinelFormat,
+} from "./sentinel";
 import type { AgentDefinition, AgentExportRuntime, ExportSupportLevel, IsolationMode, ModelTier } from "./types";
 
 // R2-F1: `AGENT_SENTINEL_PREFIX` now lives in `./sentinel` (the tiny,
@@ -195,28 +203,40 @@ export function definitionSourceHash(definition: AgentDefinition): string {
 }
 
 // ---------------------------------------------------------------------------
-// R2-F2: content-sha256 must not self-reference.
+// R2-F2 / R3-F1: content-sha256 must cover the WHOLE file, with ONLY the
+// sentinel's own hash VALUE blanked — never the whole structural line/field
+// dropped, and never a fixed key-projection substituted for it.
 //
-// The previous implementation hashed the WHOLE placeholder-bearing draft,
-// then swapped EVERY occurrence of the 64-zero placeholder in that draft for
-// the real hash, and verification located the recorded hash by the FIRST
-// `content-sha256:` substring anywhere in the file. Two legitimate inputs
-// broke that round-trip: a body containing 64 consecutive zeros (also
-// replaced, corrupting the export), and a description containing literal
-// `content-sha256:<64 hex>` text sitting BEFORE the real sentinel line in
-// frontmatter/JSON key order (the verifier then checked the wrong span).
+// Two prior implementations both under-covered the file:
+//   - R1's original hashed the WHOLE placeholder-bearing draft, then swapped
+//     EVERY occurrence of the 64-zero placeholder for the real hash, and
+//     verification located the recorded hash by the FIRST `content-sha256:`
+//     substring anywhere in the file — broken by a body containing 64
+//     consecutive zeros (also replaced, corrupting the export) or a
+//     description containing literal `content-sha256:<64 hex>` text sitting
+//     before the real sentinel (R2-F2).
+//   - R2's fix hashed the file with its ENTIRE structural sentinel line/field
+//     removed by index — but that silently excludes anything else a hand
+//     edit puts ON that line/field from the hash: text appended after the
+//     sentinel's closing `)` (SENTINEL_BODY_RE's match is deliberately NOT
+//     end-anchored — see sentinel.ts's header comment — so it still parses
+//     with trailing junk present), and, for kiro, the fix additionally hashed
+//     a fixed `{name, description, prompt, tools}` projection of the parsed
+//     document, so ANY other top-level key a hand edit adds (`model`,
+//     `allowedTools`, `mcpServers`, ...) never enters the hash at all (R3-F1).
 //
-// The fix: the hash covers the file's content with its OWN structural
-// sentinel line/field entirely REMOVED (never merely blanked in place), so
-// nothing the sentinel line itself contains — including the placeholder —
-// participates in the hash, and a coincidental 64-zero run or `content-
-// sha256:` string elsewhere in the body is untouched. Locating both "the
-// line to remove" and "the recorded hash to compare against" always goes
-// through `./sentinel`'s STRUCTURAL position (the same one `export.ts`'s
-// ownership predicate anchors to), never a whole-file substring search.
+// The fix: locate ONLY the sentinel's own `content-sha256:` VALUE
+// (`sentinel.ts`'s `sentinelHashFieldSpan`, anchored to the same structural
+// position every other predicate in this codebase uses) and blank/splice
+// JUST that span. Every other byte of the file — the rest of the sentinel
+// line, any trailing text on it, every other key in a kiro document, the
+// whole rest of the file — is hashed exactly as it stands. A coincidental
+// 64-zero run or `content-sha256:`-shaped string elsewhere in the body is
+// still never touched, because this never searches the whole file for that
+// text — only the one structurally-located span is ever blanked.
 // ---------------------------------------------------------------------------
 
-/** Fixed-width placeholder marking where the real content hash will be spliced in — see {@link finalizeAgentContentHash}. Its VALUE never participates in the hash (the line/field carrying it is removed before hashing), so it need not be secret or unique; 64 hex characters just keeps the sentinel's shape valid before finalization. */
+/** Fixed-width placeholder marking where the real content hash will be spliced in — see {@link finalizeAgentContentHash}. Its VALUE never participates in the hash (only the structurally-located span carrying it is blanked before hashing), so it need not be secret or unique; 64 hex characters just keeps the sentinel's shape valid before finalization. */
 export const AGENT_CONTENT_HASH_PLACEHOLDER = "0".repeat(64);
 const CONTENT_HASH_MARKER = "content-sha256:";
 
@@ -254,88 +274,98 @@ export function agentManagedSentinelText(definition: AgentDefinition): string {
   );
 }
 
-/** md/toml: hash `content` with its structural sentinel LINE entirely removed (index-based, never a placeholder/text search). */
-function contentHashSansStructuralLine(content: string, format: "md" | "toml"): string | undefined {
+/**
+ * `content` with the sentinel's OWN `content-sha256:` VALUE — located via
+ * `sentinel.ts`'s structural predicates, the same ones `export.ts`'s
+ * ownership/overwrite decision anchors to — replaced by `replacement`, and
+ * every other byte of `content` left exactly as it is (including any
+ * trailing text past the sentinel's closing `)`, and, for kiro, every other
+ * top-level key in the document). `undefined` when `format`'s structural
+ * position does not exist in `content`, or what sits there does not even
+ * start with the sentinel prefix (unmanaged — not a sentinel to blank at
+ * all).
+ */
+function spliceSentinelHashSpan(content: string, format: AgentSentinelFormat, replacement: string): string | undefined {
+  const candidate = structuralSentinelCandidate(content, format);
+  if (candidate === undefined) return undefined;
+  const inner = innerSentinelText(candidate, format);
+  if (inner === undefined) return undefined;
+  const span = sentinelHashFieldSpan(inner);
+  if (!span) return undefined;
+  const newInner = inner.slice(0, span.start) + replacement + inner.slice(span.end);
+
+  if (format === "kiro-json") {
+    // kiro's sentinel is the first line of the `prompt` STRING VALUE, not a
+    // standalone file line — its grammar uses only characters JSON never
+    // needs to escape (letters/digits/dashes, `: , ( ) =`, spaces), so it
+    // appears in the raw file text byte-for-byte identical to its unescaped
+    // form; splicing the raw text at that one occurrence is therefore exact,
+    // never a global search over content that could hit a coincidental match
+    // elsewhere (e.g. inside `description` — R2-F2).
+    const rawIndex = content.indexOf(candidate);
+    if (rawIndex === -1) return undefined;
+    return content.slice(0, rawIndex) + newInner + content.slice(rawIndex + candidate.length);
+  }
   const location = locateStructuralLine(content, format);
   if (!location) return undefined;
   const { lines, index } = location;
-  const withoutLine = [...lines.slice(0, index), ...lines.slice(index + 1)].join("\n");
-  return createHash("sha256").update(withoutLine, "utf8").digest("hex");
+  const line = lines[index]!;
+  const wrapperStart = line.indexOf(inner);
+  if (wrapperStart === -1) return undefined;
+  const newLine = line.slice(0, wrapperStart) + newInner + line.slice(wrapperStart + inner.length);
+  return [...lines.slice(0, index), newLine, ...lines.slice(index + 1)].join("\n");
 }
 
-/** kiro: the sentinel is a PREFIX of the `prompt` string (`<sentinel-line>\n\n<header>`), not a standalone file line — hash `{name, description, prompt: header, tools}` instead, i.e. the doc with the sentinel prefix stripped back out of `prompt`. */
-function kiroContentHashComponents(content: string): { readonly doc: Record<string, unknown>; readonly header: string } | undefined {
-  let doc: unknown;
-  try {
-    doc = JSON.parse(content);
-  } catch {
-    return undefined;
-  }
-  if (!doc || typeof doc !== "object" || Array.isArray(doc)) return undefined;
-  const record = doc as Record<string, unknown>;
-  const prompt = record.prompt;
-  if (typeof prompt !== "string") return undefined;
-  const firstNewline = prompt.indexOf("\n");
-  if (firstNewline === -1) return undefined;
-  // `${sentinelLine}\n\n${header}` — skip the sentinel line's own `\n` and the blank line's `\n`.
-  return { doc: record, header: prompt.slice(firstNewline + 2) };
-}
-
-function kiroContentHash(content: string): string | undefined {
-  const parts = kiroContentHashComponents(content);
-  if (!parts) return undefined;
-  const forHash = JSON.stringify({ name: parts.doc.name, description: parts.doc.description, prompt: parts.header, tools: parts.doc.tools }, null, 2);
-  return createHash("sha256").update(forHash, "utf8").digest("hex");
+/** `content` with the sentinel's own hash value blanked to {@link AGENT_CONTENT_HASH_PLACEHOLDER} — the exact input both {@link finalizeAgentContentHash} and {@link verifyAgentContentHash} hash. */
+function contentWithBlankedSentinelHash(content: string, format: AgentSentinelFormat): string | undefined {
+  return spliceSentinelHashSpan(content, format, AGENT_CONTENT_HASH_PLACEHOLDER);
 }
 
 /**
  * The last step every renderer's `content` passes through: `draftContent`
  * already carries a well-formed sentinel with {@link AGENT_CONTENT_HASH_PLACEHOLDER}
  * in its `content-sha256:` field, at the structural position `format`
- * expects. Hash `draftContent` with that ONE structural line/field entirely
- * removed (R2-F2 — the placeholder's own value never enters the hash, so a
- * coincidental 64-zero run or `content-sha256:`-shaped text elsewhere in the
- * body cannot corrupt or be mistaken for it), then splice the real hash back
- * into that same structural line/field only (never a whole-file
- * `split`/`join`).
+ * expects (which, being already the placeholder, is what blanking it is a
+ * no-op over). Hash that blanked form (R2-F2/R3-F1 — nothing but the
+ * sentinel's own hash span ever leaves the hash, so a coincidental 64-zero
+ * run or `content-sha256:`-shaped text elsewhere in the body, or any other
+ * key/trailing text near the sentinel, is fully covered), then splice the
+ * real hash back into that SAME span only (never a whole-file `split`/`join`
+ * or a fixed key projection).
  */
 export function finalizeAgentContentHash(format: AgentSentinelFormat, draftContent: string): string {
-  if (format === "kiro-json") {
-    const parts = kiroContentHashComponents(draftContent);
-    if (!parts) {
-      throw new Error("finalizeAgentContentHash: kiro draft has no structural sentinel-bearing `prompt` field");
-    }
-    const hash = kiroContentHash(draftContent)!;
-    const prompt = parts.doc.prompt as string;
-    const firstNewline = prompt.indexOf("\n");
-    const sentinelLine = prompt.slice(0, firstNewline).split(AGENT_CONTENT_HASH_PLACEHOLDER).join(hash);
-    const updatedDoc = { ...parts.doc, prompt: `${sentinelLine}\n\n${parts.header}` };
-    return `${JSON.stringify(updatedDoc, null, 2)}\n`;
+  const blanked = contentWithBlankedSentinelHash(draftContent, format);
+  if (blanked === undefined) {
+    throw new Error(`finalizeAgentContentHash: draft has no structural sentinel for format "${format}"`);
   }
-  const location = locateStructuralLine(draftContent, format);
-  if (!location) {
-    throw new Error(`finalizeAgentContentHash: draft has no structural sentinel line for format "${format}"`);
+  const hash = createHash("sha256").update(blanked, "utf8").digest("hex");
+  const finalized = spliceSentinelHashSpan(draftContent, format, hash);
+  if (finalized === undefined) {
+    throw new Error(`finalizeAgentContentHash: draft has no structural sentinel for format "${format}"`);
   }
-  const hash = contentHashSansStructuralLine(draftContent, format)!;
-  const { lines, index } = location;
-  const updatedLine = lines[index]!.split(AGENT_CONTENT_HASH_PLACEHOLDER).join(hash);
-  return [...lines.slice(0, index), updatedLine, ...lines.slice(index + 1)].join("\n");
+  return finalized;
 }
 
 /**
- * R1-F9/R2-F2: true when `content`'s own embedded `content-sha256:` — read
- * from its STRUCTURAL sentinel position, never a whole-file substring search
- * — still matches a hash recomputed the same way {@link finalizeAgentContentHash}
- * computed it (content with that structural line/field removed). Content with
- * no well-formed structural sentinel at all is unverifiable — reported
- * `false` (fail closed: the caller treats "cannot verify" the same as
- * "hand-edited").
+ * R1-F9/R2-F2/R3-F1: true when `content`'s own embedded `content-sha256:` —
+ * read from its STRUCTURAL sentinel position, never a whole-file substring
+ * search — still matches a hash recomputed the same way
+ * {@link finalizeAgentContentHash} computed it (the whole file, with only
+ * that same span blanked). Because nothing but that one span is ever
+ * excluded, ANY other change — a hand-added kiro key, text appended past the
+ * sentinel's closing `)`, an extra frontmatter/TOML key, any whitespace
+ * change anywhere — changes the recomputed hash and fails verification.
+ * Content with no well-formed structural sentinel at all is unverifiable —
+ * reported `false` (fail closed: the caller treats "cannot verify" the same
+ * as "hand-edited").
  */
 export function verifyAgentContentHash(format: AgentSentinelFormat, content: string): boolean {
   const parsed = structuralSentinelOf(content, format);
   if (!parsed) return false;
-  const actual = format === "kiro-json" ? kiroContentHash(content) : contentHashSansStructuralLine(content, format);
-  return actual !== undefined && actual === parsed.contentHash;
+  const blanked = contentWithBlankedSentinelHash(content, format);
+  if (blanked === undefined) return false;
+  const actual = createHash("sha256").update(blanked, "utf8").digest("hex");
+  return actual === parsed.contentHash;
 }
 
 /** `target="keryx-shell"` projection (W2 §Design "Keryx shell child agents"). */

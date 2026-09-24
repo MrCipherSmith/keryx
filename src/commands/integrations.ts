@@ -364,9 +364,21 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
 
   const results: DoctorIntegrationResult[] = [];
   for (const adapter of supported) {
-    const result = await doctorIntegration(cwd, adapter.id, { surfaces });
-    results.push(result);
-    if (!result.ok) process.exitCode = 1;
+    // T17: `doctorIntegration` now throws on an unknown `--surface` selector
+    // (reusing `resolveSurfaceSelection`'s validation, same as
+    // install/uninstall) — caught here the same way `runAndReportRuntimeOps`
+    // catches an install/uninstall throw, so one bad selector reports as an
+    // error for that runtime instead of crashing the whole command, and a
+    // multi-runtime `--runtime all` still doctors every other runtime.
+    try {
+      const result = await doctorIntegration(cwd, adapter.id, { surfaces });
+      results.push(result);
+      if (!result.ok) process.exitCode = 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      results.push({ runtimeId: adapter.id, surfaces: [], problems: [message], ok: false });
+      process.exitCode = 1;
+    }
   }
 
   if (json) {
@@ -467,7 +479,7 @@ export function printIntegrationsHelp(): void {
   helpUsage([
     `keryx integrations install --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]`,
     `keryx integrations uninstall --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]`,
-    `keryx integrations doctor --runtime <id>[,<id>...|all] [--json]`,
+    `keryx integrations doctor --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--json]`,
     `keryx integrations matrix [--check] [--write] [--json] [--file <path>]`,
   ]);
   helpOptions([

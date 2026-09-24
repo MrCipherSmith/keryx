@@ -413,6 +413,14 @@ const HOST_AGENTS_DIR: Readonly<Record<HostToolTarget, string>> = {
   opencode: ".opencode/agents",
 };
 
+/** {@link scanManagedAgentExports}'s result: managed files split by whether their own content-sha256 still verifies. */
+interface ScannedAgentExports {
+  /** Sentinel-bearing and unedited since export — safe for `removeManagedAgentExports` to delete. */
+  readonly verified: readonly string[];
+  /** Sentinel-bearing but hand-edited since export (content-sha256 no longer matches) — never deleted (design decision, R3 T17): uninstall has no `--force` for this, it only keeps and reports. */
+  readonly handEdited: readonly string[];
+}
+
 /**
  * R1-F3: read-only scan for sentinel-marked files under `runtime`'s agents
  * directory — the shared, symlink-safe core `removeManagedAgentExports` and
@@ -423,11 +431,18 @@ const HOST_AGENTS_DIR: Readonly<Record<HostToolTarget, string>> = {
  * already reflects the directory ENTRY's own type (not the symlink target),
  * so a symlinked file's `isFile()` is `false`; the extra `lstat` below is
  * defense in depth for platforms where that is not guaranteed.
+ *
+ * T17: every managed file is additionally content-hash verified
+ * (`verifyAgentContentHash`, the same check `export.ts`'s `decideAction` uses
+ * for a plain export) and split into `verified`/`handEdited` — a hand-edited
+ * managed file is still THIS exporter's file (it carries a valid, name-
+ * matching sentinel), but `removeManagedAgentExports` must never delete a
+ * user's own edit; see that function below.
  */
 async function scanManagedAgentExports(
   projectRoot: string,
   runtime: Exclude<AgentExportRuntime, "keryx-shell">,
-): Promise<string[]> {
+): Promise<ScannedAgentExports> {
   const dirRelative = HOST_AGENTS_DIR[runtime];
   const dirAbsolute = path.join(projectRoot, ...dirRelative.split("/"));
 
@@ -435,18 +450,19 @@ async function scanManagedAgentExports(
   try {
     dirStats = await lstat(dirAbsolute);
   } catch {
-    return [];
+    return { verified: [], handEdited: [] };
   }
-  if (dirStats.isSymbolicLink() || !dirStats.isDirectory()) return [];
+  if (dirStats.isSymbolicLink() || !dirStats.isDirectory()) return { verified: [], handEdited: [] };
 
   let entries: import("node:fs").Dirent[];
   try {
     entries = await readdir(dirAbsolute, { withFileTypes: true });
   } catch {
-    return [];
+    return { verified: [], handEdited: [] };
   }
 
-  const managed: string[] = [];
+  const verified: string[] = [];
+  const handEdited: string[] = [];
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const relativePath = `${dirRelative}/${entry.name}`;
@@ -465,38 +481,72 @@ async function scanManagedAgentExports(
       continue;
     }
     const stem = entry.name.slice(0, entry.name.length - path.extname(entry.name).length);
-    if (isStructurallyManaged(content, agentSentinelFormatOf(relativePath), stem)) managed.push(relativePath);
+    const format = agentSentinelFormatOf(relativePath);
+    if (!isStructurallyManaged(content, format, stem)) continue;
+    (verifyAgentContentHash(format, content) ? verified : handEdited).push(relativePath);
   }
-  return managed.sort();
+  return { verified: verified.sort(), handEdited: handEdited.sort() };
+}
+
+/** A managed file `removeManagedAgentExportsDetailed` kept rather than deleted, and why. */
+export interface KeptAgentExport {
+  readonly relativePath: string;
+  readonly reason: string;
+}
+
+export interface RemoveManagedAgentExportsResult {
+  /** Removed files' project-relative paths, sorted. */
+  readonly removed: readonly string[];
+  /** Hand-edited managed files that were kept, never deleted, with the reason (T17, design pt. 3). */
+  readonly kept: readonly KeptAgentExport[];
 }
 
 /**
  * Delete every sentinel-marked file this exporter previously wrote for
- * `runtime` — never a file lacking the sentinel, whatever else sits in that
- * directory, and never anything reached through a symlink (R1-F3). `keryx-shell`
- * writes no file (see `planAgentExport`), so this always returns `[]` for
- * it. Returns the removed files' project-relative paths, sorted.
+ * `runtime` that STILL VERIFIES (its content-sha256 matches its own
+ * recorded hash) — never a file lacking the sentinel, whatever else sits in
+ * that directory, never anything reached through a symlink (R1-F3), and
+ * never a managed file that was hand-edited since export (T17: uninstall has
+ * no `--force` override for this — a hand edit is a user's own data, and
+ * this exporter never destroys it, whether by overwrite or by delete). A
+ * hand-edited file is reported in `kept`, with why. `keryx-shell` writes no
+ * file (see `planAgentExport`), so this always returns empty for it.
  */
-export async function removeManagedAgentExports(projectRoot: string, runtime: AgentExportRuntime): Promise<string[]> {
-  if (runtime === "keryx-shell") return [];
-  const managed = await scanManagedAgentExports(projectRoot, runtime);
+export async function removeManagedAgentExportsDetailed(
+  projectRoot: string,
+  runtime: AgentExportRuntime,
+): Promise<RemoveManagedAgentExportsResult> {
+  if (runtime === "keryx-shell") return { removed: [], kept: [] };
+  const { verified, handEdited } = await scanManagedAgentExports(projectRoot, runtime);
   const removed: string[] = [];
-  for (const relativePath of managed) {
+  for (const relativePath of verified) {
     await rm(path.join(projectRoot, ...relativePath.split("/")));
     removed.push(relativePath);
   }
-  return removed;
+  const kept: KeptAgentExport[] = handEdited.map((relativePath) => ({
+    relativePath,
+    reason:
+      "content no longer matches the content-sha256 recorded in its own sentinel — it appears to have been hand-edited since it was exported; uninstall never deletes a hand-edited file (no --force override for this)",
+  }));
+  return { removed, kept };
+}
+
+/** {@link removeManagedAgentExportsDetailed}'s `removed` list alone — kept for every pre-T17 caller that only ever needed to know what was deleted. */
+export async function removeManagedAgentExports(projectRoot: string, runtime: AgentExportRuntime): Promise<string[]> {
+  return [...(await removeManagedAgentExportsDetailed(projectRoot, runtime)).removed];
 }
 
 /**
  * R1-F8: read-only presence check for a runtime's managed agent exports —
- * whether ANY sentinel-marked file currently exists, without deleting
- * anything. `installer.ts`'s `customUninstallDryRun` uses this (via the
- * `agents` surface's `inspect`) so a dry-run uninstall reports
+ * whether ANY sentinel-marked file currently exists (verified or
+ * hand-edited — either is "something here for uninstall to act on"),
+ * without deleting anything. `installer.ts`'s `customUninstallDryRun` uses
+ * this (via the `agents` surface's `inspect`) so a dry-run uninstall reports
  * "nothing-to-remove" for a directory holding only unmanaged files, instead
  * of "would-remove" merely because the directory exists.
  */
 export async function hasManagedAgentExports(projectRoot: string, runtime: AgentExportRuntime): Promise<boolean> {
   if (runtime === "keryx-shell") return false;
-  return (await scanManagedAgentExports(projectRoot, runtime)).length > 0;
+  const { verified, handEdited } = await scanManagedAgentExports(projectRoot, runtime);
+  return verified.length > 0 || handEdited.length > 0;
 }

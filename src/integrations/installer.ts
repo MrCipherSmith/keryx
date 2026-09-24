@@ -581,9 +581,21 @@ export async function uninstallIntegration(
     // not stop a LATER custom surface, or the satisfied-by-runtime loop
     // below, from being processed.
     let removed = false;
+    let customUninstallWarnings: readonly string[] = [];
     let customError: string | undefined;
     try {
-      removed = surface.customUninstall ? await surface.customUninstall(root) : false;
+      const outcome = surface.customUninstall ? await surface.customUninstall(root) : false;
+      // T17: `customUninstall` may return either the plain `boolean` every
+      // pre-flow-310 surface still does, or the richer `CustomUninstallResult`
+      // (`agents`, which can keep a hand-edited managed file rather than
+      // deleting it) — normalize both to `removed` + any extra warnings here,
+      // once, rather than at every call site.
+      if (typeof outcome === "boolean") {
+        removed = outcome;
+      } else {
+        removed = outcome.removed;
+        customUninstallWarnings = outcome.warnings ?? [];
+      }
     } catch (error) {
       customError = (error as Error).message;
     }
@@ -596,7 +608,7 @@ export async function uninstallIntegration(
       ...baseResult(surface, surface.relativePath),
       status: removed ? "removed" : "nothing-to-remove",
       errors: [],
-      warnings: warningsFor(surface),
+      warnings: [...warningsFor(surface), ...customUninstallWarnings],
     });
     if (removed) await recordSurfaceUninstalled(root, runtimeId, surface.id);
   }
@@ -686,6 +698,18 @@ export async function doctorIntegration(root: string, runtimeId: string, opts: D
   const adapter = getHarnessAdapter(runtimeId);
   if (!adapter) {
     throw new Error(`unknown runtime "${runtimeId}" — valid runtimes: ${harnessAdapterIds().join(", ")}`);
+  }
+  // T17: an unknown `--surface` selector must error the same way
+  // install/uninstall already do, instead of being silently ignored (it
+  // never matches anything in the `explicitlySelected` lookup below, so
+  // doctor previously just ran as if `--surface` had not been passed at
+  // all). Reuse `resolveSurfaceSelection`'s own validation — same message,
+  // same "valid flags/ids for this runtime" listing — rather than a second,
+  // independently-maintained check; its resolved list itself is unused here,
+  // since doctor's own surface loop below iterates `adapter.surfaces`
+  // directly and applies the opt-in/explicitly-selected rule its own way.
+  if (opts.surfaces && opts.surfaces.length > 0) {
+    resolveSurfaceSelection(adapter, opts.surfaces);
   }
   if (adapter.surfaces.length === 0) {
     const reasons = [...new Set(Object.values(adapter.unsupported))];

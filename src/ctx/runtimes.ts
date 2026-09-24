@@ -164,7 +164,22 @@ function runtimeFromSurface(adapterId: string, surface: SurfaceAdapter, decision
     ...(surface.strip !== undefined ? { strip: surface.strip } : {}),
     ...(surface.validate !== undefined ? { validate: surface.validate } : {}),
     ...(surface.customInstall !== undefined ? { customInstall: surface.customInstall } : {}),
-    ...(surface.customUninstall !== undefined ? { customUninstall: surface.customUninstall } : {}),
+    // T17: `SurfaceAdapter.customUninstall` may now return the richer
+    // `CustomUninstallResult` (a surface that can keep part of what it
+    // manages, e.g. `agents`'s hand-edited files) alongside the plain
+    // `boolean` every ctx-guard surface here still returns. `CtxRuntime`
+    // itself is a narrower, ctx-guard-only view (see `SUBSYSTEM_CTX_GUARD`
+    // filter below) that never carries an `agents` surface, so this just
+    // normalizes the return shape down to the `boolean` `CtxRuntime` expects
+    // rather than widening that type for a case it never sees.
+    ...(surface.customUninstall !== undefined
+      ? {
+          customUninstall: async (root: string) => {
+            const outcome = await surface.customUninstall!(root);
+            return typeof outcome === "boolean" ? outcome : outcome.removed;
+          },
+        }
+      : {}),
   };
 }
 

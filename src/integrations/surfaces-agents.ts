@@ -23,9 +23,12 @@
 // the artifact is a whole DIRECTORY of per-agent files, not one settings
 // file `settings-json.ts`'s walkers could own. `customInstall` returns
 // error strings (empty = success, per `installer.ts`'s contract);
-// `customUninstall` returns whether anything was actually removed;
-// `probe` reports missing/stale/unmanaged agents as problem strings for
-// `keryx integrations doctor`.
+// `customUninstall` returns a `CustomUninstallResult` (T17): whether
+// anything was actually removed, plus a warning per hand-edited managed
+// file this exporter kept rather than deleted (uninstall has no `--force`
+// override for that — see `uninstallAgentsExports` below); `probe` reports
+// missing/stale/unmanaged agents as problem strings for `keryx integrations
+// doctor`.
 
 // R1-F10: `loadAgentCatalog`/`planAgentExport`/etc. are imported LAZILY
 // inside each async function below, never at module top level. This module
@@ -38,7 +41,7 @@
 // are erased at compile time and never execute, so they cannot participate
 // in the cycle and stay at the top.
 import type { AgentExportRuntime } from "../agents/types";
-import { SUBSYSTEM_AGENTS, type SurfaceAdapter } from "./types";
+import { SUBSYSTEM_AGENTS, type CustomUninstallResult, type SurfaceAdapter } from "./types";
 
 export const LAST_VERIFIED_AGENTS = "2026-09-24";
 
@@ -88,10 +91,20 @@ async function installAgentsExports(root: string, runtime: AgentExportRuntime): 
   return errors;
 }
 
-async function uninstallAgentsExports(root: string, runtime: AgentExportRuntime): Promise<boolean> {
-  const { removeManagedAgentExports } = await import("../agents/export");
-  const removed = await removeManagedAgentExports(root, runtime);
-  return removed.length > 0;
+/**
+ * T17 (design pt. 3): never deletes a managed file that was hand-edited
+ * since export (its content-sha256 no longer verifies) — `keryx integrations
+ * uninstall` has no `--force` override for this at all; a hand edit is kept,
+ * unconditionally, and reported as a warning alongside the uninstall's own
+ * result line rather than silently vanishing from the report.
+ */
+async function uninstallAgentsExports(root: string, runtime: AgentExportRuntime): Promise<CustomUninstallResult> {
+  const { removeManagedAgentExportsDetailed } = await import("../agents/export");
+  const { removed, kept } = await removeManagedAgentExportsDetailed(root, runtime);
+  return {
+    removed: removed.length > 0,
+    warnings: kept.map((k) => `kept ${k.relativePath} — ${k.reason}`),
+  };
 }
 
 /**

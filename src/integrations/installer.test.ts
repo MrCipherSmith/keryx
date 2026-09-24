@@ -164,6 +164,24 @@ describe("resolveSurfaceSelection", () => {
   });
 });
 
+// T17: `doctorIntegration --surface <bogus>` must error the same way
+// install/uninstall do for an unknown selector, instead of silently ignoring
+// it (a never-installed opt-in surface then simply never matched
+// `explicitlySelected`, so doctor ran exactly as if `--surface` had been
+// omitted — R2-F5's round-3 info note).
+describe("doctorIntegration: unknown --surface selector", () => {
+  test("an unknown selector throws, same message shape as resolveSurfaceSelection", () => {
+    expect(doctorIntegration("/nonexistent", "claude", { surfaces: ["bogus-selector"] })).rejects.toThrow(/bogus-selector/);
+  });
+
+  test("a known selector (an opt-in surface never installed) does not throw", async () => {
+    await withMetaproject(async (root) => {
+      const result = await doctorIntegration(root, "claude", { surfaces: ["agents"] });
+      expect(result.surfaces.some((s) => s.surfaceId === "agents")).toBe(true);
+    });
+  });
+});
+
 describe("installIntegration: targeted --surfaces selection installs only that content", () => {
   test("claude: surfaces:['ctx-guard'] writes the guard but not the security-check-output entry", async () => {
     await withMetaproject(async (root) => {
@@ -807,6 +825,39 @@ describe("R1-F2/F8: the agents surface (directory-backed, opt-in)", () => {
       const dryRun = await uninstallIntegration(root, "claude", { surfaces: ["agents"], dryRun: true });
       const agentsResult = dryRun.results.find((r) => r.surfaceId === "agents");
       expect(agentsResult?.status).toBe("would-remove");
+    });
+  });
+
+  // T17 (design pt. 3): a managed file hand-edited since export is kept, not
+  // deleted, even with no `--force` equivalent for uninstall at all — and the
+  // keep is reported as a warning alongside the uninstall's own status line.
+  test("T17: uninstall keeps a hand-edited managed agent export, reports it as a warning, and still removes every unedited one", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["agents"] });
+      const agentsDir = path.join(root, ".claude", "agents");
+      const files = await readdir(agentsDir);
+      expect(files.length).toBeGreaterThan(1); // sanity: more than one bundled agent, so "removed the rest" is a real assertion
+      const [editedFile, ...untouchedFiles] = files;
+      const editedPath = path.join(agentsDir, editedFile!);
+      const original = await readFile(editedPath, "utf8");
+      await writeFile(editedPath, `${original}\nhand-added line, sentinel left untouched\n`, "utf8");
+
+      const uninstalled = await uninstallIntegration(root, "claude", { surfaces: ["agents"] });
+      expect(uninstalled.errors, JSON.stringify(uninstalled)).toEqual([]);
+      const agentsResult = uninstalled.results.find((r) => r.surfaceId === "agents");
+      // Something else was still removed, so the surface-level status is
+      // "removed", not "nothing-to-remove" — the hand-edited file's kept-ness
+      // shows up in `warnings`, not by flipping this to failure/no-op.
+      expect(agentsResult?.status).toBe("removed");
+      expect(agentsResult?.warnings.some((w) => w.includes(editedFile!) && w.includes("hand-edited"))).toBe(true);
+
+      // The hand-edited file is untouched on disk...
+      expect(existsSync(editedPath)).toBe(true);
+      expect(await readFile(editedPath, "utf8")).toContain("hand-added line");
+      // ...and every OTHER managed file was actually removed.
+      for (const untouched of untouchedFiles) {
+        expect(existsSync(path.join(agentsDir, untouched))).toBe(false);
+      }
     });
   });
 });

@@ -165,18 +165,26 @@ isn't.
 ```
 keryx agents list [--stack <id>] [--json]
 keryx agents show <name>
-keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--dry-run] [--json]
+keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--force] [--dry-run] [--json]
 keryx agents verify [<name>] [--json]
 ```
 
 `list` and `show` are read-only. `export` writes only the target's own
 managed file — the exact per-host file paths for a given name and runtime
 are listed by running `export --dry-run` rather than assumed here, since
-they follow each host's own current documented layout. `export` refuses to
-write over a file that carries no keryx-managed sentinel at all, and over a
-sentinel-bearing file whose content no longer matches what the compiler
-would generate for it (a hand edit kept in place) — either case is reported
-rather than overwritten, unless `--force` is passed.
+they follow each host's own current documented layout. Two different
+refusals, only one of which `--force` can push through:
+
+- A file with no keryx-managed sentinel for this agent at all is never
+  overwritten — not even with `--force`. `export` does not know this file is
+  its own, so it never touches it.
+- A managed file whose own recorded `content-sha256` no longer matches its
+  content (a hand edit made after export) is refused unless `--force` is
+  passed.
+
+A managed, unedited file that is merely stale — its source definition
+changed since it was last exported — is updated with no flag needed; that is
+not a refusal at all.
 
 `verify` never re-derives compile/export logic — it assembles named problem
 rows from the same checks `compile`/`export`/`schema` already run, plus a
@@ -224,12 +232,14 @@ subagent file; anything not yet verified gets a plain-prose,
 instruction-only file with a visible provenance comment instead of a false
 claim of enforcement.
 
-Every file an exporter writes carries a keryx-managed sentinel. `export`
-refuses to overwrite a file that lacks that sentinel, and refuses to
-overwrite a sentinel-bearing file whose content has drifted from what the
-compiler would regenerate (for example, a hand edit made after export) —
-either case is reported as a refusal, not silently clobbered, unless
-`--force` is passed.
+Every file an exporter writes carries a keryx-managed sentinel — every byte
+of the file, with only that sentinel's own hash value blanked, is what the
+`content-sha256` it also carries verifies. `export` never overwrites a file
+that lacks a structural sentinel for this agent at all, whatever `--force`
+says, and refuses to overwrite a sentinel-bearing file whose `content-sha256`
+no longer matches (a hand edit made after export, anywhere in the file —
+not just outside the sentinel line) unless `--force` is passed. A managed,
+unedited file that is merely stale is updated with no flag needed.
 
 To export the whole catalogue for one harness at once rather than one
 definition at a time, use the bulk integrations path:
@@ -242,6 +252,12 @@ This is opt-in — the default `keryx integrations install` (no `--surface
 agents`) does not write any agent files, so installing an existing
 integration does not start producing new files under a harness's config
 directory as a side effect.
+
+`keryx integrations uninstall --runtime <id> --surface agents` removes only
+the managed files this exporter itself wrote and that still verify. A
+managed file that was hand-edited since export is kept, never deleted —
+uninstall has no `--force` override for this — and is reported as a warning
+alongside the uninstall result.
 
 ## Auditing
 
