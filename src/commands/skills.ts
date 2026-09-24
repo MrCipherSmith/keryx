@@ -19,6 +19,17 @@ import {
   validateContractFile,
 } from "../gdskills/contracts";
 import { installGdskills } from "../gdskills/install";
+import { skillsGovernanceCommand } from "./skills-governance";
+import {
+  applyInstall,
+  defaultBundledSourceRoot,
+  doctorInstall,
+  loadBundledManifest,
+  planInstall,
+  uninstallInstall,
+  type HarnessId,
+  type InstallPlan,
+} from "../gdskills/manifest";
 import { banner, heading, note, style, symbols, nextSteps } from "../lib/ui";
 import {
   applyLearningProposal,
@@ -101,43 +112,17 @@ export async function skillsCommand(args: string[]): Promise<void> {
   }
 
   if (command === "install") {
-    const profile = normalizeGdskillsProfile(optionValue(args, "--profile"));
-    const metaprojectRoot = path.join(process.cwd(), ".metaproject");
-    banner("keryx skills install", `Profile: ${profile}`);
-    if (!(await pathExists(metaprojectRoot))) {
-      console.log(`  ${style.red(symbols.cross)} Metaproject is not initialized.`);
-      console.log(`  ${style.cyan(symbols.arrow)} Run ${style.cyan("keryx init")} first.`);
-      process.exitCode = 1;
-      return;
-    }
+    await installSkillsCommand(args);
+    return;
+  }
 
-    const result = await installGdskills(metaprojectRoot, profile);
-    console.log(
-      `  ${style.green(symbols.ok)} Installed ${style.bold(String(result.installedSkills))} skills for profile ${style.bold(result.profile)}`,
-    );
-    heading("Locations");
-    note(`skills   ${relativeToCwd(result.skillsRoot)}`);
-    note(`catalog  ${relativeToCwd(result.catalogPath)}`);
-    note(`manifest ${relativeToCwd(result.manifestPath)}`);
-    // Notices first and under their own heading: they are work that succeeded
-    // (files the sweep removed), and mixing them into "Warnings" buries the
-    // entries that actually need the operator.
-    if (result.notices.length > 0) {
-      console.log("Notices:");
-      for (const notice of result.notices) {
-        console.log(`- ${notice}`);
-      }
-    }
-    if (result.warnings.length > 0) {
-      console.log("Warnings:");
-      for (const warning of result.warnings) {
-        console.log(`- ${warning}`);
-      }
-    }
-    nextSteps([
-      `Browse the catalog: ${style.cyan("keryx skills catalog")}.`,
-      `Route a request: ${style.cyan("keryx skills route <target>")}.`,
-    ]);
+  if (command === "doctor") {
+    await doctorSkillsCommand(args);
+    return;
+  }
+
+  if (command === "uninstall") {
+    await uninstallSkillsCommand(args);
     return;
   }
 
@@ -211,9 +196,292 @@ export async function skillsCommand(args: string[]): Promise<void> {
     return;
   }
 
+  // Flow 309, W1 Lane C governance gates — a separate dispatcher/module
+  // (src/commands/skills-governance.ts) so this file's install/doctor/
+  // uninstall branches (Lane B) and these three subcommands never touch the
+  // same lines.
+  if (command === "scout" || command === "eval" || command === "stocktake") {
+    await skillsGovernanceCommand(args);
+    return;
+  }
+
   console.error(`Unknown skills command: ${command}`);
   printSkillsHelp();
   process.exitCode = 1;
+}
+
+const LEGACY_INSTALL_PROFILES = new Set(["minimal", "recommended", "full", "custom"]);
+
+/**
+ * `keryx skills install` forks into two paths (flow 309, W1 Lane B):
+ *   - the LEGACY path (unchanged): `installGdskills` writes the fixed curated
+ *     subset for `minimal|recommended|full|custom`, exactly as before this
+ *     flow.
+ *   - the MANIFEST path (new): profile -> modules/components resolution via
+ *     `src/gdskills/manifest`, used whenever any manifest-only flag is given
+ *     (`--with`/`--without`/`--target`/`--dry-run`/`--json`/`--include-deprecated`)
+ *     or the profile id is not one of the four legacy names (e.g. `core`,
+ *     `react`, `nestjs`, `python` — or `minimal`/`full` WITH a manifest flag).
+ * `--profile` with neither a value nor a manifest flag defaults to the legacy
+ * `recommended` profile, matching the pre-existing behaviour exactly.
+ */
+async function installSkillsCommand(args: string[]): Promise<void> {
+  const profileArg = optionValue(args, "--profile");
+  const withValues = collectRepeatedOption(args, "--with");
+  const withoutValues = collectRepeatedOption(args, "--without");
+  const targetArg = optionValue(args, "--target");
+  const includeDeprecated = args.includes("--include-deprecated");
+  const dryRun = args.includes("--dry-run");
+  const json = args.includes("--json");
+  const force = args.includes("--force");
+
+  const usesManifestFlags =
+    withValues.length > 0 || withoutValues.length > 0 || targetArg !== undefined || includeDeprecated || dryRun || json;
+  const isLegacyProfileId = profileArg === undefined || LEGACY_INSTALL_PROFILES.has(profileArg);
+
+  if (!usesManifestFlags && isLegacyProfileId) {
+    await installGdskillsLegacy(profileArg);
+    return;
+  }
+
+  await installFromManifest({
+    profileId: profileArg ?? "core",
+    withValues,
+    withoutValues,
+    target: targetArg as HarnessId | undefined,
+    includeDeprecated,
+    dryRun,
+    json,
+    force,
+  });
+}
+
+/** The pre-flow-309 `keryx skills install --profile <p>` behaviour, unchanged. */
+async function installGdskillsLegacy(profileArg: string | undefined): Promise<void> {
+  const profile = normalizeGdskillsProfile(profileArg);
+  const metaprojectRoot = path.join(process.cwd(), ".metaproject");
+  banner("keryx skills install", `Profile: ${profile}`);
+  if (!(await pathExists(metaprojectRoot))) {
+    console.log(`  ${style.red(symbols.cross)} Metaproject is not initialized.`);
+    console.log(`  ${style.cyan(symbols.arrow)} Run ${style.cyan("keryx init")} first.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const result = await installGdskills(metaprojectRoot, profile);
+  console.log(
+    `  ${style.green(symbols.ok)} Installed ${style.bold(String(result.installedSkills))} skills for profile ${style.bold(result.profile)}`,
+  );
+  heading("Locations");
+  note(`skills   ${relativeToCwd(result.skillsRoot)}`);
+  note(`catalog  ${relativeToCwd(result.catalogPath)}`);
+  note(`manifest ${relativeToCwd(result.manifestPath)}`);
+  // Notices first and under their own heading: they are work that succeeded
+  // (files the sweep removed), and mixing them into "Warnings" buries the
+  // entries that actually need the operator.
+  if (result.notices.length > 0) {
+    console.log("Notices:");
+    for (const notice of result.notices) {
+      console.log(`- ${notice}`);
+    }
+  }
+  if (result.warnings.length > 0) {
+    console.log("Warnings:");
+    for (const warning of result.warnings) {
+      console.log(`- ${warning}`);
+    }
+  }
+  nextSteps([
+    `Browse the catalog: ${style.cyan("keryx skills catalog")}.`,
+    `Route a request: ${style.cyan("keryx skills route <target>")}.`,
+  ]);
+}
+
+/** Every occurrence of `--flag value` / `--flag=value` in `args`, in order (unlike `optionValue`, which returns only the first). */
+function collectRepeatedOption(args: string[], name: string): string[] {
+  const values: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === name) {
+      const next = args[i + 1];
+      if (next !== undefined && !next.startsWith("--")) values.push(next);
+      continue;
+    }
+    if (arg?.startsWith(`${name}=`)) {
+      values.push(arg.slice(name.length + 1));
+    }
+  }
+  return values;
+}
+
+/**
+ * Read `.metaproject/data/stack/stack.json` (lane A's `keryx stack detect`
+ * output) directly, without importing lane A's in-progress module — this
+ * command only needs the two fields `planInstall` consumes. Absence or a
+ * parse failure both fail open: `planInstall` treats `stack: undefined` the
+ * same way `src/review/stack.ts` treats an unreadable manifest (uncertain,
+ * include everything).
+ */
+async function readStackDetectionForInstall(
+  cwd: string,
+): Promise<{ tags: Record<string, boolean>; uncertain: boolean } | undefined> {
+  const file = path.join(cwd, ".metaproject", "data", "stack", "stack.json");
+  if (!(await pathExists(file))) return undefined;
+  try {
+    const parsed = JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
+    const tagsRaw = parsed.tags;
+    const tags: Record<string, boolean> = {};
+    if (tagsRaw && typeof tagsRaw === "object" && !Array.isArray(tagsRaw)) {
+      for (const [key, value] of Object.entries(tagsRaw as Record<string, unknown>)) {
+        if (typeof value === "boolean") tags[key] = value;
+      }
+    }
+    return { tags, uncertain: parsed.uncertain === true };
+  } catch {
+    return undefined;
+  }
+}
+
+function printInstallPlanHuman(plan: InstallPlan): void {
+  banner("keryx skills install", `Profile: ${plan.profile} · Target: ${plan.target}`);
+  if (plan.components.length > 0) {
+    heading("Components");
+    for (const component of plan.components) {
+      const icon = component.included ? style.green(symbols.ok) : style.red(symbols.cross);
+      note(`${icon} ${component.id} — ${component.reason}`);
+    }
+  }
+  heading("Modules");
+  if (plan.modules.length === 0) {
+    note("(none resolved)");
+  }
+  for (const module of plan.modules) {
+    note(`${module.id} (${module.kind}, ${module.files.length} file(s), cost ${module.cost}, ${module.stability})`);
+  }
+  if (plan.errors.length > 0) {
+    console.log("Errors:");
+    for (const error of plan.errors) {
+      console.log(`- ${error}`);
+    }
+  }
+}
+
+async function installFromManifest(opts: {
+  profileId: string;
+  withValues: string[];
+  withoutValues: string[];
+  target: HarnessId | undefined;
+  includeDeprecated: boolean;
+  dryRun: boolean;
+  json: boolean;
+  force: boolean;
+}): Promise<void> {
+  const projectRoot = process.cwd();
+  const sourceRoot = defaultBundledSourceRoot();
+  const manifest = loadBundledManifest();
+  const stack = await readStackDetectionForInstall(projectRoot);
+
+  const plan = await planInstall({
+    manifest,
+    profileId: opts.profileId,
+    with: opts.withValues,
+    without: opts.withoutValues,
+    target: opts.target,
+    stack,
+    includeDeprecated: opts.includeDeprecated,
+    repoRoot: sourceRoot,
+  });
+
+  if (opts.dryRun) {
+    if (opts.json) {
+      console.log(JSON.stringify(plan, null, 2));
+    } else {
+      printInstallPlanHuman(plan);
+      if (plan.ok) {
+        nextSteps([
+          `Apply this plan: ${style.cyan(`keryx skills install --profile ${plan.profile} --target ${plan.target}`)}`,
+        ]);
+      }
+    }
+    if (!plan.ok) process.exitCode = 1;
+    return;
+  }
+
+  if (!plan.ok) {
+    if (opts.json) {
+      console.log(JSON.stringify({ plan }, null, 2));
+    } else {
+      printInstallPlanHuman(plan);
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const result = await applyInstall(plan, projectRoot, { force: opts.force, sourceRoot });
+
+  if (opts.json) {
+    console.log(JSON.stringify({ plan, result }, null, 2));
+  } else {
+    printInstallPlanHuman(plan);
+    console.log(`  ${style.green(symbols.ok)} Wrote ${result.written.length} file(s) for target "${plan.target}".`);
+    if (result.skipped.length > 0) {
+      console.log("Skipped (existing file not recorded in install-state, or drifted — rerun with --force to overwrite):");
+      for (const skipped of result.skipped) {
+        console.log(`- ${skipped.path}: ${skipped.reason}`);
+      }
+    }
+  }
+  if (!result.ok) process.exitCode = 1;
+}
+
+async function doctorSkillsCommand(args: string[]): Promise<void> {
+  const target = (optionValue(args, "--target") ?? "claude") as HarnessId;
+  const json = args.includes("--json");
+  const report = await doctorInstall(process.cwd(), target);
+
+  if (json) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    banner("keryx skills doctor", `Target: ${target}`);
+    if (report.entries.length === 0) {
+      note("Nothing recorded for this target.");
+    }
+    for (const entry of report.entries) {
+      const icon = entry.status === "ok" ? style.green(symbols.ok) : style.red(symbols.cross);
+      const moduleLabel = entry.moduleId !== undefined ? ` (${entry.moduleId})` : "";
+      note(`${icon} [${entry.status}] ${entry.path}${moduleLabel}`);
+    }
+  }
+  if (!report.ok) process.exitCode = 1;
+}
+
+async function uninstallSkillsCommand(args: string[]): Promise<void> {
+  const target = (optionValue(args, "--target") ?? "claude") as HarnessId;
+  const moduleId = optionValue(args, "--module");
+  const force = args.includes("--force");
+  const json = args.includes("--json");
+
+  const result = await uninstallInstall(process.cwd(), target, { moduleId, force });
+
+  if (json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    banner("keryx skills uninstall", `Target: ${target}${moduleId !== undefined ? ` · Module: ${moduleId}` : ""}`);
+    console.log(`  ${style.green(symbols.ok)} Removed ${result.removed.length} file(s).`);
+    if (result.diffs.length > 0) {
+      console.log("Force-removed drifted files:");
+      for (const diff of result.diffs) {
+        console.log(`- ${diff.path}: ${diff.message}`);
+      }
+    }
+    if (result.refused.length > 0) {
+      console.log("Refused (drifted — rerun with --force):");
+      for (const refusal of result.refused) {
+        console.log(`- ${refusal.path}: ${refusal.reason}`);
+      }
+    }
+  }
+  if (!result.ok) process.exitCode = 1;
 }
 
 async function listProjectSkills(args: string[]): Promise<void> {
@@ -1294,6 +1562,10 @@ Usage:
   keryx skills route <query-or-target>
   keryx skills catalog [--profile minimal|recommended|full|custom]
   keryx skills install [--profile minimal|recommended|full|custom]
+  keryx skills install --profile <manifest-profile> [--with <component>]... [--without <component>]...
+      [--target <harness>] [--include-deprecated] [--dry-run] [--json] [--force]
+  keryx skills doctor [--target <harness>] [--json]
+  keryx skills uninstall --target <harness> [--module <module-id>] [--force] [--json]
   keryx skills create <target> --module <module> --name <skill-name>
   keryx skills generate <target> --module <module> --name <skill-name>
   keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
@@ -1307,6 +1579,9 @@ Usage:
   keryx skills sync --runtime codex|claude --target <dir>
   keryx skills contracts list
   keryx skills contracts validate <file> --schema <name>
+  keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all] [--json]
+  keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>] [--model-grader] [--json]
+  keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 
 Commands:
   status    Show local gdskills installation status
@@ -1314,7 +1589,12 @@ Commands:
   inspect   Inspect one registered project skill
   route     Route a query or target to matching project skills
   catalog   Print bundled gdskills catalog for a profile
-  install   Install bundled gdskills into .metaproject
+  install   Install bundled gdskills into .metaproject (legacy profile), or resolve/apply a
+            profile->modules/components install-manifest plan (--with/--without/--target/
+            --dry-run/--json/--include-deprecated, or a non-legacy profile id such as
+            core|react|nestjs|python)
+  doctor    Compare recorded install-state to disk: ok/drifted/missing/orphaned per path
+  uninstall Remove only the paths recorded in install-state for a target (optionally one module)
   create    Create a canonical project skill package
   generate  Alias for create
   import    Copy a SKILL.md or overlay tree into project-skills
@@ -1324,6 +1604,9 @@ Commands:
   export    Export a canonical project skill to a runtime artifact
   sync      Sync exported runtime skills to an explicit target directory
   contracts List and validate gdskills JSON contracts
+  scout     Pre-creation dedupe gate: does an existing skill already cover this?
+  eval      Behavioral compliance eval: trigger accuracy + scenario pass rate
+  stocktake Periodic catalog health check: keep|improve|update|retire|merge
 `);
 }
 
