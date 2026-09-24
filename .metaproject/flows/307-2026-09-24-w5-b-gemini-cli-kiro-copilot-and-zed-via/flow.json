@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "307",
   "slug": "w5-b-gemini-cli-kiro-copilot-and-zed-via",
   "title": "W5-b: Gemini CLI, Kiro, Copilot and Zed-via-ACP adapters, generated capability matrix, keryx integrations CLI",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T00:56:53.608Z",
-  "updatedAt": "2026-09-24T00:56:53.608Z",
+  "updatedAt": "2026-09-24T01:02:33.084Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:19753afffb0ce29bcedf2997f565b1dfb26ec1db649a63e647b7fd1708abca83",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,215 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T9 (split implementation tasks)"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Register gemini-cli, kiro, github-copilot-agent, zed (ACP) and keryx-shell adapters with codecs, instructions surfaces and probes",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Integrations installer core with per-target install-state; legacy installers delegate to it",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Generated capability matrix, checked-in artifact, schema validation, guard test and CI step",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "keryx integrations install|doctor|uninstall|matrix CLI, help and command registry",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Docs: integrations page, W5 spec status, matrix artifact reference",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Verify keryx harness run|exec|extension|wave help and behavior unchanged (pinning test)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "End-to-end: integrations install/doctor/uninstall on a temp project for every runtime, legacy alias tests unmodified",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-24T00:56:53.608Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T01:02:27.197Z",
+      "event": "task-added",
+      "detail": "T5: Register gemini-cli, kiro, github-copilot-agent, zed (ACP) and keryx-shell adapters with codecs, instructions surfaces and probes"
+    },
+    {
+      "at": "2026-09-24T01:02:27.275Z",
+      "event": "task-added",
+      "detail": "T6: Integrations installer core with per-target install-state; legacy installers delegate to it"
+    },
+    {
+      "at": "2026-09-24T01:02:27.352Z",
+      "event": "task-added",
+      "detail": "T7: Generated capability matrix, checked-in artifact, schema validation, guard test and CI step"
+    },
+    {
+      "at": "2026-09-24T01:02:27.430Z",
+      "event": "task-added",
+      "detail": "T8: keryx integrations install|doctor|uninstall|matrix CLI, help and command registry"
+    },
+    {
+      "at": "2026-09-24T01:02:27.516Z",
+      "event": "task-added",
+      "detail": "T9: Docs: integrations page, W5 spec status, matrix artifact reference"
+    },
+    {
+      "at": "2026-09-24T01:02:27.602Z",
+      "event": "task-added",
+      "detail": "T10: Verify keryx harness run|exec|extension|wave help and behavior unchanged (pinning test)"
+    },
+    {
+      "at": "2026-09-24T01:02:27.683Z",
+      "event": "task-added",
+      "detail": "T11: End-to-end: integrations install/doctor/uninstall on a temp project for every runtime, legacy alias tests unmodified"
+    },
+    {
+      "at": "2026-09-24T01:02:32.926Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T01:02:33.006Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-24T01:02:33.084Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
     }
   ]
 }
