@@ -9,7 +9,7 @@
   "title": "W6: lifecycle hooks in keryx shell that can only tighten the policy engine",
   "status": "in-progress",
   "createdAt": "2026-09-24T00:56:52.772Z",
-  "updatedAt": "2026-09-24T03:03:55.186Z",
+  "updatedAt": "2026-09-24T03:41:36.704Z",
   "source": {
     "type": "description",
     "ref": null
@@ -236,8 +236,19 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T03:04:44.322Z",
+            "outcome": "started",
+            "detail": "review round 1 on PR #678"
+          },
+          {
+            "at": "2026-09-24T03:20:09.565Z",
+            "outcome": "failed",
+            "detail": "round 1: opus review blocker 1, major 4, minor 8, info 5 (unsandboxed never refused; runner hang past timeout; fire() rejection fails open; hook ask ignored on non-tool gate events; hookAsk auto-approved in TUI/ACP) + mkdocs --strict link failure"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -321,6 +332,36 @@
             "detail": "306-T16 sonnet"
           }
         ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Review round 1 fixes A: runtime/runner/codec/run.ts/subagent (findings 1,2,3-runtime,4-run/spawn,7,8,9,10,13,15,16)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Review round 1 fixes B: agent.ts/TUI/ACP/CLI/docs (findings 3-agent,4-agent,5,6,11,12,17,18, mkdocs links)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -526,6 +567,41 @@
       "at": "2026-09-24T03:03:55.186Z",
       "event": "task-done",
       "detail": "T16: Test hermeticity and entry resolution: test preload defaults KERYX_HOOKS=off (real built-ins resolve to the test runner under bun test), resolveKeryxArgv only trusts argv[1] when it is the keryx entry; fix serve-listener.turns test"
+    },
+    {
+      "at": "2026-09-24T03:04:44.322Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — review round 1 on PR #678"
+    },
+    {
+      "at": "2026-09-24T03:20:09.565Z",
+      "event": "task-attempt",
+      "detail": "T12: failed (attempt 2) — round 1: opus review blocker 1, major 4, minor 8, info 5 (unsandboxed never refused; runner hang past timeout; fire() rejection fails open; hook ask ignored on non-tool gate events; hookAsk auto-approved in TUI/ACP) + mkdocs --strict link failure"
+    },
+    {
+      "at": "2026-09-24T03:20:09.645Z",
+      "event": "ac-updated",
+      "detail": "Round-1 review found the original wording ('never modify hand-authored entries') contradicts the W6 CLI section, which requires enable/disable to flip enabled on project/user hooks; the only field the command may touch is enabled."
+    },
+    {
+      "at": "2026-09-24T03:20:31.285Z",
+      "event": "task-added",
+      "detail": "T17: Review round 1 fixes A: runtime/runner/codec/run.ts/subagent (findings 1,2,3-runtime,4-run/spawn,7,8,9,10,13,15,16)"
+    },
+    {
+      "at": "2026-09-24T03:20:31.372Z",
+      "event": "task-added",
+      "detail": "T18: Review round 1 fixes B: agent.ts/TUI/ACP/CLI/docs (findings 3-agent,4-agent,5,6,11,12,17,18, mkdocs links)"
+    },
+    {
+      "at": "2026-09-24T03:41:21.777Z",
+      "event": "task-done",
+      "detail": "T17: Review round 1 fixes A: runtime/runner/codec/run.ts/subagent (findings 1,2,3-runtime,4-run/spawn,7,8,9,10,13,15,16)"
+    },
+    {
+      "at": "2026-09-24T03:41:36.704Z",
+      "event": "task-done",
+      "detail": "T18: Review round 1 fixes B: agent.ts/TUI/ACP/CLI/docs (findings 3-agent,4-agent,5,6,11,12,17,18, mkdocs links)"
     }
   ]
 }
