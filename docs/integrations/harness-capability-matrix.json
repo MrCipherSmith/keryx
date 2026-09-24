@@ -30,7 +30,7 @@
           "settingsFile": ".claude/agents"
         },
         {
-          "surface": "instructions",
+          "surface": "rules",
           "state": "native",
           "settingsFile": "CLAUDE.md"
         }
@@ -71,7 +71,7 @@
           "settingsFile": ".codex/agents"
         },
         {
-          "surface": "instructions",
+          "surface": "rules",
           "state": "native",
           "settingsFile": "AGENTS.md"
         }
@@ -113,7 +113,7 @@
           "settingsFile": ".cursor/hooks.json"
         },
         {
-          "surface": "instructions",
+          "surface": "rules",
           "state": "adapter",
           "settingsFile": ".cursor/rules/keryx-rules.mdc"
         }
@@ -148,7 +148,7 @@
           "settingsFile": ".windsurf/hooks.json"
         },
         {
-          "surface": "instructions",
+          "surface": "rules",
           "state": "adapter",
           "settingsFile": ".windsurf/rules/keryx-rules.md"
         }
@@ -309,6 +309,11 @@
         },
         {
           "surface": "instructions",
+          "state": "instruction-only",
+          "settingsFile": "GEMINI.md"
+        },
+        {
+          "surface": "rules",
           "state": "adapter",
           "settingsFile": "GEMINI.md"
         }
@@ -344,6 +349,11 @@
         },
         {
           "surface": "instructions",
+          "state": "instruction-only",
+          "settingsFile": ".kiro/steering/keryx.md"
+        },
+        {
+          "surface": "rules",
           "state": "adapter",
           "settingsFile": ".kiro/steering/keryx-rules.md"
         }
@@ -376,6 +386,11 @@
         },
         {
           "surface": "instructions",
+          "state": "instruction-only",
+          "settingsFile": ".github/copilot-instructions.md"
+        },
+        {
+          "surface": "rules",
           "state": "adapter",
           "settingsFile": ".github/copilot-instructions.md"
         }

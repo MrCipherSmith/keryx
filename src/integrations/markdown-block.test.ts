@@ -4,7 +4,7 @@
 // gemini-cli/kiro/github-copilot-agent instructions surfaces).
 
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -12,6 +12,7 @@ import { describe, expect, test } from "bun:test";
 import {
   INSTRUCTIONS_END_MARKER,
   INSTRUCTIONS_START_MARKER,
+  SymlinkRefusedError,
   UnterminatedInstructionsBlockError,
   inspectMarkdownBlock,
   installMarkdownBlock,
@@ -572,6 +573,104 @@ describe("idempotent re-install", () => {
       await installMarkdownBlock(root, RELATIVE_PATH);
       const second = await readFile(file, "utf8");
       expect(second).toBe(first);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Review round 1, F20: install/uninstall used to `lstat`/`readFile`/
+// `writeFile` straight through a symlink — a symlinked TARGET FILE, or a
+// symlinked PARENT DIRECTORY of the target — letting a symlink planted under
+// the project root redirect a managed-block write to a file outside the
+// project root entirely. These reproduce the exact reviewer scenarios (a
+// symlinked CLAUDE.md, and a symlinked `.cursor/rules` directory) and fail on
+// the pre-fix code: before this fix, the "outside" file below ends up
+// containing the rendered block.
+// ---------------------------------------------------------------------------
+
+describe("F20: install/uninstall refuse a symlink anywhere in the target's path", () => {
+  test("install refuses a symlinked target file, and never writes through it", async () => {
+    await withTempDir(async (root) => {
+      const outsideDir = await mkdtemp(path.join(tmpdir(), "keryx-markdown-block-outside-"));
+      try {
+        const outsideFile = path.join(outsideDir, "outside-target.md");
+        await writeFile(outsideFile, "OUTSIDE FILE\n", "utf8");
+        await mkdir(root, { recursive: true });
+        symlinkSync(outsideFile, path.join(root, RELATIVE_PATH));
+
+        const errors = await installMarkdownBlock(root, RELATIVE_PATH);
+        expect(errors.length).toBe(1);
+        expect(errors[0]).toContain("symlink");
+
+        const outsideContent = await readFile(outsideFile, "utf8");
+        expect(outsideContent).toBe("OUTSIDE FILE\n");
+        expect(outsideContent).not.toContain(INSTRUCTIONS_START_MARKER);
+      } finally {
+        await rm(outsideDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  test("install refuses a symlinked parent directory, and never creates a file under it", async () => {
+    await withTempDir(async (root) => {
+      const outsideDir = await mkdtemp(path.join(tmpdir(), "keryx-markdown-block-outside-"));
+      try {
+        await mkdir(path.join(root, ".cursor"), { recursive: true });
+        symlinkSync(outsideDir, path.join(root, ".cursor", "rules"));
+
+        const relativePath = ".cursor/rules/keryx-rules.mdc";
+        const errors = await installMarkdownBlock(root, relativePath);
+        expect(errors.length).toBe(1);
+        expect(errors[0]).toContain("symlink");
+        expect(existsSync(path.join(outsideDir, "keryx-rules.mdc"))).toBe(false);
+      } finally {
+        await rm(outsideDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  test("uninstall throws SymlinkRefusedError for a symlinked target file, and never touches it", async () => {
+    await withTempDir(async (root) => {
+      const outsideDir = await mkdtemp(path.join(tmpdir(), "keryx-markdown-block-outside-"));
+      try {
+        const outsideFile = path.join(outsideDir, "outside-target.md");
+        const outsideOriginal = `${INSTRUCTIONS_START_MARKER}\nsomething\n${INSTRUCTIONS_END_MARKER}\n`;
+        await writeFile(outsideFile, outsideOriginal, "utf8");
+        await mkdir(root, { recursive: true });
+        symlinkSync(outsideFile, path.join(root, RELATIVE_PATH));
+
+        await expect(uninstallMarkdownBlock(root, RELATIVE_PATH)).rejects.toThrow(SymlinkRefusedError);
+        expect(await readFile(outsideFile, "utf8")).toBe(outsideOriginal);
+      } finally {
+        await rm(outsideDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  test("inspect reports a symlinked target as malformed (dry-run parity with the real refusal)", async () => {
+    await withTempDir(async (root) => {
+      const outsideDir = await mkdtemp(path.join(tmpdir(), "keryx-markdown-block-outside-"));
+      try {
+        const outsideFile = path.join(outsideDir, "outside-target.md");
+        await writeFile(outsideFile, "OUTSIDE FILE\n", "utf8");
+        await mkdir(root, { recursive: true });
+        symlinkSync(outsideFile, path.join(root, RELATIVE_PATH));
+
+        const inspection = await inspectMarkdownBlock(root, RELATIVE_PATH);
+        expect(inspection.state).toBe("malformed");
+        expect(inspection.message).toContain("symlink");
+      } finally {
+        await rm(outsideDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  test("a non-symlinked, ordinary nested target is unaffected (no false positive)", async () => {
+    await withTempDir(async (root) => {
+      const relativePath = "docs/nested/NOTES.md";
+      const errors = await installMarkdownBlock(root, relativePath);
+      expect(errors).toEqual([]);
+      expect(existsSync(path.join(root, ...relativePath.split("/")))).toBe(true);
     });
   });
 });

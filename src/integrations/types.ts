@@ -12,6 +12,14 @@
  * subset is wired up in W5-a (block, prompt-gate, inject-context); the rest
  * are named here so `HarnessAdapter.unsupported` and future surfaces have a
  * fixed vocabulary to grow into, per the W5 spec's flag list.
+ *
+ * `"rules"` (flow 313, W4 portability, review round 1 F19) is a 13th flag
+ * added OUTSIDE the frozen W5 list, for the `rules-export` surfaces
+ * (`surfaces-rules.ts`) alone. It exists so `--surface instructions` selects
+ * only the pre-existing `keryx:instructions` pointer-block surfaces, never
+ * the (opt-in, content-reflecting) `keryx:rules` index block — the two used
+ * to share the `instructions` flag, which made `--surface instructions`
+ * silently also install/uninstall `rules-export`.
  */
 export type SurfaceFlag =
   | "block"
@@ -25,7 +33,8 @@ export type SurfaceFlag =
   | "skills"
   | "agents"
   | "instructions"
-  | "mcp";
+  | "mcp"
+  | "rules";
 
 export type Confidence = "verified" | "experimental";
 

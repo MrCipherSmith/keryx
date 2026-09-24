@@ -8,6 +8,22 @@ import {
   renderProjectRulesSkillReadme,
 } from "../lib/templates";
 
+/**
+ * Review round 1, F7: thrown by `ensureMetaprojectReference` (via
+ * `replaceManagedBlock`) when `filePath` carries a `<!-- keryx:index -->`
+ * start marker with no matching `<!-- /keryx:index -->` end marker — the
+ * file is left COMPLETELY UNTOUCHED (never guessed at, never truncated).
+ * Before this fix the missing-end-marker case truncated the file from the
+ * start marker to EOF, which is exactly what a forged start marker (e.g. a
+ * canonical rule file literally named `<!-- keryx:index -->.md`, imported
+ * verbatim by `syncAgentRules`) could trigger, deleting every human line
+ * after it. Mirrors `markdown-block.ts`'s `UnterminatedInstructionsBlockError`
+ * — same "refuse hard" idiom, a distinct class because this module's marker
+ * pair (`keryx:index`) and callers (`syncAgentRules`/`distillAgentEntrypoints`,
+ * `keryx init`/`update`) are independent of that one.
+ */
+export class UnterminatedMetaprojectReferenceError extends Error {}
+
 export type SyncedAgentRule = {
   source: string;
   ruleFile: string;
@@ -131,7 +147,17 @@ function replaceManagedBlock(content: string, marker: string, endMarker: string,
   }
   const end = content.indexOf(endMarker, start + marker.length);
   if (end < 0) {
-    return `${content.slice(0, start)}${block}`;
+    // Review round 1, F7: this used to return
+    // `content.slice(0, start) + block`, silently DROPPING everything from
+    // the start marker to EOF — including real human content after a start
+    // marker that has no matching end (a forged marker planted via a rule
+    // file's own name is one way to reach this; a manual edit that deleted
+    // only the end marker is another). Refuse instead, leaving `content`
+    // (and therefore the file on disk — see `ensureMetaprojectReference`)
+    // completely untouched.
+    throw new UnterminatedMetaprojectReferenceError(
+      `unterminated ${marker} block: found ${marker} with no matching ${endMarker} — fix it by hand`,
+    );
   }
   return `${content.slice(0, start)}${block}${content.slice(end + endMarker.length)}`.replace(/\n{3,}/g, "\n\n");
 }

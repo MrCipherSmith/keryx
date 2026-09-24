@@ -208,6 +208,46 @@ describe("rules-export surface: opt-in only", () => {
     expect(result.results.some((r) => r.surfaceId === "rules-export")).toBe(false);
     expect(await Bun.file(path.join(root, "CLAUDE.md")).exists()).toBe(false);
   });
+
+  // Review round 1, F19: `rules-export` used to share the `instructions`
+  // flag with the pre-existing `keryx:instructions` pointer surface, so
+  // `--surface instructions` reached BOTH — no longer opt-in in effect. Its
+  // own `rules` flag fixes that; these fail on the pre-fix registration
+  // (where `surfaces-rules.ts` set `flag: "instructions"`).
+  test("--surface instructions installs only the pointer surface, never rules-export", async () => {
+    await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    const result = await installIntegration(root, "gemini-cli", { surfaces: ["instructions"] });
+    expect(result.errors).toEqual([]);
+    expect(result.results.map((r) => r.surfaceId)).toEqual(["instructions"]);
+    const content = await readTarget("GEMINI.md");
+    expect(content).toContain("<!-- keryx:instructions -->");
+    expect(content).not.toContain("<!-- keryx:rules -->");
+  });
+
+  test("--surface rules installs only rules-export, via its own flag", async () => {
+    await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    const result = await installIntegration(root, "gemini-cli", { surfaces: ["rules"] });
+    expect(result.errors).toEqual([]);
+    expect(result.results.map((r) => r.surfaceId)).toEqual(["rules-export"]);
+    const content = await readTarget("GEMINI.md");
+    expect(content).toContain("<!-- keryx:rules -->");
+    expect(content).not.toContain("<!-- keryx:instructions -->");
+  });
+
+  test("--surface instructions uninstall never removes a rules-export block installed separately", async () => {
+    await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    await installIntegration(root, "gemini-cli", { surfaces: ["instructions", "rules-export"] });
+    const before = await readTarget("GEMINI.md");
+    expect(before).toContain("<!-- keryx:instructions -->");
+    expect(before).toContain("<!-- keryx:rules -->");
+
+    const uninstall = await uninstallIntegration(root, "gemini-cli", { surfaces: ["instructions"] });
+    expect(uninstall.results.map((r) => r.surfaceId)).toEqual(["instructions"]);
+
+    const after = await readTarget("GEMINI.md");
+    expect(after).not.toContain("<!-- keryx:instructions -->");
+    expect(after).toContain("<!-- keryx:rules -->");
+  });
 });
 
 describe("renderRulesForHarnesses", () => {

@@ -33,6 +33,42 @@ const README_BASENAME = "readme.md";
 const MAX_DESCRIPTION_LENGTH = 200;
 
 /**
+ * Review round 1, F7: unlike a rule's title/description (both run through
+ * `neutralise` below), a rule's `relativePath` comes straight from the
+ * filesystem — a file or directory NAME under `.metaproject/rules/` — and is
+ * rendered unescaped, inside backticks, directly into the `keryx:rules`
+ * managed block. A path containing a real `<!-- keryx:rules -->`/
+ * `<!-- /keryx:rules -->` (or `<!-- keryx:index -->`/`<!-- keryx:instructions
+ * -->`) marker forges a second, real marker line inside the rendered block:
+ * the next render then fails with "unterminated block", and
+ * `ensureMetaprojectReference`'s managed-block replacer (before its own F7
+ * fix) would truncate everything after it. A backtick closes the code span
+ * early; control characters (including CR/LF) let a path masquerade as extra
+ * markdown lines (e.g. a fake `## SYSTEM` heading) inside what is meant to be
+ * one list item. Refusing anything holding `<`, `>`, a backtick, a control
+ * character, or the literal `<!--`/`-->` substrings closes all of these at
+ * once — a rule whose OWN NAME does this is skipped (never rendered), and
+ * reported via `CollectCanonicalRulesResult.skipped` instead of silently
+ * dropped or, worse, trusted.
+ */
+// eslint-disable-next-line no-control-regex -- matching control characters is the point (review round 1, F7)
+const UNSAFE_RULE_PATH_PATTERN = /[\x00-\x1f\x7f<>`]/;
+
+function isUnsafeRulePath(relativePath: string): boolean {
+  return UNSAFE_RULE_PATH_PATTERN.test(relativePath) || relativePath.includes("<!--") || relativePath.includes("-->");
+}
+
+export interface SkippedCanonicalRule {
+  readonly relativePath: string;
+  readonly reason: string;
+}
+
+export interface CollectCanonicalRulesResult {
+  readonly rules: readonly CanonicalRuleEntry[];
+  readonly skipped: readonly SkippedCanonicalRule[];
+}
+
+/**
  * Neutralises any substring a rule's own text could use to forge or close a
  * managed-block marker: HTML comment delimiters (`<!--`, `-->`) and backticks
  * (which could otherwise fence a rendered marker to look like code, or break
@@ -116,15 +152,24 @@ function parseRuleFile(fileName: string, content: string): { title: string; desc
  * Walk `.metaproject/rules/` recursively for `*.md`/`*.mdc` files, skipping any file literally named
  * `README.md` (case-insensitive) at any depth — those are directory-level
  * documentation about the rules library itself, not a rule to index. Returns
- * entries sorted by `relativePath` for deterministic rendering. A missing
- * `.metaproject/rules` directory returns `[]` (never throws — a project with
- * no canonical rules yet is a legitimate, common state, not an error).
+ * `rules` sorted by `relativePath` for deterministic rendering. A missing
+ * `.metaproject/rules` directory returns `{ rules: [], skipped: [] }` (never
+ * throws — a project with no canonical rules yet is a legitimate, common
+ * state, not an error).
+ *
+ * Review round 1, F7: a rule whose relative path (any file or directory
+ * segment under `.metaproject/rules/`) is unsafe to interpolate into the
+ * `keryx:rules` managed block unescaped (see `isUnsafeRulePath`) is never
+ * added to `rules` — it is reported in `skipped` instead, sorted the same
+ * way, so a caller can surface it as a problem (`probe`/install warnings)
+ * rather than the file silently vanishing from the index with no trace.
  */
-export async function collectCanonicalRules(root: string): Promise<CanonicalRuleEntry[]> {
+export async function collectCanonicalRules(root: string): Promise<CollectCanonicalRulesResult> {
   const rulesDir = path.join(root, ".metaproject", "rules");
-  if (!(await pathExists(rulesDir))) return [];
+  if (!(await pathExists(rulesDir))) return { rules: [], skipped: [] };
 
-  const entries: CanonicalRuleEntry[] = [];
+  const rules: CanonicalRuleEntry[] = [];
+  const skipped: SkippedCanonicalRule[] = [];
 
   async function walk(dirAbsolute: string, dirRelative: string): Promise<void> {
     let dirents;
@@ -145,6 +190,16 @@ export async function collectCanonicalRules(root: string): Promise<CanonicalRule
       if (!RULE_EXTENSIONS.has(ext)) continue;
       if (dirent.name.toLowerCase() === README_BASENAME) continue;
 
+      const relativePath = `rules/${toPosix(childRelative)}`;
+      if (isUnsafeRulePath(relativePath)) {
+        skipped.push({
+          relativePath,
+          reason:
+            "unsafe rule path: contains a control character, `<`, `>`, a backtick, or an HTML comment delimiter (<!-- / -->) — refused to protect the managed keryx:rules block from a forged marker",
+        });
+        continue;
+      }
+
       let content: string;
       try {
         content = await readFile(childAbsolute, "utf8");
@@ -152,17 +207,14 @@ export async function collectCanonicalRules(root: string): Promise<CanonicalRule
         continue;
       }
       const { title, description } = parseRuleFile(dirent.name, content);
-      entries.push({
-        relativePath: `rules/${toPosix(childRelative)}`,
-        title,
-        description,
-      });
+      rules.push({ relativePath, title, description });
     }
   }
 
   await walk(rulesDir, "");
-  entries.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
-  return entries;
+  rules.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  skipped.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  return { rules, skipped };
 }
 
 /**
@@ -172,8 +224,18 @@ export async function collectCanonicalRules(root: string): Promise<CanonicalRule
  * still renders the heading/intro plus a "no canonical rules found." line —
  * NEVER an empty block, which would otherwise round-trip as a `no-block`
  * state on the very next `inspectMarkdownBlock` probe.
+ *
+ * Review round 1, F7 (defense in depth): every `rule.relativePath` is
+ * re-checked with `isUnsafeRulePath` immediately before it is interpolated —
+ * `collectCanonicalRules` above is the only realistic caller and already
+ * filters these out, but this function's own contract ("render the remaining
+ * paths inside backticks only after that check") must hold regardless of
+ * what a caller passes it. An unsafe entry reaching here is dropped silently
+ * rather than rendered (it should never happen; `collectCanonicalRules`
+ * already reports it in `skipped` for its own caller).
  */
 export function renderRulesBlockBody(rules: readonly CanonicalRuleEntry[]): string {
+  const safeRules = rules.filter((rule) => !isUnsafeRulePath(rule.relativePath));
   const intro = [
     "## Project rules (Keryx)",
     "",
@@ -181,9 +243,9 @@ export function renderRulesBlockBody(rules: readonly CanonicalRuleEntry[]): stri
     "",
   ];
   const list =
-    rules.length === 0
+    safeRules.length === 0
       ? ["No canonical rules found."]
-      : rules.map((rule) => `- \`.metaproject/${rule.relativePath}\` — ${rule.description}`);
+      : safeRules.map((rule) => `- \`.metaproject/${rule.relativePath}\` — ${rule.description}`);
 
   return `${RULES_BLOCK_START_MARKER}\n${[...intro, ...list].join("\n")}\n${RULES_BLOCK_END_MARKER}\n`;
 }

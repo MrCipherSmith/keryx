@@ -21,7 +21,13 @@
 // surfaces already use.
 
 import path from "node:path";
-import { collectCanonicalRules, renderRulesBlockBody, RULES_BLOCK_END_MARKER, RULES_BLOCK_START_MARKER } from "../rules/export-render";
+import {
+  collectCanonicalRules,
+  renderRulesBlockBody,
+  RULES_BLOCK_END_MARKER,
+  RULES_BLOCK_START_MARKER,
+  type SkippedCanonicalRule,
+} from "../rules/export-render";
 import {
   inspectMarkdownBlock,
   installMarkdownBlock,
@@ -29,31 +35,55 @@ import {
   uninstallMarkdownBlock,
   type ManagedBlockSpec,
 } from "./markdown-block";
-import { SUBSYSTEM_RULES_EXPORT, type Confidence, type SurfaceAdapter } from "./types";
+import { SUBSYSTEM_RULES_EXPORT, type Confidence, type CustomUninstallResult, type SurfaceAdapter } from "./types";
 
 export const LAST_VERIFIED_RULES_EXPORT = "2026-09-24";
 
+interface RulesSpecResult {
+  readonly spec: ManagedBlockSpec;
+  readonly skipped: readonly SkippedCanonicalRule[];
+}
+
 /** Builds this call's `ManagedBlockSpec` by collecting+rendering the CURRENT rule set — never cached, so a rule added/removed since the last install is reflected on the next one. */
-async function rulesSpec(root: string): Promise<ManagedBlockSpec> {
-  const rules = await collectCanonicalRules(root);
+async function rulesSpec(root: string): Promise<RulesSpecResult> {
+  const { rules, skipped } = await collectCanonicalRules(root);
   const body = renderRulesBlockBody(rules);
-  return { startMarker: RULES_BLOCK_START_MARKER, endMarker: RULES_BLOCK_END_MARKER, render: () => body };
+  return {
+    spec: { startMarker: RULES_BLOCK_START_MARKER, endMarker: RULES_BLOCK_END_MARKER, render: () => body },
+    skipped,
+  };
+}
+
+/** Review round 1, F7: a rule `collectCanonicalRules` refused to index (an unsafe path) is surfaced here as a problem string, on every path this surface reports through — never silently dropped. */
+function skippedMessages(skipped: readonly SkippedCanonicalRule[]): string[] {
+  return skipped.map((s) => `${s.relativePath}: ${s.reason}`);
 }
 
 async function installRulesExport(root: string, relativePath: string, frontMatter?: string): Promise<string[]> {
-  return installMarkdownBlock(root, relativePath, frontMatter, await rulesSpec(root));
+  const { spec, skipped } = await rulesSpec(root);
+  const errors = await installMarkdownBlock(root, relativePath, frontMatter, spec);
+  return [...skippedMessages(skipped), ...errors];
 }
 
-async function uninstallRulesExport(root: string, relativePath: string, frontMatter?: string): Promise<boolean> {
-  return uninstallMarkdownBlock(root, relativePath, frontMatter, await rulesSpec(root));
+async function uninstallRulesExport(
+  root: string,
+  relativePath: string,
+  frontMatter?: string,
+): Promise<boolean | CustomUninstallResult> {
+  const { spec, skipped } = await rulesSpec(root);
+  const removed = await uninstallMarkdownBlock(root, relativePath, frontMatter, spec);
+  return skipped.length === 0 ? removed : { removed, warnings: skippedMessages(skipped) };
 }
 
 async function probeRulesExport(root: string, relativePath: string): Promise<string[]> {
-  return probeMarkdownBlock(root, relativePath, await rulesSpec(root));
+  const { spec, skipped } = await rulesSpec(root);
+  const problems = await probeMarkdownBlock(root, relativePath, spec);
+  return [...skippedMessages(skipped), ...problems];
 }
 
 async function inspectRulesExport(root: string, relativePath: string) {
-  return inspectMarkdownBlock(root, relativePath, await rulesSpec(root));
+  const { spec } = await rulesSpec(root);
+  return inspectMarkdownBlock(root, relativePath, spec);
 }
 
 interface RulesExportParams {
@@ -68,7 +98,14 @@ function rulesExportSurface(params: RulesExportParams): SurfaceAdapter {
   const { relativePath, frontMatter, confidence, sourceDocs, riskNotes } = params;
   return {
     id: "rules-export",
-    flag: "instructions",
+    // Review round 1, F19: this surface used to share the `instructions`
+    // flag with `markdown-block.ts`'s pointer-block surfaces (gemini-cli's
+    // GEMINI.md, kiro's steering file, ...), which made
+    // `--surface instructions` also install/uninstall `rules-export` — no
+    // longer opt-in in effect, even though `optIn: true` is set below. Its
+    // own flag keeps `--surface instructions` and `--surface rules` (or
+    // `--surface rules-export`, the id) fully independent selectors.
+    flag: "rules",
     subsystem: SUBSYSTEM_RULES_EXPORT,
     sentinel: "keryx:rules",
     confidence,

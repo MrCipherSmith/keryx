@@ -203,6 +203,7 @@ export type SurfaceFlag =
   | "skills"           // can load/discover SKILL.md-shaped capability packages
   | "agents"           // can load a subagent/custom-agent definition format
   | "instructions"     // reads a standing project-instructions file (AGENTS.md-family)
+  | "rules"            // flow 313 (W4): receives the canonical-rules index as a managed block (opt-in rules-export surfaces)
   | "mcp";             // can act as an MCP client to Keryx's own MCP server
 
 export type Confidence = "verified" | "experimental";

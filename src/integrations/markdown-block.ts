@@ -51,7 +51,7 @@
 // `computeFencedRanges` (which walks raw content directly rather than a
 // normalised copy).
 
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 
@@ -88,6 +88,51 @@ export interface ManagedBlockSpec {
  * user content between a stray start marker and EOF.
  */
 export class UnterminatedInstructionsBlockError extends Error {}
+
+/**
+ * Thrown (review round 1, F20) by `uninstallMarkdownBlock` when any segment
+ * of `relativePath`, from `root` down to the target itself, is a symlink.
+ * Install (`installMarkdownBlock`) reports the same fact through its own
+ * `string[]` error channel instead of throwing — see the identical check in
+ * both — so this class mirrors `UnterminatedInstructionsBlockError`'s "refuse
+ * hard, leave the file untouched" idiom for uninstall's no-error-channel
+ * `customUninstall` contract, and `installer.ts` (N1) already catches any
+ * thrown error from `customUninstall` into a `failed` `SurfaceResult`.
+ */
+export class SymlinkRefusedError extends Error {}
+
+/**
+ * Review round 1, F20: `lstat` every path segment from `root` down to
+ * `relativePath`'s target — never `stat`, which follows a symlink instead of
+ * reporting it — and refuse the FIRST one found to be a symlink, whether it
+ * is the target file itself (`CLAUDE.md -> $OUTSIDE/other-file.md`) or a
+ * parent directory (`.cursor/rules -> $OUTSIDE/some-dir`, with the actual
+ * target `.cursor/rules/keryx-rules.mdc` underneath it). Before this check,
+ * `installMarkdownBlock`/`uninstallMarkdownBlock` read/wrote straight through
+ * either shape, letting a symlink planted under the project root (by a
+ * bundle import, or any other writer) redirect Keryx's own managed-block
+ * write to an arbitrary file outside the project entirely. A segment that
+ * does not exist yet (ENOENT — the ordinary "this file/directory will be
+ * created" case ever install already handles) is not a refusal.
+ */
+async function refuseSymlinkChain(root: string, relativePath: string): Promise<string | undefined> {
+  const rootResolved = path.resolve(root);
+  const segments = relativePath.split("/");
+  let current = rootResolved;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    let stats;
+    try {
+      stats = await lstat(current);
+    } catch {
+      continue; // does not exist yet — nothing to refuse.
+    }
+    if (stats.isSymbolicLink()) {
+      return `${relativePath}: refuses to write through a symlink at ${path.relative(rootResolved, current) || "."}`;
+    }
+  }
+  return undefined;
+}
 
 interface Block {
   readonly start: number;
@@ -354,6 +399,9 @@ export async function installMarkdownBlock(
   frontMatter?: string,
   spec: ManagedBlockSpec = INSTRUCTIONS_BLOCK_SPEC,
 ): Promise<string[]> {
+  const symlinkRefusal = await refuseSymlinkChain(root, relativePath);
+  if (symlinkRefusal) return [symlinkRefusal];
+
   const file = fileFor(root, relativePath);
   if (!(await pathExists(file))) {
     await mkdir(path.dirname(file), { recursive: true });
@@ -415,6 +463,9 @@ export async function uninstallMarkdownBlock(
   frontMatter?: string,
   spec: ManagedBlockSpec = INSTRUCTIONS_BLOCK_SPEC,
 ): Promise<boolean> {
+  const symlinkRefusal = await refuseSymlinkChain(root, relativePath);
+  if (symlinkRefusal) throw new SymlinkRefusedError(symlinkRefusal);
+
   const file = fileFor(root, relativePath);
   if (!(await pathExists(file))) return false;
   const raw = await readFile(file, "utf8");
@@ -450,6 +501,14 @@ export async function inspectMarkdownBlock(
   relativePath: string,
   spec: ManagedBlockSpec = INSTRUCTIONS_BLOCK_SPEC,
 ): Promise<MarkdownBlockInspection> {
+  // F20: reported the same "malformed" way a parse failure is, so a dry-run
+  // built on this inspection (`installer.ts`'s `customInstallDryRun`/
+  // `customUninstallDryRun`) predicts the real install/uninstall's refusal
+  // instead of promising a success (or a plain "absent-file") it cannot
+  // deliver.
+  const symlinkRefusal = await refuseSymlinkChain(root, relativePath);
+  if (symlinkRefusal) return { state: "malformed", message: symlinkRefusal };
+
   const file = fileFor(root, relativePath);
   if (!(await pathExists(file))) return { state: "absent-file" };
   const raw = await readFile(file, "utf8");

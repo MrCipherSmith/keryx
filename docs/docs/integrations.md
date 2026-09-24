@@ -236,8 +236,13 @@ there, not this block). Read the rule that matches your task before acting:
 
 It is **opt-in** (`optIn: true`) — `keryx integrations install --runtime
 <id>` with no `--surface` never writes it; reach it explicitly with `--surface
-rules-export` (or its flag, `--surface instructions`, which also matches the
-pre-existing pointer surface on harnesses that have one). Registered for
+rules-export` (its id) or `--surface rules` (its flag). Review round 1, F19:
+this surface used to share the `instructions` flag with the pre-existing
+`keryx:instructions` pointer surfaces (gemini-cli/kiro/github-copilot-agent),
+which meant `--surface instructions` silently ALSO installed/uninstalled
+`rules-export` — no longer truly opt-in. `rules` is its own flag precisely so
+`--surface instructions` reaches only the pointer surfaces, and `--surface
+rules`/`rules-export` reaches only this one. Registered for
 `claude` (`CLAUDE.md`), `codex` (`AGENTS.md`), `gemini-cli` (`GEMINI.md`),
 `github-copilot-agent` (`.github/copilot-instructions.md`, appended with no
 front matter), `cursor` (`.cursor/rules/keryx-rules.mdc`, created with
