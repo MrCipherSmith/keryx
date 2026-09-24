@@ -190,6 +190,40 @@ function decodeUtf16WithBom(buffer: Buffer): string | undefined {
 }
 
 /**
+ * R8-F2 (flow 313 W4, review round 8): `decodeUtf16WithBom` above only
+ * recognises the two UTF-16 BOMs (`FF FE`/`FE FF`) — a genuine UTF-32 file
+ * (`FF FE 00 00` little-endian, `00 00 FE FF` big-endian) has its first two
+ * bytes MATCH the UTF-16LE BOM too, so without this check running first, a
+ * UTF-32LE file would be silently mis-decoded as UTF-16LE with a spurious NUL
+ * code unit between every real one (the same noise class `decodeUtf16WithBom`
+ * itself exists to avoid) — the pre-existing R6-F1 gap. Order matters: the
+ * 4-byte UTF-32LE BOM is checked before the 2-byte UTF-16LE one so it is
+ * never shadowed. `TextDecoder` has no builtin `utf-32le`/`utf-32be`, so this
+ * decodes by hand, 4 bytes per code point; a code unit outside the valid
+ * Unicode range or landing in the surrogate range becomes U+FFFD rather than
+ * throwing, same `fatal: false` policy as the UTF-16 decode.
+ */
+function decodeUtf32WithBom(buffer: Buffer): string | undefined {
+  if (buffer.length < 4) return undefined;
+  const isLittleEndianBom = buffer[0] === 0xff && buffer[1] === 0xfe && buffer[2] === 0x00 && buffer[3] === 0x00;
+  const isBigEndianBom = buffer[0] === 0x00 && buffer[1] === 0x00 && buffer[2] === 0xfe && buffer[3] === 0xff;
+  if (!isLittleEndianBom && !isBigEndianBom) return undefined;
+  const codeUnits = buffer.subarray(4);
+  const usableLength = codeUnits.length - (codeUnits.length % 4);
+  let out = "";
+  for (let i = 0; i < usableLength; i += 4) {
+    const codePoint = isLittleEndianBom ? codeUnits.readUInt32LE(i) : codeUnits.readUInt32BE(i);
+    if (codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+      out += "�";
+      continue;
+    }
+    out += String.fromCodePoint(codePoint);
+  }
+  if (usableLength < codeUnits.length) out += "�";
+  return out;
+}
+
+/**
  * R7-F1 (flow 313 W4, review round 7): the BOM-aware dual decode above used
  * to exist ONLY on the `skill` entry path — every other imported-bundle kind
  * (`rule`, `agent`, `memory-entry`, `learned-pattern`, `hook-config`) was
@@ -199,13 +233,34 @@ function decodeUtf16WithBom(buffer: Buffer): string | undefined {
  * matched, and imported with ZERO findings — the exact class `decodeUtf16WithBom`
  * exists to close, just at a sibling site the original fix's scope missed.
  * This is the ONE shared helper every scanned text kind now goes through
- * (never a per-kind copy): a BOM-marked buffer yields BOTH the BOM-decoded
- * view and the plain lossy UTF-8 view of the same bytes; a non-BOM buffer
- * yields only the lossy view. Callers run their checks against every variant
- * and union the findings, deduplicated by `findingId` (see
- * `unionFindingsById` below), exactly like the skill path already did.
+ * (never a per-kind copy): a BOM-marked buffer yields BOTH a "genuine
+ * encoding" decoded view and the plain lossy UTF-8 view of the same bytes; a
+ * buffer with no recognised BOM yields only the lossy view. Callers run their
+ * checks against every variant and union the findings, deduplicated by
+ * `findingId` (see `unionFindingsById` below), exactly like the skill path
+ * already did.
+ *
+ * R8-F2: the UTF-32 check runs first (see `decodeUtf32WithBom` above) since
+ * its BOM's first two bytes collide with the UTF-16LE one. Two sub-gaps are
+ * deliberately NOT handled here, documented rather than silently missed:
+ * (1) a directive split so that neither the BOM-decoded view nor the lossy
+ * view alone contains the whole thing (e.g. half the text is genuine UTF-16,
+ * the other half raw ASCII appended after it) — no single decode of one
+ * buffer can reassemble a payload the author deliberately fragmented across
+ * two encodings; (2) bare UTF-16 content with NO BOM at offset 0 (e.g. a
+ * UTF-8 preamble followed by a raw UTF-16 tail) — a BOM is the only signal
+ * this function has that a buffer is not UTF-8, so content with no BOM at
+ * all is always scanned only as the lossy UTF-8 view, same as any other
+ * unmarked bytes. Both are pre-existing, non-dual-decode classes (R6-F1's
+ * split-view case and R5-F4's bare-UTF-16 case), not regressions from this
+ * fix, and R8's bypass matrix (`bom8.out` R4/M2) confirms they are the only
+ * misses left.
  */
 function decodeTextVariants(buffer: Buffer): string[] {
+  const utf32Decoded = decodeUtf32WithBom(buffer);
+  if (utf32Decoded !== undefined) {
+    return [utf32Decoded, lossyDecodeBytes(buffer)];
+  }
   const bomDecoded = decodeUtf16WithBom(buffer);
   const lossyDecoded = lossyDecodeBytes(buffer);
   return bomDecoded !== undefined ? [bomDecoded, lossyDecoded] : [lossyDecoded];
@@ -524,6 +579,35 @@ async function scanImportedBundle(
     scanned.push(entry.path);
     const contentVariants = decodeTextVariants(buffer);
 
+    if (entry.kind === "agent") {
+      // R8-F3 (review round 8): `checkAgentUnrestrictedTools`/
+      // `checkAgentMissingModelTier` are ABSENCE-type checks ("the expected
+      // key is missing") — unioning them across every decode variant the way
+      // the other kinds' positive-match checks are unioned means the
+      // NUL-interleaved lossy-decode noise view of a genuine BOM-marked
+      // agent (which never has a parseable frontmatter block) always
+      // contributes a false-positive finding, regardless of what the real,
+      // BOM-decoded frontmatter says. In practice `plan.ts` refuses a
+      // non-UTF-8 `agent` bundle entry before import reaches this audit, so
+      // this path is normally unreachable for a genuine BOM file — fixed
+      // anyway, both for direct-audit parity (see the `agent-definitions`
+      // surface above, same fix) and defense in depth. Absence-type checks
+      // run only against the PRIMARY variant (the genuine-encoding decode
+      // when a BOM is present); `checkAutoRunDirective` — a positive-match
+      // check — still runs against every variant and is unioned.
+      const primaryContent = contentVariants[0]!;
+      raw.push(
+        ...asBundleFindings(checkAgentUnrestrictedTools(entry.path, primaryContent), "bundle-agent-unrestricted-tools"),
+        ...asBundleFindings(checkAgentMissingModelTier(entry.path, primaryContent), "bundle-agent-missing-model-tier"),
+        ...unionFindingsById(
+          contentVariants.map((content) =>
+            asBundleFindings(checkAutoRunDirective("agent-definitions", entry.path, content), "bundle-auto-run-directive"),
+          ),
+        ),
+      );
+      continue;
+    }
+
     const otherKindVariantFindings: RawFinding[][] = contentVariants.map((content) => {
       switch (entry.kind) {
         case "rule": {
@@ -537,13 +621,6 @@ async function scanImportedBundle(
               "bundle-prompt-injection-in-instructions",
             ),
             ...asBundleFindings(checkAutoRunDirective("instructions", entry.path, content), "bundle-auto-run-directive"),
-          ];
-        }
-        case "agent": {
-          return [
-            ...asBundleFindings(checkAgentUnrestrictedTools(entry.path, content), "bundle-agent-unrestricted-tools"),
-            ...asBundleFindings(checkAgentMissingModelTier(entry.path, content), "bundle-agent-missing-model-tier"),
-            ...asBundleFindings(checkAutoRunDirective("agent-definitions", entry.path, content), "bundle-auto-run-directive"),
           ];
         }
         case "learned-pattern": {
@@ -824,14 +901,32 @@ export async function computeAuditInternal(
     const { found: files, unreadable: discoveryUnreadable } = await discoverAgentDefinitions(root);
     const unreadable: string[] = [...discoveryUnreadable];
     for (const relativePath of files) {
-      const content = await safeReadText(path.join(root, relativePath));
-      if (content === undefined) {
+      // R8-F3 (review round 8): this used to be `safeReadText` — a single
+      // plain UTF-8 decode, with no BOM awareness at all (this direct
+      // surface, unlike `scanImportedBundle`, never went through
+      // `decodeTextVariants`). A genuine UTF-16-BOM agent file always
+      // lossy-decodes to NUL-interleaved noise with no parseable
+      // frontmatter, so `checkAgentUnrestrictedTools`/
+      // `checkAgentMissingModelTier` — both "the expected key is ABSENT"
+      // checks — fired on every such file regardless of what its real
+      // frontmatter said: a false positive. Absence-type checks now run only
+      // against the PRIMARY variant (the genuine-encoding decode when a BOM
+      // is present, never the noise view), while `checkAutoRunDirective` — a
+      // positive-match check — still runs against every variant and is
+      // unioned, so a directive visible only in one view (the R5-F2/R7-F1
+      // class) is still caught either way.
+      const buffer = await safeReadBuffer(path.join(root, relativePath));
+      if (buffer === undefined) {
         unreadable.push(relativePath);
         continue;
       }
-      raw.push(...checkAgentUnrestrictedTools(relativePath, content));
-      raw.push(...checkAgentMissingModelTier(relativePath, content));
-      raw.push(...checkAutoRunDirective("agent-definitions", relativePath, content));
+      const contentVariants = decodeTextVariants(buffer);
+      const primaryContent = contentVariants[0]!;
+      raw.push(...checkAgentUnrestrictedTools(relativePath, primaryContent));
+      raw.push(...checkAgentMissingModelTier(relativePath, primaryContent));
+      raw.push(
+        ...unionFindingsById(contentVariants.map((content) => checkAutoRunDirective("agent-definitions", relativePath, content))),
+      );
     }
     surfaces.push(surfaceResult("agent-definitions", files, unreadable));
   }
