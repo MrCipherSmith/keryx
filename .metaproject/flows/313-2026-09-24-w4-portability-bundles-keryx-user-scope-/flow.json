@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T10:44:09.151Z",
+  "updatedAt": "2026-09-24T11:38:37.431Z",
   "source": {
     "type": "description",
     "ref": null
@@ -332,8 +332,19 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T11:15:03.684Z",
+            "outcome": "started",
+            "detail": "choke-point re-plan lanes C1-C4 at ca877166; round 4 verification"
+          },
+          {
+            "at": "2026-09-24T11:38:37.431Z",
+            "outcome": "failed",
+            "detail": "round 4: 0 blocker, 2 major remaining (R1-F20, R3-F1), 16 minor"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -548,6 +559,16 @@
       "at": "2026-09-24T10:44:09.151Z",
       "event": "task-added",
       "detail": "T17: Re-plan after round 3: choke-point fixes (contained-write primitive, canonical path key, audit binary rule, memory splitter, distill matcher, own-repo round-trip CI test)"
+    },
+    {
+      "at": "2026-09-24T11:15:03.684Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — choke-point re-plan lanes C1-C4 at ca877166; round 4 verification"
+    },
+    {
+      "at": "2026-09-24T11:38:37.431Z",
+      "event": "task-attempt",
+      "detail": "T17: failed (attempt 2) — round 4: 0 blocker, 2 major remaining (R1-F20, R3-F1), 16 minor"
     }
   ]
 }
