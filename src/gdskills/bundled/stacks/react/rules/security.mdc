@@ -1,0 +1,61 @@
+---
+extends: common
+paths: ["**/*.tsx", "**/*.jsx"]
+metadata:
+  origin: authored
+---
+
+# React security
+
+Stack-specific risks for React component files (`*.tsx`/`*.jsx`, W1-AC8),
+narrowing `ts-js-node`'s generic security rule. Not a general OWASP list —
+only the sinks React's rendering model makes reachable.
+
+## `dangerouslySetInnerHTML`
+
+- Treat `dangerouslySetInnerHTML` as the default XSS sink: any user-, API-,
+  or CMS-sourced string passed to it renders as live HTML/JS. Avoid it —
+  render the content as text/JSX instead — unless the project genuinely
+  needs to render rich HTML (e.g. a CMS body).
+- When it is unavoidable, sanitize the string through the project's own
+  sanitizer (e.g. DOMPurify) immediately before the prop is built, not
+  earlier in the pipeline where a later edit could drop the sanitize step;
+  never pass a raw string straight through.
+- Never build the `__html` value by concatenating user input into a
+  template string of markup — that is the same sink with extra steps.
+
+## URLs from user data
+
+- Reject or scheme-allowlist a URL that becomes an `href`/`src` when it
+  comes from user input, a query param, or an API response —
+  `javascript:`, `data:`, and `vbscript:` schemes execute on click/load.
+  Validate against an allowlist (`http:`, `https:`, `mailto:`) before
+  binding it to the element.
+- The same applies to a dynamic `src` on `<img>`, `<iframe>`, or `<script>`
+  built from anything not fully controlled by the app.
+
+## Secrets and client bundles
+
+- Anything read via the framework's public-env convention (e.g. a
+  `NEXT_PUBLIC_`/`VITE_`/`REACT_APP_`-prefixed variable, or any value the
+  bundler inlines into client output) ships in the browser bundle in plain
+  text — never put an API secret, private key, or unscoped token behind
+  one of these prefixes. A value that must stay server-only belongs in a
+  server component, a route handler/API route, or a server action, never
+  a client component or a plain (non-prefixed-and-still-bundled) constant
+  imported into client code.
+- Grep a diff for the project's public-env prefix before approving a new
+  environment variable used inside a client component.
+
+## Third-party scripts and client-side auth
+
+- Loading a third-party script by injecting a `<script>` tag with a
+  dynamic or user-influenced `src` is the same class of risk as an
+  unvalidated `href`/`src` above; pin third-party script URLs to a fixed,
+  reviewed list.
+- Do not gate a protected view purely on client-side state (a store flag,
+  a decoded-but-unverified JWT, a route guard component) — a client
+  component can always be bypassed by disabling JavaScript or calling the
+  underlying API directly. Client-side checks are UX only; the real
+  authorization check must happen server-side (server component, route
+  handler, or backend).

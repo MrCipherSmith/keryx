@@ -1,0 +1,40 @@
+[
+  {
+    "query": "Use when building or changing a React component, hook, or form in a .tsx/.jsx file -- covers function components, deriving state instead of syncing it with effects, Suspense and error boundaries, form Actions (useActionState, useOptimistic, useTransition), ref-as-prop, and React Compiler-aware memoization.",
+    "decision": "fork",
+    "topMatch": "react/react-build-fix",
+    "recordedAt": "2026-09-24T12:00:07.391Z",
+    "skillName": "react-implementation",
+    "justification": "top match react/react-build-fix (0.32) is a build/lint/type-error fix skill for already-broken code, not an authoring workflow for new component/hook code; react-code-review (0.24) is read-only review; react-testing (0.18) is test authoring, not component authoring. Below use threshold 0.55; none is a substitute for a React component-authoring skill, so create."
+  },
+  {
+    "query": "Use when a React component's test suite needs writing, extending, or fixing with React Testing Library -- covers query-by-role/label, user-event interaction, async findBy/waitFor, network mocking at the request boundary, and act warnings, on top of the project's Vitest or Jest runner.",
+    "decision": "fork",
+    "topMatch": "ts-js-node/nodejs-testing",
+    "recordedAt": "2026-09-24T12:00:14.111Z",
+    "skillName": "react-testing",
+    "justification": "top match ts-js-node/nodejs-testing (0.46) is the generic TS/Node testing skill with no React component, JSX rendering, or React Testing Library query/interaction guidance; review-testing-practices (0.29) is read-only review, not authoring. Below use threshold 0.55; neither is a substitute for a React-specific RTL authoring skill, so create."
+  },
+  {
+    "query": "Use when reviewing changed React component or hook code (.tsx/.jsx) for Rules of Hooks violations, effect dependency bugs, stale closures, key misuse, in-place state mutation, re-render hot spots, accessibility gaps, and dangerouslySetInnerHTML/URL XSS sinks -- read-only, no MobX store review and no repository convention-doc lookup.",
+    "decision": "create",
+    "topMatch": "react/react-implementation",
+    "recordedAt": "2026-09-24T12:00:23.775Z",
+    "skillName": "react-code-review"
+  },
+  {
+    "query": "Use when a React component fails to type-check, lint, or build -- JSX/TSX prop and children typing errors, event handler and ref types after the React 19 types changes, eslint-plugin-react-hooks failures, and Vite/webpack/Next.js bundler build failures or hydration mismatches. Fixes the root cause, never disables the hooks lint rule or casts to any.",
+    "decision": "fork",
+    "topMatch": "ts-js-node/nodejs-build-fix",
+    "recordedAt": "2026-09-24T12:00:23.917Z",
+    "skillName": "react-build-fix",
+    "justification": "top match ts-js-node/nodejs-build-fix (0.32) is the generic TS/Node build-fix skill with no JSX/TSX prop typing, react-hooks lint, or hydration-mismatch guidance; react-implementation (0.25) is an authoring skill, not a fix skill. Below use threshold 0.55; neither is a substitute for a React-specific build-fix skill, so create."
+  },
+  {
+    "query": "Use when upgrading a codebase across React major versions (e.g. 18 to 19) -- removing legacy APIs (string refs, legacy context, propTypes/defaultProps on function components, ReactDOM.render/hydrate), applying official codemods, updating the @types/react package, fixing the act import, and staging the rollout.",
+    "decision": "create",
+    "topMatch": "react/react-build-fix",
+    "recordedAt": "2026-09-24T12:00:24.073Z",
+    "skillName": "react-upgrade-migration"
+  }
+]
