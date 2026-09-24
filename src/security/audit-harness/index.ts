@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
-import { pathExists } from "../../lib/fs";
+import { isPathInside, pathExists } from "../../lib/fs";
 import { readJsonObjectFile } from "../../lib/json";
 import { parseCodexToml } from "./codex-toml";
 import { securityDataRoot } from "../config";
@@ -46,7 +46,9 @@ import type {
   AuditFinding,
   AuditReport,
   BaselineState,
+  CheckId,
   CoverageStatus,
+  ImportedBundleEntryKind,
   InternalProposal,
   RawFinding,
   RunAuditOptions,
@@ -144,6 +146,162 @@ function surfaceResult(
     };
   }
   return { surface, status: "scanned", pathsScanned: scanned };
+}
+
+// --- imported-bundles (Flow 313, W4 portability, T7) ------------------------
+//
+// `keryx bundle import` (W4) stages a bundle's to-be-written files into a
+// temp dir AT THEIR BUNDLE PATHS and passes that dir as `root` plus a manifest
+// of `{path, kind}` entries via `options.importedBundle`. Every check above
+// already knows how to scan its own native surface (`instructions`, `skills`,
+// `agent-definitions`, `hooks`) — rather than duplicating that detection
+// logic, the functions below call the EXISTING check with its own surface/
+// check-id arguments (never behaviour-changing) and then rewrite the returned
+// findings' `surface`/`check` onto the `imported-bundles` surface and its
+// `bundle-*` check id, per W8-harness-security-audit.md's `bundle-*` row
+// ("every check above, run against staged bundle contents ... inherits
+// per-check severity" — the severity on each RawFinding is left untouched).
+
+/** Rewrites `surface`→"imported-bundles" and `check`→`bundleCheck` on every finding, leaving severity/confidence/message/evidence/location exactly as the underlying check produced them. */
+function asBundleFindings(findings: RawFinding[], bundleCheck: CheckId): RawFinding[] {
+  return findings.map((f) => ({ ...f, surface: "imported-bundles", check: bundleCheck }));
+}
+
+/**
+ * A staged bundle entry's `path` is attacker-influenced (it comes from the
+ * bundle manifest, before any content is trusted). Refuse anything that could
+ * resolve outside `root`: absolute paths, `..` segments, and backslashes
+ * (which `path.join` on POSIX would otherwise treat as a literal filename
+ * character, silently hiding a Windows-style traversal attempt from the `..`
+ * check). Such an entry is reported `unreadable`, never read.
+ */
+function isSafeBundleEntryPath(relativePath: string): boolean {
+  if (relativePath.length === 0) return false;
+  if (path.isAbsolute(relativePath)) return false;
+  if (relativePath.includes("\\")) return false;
+  return !relativePath.split("/").some((segment) => segment === "..");
+}
+
+async function scanImportedBundle(
+  root: string,
+  entries: ReadonlyArray<{ path: string; kind: ImportedBundleEntryKind }>,
+): Promise<{ raw: RawFinding[]; surface: SurfaceResult }> {
+  const raw: RawFinding[] = [];
+  const scanned: string[] = [];
+  const unreadable: string[] = [];
+  const sorted = [...entries].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+
+  for (const entry of sorted) {
+    if (!isSafeBundleEntryPath(entry.path)) {
+      unreadable.push(entry.path);
+      continue;
+    }
+    const absolute = path.join(root, entry.path);
+    if (!isPathInside(root, absolute)) {
+      unreadable.push(entry.path);
+      continue;
+    }
+
+    if (entry.kind === "hook-config") {
+      const content = await safeReadText(absolute);
+      if (content === undefined) {
+        unreadable.push(entry.path);
+        continue;
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        unreadable.push(entry.path);
+        continue;
+      }
+      scanned.push(entry.path);
+      const commands: Array<{ command: string; pointer: string }> = [];
+      collectHookCommands(parsed, "", commands);
+      for (const { command, pointer } of commands) {
+        raw.push(...asBundleFindings(checkHookCommandInjection(entry.path, command, pointer), "bundle-hook-command-injection"));
+        raw.push(...asBundleFindings(checkHookExfiltrationShape(entry.path, command, pointer), "bundle-hook-exfiltration-shape"));
+        raw.push(...asBundleFindings(checkHookSilentSuppression(entry.path, command, pointer), "bundle-hook-silent-suppression"));
+      }
+      continue;
+    }
+
+    const content = await safeReadText(absolute);
+    if (content === undefined) {
+      unreadable.push(entry.path);
+      continue;
+    }
+    scanned.push(entry.path);
+
+    switch (entry.kind) {
+      case "skill": {
+        raw.push(
+          ...asBundleFindings(
+            checkSecretsInText("skills", "skill-script-secret", entry.path, content, "high"),
+            "bundle-skill-script-secret",
+          ),
+        );
+        raw.push(
+          ...asBundleFindings(
+            checkInjectionInText("skills", "skill-script-injection", entry.path, content, "high"),
+            "bundle-skill-script-injection",
+          ),
+        );
+        if (path.basename(entry.path) === "SKILL.md") {
+          raw.push(...asBundleFindings(checkAutoRunDirective("skills", entry.path, content), "bundle-auto-run-directive"));
+          raw.push(
+            ...asBundleFindings(
+              checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
+              "bundle-prompt-injection-in-instructions",
+            ),
+          );
+        }
+        break;
+      }
+      case "rule": {
+        raw.push(
+          ...asBundleFindings(
+            checkSecretsInText("instructions", "secret-in-instructions", entry.path, content, "critical"),
+            "bundle-secret-in-instructions",
+          ),
+        );
+        raw.push(
+          ...asBundleFindings(
+            checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
+            "bundle-prompt-injection-in-instructions",
+          ),
+        );
+        raw.push(...asBundleFindings(checkAutoRunDirective("instructions", entry.path, content), "bundle-auto-run-directive"));
+        break;
+      }
+      case "agent": {
+        raw.push(...asBundleFindings(checkAgentUnrestrictedTools(entry.path, content), "bundle-agent-unrestricted-tools"));
+        raw.push(...asBundleFindings(checkAgentMissingModelTier(entry.path, content), "bundle-agent-missing-model-tier"));
+        raw.push(
+          ...asBundleFindings(checkAutoRunDirective("agent-definitions", entry.path, content), "bundle-auto-run-directive"),
+        );
+        break;
+      }
+      case "learned-pattern":
+      case "memory-entry": {
+        raw.push(
+          ...asBundleFindings(
+            checkSecretsInText("instructions", "secret-in-instructions", entry.path, content, "critical"),
+            "bundle-secret-in-instructions",
+          ),
+        );
+        raw.push(
+          ...asBundleFindings(
+            checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
+            "bundle-prompt-injection-in-instructions",
+          ),
+        );
+        break;
+      }
+    }
+  }
+
+  return { raw, surface: surfaceResult("imported-bundles", scanned, unreadable) };
 }
 
 async function mcpBaselineTools(root: string): Promise<{ tools: Record<string, string>; state: "absent" | "ok" | "unreadable" }> {
@@ -392,7 +550,13 @@ export async function computeAuditInternal(
   }
 
   // --- imported-bundles ----------------------------------------------------------
-  surfaces.push({ surface: "imported-bundles", status: "not-applicable", pathsScanned: [] });
+  if (options.importedBundle) {
+    const { raw: bundleRaw, surface: bundleSurface } = await scanImportedBundle(root, options.importedBundle.entries);
+    raw.push(...bundleRaw);
+    surfaces.push(bundleSurface);
+  } else {
+    surfaces.push({ surface: "imported-bundles", status: "not-applicable", pathsScanned: [] });
+  }
 
   // --- assign ids, dedupe --------------------------------------------------------
   const proposalsById = new Map<string, InternalProposal>();

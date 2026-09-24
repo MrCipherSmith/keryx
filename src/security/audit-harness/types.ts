@@ -33,7 +33,21 @@ export type CheckId =
   | "agent-missing-model-tier"
   | "skill-script-secret"
   | "skill-script-injection"
-  | "indefinite-suppression";
+  | "indefinite-suppression"
+  // Flow 313 (W4 portability) T7: `bundle-*` variants of the checks above,
+  // run against a staged W4 bundle's to-be-written content (`imported-bundles`
+  // surface) before import applies anything. See W8-harness-security-audit.md
+  // §Checks, `bundle-*` row.
+  | "bundle-secret-in-instructions"
+  | "bundle-prompt-injection-in-instructions"
+  | "bundle-auto-run-directive"
+  | "bundle-hook-command-injection"
+  | "bundle-hook-exfiltration-shape"
+  | "bundle-hook-silent-suppression"
+  | "bundle-agent-unrestricted-tools"
+  | "bundle-agent-missing-model-tier"
+  | "bundle-skill-script-secret"
+  | "bundle-skill-script-injection";
 
 export type SurfaceScanStatus = "scanned" | "not-applicable" | "error";
 
@@ -164,12 +178,27 @@ export type AuditReport = {
   baseline: BaselineState | null;
 };
 
+/**
+ * Flow 313 (W4 portability) T7: the kind of a staged bundle entry, used to
+ * pick which check(s) run against it — see `index.ts#scanImportedBundle`.
+ */
+export type ImportedBundleEntryKind = "skill" | "rule" | "agent" | "learned-pattern" | "memory-entry" | "hook-config";
+
 export type RunAuditOptions = {
   fixProposals?: boolean;
   baselinePath?: string;
   severityFloor?: AuditSeverity;
   ci?: boolean;
   now?: () => Date;
+  /**
+   * Flow 313 (W4 portability) T7: a W4 bundle staged into a temp dir at its
+   * to-be-written paths, with `root` pointed at that temp dir. `entries[].path`
+   * is relative to `root`. Absent (the default): the `imported-bundles`
+   * surface reports `not-applicable`, unchanged from before this option
+   * existed. Present with an empty `entries` array: also `not-applicable`
+   * (nothing to scan).
+   */
+  importedBundle?: { entries: ReadonlyArray<{ path: string; kind: ImportedBundleEntryKind }> };
 };
 
 export const SEVERITY_ORDER: readonly AuditSeverity[] = ["low", "medium", "high", "critical"];

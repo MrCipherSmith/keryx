@@ -77,7 +77,7 @@ export {
   defaultBaselinePath,
   runHarnessAudit,
 } from "./audit-harness";
-export type { AuditFinding, AuditReport, AuditSeverity } from "./audit-harness";
+export type { AuditFinding, AuditReport, AuditSeverity, ImportedBundleEntryKind, RunAuditOptions } from "./audit-harness";
 
 // Re-exported here for the same reason: `commands/security-impact-evidence.ts`
 // needs both the impact-evidence config helpers and the impact-evidence
