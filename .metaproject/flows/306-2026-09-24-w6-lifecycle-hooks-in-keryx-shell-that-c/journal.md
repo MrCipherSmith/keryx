@@ -15,3 +15,36 @@
 - 2026-09-24T01:02:34.947Z - task-done: T4: Self-review and prepare draft PR
 - 2026-09-24T01:02:35.033Z - frozen: 16 criteria; checksum recorded
 - 2026-09-24T01:02:35.114Z - started
+- 2026-09-24T01:02:41.090Z - task-attempt: T5: started (attempt 1) — 306-T5 sonnet worker
+- 2026-09-24T01:22:31.129Z - task-done: T5: Core hook runtime module src/harness/hooks (types, schema copy, config load/merge/validate, builtin declarations+ports, codec, failure semantics, composition, process runner, dispatcher) with unit tests
+- 2026-09-24T01:22:38.873Z - task-attempt: T6: started (attempt 1) — 306-T6 sonnet worker
+- 2026-09-24T01:22:38.952Z - task-attempt: T8: started (attempt 1) — 306-T8 sonnet worker
+- 2026-09-24T01:22:39.052Z - task-attempt: T9: started (attempt 1) — 306-T9 sonnet worker
+- note (orchestrator): completion outcome answered by the dispatch (create-pr-and-merge, operator_confirmed by MrCipherSmith) with the stacked-wave addendum: PR base stack/wave0, no merge by the agent, return READY_TO_MERGE. Decisions D1-D6 recorded in plan.md. T2-T4 scaffold rows skipped as superseded by T5-T12.
+- note (orchestrator): T5 accepted (208 unit tests). Worker notes: additionalContext cap = 1% of MAX_CONTEXT_BYTES (~20 KiB); SessionStart failures always proceed-with-warning regardless of class; PreToolUse composition left to integration (T6/T9) — `tightened` only for non-tool gate events.
+- 2026-09-24T01:44:38.020Z - task-done: T6: Integrate hooks into run.ts (all run-loop events, hook_invocation session records, schema) and subagent start/stop on external and internal spawn paths
+- 2026-09-24T01:44:38.107Z - task-done: T8: keryx hooks CLI (list/test/validate/enable/disable --user) with tests, registered in cli and help
+- 2026-09-24T01:45:02.509Z - task-added: T13: Children actually run under the inherited hook set (runtime restricted to inheritedHookIds passed to internal child runAgentTurn deps; external children get none) + test
+- 2026-09-24T01:45:02.587Z - task-attempt: T7: started (attempt 1) — 306-T7 sonnet worker
+- 2026-09-24T01:59:30.154Z - task-done: T9: Wire hooks into keryx shell runAgentTurn (PreToolUse tighten-only, UserPromptSubmit, Post*, Stop, PreCompact), trigger/schedule interactive false, production deps
+- 2026-09-24T01:59:30.262Z - task-done: T7: Guard and failure-semantics tests: hook never loosens deny/hard deny, ask floor, headless, class x failure x profile matrix, subagent inheritance
+- 2026-09-24T01:59:30.351Z - task-added: T14: Close T9 gaps: SessionStart/SessionEnd in keryx shell (readline + TUI) and ACP session boundary, ACP/serve wiring, hook profile follows /plan read-only
+- 2026-09-24T01:59:36.798Z - task-attempt: T13: started (attempt 1) — 306-T13 sonnet worker
+- 2026-09-24T01:59:36.876Z - task-attempt: T14: started (attempt 1) — 306-T14 sonnet worker
+- 2026-09-24T01:59:36.953Z - task-attempt: T10: started (attempt 1) — 306-T10 sonnet worker
+- 2026-09-24T02:10:30.729Z - task-done: T10: Docs: hooks user doc + extension points for W3/W8 + spec status note
+- 2026-09-24T02:20:49.828Z - task-done: T13: Children actually run under the inherited hook set (runtime restricted to inheritedHookIds passed to internal child runAgentTurn deps; external children get none) + test
+- 2026-09-24T02:21:25.291Z - task-done: T11: Verification: run bun ./src/cli.ts hooks list/validate/test end to end in a temp project and a real sandboxed hook process
+- 2026-09-24T02:21:25.379Z - task-added: T15: Built-in command hooks run in the keryx trust domain (unsandboxed unless isolation required-fail-closed) so a missing/nested sandbox cannot deny every prompt; wire ACP sessions and keryx serve
+- 2026-09-24T02:21:25.456Z - task-attempt: T15: started (attempt 1) — 306-T15 sonnet worker
+- 2026-09-24T02:22:04.250Z - task-done: T14: Close T9 gaps: SessionStart/SessionEnd in keryx shell (readline + TUI) and ACP session boundary, ACP/serve wiring, hook profile follows /plan read-only
+- note (orchestrator): T6 DONE_WITH_CONCERNS — (1) PreToolUse fired before decide() left decideOutcome undefined so the malformed-on-ask rule could not deny: fixed in T7 (decide() evaluated first; pure, observationally equivalent). (2) children hook-less: fixed in T13 (HookRuntime.forChild). (3) earlyTermination fires no hooks: accepted (run never started).
+- note (orchestrator): T9 DONE_WITH_CONCERNS — SessionStart/End, ACP/serve and per-/plan profile gaps moved to T14 (done in commit 8a21a3cf except ACP/serve, deferred to T15). Local trigger-*.test.ts git fixtures fail under the local commit-author guard hook — environmental, CI is the judge.
+- note (orchestrator): T11 evidence (bun ./src/cli.ts in a temp git project, macOS): hooks list --json = five built-ins enabled; security-check-input/check-output exit 0 PASS; ctx-guard on grep → exit 2 decision deny; user curl hook in sandbox → cannot resolve host (network none) → crash → deny hook-crashed; env probe shows only the allowlist (SECRET_TOKEN stripped); timeoutMs 500 sleep hook → timeout deny after 507ms; hand-authored keryx.ctx-guard override → enable refused exit 1; disable keryx.security-check-input writes managed override + _keryxManaged.managedHookIds; validate OK.
+- decision (orchestrator): T14 worker found real built-in hooks fail closed where the OS sandbox cannot run (nested sandbox, Linux without bwrap) → every prompt denied. T15: built-in command hooks (the keryx binary itself) run in the keryx trust domain (unsandboxed) unless the profile's isolation is required-fail-closed; user/project hooks stay sandbox-by-default and fail closed. Then wire ACP + serve.
+- 2026-09-24T02:52:37.624Z - task-done: T15: Built-in command hooks run in the keryx trust domain (unsandboxed unless isolation required-fail-closed) so a missing/nested sandbox cannot deny every prompt; wire ACP sessions and keryx serve
+- 2026-09-24T02:56:28.847Z - task-added: T16: Test hermeticity and entry resolution: test preload defaults KERYX_HOOKS=off (real built-ins resolve to the test runner under bun test), resolveKeryxArgv only trusts argv[1] when it is the keryx entry; fix serve-listener.turns test
+- 2026-09-24T02:56:28.934Z - task-attempt: T16: started (attempt 1) — 306-T16 sonnet
+- 2026-09-24T03:03:55.186Z - task-done: T16: Test hermeticity and entry resolution: test preload defaults KERYX_HOOKS=off (real built-ins resolve to the test runner under bun test), resolveKeryxArgv only trusts argv[1] when it is the keryx entry; fix serve-listener.turns test
+- note (orchestrator): T15 DONE (ACP per-session runtime, serve per-turn runtime, built-in command hooks unsandboxed unless isolation required-fail-closed; also fixed an ACP cancel-vs-permission race exposed by hook latency). T16: bun test preload defaults KERYX_HOOKS=off; resolveKeryxArgv trusts argv[1] only for cli.ts/cli.js. Local: tsc clean, eslint clean on 43 changed src files, targeted suites green except 2 commit-author-guard environmental failures (src/lib git fixtures).
+- decision (orchestrator): single PR (D6) — diff ~9.8k lines of which most are tests; split judged not worth the rebase churn.

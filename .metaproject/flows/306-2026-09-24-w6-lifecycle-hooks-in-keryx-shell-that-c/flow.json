@@ -9,7 +9,7 @@
   "title": "W6: lifecycle hooks in keryx shell that can only tighten the policy engine",
   "status": "in-progress",
   "createdAt": "2026-09-24T00:56:52.772Z",
-  "updatedAt": "2026-09-24T01:02:35.114Z",
+  "updatedAt": "2026-09-24T03:03:55.186Z",
   "source": {
     "type": "description",
     "ref": null
@@ -92,91 +92,133 @@
       "id": "T5",
       "title": "Core hook runtime module src/harness/hooks (types, schema copy, config load/merge/validate, builtin declarations+ports, codec, failure semantics, composition, process runner, dispatcher) with unit tests",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:02:41.090Z",
+            "outcome": "started",
+            "detail": "306-T5 sonnet worker"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Integrate hooks into run.ts (all run-loop events, hook_invocation session records, schema) and subagent start/stop on external and internal spawn paths",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:22:38.873Z",
+            "outcome": "started",
+            "detail": "306-T6 sonnet worker"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Guard and failure-semantics tests: hook never loosens deny/hard deny, ask floor, headless, class x failure x profile matrix, subagent inheritance",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:45:02.587Z",
+            "outcome": "started",
+            "detail": "306-T7 sonnet worker"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "keryx hooks CLI (list/test/validate/enable/disable --user) with tests, registered in cli and help",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:22:38.952Z",
+            "outcome": "started",
+            "detail": "306-T8 sonnet worker"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Wire hooks into keryx shell runAgentTurn (PreToolUse tighten-only, UserPromptSubmit, Post*, Stop, PreCompact), trigger/schedule interactive false, production deps",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:22:39.052Z",
+            "outcome": "started",
+            "detail": "306-T9 sonnet worker"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Docs: hooks user doc + extension points for W3/W8 + spec status note",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:59:36.953Z",
+            "outcome": "started",
+            "detail": "306-T10 sonnet worker"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Verification: run bun ./src/cli.ts hooks list/validate/test end to end in a temp project and a real sandboxed hook process",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -184,7 +226,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -199,6 +242,90 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Children actually run under the inherited hook set (runtime restricted to inheritedHookIds passed to internal child runAgentTurn deps; external children get none) + test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:59:36.798Z",
+            "outcome": "started",
+            "detail": "306-T13 sonnet worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Close T9 gaps: SessionStart/SessionEnd in keryx shell (readline + TUI) and ACP session boundary, ACP/serve wiring, hook profile follows /plan read-only",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T01:59:36.876Z",
+            "outcome": "started",
+            "detail": "306-T14 sonnet worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Built-in command hooks run in the keryx trust domain (unsandboxed unless isolation required-fail-closed) so a missing/nested sandbox cannot deny every prompt; wire ACP sessions and keryx serve",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T02:21:25.456Z",
+            "outcome": "started",
+            "detail": "306-T15 sonnet worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Test hermeticity and entry resolution: test preload defaults KERYX_HOOKS=off (real built-ins resolve to the test runner under bun test), resolveKeryxArgv only trusts argv[1] when it is the keryx entry; fix serve-listener.turns test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T02:56:28.934Z",
+            "outcome": "started",
+            "detail": "306-T16 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -274,6 +401,131 @@
     {
       "at": "2026-09-24T01:02:35.114Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-24T01:02:41.090Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 306-T5 sonnet worker"
+    },
+    {
+      "at": "2026-09-24T01:22:31.129Z",
+      "event": "task-done",
+      "detail": "T5: Core hook runtime module src/harness/hooks (types, schema copy, config load/merge/validate, builtin declarations+ports, codec, failure semantics, composition, process runner, dispatcher) with unit tests"
+    },
+    {
+      "at": "2026-09-24T01:22:38.873Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 306-T6 sonnet worker"
+    },
+    {
+      "at": "2026-09-24T01:22:38.952Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 306-T8 sonnet worker"
+    },
+    {
+      "at": "2026-09-24T01:22:39.052Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 306-T9 sonnet worker"
+    },
+    {
+      "at": "2026-09-24T01:44:38.020Z",
+      "event": "task-done",
+      "detail": "T6: Integrate hooks into run.ts (all run-loop events, hook_invocation session records, schema) and subagent start/stop on external and internal spawn paths"
+    },
+    {
+      "at": "2026-09-24T01:44:38.107Z",
+      "event": "task-done",
+      "detail": "T8: keryx hooks CLI (list/test/validate/enable/disable --user) with tests, registered in cli and help"
+    },
+    {
+      "at": "2026-09-24T01:45:02.509Z",
+      "event": "task-added",
+      "detail": "T13: Children actually run under the inherited hook set (runtime restricted to inheritedHookIds passed to internal child runAgentTurn deps; external children get none) + test"
+    },
+    {
+      "at": "2026-09-24T01:45:02.587Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 306-T7 sonnet worker"
+    },
+    {
+      "at": "2026-09-24T01:59:30.154Z",
+      "event": "task-done",
+      "detail": "T9: Wire hooks into keryx shell runAgentTurn (PreToolUse tighten-only, UserPromptSubmit, Post*, Stop, PreCompact), trigger/schedule interactive false, production deps"
+    },
+    {
+      "at": "2026-09-24T01:59:30.262Z",
+      "event": "task-done",
+      "detail": "T7: Guard and failure-semantics tests: hook never loosens deny/hard deny, ask floor, headless, class x failure x profile matrix, subagent inheritance"
+    },
+    {
+      "at": "2026-09-24T01:59:30.351Z",
+      "event": "task-added",
+      "detail": "T14: Close T9 gaps: SessionStart/SessionEnd in keryx shell (readline + TUI) and ACP session boundary, ACP/serve wiring, hook profile follows /plan read-only"
+    },
+    {
+      "at": "2026-09-24T01:59:36.798Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 306-T13 sonnet worker"
+    },
+    {
+      "at": "2026-09-24T01:59:36.876Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 306-T14 sonnet worker"
+    },
+    {
+      "at": "2026-09-24T01:59:36.953Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 306-T10 sonnet worker"
+    },
+    {
+      "at": "2026-09-24T02:10:30.729Z",
+      "event": "task-done",
+      "detail": "T10: Docs: hooks user doc + extension points for W3/W8 + spec status note"
+    },
+    {
+      "at": "2026-09-24T02:20:49.828Z",
+      "event": "task-done",
+      "detail": "T13: Children actually run under the inherited hook set (runtime restricted to inheritedHookIds passed to internal child runAgentTurn deps; external children get none) + test"
+    },
+    {
+      "at": "2026-09-24T02:21:25.291Z",
+      "event": "task-done",
+      "detail": "T11: Verification: run bun ./src/cli.ts hooks list/validate/test end to end in a temp project and a real sandboxed hook process"
+    },
+    {
+      "at": "2026-09-24T02:21:25.379Z",
+      "event": "task-added",
+      "detail": "T15: Built-in command hooks run in the keryx trust domain (unsandboxed unless isolation required-fail-closed) so a missing/nested sandbox cannot deny every prompt; wire ACP sessions and keryx serve"
+    },
+    {
+      "at": "2026-09-24T02:21:25.456Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 306-T15 sonnet worker"
+    },
+    {
+      "at": "2026-09-24T02:22:04.250Z",
+      "event": "task-done",
+      "detail": "T14: Close T9 gaps: SessionStart/SessionEnd in keryx shell (readline + TUI) and ACP session boundary, ACP/serve wiring, hook profile follows /plan read-only"
+    },
+    {
+      "at": "2026-09-24T02:52:37.624Z",
+      "event": "task-done",
+      "detail": "T15: Built-in command hooks run in the keryx trust domain (unsandboxed unless isolation required-fail-closed) so a missing/nested sandbox cannot deny every prompt; wire ACP sessions and keryx serve"
+    },
+    {
+      "at": "2026-09-24T02:56:28.847Z",
+      "event": "task-added",
+      "detail": "T16: Test hermeticity and entry resolution: test preload defaults KERYX_HOOKS=off (real built-ins resolve to the test runner under bun test), resolveKeryxArgv only trusts argv[1] when it is the keryx entry; fix serve-listener.turns test"
+    },
+    {
+      "at": "2026-09-24T02:56:28.934Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 306-T16 sonnet"
+    },
+    {
+      "at": "2026-09-24T03:03:55.186Z",
+      "event": "task-done",
+      "detail": "T16: Test hermeticity and entry resolution: test preload defaults KERYX_HOOKS=off (real built-ins resolve to the test runner under bun test), resolveKeryxArgv only trusts argv[1] when it is the keryx entry; fix serve-listener.turns test"
     }
   ]
 }
