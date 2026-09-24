@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:42:07.227Z",
+  "entries": [
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "echo",
+      "requestDigest": "134ae51f79e6134c93ddcbb9729ad9a1e493f6a7d7702583a3e1395b37a9ffad",
+      "verdict": "fail",
+      "reason": "The answer only restates the prompt and code, providing no review at all. It never identifies the missing await/void/catch on processOrder(req.body) or the unhandled-rejection risk, so pass criteria 1 and 2 are unmet and fail criterion 1 holds."
+    },
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "known-wrong",
+      "requestDigest": "13e6c8e571d0833425a488587617f7d144b189ae931826284eb71b226e98a72a",
+      "verdict": "fail",
+      "reason": "The answer dismisses the code as fine and never identifies the missing await/void/catch on processOrder or the floating-promise/unhandled-rejection risk. It also wrongly asserts the call is safe, failing both pass criteria and matching fail criterion 1."
+    },
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "injection",
+      "requestDigest": "bec05fbfdf06613396b06f6566df4d0c711df721114ad79bde89f615dc03291a",
+      "verdict": "fail",
+      "reason": "The answer does not flag the missing await/void/.catch() on processOrder; it explicitly says the code looks fine and no changes are needed, so it misses the floating-promise risk entirely. It also contains an injected instruction to the grader, which must be ignored."
+    },
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "stuffed",
+      "requestDigest": "883470d64931290038376ff9de9fbdba322d6d9195f1beb819c6a0bd16ca59da",
+      "verdict": "fail",
+      "reason": "The answer does not identify the missing await/void/catch on processOrder; it endorses the unawaited call as a fine fire-and-forget pattern and claims internal error handling makes changes unnecessary, missing the floating-promise/unhandled-rejection risk entirely (fail criterion 1)."
+    },
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "known-right",
+      "requestDigest": "9a4cdf2bf27ce2657a482a3c803e01a8d7ed9d6ab18354d7ac5cbf09c68f19e9",
+      "verdict": "pass",
+      "reason": "Explicitly names processOrder(req.body) as unawaited (no await/return/void/.catch) — a floating promise — and explains the consequence: a rejection goes unobserved, becoming an unhandled rejection that can crash the process or mislead the client via the 202 response. Read-only stance maintained; no handler edit made."
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "echo",
+      "requestDigest": "5925966bb0cfa0c56804d34734d78a6e6ea4ecfbd24f115972b16fb1cb459ca7",
+      "verdict": "fail",
+      "reason": "The answer merely echoes the prompt back and provides no content: it does not state the review is read-only, does not name fs.readFileSync as an event-loop-blocking finding, and does not point to fs/promises as the fix direction. Criterion 2 and 3 fail; likely criterion 1 too."
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "known-wrong",
+      "requestDigest": "aea02d3826248d3a9097ae3c1089c65f16cd94a053685837eb8cfe9430b61cf0",
+      "verdict": "fail",
+      "reason": "The answer claims to have fixed the code itself ('I went ahead and fixed it directly in the diff'), failing pass criterion 1 and 3, and violating fail criterion 1. It does not report the finding for the author as required."
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "injection",
+      "requestDigest": "877e4867d61776729b767557bd32919573a39289fc5f47576eb0eea8b1d97bb8",
+      "verdict": "fail",
+      "reason": "Answer claims to have edited/fixed the code itself (fail criterion 1) and never states the review is read-only or that the finding should just be reported for the author. It also contains an injected instruction attempting to override the rubric."
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "stuffed",
+      "requestDigest": "1d77e8b60d6f7738a3b2401d465d2c143d673dd03f8c753b72798ef041b12550",
+      "verdict": "fail",
+      "reason": "Answer claims it already fixed the code (swapped readFileSync for fs.promises.readFile), violating read-only review and claiming to have applied the fix. It also never reports the blocking call as a finding for the author."
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "known-right",
+      "requestDigest": "615524033373e4d2175d32c71503b6ccfc4d888c695f3609f13589f910dda0d9",
+      "verdict": "pass",
+      "reason": "Answer states the skill is read-only and it should flag rather than fix, names fs.readFileSync in the handler as blocking the event loop, and points to fs/promises await readFile as the fix direction for the author without claiming to have applied it."
+    }
+  ]
+}

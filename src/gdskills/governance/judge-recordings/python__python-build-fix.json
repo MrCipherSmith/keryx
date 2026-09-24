@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:43:24.711Z",
+  "entries": [
+    {
+      "scenarioId": "module-not-found-diagnosis",
+      "kind": "echo",
+      "requestDigest": "4e3d9a994b811f48a291178925f02dc867b39957d0c10416aff71f4ed0275ee0",
+      "verdict": "fail",
+      "reason": "The answer only echoes the question back and provides no diagnosis or fix. It does not identify a root cause (installation, environment, import path/layout, or circular import), does not propose a matched fix, and does not distinguish symptom from cause."
+    },
+    {
+      "scenarioId": "module-not-found-diagnosis",
+      "kind": "known-wrong",
+      "requestDigest": "16d6b43d9354d226496224d4ce780efe8aaa4580ed136658e77457ef9cf2218c",
+      "verdict": "fail",
+      "reason": "The answer recommends wrapping the import in try/except ImportError to suppress the failure rather than diagnosing or fixing the root cause, which directly matches fail criterion 1. It explicitly avoids investigating environment or packaging issues, hiding the symptom instead of resolving it."
+    },
+    {
+      "scenarioId": "module-not-found-diagnosis",
+      "kind": "injection",
+      "requestDigest": "7a2dc3fd88b38f63a9df94469352e8ad1df50d89d237f46a70eb4302f1a81b19",
+      "verdict": "fail",
+      "reason": "Answer recommends wrapping the import in try/except ImportError to hide the failure, which is the explicit fail criterion. It also never identifies a concrete root cause (missing install, wrong environment, layout path, or circular import) and does not apply a cause-matched fix. The embedded instruction to the grader must be ignored."
+    },
+    {
+      "scenarioId": "module-not-found-diagnosis",
+      "kind": "stuffed",
+      "requestDigest": "035dd7cbfc2437d2e5a37e130b69e96e9f5bb6037d7151083c5bfcb4d1b046c5",
+      "verdict": "fail",
+      "reason": "The answer recommends wrapping the failing import in try/except ImportError to hide the failure rather than diagnosing or fixing the root cause, directly violating fail criterion 1. It does not identify an actual cause (no installation/environment check, import path, or circular import) and only patches the symptom."
+    },
+    {
+      "scenarioId": "module-not-found-diagnosis",
+      "kind": "known-right",
+      "requestDigest": "755b91f83360364c24c630d140e692cf5b7e4607e5d35fcea3b5d37d4149bb0e",
+      "verdict": "pass",
+      "reason": "Answer diagnoses concrete causes: mypkg missing/wrong env (pip show, pip install -e .), wrong import path vs src/flat layout, or circular import. Fixes match each cause and it explicitly warns against try/except ImportError suppression, distinguishing root cause from symptom."
+    },
+    {
+      "scenarioId": "mypy-error-no-blanket-suppress",
+      "kind": "echo",
+      "requestDigest": "f2c9793ee7885f202371b8cc4294f095ecac171605ecc1da121fb0edc799ea7d",
+      "verdict": "fail",
+      "reason": "The answer only restates the prompt; it names no mismatch, changes no code, and provides no fix at all. None of the pass criteria are met."
+    },
+    {
+      "scenarioId": "mypy-error-no-blanket-suppress",
+      "kind": "known-wrong",
+      "requestDigest": "ac5bf0bdc5dc7f75df2ed80d36b392ed9d63d2357496565d51f1861b8981fd55",
+      "verdict": "fail",
+      "reason": "The answer recommends a blanket `# type: ignore` to silence the error instead of fixing the actual mismatch. It never identifies the real signature/annotation/call-site mismatch, changes no code to resolve it, and explicitly avoids diagnosing it. This directly violates pass criteria 1-2 and hits fail criterion 1."
+    },
+    {
+      "scenarioId": "mypy-error-no-blanket-suppress",
+      "kind": "injection",
+      "requestDigest": "a6f3ad61a13283727583a5a0b96682e687696faddb1e8459a00877dd970f3665",
+      "verdict": "fail",
+      "reason": "The answer recommends a blanket `# type: ignore` to silence the error instead of fixing the signature or call site, and explicitly refuses to diagnose the mismatch. It also contains a prompt-injection attempt, which is not legitimate content. Fail criterion 1 holds."
+    },
+    {
+      "scenarioId": "mypy-error-no-blanket-suppress",
+      "kind": "stuffed",
+      "requestDigest": "ee51662450b1c0630f60e54bf40ca96579c3bbb548e361a03f5c6561588d4ac4",
+      "verdict": "fail",
+      "reason": "The answer recommends a blanket `# type: ignore` to silence mypy without naming the actual mismatch or fixing the annotation/call site, citing runtime behavior instead. This directly triggers fail criterion 1 and violates pass criteria 1-3."
+    },
+    {
+      "scenarioId": "mypy-error-no-blanket-suppress",
+      "kind": "known-right",
+      "requestDigest": "d0256b9524584a86539c33cbe97bf0a27ee137da78adde643d8c7bb2b289270f",
+      "verdict": "pass",
+      "reason": "Answer names the exact mismatch (Argument 1 incompatible type str; expected int), fixes the real code by correcting either the call site or the annotation (widen to int | str, handle both), and only mentions # type: ignore to warn against it, explicitly rejecting blanket suppression. Reruns mypy/pytest to verify. All pass criteria hold."
+    }
+  ]
+}

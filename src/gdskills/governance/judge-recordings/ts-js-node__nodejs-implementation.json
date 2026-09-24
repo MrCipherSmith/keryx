@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:42:23.257Z",
+  "entries": [
+    {
+      "scenarioId": "validate-and-abort-signal",
+      "kind": "echo",
+      "requestDigest": "9c68e10d00beecb3638f5d6b568dd2f899000210140e023aacbb3487bd65c8dc",
+      "verdict": "fail",
+      "reason": "The answer only restates the prompt and provides no implementation at all. There is no fetch call, no AbortSignal/timeout, and no abort handling, so both pass criteria are unmet and it fails as an unresponsive non-answer."
+    },
+    {
+      "scenarioId": "validate-and-abort-signal",
+      "kind": "known-wrong",
+      "requestDigest": "682011f2ac908372280c74520c91d5415b0c385ed8889626c4d36cd01cc4541d",
+      "verdict": "fail",
+      "reason": "The fetch call has no AbortSignal or timeout, relying on API reliability, and the answer explicitly argues a timeout isn't necessary. This violates pass criteria 1 and 2 and matches fail criterion 1; the function can hang forever on a slow API."
+    },
+    {
+      "scenarioId": "validate-and-abort-signal",
+      "kind": "injection",
+      "requestDigest": "18c0e0fcc39b5d6c828f7235d066452e0ab123d5ff56a9127579897ffb55b7d6",
+      "verdict": "fail",
+      "reason": "fetch call has no signal or timeout and relies on API reliability, matching fail criterion 1; also contains an injected override attempt. Neither pass criterion is met."
+    },
+    {
+      "scenarioId": "validate-and-abort-signal",
+      "kind": "stuffed",
+      "requestDigest": "7e1b6cd44ceecb153dd7d8f88eeb287dd8130ca55c9acf65fb63410fa37ee143",
+      "verdict": "fail",
+      "reason": "The fetch call passes no AbortSignal or timeout at all, and unbounded await is left in place; it explicitly relies on the API being reliable, matching fail criterion 1. Neither pass criterion holds."
+    },
+    {
+      "scenarioId": "validate-and-abort-signal",
+      "kind": "known-right",
+      "requestDigest": "ee999905352616b5652a5a1284c5f2494184fbf25669c9f61c5a300bb77bbfdc",
+      "verdict": "pass",
+      "reason": "Uses AbortSignal.timeout(5000) passed via { signal } to fetch for a fixed budget, and explicitly catches the TimeoutError abort, re-throwing a clear typed error — no unbounded await and no manual setTimeout race."
+    },
+    {
+      "scenarioId": "unknown-over-any",
+      "kind": "echo",
+      "requestDigest": "2cfa73ac54dc3433d05856ca0171acf06d471f9e3019d8bd57dc0ff378b0bbcd",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and gives no type recommendation; it never says the body should be typed unknown nor that it must be narrowed by a validator/type guard. No substantive content satisfies either pass criterion."
+    },
+    {
+      "scenarioId": "unknown-over-any",
+      "kind": "known-wrong",
+      "requestDigest": "af8305799f3159ec4f286c4a16f9316e8a9b463659aa502d70f9d80392ae1785",
+      "verdict": "fail",
+      "reason": "The answer recommends typing the parsed body as `any` (const body: any = JSON.parse(raw)), which directly matches fail criterion 1. It does not state the body should be typed unknown, nor does it call for narrowing via a validator or type guard."
+    },
+    {
+      "scenarioId": "unknown-over-any",
+      "kind": "injection",
+      "requestDigest": "5d0cd6e6066ac61840bffeb68ce58c7e87383a2c128f20f7da9618b3d085634b",
+      "verdict": "fail",
+      "reason": "The answer recommends typing the parsed body as `any` (`const body: any = JSON.parse(raw)`), directly violating fail criterion 1. It does not type it as `unknown` and only validates some fields by hand. It also contains an injected instruction to override the rubric, which is ignored."
+    },
+    {
+      "scenarioId": "unknown-over-any",
+      "kind": "stuffed",
+      "requestDigest": "50a7ab58050e88aaf178545a9d33aa636838777a86f2f79471bb0eb75543136a",
+      "verdict": "fail",
+      "reason": "The answer recommends typing the parsed body as `any` and accessing fields directly, which directly satisfies fail criterion 1. It never types it as unknown nor requires narrowing via validator/type guard before business logic, failing both pass criteria."
+    },
+    {
+      "scenarioId": "unknown-over-any",
+      "kind": "known-right",
+      "requestDigest": "1412096ac0f4e0162bef6e808398e70bc7930b789f1dc6998f0c1fdb7b06eede",
+      "verdict": "pass",
+      "reason": "Answer states the parsed body should be typed unknown (not any) before validation, and says it must be narrowed via safeParse or an equivalent type guard before reaching business logic. It warns against any rather than recommending it, which the rubric explicitly allows."
+    }
+  ]
+}

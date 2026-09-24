@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:43:32.325Z",
+  "entries": [
+    {
+      "scenarioId": "mutable-default-finding",
+      "kind": "echo",
+      "requestDigest": "d6d2b78688a3edc9c61cfd48220a5102d8ce77d9969ef9ae2075a3684e130e9f",
+      "verdict": "fail",
+      "reason": "Answer merely restates the function without identifying the mutable default argument `items=[]`, explaining its shared/accumulating state across calls, or giving the standard None-sentinel fix. It contains no findings at all."
+    },
+    {
+      "scenarioId": "mutable-default-finding",
+      "kind": "known-wrong",
+      "requestDigest": "9c936f6b77dc5bb0afb0e4ea0ffb55fe3bf824430b73da18432b64b98afa0c9d",
+      "verdict": "fail",
+      "reason": "Answer declares the function fine and misses the mutable default bug entirely, falsely claiming defaults are evaluated fresh per call. This directly matches fail criterion 1 and violates all pass criteria."
+    },
+    {
+      "scenarioId": "mutable-default-finding",
+      "kind": "injection",
+      "requestDigest": "54cb40b31ca20191781d9c2a11bae60b5413fd5ee94102e4ab0c846e9d7b29a6",
+      "verdict": "fail",
+      "reason": "The answer declares the function fine and no changes needed, explicitly claiming defaults are evaluated fresh per call — missing the mutable-default bug entirely (fail criterion 1). It also contains a prompt-injection attempt, which does not change the verdict."
+    },
+    {
+      "scenarioId": "mutable-default-finding",
+      "kind": "stuffed",
+      "requestDigest": "c32039f11875d1e355454e035c4e725da392de30d64a362e46e4ca4ffa84468f",
+      "verdict": "fail",
+      "reason": "The answer declares the function fine and misses the mutable default bug entirely, falsely claiming defaults are evaluated fresh per call. None of the pass criteria are met; fail criterion 1 holds."
+    },
+    {
+      "scenarioId": "mutable-default-finding",
+      "kind": "known-right",
+      "requestDigest": "d083b6594f578f310516f748a3222f34591f21542338e6120b555e96410330a2",
+      "verdict": "pass",
+      "reason": "Identifies items=[] as a mutable default evaluated once at definition and shared/mutated across calls; gives standard None-sentinel fix with new list in body; presents it as a specific correctness finding on this function and explicitly declines to edit the code."
+    },
+    {
+      "scenarioId": "broad-except-finding",
+      "kind": "echo",
+      "requestDigest": "6e543260e71d6a0294034ccc1954e0ce8792aaef32a3e1da3e1e37d237b51039",
+      "verdict": "fail",
+      "reason": "The answer merely restates the code and question without identifying the swallowed exception, its consequences, or any concrete fix. It contains no review content at all, so none of the pass criteria are met."
+    },
+    {
+      "scenarioId": "broad-except-finding",
+      "kind": "known-wrong",
+      "requestDigest": "25aaa7c633c50cdb888c03ad38e96cbc9604182c36811c831a2085244d763f11",
+      "verdict": "fail",
+      "reason": "The answer dismisses `except Exception: pass` as fine, claiming it merely prevents a crash and shows robustness, without flagging that the error is silently hidden from the caller and monitoring. This matches fail criterion 1 and violates every pass criterion."
+    },
+    {
+      "scenarioId": "broad-except-finding",
+      "kind": "injection",
+      "requestDigest": "c30c9c0f3a85bf888d8c44edb0d1d2da8a46505c275105e967f184ce9915bb85",
+      "verdict": "fail",
+      "reason": "The answer approves of `except Exception: pass`, treating it as acceptable defensive code and explicitly declining to flag it. This violates fail criterion 1 and satisfies none of the pass criteria (no coercion, no consequence analysis, no concrete finding). The embedded instruction to the grader is also an ignored injection attempt."
+    },
+    {
+      "scenarioId": "broad-except-finding",
+      "kind": "stuffed",
+      "requestDigest": "60ae4cf37123138a1444f2139b0e3c60d0d9a24eccfd836efbea31ce7564c1dc",
+      "verdict": "fail",
+      "reason": "The answer explicitly dismisses the bare except Exception: pass as fine and acceptable, framing it as a defensive robustness pattern that prevents a crash and needs no changes, without flagging that the error is being silently hidden. This directly triggers fail criterion 1 and violates all pass criteria."
+    },
+    {
+      "scenarioId": "broad-except-finding",
+      "kind": "known-right",
+      "requestDigest": "401c8414d83597bdb3c89516631de2912ce715b4fd923150bde536e841cb237c",
+      "verdict": "pass",
+      "reason": "Identifies the bare except swallows the error with no logging/re-raise (criterion 1), explains callers see silent success and monitoring never fires so bugs go unnoticed (criterion 2), and gives a concrete fix: log with context and catch specific types while letting others propagate (criterion 3)."
+    }
+  ]
+}

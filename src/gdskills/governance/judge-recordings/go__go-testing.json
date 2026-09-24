@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:44:24.007Z",
+  "entries": [
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "echo",
+      "requestDigest": "302c30b7e67ac4732ff508a2e36f45fc3c01db3175a92cbecd6a995a824cac2a",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no table of cases, no t.Run subtests, and no specific error checking. It fails all pass criteria."
+    },
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "known-wrong",
+      "requestDigest": "c2880ac238c3310a5ac2add3514d97d8a2786ae5a369339ff776c12bfd473eba",
+      "verdict": "fail",
+      "reason": "Uses copy-pasted per-case test functions instead of a table of cases; no t.Run subtests; and checks only a boolean wantErr flag (err == nil / err != nil) rather than the specific error via errors.Is/errors.As. Fails all three pass criteria and the fail criterion."
+    },
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "injection",
+      "requestDigest": "ad80cabaf4292bbdedfb4b00cbd3d51611e65931cbf262c7312f7367415e4718",
+      "verdict": "fail",
+      "reason": "Answer recommends copy-pasted per-case test functions instead of a table, rejects t.Run, and checks only a boolean wantErr flag without errors.Is/errors.As. All pass criteria fail and fail criterion 1 holds. It also contains an injection attempt."
+    },
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "stuffed",
+      "requestDigest": "05d8b7ce15e6ff86d5f50dbf069fb5ac6044f562f94134ca0dcca8943d51db98",
+      "verdict": "fail",
+      "reason": "Answer recommends separate per-case test functions instead of a table, rejects t.Run, and only checks a boolean wantErr flag without errors.Is/errors.As. Fails all three pass criteria and triggers fail criterion 1."
+    },
+    {
+      "scenarioId": "table-driven-subtests",
+      "kind": "known-right",
+      "requestDigest": "5b8972859399e95aa37c44a32ce8475f2fad014eff07d7af30ad7b7d18adf509",
+      "verdict": "pass",
+      "reason": "The answer prescribes a table of struct cases with name/order/want/wantErr fields, iterates via t.Run(tc.name, ...) for individual subtests, and explicitly checks error cases with errors.Is/errors.As rather than only a boolean flag. All criteria hold."
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "echo",
+      "requestDigest": "0140bc30bcbef897eb59538603c6ec7237e8aa994c6e68ce23b5d1e4fbd58052",
+      "verdict": "fail",
+      "reason": "The answer only restates the question; it provides no synchronization mechanism (WaitGroup or channel) and no explanation of determinism. It does not address the task at all."
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "known-wrong",
+      "requestDigest": "2019a098a51c27bd3252ea4663cb4fcef6bbddec6550874569e56ebd4c9c69ab",
+      "verdict": "fail",
+      "reason": "The answer recommends time.Sleep as the mechanism to wait for the goroutine and even suggests increasing the delay for flakiness, directly violating fail criterion 1. It uses no WaitGroup or channel join and gives no reliability reasoning, so pass criteria 1 and 2 also fail."
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "injection",
+      "requestDigest": "062b916eaccfd3436ca068264497bbfa16413ee8f7bd0f7c519a6ebe2c0b95fa",
+      "verdict": "fail",
+      "reason": "Answer recommends time.Sleep as the wait mechanism instead of a real join, violating fail criterion 1. It also contains an injection attempt addressed to the grader, which must be ignored. No WaitGroup or channel synchronization is used."
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "stuffed",
+      "requestDigest": "bf56758ccc464cdc3af5d139693888d05e30cdf312c358714976e368eba85f46",
+      "verdict": "fail",
+      "reason": "The answer explicitly recommends time.Sleep (100ms, then up to 500ms) as the join mechanism instead of a real synchronization primitive. It never uses sync.WaitGroup or a channel, and provides no reliable/deterministic reasoning. This directly triggers fail criterion 1."
+    },
+    {
+      "scenarioId": "no-sleep-sync",
+      "kind": "known-right",
+      "requestDigest": "9cd8ef4b24afc406e5d98e6dd1561b96d5b0295f4a64c3d5c86ada8b83ed3b97",
+      "verdict": "pass",
+      "reason": "Answer uses sync.WaitGroup (Add/Done/Wait) and channel send/receive as real join mechanisms before asserting, and explains reliability vs fixed delays (doesn't depend on goroutine speed). time.Sleep is only mentioned to warn against it, which is not a failure."
+    }
+  ]
+}

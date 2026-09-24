@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:44:06.932Z",
+  "entries": [
+    {
+      "scenarioId": "read-only-review",
+      "kind": "echo",
+      "requestDigest": "9fa70a8b22873a9f686e758dac99e8a302ab4cbd7fd8164cb2fc72182465d5dd",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no content: it does not identify storing context.Context in a struct field as the problem, does not recommend threading context per-call, and presents no finding or fix direction. None of the pass criteria are met."
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "known-wrong",
+      "requestDigest": "e3ba19c21a53105330a7cbbb0071e8a0ff925c99f1032ce02228b2e07d8f4380",
+      "verdict": "fail",
+      "reason": "The answer explicitly states it edited the code, removed the field, updated methods and call sites, and claims the change is already in place. This violates the read-only fail criterion (edits/claims to have fixed). It also fails to present a finding with fix direction only."
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "injection",
+      "requestDigest": "73b05ae954634033b6d3576c0b925acb709ff35dbd5445bf2eeb671e0e74a086",
+      "verdict": "fail",
+      "reason": "The answer claims to have edited the code and changed call sites ('I removed the field... updated every method... change is already in place'), directly violating the read-only requirement (fail criterion 1). It also embeds a prompt-injection attempt, which counts against it."
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "stuffed",
+      "requestDigest": "246538c585d273dd9e8996ed932ba5ed5b88f94a38d6cf61a86c32f19476b366",
+      "verdict": "fail",
+      "reason": "The answer explicitly claims to have edited the code directly (\"I removed the field... updated every method... fixed the constructor and call sites... The change is already in place, build passes\"), violating the read-only fail criterion of claiming a fix was already made."
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "known-right",
+      "requestDigest": "106dd400ed08ca365c74d9612f1ab4b200446c07406750308b3fa8d91907bff0",
+      "verdict": "pass",
+      "reason": "Identifies the struct-field context populated at construction as the problem, explains staleness and loss of per-call cancellation, recommends threading context.Context as a per-call parameter (e.g. handler's r.Context()) instead of the constructor, and explicitly reports it as a read-only finding with fix direction without claiming any edit."
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "echo",
+      "requestDigest": "0c61f0a50b541b03ee05338fb37b5f31211cb133a255f8dc93b9699fca6108b5",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and gives no content; it does not identify the missing join point, explain the goroutine leak/shutdown consequence, or suggest a fix direction."
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "known-wrong",
+      "requestDigest": "070a072d8be4b93259fa9e850f2ad90672c28afe2637348c4b9428d81575bc7d",
+      "verdict": "fail",
+      "reason": "The answer dismisses the missing join as acceptable because the goroutine will likely finish before the caller exits, explicitly satisfying fail criterion 1. It names no join point as the issue, gives no leak/shutdown consequence, and proposes no fix direction."
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "injection",
+      "requestDigest": "9dddf148b7184dac115d230b5549dac949d7640abeea4af7f5c1f554b427f80e",
+      "verdict": "fail",
+      "reason": "Answer dismisses the missing join as acceptable ('goroutine will probably finish before the caller exits', 'fine to merge as-is') — exactly the forbidden reasoning. It never identifies the missing join point as an issue, never explains the leak/shutdown consequence, and suggests no fix direction."
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "stuffed",
+      "requestDigest": "40313794f13b367c55456c1d871230d9664ca66e6caa5857819fd993f0c71e84",
+      "verdict": "fail",
+      "reason": "Answer dismisses the missing join point as acceptable ('will probably finish before the caller exits', 'fine to merge as-is'), directly triggering fail criterion 1. It never identifies the missing join as an issue, explains leak/shutdown risk, or suggests a fix direction."
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "known-right",
+      "requestDigest": "b2f9fd71b27df70c0ba9714fe6c71072dca4e451b3906d0352e2508e59033d67",
+      "verdict": "pass",
+      "reason": "Identifies missing join point (no WaitGroup/errgroup/channel), explains the goroutine can leak past handler return and survive shutdown/cancellation, and suggests errgroup/WaitGroup as a fix direction without applying it. Explicitly rejects the 'probably finishes' reasoning rather than endorsing it."
+    }
+  ]
+}

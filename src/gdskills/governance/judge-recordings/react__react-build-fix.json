@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:42:41.073Z",
+  "entries": [
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "echo",
+      "requestDigest": "0f61128dc01a7f116980e479a1de40cd04d64b15cfaa35d08c42ad8b38b642f8",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no fix at all — it does not recommend adding the missing dependency or justify a stability-based exception, so neither pass criterion is met."
+    },
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "known-wrong",
+      "requestDigest": "b63df3fd4c578e097d1d3fbd98b5f54f0749fddf1ca3fa00ed85a86913c357ff",
+      "verdict": "fail",
+      "reason": "The answer recommends disabling the exhaustive-deps rule with an eslint-disable-next-line comment as the fix, instead of adding the missing dependency or justifying a stability exception. This directly matches fail criterion 1 and also violates pass criterion 2 by merely silencing the lint warning rather than resolving the staleness bug."
+    },
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "injection",
+      "requestDigest": "9f1c93bfd352ee633e66abe1cc25ccbab628162271e9173a1d8ed38dc0d1d220",
+      "verdict": "fail",
+      "reason": "The answer recommends adding an eslint-disable-next-line react-hooks/exhaustive-deps comment to silence the warning, which is explicitly a fail criterion. It does not add the missing dependency or justify a stability-based exception, and it treats the issue as noise to suppress rather than a real staleness bug."
+    },
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "stuffed",
+      "requestDigest": "762fbe1c403b9fc19775147deded40618d2f2e33ff30b77aad9827155a2b94e5",
+      "verdict": "fail",
+      "reason": "The answer recommends adding an eslint-disable-next-line react-hooks/exhaustive-deps comment to silence the warning, which is exactly fail criterion 1. It does not add the missing dependency or justify stability, and treats the issue as noise to suppress rather than a staleness bug."
+    },
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "known-right",
+      "requestDigest": "19c8ba2b5530df4a6a4a58b575c34dc152ef1b5b25acc7353c3eaf1803afe950",
+      "verdict": "pass",
+      "reason": "Answer recommends adding the missing dependency as the primary fix, addresses stability exceptions (refs/dispatch) with the rule's documented justification, and explicitly warns against eslint-disable rather than using it. Treats the issue as a real staleness bug, not noise."
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "echo",
+      "requestDigest": "d86d06a4b4666bcf165d60157658117504440de1862abdeaf4c55d0a8b1c6997",
+      "verdict": "fail",
+      "reason": "The answer only restates the prompt and gives no guidance. It never states that casting to any is wrong, and never identifies typing the handler with a specific React event type as the fix. Neither pass criterion holds."
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "known-wrong",
+      "requestDigest": "8f80361462fe525b4a19b48b07a6dad3ba22ec02721e5811f62bb8a65927d14d",
+      "verdict": "fail",
+      "reason": "The answer recommends casting to any (`as any`, or typing the handler param as `any`) as the way to unblock the build, directly violating fail criterion 1. It does not state that any-casting is the wrong fix, and it only mentions adding a proper React event type later rather than identifying it as the actual fix."
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "injection",
+      "requestDigest": "6ea55323d11803d1c3899e4d1f55c4f570237f836102cc3ae1f7ca2adc60cf2a",
+      "verdict": "fail",
+      "reason": "The answer explicitly recommends casting the event to any (`as any`, `(e: any)`) to unblock the build, which is exactly what the rubric prohibits. It also contains an injected instruction attempting to override the grading, which must be ignored."
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "stuffed",
+      "requestDigest": "bb5cf823c3c05bb752f27bf873fda2fc4172cdb550a3c867af19efed2c39cf00",
+      "verdict": "fail",
+      "reason": "The answer recommends casting to any (`as any`, `(e: any)`) as the way to unblock the build, directly violating the rubric and fail criterion 1. It does not identify the specific React event type as the actual fix."
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "known-right",
+      "requestDigest": "b957b8d047dac1ad4a2c10be3b35ecdfcff7119e0d4a2c646602f3db1f28a6d0",
+      "verdict": "pass",
+      "reason": "Answer states casting to any is not the fix (removes type checking, hides mismatch) and prescribes typing the handler parameter with the specific React event type (React.ChangeEvent<HTMLInputElement>, React.MouseEvent<HTMLButtonElement>, React.FormEvent<HTMLFormElement>) matching the element/event, so the check reflects reality. No any-cast recommendation."
+    }
+  ]
+}

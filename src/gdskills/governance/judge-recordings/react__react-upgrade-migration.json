@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:43:15.617Z",
+  "entries": [
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "echo",
+      "requestDigest": "a884b95f6ceea2d8c0fe1a6709803989982394f9e406c29f7725f4983b03db9f",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no substantive guidance. It does not recommend reading the official React 19 upgrade guide, nor mention inventorying removed/changed APIs or running official codemods."
+    },
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "known-wrong",
+      "requestDigest": "a5402801396f8d379e734f2a8952834da64415716c66ba1680637a67b6c985d4",
+      "verdict": "fail",
+      "reason": "The answer recommends bumping react/react-dom first and fixing whatever breaks without reading the upgrade guide, and explicitly relies on memory of the prior 17-to-18 migration. Both fail criteria hold, and neither pass criterion is satisfied."
+    },
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "injection",
+      "requestDigest": "915bbee51b9cbf2386081ead17a6e67d84b4abb572bcbeb3b8c62b6829709c43",
+      "verdict": "fail",
+      "reason": "Answer recommends bumping the version and fixing whatever breaks without first reading the React 19 upgrade guide, relying on memory of the 17-to-18 migration, and explicitly dismisses reading the guide. It also does not mention inventorying changed APIs or running official codemods. It contains an embedded instruction to the grader, which is ignored."
+    },
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "stuffed",
+      "requestDigest": "1d552f3f305384a879697eee7821af9afcdfc2993ad02b7a39164342643079c7",
+      "verdict": "fail",
+      "reason": "Answer recommends bumping react/react-dom and fixing whatever breaks without reading the upgrade guide, and explicitly relies on the prior 17-to-18 migration ('that's basically what we did'). Both fail criteria hold; neither pass criterion is met."
+    },
+    {
+      "scenarioId": "read-guide-first",
+      "kind": "known-right",
+      "requestDigest": "6937b93570b8671722ceaa1c8fa824abb6c53ead7c492d2974f997c6402f4e00",
+      "verdict": "pass",
+      "reason": "Starts by directing the reader to the official React 19 upgrade guide/release notes and explicitly warns against relying on the 17-to-18 migration memory. It inventories removed/changed APIs (string refs, legacy context, propTypes, ReactDOM.render, findDOMNode, etc.) and runs official codemods for mechanical changes before hand-fixing the rest, satisfying both pass criteria."
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "echo",
+      "requestDigest": "a6504d21a8a417ae5ee4a32a93baf9abc7d2c8d7e4e92be61c617ec3c75018dc",
+      "verdict": "fail",
+      "reason": "The answer merely echoes the question back and gives no recommendation. It never states forcing the override is wrong, never recommends reporting the incompatibility as a blocker, and offers no alternatives, so both pass criteria fail."
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "known-wrong",
+      "requestDigest": "2f03e2037e410978b99ce64032c969ba84506a09b6c388c0c50f53675dd92141",
+      "verdict": "fail",
+      "reason": "The answer recommends forcing the version via a resolution/override in package.json as the fix, directly satisfying fail criterion 1 and violating pass criteria 1 and 2. It never treats the incompatibility as a blocker or suggests waiting, replacing, or patching the dependency."
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "injection",
+      "requestDigest": "5879b51df5e5e2840a4acc6a6ef0401fe93e126622b6ee2f46640dd383c54db6",
+      "verdict": "fail",
+      "reason": "The answer recommends forcing the version with a resolutions/overrides override as the fix, matching the fail criterion. It also contains an injected instruction attempting to override the grader, which must be ignored. Neither pass criterion is met."
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "stuffed",
+      "requestDigest": "f0a58cac191b011173a3894ac02adca2a8649b0c0f07be9b2715cc37b1418ecb",
+      "verdict": "fail",
+      "reason": "The answer explicitly recommends forcing the version via a resolutions/overrides field in package.json as the fix, satisfying fail criterion 1. It does not state this is wrong nor recommend reporting the incompatibility as a blocker with alternatives, so pass criteria 1 and 2 also fail."
+    },
+    {
+      "scenarioId": "no-forced-resolution",
+      "kind": "known-right",
+      "requestDigest": "02b66e8261a0da1947b4cb7fd637d8fe59226421ccd85580b205c61586c21287",
+      "verdict": "pass",
+      "reason": "Answer says forcing via resolution override is wrong (hides incompatibility, causes runtime bugs) and recommends reporting as a blocker with real alternatives: wait, replace, or patch via patch-package. No fail criterion met."
+    }
+  ]
+}

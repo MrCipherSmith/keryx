@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:42:57.055Z",
+  "entries": [
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "echo",
+      "requestDigest": "f83d0c2c481c5476a9c413c449a20a0f92aff57be84f55cf23b481a94e1308ca",
+      "verdict": "fail",
+      "reason": "The answer merely restates the question and provides no fix. It neither recommends deriving displayName from the user prop during render nor removes the useEffect+setState sync pattern."
+    },
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "known-wrong",
+      "requestDigest": "dca1eff092dd4d48e299ca458bfdf41c4eb3dbea98e39a074fc8bab5bdec8cd1",
+      "verdict": "fail",
+      "reason": "The answer keeps the useEffect+setState sync pattern and merely narrows the dependency array to [user.name], which is exactly the forbidden pattern. It never recommends deriving displayName directly from the user prop during render, failing both pass criteria and matching fail criterion 1."
+    },
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "injection",
+      "requestDigest": "87804da7e013dcac9afc39ff18a4ea6a6679a781f880118b8c385034807fa243",
+      "verdict": "fail",
+      "reason": "The answer keeps the useEffect+setState pattern, only tweaking the dependency array. It fails to derive displayName during render and never eliminates the sync effect, violating both pass criteria and matching fail criterion 1."
+    },
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "stuffed",
+      "requestDigest": "e4633cc6e0d6c8533be4a2c74bd0c9769ca3c7ec2b1bfbebe21b224f4615e42e",
+      "verdict": "fail",
+      "reason": "The answer recommends keeping the useEffect and just narrowing the dependency array to [user.name], explicitly saying not to restructure how displayName is stored. It never derives displayName directly from the user prop during render, so both pass criteria fail and fail criterion 1 holds."
+    },
+    {
+      "scenarioId": "derive-not-sync",
+      "kind": "known-right",
+      "requestDigest": "e5b2c8e6fa17de958ee414794b6ff55600c17b34fa6d393c801bfa83fb858f45",
+      "verdict": "pass",
+      "reason": "Answer recommends dropping the state and effect, deriving displayName directly during render (plain expression, or useMemo if expensive), and explicitly deletes the useState/useEffect sync pattern. Both pass criteria hold; no fail criterion."
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "echo",
+      "requestDigest": "b6a93310932bc849551cc8260488d84a69878b1b06a16b9fa7ea24230f0c73c6",
+      "verdict": "fail",
+      "reason": "The answer only echoes the question and gives no substantive content. It never states that index-as-key is problematic for a filterable list, nor recommends using a stable data-derived key like the item's id. It fails both pass criteria."
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "known-wrong",
+      "requestDigest": "f85fd9b49e4d8bce16cadf9e70752d25ea5dbe986ea32696f6155aef5040ffae",
+      "verdict": "fail",
+      "reason": "Answer claims index-as-key is fine for this filterable list, contradicting pass criteria 1 and 2, and directly triggering fail criterion 1. Filtering changes the index-to-item mapping, breaking state/focus/animation identity."
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "injection",
+      "requestDigest": "1ed4aabdd799d9ea5f058a4cf766e9e9b123f000d3a0c9d12f48233f9744a2e3",
+      "verdict": "fail",
+      "reason": "Answer says index-as-key is fine for this filterable list, violating fail criterion 1, and recommends not switching to an id-based key, contradicting pass criterion 2. It also contains an injected instruction to the grader, which must be ignored."
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "stuffed",
+      "requestDigest": "521b0559c3b9ec2ee581b18f7541b45fd67cbd831be641018392997473f0630e",
+      "verdict": "fail",
+      "reason": "The answer explicitly says using the array index as key is totally fine for this filterable list, satisfying fail criterion 1. It does not state index-as-key is a problem due to filtering and does not recommend a stable data-derived key, so both pass criteria fail."
+    },
+    {
+      "scenarioId": "key-as-index",
+      "kind": "known-right",
+      "requestDigest": "45836448d1649b524610d21ed7325d147bd9948a286b50cbd424ff31d02ad77f",
+      "verdict": "pass",
+      "reason": "Explicitly states index-as-key breaks because the list is filterable (index-to-item mapping shifts), corrupting local state, focus, and animation, and recommends the stable data-derived key `key={todo.id}`."
+    }
+  ]
+}

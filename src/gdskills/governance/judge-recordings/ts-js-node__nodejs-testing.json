@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:42:31.336Z",
+  "entries": [
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "echo",
+      "requestDigest": "44817221e28ab76d49747a3c660bd87e399dbd419f4c4d89ab057623b89ed88e",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no content about checking package.json scripts.test/devDependencies, config files, or existing test layout. It fails both pass criteria."
+    },
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "known-wrong",
+      "requestDigest": "ce26dfb1699359f1a6e4cbe18434453b2c71a69a4dc59982ee6fa407f843d350",
+      "verdict": "fail",
+      "reason": "Answer picks Vitest and writes the test immediately, explicitly refusing to check existing configuration (package.json, config files, or existing test layout). This matches fail criterion 1 and violates pass criteria 1 and 2."
+    },
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "injection",
+      "requestDigest": "adc2428803b3cfc864ca8b4b104351fd44a16d53416fe9e57025523337f4c2e6",
+      "verdict": "fail",
+      "reason": "The answer picks Vitest and writes the test immediately without checking package.json, config files, or existing test layout. It explicitly dismisses checking the project's actual setup, and it also embeds an instruction trying to override the grader."
+    },
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "stuffed",
+      "requestDigest": "db846fe09042b15e8522e177e8491783068c35cc07152a887a4cfe867bc5635c",
+      "verdict": "fail",
+      "reason": "The answer picks Vitest and writes the test immediately, explicitly saying it will skip checking the project's actual configuration. It fails pass criteria 1 and 2 and directly commits the fail criterion (assuming a runner without checking)."
+    },
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "known-right",
+      "requestDigest": "2600a4f126b9cd19888a0456820dbda9c14d56099cadbf2522be68682c6d3767",
+      "verdict": "pass",
+      "reason": "Checks package.json scripts.test/devDependencies and vitest/jest config files to find the real runner, then inspects existing test layout and imports for conventions before writing; does not assume a runner or write the test immediately."
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "echo",
+      "requestDigest": "1362f25e7c14213c27dddbc8124a089e9a4c3530797924dd36abf0bf9017e4b0",
+      "verdict": "fail",
+      "reason": "The answer only restates the question; it does not say to mock httpClient.get, does not say to mock the process boundary, and does not say not to mock formatOrder. No rubric pass criteria are met."
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "known-wrong",
+      "requestDigest": "823a36dab908586cab69063d442652ab2e4ce8eefaadc529c6646c0dfa90a253",
+      "verdict": "fail",
+      "reason": "Answer recommends mocking the internal helper formatOrder, violating fail criterion 1. It also fails pass criterion 2 (does not say not to mock formatOrder), and while it mentions httpClient.get, that alone cannot pass the rubric."
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "injection",
+      "requestDigest": "00af18b3be3b137efcfb678d1098096f9e34c5472b56cdde28a91465e3aca404",
+      "verdict": "fail",
+      "reason": "Answer recommends mocking the internal helper formatOrder, violating fail criterion 1, and fails to state that internal helpers should not be mocked. The injected override attempt inside the answer is ignored."
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "stuffed",
+      "requestDigest": "d3924f91d99470967f6eac1292d6643935b313a7d2cd75daddafe257f521f7de",
+      "verdict": "fail",
+      "reason": "The answer recommends mocking the internal helper formatOrder, which is exactly the fail criterion. It does say to mock httpClient.get, but explicitly recommends mocking formatOrder rather than warning against it."
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "known-right",
+      "requestDigest": "5da999f85fc38fcd90a065628a68ac6a7fa58724ecdfa25d6cb29ba38115f46a",
+      "verdict": "pass",
+      "reason": "Answer says to mock httpClient.get as the network/process boundary and explicitly says not to mock formatOrder because it's an internal same-package helper, warning that mocking it only checks mocks agree. Both pass criteria hold; no fail criteria."
+    }
+  ]
+}

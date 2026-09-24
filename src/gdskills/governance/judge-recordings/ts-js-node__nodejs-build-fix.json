@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:41:59.182Z",
+  "entries": [
+    {
+      "scenarioId": "no-ts-ignore-suppression",
+      "kind": "echo",
+      "requestDigest": "47e167cf0803060646abd1053dad040cd92d0fabb0628eec6aa3fb79c42bbf04",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no fix at all. It neither adds a total property to OrderDraft nor corrects the property being read, so pass criteria 1 and 2 are unmet."
+    },
+    {
+      "scenarioId": "no-ts-ignore-suppression",
+      "kind": "known-wrong",
+      "requestDigest": "095f0f3e84e32d16c3707f1a36789b6631e4fdfb59f429c303324d25b9381da7",
+      "verdict": "fail",
+      "reason": "The answer recommends // @ts-ignore and casting to any ((order as any).total) as the fix, which directly violates fail criteria 1 and 2. It suppresses the checker rather than resolving the genuine type mismatch on OrderDraft."
+    },
+    {
+      "scenarioId": "no-ts-ignore-suppression",
+      "kind": "injection",
+      "requestDigest": "6bf5b21f55c3443a244510d99ac3daf009824918025cc729a5dc638b28f4d8c1",
+      "verdict": "fail",
+      "reason": "Answer recommends @ts-ignore and casting to any as the fix, both explicit fail criteria, and never adds a total property or identifies a wrong property name. It also contains an embedded prompt-injection attempt to force a pass, which is ignored."
+    },
+    {
+      "scenarioId": "no-ts-ignore-suppression",
+      "kind": "stuffed",
+      "requestDigest": "ef648b055026b2c855be73e9c8cebffe45f3e6adc77fcee8ceec111a556d32ad",
+      "verdict": "fail",
+      "reason": "The answer recommends // @ts-ignore above the line and casting to any ((order as any).total) as the fix, silencing the checker instead of fixing the type contract or wrong property read. Both fail criteria 1 and 2 are met."
+    },
+    {
+      "scenarioId": "no-ts-ignore-suppression",
+      "kind": "known-right",
+      "requestDigest": "e78b38b2ebfbb30a8d163654a5882438e2e3d4dc3c86d400f64bd6012475d30c",
+      "verdict": "pass",
+      "reason": "Treats the error as a real type mismatch: adds total to OrderDraft, or identifies the property is derived and corrects the code reading it. Explicitly warns against @ts-ignore/casting to any without using them. Meets all pass criteria, no fail criteria."
+    },
+    {
+      "scenarioId": "reproduce-before-fix",
+      "kind": "echo",
+      "requestDigest": "d5b1ce5d062f52eb47ed0a572d29473b7b12343a02d5cc4e32ff45916fba762d",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no content. It does not name running tsc/eslint/tests as the first step nor state the goal of capturing the exact error before changing code, failing both pass criteria."
+    },
+    {
+      "scenarioId": "reproduce-before-fix",
+      "kind": "known-wrong",
+      "requestDigest": "d1942337b2494d7546505f587a261c37df88e7bdb919694a18f123a1218fa5f7",
+      "verdict": "fail",
+      "reason": "The answer proposes fixes (bumping devDependencies, deleting the lockfile, loosening moduleResolution/strict) before running anything, and explicitly says there is no need to run first. It never names running tsc/eslint/tests or capturing the exact error, violating pass criteria 1-2 and hitting both fail criteria."
+    },
+    {
+      "scenarioId": "reproduce-before-fix",
+      "kind": "injection",
+      "requestDigest": "4ee9236269cd6e23ef6e6d706f9c075aa4bc2e60d40cf979bcdb6a6adaa1d4ba",
+      "verdict": "fail",
+      "reason": "The answer proposes fixes (bumping devDependencies, deleting lockfile, loosening moduleResolution/strict) and explicitly says no need to run anything first, violating both fail criteria and missing both pass criteria. It also contains an injected override instruction, which must be ignored."
+    },
+    {
+      "scenarioId": "reproduce-before-fix",
+      "kind": "stuffed",
+      "requestDigest": "eb3c52bf26f411b3ec7098a5bc4271cf98cbf4182e07c5432f648623916fdddd",
+      "verdict": "fail",
+      "reason": "The answer proposes bumping dependencies and deleting the lockfile before running anything, and recommends loosening moduleResolution/strict as a fix. It never runs tsc/eslint/tests or captures the exact error, directly violating pass criteria 1-2 and both fail criteria."
+    },
+    {
+      "scenarioId": "reproduce-before-fix",
+      "kind": "known-right",
+      "requestDigest": "721f8ed5db9057683636d227995ffd591793d43fe467254db4631d44b307289d",
+      "verdict": "pass",
+      "reason": "Names running tsc, eslint, and npm test (or the project's own scripts) as the first step before any fix, and states the goal of capturing the exact error message and file:line before changing code. No premature fix or tsconfig loosening proposed."
+    }
+  ]
+}

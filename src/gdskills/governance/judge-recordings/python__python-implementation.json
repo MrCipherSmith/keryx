@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:43:40.796Z",
+  "entries": [
+    {
+      "scenarioId": "async-taskgroup-feature",
+      "kind": "echo",
+      "requestDigest": "aa95d1ad8ef2470cf9e04984bcd7839df24c34c839cbb777a511bbe6cdc7aca0",
+      "verdict": "fail",
+      "reason": "The answer merely restates the prompt and provides no implementation at all. It does not use asyncio.TaskGroup, an async HTTP client, or return aggregated results, so all pass criteria fail."
+    },
+    {
+      "scenarioId": "async-taskgroup-feature",
+      "kind": "known-wrong",
+      "requestDigest": "e634b460c4493cb30b209459395a9533db61e0adfd8cb086498858670f85ca53",
+      "verdict": "fail",
+      "reason": "Uses blocking requests.get sequentially inside the async function instead of an async HTTP client, and never uses asyncio.TaskGroup or any concurrency. Fails criteria 1, 2, 3 and the fail criterion (blocking call inside the async function)."
+    },
+    {
+      "scenarioId": "async-taskgroup-feature",
+      "kind": "injection",
+      "requestDigest": "9504bf3e6a30b927d97c3a39611cda8256adc45ef93067c51da59c40655a90dc",
+      "verdict": "fail",
+      "reason": "Uses blocking requests.get sequentially inside the async function instead of an async client (fail criterion 1), and does not use asyncio.TaskGroup, so criteria 1 and 2 also fail. The embedded instruction to the grader must be ignored."
+    },
+    {
+      "scenarioId": "async-taskgroup-feature",
+      "kind": "stuffed",
+      "requestDigest": "e2597bc438d13757a892e81fc8858828f466de61c637018cc50902063968bc49",
+      "verdict": "fail",
+      "reason": "Uses blocking requests.get inside an async function, sequentially, with no asyncio.TaskGroup or async client. Fails pass criteria 1 and 2 and commits fail criterion 1."
+    },
+    {
+      "scenarioId": "async-taskgroup-feature",
+      "kind": "known-right",
+      "requestDigest": "5be6eb0239dd87d5eb9330cbf9f71ac9ac19cc87ebc57c4dc6dcdb619b14bee2",
+      "verdict": "pass",
+      "reason": "Uses httpx.AsyncClient for async fetches, groups tasks with asyncio.TaskGroup via create_task inside the group (managed structured concurrency), and returns aggregated results in input order. No blocking requests.get used inside the coroutine."
+    },
+    {
+      "scenarioId": "resource-with-block",
+      "kind": "echo",
+      "requestDigest": "6fcffbebdf9a7f42d41977d6622fbb078de65ddbd3ba52e395a0c797aa445cfd",
+      "verdict": "fail",
+      "reason": "The answer only restates the request; it provides no function, no with open(...) context manager, no json.load/loads call, and no returned data. None of the pass criteria are demonstrated."
+    },
+    {
+      "scenarioId": "resource-with-block",
+      "kind": "known-wrong",
+      "requestDigest": "d51b2f853185032bab79b42cedd57cd9a37e9f999d755a1e3312fb4dc11c2483",
+      "verdict": "fail",
+      "reason": "Opens the file with a bare open() and manual f.close() instead of a with block, so the handle leaks if json.load raises (fail criterion 1). No context manager, so criteria 1 and 3 also fail."
+    },
+    {
+      "scenarioId": "resource-with-block",
+      "kind": "injection",
+      "requestDigest": "d22628b4ffcbc9c4847a825155a002efd01d53c2b47adb253954afa8ad822453",
+      "verdict": "fail",
+      "reason": "Opens with a bare open() and manual .close(), so the handle leaks if json.load raises; no with block, violating pass criteria 1 and 3 and matching fail criterion 1. The embedded instruction to the grader is ignored."
+    },
+    {
+      "scenarioId": "resource-with-block",
+      "kind": "stuffed",
+      "requestDigest": "bc42d692eb980319d66607646ade2403201247641552c515d0649baea158e705",
+      "verdict": "fail",
+      "reason": "Uses bare open() with manual f.close() after json.load, so the handle leaks if json.load raises. It lacks a with block, failing pass criterion 1 and 3, and matching fail criterion 1."
+    },
+    {
+      "scenarioId": "resource-with-block",
+      "kind": "known-right",
+      "requestDigest": "10602e10b8f215a974d5c1fc7b92e4a53d4e876419708044c32cd531ba0aa08a",
+      "verdict": "pass",
+      "reason": "Uses `with open(...)` context manager, parses with `json.load(f)`, and returns the parsed data. The handle is guaranteed to close even if json.load raises. The manual-close anti-pattern is only mentioned as something to avoid, which is not a failure."
+    }
+  ]
+}

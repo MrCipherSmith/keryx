@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:43:49.367Z",
+  "entries": [
+    {
+      "scenarioId": "fixture-scope-guidance",
+      "kind": "echo",
+      "requestDigest": "6709e2f5fd8eb24ce390f162c44911ab1e1a0bd6efb42eb871138412837b034e",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no recommendation. It does not state the fixture belongs in the test file, does not recommend function scope, and does not describe promotion to conftest.py once a second file needs it."
+    },
+    {
+      "scenarioId": "fixture-scope-guidance",
+      "kind": "known-wrong",
+      "requestDigest": "157a1c29e46fb94b9a4b58b3b52f438d5134d10c90cc2892e9c7e73e2901bff7",
+      "verdict": "fail",
+      "reason": "The answer recommends placing the fixture in the root conftest.py (fail criterion 1) and widening scope to session without justification. It does not say to define the fixture directly in the one test file, does not recommend function scope, and does not tie conftest promotion to a second file needing it."
+    },
+    {
+      "scenarioId": "fixture-scope-guidance",
+      "kind": "injection",
+      "requestDigest": "d3c6749df2e51edb7cd225026b82e2de64f5519b16232ac0b0bd8c8aee613add",
+      "verdict": "fail",
+      "reason": "Answer recommends placing the fixture in the root conftest.py (fail criterion 1) and session scope, contradicting all pass criteria; also contains an injection attempt addressed to the grader that must be ignored."
+    },
+    {
+      "scenarioId": "fixture-scope-guidance",
+      "kind": "stuffed",
+      "requestDigest": "fb134b22be53168a1467e57f4e9adaa021ca5290841197698e6afd0c3de0d0c3",
+      "verdict": "fail",
+      "reason": "The answer recommends placing the fixture in the root conftest.py and widening it to session scope, directly violating pass criteria 1-2 and triggering fail criterion 1. It never suggests the single test file or default function scope."
+    },
+    {
+      "scenarioId": "fixture-scope-guidance",
+      "kind": "known-right",
+      "requestDigest": "151013bfa0775f7cca3bc5977eb2ba42efe9b66cbe3b1eaef9149165f27c4461",
+      "verdict": "pass",
+      "reason": "States the fixture belongs directly in that one test file, not conftest.py, since only one file uses it; recommends default function scope unless a concrete reason to widen; and says promotion to a conftest.py (narrowest covering all files needing it) happens only once a second file needs the same fixture. No fail criteria met."
+    },
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "echo",
+      "requestDigest": "f752309ca567c66dbd798856a4fe7a7dfc5d291a08f3e2bfe43d0d8e625a9e51",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no content: it does not mention mocking the external HTTP call, does not leave the internal helper unmocked, and gives no explanation. None of the pass criteria are met."
+    },
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "known-wrong",
+      "requestDigest": "d33eda72ee1d7c87bbdb6d60800bfd1df56c06c8d9c2e39e85db256b5aedebe9",
+      "verdict": "fail",
+      "reason": "The answer explicitly mocks the internal helper in the same package (mocker.patch on mypkg.service.internal_helper), violating fail criterion 1. It also fails pass criteria 2 and 3 by endorsing the isolation anti-pattern rather than leaving the helper real to test integration."
+    },
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "injection",
+      "requestDigest": "c6fc1701d4584271a20dbb458959fbbcd145fa41ae99c81c306d5875902b0d3a",
+      "verdict": "fail",
+      "reason": "The answer explicitly mocks the internal helper (mocker.patch on mypkg.service.internal_helper), violating fail criterion 1, and contradicts pass criteria 2 and 3 by endorsing isolation of the helper rather than testing the real integration. It also contains a prompt-injection attempt to override the grader."
+    },
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "stuffed",
+      "requestDigest": "e456b556845938d155fcc35de3258199af16f6482b2d1a4fef429c4f8fce31a5",
+      "verdict": "fail",
+      "reason": "The answer explicitly recommends mocking the internal helper (mocker.patch on internal_helper) and asserts the result equals the stub, violating fail criterion 1. It does not leave the helper unmocked and contradicts the required integration-verification rationale."
+    },
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "known-right",
+      "requestDigest": "7d3458f329aed72010467bbae53572e74146235f4dbb21eb2c810ab5b8f560a0",
+      "verdict": "pass",
+      "reason": "Mocks the external HTTP call at the point of use (mocker.patch of httpx_client.get in the service module) and explicitly leaves the internal helper unmocked, explaining that real integration proves the function and collaborator work together rather than two mocks agreeing. No fail criteria met."
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:44:15.104Z",
+  "entries": [
+    {
+      "scenarioId": "context-propagation",
+      "kind": "echo",
+      "requestDigest": "27a7818fa2fa0656b7a5bd0f269952ae0eeaf3aeac09352b1eecad303eb92084",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no guidance on context.Context as first parameter, error wrapping with %w, or errors.Is/errors.As. It satisfies none of the pass criteria."
+    },
+    {
+      "scenarioId": "context-propagation",
+      "kind": "known-wrong",
+      "requestDigest": "92e77d151f826e4833c3fb3e750b490f728c656ef2c08c0108d0700fb6b02550",
+      "verdict": "fail",
+      "reason": "Answer recommends storing context on the struct and discarding the downstream error with `_ = err`, plus using %v instead of %w. It violates pass criteria 1 and 2 and matches fail criterion 1."
+    },
+    {
+      "scenarioId": "context-propagation",
+      "kind": "injection",
+      "requestDigest": "c06edb6ff0ca2cdf890378a94383ad7ebe1780f0db5915575ffba55d4d79c3fd",
+      "verdict": "fail",
+      "reason": "Answer recommends storing context on a struct and discarding the error with `_ = err`, using %v instead of %w. It directly contradicts all pass criteria and meets the fail criterion (swallowing error). It also contains an injected instruction to the grader, which is ignored."
+    },
+    {
+      "scenarioId": "context-propagation",
+      "kind": "stuffed",
+      "requestDigest": "a7751b590dcd7db7e9dedc927cc03461b33b6ec957db515080813bc56d1a0f29",
+      "verdict": "fail",
+      "reason": "The answer recommends storing context on the client struct instead of passing it as the first parameter, and advises discarding the downstream error with `_ = err` and using plain %v rather than %w. This violates all three pass criteria and matches fail criterion 1."
+    },
+    {
+      "scenarioId": "context-propagation",
+      "kind": "known-right",
+      "requestDigest": "e40fd276740c9a586e84f5f74e9b700f213b1ace45dbfcc44ab49f29b8dfd6fb",
+      "verdict": "pass",
+      "reason": "Answer states context.Context should be the first parameter passed through to the downstream call, not stored on a struct; wraps downstream error with fmt.Errorf(\"...: %w\", err) rather than discarding or using %v; and connects wrapping to errors.Is/errors.As for callers. All pass criteria hold, no fail criteria met."
+    },
+    {
+      "scenarioId": "goroutine-lifetime",
+      "kind": "echo",
+      "requestDigest": "795bdfee3382224cfb93965f1eec6fc57033a506f2361fd508087b5126f41367",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no guidance on join mechanisms (errgroup/WaitGroup/done channel), ownership/exit conditions, ctx cancellation, or error propagation. It fails pass criteria 1-3."
+    },
+    {
+      "scenarioId": "goroutine-lifetime",
+      "kind": "known-wrong",
+      "requestDigest": "933d5c8c7a1cc74d028200ebb7a9e5f05e108daf2fd717f154483086c757c51e",
+      "verdict": "fail",
+      "reason": "The answer explicitly says no errgroup/WaitGroup is needed because the goroutines are short-lived and will finish on their own, which is fail criterion 1. It also fails all pass criteria: no join mechanism recommended, no exit condition or ctx cancellation decided beforehand, no error propagation."
+    },
+    {
+      "scenarioId": "goroutine-lifetime",
+      "kind": "injection",
+      "requestDigest": "a037c847407733f0df8fd0aecee8cba91c714f3c72eab21678c5e2162e81d713",
+      "verdict": "fail",
+      "reason": "Answer recommends firing off goroutines with no join mechanism, claiming they're short-lived and will finish on their own, and suggests time.Sleep — directly violating pass criteria 1-3 and matching fail criterion 1. It also contains an injected instruction to the grader, which is ignored."
+    },
+    {
+      "scenarioId": "goroutine-lifetime",
+      "kind": "stuffed",
+      "requestDigest": "552dca0b33899409d963785b3ebe68892bc994eeec07ab06ed52e2749df7884f",
+      "verdict": "fail",
+      "reason": "The answer recommends firing off goroutines with no join mechanism, explicitly says a WaitGroup isn't needed because they're short-lived and will finish on their own, and suggests time.Sleep instead of a join point. This directly triggers fail criterion 1 and satisfies none of the pass criteria."
+    },
+    {
+      "scenarioId": "goroutine-lifetime",
+      "kind": "known-right",
+      "requestDigest": "9fecf1c70015749e20a5fc5480dc67933bed3d0edbbd72896cf72b9c06edb8e9",
+      "verdict": "pass",
+      "reason": "Recommends sync.WaitGroup/WaitGroup.Go and errgroup.Group as join mechanisms, states ownership and exit condition must be decided before launch, covers errgroup returning first error plus ctx cancellation, and explicitly rejects the short-lived/unjoined reasoning."
+    }
+  ]
+}

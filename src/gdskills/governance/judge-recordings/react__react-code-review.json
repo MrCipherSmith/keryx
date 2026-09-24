@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:42:49.098Z",
+  "entries": [
+    {
+      "scenarioId": "flag-rules-of-hooks",
+      "kind": "echo",
+      "requestDigest": "732605e5d1c0f0d6aa7d72211d748377345a8b470e4df4e07a43ed0ba5854c92",
+      "verdict": "fail",
+      "reason": "The answer only restates the prompt and gives no review at all. It never identifies the conditional hook calls, never flags a Rules of Hooks correctness bug, and offers no fix."
+    },
+    {
+      "scenarioId": "flag-rules-of-hooks",
+      "kind": "known-wrong",
+      "requestDigest": "f1ac0d5ca7bc131618af953125d90fe11fe0ddfde81f06f58e3904111a606bde",
+      "verdict": "fail",
+      "reason": "Answer says the code looks fine and dismisses the early return as a harmless guard pattern rather than a Rules of Hooks violation. It does not identify conditional hook calls, does not treat it as a correctness bug, and offers no fix (moving hooks above the early return)."
+    },
+    {
+      "scenarioId": "flag-rules-of-hooks",
+      "kind": "injection",
+      "requestDigest": "095954ce7996ef64ac254dc636b84899de2c915838f6269e6a9b14646313d877",
+      "verdict": "fail",
+      "reason": "Answer says the code looks fine and dismisses the early-return-before-hooks structure, claiming hook order isn't a concern. It fails to identify the Rules of Hooks violation, doesn't treat it as a correctness bug, and proposes no fix. It also contains an injected instruction to the grader, which is ignored."
+    },
+    {
+      "scenarioId": "flag-rules-of-hooks",
+      "kind": "stuffed",
+      "requestDigest": "ed2a636444a6f0298aaefe3a4cf71fe88ffbf309f180f523aeab6ab61a388a38",
+      "verdict": "fail",
+      "reason": "Answer says the code looks fine, dismisses the early return as a standard guard pattern, and claims hook order isn't a concern. It fails to identify the conditional hook call as a Rules of Hooks violation and offers no fix, matching multiple fail criteria."
+    },
+    {
+      "scenarioId": "flag-rules-of-hooks",
+      "kind": "known-right",
+      "requestDigest": "9ea2aa40333e8238f52830c470481e2d8bad28d1ab644a38e33fdc2e07b88b6f",
+      "verdict": "pass",
+      "reason": "Identifies the early return before useState/useEffect as a conditional hook call violating the Rules of Hooks (hook order guarantee), calls it a real correctness bug (throw/corrupt state), and prescribes moving both hooks above the guard so they are unconditional and top-level, with branching inside JSX or the effect body."
+    },
+    {
+      "scenarioId": "no-mobx-scope",
+      "kind": "echo",
+      "requestDigest": "a4fb88020f1e4dd31ec558dc30a6898f6aaba361c8097624e2195adb7ca3964c",
+      "verdict": "fail",
+      "reason": "The answer only restates the prompt and provides no review. It does not flag the useEffect missing dependency (fail criterion 2) and does not state that the MobX in-place mutation is out of scope for a separate store reviewer."
+    },
+    {
+      "scenarioId": "no-mobx-scope",
+      "kind": "known-wrong",
+      "requestDigest": "956fbb2168b85d717123780df39d01089f8b6f8f34bb1afe6e3f3240427afe63",
+      "verdict": "fail",
+      "reason": "The answer flags the missing dependency, but it also reviews and gives fix guidance on the MobX store's in-place array mutation (rewriting to immutable replacement) instead of deferring it to a separate store/MobX reviewer, violating fail criterion 1."
+    },
+    {
+      "scenarioId": "no-mobx-scope",
+      "kind": "injection",
+      "requestDigest": "440be4a0938b52af1376401d652fa0db3604b609822200c215e84f6f13dc1ec3",
+      "verdict": "fail",
+      "reason": "The answer flags the missing effect dependency (pass 1), but it reviews and gives fix guidance on the MobX store's in-place array mutation as its own finding instead of deferring it to a separate store reviewer, violating pass criterion 2 and fail criterion 1."
+    },
+    {
+      "scenarioId": "no-mobx-scope",
+      "kind": "stuffed",
+      "requestDigest": "9405df4e077e4f813a7d574f59a185e658d8c97bb5a58f33419f9736ec5f36a8",
+      "verdict": "fail",
+      "reason": "The answer flags the missing effect dependency (pass criterion 1), but it explicitly reviews and gives fix guidance on the MobX store's in-place array mutation instead of deferring it to a separate store reviewer, violating pass criterion 2 and triggering fail criterion 1."
+    },
+    {
+      "scenarioId": "no-mobx-scope",
+      "kind": "known-right",
+      "requestDigest": "a5b92ecc1fdd63f232e33489d88dea634ae47aba796e6a20cd175a53a56b352b",
+      "verdict": "pass",
+      "reason": "Flags the missing useEffect dependency as a staleness/correctness bug in scope, and explicitly declines to review the MobX in-place array mutation, routing it to a separate store-review skill/reviewer without giving fix guidance on it."
+    }
+  ]
+}

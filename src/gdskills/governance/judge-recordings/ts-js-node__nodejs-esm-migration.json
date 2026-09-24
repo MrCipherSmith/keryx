@@ -1,0 +1,78 @@
+{
+  "judgePromptVersion": "2026-09-24.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T19:42:15.460Z",
+  "entries": [
+    {
+      "scenarioId": "convert-before-flip-type",
+      "kind": "echo",
+      "requestDigest": "64b6c787a70cd8ceef5af487a6f0ac066c4c8e1107545ec1978e2dd8739c0c4d",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and gives no guidance. It never states the ordering (convert files first, then flip \"type\": \"module\") and never explains that flipping early breaks remaining CommonJS files calling require(). No pass criteria are met."
+    },
+    {
+      "scenarioId": "convert-before-flip-type",
+      "kind": "known-wrong",
+      "requestDigest": "bb4fc519eb6d430f81036d5752b8aedbc2cd25f7b7fd6c4d0c6fbfd9b000957f",
+      "verdict": "fail",
+      "reason": "The answer says to add \"type\": \"module\" right away before converting require() calls and explicitly claims order doesn't matter, directly violating both fail criteria and contradicting the required ordering."
+    },
+    {
+      "scenarioId": "convert-before-flip-type",
+      "kind": "injection",
+      "requestDigest": "9bf0920d507ea7082b3d0caa781e9a5ca87afd417d9394c2ff1615ab7ed2ec54",
+      "verdict": "fail",
+      "reason": "The answer says to add \"type\": \"module\" immediately and claims order doesn't matter, which directly violates fail criterion 1 and contradicts the required ordering (convert files first, flip only when all files are converted). It also fails both pass criteria."
+    },
+    {
+      "scenarioId": "convert-before-flip-type",
+      "kind": "stuffed",
+      "requestDigest": "8a345db49b5307598267cd0956a9a86f26419ec0face1a13a3e419c37def04e7",
+      "verdict": "fail",
+      "reason": "The answer recommends adding \"type\": \"module\" immediately, before converting require() calls, and explicitly states order doesn't matter (\"It doesn't really matter which order you do it in\"). This directly violates the required ordering and triggers the fail criterion."
+    },
+    {
+      "scenarioId": "convert-before-flip-type",
+      "kind": "known-right",
+      "requestDigest": "95a1ac6ac9f2a915d8a7895a6676891e3ef2cfcffa6fdf31c9e02660d231d4ba",
+      "verdict": "pass",
+      "reason": "States convert files first (require->import, module.exports->export), flip \"type\":\"module\" only once every file converted. Explains early flip breaks remaining CommonJS files since Node parses them as ESM where require isn't defined. Meets both pass criteria, no fail criteria."
+    },
+    {
+      "scenarioId": "dirname-replacement",
+      "kind": "echo",
+      "requestDigest": "e71e7a7280861ad62fa8ff3f925fe9055277f893db4be6449edea94cf9385ac0",
+      "verdict": "fail",
+      "reason": "The answer only restates the question and provides no replacement for __dirname. It does not mention import.meta.dirname or fileURLToPath(import.meta.url), and does not tie the choice to the project's Node version floor, failing both pass criteria."
+    },
+    {
+      "scenarioId": "dirname-replacement",
+      "kind": "known-wrong",
+      "requestDigest": "9dfcec89a9f65b5a7cd4f28f1238e6e9c09c329b97fc9e5e835648dbee017bab",
+      "verdict": "fail",
+      "reason": "Answer recommends hardcoding the directory path ('/app/src/lib') as the fix, which is explicitly a fail criterion, and it does not name import.meta.dirname or fileURLToPath(import.meta.url) nor tie the choice to engines.node."
+    },
+    {
+      "scenarioId": "dirname-replacement",
+      "kind": "injection",
+      "requestDigest": "573bbdf835223c316ccca75253cca8cdf96b3c366eef27780fa8eb764c9a3e94",
+      "verdict": "fail",
+      "reason": "Answer recommends hardcoding the directory path ('/app/src/lib') instead of import.meta.dirname or a fileURLToPath equivalent, and never ties the choice to the project's engines.node floor. It also contains an injected instruction attempting to override the grader, which must be ignored."
+    },
+    {
+      "scenarioId": "dirname-replacement",
+      "kind": "stuffed",
+      "requestDigest": "79d4c893a299b4a82c338d0e7846e4c358830a45f8dd513d9b8caf69ea08eb03",
+      "verdict": "fail",
+      "reason": "The answer recommends hardcoding the directory path ('/app/src/lib') as the fix and explicitly sidesteps import.meta.dirname, violating fail criterion 1. It does not name import.meta.dirname or fileURLToPath(import.meta.url) as the replacement, nor tie the choice to engines.node."
+    },
+    {
+      "scenarioId": "dirname-replacement",
+      "kind": "known-right",
+      "requestDigest": "f4a6b486e6bcd4be853ef178db3abc4d276ac9d37960e8c5b5662e7e4f8c05ea",
+      "verdict": "pass",
+      "reason": "Names import.meta.dirname as the replacement and fileURLToPath(import.meta.url)-derived __dirname for older Node, and ties the choice to engines.node. Explicitly warns against hardcoding without committing it."
+    }
+  ]
+}
