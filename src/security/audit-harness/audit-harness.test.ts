@@ -4,14 +4,16 @@
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { scanMcpManifest } from "../detect/mcp";
 import { computeObjectChecksum } from "../config";
 import { addBaselineEntry, applyAuditProposal, auditGate, defaultBaselinePath, runHarnessAudit } from "./index";
 import { entryIsActive } from "./baseline";
-import { isPinnedPackageSpec } from "./checks";
+import { checkAgentMissingModelTier, checkAgentUnrestrictedTools, isPinnedPackageSpec } from "./checks";
 import { scoreFindings } from "./score";
 import type { AuditFinding } from "./types";
+import { loadAgentCatalog } from "../../agents/catalog";
+import { planAgentExport, writeAgentExport } from "../../agents/export";
 
 let root: string;
 
@@ -901,4 +903,219 @@ test("F27 (control): applyAuditProposal works against an explicitly-passed root,
   const finding_ = report.findings.find((f) => f.check === "over-permissive-allowlist");
   const result = await applyAuditProposal(root, finding_!.fixProposal!.id);
   expect(result.path).toBe(".claude/settings.json");
+});
+
+// --- Flow 310 (W2) T13 --------------------------------------------------------
+//
+// (a) The `agents` subsystem's exported directories (`.claude/agents`,
+// `.codex/agents`, `.kiro/agents`, `.opencode/agents`) are custom, non-JSON
+// surfaces just like a hook artifact — before this fix they were picked up
+// by `discoverHookSurfaceFiles` and reported as unreadable "hook files"
+// (they are directories, not files), turning the `hooks` coverage surface
+// `status: "error"` for any project that had exported agent definitions.
+
+test("flow 310-T13: a project with every host's exported agent definitions reports no hooks coverage error", async () => {
+  const catalog = loadAgentCatalog(process.cwd());
+  expect(catalog.errors).toEqual([]);
+  expect(catalog.agents.length).toBeGreaterThan(0);
+
+  for (const runtime of ["claude", "codex", "kiro", "opencode"] as const) {
+    for (const agent of catalog.agents) {
+      const plan = await planAgentExport(root, agent.definition, runtime);
+      await writeAgentExport(root, plan);
+    }
+  }
+
+  const report = await runHarnessAudit(root);
+  const hooksSurface = report.surfaces.find((s) => s.surface === "hooks");
+  expect(hooksSurface?.status).not.toBe("error");
+  expect(hooksSurface?.pathsUnreadable ?? []).toEqual([]);
+  expect(
+    report.coverage.reasons?.some((r) => r.toLowerCase().includes("hooks")),
+  ).toBeFalsy();
+});
+
+// (b) Agent-definitions discovery previously only scanned
+// `.metaproject/agents/*.md` and `.claude/agents/*.md` — a codex/kiro/
+// opencode export was never scanned at all, making the "scanned clean" exit
+// criterion vacuous for those three runtimes.
+
+test("flow 310-T13: agent-definitions discovery scans every host's exported directory, not just .claude/agents", async () => {
+  const catalog = loadAgentCatalog(process.cwd());
+  expect(catalog.errors).toEqual([]);
+
+  const relativePaths: string[] = [];
+  for (const runtime of ["claude", "codex", "kiro", "opencode"] as const) {
+    for (const agent of catalog.agents) {
+      const plan = await planAgentExport(root, agent.definition, runtime);
+      await writeAgentExport(root, plan);
+      expect(plan.relativePath).toBeDefined();
+      relativePaths.push(plan.relativePath!);
+    }
+  }
+  // Sanity: the fixture actually spans all three non-markdown-only formats.
+  expect(relativePaths.some((p) => p.endsWith(".toml"))).toBe(true);
+  expect(relativePaths.some((p) => p.endsWith(".json"))).toBe(true);
+  expect(relativePaths.some((p) => p.startsWith(".opencode/agents/") && p.endsWith(".md"))).toBe(true);
+
+  const report = await runHarnessAudit(root);
+  const surface = report.surfaces.find((s) => s.surface === "agent-definitions");
+  expect(surface?.status).toBe("scanned");
+  for (const relativePath of relativePaths) {
+    expect(surface?.pathsScanned).toContain(relativePath);
+  }
+});
+
+// --- Flow 310 (W2) T13: format-aware agent-definitions checks -----------------
+
+test("checkAgentUnrestrictedTools: toml (codex) is satisfied by sandbox_mode, flagged without it", () => {
+  const withSandbox = '# keryx-managed: keryx agents export (x, sha256:abc, model_tier=light)\nname = "x"\nsandbox_mode = "read-only"\n';
+  expect(checkAgentUnrestrictedTools(".codex/agents/x.toml", withSandbox)).toEqual([]);
+
+  const withoutSandbox = '# keryx-managed: keryx agents export (x, sha256:abc, model_tier=light)\nname = "x"\n';
+  const findings = checkAgentUnrestrictedTools(".codex/agents/x.toml", withoutSandbox);
+  expect(findings.length).toBe(1);
+  expect(findings[0]!.check).toBe("agent-unrestricted-tools");
+});
+
+test("checkAgentUnrestrictedTools: json (kiro) is satisfied by a tools array, flagged without one", () => {
+  const withTools = JSON.stringify({ name: "x", description: "d", prompt: "p", tools: ["read"] });
+  expect(checkAgentUnrestrictedTools(".kiro/agents/x.json", withTools)).toEqual([]);
+
+  const withoutTools = JSON.stringify({ name: "x", description: "d", prompt: "p" });
+  const findings = checkAgentUnrestrictedTools(".kiro/agents/x.json", withoutTools);
+  expect(findings.length).toBe(1);
+});
+
+test("checkAgentUnrestrictedTools: opencode md is satisfied by a permission block, flagged without one", () => {
+  const withPermission = "---\ndescription: d\nmode: subagent\npermission:\n  edit: deny\n---\nbody\n";
+  expect(checkAgentUnrestrictedTools(".opencode/agents/x.md", withPermission)).toEqual([]);
+
+  const withoutPermission = "---\ndescription: d\nmode: subagent\n---\nbody\n";
+  const findings = checkAgentUnrestrictedTools(".opencode/agents/x.md", withoutPermission);
+  expect(findings.length).toBe(1);
+});
+
+test("checkAgentMissingModelTier: toml/json/opencode-md accept an explicit model field OR the sentinel's model_tier= annotation", () => {
+  const tomlWithModel = 'name = "x"\nmodel = "gpt-5"\n';
+  expect(checkAgentMissingModelTier(".codex/agents/x.toml", tomlWithModel)).toEqual([]);
+  const tomlWithSentinelTier = '# keryx-managed: keryx agents export (x, sha256:abc, model_tier=deep)\nname = "x"\n';
+  expect(checkAgentMissingModelTier(".codex/agents/x.toml", tomlWithSentinelTier)).toEqual([]);
+  const tomlWithNeither = 'name = "x"\n';
+  expect(checkAgentMissingModelTier(".codex/agents/x.toml", tomlWithNeither).length).toBe(1);
+
+  const jsonWithModel = JSON.stringify({ name: "x", model: "gpt-5" });
+  expect(checkAgentMissingModelTier(".kiro/agents/x.json", jsonWithModel)).toEqual([]);
+  const jsonWithSentinelTier = JSON.stringify({
+    name: "x",
+    prompt: "keryx-managed: keryx agents export (x, sha256:abc, model_tier=standard)\n\nbody",
+  });
+  expect(checkAgentMissingModelTier(".kiro/agents/x.json", jsonWithSentinelTier)).toEqual([]);
+  const jsonWithNeither = JSON.stringify({ name: "x", prompt: "body" });
+  expect(checkAgentMissingModelTier(".kiro/agents/x.json", jsonWithNeither).length).toBe(1);
+
+  const opencodeWithSentinelTier =
+    "---\ndescription: d\nmode: subagent\n---\n<!-- keryx-managed: keryx agents export (x, sha256:abc, model_tier=light) -->\n\nbody\n";
+  expect(checkAgentMissingModelTier(".opencode/agents/x.md", opencodeWithSentinelTier)).toEqual([]);
+  const opencodeWithNeither = "---\ndescription: d\nmode: subagent\n---\nbody\n";
+  expect(checkAgentMissingModelTier(".opencode/agents/x.md", opencodeWithNeither).length).toBe(1);
+});
+
+test("checkAgentMissingModelTier: a hand-written host agent file without model and without the sentinel annotation is still flagged", () => {
+  const handWritten = "---\nname: x\ndescription: d\ntools: []\n---\nno model, no sentinel\n";
+  const findings = checkAgentMissingModelTier(".claude/agents/x.md", handWritten);
+  expect(findings.length).toBe(1);
+  expect(findings[0]!.check).toBe("agent-missing-model-tier");
+});
+
+// --- R1-F12 (review 310 round 1): sentinel-anchored model_tier fallback +
+// explicitly empty/null `tools` counts as unrestricted -----------------------
+
+test("checkAgentMissingModelTier: model_tier= mentioned OUTSIDE the keryx-managed sentinel line (e.g. in body prose) does not suppress the finding", () => {
+  const bodyMentionsTier =
+    "---\nname: x\ndescription: d\ntools: []\n---\nThis agent uses model_tier=deep for its work, but there is no real sentinel here.\n";
+  const findings = checkAgentMissingModelTier(".claude/agents/x.md", bodyMentionsTier);
+  expect(findings.length).toBe(1);
+  expect(findings[0]!.check).toBe("agent-missing-model-tier");
+
+  const tomlBodyMentionsTier = 'name = "x"\n# a random comment about model_tier=deep, not a real sentinel\n';
+  expect(checkAgentMissingModelTier(".codex/agents/x.toml", tomlBodyMentionsTier).length).toBe(1);
+
+  const jsonBodyMentionsTier = JSON.stringify({ name: "x", prompt: "uses model_tier=deep in prose, no sentinel" });
+  expect(checkAgentMissingModelTier(".kiro/agents/x.json", jsonBodyMentionsTier).length).toBe(1);
+});
+
+test("checkAgentMissingModelTier: model_tier= WITHIN the actual keryx-managed sentinel line still suppresses the finding", () => {
+  const withRealSentinel =
+    "---\nname: x\ndescription: d\ntools: []\n---\n<!-- keryx-managed: keryx agents export (x, sha256:abc, model_tier=deep) -->\nbody\n";
+  expect(checkAgentMissingModelTier(".claude/agents/x.md", withRealSentinel)).toEqual([]);
+});
+
+test("checkAgentUnrestrictedTools: claude md with an empty `tools:` value is flagged as unrestricted, not treated as an allowlist", () => {
+  const emptyTools = "---\nname: x\ndescription: d\ntools:\n---\nbody\n";
+  const findings = checkAgentUnrestrictedTools(".claude/agents/x.md", emptyTools);
+  expect(findings.length).toBe(1);
+  expect(findings[0]!.check).toBe("agent-unrestricted-tools");
+});
+
+test("checkAgentUnrestrictedTools: claude md with `tools: \"\"` is flagged as unrestricted", () => {
+  const quotedEmptyTools = '---\nname: x\ndescription: d\ntools: ""\n---\nbody\n';
+  const findings = checkAgentUnrestrictedTools(".claude/agents/x.md", quotedEmptyTools);
+  expect(findings.length).toBe(1);
+  expect(findings[0]!.check).toBe("agent-unrestricted-tools");
+});
+
+test("checkAgentUnrestrictedTools: claude md with a non-empty `tools:` value is still treated as an allowlist", () => {
+  const nonEmptyTools = "---\nname: x\ndescription: d\ntools: Read, Grep\n---\nbody\n";
+  expect(checkAgentUnrestrictedTools(".claude/agents/x.md", nonEmptyTools)).toEqual([]);
+});
+
+// --- R2-F3 (review 310 round 2): YAML null-form `tools` values are flagged too --
+
+describe("R2-F3: checkAgentUnrestrictedTools flags every YAML null-form spelling of `tools`, not just \"\"/''", () => {
+  for (const spelling of ["null", "Null", "NULL", "~"]) {
+    test(`tools: ${spelling}`, () => {
+      const content = `---\nname: x\ndescription: d\ntools: ${spelling}\n---\nbody\n`;
+      const findings = checkAgentUnrestrictedTools(".claude/agents/x.md", content);
+      expect(findings.length).toBe(1);
+      expect(findings[0]!.check).toBe("agent-unrestricted-tools");
+    });
+  }
+
+  test("tools: [] (explicit empty flow sequence)", () => {
+    const content = "---\nname: x\ndescription: d\ntools: []\n---\nbody\n";
+    const findings = checkAgentUnrestrictedTools(".claude/agents/x.md", content);
+    expect(findings.length).toBe(1);
+    expect(findings[0]!.check).toBe("agent-unrestricted-tools");
+  });
+
+  test("a genuinely unparsable frontmatter block still falls back to the scalar check for the null spellings", () => {
+    // `Bun.YAML.parse` throws on this (an unindented nested mapping under an
+    // empty `tools:` key) — the fallback scalar path must still catch it.
+    const content = "---\nname: x\ndescription: d\ntools: ~\nbad:\nnested: [unterminated\n---\nbody\n";
+    const findings = checkAgentUnrestrictedTools(".claude/agents/x.md", content);
+    expect(findings.length).toBe(1);
+  });
+});
+
+// --- R2-F6 (review 310 round 2): kiro's tier fallback is anchored to the
+// FIRST LINE of the parsed `prompt` only — prose anywhere else in that one
+// physical JSON line (which also carries the whole header) must not
+// suppress the finding. --------------------------------------------------
+
+test("R2-F6: checkAgentMissingModelTier — model_tier= in kiro prompt HEADER prose (after the real sentinel line) does not, by itself, save a file with no real sentinel", () => {
+  const noSentinelButHeaderMentionsTier = JSON.stringify({
+    name: "x",
+    prompt: "Not a real sentinel line at all.\n\nThe agent should use model_tier=deep for reasoning.",
+  });
+  const findings = checkAgentMissingModelTier(".kiro/agents/x.json", noSentinelButHeaderMentionsTier);
+  expect(findings.length).toBe(1);
+});
+
+test("R2-F6: checkAgentMissingModelTier — a real kiro sentinel on the prompt's first line still suppresses the finding even when the header body also mentions model_tier=", () => {
+  const realSentinelPlusHeaderMention = JSON.stringify({
+    name: "x",
+    prompt: "keryx-managed: keryx agents export (x, sha256:abc, model_tier=deep)\n\nDo not use model_tier=light for this task.",
+  });
+  expect(checkAgentMissingModelTier(".kiro/agents/x.json", realSentinelPlusHeaderMention)).toEqual([]);
 });

@@ -4,7 +4,7 @@
 // records. AC5/AC6.
 
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -135,10 +135,19 @@ describe("resolveSurfaceSelection", () => {
     expect(byId.map((s) => s.id)).toEqual(["ctx-guard"]);
   });
 
-  test("empty selector list selects every surface", () => {
+  test("empty selector list selects every non-opt-in surface (flow 310: an opt-in surface like `agents` is excluded by default)", () => {
     const claude = getHarnessAdapter("claude")!;
-    expect(resolveSurfaceSelection(claude, []).length).toBe(claude.surfaces.length);
-    expect(resolveSurfaceSelection(claude).length).toBe(claude.surfaces.length);
+    const nonOptIn = claude.surfaces.filter((s) => !s.optIn).length;
+    expect(resolveSurfaceSelection(claude, []).length).toBe(nonOptIn);
+    expect(resolveSurfaceSelection(claude).length).toBe(nonOptIn);
+    // Sanity: claude DOES carry an opt-in surface today (`agents`), so this
+    // test would not have caught a regression if `optIn` had no effect.
+    expect(nonOptIn).toBeLessThan(claude.surfaces.length);
+  });
+
+  test("an opt-in surface is still selected when named explicitly (by flag or id)", () => {
+    const claude = getHarnessAdapter("claude")!;
+    expect(resolveSurfaceSelection(claude, ["agents"]).map((s) => s.id)).toEqual(["agents"]);
   });
 
   test("unknown selector throws, naming it and the valid flags/ids for that runtime", () => {
@@ -152,6 +161,92 @@ describe("resolveSurfaceSelection", () => {
       expect(message).toContain("ctx-guard");
       expect(message).toContain("block");
     }
+  });
+});
+
+// T17: `doctorIntegration --surface <bogus>` must error the same way
+// install/uninstall do for an unknown selector, instead of silently ignoring
+// it (a never-installed opt-in surface then simply never matched
+// `explicitlySelected`, so doctor ran exactly as if `--surface` had been
+// omitted — R2-F5's round-3 info note).
+describe("doctorIntegration: unknown --surface selector", () => {
+  test("an unknown selector throws, same message shape as resolveSurfaceSelection", () => {
+    expect(doctorIntegration("/nonexistent", "claude", { surfaces: ["bogus-selector"] })).rejects.toThrow(/bogus-selector/);
+  });
+
+  test("a known selector (an opt-in surface never installed) does not throw", async () => {
+    await withMetaproject(async (root) => {
+      const result = await doctorIntegration(root, "claude", { surfaces: ["agents"] });
+      expect(result.surfaces.some((s) => s.surfaceId === "agents")).toBe(true);
+    });
+  });
+});
+
+// review round 4, F1: multi-runtime `keryx integrations doctor --runtime
+// all --surface agents` (or a comma list) previously threw for every
+// runtime lacking an `agents` surface, because `doctorIntegration` always
+// ran the STRICT `resolveSurfaceSelection`. `lenientSelectors` (threaded by
+// the CLI exactly like `installIntegration`/`uninstallIntegration` already
+// do) fixes that: mirrors install/uninstall's own lenient-selector tests.
+describe("doctorIntegration: lenientSelectors (F1)", () => {
+  // The CLI only ever sets `lenientSelectors: true` for a multi-runtime
+  // (`all`/comma list) selection (see `commands/integrations.ts`); a single
+  // explicit `--runtime` always calls with the default `lenientSelectors:
+  // false`/omitted, which is what keeps throwing on a bogus selector — same
+  // as `installIntegration`/`uninstallIntegration`, `doctorIntegration`
+  // itself just does whatever `opts.lenientSelectors` says.
+  test("the CLI's default (lenientSelectors omitted) still throws on a bogus selector", async () => {
+    await expect(doctorIntegration("/nonexistent", "claude", { surfaces: ["bogus-selector"] })).rejects.toThrow(/bogus-selector/);
+  });
+
+  // review round 5, F1: a runtime lacking the selected surface must NOT be
+  // skipped — `--surface` is additive for doctor, so a runtime that doesn't
+  // declare `agents` is still doctored in full over its own default
+  // surfaces. Only the informational `noMatchingSurface` marker is set.
+  test("a runtime lacking the selected surface is still doctored in full, with noMatchingSurface only as a marker", async () => {
+    await withMetaproject(async (root) => {
+      // gemini-cli carries no `agents` surface (see registry.ts) — the
+      // multi-runtime case (`--runtime all`/comma list) this fix targets.
+      const gemini = getHarnessAdapter("gemini-cli")!;
+      const nonOptIn = gemini.surfaces.filter((s) => !s.optIn).length;
+      const withoutSelector = await doctorIntegration(root, "gemini-cli", {});
+      const result = await doctorIntegration(root, "gemini-cli", { surfaces: ["agents"], lenientSelectors: true });
+      expect(result.noMatchingSurface).toBe(true);
+      // Same full doctor pass as if `--surface agents` had never been
+      // passed: no surfaces silently dropped, no health checks skipped.
+      expect(result.surfaces.length).toBe(nonOptIn);
+      expect(result.surfaces.map((s) => s.surfaceId).sort()).toEqual(withoutSelector.surfaces.map((s) => s.surfaceId).sort());
+      expect(result.problems).toEqual(withoutSelector.problems);
+      expect(result.ok).toBe(withoutSelector.ok);
+      expect(result.surfaces.some((s) => s.surfaceId === "agents")).toBe(false);
+    });
+  });
+
+  test("a runtime that DOES carry the selected surface still doctors normally under lenientSelectors", async () => {
+    await withMetaproject(async (root) => {
+      const result = await doctorIntegration(root, "claude", { surfaces: ["agents"], lenientSelectors: true });
+      expect(result.noMatchingSurface).toBeUndefined();
+      expect(result.surfaces.some((s) => s.surfaceId === "agents")).toBe(true);
+    });
+  });
+
+  // review round 5: renamed from "...still errors, even under
+  // lenientSelectors" — `doctorIntegration` itself never errors here, it
+  // only reports `noMatchingSurface: true`; the CLI aggregate
+  // (`commands/integrations.ts`, `handleDoctor`) is what turns "every
+  // selected runtime had no matching surface" into an exit-1 error. Kept
+  // here to cover the flag doctorIntegration reports, with the name no
+  // longer implying doctorIntegration itself throws or errors.
+  test("selecting something no runtime declares at all reports noMatchingSurface (the CLI aggregate is what errors)", async () => {
+    await withMetaproject(async (root) => {
+      const result = await doctorIntegration(root, "gemini-cli", {
+        surfaces: ["totally-bogus-selector-nothing-declares"],
+        lenientSelectors: true,
+      });
+      expect(result.noMatchingSurface).toBe(true);
+      // Still fully doctored, not skipped, even though nothing matched.
+      expect(result.surfaces.length).toBeGreaterThan(0);
+    });
   });
 });
 
@@ -723,6 +818,172 @@ describe("F7 (round 2): a malformed RECORD inside installedModules invalidates t
       // Must not throw.
       const doctor = await doctorIntegration(root, "claude");
       expect(doctor.problems).toEqual([]);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R1-F2/F8 (review round 1, flow 310 W2): the `agents` surface is
+// directory-backed (`.claude/agents`), unlike every other surface's single
+// settings file — `recordSurfaceInstalled` hashing that directory used to
+// throw EISDIR in any project WITH a `.metaproject/` (the only case the
+// pre-fix test suite never exercised), after the agent files were already
+// written to disk. F8: the surface is also opt-in, so the default,
+// no-selector `doctor` must not report it "invalid" merely because nobody
+// has opted in yet, and a dry-run uninstall must judge presence off actual
+// managed files, not bare directory existence.
+// ---------------------------------------------------------------------------
+
+describe("R1-F2/F8: the agents surface (directory-backed, opt-in)", () => {
+  test("install --surface agents in a project WITH .metaproject/ succeeds, records state, and doctor/uninstall round-trip cleanly", async () => {
+    await withMetaproject(async (root) => {
+      const installed = await installIntegration(root, "claude", { surfaces: ["agents"] });
+      expect(installed.errors, JSON.stringify(installed)).toEqual([]);
+      expect(installed.results.some((r) => r.surfaceId === "agents" && r.status === "installed")).toBe(true);
+      expect(existsSync(path.join(root, ".claude", "agents"))).toBe(true);
+      const writtenFiles = await readdir(path.join(root, ".claude", "agents"));
+      expect(writtenFiles.length).toBeGreaterThan(0);
+
+      // R1-F2: this used to throw EISDIR here — the install-state write is
+      // the very thing that crashed, and nothing was recorded on failure.
+      const state = await readInstallState(root, "claude");
+      expect(state?.installedModules.some((r) => r.moduleId === "agents")).toBe(true);
+
+      const doctor = await doctorIntegration(root, "claude", { surfaces: ["agents"] });
+      expect(doctor.ok, JSON.stringify(doctor)).toBe(true);
+      const agentsDoctor = doctor.surfaces.find((s) => s.surfaceId === "agents");
+      expect(agentsDoctor?.live).toBe("valid");
+
+      const uninstalled = await uninstallIntegration(root, "claude", { surfaces: ["agents"] });
+      expect(uninstalled.errors, JSON.stringify(uninstalled)).toEqual([]);
+      expect(uninstalled.results.some((r) => r.surfaceId === "agents" && r.status === "removed")).toBe(true);
+    });
+  });
+
+  test("R1-F8: doctor with NO selector does not report a never-installed agents surface as invalid", async () => {
+    await withMetaproject(async (root) => {
+      const doctor = await doctorIntegration(root, "claude");
+      expect(doctor.ok, JSON.stringify(doctor)).toBe(true);
+      expect(doctor.surfaces.some((s) => s.surfaceId === "agents")).toBe(false);
+    });
+  });
+
+  test("R1-F8: doctor still reports an INSTALLED agents surface even with no selector (drift stays visible once opted in)", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["agents"] });
+      const doctor = await doctorIntegration(root, "claude");
+      expect(doctor.surfaces.some((s) => s.surfaceId === "agents")).toBe(true);
+    });
+  });
+
+  test("R1-F8: a dry-run uninstall reports nothing-to-remove for a directory holding only unmanaged files", async () => {
+    await withMetaproject(async (root) => {
+      await mkdir(path.join(root, ".claude", "agents"), { recursive: true });
+      await writeFile(path.join(root, ".claude", "agents", "hand-authored.md"), "# not keryx's\n", "utf8");
+
+      const dryRun = await uninstallIntegration(root, "claude", { surfaces: ["agents"], dryRun: true });
+      const agentsResult = dryRun.results.find((r) => r.surfaceId === "agents");
+      expect(agentsResult?.status).toBe("nothing-to-remove");
+    });
+  });
+
+  test("R1-F8: a dry-run uninstall reports would-remove once at least one managed file exists", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["agents"] });
+      const dryRun = await uninstallIntegration(root, "claude", { surfaces: ["agents"], dryRun: true });
+      const agentsResult = dryRun.results.find((r) => r.surfaceId === "agents");
+      expect(agentsResult?.status).toBe("would-remove");
+    });
+  });
+
+  // T17 (design pt. 3): a managed file hand-edited since export is kept, not
+  // deleted, even with no `--force` equivalent for uninstall at all — and the
+  // keep is reported as a warning alongside the uninstall's own status line.
+  test("T17: uninstall keeps a hand-edited managed agent export, reports it as a warning, and still removes every unedited one", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["agents"] });
+      const agentsDir = path.join(root, ".claude", "agents");
+      const files = await readdir(agentsDir);
+      expect(files.length).toBeGreaterThan(1); // sanity: more than one bundled agent, so "removed the rest" is a real assertion
+      const [editedFile, ...untouchedFiles] = files;
+      const editedPath = path.join(agentsDir, editedFile!);
+      const original = await readFile(editedPath, "utf8");
+      await writeFile(editedPath, `${original}\nhand-added line, sentinel left untouched\n`, "utf8");
+
+      const uninstalled = await uninstallIntegration(root, "claude", { surfaces: ["agents"] });
+      expect(uninstalled.errors, JSON.stringify(uninstalled)).toEqual([]);
+      const agentsResult = uninstalled.results.find((r) => r.surfaceId === "agents");
+      // Something else was still removed, so the surface-level status is
+      // "removed", not "nothing-to-remove" — the hand-edited file's kept-ness
+      // shows up in `warnings`, not by flipping this to failure/no-op.
+      expect(agentsResult?.status).toBe("removed");
+      expect(agentsResult?.warnings.some((w) => w.includes(editedFile!) && w.includes("hand-edited"))).toBe(true);
+
+      // The hand-edited file is untouched on disk...
+      expect(existsSync(editedPath)).toBe(true);
+      expect(await readFile(editedPath, "utf8")).toContain("hand-added line");
+      // ...and every OTHER managed file was actually removed.
+      for (const untouched of untouchedFiles) {
+        expect(existsSync(path.join(agentsDir, untouched))).toBe(false);
+      }
+    });
+  });
+
+  // review round 4, F2: `hasManagedAgentExports` (which `inspectAgentsExports`
+  // wires into `customUninstallDryRun`) used to count a hand-edited managed
+  // file as "something to remove", so a directory holding ONLY hand-edited
+  // exports reported `would-remove` on dry-run while the real uninstall then
+  // kept every one of them (nothing actually removed) — dry-run and the real
+  // run disagreed. Fixed to count only VERIFIED files, matching exactly what
+  // `removeManagedAgentExportsDetailed` deletes.
+  test("F2: a directory with only hand-edited managed exports — dry-run says nothing-to-remove, matching the real run which removes nothing", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["agents"] });
+      const agentsDir = path.join(root, ".claude", "agents");
+      const files = await readdir(agentsDir);
+      expect(files.length).toBeGreaterThan(0); // sanity
+      for (const file of files) {
+        const filePath = path.join(agentsDir, file);
+        const original = await readFile(filePath, "utf8");
+        await writeFile(filePath, `${original}\nhand-added line, sentinel left untouched\n`, "utf8");
+      }
+
+      const dryRun = await uninstallIntegration(root, "claude", { surfaces: ["agents"], dryRun: true });
+      const dryRunResult = dryRun.results.find((r) => r.surfaceId === "agents");
+      expect(dryRunResult?.status).toBe("nothing-to-remove");
+
+      const real = await uninstallIntegration(root, "claude", { surfaces: ["agents"] });
+      const realResult = real.results.find((r) => r.surfaceId === "agents");
+      // Dry-run and the real run agree: nothing removed, every file kept.
+      expect(realResult?.status).toBe("nothing-to-remove");
+      for (const file of files) {
+        expect(existsSync(path.join(agentsDir, file))).toBe(true);
+      }
+    });
+  });
+
+  test("F2: a mixed directory (verified + hand-edited) — dry-run says would-remove, and the real run removes only the verified file", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["agents"] });
+      const agentsDir = path.join(root, ".claude", "agents");
+      const files = await readdir(agentsDir);
+      expect(files.length).toBeGreaterThan(1); // sanity: need at least one verified + one hand-edited
+      const [editedFile, ...verifiedFiles] = files;
+      const editedPath = path.join(agentsDir, editedFile!);
+      const original = await readFile(editedPath, "utf8");
+      await writeFile(editedPath, `${original}\nhand-added line, sentinel left untouched\n`, "utf8");
+
+      const dryRun = await uninstallIntegration(root, "claude", { surfaces: ["agents"], dryRun: true });
+      const dryRunResult = dryRun.results.find((r) => r.surfaceId === "agents");
+      expect(dryRunResult?.status).toBe("would-remove");
+
+      const real = await uninstallIntegration(root, "claude", { surfaces: ["agents"] });
+      const realResult = real.results.find((r) => r.surfaceId === "agents");
+      expect(realResult?.status).toBe("removed");
+      expect(existsSync(editedPath)).toBe(true); // hand-edited file kept
+      for (const verified of verifiedFiles) {
+        expect(existsSync(path.join(agentsDir, verified))).toBe(false); // verified files removed
+      }
     });
   });
 });

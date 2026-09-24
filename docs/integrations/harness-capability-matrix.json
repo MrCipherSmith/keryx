@@ -23,6 +23,11 @@
           "surface": "inject-context",
           "state": "native",
           "settingsFile": ".claude/settings.json"
+        },
+        {
+          "surface": "agents",
+          "state": "native",
+          "settingsFile": ".claude/agents"
         }
       ],
       "surfaces_unsupported": [],
@@ -31,6 +36,7 @@
       "risk_notes": "",
       "last_verified": "2026-09-23",
       "source_docs": [
+        "https://code.claude.com/docs/en/sub-agents",
         "src/ctx/orient-runtimes.ts",
         "src/ctx/runtimes.ts",
         "src/security/agent-hooks/runtimes.ts"
@@ -52,15 +58,21 @@
           "surface": "inject-context",
           "state": "native",
           "settingsFile": ".codex/hooks.json"
+        },
+        {
+          "surface": "agents",
+          "state": "adapter",
+          "settingsFile": ".codex/agents"
         }
       ],
       "surfaces_unsupported": [],
       "install_command": "keryx integrations install --runtime codex",
       "verification_command": "keryx integrations doctor --runtime codex",
-      "risk_notes": "",
+      "risk_notes": "Codex has no per-tool allowlist — access is governed entirely by sandbox_mode (read-only/workspace-write); a tool a definition names but the sandbox mode does not itself restrict is NOT enforced the way claude's per-tool allowlist is.",
       "last_verified": "2026-09-23",
       "source_docs": [
         "docs/docs/harness.md",
+        "https://developers.openai.com/codex/subagents",
         "src/ctx/orient-runtimes.ts",
         "src/ctx/runtimes.ts"
       ]
@@ -172,6 +184,11 @@
           "surface": "block",
           "state": "adapter",
           "settingsFile": ".opencode/plugin/keryx-ctx-guard.js"
+        },
+        {
+          "surface": "agents",
+          "state": "adapter",
+          "settingsFile": ".opencode/agents"
         }
       ],
       "surfaces_unsupported": [
@@ -182,9 +199,10 @@
       ],
       "install_command": "keryx integrations install --runtime opencode",
       "verification_command": "keryx integrations doctor --runtime opencode",
-      "risk_notes": "Bridged via a generated plugin file rather than a documented hook config.",
+      "risk_notes": "Bridged via a generated plugin file rather than a documented hook config. OpenCode's documented `tools` boolean map is flagged deprecated in favour of `permission`, which this exporter targets — the stability of that migration is not independently confirmed here.",
       "last_verified": "2026-09-23",
       "source_docs": [
+        "https://opencode.ai/docs/agents/",
         "src/ctx/orient-runtimes.ts",
         "src/ctx/runtimes.ts"
       ]
@@ -295,6 +313,11 @@
           "settingsFile": ".kiro/hooks/keryx-ctx-guard.json"
         },
         {
+          "surface": "agents",
+          "state": "adapter",
+          "settingsFile": ".kiro/agents"
+        },
+        {
           "surface": "instructions",
           "state": "instruction-only",
           "settingsFile": ".kiro/steering/keryx.md"
@@ -303,10 +326,11 @@
       "surfaces_unsupported": [],
       "install_command": "keryx integrations install --runtime kiro",
       "verification_command": "keryx integrations doctor --runtime kiro",
-      "risk_notes": "Kiro's hook stdin field names and its shell tool's name are third-party-reported only, not confirmed by first-party docs. Open Kiro issues report that steering file `inclusion` modes are not always honoured. Kiro's hook stdin field names and its shell tool's name are third-party-reported only, not confirmed by first-party docs — the matcher above is a best guess and may gate nothing on a real install; verify before relying on it. Open Kiro issues report that steering file `inclusion` modes are not always honoured, even with `inclusion: always` set — verify on a live install.",
+      "risk_notes": "Kiro's hook stdin field names and its shell tool's name are third-party-reported only, not confirmed by first-party docs. Open Kiro issues report that steering file `inclusion` modes are not always honoured. Kiro's hook stdin field names and its shell tool's name are third-party-reported only, not confirmed by first-party docs — the matcher above is a best guess and may gate nothing on a real install; verify before relying on it. Open Kiro issues report that steering file `inclusion` modes are not always honoured, even with `inclusion: always` set — verify on a live install. Kiro's unknown-key tolerance for .kiro/agents/*.json is not documented, so the managed sentinel is written as the first line of `prompt` rather than a new top-level key; verify on a live install.",
       "last_verified": "2026-09-24",
       "source_docs": [
         "https://kiro.dev/docs/cli/v3/hooks-migration/",
+        "https://kiro.dev/docs/custom-agents/configuration-reference/",
         "https://kiro.dev/docs/hooks/",
         "https://kiro.dev/docs/hooks/actions/",
         "https://kiro.dev/docs/hooks/types/",

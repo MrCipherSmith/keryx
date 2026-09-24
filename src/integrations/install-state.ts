@@ -15,7 +15,7 @@
 // actually wrote something.
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { currentWriterVersion } from "../lib/install-plan";
@@ -51,10 +51,29 @@ export function installStatePath(root: string, runtimeId: string): string {
   return path.join(metaprojectDir(root), "data", "integrations", "install-state", `${runtimeId}.json`);
 }
 
-/** sha256 hex of a project-relative file's current on-disk content, or `undefined` when it does not exist. */
+/**
+ * sha256 hex of a project-relative FILE's current on-disk content, or
+ * `undefined` when it does not exist. R1-F2: a directory-valued
+ * `writtenPaths`/`hashPaths` entry (the `agents` surface's `relativePath` is
+ * a whole directory, e.g. `.claude/agents`, unlike every other surface's
+ * single settings file) previously reached `readFile` here and crashed with
+ * EISDIR — after every agent file was already written, escaping
+ * `installIntegration`'s try/catch and reporting the whole install failed.
+ * `stat` + `isFile()` makes a directory (or anything else that is not a
+ * plain file) a quiet `undefined` instead: nothing to hash, not an error —
+ * `doctor`'s drift check (`shaDriftedSinceInstall`, which calls this per
+ * recorded path) degrades the same way, simply reporting no drift signal for
+ * a path it cannot hash rather than throwing.
+ */
 export async function sha256OfFile(root: string, relativePath: string): Promise<string | undefined> {
   const file = path.join(root, ...relativePath.split("/"));
-  if (!(await pathExists(file))) return undefined;
+  let stats;
+  try {
+    stats = await stat(file);
+  } catch {
+    return undefined;
+  }
+  if (!stats.isFile()) return undefined;
   const content = await readFile(file);
   return createHash("sha256").update(content).digest("hex");
 }

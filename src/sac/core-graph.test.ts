@@ -43,19 +43,31 @@ const ROOT = path.resolve(import.meta.dir, "..", "..");
 /**
  * Zones that carry the model runtime AFC-19 keeps out of core: the harness
  * (provider registry, model selection, credentials, streaming, policy loop),
- * the CLI/MCP adapters, the TUI, the MCP client and the vendor-agent runtime.
- * A single module from any of these inside the facade's shipped graph is the
- * failure this test exists for.
+ * the CLI/MCP adapters, the TUI and the MCP client. A single module from any
+ * of these inside the facade's shipped graph is the failure this test exists
+ * for.
+ *
+ * `src/agents/` was REMOVED from this list in flow 310 (W2, R2 fix). It
+ * carried `src/agents/bootstrap.ts` (the unrelated global-routing-block
+ * installer) alone when this list was written, which is why it sat here
+ * beside the CLI/MCP adapters — under `src/lib/import-zones.ts`'s coarser
+ * "adapters and clients are one not-core bucket" framing (see that file's
+ * header, "WHY THIS TABLE AND `src/sac/core-graph.test.ts` READ
+ * DIFFERENTLY") that was a defensible classification at the time. Flow 310
+ * added the agent-definition catalog (`types`/`schema`/`frontmatter`/
+ * `catalog`/`baseline`/`tools`/`policy`/`compile`/`sentinel`/`export`) under
+ * the same directory and `import-zones.ts` reclassified the WHOLE segment
+ * `client` → `core` for it: deterministic schema validation, catalog
+ * loading and dispatch-input compilation, with no provider registry, no
+ * model selection, no credential read and no LLM call — exactly the AFC-19
+ * shape, and confirmed here by keeping this list in sync rather than by
+ * assertion alone. `src/agents` still deliberately never imports
+ * `src/harness/policy/profiles.ts` or `src/harness/child/quarantine.ts`
+ * (both genuinely client) — see `import-zones.ts`'s and `policy.ts`'s own
+ * headers — so removing it here does not widen what this test tolerates,
+ * it corrects a STALE entry to match the current, true classification.
  */
-const CLIENT_ZONES = [
-  "src/harness/",
-  "src/tui/",
-  "src/mcp-client/",
-  "src/agents/",
-  "src/commands/",
-  "src/mcp/",
-  "src/cli.ts",
-];
+const CLIENT_ZONES = ["src/harness/", "src/tui/", "src/mcp-client/", "src/commands/", "src/mcp/", "src/cli.ts"];
 
 /**
  * `src/session/` is classified as a client zone by the phase-7 inventory's zone

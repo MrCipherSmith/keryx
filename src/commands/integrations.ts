@@ -341,11 +341,18 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
   const runtimeArg = requireRuntimeArg(args);
   if (runtimeArg === undefined) {
     console.error("--runtime is required");
-    console.error("Usage: keryx integrations doctor --runtime <id>[,<id>...|all] [--json]");
+    console.error("Usage: keryx integrations doctor --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--json]");
     process.exitCode = 1;
     return;
   }
   const json = isFlag(args, "--json");
+  // R2-F5: `--surface` was accepted by nothing but tests calling
+  // `doctorIntegration` directly — the CLI parsed `--runtime`/`--json` only
+  // and silently dropped `--surface`. Threaded through exactly like
+  // install/uninstall already do (`parseRuntimeOpts`), so a never-installed
+  // opt-in surface (e.g. `agents`) can be asked about explicitly before
+  // anyone has run `install --surface agents`.
+  const surfaces = collectRepeatable(args, "--surface");
 
   const { supported, unsupported, unknown } = resolveRuntimeIds(runtimeArg);
   if (unknown.length > 0) {
@@ -355,11 +362,46 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
     return;
   }
 
+  // review round 4, F1: multi-runtime (`all`/comma list) + `--surface` uses
+  // `doctorIntegration`'s lenient selector resolution — same condition
+  // install/uninstall already gate `lenientSelectors` on — so a selector
+  // that only some selected runtimes declare (e.g. `agents`) is dropped for
+  // the runtimes that lack it instead of erroring every one of them.
+  //
+  // review round 5, F1: unlike install/uninstall, this never skips a
+  // runtime's doctor pass — see `doctorIntegration`'s `DoctorOptions`/
+  // `DoctorIntegrationResult` docs. `noMatchingSurface` below is purely
+  // informational/aggregation, not a "was this runtime checked" flag.
+  const lenientSelectors = surfaces.length > 0 && isMultiRuntimeRequest(runtimeArg);
+
   const results: DoctorIntegrationResult[] = [];
   for (const adapter of supported) {
-    const result = await doctorIntegration(cwd, adapter.id);
-    results.push(result);
-    if (!result.ok) process.exitCode = 1;
+    // T17: `doctorIntegration` still throws on an unknown `--surface`
+    // selector for a single explicit runtime (strict `resolveSurfaceSelection`,
+    // same as install/uninstall) — caught here the same way
+    // `runAndReportRuntimeOps` catches an install/uninstall throw, so one bad
+    // selector reports as an error for that runtime instead of crashing the
+    // whole command, and a multi-runtime `--runtime all` still doctors every
+    // other runtime. With `lenientSelectors`, a runtime matching none of
+    // `surfaces` is still doctored in full (never throws) and comes back
+    // with `noMatchingSurface: true` attached, alongside its normal result.
+    try {
+      const result = await doctorIntegration(cwd, adapter.id, { surfaces, lenientSelectors });
+      results.push(result);
+      if (!result.ok) process.exitCode = 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      results.push({ runtimeId: adapter.id, surfaces: [], problems: [message], ok: false });
+      process.exitCode = 1;
+    }
+  }
+
+  // F3 (mirrors `runAndReportRuntimeOps`): error only if a multi-runtime +
+  // `--surface` selection matched nothing on ANY selected runtime — a
+  // partial match (some skipped, some doctored) is success.
+  if (lenientSelectors && results.length > 0 && results.every((r) => r.noMatchingSurface)) {
+    console.error(`No selected runtime declares surface(s): ${surfaces.join(", ")}`);
+    process.exitCode = 1;
   }
 
   if (json) {
@@ -370,6 +412,14 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
   heading("keryx integrations doctor");
   for (const result of results) {
     console.log(`  ${style.bold(result.runtimeId)} ${result.ok ? style.green("ok") : style.red("problems found")}`);
+    // review round 5, F1: `--surface` is additive for doctor, not
+    // restrictive (unlike install/uninstall's "no matching surface" skip
+    // line) — this runtime's normal doctor output above/below is always the
+    // full result. This note only flags that none of the requested
+    // selectors apply here, so it never replaces that output.
+    if (result.noMatchingSurface) {
+      note(`    ${result.runtimeId} declares none of the requested surface(s): ${surfaces.join(", ")}`);
+    }
     for (const problem of result.problems) {
       console.log(`  ${style.red(symbols.cross)} ${problem}`);
     }
@@ -460,7 +510,7 @@ export function printIntegrationsHelp(): void {
   helpUsage([
     `keryx integrations install --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]`,
     `keryx integrations uninstall --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]`,
-    `keryx integrations doctor --runtime <id>[,<id>...|all] [--json]`,
+    `keryx integrations doctor --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--json]`,
     `keryx integrations matrix [--check] [--write] [--json] [--file <path>]`,
   ]);
   helpOptions([

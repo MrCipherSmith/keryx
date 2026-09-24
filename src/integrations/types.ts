@@ -111,10 +111,25 @@ export const SUBSYSTEM_ORIENT = "orient";
 export const SUBSYSTEM_SECURITY = "security";
 export const SUBSYSTEM_INSTRUCTIONS = "instructions";
 export const SUBSYSTEM_ACP_PERMISSION = "acp-permission";
+/** Flow 310 (W2): the agent-definitions export subsystem — a harness's own `<runtime>/agents/*` directory, written by `src/agents/export.ts`. */
+export const SUBSYSTEM_AGENTS = "agents";
 // Flow 306 (W6, T20): `keryx shell`'s own compiled-in lifecycle hook runtime
 // (`src/harness/hooks/`) — a `policy-travels-with-agent` capability like
 // `SUBSYSTEM_ACP_PERMISSION`, not a settings file keryx installs into.
 export const SUBSYSTEM_SHELL_HOOKS = "shell-hooks";
+
+/**
+ * T17: the richer `customUninstall` return shape for a surface that may keep
+ * part of what it manages rather than deleting it (e.g. `agents`'s hand-edited
+ * managed files). `removed` carries the same meaning the plain `boolean`
+ * shape's value always has; `warnings`, when present, is folded into the
+ * surface's `SurfaceResult.warnings` by `installer.ts` so a kept file is
+ * visible in the CLI/JSON output alongside the uninstall's own status line.
+ */
+export interface CustomUninstallResult {
+  readonly removed: boolean;
+  readonly warnings?: readonly string[];
+}
 
 /**
  * One installable capability of one harness. `id` is unique within its
@@ -131,6 +146,17 @@ export interface SurfaceAdapter {
   readonly confidence: Confidence;
   readonly riskNotes?: readonly string[];
   readonly sourceDocs: readonly string[];
+  /**
+   * Flow 310 (W2): true excludes this surface from an EMPTY-selector
+   * install/uninstall (`resolveSurfaceSelection`/`resolveSurfaceSelectionLenient`
+   * in `installer.ts`) — `keryx integrations install --runtime <id>` with no
+   * `--surface` keeps installing exactly what it always has, unchanged. An
+   * opt-in surface is only selected by naming it explicitly: its own flag
+   * (`--surface agents`) or its id. Used by the `agents` surfaces (T7) so a
+   * default install never starts silently writing per-agent export files
+   * nobody asked for.
+   */
+  readonly optIn?: boolean;
   /** Absolute path of the settings artifact this surface installs into. */
   settingsFile?(root: string): string;
   /**
@@ -159,7 +185,17 @@ export interface SurfaceAdapter {
   strip?(settings: Settings): Settings;
   validate?(settings: Settings): string[];
   customInstall?(projectRoot: string): Promise<string[]>;
-  customUninstall?(projectRoot: string): Promise<boolean>;
+  /**
+   * Uninstall this surface's artifact. The plain `boolean` shape (every
+   * pre-flow-310 surface) reports only whether anything was removed. T17: a
+   * surface that can legitimately REFUSE to delete part of what it manages —
+   * `agents`, which never deletes a hand-edited managed file even though it
+   * still carries a keryx sentinel — instead returns
+   * `CustomUninstallResult`, whose `warnings` (kept files, and why) `installer.ts`
+   * folds into the surface's `SurfaceResult.warnings` the same way an
+   * experimental surface's static risk notes already are.
+   */
+  customUninstall?(projectRoot: string): Promise<boolean | CustomUninstallResult>;
   /**
    * Health check for a surface that has no `merge`/`strip` to validate
    * against — a non-JSON artifact (a generated plugin file, a markdown

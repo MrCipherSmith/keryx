@@ -48,7 +48,11 @@ export function resolveSurfaceSelection(
   adapter: HarnessAdapter,
   selectors: readonly string[] = [],
 ): SurfaceAdapter[] {
-  if (selectors.length === 0) return [...adapter.surfaces];
+  // F10 (flow 310, W2): an opt-in surface (`agents`) is excluded from the
+  // empty-selector default — it is only reached by naming its flag or id
+  // explicitly, below. `keryx integrations install --runtime <id>` with no
+  // `--surface` therefore keeps installing exactly what it always has.
+  if (selectors.length === 0) return adapter.surfaces.filter((s) => !s.optIn);
 
   const resolved: SurfaceAdapter[] = [];
   const unknown: string[] = [];
@@ -89,7 +93,8 @@ export function resolveSurfaceSelectionLenient(
   adapter: HarnessAdapter,
   selectors: readonly string[] = [],
 ): SurfaceAdapter[] {
-  if (selectors.length === 0) return [...adapter.surfaces];
+  // F10 (flow 310, W2): same opt-in exclusion as `resolveSurfaceSelection` above.
+  if (selectors.length === 0) return adapter.surfaces.filter((s) => !s.optIn);
   const resolved: SurfaceAdapter[] = [];
   for (const selector of selectors) {
     for (const match of adapter.surfaces.filter((s) => s.flag === selector || s.id === selector)) {
@@ -149,6 +154,21 @@ export interface DoctorIntegrationResult {
   /** F7: top-level problems not tied to any one surface — e.g. an unreadable install-state file. */
   readonly problems: readonly string[];
   readonly ok: boolean;
+  /**
+   * review round 4, F1 / review round 5, F1: set when `lenientSelectors`
+   * found no surface on this runtime matching any requested `--surface`
+   * selector. Unlike `InstallIntegrationResult`/`UninstallIntegrationResult`'s
+   * `noMatchingSurface` — which means "nothing to do on this runtime, skip
+   * it" for install/uninstall, where `--surface` restricts the work — doctor
+   * treats `--surface` as ADDITIVE: an opt-in surface is added on top of the
+   * runtime's normal doctor set, never in place of it. So this flag never
+   * skips anything here: `surfaces`/`problems`/`ok` above are always the
+   * full, normal doctor result for this runtime. It only tells the caller
+   * this runtime declares none of the requested selectors (informational —
+   * and, aggregated across every selected runtime, whether to error with "no
+   * selected runtime declares surface(s)").
+   */
+  readonly noMatchingSurface?: boolean;
 }
 
 export interface InstallOptions {
@@ -251,6 +271,14 @@ function wasSurfaceInstalled(settings: Settings, surface: SurfaceAdapter): boole
  * `inspect` (the OpenCode plugin, which owns its whole file outright) falls
  * back to plain file existence: any content present means there is something
  * to remove.
+ *
+ * review round 4, F2: this mirroring depends on each `inspect` itself only
+ * reporting `"present"` for what the real uninstall would delete — the
+ * `agents` surface's `inspectAgentsExports` (`src/integrations/
+ * surfaces-agents.ts`) now reports `"present"` only when a VERIFIED (not
+ * hand-edited) managed export exists, matching `removeManagedAgentExports
+ * Detailed`'s `removed` set, since a hand-edited managed export is never
+ * deleted by the real run.
  */
 async function customUninstallDryRun(
   root: string,
@@ -576,9 +604,21 @@ export async function uninstallIntegration(
     // not stop a LATER custom surface, or the satisfied-by-runtime loop
     // below, from being processed.
     let removed = false;
+    let customUninstallWarnings: readonly string[] = [];
     let customError: string | undefined;
     try {
-      removed = surface.customUninstall ? await surface.customUninstall(root) : false;
+      const outcome = surface.customUninstall ? await surface.customUninstall(root) : false;
+      // T17: `customUninstall` may return either the plain `boolean` every
+      // pre-flow-310 surface still does, or the richer `CustomUninstallResult`
+      // (`agents`, which can keep a hand-edited managed file rather than
+      // deleting it) — normalize both to `removed` + any extra warnings here,
+      // once, rather than at every call site.
+      if (typeof outcome === "boolean") {
+        removed = outcome;
+      } else {
+        removed = outcome.removed;
+        customUninstallWarnings = outcome.warnings ?? [];
+      }
     } catch (error) {
       customError = (error as Error).message;
     }
@@ -591,7 +631,7 @@ export async function uninstallIntegration(
       ...baseResult(surface, surface.relativePath),
       status: removed ? "removed" : "nothing-to-remove",
       errors: [],
-      warnings: warningsFor(surface),
+      warnings: [...warningsFor(surface), ...customUninstallWarnings],
     });
     if (removed) await recordSurfaceUninstalled(root, runtimeId, surface.id);
   }
@@ -666,10 +706,84 @@ function driftMessage(surface: SurfaceAdapter, recorded: InstalledModuleRecord, 
   return `${surface.id} (${surface.flag}) was installed by ${version} on ${when} and is now ${live}: ${detail}`;
 }
 
-export async function doctorIntegration(root: string, runtimeId: string): Promise<DoctorIntegrationResult> {
+export interface DoctorOptions {
+  /**
+   * R1-F8: surface flags/ids explicitly of interest — when given, an opt-in
+   * surface named here is doctored even with no install record (matching
+   * `resolveSurfaceSelection`'s "opt-in only when named explicitly" rule).
+   * Optional and additive: omitting it keeps every pre-flow-310 caller's
+   * behavior for every NON-opt-in surface unchanged.
+   */
+  readonly surfaces?: readonly string[];
+  /**
+   * review round 4, F1: resolve `surfaces` leniently (see
+   * `resolveSurfaceSelectionLenient`) for a multi-runtime `--runtime
+   * all`/comma-list selection, not a single explicit runtime — same flag,
+   * same meaning as `InstallOptions.lenientSelectors`. A selector that
+   * matches nothing on THIS runtime is dropped instead of throwing, since a
+   * runtime legitimately does not carry every surface every other selected
+   * runtime does.
+   *
+   * review round 5, F1: unlike `installIntegration`/`uninstallIntegration`,
+   * doctor never skips a runtime over this — `--surface` is additive for
+   * doctor (it adds an opt-in surface to the normal doctor set), not
+   * restrictive, so a runtime declaring none of `surfaces` is still doctored
+   * in full over its default (non-opt-in) surfaces. When NONE of `surfaces`
+   * match anything on this runtime, `doctorIntegration` still runs that full
+   * doctor and returns it with `noMatchingSurface: true` attached, purely as
+   * an informational/aggregation marker — never in place of `surfaces`.
+   */
+  readonly lenientSelectors?: boolean;
+}
+
+export async function doctorIntegration(root: string, runtimeId: string, opts: DoctorOptions = {}): Promise<DoctorIntegrationResult> {
   const adapter = getHarnessAdapter(runtimeId);
   if (!adapter) {
     throw new Error(`unknown runtime "${runtimeId}" — valid runtimes: ${harnessAdapterIds().join(", ")}`);
+  }
+  // T17: an unknown `--surface` selector must error the same way
+  // install/uninstall already do, instead of being silently ignored (it
+  // never matches anything in the `explicitlySelected` lookup below, so
+  // doctor previously just ran as if `--surface` had not been passed at
+  // all). Reuse `resolveSurfaceSelection`'s own validation — same message,
+  // same "valid flags/ids for this runtime" listing — rather than a second,
+  // independently-maintained check; its resolved list itself is unused here,
+  // since doctor's own surface loop below iterates `adapter.surfaces`
+  // directly and applies the opt-in/explicitly-selected rule its own way.
+  //
+  // review round 4, F1: that strict validation broke a multi-runtime
+  // `--runtime all`/comma-list doctor combined with `--surface` — a selector
+  // valid on SOME selected runtimes (e.g. `agents`) is unknown on every
+  // runtime that does not declare it, and `resolveSurfaceSelection` threw on
+  // the first one. `opts.lenientSelectors` (set by the CLI for exactly the
+  // multi-runtime case, same condition `installIntegration`/
+  // `uninstallIntegration` already use) switches to
+  // `resolveSurfaceSelectionLenient` instead: a selector matching nothing on
+  // THIS runtime is silently dropped rather than thrown on. A single
+  // explicit runtime still goes through the strict `resolveSurfaceSelection`
+  // below and throws on an unknown selector, unchanged.
+  //
+  // review round 5, F1: for install/uninstall a `--surface` selection
+  // RESTRICTS the work to the selected surfaces, so a runtime matching none
+  // of them legitimately has nothing to do and can be skipped outright. For
+  // doctor, `--surface` only ADDS an opt-in surface on top of the runtime's
+  // normal doctor set (see `explicitlySelected` below) — the surface loop
+  // always doctors every one of `adapter.surfaces`. Early-returning here on
+  // "no match" therefore used to skip a runtime's entire doctor pass (every
+  // default surface, not just the opt-in one), silently hiding real drift —
+  // e.g. `doctor --runtime claude,cursor --surface agents` reported a
+  // corrupted `.cursor/hooks.json` as healthy because cursor doesn't declare
+  // `agents`. So: never skip. Just remember whether this runtime declared
+  // any of the requested selectors, for the informational marker below and
+  // the caller's aggregate "no selected runtime declares surface(s)" check.
+  let noMatchingSurface = false;
+  if (opts.surfaces && opts.surfaces.length > 0) {
+    if (opts.lenientSelectors) {
+      const matched = resolveSurfaceSelectionLenient(adapter, opts.surfaces);
+      noMatchingSurface = matched.length === 0;
+    } else {
+      resolveSurfaceSelection(adapter, opts.surfaces);
+    }
   }
   if (adapter.surfaces.length === 0) {
     const reasons = [...new Set(Object.values(adapter.unsupported))];
@@ -686,10 +800,21 @@ export async function doctorIntegration(root: string, runtimeId: string): Promis
     problems.push(`install-state unreadable: ${installStatePath(root, runtimeId)}`);
   }
 
+  const explicitlySelected = new Set(opts.surfaces ?? []);
   const state = await readInstallState(root, runtimeId);
   const surfaces: DoctorSurfaceResult[] = [];
   for (const surface of adapter.surfaces) {
     const recorded = state?.installedModules.find((r) => r.moduleId === surface.id);
+    // R1-F8: a never-installed opt-in surface (e.g. `agents`, before anyone
+    // ran `--surface agents`) is not something the default, no-selector
+    // `doctor` should judge "invalid (not recorded)" — that regressed the
+    // default output for every runtime the moment this surface was
+    // registered. Skip it entirely unless it is already recorded (drift on
+    // an installed opt-in surface is still worth reporting) or the caller
+    // named it explicitly.
+    if (surface.optIn && !recorded && !explicitlySelected.has(surface.flag) && !explicitlySelected.has(surface.id)) {
+      continue;
+    }
     const { live, problems: surfaceProblems } = await liveStatusOf(root, surface);
 
     let drift: string | undefined;
@@ -703,5 +828,5 @@ export async function doctorIntegration(root: string, runtimeId: string): Promis
   }
 
   const ok = problems.length === 0 && !surfaces.some((s) => s.recorded && s.live !== "valid");
-  return { runtimeId, surfaces, problems, ok };
+  return { runtimeId, surfaces, problems, ok, ...(noMatchingSurface ? { noMatchingSurface: true } : {}) };
 }

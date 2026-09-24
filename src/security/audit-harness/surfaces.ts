@@ -9,7 +9,7 @@
 import path from "node:path";
 import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import { isPathInside, pathExists, toPosix } from "../../lib/fs";
-import { SETTINGS_FILE_OWNERS, HARNESS_ADAPTERS } from "../../integrations/index";
+import { SETTINGS_FILE_OWNERS, HARNESS_ADAPTERS, SUBSYSTEM_AGENTS } from "../../integrations/index";
 import type { SurfaceId } from "./types";
 
 /** A directory or file discovery result that distinguishes "found" from
@@ -112,11 +112,25 @@ export async function discoverMcpConfigCandidates(root: string): Promise<{
  * Previously this only matched `relativePath.endsWith(".js")`, which missed
  * any future non-JSON artifact with a different extension (e.g. `.py`,
  * `.sh`) — a surface with a `relativePath` but no `merge`/`strip` pair.
+ *
+ * Flow 310 (W2) T13: a surface in the `agents` SUBSYSTEM (`SUBSYSTEM_AGENTS`
+ * — `.claude/agents`, `.codex/agents`, `.kiro/agents`, `.opencode/agents`,
+ * each a whole DIRECTORY of per-agent files written by
+ * `src/agents/export.ts`) also has no `merge`/`strip` pair — a custom
+ * surface, same as a hook artifact — but it is not a hook artifact at all.
+ * Before this exclusion, every agents-export directory was picked up here
+ * and reported as an unreadable "hook file" (a directory, not a file) by
+ * `discoverHookSurfaceFiles` below, turning the `hooks` coverage surface
+ * `status: "error"` for every project that exported agent definitions. Named
+ * exclusion by subsystem, not by extension or shape, so a future non-JSON
+ * hook artifact still lands here and a future non-agents custom surface is
+ * unaffected.
  */
 const NON_JSON_HOOK_SURFACE_PATHS = (() => {
   const paths = new Set<string>();
   for (const adapter of HARNESS_ADAPTERS) {
     for (const surface of adapter.surfaces) {
+      if (surface.subsystem === SUBSYSTEM_AGENTS) continue;
       if (surface.relativePath && !(surface.merge && surface.strip)) {
         paths.add(surface.relativePath);
       }
@@ -131,7 +145,19 @@ export async function discoverHookSurfaceFiles(root: string): Promise<string[]> 
 
 // --- agent-definitions ---------------------------------------------------
 
-async function listMarkdownFiles(root: string, dirRelative: string): Promise<DiscoveryResult> {
+/**
+ * Flow 310 (W2) T13: generalized from a markdown-only walk (`.md`) to any of
+ * `extensions` — codex ships `.codex/agents/<name>.toml`, kiro ships
+ * `.kiro/agents/<name>.json`; claude/opencode keep `.md`. One walk, one
+ * extension set per call, so the symlink/unreadable handling below (F7/F21)
+ * stays in exactly one place regardless of which host directory or format is
+ * being scanned.
+ */
+async function listFilesByExtensions(
+  root: string,
+  dirRelative: string,
+  extensions: ReadonlySet<string>,
+): Promise<DiscoveryResult> {
   const dirAbsolute = path.join(root, dirRelative);
   if (!(await pathExists(dirAbsolute))) {
     // Genuinely absent: not-applicable, not an error (F7).
@@ -148,7 +174,7 @@ async function listMarkdownFiles(root: string, dirRelative: string): Promise<Dis
   const found: string[] = [];
   const unreadable: string[] = [];
   for (const entry of entries) {
-    if (!entry.name.endsWith(".md")) continue;
+    if (!extensions.has(path.extname(entry.name))) continue;
     const childRelative = path.join(dirRelative, entry.name);
     if (entry.isFile()) {
       found.push(toPosix(childRelative));
@@ -169,15 +195,46 @@ async function listMarkdownFiles(root: string, dirRelative: string): Promise<Dis
   return { found: found.sort(), unreadable: unreadable.sort() };
 }
 
+/** Every extension a bundled agent-definition catalog exporter writes: markdown (claude/opencode/`.metaproject/agents`), TOML (codex), JSON (kiro). */
+const AGENT_DEFINITION_EXTENSIONS = new Set([".md", ".toml", ".json"]);
+
+/**
+ * Flow 310 (W2) T13: the canonical `.metaproject/agents` source directory
+ * plus every host directory the W5 registry's `agents`-subsystem surfaces
+ * declare (`SUBSYSTEM_AGENTS` — `surfaces-agents.ts`'s `AGENTS_CLAUDE`/
+ * `AGENTS_CODEX`/`AGENTS_KIRO`/`AGENTS_OPENCODE`), derived from the registry
+ * rather than hand-copied here so a future host runtime's agents surface is
+ * picked up without a second edit. `.claude/agents` is kept as an explicit
+ * fallback in case that runtime's surface is ever unregistered — the
+ * exit-criterion promise ("codex/kiro/opencode exports actually get
+ * scanned") must not silently regress to claude-only if a registry edit
+ * elsewhere ever drops a runtime's surface.
+ */
+function agentDefinitionHostDirs(): string[] {
+  const dirs = new Set<string>([".metaproject/agents", ".claude/agents"]);
+  for (const adapter of HARNESS_ADAPTERS) {
+    for (const surface of adapter.surfaces) {
+      if (surface.subsystem === SUBSYSTEM_AGENTS && surface.relativePath) {
+        dirs.add(surface.relativePath);
+      }
+    }
+  }
+  return [...dirs];
+}
+
 export async function discoverAgentDefinitions(root: string): Promise<DiscoveryResult> {
-  const [canonical, exported] = await Promise.all([
-    listMarkdownFiles(root, ".metaproject/agents"),
-    listMarkdownFiles(root, ".claude/agents"),
-  ]);
-  return {
-    found: [...new Set([...canonical.found, ...exported.found])].sort(),
-    unreadable: [...new Set([...canonical.unreadable, ...exported.unreadable])].sort(),
-  };
+  const results = await Promise.all(
+    agentDefinitionHostDirs().map((dirRelative) =>
+      listFilesByExtensions(root, dirRelative, AGENT_DEFINITION_EXTENSIONS),
+    ),
+  );
+  const found = new Set<string>();
+  const unreadable = new Set<string>();
+  for (const result of results) {
+    result.found.forEach((f) => found.add(f));
+    result.unreadable.forEach((f) => unreadable.add(f));
+  }
+  return { found: [...found].sort(), unreadable: [...unreadable].sort() };
 }
 
 // --- skills ----------------------------------------------------------------
