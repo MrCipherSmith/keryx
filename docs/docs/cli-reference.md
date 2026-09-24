@@ -2431,6 +2431,32 @@ with a masked reason (the run itself is never broken).
 
 ---
 
+## stack
+
+Deterministic, offline stack detection (flow 309, W1). Reads manifest files
+(`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, …), marker files
+(`Dockerfile`, `.github/workflows/*.yml`, `*.tf`, `*.sql`, …) and runs a
+bounded extension scan — no network, no model call — and writes
+`.metaproject/data/stack/stack.json`.
+
+```
+keryx stack detect [--cwd <dir>] [--json] [--no-write]
+```
+
+| Subcommand | Flags | Notes |
+|---|---|---|
+| `detect` (only subcommand) | `--cwd <dir>`, `--json`, `--no-write` | Detects the repository's stack tags. Writes `.metaproject/data/stack/stack.json` by default; `--no-write` detects and prints without writing. `--json` prints exactly the persisted document. `--cwd` points detection at another directory instead of the current one. |
+
+Every failure mode (an unreadable/unparseable manifest, a workspace root with
+no leaf dependency, a bounded scan that hits its file cap) marks `uncertain:
+true` for only the tags that signal's family covers — never every tag —
+matching `src/review/stack.ts`'s existing fail-open discipline, generalized.
+Re-running `detect` on an unchanged tree writes a byte-identical file: the
+persisted `detectedAt` is kept whenever the content fingerprint
+(`inputsSha256`) is unchanged.
+
+---
+
 ## metrics
 
 Provenance-aware execution observability: per-run evidence, active-time

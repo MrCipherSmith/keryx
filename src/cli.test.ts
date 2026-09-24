@@ -101,6 +101,10 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx integrations doctor --runtime <id>[,<id>...|all] [--json]\n",
     "  keryx integrations matrix [--check] [--write] [--json] [--file <path>]\n",
     "  integrations Install/uninstall/audit Keryx's hooks and instructions in another coding agent, and the generated capability matrix\n",
+    // Flow 309 (W1 Lane A): brand-new `stack` verb — one USAGE_BODY line plus
+    // one Commands: summary row, same shape as flow 307's `integrations`.
+    "  keryx stack detect [--cwd <dir>] [--json] [--no-write]\n",
+    "  stack     Deterministic, offline stack detection (keryx stack detect)\n",
   ];
 
   test("the flat --help block is the pre-flow fixture plus exactly those lines, nothing else", async () => {

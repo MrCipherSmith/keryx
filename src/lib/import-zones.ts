@@ -164,6 +164,13 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // `sync`/`forgetting`/`trigger` above; `src/commands/governance.ts`
   // (adapter) is what actually writes the report artifacts and prints.
   { segment: "governance", zone: "core" },
+  // Flow 309, W1 Lane A: deterministic, offline stack detection
+  // (`detectStack`) and its persisted `stack.json`. Same shape as
+  // `sync`/`forgetting`/`trigger`/`governance` above — project-state
+  // bookkeeping over the filesystem, no provider registry, no model
+  // selection, no network call. `src/commands/stack.ts` (adapter) is what
+  // actually wires it to the CLI verb.
+  { segment: "stack", zone: "core" },
   // Flow 305, W5-a: the host-harness surface registry (which harnesses
   // support which hook surfaces, and the JSON walkers that install them).
   // Deterministic project-state bookkeeping over hand-authored settings
