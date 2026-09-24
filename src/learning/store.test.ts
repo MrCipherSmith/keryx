@@ -523,7 +523,7 @@ describe("accepted record field whitelist (R2-F5)", () => {
       await expect(
         updatePattern(root, accepted.id, "project", (current) => ({
           ...current,
-          reviewerProfile: { ...current.reviewerProfile, reviewerId: "reviewer-xyz789" },
+          reviewerProfile: { reviewerId: "reviewer-xyz789", generalizedFrom: current.reviewerProfile?.generalizedFrom ?? 5 },
         })),
       ).rejects.toMatchObject({ reason: "learning-accepted-field-immutable" });
 
