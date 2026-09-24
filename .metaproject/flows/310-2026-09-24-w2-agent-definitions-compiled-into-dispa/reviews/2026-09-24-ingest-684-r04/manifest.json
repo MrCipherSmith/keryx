@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-24-ingest-684-r04",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "684",
@@ -65,8 +65,8 @@
       "source": "the finding's own title"
     }
   ],
-  "createdAt": "2026-09-24T06:43:07.990Z",
-  "updatedAt": "2026-09-24T06:43:07.990Z",
+  "createdAt": "2026-09-24T07:08:04.077Z",
+  "updatedAt": "2026-09-24T07:08:04.452Z",
   "flow": {
     "id": "310",
     "path": ".metaproject/flows/310-2026-09-24-w2-agent-definitions-compiled-into-dispa"

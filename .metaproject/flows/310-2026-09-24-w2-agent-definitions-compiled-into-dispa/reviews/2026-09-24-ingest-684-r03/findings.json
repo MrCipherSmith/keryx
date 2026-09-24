@@ -19,7 +19,17 @@
       ],
       "enumeration_method": "Called verifyAgentContentHash on hand-edited copies of a fresh export for each format (probe.out: kiro add model/allowedTools/mcpServers → true; change tools/prompt → false; claude frontmatter key → false; codex sandbox_mode change → false). Reproduced both classes with the CLI (e2e.out)."
     },
-    "global_id": "2026-09-24-ingest-684-r03#R3-F1"
+    "global_id": "2026-09-24-ingest-684-r03#R3-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at bb521e75 (after fixing commit 9e77c3d6) by the round-4 opus reviewer: round-4 re-ran the round-3 probes (whole-file hash incl. kiro hand-added keys and sentinel-line trailing text; --force docs) and reported resolved.",
+      "verifier": "round-4"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at bb521e75 (after fixing commit 9e77c3d6) by the round-4 opus reviewer: round-4 re-ran the round-3 probes (whole-file hash incl. kiro hand-added keys and sentinel-line trailing text; --force docs) and reported resolved."
+    }
   },
   {
     "id": "R3-F2",
@@ -32,6 +42,16 @@
     "confidence": "high",
     "file": "docs/docs/guides/agent-catalog.md",
     "line": 175,
-    "global_id": "2026-09-24-ingest-684-r03#R3-F2"
+    "global_id": "2026-09-24-ingest-684-r03#R3-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at bb521e75 (after fixing commit 9e77c3d6) by the round-4 opus reviewer: round-4 re-ran the round-3 probes (whole-file hash incl. kiro hand-added keys and sentinel-line trailing text; --force docs) and reported resolved.",
+      "verifier": "round-4"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at bb521e75 (after fixing commit 9e77c3d6) by the round-4 opus reviewer: round-4 re-ran the round-3 probes (whole-file hash incl. kiro hand-added keys and sentinel-line trailing text; --force docs) and reported resolved."
+    }
   }
 ]

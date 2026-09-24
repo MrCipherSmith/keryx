@@ -20,7 +20,17 @@
       ],
       "enumeration_method": "Compiled every bundled agent for claude/opencode/codex/kiro and parsed each output with Bun.YAML/Bun.TOML/JSON.parse (probe-formats.ts), plus adversarial descriptions/bodies containing ': ', '#', a leading '- ', newlines, '\"\"\"' and control chars. Read every string-interpolation site in the four host renderers."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F1"
+    "global_id": "2026-09-24-ingest-684#R1-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: YAML/TOML/JSON serialization via safe scalars; probe with ': ', newline key injection and control chars no longer reproduces; compile.format-safety.test.ts parses every agent x host.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: YAML/TOML/JSON serialization via safe scalars; probe with ': ', newline key injection and control chars no longer reproduces; compile.format-safety.test.ts parses every agent x host."
+    }
   },
   {
     "id": "R1-F2",
@@ -42,7 +52,17 @@
       ],
       "enumeration_method": "Ran the CLI end to end in scratch repos with and without .metaproject. Traced every consumer of surface.relativePath/settingsFile that assumes a file (install record, doctor hash, uninstall dry-run pathExists)."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F2"
+    "global_id": "2026-09-24-ingest-684#R1-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: integrations install --surface agents in a project with .metaproject no longer hits EISDIR; installer test installs+doctors+uninstalls the surface.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: integrations install --surface agents in a project with .metaproject no longer hits EISDIR; installer test installs+doctors+uninstalls the surface."
+    }
   },
   {
     "id": "R1-F3",
@@ -64,7 +84,17 @@
       ],
       "enumeration_method": "Listed every fs call in export.ts and surfaces-agents.ts. Reproduced the file-symlink and directory-symlink cases with the real CLI in scratchpad/review310/repo4 and repo5."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F3"
+    "global_id": "2026-09-24-ingest-684#R1-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: dangling symlink / symlinked agents dir / symlinked file probes refused (lstat + realpath containment); remove never descends symlinked dirs.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: dangling symlink / symlinked agents dir / symlinked file probes refused (lstat + realpath containment); remove never descends symlinked dirs."
+    }
   },
   {
     "id": "R1-F4",
@@ -85,7 +115,17 @@
       ],
       "enumeration_method": "probe-formats.ts cases adv-empty-tools and adv-unmapped for all four hosts (kiro emits [] correctly; opencode's permission map denies correctly; codex governs access by sandbox_mode). Also read the audit md branch."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F4"
+    "global_id": "2026-09-24-ingest-684#R1-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: empty or fully unmapped tools[] exports the host read baseline (Claude Read, Grep, Glob); no bare tools: line.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: empty or fully unmapped tools[] exports the host read baseline (Claude Read, Grep, Glob); no bare tools: line."
+    }
   },
   {
     "id": "R1-F5",
@@ -107,7 +147,17 @@
       ],
       "enumeration_method": "probe-formats.ts adv-ro-write compiled for all four hosts. Also read every renderer for policy_profile usage."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F5"
+    "global_id": "2026-09-24-ingest-684#R1-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: read-only definitions with apply_patch/shell_exec export without Edit/Bash (Claude) or write/shell (Kiro); dropped tools reported; verify reports policy-tool-conflict (64e2a3bf).",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: read-only definitions with apply_patch/shell_exec export without Edit/Bash (Claude) or write/shell (Kiro); dropped tools reported; verify reports policy-tool-conflict (64e2a3bf)."
+    }
   },
   {
     "id": "R1-F6",
@@ -131,7 +181,17 @@
       ],
       "enumeration_method": "Searched for consumers of `policy.toolAllowlist`/`profileName`/`policy.isolation` outside src/agents (none). Read spawn_subagent's mode→tools construction. Compared every AgentDefinition field against the compiled input and sidecar."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F6"
+    "global_id": "2026-09-24-ingest-684#R1-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: keryx-shell compile result carries enforcement {enforced:[mode], advisory:[toolAllowlist, isolation]} shown by agents show/export; no 'nothing dropped' claim.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: keryx-shell compile result carries enforcement {enforced:[mode], advisory:[toolAllowlist, isolation]} shown by agents show/export; no 'nothing dropped' claim."
+    }
   },
   {
     "id": "R1-F7",
@@ -150,7 +210,17 @@
       ],
       "enumeration_method": "Ran the CLI in scratchpad/review310/repo6 with gen-trav.md (sourceRef ../agents): 'ok: true ● gen-trav (project)'."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F7"
+    "global_id": "2026-09-24-ingest-684#R1-F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7077edb7 (after fixing commit 64e2a3bf) by the round-2 opus reviewer: origin.sourceRef '../agents' now fails with invalid-source-ref before any path join.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7077edb7 (after fixing commit 64e2a3bf) by the round-2 opus reviewer: origin.sourceRef '../agents' now fails with invalid-source-ref before any path join."
+    }
   },
   {
     "id": "R1-F8",
@@ -170,7 +240,17 @@
       ],
       "enumeration_method": "Ran `integrations doctor` before install in a scratch repo. Read every adapter.surfaces loop in installer.ts."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F8"
+    "global_id": "2026-09-24-ingest-684#R1-F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: default integrations doctor no longer reports the never-installed opt-in agents surface; dry-run uninstall of unmanaged-only dir no longer says would-remove.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: default integrations doctor no longer reports the never-installed opt-in agents surface; dry-run uninstall of unmanaged-only dir no longer says would-remove."
+    }
   },
   {
     "id": "R1-F9",
@@ -190,7 +270,17 @@
       ],
       "enumeration_method": "Code trace of decideAction against the guide claim."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F9"
+    "global_id": "2026-09-24-ingest-684#R1-F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: partial at round 2 (substring sentinel) carried as R2-F1/F2; round 3 re-checked hand-edited managed export refusal at b9f6293a and it holds; later strengthened in 9e77c3d6.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: partial at round 2 (substring sentinel) carried as R2-F1/F2; round 3 re-checked hand-edited managed export refusal at b9f6293a and it holds; later strengthened in 9e77c3d6."
+    }
   },
   {
     "id": "R1-F10",
@@ -211,7 +301,17 @@
       ],
       "enumeration_method": "Imported each of the 8 modules first in a fresh bun process and read getHarnessAdapter('claude').surfaces."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F10"
+    "global_id": "2026-09-24-ingest-684#R1-F10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: importing src/integrations/surfaces-agents.ts first in a fresh process no longer throws (lazy imports; 9 modules load-order probe clean).",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7077edb7 (after fixing commit 795acba0) by the round-2 opus reviewer: importing src/integrations/surfaces-agents.ts first in a fresh process no longer throws (lazy imports; 9 modules load-order probe clean)."
+    }
   },
   {
     "id": "R1-F11",
@@ -234,7 +334,17 @@
       ],
       "enumeration_method": "Checked each factual sentence in the guide against schema.ts, verify.ts, compile.ts and audit-harness/surfaces.ts."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F11"
+    "global_id": "2026-09-24-ingest-684#R1-F11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at b9f6293a (after fixing commit 64e2a3bf) by the round-3 opus reviewer: guide claims re-read against code at round 2/3; remaining inaccuracy tracked as R2-F4 and fixed in 714a4e13; round 3 found none.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at b9f6293a (after fixing commit 64e2a3bf) by the round-3 opus reviewer: guide claims re-read against code at round 2/3; remaining inaccuracy tracked as R2-F4 and fixed in 714a4e13; round 3 found none."
+    }
   },
   {
     "id": "R1-F12",
@@ -255,6 +365,16 @@
       ],
       "enumeration_method": "Code read of the T13 check changes."
     },
-    "global_id": "2026-09-24-ingest-684#R1-F12"
+    "global_id": "2026-09-24-ingest-684#R1-F12",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: model_tier fallback anchored to the structural sentinel (R2-F6), verified by round 3.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: model_tier fallback anchored to the structural sentinel (R2-F6), verified by round 3."
+    }
   }
 ]

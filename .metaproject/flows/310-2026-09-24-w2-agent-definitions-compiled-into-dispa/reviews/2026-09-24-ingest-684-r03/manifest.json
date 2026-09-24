@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-24-ingest-684-r03",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "684",
-    "head": "535f20af29c4305613262429fa63e1eb9b6226dc"
+    "head": "b9f6293adb013b014c56c2b896882a782f3b4ab4"
   },
   "artifacts": {
     "scope": ".metaproject/flows/310-2026-09-24-w2-agent-definitions-compiled-into-dispa/reviews/2026-09-24-ingest-684-r03/scope.md",
@@ -65,8 +65,8 @@
       "source": "the finding's own title"
     }
   ],
-  "createdAt": "2026-09-24T06:20:21.568Z",
-  "updatedAt": "2026-09-24T06:20:21.568Z",
+  "createdAt": "2026-09-24T07:08:03.606Z",
+  "updatedAt": "2026-09-24T07:08:03.981Z",
   "flow": {
     "id": "310",
     "path": ".metaproject/flows/310-2026-09-24-w2-agent-definitions-compiled-into-dispa"

@@ -18,6 +18,16 @@
       ],
       "enumeration_method": "Found every lenientSelectors/noMatchingSurface/resolveSurfaceSelectionLenient site with `keryx ctx rg --all`. Only doctor combines a lenient skip with additive `--surface` semantics. Reproduced with the CLI in scratchpad/review310-r5/r-drift."
     },
-    "global_id": "2026-09-24-ingest-684-r05#R5-F1"
+    "global_id": "2026-09-24-ingest-684-r05#R5-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at d3a695cb (after fixing commit 27fe9bc3) by the round-6 opus reviewer: round-6 re-ran the r-drift repro: multi-runtime doctor --surface agents now exits 1 listing the corrupted cursor surfaces.",
+      "verifier": "round-6"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at d3a695cb (after fixing commit 27fe9bc3) by the round-6 opus reviewer: round-6 re-ran the r-drift repro: multi-runtime doctor --surface agents now exits 1 listing the corrupted cursor surfaces."
+    }
   }
 ]
