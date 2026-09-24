@@ -165,7 +165,7 @@ contracts).
   > reversed — a canonical agent-definition layer
   > (`.metaproject/agents/<name>.md`) is added that **compiles into** this
   > same dispatch contract, which remains the sole execution surface. See
-  > [D-2](../keryx-agent-platform-expansion/brainstorm.md#d-2--agent-definitions-layer-compiles-into-dispatch-contracts)
+  > [D-2](../keryx-agent-platform-expansion/brainstorm.md#d-2-agent-definitions-layer-compiles-into-dispatch-contracts)
   > and
   > [W2 — Agent Definitions Catalog](../keryx-agent-platform-expansion/workstreams/W2-agent-catalog.md).
 - Any relaxation of the D-02 invariant (a child never writes flow state).
