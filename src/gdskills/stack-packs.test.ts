@@ -150,12 +150,13 @@ describe("stack pack layout (real bundled tree)", () => {
 
     // Flow 314, W4 Wave 4: every skill under stacks/*/skills/* ships an
     // `evals.json` beside SKILL.md that (a) parses, (b) carries >=10 trigger
-    // prompts total with >=4 negatives, (c) carries >=1 behavior scenario,
-    // and (d) never names a "model" grader in any behavior scenario's
-    // `expected_behavior` — every grader is deterministic
-    // (contains|regex|not-contains) so a scenario is machine-checkable
-    // without a human-in-the-loop judge.
-    test(`${packId}: every skills/*/evals.json exists, parses, and meets the trigger-bank/behavior/grader floors (flow 314 W4)`, () => {
+    // prompts total with >=4 negatives, (c) carries >=1 behavior scenario.
+    //
+    // Flow 316: behavior is graded by an LLM judge against a rubric, not by a
+    // string match — every behavior scenario carries exactly one "judge"
+    // expectation (I9 in stack-pack-eval-integrity.test.ts enforces this same
+    // rule scenario-by-scenario; this floor is the pack-wide summary of it).
+    test(`${packId}: every skills/*/evals.json exists, parses, and meets the trigger-bank/behavior/grader floors (flow 314 W4, flow 316)`, () => {
       for (const name of skillDirNames(packDir)) {
         const evalsPath = path.join(packDir, "skills", name, "evals.json");
         expect(existsSync(evalsPath)).toBe(true);
@@ -174,10 +175,8 @@ describe("stack pack layout (real bundled tree)", () => {
         expect(scenarios.length).toBeGreaterThanOrEqual(1);
 
         for (const scenario of scenarios) {
-          for (const expected of scenario.expected_behavior) {
-            expect(expected.grader).not.toBe("model");
-            expect(["contains", "regex", "not-contains"]).toContain(expected.grader);
-          }
+          const judgeExpectations = scenario.expected_behavior.filter((expected) => expected.grader === "judge");
+          expect(judgeExpectations.length).toBe(1);
         }
       }
     });
