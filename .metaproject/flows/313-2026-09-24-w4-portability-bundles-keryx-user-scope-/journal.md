@@ -196,3 +196,16 @@ Source: the review-313-r5.md report, with probes in scratchpad/review313-r5/.
 - Authorise one more tiny fix: `{fatal:false}` plus a test for R5-F2, and never overwrite a recorded sourceProject on an identical entry plus a test and the docs wording for R3-F18.
 - Then run a narrow check and merge.
 - Or merge over these two minors as an explicit owner exception.
+- 2026-09-24T14:02:09.737Z - task-added: T20: Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs
+- 2026-09-24T14:02Z - CLOSURE FIX 2. The owner approved it in chat; the program orchestrator relayed it. It is the last fix pass.
+  - **T20 (Sonnet implementer) covers three changes:**
+    - **(a) R5-F2 remainder:** at `index.ts:176`, decode BOM-prefixed files leniently with `{fatal:false}`. Test: FF FE, then a lone surrogate or a trailing odd byte, then an injection payload.
+    - **(b) R3-F18 remainder:** at `apply.ts:223-238`, an identical entry never replaces or drops a recorded sourceProject. Test: reproduce the two-step takeover and show it is refused without `--force`.
+    - **(c) Docs:** give an honest provenance description in `cli-reference.md` and the comment at `plan.ts:435`: the sourceProject is derived from the git remote and is trust-on-first-use.
+  - **Tests:** each new test must fail on the pre-fix code.
+  - **After T20:**
+    - Push and wait for CI to go green.
+    - Run ONE narrow Opus check with one bypass attempt per fix.
+    - If it finds 0 blocker, major or minor: ingest the check, run `gh pr ready`, and make one merge attempt.
+    - Otherwise stop and report. No further loop.
+- 2026-09-24T14:02:24.789Z - task-attempt: T20: started (attempt 1) — 313-T20 closure fix 2 dispatch

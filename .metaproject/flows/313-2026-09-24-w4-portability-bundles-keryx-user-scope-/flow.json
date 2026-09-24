@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T13:57:40.896Z",
+  "updatedAt": "2026-09-24T14:02:24.789Z",
   "source": {
     "type": "description",
     "ref": null
@@ -400,6 +400,26 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T14:02:24.789Z",
+            "outcome": "started",
+            "detail": "313-T20 closure fix 2 dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -655,6 +675,16 @@
       "at": "2026-09-24T13:57:40.896Z",
       "event": "task-attempt",
       "detail": "T14: failed (attempt 7) — closure verification r06: R5-F2 and R3-F18 partial (minor each); merge rule -> stop"
+    },
+    {
+      "at": "2026-09-24T14:02:09.737Z",
+      "event": "task-added",
+      "detail": "T20: Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs"
+    },
+    {
+      "at": "2026-09-24T14:02:24.789Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 313-T20 closure fix 2 dispatch"
     }
   ]
 }
