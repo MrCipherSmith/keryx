@@ -9,7 +9,7 @@
   "title": "W3: self-learning loop — observe, extract, consent-gated learned patterns, reviewer profiles, promote and graduate",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:32.725Z",
-  "updatedAt": "2026-09-24T13:50:32.308Z",
+  "updatedAt": "2026-09-24T14:10:57.210Z",
   "source": {
     "type": "description",
     "ref": null
@@ -693,6 +693,29 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T28",
+      "title": "Fix R8-F1..F4: single gateReviewerText helper for every text sink (incl. promote, graduate apply derived tokens); import-ban guard",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T27"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T13:55:49.443Z",
+            "outcome": "started",
+            "detail": "312-T28 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -1143,6 +1166,21 @@
       "at": "2026-09-24T13:50:32.308Z",
       "event": "task-done",
       "detail": "T27: Fix R7-F1..F3: one shared mayCarryReviewerText predicate for every attribution gate; drop summary token gate"
+    },
+    {
+      "at": "2026-09-24T13:55:49.308Z",
+      "event": "task-added",
+      "detail": "T28: Fix R8-F1..F4: single gateReviewerText helper for every text sink (incl. promote, graduate apply derived tokens); import-ban guard"
+    },
+    {
+      "at": "2026-09-24T13:55:49.443Z",
+      "event": "task-attempt",
+      "detail": "T28: started (attempt 1) — 312-T28 sonnet"
+    },
+    {
+      "at": "2026-09-24T14:10:57.210Z",
+      "event": "task-done",
+      "detail": "T28: Fix R8-F1..F4: single gateReviewerText helper for every text sink (incl. promote, graduate apply derived tokens); import-ban guard"
     }
   ],
   "owner": {

@@ -115,3 +115,7 @@
 - 2026-09-24T13:37:20.185Z - task-attempt: T27: started (attempt 1) — 312-T27 sonnet
 - 2026-09-24T13:50:32.308Z - task-done: T27: Fix R7-F1..F3: one shared mayCarryReviewerText predicate for every attribution gate; drop summary token gate
 - 2026-09-24 - R7 verification (3 minor, attribution scoping) ingested. T27 DONE: one mayCarryReviewerText predicate (reviewer-comment OR model-backed) now scopes every gate, and the summary token gate is removed. Tests fail pre-fix on a scratch copy.
+- 2026-09-24T13:55:49.308Z - task-added: T28: Fix R8-F1..F4: single gateReviewerText helper for every text sink (incl. promote, graduate apply derived tokens); import-ban guard
+- 2026-09-24T13:55:49.443Z - task-attempt: T28: started (attempt 1) — 312-T28 sonnet
+- 2026-09-24T14:10:57.210Z - task-done: T28: Fix R8-F1..F4: single gateReviewerText helper for every text sink (incl. promote, graduate apply derived tokens); import-ban guard
+- 2026-09-24 - R8 verification (3 minor, 1 info) ingested. T28 DONE: one gateReviewerText helper now guards every sink, including promote, and applyGraduation re-checks the derived tokens. The import-ban guard catches all 4 bypass mutations.
