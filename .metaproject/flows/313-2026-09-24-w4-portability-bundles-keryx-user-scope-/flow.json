@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T11:38:37.866Z",
+  "updatedAt": "2026-09-24T12:22:32.538Z",
   "source": {
     "type": "description",
     "ref": null
@@ -357,8 +357,19 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T12:05:20.606Z",
+            "outcome": "started",
+            "detail": "final pass at c8d68d62; round 5 verification"
+          },
+          {
+            "at": "2026-09-24T12:22:32.538Z",
+            "outcome": "failed",
+            "detail": "round 5: 0 blocker, 2 major (R5-F1 pre-existing on main, R5-F2 new), 2 minor, 17 info; exit rule -> stop"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -588,6 +599,16 @@
       "at": "2026-09-24T11:38:37.866Z",
       "event": "task-added",
       "detail": "T18: Final surgical pass (orchestrator exception): no binary skip; project-root containment for all writers + full ratchet; cheap minors"
+    },
+    {
+      "at": "2026-09-24T12:05:20.606Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — final pass at c8d68d62; round 5 verification"
+    },
+    {
+      "at": "2026-09-24T12:22:32.538Z",
+      "event": "task-attempt",
+      "detail": "T18: failed (attempt 2) — round 5: 0 blocker, 2 major (R5-F1 pre-existing on main, R5-F2 new), 2 minor, 17 info; exit rule -> stop"
     }
   ]
 }

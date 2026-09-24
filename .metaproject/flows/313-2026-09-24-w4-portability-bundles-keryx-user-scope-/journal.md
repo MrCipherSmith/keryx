@@ -73,3 +73,79 @@
 - 2026-09-24T11:38:37.866Z - task-added: T18: Final surgical pass (orchestrator exception): no binary skip; project-root containment for all writers + full ratchet; cheap minors
 - 2026-09-24T11:51:20Z - Final pass F-B committed. External vetting (scout auditSkillSnapshot) delegates to runHarnessAudit importedBundle kind skill, so it inherits the always-scan rule; only its doc comments referenced the removed binary-content path (updated). Round-5 checklist: external vetting of a polyglot skill must be rejected.
 - 2026-09-24T12:05:03Z - Final pass F-A committed; all three lanes in. Open for round 5 to classify: R3-F13 (cross-harness settings symlink, in-root link to another harness's settings file) not fixed — needs registry-aware ownership logic.
+- 2026-09-24T12:05:20.606Z - task-attempt: T18: started (attempt 1) — final pass at c8d68d62; round 5 verification
+- 2026-09-24T12:22:32.538Z - task-attempt: T18: failed (attempt 2) — round 5: 0 blocker, 2 major (R5-F1 pre-existing on main, R5-F2 new), 2 minor, 17 info; exit rule -> stop
+- 2026-09-24T12:25Z - Review round 5 was recorded under a NEW review id (2026-09-24-ingest-690-r05). The r01-r04 packages and their dispositions were left untouched, because re-ingesting an existing id wipes its dispositions.
+  - Result: 0 blocker, 2 major, 2 minor, 17 info.
+  - The exit rule applies, so the flow STOPS here. PR #690 stays draft, the flow stays in-progress, and no further fix round runs.
+
+## HANDOFF (2026-09-24) — flow 313 stopped before merge
+
+### State
+- PR #690 is a draft. Head is c8d68d62 on flow/313-w4, base feat/agent-platform-expansion. CI is green at that head.
+- Every task is done except three, which stay open:
+  - T14: the review/fix loop.
+  - T17: the choke-point re-plan.
+  - T18: the final surgical pass.
+- The AC1-AC15 evidence list is in the PR #690 body and in the T12/T13 journal entries.
+
+### Budget spent
+- All review/fix budget for this flow is used:
+  - three review/fix attempts (rounds 1-3);
+  - the choke-point re-plan (round 4);
+  - the one extra surgical pass the orchestrator authorised (round 5).
+- Any further work in this flow needs a new decision by the owner.
+
+### Remaining findings
+Source: the review-313-r5.md report, with probes in scratchpad/review313-r5/.
+
+**R5-F2 — MAJOR, introduced by this PR.**
+- Location: src/security/audit-harness/index.ts:402.
+- Defect: the UTF-16 BOM decode branch lets a 2-byte FF FE / FE FF prefix hide an ASCII script or markdown file from every skill check. A `curl … | sh` line or injection text in such a file is not seen.
+- Fix: scan BOTH the BOM-decoded text and lossyDecodeBytes(buffer), and union the findings. Alternatively, accept the UTF-16 view only when the lossy UTF-8 view is itself clean.
+- Test: add a regression test with an FF FE prefix followed by ASCII `curl … | sh`.
+- This must be fixed before PR #690 can merge.
+
+**R5-F1 — MAJOR, pre-existing on main.**
+- Location: src/commands/init.ts:1916.
+- Defect: `keryx init` writes through in-repo symlinks that escape the project.
+  - A manifest link can overwrite an arbitrary file.
+  - Rules get planted into ~/.claude/rules, carrying the cloned repo's AGENTS.md text.
+- Fix:
+  - Route writeJsonIfChanged, writeTextIfChanged, writeTextIfMissing, copyFileIfChanged and the scaffold mkdirs through writeContained / mkdirContained. Use projectRoot as the root and `.metaproject/...` as the relative path.
+  - Do the same for the writers in src/testing/service.ts.
+  - Add both files to src/lib/contained-write.ratchet.test.ts, with regression tests.
+- Commit 94ba146c claims containment for "every .metaproject writer". That claim is too broad for init.ts; correct it in the follow-up.
+- This is a candidate for a separate follow-up flow, since it is not introduced by W4.
+
+**R5-F3 — minor, pre-existing on main.**
+- Location: src/lib/metaproject-gitignore.ts:38.
+- Defect: update and init append the Keryx .gitignore block through a symlinked .gitignore, so the text lands in a file outside the project.
+- Fix: writeContained(projectRoot, ".gitignore", next), add the file to the ratchet, and add a regression test.
+- This is a candidate for the same separate follow-up flow as R5-F1.
+
+**R3-F18 — minor.**
+- Location: src/bundle/plan.ts:442.
+- Defect: bundle ownership provenance is self-declared. A bundle with the same sourceProject, or with none, silently overwrites another bundle's files.
+- Fix:
+  - Treat a recorded sourceProject against an incoming bundle without one as a conflict.
+  - Document bundleId + sourceProject as trust-on-first-use.
+  - Surface a takeover in the output.
+
+**Info — 17 items.**
+- IDs: R5-F4, R4-F1, R4-F4, R4-F5, R4-F7, R4-F8, R4-F9, R4-F10, R3-F7, R3-F13, R3-I2, R3-I3, R3-I5, R2-F10, R2-F15, R2-F21, R1-F13.
+- These are accepted trade-offs or hardening ideas. List them in the PR body when it is finalised.
+
+### Recommended next steps
+1. **Follow-up flow A**, small, in this PR:
+   - Fix R5-F2 and R3-F18.
+   - Run a narrow verification review.
+   - Merge PR #690 if that review shows zero blocker/major/minor.
+2. **Follow-up flow B**, separate, against feat/agent-platform-expansion or main:
+   - Fix R5-F1 and R5-F3 by making the writers in init.ts, testing/service.ts and metaproject-gitignore.ts use contained writes.
+   - These are pre-existing on main and were not introduced by W4.
+3. **After the merge:**
+   - `keryx flow implemented 313 --pr <url>`.
+   - Confirm AC1-AC15.
+   - Collect the PR comments.
+   - `keryx flow complete 313 --signed-by MrCipherSmith`. A health report already exists and the review rounds are recorded.
