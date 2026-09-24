@@ -49,6 +49,8 @@
 // how the score was COMPUTED, not where the bar was set.
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { cp, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { normalizeRouteText, routeTokens } from "../../lib/route-tokens";
 import type { CatalogEntry } from "./catalog-index";
@@ -84,6 +86,8 @@ export interface ScoutResult {
 
 export interface ScoutOptions {
   readonly threshold?: { readonly use?: number; readonly fork?: number };
+  /** Which entry fields to score against — see `LexicalField`'s doc comment. Defaults to `"full"`. */
+  readonly field?: LexicalField;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,9 +113,34 @@ function lexicalTokens(text: string): Set<string> {
   return new Set([...routeTokens(normalizeRouteText(text))].map(stemLite));
 }
 
-/** `name + description + triggers`, tokenized and stemmed — the text an entry is scored on. */
-function entryLexicalTokens(entry: CatalogEntry): Set<string> {
-  return lexicalTokens([entry.name, entry.description, ...entry.triggers].join(" "));
+/**
+ * Which fields of an entry contribute to its scored tokens.
+ *
+ * `"full"` (`name + description + triggers`) is what `scoutSkill`'s own
+ * use/fork/create dedupe decision scores against — that decision is
+ * legitimately "does an EXISTING skill's whole definition, triggers
+ * included, already cover this query".
+ *
+ * `"description-only"` (`name + description`, triggers excluded) exists for
+ * F5 (flow 309 review round 1): trigger-ACCURACY checks (`eval`'s trigger
+ * scenarios, `stocktake`'s own-trigger-routes-back check) synthesize their
+ * test prompts FROM a skill's own `triggers` list — scoring such a prompt
+ * against an index that also includes that same triggers list is circular
+ * (the prompt is, verbatim or near-verbatim, part of what it is being
+ * matched against), so a bogus skill that simply borrows another skill's
+ * trigger phrases "passes" a trigger check that never had to prove its
+ * DESCRIPTION actually covers what the trigger claims. Scoring against
+ * description-only tokens instead asks the sound question: does this
+ * skill's description (what a human/router actually reads to decide
+ * relevance) account for the trigger phrase's words, independent of the
+ * trigger list itself.
+ */
+export type LexicalField = "full" | "description-only";
+
+/** `name + description` (+ `triggers` when `field` is `"full"`), tokenized and stemmed — the text an entry is scored on. */
+function entryLexicalTokens(entry: CatalogEntry, field: LexicalField): Set<string> {
+  const parts = field === "full" ? [entry.name, entry.description, ...entry.triggers] : [entry.name, entry.description];
+  return lexicalTokens(parts.join(" "));
 }
 
 interface LexicalIndex {
@@ -121,11 +150,11 @@ interface LexicalIndex {
 }
 
 /** Builds the corpus IDF table this `catalog` scores against — document frequency per stemmed token, over this catalog only, so two calls against different catalogs never leak weights between them. */
-function buildLexicalIndex(catalog: readonly CatalogEntry[]): LexicalIndex {
+function buildLexicalIndex(catalog: readonly CatalogEntry[], field: LexicalField): LexicalIndex {
   const tokensById = new Map<string, ReadonlySet<string>>();
   const documentFrequency = new Map<string, number>();
   for (const entry of catalog) {
-    const tokens = entryLexicalTokens(entry);
+    const tokens = entryLexicalTokens(entry, field);
     tokensById.set(entry.id, tokens);
     for (const token of tokens) documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
   }
@@ -160,8 +189,8 @@ function coverageScore(
 }
 
 /** Every catalog entry scored against `query`, sorted by score descending then id ascending (deterministic ties) — the FULL ranking, uncapped (`scoutSkill` caps it to 5 for display; the trigger grader needs the whole thing to check what outranks what). */
-function rankCatalog(query: string, catalog: readonly CatalogEntry[]): ScoutMatch[] {
-  const index = buildLexicalIndex(catalog);
+function rankCatalog(query: string, catalog: readonly CatalogEntry[], field: LexicalField = "full"): ScoutMatch[] {
+  const index = buildLexicalIndex(catalog, field);
   const queryTokens = lexicalTokens(query);
   const scored = catalog.map((entry) => {
     const entryTokens = index.tokensById.get(entry.id) ?? new Set<string>();
@@ -246,7 +275,7 @@ export interface SkillSelectionCheck {
  */
 export function checkSkillSelected(query: string, skillId: string, catalog: readonly CatalogEntry[], options: ScoutOptions = {}): SkillSelectionCheck {
   const fork = options.threshold?.fork ?? SCOUT_FORK_THRESHOLD;
-  const ranked = rankCatalog(query, catalog);
+  const ranked = rankCatalog(query, catalog, options.field ?? "full");
   const index = ranked.findIndex((match) => match.skillId === skillId);
   if (index === -1) return { selected: false, score: 0, rank: -1 };
 
@@ -259,6 +288,23 @@ export function checkSkillSelected(query: string, skillId: string, catalog: read
     rank: index + 1,
     ...(outranker !== undefined ? { outrankedBy: outranker.skillId } : {}),
   };
+}
+
+/**
+ * The `limit` catalog entries (excluding `skillId` itself) whose FULL text
+ * scores closest to `skillId`'s own description — deterministic (ties break
+ * by id), used by `eval.ts#synthesizeNegatives` (F5, flow 309 review round
+ * 1) to pick "nearest neighbour" negatives instead of an arbitrary
+ * alphabetical pick from other categories: a trigger-accuracy check that
+ * never tries a CONFUSABLE skill as a negative cannot catch a trigger phrase
+ * that is actually ambiguous between two related skills.
+ */
+export function nearestSkills(skillId: string, catalog: readonly CatalogEntry[], limit: number): readonly ScoutMatch[] {
+  const skill = catalog.find((entry) => entry.id === skillId);
+  if (skill === undefined) return [];
+  const query = skill.description.length > 0 ? skill.description : skill.name;
+  const ranked = rankCatalog(query, catalog, "full").filter((match) => match.skillId !== skillId);
+  return ranked.slice(0, limit);
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +324,17 @@ export interface ScoutRecordEntry {
    * workflow, or a generic cross-language skill with no stack-specific
    * content. Optional: a `create` decision with no competing match needs
    * none, and older records predate this field.
+   *
+   * POLICY (F21, flow 309 review round 1): a new skill may be created
+   * freely on a `create` decision (nothing competing was found). Creating
+   * one on a `use` or, especially, `fork` decision — an existing catalog
+   * entry already scored close enough to be a candidate reuse — is only
+   * legitimate WITH a recorded, non-empty `justification` explaining why
+   * that candidate was not actually enough (scope mismatch, wrong workflow
+   * shape, missing stack-specific content, …). `stack-packs.test.ts`
+   * enforces this over every pack's `governance/scout.json`: every
+   * non-`create` record must carry a non-empty `justification`, or the
+   * pack's guard test fails.
    */
   readonly justification?: string;
 }
@@ -332,31 +389,55 @@ export interface ScoutVettingSummary {
  * Runs W8's `runHarnessAudit` over a scout candidate directory, when asked
  * (`--candidate <dir>`).
  *
- * `runHarnessAudit(root)` audits a PROJECT root — instructions, settings,
- * MCP configs, hooks, agent definitions, skills, imported bundles — not an
- * arbitrary directory. A bare skill candidate directory has none of those
- * surfaces, so most runs report every surface `not-applicable` and zero
- * findings; that is still an honest answer (nothing suspicious found in what
- * WAS scannable), not a fabricated pass. If the call throws — the directory
- * does not exist, or a surface reader chokes on an unexpected shape — this
- * reports `available: false` with the reason, per the "no fake pass"
- * instruction: an audit that could not run is not a clean audit.
+ * F7 (flow 309 review round 1): `runHarnessAudit(root)` audits a PROJECT
+ * root — it discovers scripts under `.claude/skills/**`/`.metaproject/skills/**`
+ * relative to `root` (`discoverSkillScripts`), not files directly under an
+ * arbitrary directory. Auditing the bare candidate dir itself therefore
+ * scanned NOTHING (every surface `not-applicable`, `findings: 0`) and that
+ * empty result was reported as `available: true` — indistinguishable from a
+ * genuinely clean audit. A malicious `scripts/install.sh` in the candidate
+ * never got looked at.
+ *
+ * The fix: stage the candidate under a throwaway temp project at
+ * `<tmp>/.claude/skills/<name>/` (a plain recursive copy — this never
+ * touches the caller's real project) and audit THAT root, so the "skills"
+ * surface's script walk actually reaches the candidate's files. If the
+ * skills surface still comes back with nothing scanned and nothing
+ * unreadable (an empty candidate directory, or one with no script-extension
+ * files), that is reported as `available: false` / not-applicable with a
+ * reason — never as a clean pass, per the "no fake pass" rule the module
+ * header above states. The temp project is removed afterward regardless of
+ * outcome.
  *
  * A nonexistent or non-directory `candidateDir` is refused up front, the
  * same guard `keryx security audit-harness` itself added at its CLI layer
- * (see `src/commands/security-audit-harness.ts`'s "F5" comment):
- * `runHarnessAudit` does not check this itself, and calling it on a missing
- * directory reports a scan of nothing as a clean pass — exactly the fake
- * pass this function exists to refuse.
+ * (see `src/commands/security-audit-harness.ts`'s "F5" comment).
  */
 export async function scoutVetCandidate(candidateDir: string): Promise<ScoutVettingSummary> {
   const stat = existsSync(candidateDir) ? statSync(candidateDir) : undefined;
   if (stat === undefined || !stat.isDirectory()) {
     return { available: false, reason: `no such directory: ${candidateDir}` };
   }
+
+  const skillName = path.basename(path.resolve(candidateDir)) || "candidate";
+  let stagingRoot: string | undefined;
   try {
+    stagingRoot = await mkdtemp(path.join(tmpdir(), "keryx-scout-vet-"));
+    const stagedSkillDir = path.join(stagingRoot, ".claude", "skills", skillName);
+    await cp(candidateDir, stagedSkillDir, { recursive: true });
+
     const { runHarnessAudit } = await import("../../security/audit-harness/index");
-    const report = await runHarnessAudit(candidateDir);
+    const report = await runHarnessAudit(stagingRoot);
+
+    const skillsSurface = report.surfaces.find((surface) => surface.surface === "skills");
+    const scannedSomething = skillsSurface !== undefined && (skillsSurface.pathsScanned.length > 0 || (skillsSurface.pathsUnreadable?.length ?? 0) > 0);
+    if (!scannedSomething) {
+      return {
+        available: false,
+        reason: "not-applicable: the candidate directory has no script files (.sh/.py/.js/.ts) for the skills surface to scan",
+      };
+    }
+
     const bySeverity: Record<string, number> = {};
     for (const finding of report.findings) {
       bySeverity[finding.severity] = (bySeverity[finding.severity] ?? 0) + 1;
@@ -364,5 +445,9 @@ export async function scoutVetCandidate(candidateDir: string): Promise<ScoutVett
     return { available: true, summary: { findings: report.findings.length, bySeverity } };
   } catch (error) {
     return { available: false, reason: error instanceof Error ? error.message : String(error) };
+  } finally {
+    if (stagingRoot !== undefined) {
+      await rm(stagingRoot, { recursive: true, force: true });
+    }
   }
 }

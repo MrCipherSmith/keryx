@@ -9,14 +9,28 @@ import { loadSkillCatalog, type CatalogScope } from "../gdskills/governance/cata
 import { EvalContractError, evalSkill } from "../gdskills/governance/eval";
 import { recordScout, scoutImports, scoutSkill, scoutVetCandidate } from "../gdskills/governance/scout";
 import { runStocktake } from "../gdskills/governance/stocktake";
-
-function optionValue(args: readonly string[], flag: string): string | undefined {
-  const index = args.indexOf(flag);
-  return index === -1 ? undefined : args[index + 1];
-}
+import { optionValue } from "../lib/args";
 
 function parseScope(args: readonly string[]): CatalogScope {
-  return optionValue(args, "--scope") === "all" ? "all" : "bundled";
+  return optionValue([...args], "--scope") === "all" ? "all" : "bundled";
+}
+
+/**
+ * F9 (flow 309 review round 1): a positive integer flag value, in either
+ * `--flag value` or `--flag=value` spelling (both handled by the shared
+ * `optionValue`, which the local hand-rolled `args.indexOf` reimplementation
+ * this replaced did NOT — `--trials=3` read as absent and silently fell back
+ * to the default). `undefined` means the flag was not given at all;
+ * `"invalid"` means it WAS given but is not a positive integer (`--trials
+ * abc` used to parse as `NaN`, which flowed all the way into the eval report
+ * as a trial count no downstream check ever rejected).
+ */
+function positiveIntegerFlag(args: readonly string[], flag: string): number | undefined | "invalid" {
+  const raw = optionValue([...args], flag);
+  if (raw === undefined) return undefined;
+  if (!/^\d+$/.test(raw)) return "invalid";
+  const value = Number(raw);
+  return value >= 1 ? value : "invalid";
 }
 
 export async function skillsGovernanceCommand(args: readonly string[]): Promise<void> {
@@ -170,13 +184,31 @@ async function evalCommand(args: readonly string[]): Promise<void> {
     return;
   }
 
-  const strictnessArg = optionValue(args, "--strictness");
-  const strictness = isStrictness(strictnessArg) ? strictnessArg : "low";
-  const trialsArg = optionValue(args, "--trials");
-  const trials = trialsArg !== undefined ? Number(trialsArg) : 3;
+  const strictnessArg = optionValue([...args], "--strictness");
+  // F9: an unknown `--strictness` value used to silently fall back to "low"
+  // — the weakest gate — instead of being refused. `--strictness hihg` (a
+  // typo) would quietly run the least strict eval and nobody would notice.
+  if (strictnessArg !== undefined && !isStrictness(strictnessArg)) {
+    console.error(`--strictness must be one of low, medium, high (got ${JSON.stringify(strictnessArg)})`);
+    process.exitCode = 1;
+    return;
+  }
+  const strictness = strictnessArg ?? "low";
+
+  const trialsArg = positiveIntegerFlag(args, "--trials");
+  // F9: `--trials abc` used to parse as `NaN` and flow straight into the
+  // report; `--trials=3` (the `=` spelling) was silently ignored (the
+  // hand-rolled parser only handled `--trials 3`) and fell back to the
+  // default of 3 without any error. Both are now refused up front.
+  if (trialsArg === "invalid") {
+    console.error("--trials must be a positive integer");
+    process.exitCode = 1;
+    return;
+  }
+  const trials = trialsArg ?? 3;
   const modelGrader = args.includes("--model-grader");
   const json = args.includes("--json");
-  const runnerName = optionValue(args, "--runner");
+  const runnerName = optionValue([...args], "--runner");
 
   if (runnerName !== undefined) {
     console.error(

@@ -22,7 +22,7 @@ import { validateAgainstSchemaObject } from "../contracts/validator";
 import { lintSkill, lintStackRule, STACK_EXTENSIONS } from "./governance/authoring-lint";
 import { readScoutRecord } from "./governance/scout";
 import type { EvalReport } from "./governance/eval";
-import { validateEvalReport } from "./governance/eval";
+import { checkStablePackGate, validateEvalReport } from "./governance/eval";
 import { exportProjectSkill } from "./export";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 import { defaultBundledRoot } from "./bundled-eval";
@@ -131,16 +131,27 @@ describe("stack pack layout (real bundled tree)", () => {
       }
     });
 
-    test(`${packId}: a "stable" pack ships governance/eval.json with a passing verdict`, () => {
+    test(`${packId}: the stable-pack eval gate is not-applicable or passing (never a silent fail)`, () => {
       const pack = readPackJson(packDir);
-      if (pack.stability !== "stable") {
-        return; // not this pack's gate yet (python ships "experimental")
+      const result = checkStablePackGate(packDir, pack.stability);
+      // python ships "experimental" today, so this is "not-applicable" — the
+      // gate is proven to actually FIRE (not just early-return unexercised)
+      // by the fixture tests below, which force stability: "stable".
+      expect(result.status).not.toBe("fail");
+    });
+
+    // F21 (flow 309 review round 1): a new skill may be created on a scout
+    // `create` decision freely, or on `use`/`fork` only with a recorded,
+    // non-empty `justification` explaining why the existing match(es) were
+    // not enough — see `scout.ts`'s `ScoutRecordEntry.justification` doc
+    // comment for the policy statement. Enforced here over every scout
+    // record this pack shipped, not just python-testing's.
+    test(`${packId}: every non-"create" scout record carries a non-empty justification (F21 policy)`, () => {
+      const record = readScoutRecord(packDir);
+      for (const entry of record) {
+        if (entry.decision === "create") continue;
+        expect(entry.justification?.trim().length ?? 0).toBeGreaterThan(0);
       }
-      const evalPath = path.join(packDir, "governance", "eval.json");
-      expect(existsSync(evalPath)).toBe(true);
-      const report = JSON.parse(readFileSync(evalPath, "utf8")) as EvalReport;
-      expect(validateEvalReport(report)).toEqual([]);
-      expect(report.verdict).toBe("pass");
     });
   }
 });
@@ -212,37 +223,103 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
     expect(result.valid).toBe(false);
   });
 
-  test("a 'stable' pack with no governance/eval.json fails the eval-verdict-presence gate", () => {
+  // F19 (flow 309 review round 1): the ORIGINAL version of this test never
+  // actually called the stable-pack gate — it wrote a fixture `pack.json`
+  // with `stability: "stable"` and then only asserted the FIXTURE'S OWN
+  // shape (`reread.stability === "stable"`, `eval.json` absent from disk).
+  // It could not have caught a broken gate: nothing here invoked the gate
+  // logic at all, and the real-tree test right above it never exercises the
+  // "stable" branch either (python ships "experimental"). This is now a
+  // fixture that IS "stable" run through the extracted `checkStablePackGate`
+  // itself, alongside a companion "stable + passing eval.json" fixture that
+  // proves the gate can also return "pass" — a gate that never once returns
+  // "pass" in its own test suite is unproven in the other direction too.
+  test("checkStablePackGate: a 'stable' pack with no governance/eval.json fails", () => {
     const packDir = makeFixturePack();
     try {
-      const pack: PackJson = {
-        id: "fixture-lang",
-        family: "language",
-        modules: ["x"],
-        stability: "stable",
-        skills: { implement: [], test: ["fixture-skill"], review: [], "build-fix": [], migrate: [] },
-      };
-      writeFileSync(path.join(packDir, "pack.json"), JSON.stringify(pack, null, 2), "utf8");
-      const reread = readPackJson(packDir);
-      expect(reread.stability).toBe("stable");
-      expect(existsSync(path.join(packDir, "governance", "eval.json"))).toBe(false);
+      const result = checkStablePackGate(packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toMatch(/missing/);
     } finally {
       cleanup();
     }
   });
 
-  test("an eval.json with verdict 'fail' does not satisfy the eval-verdict-presence gate", () => {
+  test("checkStablePackGate: a 'stable' pack with a valid, passing eval.json passes", () => {
+    const packDir = makeFixturePack();
+    try {
+      const report: EvalReport = {
+        schemaVersion: "1.0.0",
+        skillId: "fixture-lang/fixture-skill",
+        strictness: "low",
+        trials: 3,
+        triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+        evidence: "authored",
+        scenarios: [
+          { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "low", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+          { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "low", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+        ],
+        verdict: "pass",
+      };
+      writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(report, null, 2), "utf8");
+      const result = checkStablePackGate(packDir, "stable");
+      expect(result.status).toBe("pass");
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("checkStablePackGate: a non-'stable' pack is not-applicable, never a silent pass or fail", () => {
+    const packDir = makeFixturePack();
+    try {
+      const result = checkStablePackGate(packDir, "experimental");
+      expect(result.status).toBe("not-applicable");
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("checkStablePackGate: a 'stable' pack whose eval.json verdict is 'fail' fails the gate", () => {
+    const packDir = makeFixturePack();
+    try {
+      const report: EvalReport = {
+        schemaVersion: "1.0.0",
+        skillId: "fixture-lang/fixture-skill",
+        strictness: "low",
+        trials: 3,
+        triggerAccuracy: { truePositive: 0, falsePositive: 1, positives: 1, negatives: 1 },
+        evidence: "authored",
+        scenarios: [
+          { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "low", trials: 1, passes: 0, passRate: 0, passAtK: 0, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+          { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "low", trials: 1, passes: 0, passRate: 0, passAtK: 0, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+        ],
+        verdict: "fail",
+      };
+      writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(report, null, 2), "utf8");
+      const result = checkStablePackGate(packDir, "stable");
+      expect(result.status).toBe("fail");
+    } finally {
+      cleanup();
+    }
+  });
+
+  // F19: "empty scenarios must not pass" — a report whose `triggerAccuracy`
+  // CLAIMS prompts were checked but carries no matching `scenarios` entries
+  // used to validate clean (`validateEvalReport(report)` returned `[]`).
+  test("validateEvalReport rejects a report whose scenarios are empty but triggerAccuracy claims otherwise", () => {
     const report: EvalReport = {
       schemaVersion: "1.0.0",
       skillId: "fixture/fixture-skill",
       strictness: "low",
       trials: 3,
       triggerAccuracy: { truePositive: 0, falsePositive: 1, positives: 1, negatives: 1 },
+      evidence: "authored",
       scenarios: [],
       verdict: "fail",
     };
-    expect(validateEvalReport(report)).toEqual([]);
-    expect(report.verdict).not.toBe("pass");
+    const errors = validateEvalReport(report);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some((error) => error.includes("trigger scenario"))).toBe(true);
   });
 });
 

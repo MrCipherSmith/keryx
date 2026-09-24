@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { lintSkill, lintStackRule, STACK_EXTENSIONS } from "./authoring-lint";
@@ -164,5 +164,66 @@ Rule body.
     expect(STACK_EXTENSIONS.react).toEqual(["tsx", "jsx"]);
     expect(STACK_EXTENSIONS.go).toEqual(["go"]);
     expect(STACK_EXTENSIONS.rust).toEqual(["rs"]);
+  });
+
+  // F8 (flow 309 review round 1): lintStackRule never checked
+  // metadata.origin (AC12: every stack-pack skill/rule frontmatter) —
+  // `lintSkill` had this check, `lintStackRule` did not.
+  test("flags a missing metadata.origin — warning by default, error under strict", () => {
+    const content = good.replace("metadata:\n  origin: authored\n", "");
+    const nonStrict = lintStackRule(content, { path: "/tmp/pack/rules/coding-style.mdc", allowedExtensions: STACK_EXTENSIONS.python! });
+    expect(nonStrict.find((f) => f.rule === "stack-rule-metadata-origin")?.severity).toBe("warning");
+
+    const strict = lintStackRule(content, { path: "/tmp/pack/rules/coding-style.mdc", allowedExtensions: STACK_EXTENSIONS.python!, strict: true });
+    expect(strict.find((f) => f.rule === "stack-rule-metadata-origin")?.severity).toBe("error");
+  });
+
+  test("flags an invalid metadata.origin value under strict", () => {
+    const content = good.replace("origin: authored", "origin: invented");
+    const findings = lintStackRule(content, { path: "/tmp/pack/rules/coding-style.mdc", allowedExtensions: STACK_EXTENSIONS.python!, strict: true });
+    const finding = findings.find((f) => f.rule === "stack-rule-metadata-origin");
+    expect(finding?.severity).toBe("error");
+    expect(finding?.message).toContain("invented");
+  });
+
+  // Regression guard named in the review report: the shipped python pack's
+  // real rule file must still pass cleanly after adding this check.
+  test("the real python stack pack's coding-style.mdc still passes with no findings", () => {
+    const realPath = path.join(process.cwd(), "src/gdskills/bundled/stacks/python/rules/coding-style.mdc");
+    const content = readFileSync(realPath, "utf8");
+    const findings = lintStackRule(content, { path: realPath, allowedExtensions: STACK_EXTENSIONS.python!, strict: true });
+    expect(findings).toEqual([]);
+  });
+});
+
+describe("F20 (flow 309 review round 1)", () => {
+  test("strict lintSkill flags a missing frontmatter name even though the directory has a name", () => {
+    const skillMd = `---\ndescription: Use when testing strict name requirements.\n---\n\nBody.\n`;
+    const findings = lintSkill(skillMd, { path: "/tmp/pack/skills/some-directory-name/SKILL.md", strict: true });
+    expect(findingRules(findings)).toContain("name-required");
+  });
+
+  test("non-strict lintSkill does not flag a missing frontmatter name (directory-inferred name is accepted)", () => {
+    const skillMd = `---\ndescription: Use when testing non-strict name inference.\n---\n\nBody.\n`;
+    const findings = lintSkill(skillMd, { path: "/tmp/pack/skills/some-directory-name/SKILL.md", strict: false });
+    expect(findingRules(findings)).not.toContain("name-required");
+  });
+
+  test("body-length counts only the body, not the frontmatter block", () => {
+    // A frontmatter block padded well past MAX_BODY_LINES (500) on its own,
+    // with a tiny body — must NOT trip body-length; the whole-file count
+    // used to include the frontmatter and could trip the limit on
+    // frontmatter alone.
+    const paddedFrontmatterLines = Array.from({ length: 520 }, (_, i) => `# padding-${i}: value`).join("\n");
+    const skillMd = `---\nname: padded-frontmatter\ndescription: Use when testing frontmatter is excluded from body-length.\n${paddedFrontmatterLines}\n---\n\nTiny body.\n`;
+    const findings = lintSkill(skillMd, { path: "/tmp/pack/skills/padded-frontmatter/SKILL.md" });
+    expect(findingRules(findings)).not.toContain("body-length");
+  });
+
+  test("body-length still flags a genuinely long body", () => {
+    const longBody = Array.from({ length: 520 }, (_, i) => `Line ${i} of body content.`).join("\n");
+    const skillMd = `---\nname: long-body\ndescription: Use when testing body-length still fires on a real long body.\n---\n\n${longBody}\n`;
+    const findings = lintSkill(skillMd, { path: "/tmp/pack/skills/long-body/SKILL.md" });
+    expect(findingRules(findings)).toContain("body-length");
   });
 });

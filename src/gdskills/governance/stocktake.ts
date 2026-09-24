@@ -26,7 +26,8 @@
 // requirement, satisfied by not doing the O(n^2) scout comparison for a skill
 // whose hash has not moved since the version that already reasoned about it.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { lintSkill } from "./authoring-lint";
 import { loadSkillCatalog, type CatalogEntry, type CatalogScope } from "./catalog-index";
@@ -66,13 +67,107 @@ export interface StocktakeOptions {
  * entry written under "1" reflects verdicts the old, defective scoring
  * produced (e.g. spurious `improve` from trigger prompts that could never
  * clear the old, too-strict rule) and must not be served after this fix.
+ *
+ * Bumped to "3" (F6, flow 309 review round 1) alongside the cache-key
+ * widening below: `description-only` trigger scoring (F5) is also a scoring
+ * change no entry cached under "2" reflects.
  */
-const ALGORITHM_VERSION = "2";
+const ALGORITHM_VERSION = "3";
+
+/**
+ * F6 (flow 309 review round 1): the cache used to be keyed on ONLY the
+ * skill's own `SKILL.md` sha256 — but `evaluateEntry` above does not just
+ * lint that one file: the `merge` verdict (scout overlap) and the low
+ * trigger-accuracy `improve` verdict both depend on EVERY OTHER catalog
+ * entry (a new or edited NEIGHBOUR skill can push this skill's overlap
+ * score across `SCOUT_USE_THRESHOLD`, or change what outranks it in the
+ * trigger check, without this skill's own file changing at all), the
+ * `update` verdict depends on a separate verification-report file, and a
+ * skill can ship extra `references/` files that are not part of the hash
+ * lint/scout run against. A cache keyed on sha256 alone served a stale
+ * `keep`/`merge`/`update` verdict whenever any of those OTHER inputs moved.
+ *
+ * The key now also covers:
+ *   - `catalogFingerprint`: a single hash of every entry's `id`+`sha256` in
+ *     the catalog this run scored against (sorted, so key order never
+ *     matters) — any entry added, removed, or edited anywhere invalidates
+ *     every OTHER entry's cache row, not just its own.
+ *   - `verificationReportHash`: hash of `checkFreshness`'s report file
+ *     content, `null` when none exists — a report written/edited/removed
+ *     after the last stocktake run invalidates the row.
+ *   - `referencesHash`: hash of every file under the skill's own
+ *     `references/` directory (sorted paths + content), `null` when none
+ *     exists.
+ */
+interface CacheKeyInputs {
+  readonly sha256: string;
+  readonly catalogFingerprint: string;
+  readonly verificationReportHash: string | null;
+  readonly referencesHash: string | null;
+}
+
+function cacheKeyMatches(cached: CacheRecord, inputs: CacheKeyInputs, quick: boolean): boolean {
+  return (
+    cached.algorithmVersion === ALGORITHM_VERSION &&
+    cached.quick === quick &&
+    cached.sha256 === inputs.sha256 &&
+    cached.catalogFingerprint === inputs.catalogFingerprint &&
+    cached.verificationReportHash === inputs.verificationReportHash &&
+    cached.referencesHash === inputs.referencesHash
+  );
+}
+
+/** Sorted hash of every entry's `id`+`sha256` — moves whenever ANY catalog entry is added, removed, or edited, since `evaluateEntry`'s overlap/trigger checks score against neighbours, not just the entry itself. */
+function catalogFingerprint(catalog: readonly CatalogEntry[]): string {
+  const parts = [...catalog].map((entry) => `${entry.id}:${entry.sha256}`).sort();
+  return createHash("sha256").update(parts.join("\n")).digest("hex");
+}
+
+/** Hash of `checkFreshness`'s verification-report file, `null` when none exists (the common case for bundled skills). */
+function verificationReportHash(root: string, entry: CatalogEntry): string | null {
+  const reportPath = verificationReportPath(root, entry);
+  if (!existsSync(reportPath)) return null;
+  try {
+    return createHash("sha256").update(readFileSync(reportPath, "utf8")).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+/** Hash of every file under `<skill-dir>/references/` (sorted relative path + content), `null` when the directory does not exist. */
+function referencesHash(entry: CatalogEntry): string | null {
+  const referencesDir = path.join(path.dirname(entry.path), "references");
+  if (!existsSync(referencesDir)) return null;
+  const files: string[] = [];
+  const walk = (dir: string, relative: string): void => {
+    for (const name of readdirSync(dir).sort()) {
+      const full = path.join(dir, name);
+      const rel = relative.length > 0 ? `${relative}/${name}` : name;
+      if (statSync(full).isDirectory()) {
+        walk(full, rel);
+      } else {
+        files.push(rel);
+      }
+    }
+  };
+  walk(referencesDir, "");
+  const hash = createHash("sha256");
+  for (const rel of files) {
+    hash.update(rel);
+    hash.update("\0");
+    hash.update(readFileSync(path.join(referencesDir, rel)));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
 
 interface CacheRecord {
   readonly sha256: string;
   readonly algorithmVersion: string;
   readonly quick: boolean;
+  readonly catalogFingerprint: string;
+  readonly verificationReportHash: string | null;
+  readonly referencesHash: string | null;
   readonly entry: StocktakeEntry;
 }
 type Cache = Record<string, CacheRecord>;
@@ -169,15 +264,40 @@ function evaluateEntry(root: string, entry: CatalogEntry, catalog: readonly Cata
     // doc comment). A trigger "routes back" here when it clears
     // `SCOUT_FORK_THRESHOLD` and no entry from a DIFFERENT category
     // outscores this skill.
+    //
+    // F5 (flow 309 review round 1): `field: "description-only"` — this
+    // check's positives are drawn FROM `entry.triggers` itself, so scoring
+    // them against an index that ALSO contains that same triggers list is
+    // circular (a trigger phrase always "finds" the entry that lists it
+    // verbatim). `eval.ts`'s trigger-accuracy check shares this exact
+    // grader/flaw and the exact same fix — see that module's header for the
+    // full rationale. This check's result is still a SYNTHESIZED signal
+    // (drawn from the skill's own frontmatter, never human-authored test
+    // cases), so it is used only as a demotion trigger ("improve" on low
+    // accuracy) below — never treated as proof a skill's triggers are
+    // correct; a "keep" verdict never cites this check as its justification,
+    // only lint + overlap + freshness + retirement, each independently
+    // checked above.
     const positives = entry.triggers.length > 0 ? entry.triggers.slice(0, 3) : [entry.description];
-    const hits = positives.filter((prompt) => checkSkillSelected(prompt, entry.id, catalog).selected).length;
+    const failing = positives.filter((prompt) => !checkSkillSelected(prompt, entry.id, catalog, { field: "description-only" }).selected);
+    const hits = positives.length - failing.length;
     const accuracy = positives.length > 0 ? hits / positives.length : 1;
     if (accuracy < 0.5) {
+      // F23 (flow 309 review round 1): a reason built ONLY from a
+      // percentage and a fraction ("33% — 1/3") collides across two
+      // UNRELATED skills that happen to share the same trigger count and
+      // hit rate — real, observed on the bundled catalog (two skills both
+      // landing on "1/3 of its own triggers route back to it"). Naming the
+      // ACTUAL failing trigger phrases makes the reason genuinely
+      // skill-specific: two skills only collide now if they also share the
+      // exact same failing trigger text, which is not a coincidence worth
+      // tolerating either.
+      const failingList = failing.map((prompt) => JSON.stringify(prompt)).join(", ");
       return {
         skillId: entry.id,
         verdict: "improve",
-        reason: `${entry.id}: trigger accuracy ${(accuracy * 100).toFixed(0)}% — ${hits}/${positives.length} of its own triggers route back to it`,
-        evidence: { triggerAccuracy: accuracy, checked: positives.length },
+        reason: `${entry.id}: trigger accuracy ${(accuracy * 100).toFixed(0)}% — ${hits}/${positives.length} of its own triggers route back to it; failing: ${failingList}`,
+        evidence: { triggerAccuracy: accuracy, checked: positives.length, failing },
       };
     }
   }
@@ -190,15 +310,39 @@ function evaluateEntry(root: string, entry: CatalogEntry, catalog: readonly Cata
   };
 }
 
-/** Throws when the same `reason` string appears for two different skills — a stocktake report must never ship a generic, reused verdict (W1-AC11). */
+/**
+ * F23 (flow 309 review round 1): every reason is prefixed `${entry.id}: `
+ * (the module header explains why — it's what keeps two same-lint-rule or
+ * same-closest-neighbor reasons apart at all), which meant the OLD
+ * byte-for-byte comparison was satisfied BY CONSTRUCTION — two entries can
+ * never collide on the id prefix alone, so the guard never actually checked
+ * whether the EVIDENCE after the prefix was skill-specific. Two skills with
+ * the exact same lint rule, the exact same closest neighbor, and the exact
+ * same trigger count would sail through as "specific" purely because their
+ * ids differ.
+ *
+ * The comparison now strips each entry's own id (and its bare name, the
+ * `${category}/${name}` split) from its reason before comparing — what
+ * remains must still differ across two DIFFERENT skills, or the reason is
+ * not actually skill-specific evidence, just a decorated id.
+ */
+function stripSkillIdentity(reason: string, skillId: string): string {
+  const name = skillId.split("/").at(-1) ?? skillId;
+  return reason.split(skillId).join("<skill>").split(name).join("<skill>");
+}
+
+/** Throws when two DIFFERENT skills' reasons carry the same evidence once each one's own id/name is stripped out — a stocktake report must never ship a generic, reused verdict (W1-AC11). */
 export function assertReasonsSpecific(report: StocktakeReport): void {
   const seen = new Map<string, string>();
   for (const entry of report.entries) {
-    const owner = seen.get(entry.reason);
+    const stripped = stripSkillIdentity(entry.reason, entry.skillId);
+    const owner = seen.get(stripped);
     if (owner !== undefined && owner !== entry.skillId) {
-      throw new Error(`stocktake reason reused verbatim across skills: "${entry.reason}" (${owner}, ${entry.skillId})`);
+      throw new Error(
+        `stocktake reason not skill-specific — identical evidence once each skill's own id is stripped, for ${owner} and ${entry.skillId}: "${entry.reason}"`,
+      );
     }
-    seen.set(entry.reason, entry.skillId);
+    seen.set(stripped, entry.skillId);
   }
 }
 
@@ -215,12 +359,19 @@ export function runStocktake(root: string, options: StocktakeOptions = {}): Stoc
   const cachePath = options.cachePath ?? path.join(root, ".metaproject", "data", "skills", "stocktake", "cache.json");
   const cache = loadCache(cachePath);
 
+  const fingerprint = catalogFingerprint(catalog);
   let hits = 0;
   let misses = 0;
   const entries: StocktakeEntry[] = [];
   for (const entry of catalog) {
+    const inputs: CacheKeyInputs = {
+      sha256: entry.sha256,
+      catalogFingerprint: fingerprint,
+      verificationReportHash: verificationReportHash(root, entry),
+      referencesHash: referencesHash(entry),
+    };
     const cached = cache[entry.id];
-    if (cached !== undefined && cached.sha256 === entry.sha256 && cached.algorithmVersion === ALGORITHM_VERSION && cached.quick === quick) {
+    if (cached !== undefined && cacheKeyMatches(cached, inputs, quick)) {
       hits += 1;
       entries.push(cached.entry);
       continue;
@@ -228,7 +379,7 @@ export function runStocktake(root: string, options: StocktakeOptions = {}): Stoc
     misses += 1;
     const result = evaluateEntry(root, entry, catalog, quick);
     entries.push(result);
-    cache[entry.id] = { sha256: entry.sha256, algorithmVersion: ALGORITHM_VERSION, quick, entry: result };
+    cache[entry.id] = { ...inputs, algorithmVersion: ALGORITHM_VERSION, quick, entry: result };
   }
 
   const generatedAt = now().toISOString();

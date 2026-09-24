@@ -78,6 +78,24 @@ function skillDirectoryName(skillMdPath: string): string {
   return path.basename(path.dirname(skillMdPath));
 }
 
+/**
+ * F20 (flow 309 review round 1): `body-length` used to count
+ * `content.split("\n").length` — the WHOLE file, frontmatter included — so
+ * a large `metadata`/`triggers` frontmatter block ate into the 500-line
+ * body budget the rule is actually meant to bound (and, worse, a file with
+ * a huge frontmatter and a tiny body could trip the limit on frontmatter
+ * alone). Strips the frontmatter block first, mirroring `frontmatterBlock`'s
+ * own delimiter search, so only the BODY — what the standard's "move
+ * overflow into references/" advice is actually about — is counted.
+ */
+function bodyOnly(content: string): string {
+  if (!content.startsWith("---")) return content;
+  const end = content.indexOf("\n---", 3);
+  if (end === -1) return content;
+  const afterClosingLine = content.indexOf("\n", end + 1);
+  return afterClosingLine === -1 ? "" : content.slice(afterClosingLine + 1);
+}
+
 /** Every `references/*.md` sibling that itself links to another local `.md` — the one-hop-only rule (W1's "references one level deep"). */
 function deepReferenceFindings(skillMdPath: string): LintFinding[] {
   const referencesDir = path.join(path.dirname(skillMdPath), "references");
@@ -116,6 +134,18 @@ export function lintSkill(content: string, options: LintSkillOptions): LintFindi
   if (name.length === 0) {
     findings.push({ rule: "name-required", severity: "error", message: "name is missing" });
   } else {
+    if (options.strict === true && frontmatter.name === undefined) {
+      // F20: without `options.strict`, an absent `name:` silently fell back
+      // to `directoryName` and never tripped `name-required` (a directory
+      // always has SOME basename) — so strict mode, the one profile that is
+      // supposed to catch exactly this kind of "technically has SOME name"
+      // gap, let a SKILL.md with no `name:` frontmatter key through clean.
+      findings.push({
+        rule: "name-required",
+        severity: "error",
+        message: "name is missing from frontmatter (strict mode requires an explicit name:, not one inferred from the directory)",
+      });
+    }
     if (name.length > MAX_NAME_LENGTH) {
       findings.push({
         rule: "name-length",
@@ -167,7 +197,7 @@ export function lintSkill(content: string, options: LintSkillOptions): LintFindi
     }
   }
 
-  const bodyLines = content.split("\n").length;
+  const bodyLines = bodyOnly(content).split("\n").length;
   if (bodyLines > MAX_BODY_LINES) {
     findings.push({
       rule: "body-length",
@@ -210,6 +240,24 @@ export const STACK_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
 export interface LintStackRuleOptions {
   readonly path: string;
   readonly allowedExtensions: readonly string[];
+  /** When true, a missing/invalid `metadata.origin` is an error rather than a warning — same contract as `lintSkill`'s `strict`. */
+  readonly strict?: boolean;
+}
+
+/** `metadata:\n  origin: <value>` — the one nested key this lint set reads, parsed the same shallow way `lintSkill`'s own `metadata.origin` check does (via `parseSkillFrontmatter`, which handles `SKILL.md`; stack rule files use the `.mdc` frontmatter block directly, so this is its own small reader). */
+function parseMetadataOrigin(block: string): string | undefined {
+  const lines = block.split("\n");
+  const metadataIndex = lines.findIndex((line) => /^metadata:\s*$/.test(line));
+  if (metadataIndex === -1) return undefined;
+  for (let i = metadataIndex + 1; i < lines.length; i++) {
+    const line = lines[i] as string;
+    if (!/^\s+/.test(line)) break; // dedented past the metadata: block
+    const match = /^\s+origin:\s*(.+)$/.exec(line);
+    if (match !== null && match[1] !== undefined) {
+      return match[1].trim().replace(/^["']|["']$/g, "");
+    }
+  }
+  return undefined;
 }
 
 /** The `paths:` glob list from a rule file's frontmatter block, flow-list or block-list. */
@@ -298,6 +346,24 @@ export function lintStackRule(content: string, options: LintStackRuleOptions): L
         message: `paths glob "${glob}" is outside this stack's allowed extensions (${[...allowed].sort().join(", ")})`,
       });
     }
+  }
+
+  // F8 (flow 309 review round 1): AC12 requires `metadata.origin` on every
+  // stack-pack skill AND rule frontmatter — `lintSkill` already checked it
+  // for skills; `lintStackRule` never checked it for rules at all, so a rule
+  // file with no `metadata.origin` (or an invalid one) linted clean under
+  // every strictness. Same contract as `lintSkill`'s check: missing/invalid
+  // is a warning normally, an error under `options.strict`.
+  const origin = parseMetadataOrigin(block);
+  if (origin === undefined || !VALID_ORIGINS.has(origin)) {
+    findings.push({
+      rule: "stack-rule-metadata-origin",
+      severity: options.strict === true ? "error" : "warning",
+      message:
+        origin === undefined
+          ? "metadata.origin is missing (must be one of authored | generated | imported | learned)"
+          : `metadata.origin "${origin}" is not one of authored | generated | imported | learned`,
+    });
   }
 
   return findings;

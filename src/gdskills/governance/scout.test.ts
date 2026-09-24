@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSkillCatalog } from "./catalog-index";
@@ -164,14 +164,59 @@ describe("scoutImports", () => {
 });
 
 describe("scoutVetCandidate", () => {
-  test("returns a result without throwing for a real directory", async () => {
-    const result = await scoutVetCandidate(process.cwd());
-    expect(typeof result.available).toBe("boolean");
-  });
-
   test("reports unavailable, not a fake pass, for a nonexistent directory", async () => {
     const result = await scoutVetCandidate(path.join(tmpdir(), "definitely-does-not-exist-scout-candidate"));
     expect(result.available).toBe(false);
     expect(result.reason).toBeDefined();
+  });
+
+  // F7 (flow 309 review round 1): vetting used to audit the bare candidate
+  // dir directly, which the harness auditor never scans (it walks
+  // `.claude/skills/**` relative to a PROJECT root) — so any candidate came
+  // back "available: true, findings: 0", a fake clean pass. It must now
+  // actually stage the candidate as a skill and scan its scripts.
+  test("an empty candidate directory is not-applicable, never a fake clean pass", async () => {
+    const candidateDir = mkdtempSync(path.join(tmpdir(), "scout-candidate-empty-"));
+    try {
+      writeFileSync(path.join(candidateDir, "SKILL.md"), "---\nname: empty-candidate\n---\nNo scripts here.\n", "utf8");
+      const result = await scoutVetCandidate(candidateDir);
+      expect(result.available).toBe(false);
+      expect(result.reason).toMatch(/not-applicable/);
+      expect(result.summary).toBeUndefined();
+    } finally {
+      rmSync(candidateDir, { recursive: true, force: true });
+    }
+  });
+
+  test("a malicious script in the candidate produces a finding, not a clean pass", async () => {
+    const candidateDir = mkdtempSync(path.join(tmpdir(), "scout-candidate-malicious-"));
+    try {
+      writeFileSync(path.join(candidateDir, "SKILL.md"), "---\nname: malicious-candidate\n---\nDoes something.\n", "utf8");
+      mkdirSync(path.join(candidateDir, "scripts"));
+      writeFileSync(
+        path.join(candidateDir, "scripts", "install.sh"),
+        "#!/bin/sh\nexport AWS_ACCESS_KEY_ID=AKIAABCDEFGHIJKLMNOP\n",
+        "utf8",
+      );
+      const result = await scoutVetCandidate(candidateDir);
+      expect(result.available).toBe(true);
+      expect(result.summary?.findings).toBeGreaterThan(0);
+    } finally {
+      rmSync(candidateDir, { recursive: true, force: true });
+    }
+  });
+
+  test("staging the candidate never mutates or reads outside the temp project it creates", async () => {
+    const candidateDir = mkdtempSync(path.join(tmpdir(), "scout-candidate-clean-"));
+    try {
+      writeFileSync(path.join(candidateDir, "SKILL.md"), "---\nname: clean-candidate\n---\nSays hello.\n", "utf8");
+      mkdirSync(path.join(candidateDir, "scripts"));
+      writeFileSync(path.join(candidateDir, "scripts", "hello.sh"), "#!/bin/sh\necho hello\n", "utf8");
+      const result = await scoutVetCandidate(candidateDir);
+      expect(result.available).toBe(true);
+      expect(result.summary?.findings).toBe(0);
+    } finally {
+      rmSync(candidateDir, { recursive: true, force: true });
+    }
   });
 });
