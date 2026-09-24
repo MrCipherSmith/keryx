@@ -52,6 +52,10 @@ async function filterMemorySearchHitsByHarness(
   const visibility = await memoryHarnessVisibilityByPath(cwd, harnessIdentity);
   const filteredHits = hits.filter((hit) => {
     const path = typeof hit.path === "string" ? hit.path : null;
+    // R2-I1 (evaluated, not applied): see the identical note on
+    // `../mcp/tools.ts`'s copy of this filter — flipping this to fail-closed
+    // breaks `memory-p0.test.ts`'s decoupled-fixture purity test with no
+    // production security gain.
     return path === null || (visibility.get(path) ?? true);
   });
   return { ...(result as Record<string, unknown>), hits: filteredHits };

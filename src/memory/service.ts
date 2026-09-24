@@ -338,6 +338,14 @@ export async function memoryAllowedRelativePaths(
  * treated as "unknown, not this filter's concern" (visible), exactly
  * mirroring the pre-fix behaviour for that case; a hit backed by a real
  * entry is filtered exactly as `filterEntriesForHarness` decides.
+ *
+ * Flow 313 (W4) review round 2, R2-I1 evaluated this default and left it as
+ * "visible": flipping it to fail-closed excludes every fixture hit in a
+ * decoupled-port test (no on-disk store to match against — see
+ * `src/mcp/memory-p0.test.ts`'s "MCP fake port fixture" purity test) for no
+ * production security gain, since real callers' hit paths and this map
+ * always read the identical store. The finding is info-severity with no
+ * demonstrated impact; both call sites document this same reasoning.
  */
 export async function memoryHarnessVisibilityByPath(
   cwd: string,

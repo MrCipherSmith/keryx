@@ -126,11 +126,21 @@ A real summary here.
 // Flow 313 (W4) review R1-F3: `parseEntry`'s Source-Harness/Target-Harnesses
 // lookup must be scoped to the HEADER BLOCK (before the first `## ` section)
 // — never the generic all-lines scan `field()` uses for every other header.
-// Discriminating: pre-fix, a `Source-Harness:` line inside `## Summary`/
-// `## Details` was read exactly like the real header (first match wins),
-// which is how a proposal's own free-text fields could spoof the stamped
-// harness identity.
-test("R1-F3: a Source-Harness/Target-Harnesses line inside ## Summary or ## Details is not read as the header", () => {
+// Discriminating: pre-fix `headerBlockMatches`, a `Source-Harness:` line
+// inside `## Summary`/`## Details` was invisible to the scan entirely, so
+// the real header-block value ("claude") won cleanly with no trace of the
+// body line — this asserts the body line is still never read as if it were
+// the header's value (never "first match wins" toward the spoofed id).
+//
+// R2-F14 (round 2): that same "invisible" pre-fix behaviour is itself the
+// bug for a Target-Harnesses restriction — `## Details` here has NO
+// well-formed header-block Target-Harnesses at all, only the misplaced
+// body line, so pre-fix this entry read as *unrestricted* (visible to every
+// harness). Post-fix, a misplaced line anywhere in the body makes that
+// header INVALID (hidden from every harness), never silently absent — this
+// is a different, stricter outcome than "the body line is ignored", so this
+// test's expectations changed from round 1 accordingly.
+test("R1-F3/R2-F14: a Source-Harness/Target-Harnesses line inside ## Summary or ## Details is misplaced, not header-block-valid and not silently absent", () => {
   const md = `# Title
 
 Version: 0.1.0
@@ -148,9 +158,16 @@ An ordinary summary line.
 Target-Harnesses: zed
 `;
   const entry = parseEntry("/abs/x.md", "decisions/x.md", "decision", md);
-  expect(entry.sourceHarness).toBe("claude");
+  // The well-formed header-block "claude" never wins once a misplaced
+  // duplicate exists in the body: the whole Source-Harness header is
+  // invalid, not "first match / header-block match wins".
+  expect(entry.sourceHarness).toBeNull();
+  expect(entry.sourceHarnessInvalid).toBe(true);
+  // No Target-Harnesses line exists in the header block at all — only the
+  // misplaced body line — so this must be reported as an invalid,
+  // hidden-from-everyone restriction, never as "absent" (unrestricted).
   expect(entry.targetHarnesses ?? null).toBeNull();
-  expect(entry.targetHarnessesInvalid ?? false).toBe(false);
+  expect(entry.targetHarnessesInvalid).toBe(true);
 });
 
 // R1-F14: a duplicate Source-Harness/Target-Harnesses header line WITHIN the
@@ -196,6 +213,62 @@ s
   const entry = parseEntry("/abs/z.md", "decisions/z.md", "decision", md);
   expect(entry.targetHarnesses ?? null).toBeNull();
   expect(entry.targetHarnessesInvalid).toBe(true);
+});
+
+// Flow 313 (W4) review R2-F5: JS regex "." and "$" (without "m") both treat
+// "\r" as a line terminator "." never matches and "$" can't reach past — so
+// a CRLF (or lone-CR) file used to fail EVERY per-line header/field pattern
+// in this module, not merely mis-parse them. Discriminating: on pre-fix code
+// (content.split("\n") only, no normalisation) `Status:` and
+// `Target-Harnesses:` both fail to match a line ending in "\r", so
+// `entry.status` falls back to "draft" and `entry.targetHarnesses` reads as
+// null (unrestricted) instead of the real restriction — this asserts
+// neither happens.
+test("R2-F5: a CRLF-authored entry parses Status and Target-Harnesses instead of losing them", () => {
+  const lines = [
+    "# Title",
+    "",
+    "Version: 0.1.0",
+    "Type: decision",
+    "Status: accepted",
+    "Source-Harness: claude",
+    "Target-Harnesses: codex",
+    "",
+    "## Summary",
+    "",
+    "A summary.",
+    "",
+  ];
+  const crlf = lines.join("\r\n");
+  const entry = parseEntry("/abs/crlf.md", "decisions/crlf.md", "decision", crlf);
+  expect(entry.status).toBe("accepted");
+  expect(entry.sourceHarness).toBe("claude");
+  expect(entry.targetHarnesses).toEqual(["codex"]);
+  expect(entry.targetHarnessesInvalid).toBe(false);
+});
+
+// Same discriminating shape as above, but with a lone CR (old Mac-style)
+// line ending instead of CRLF — `\r` alone also breaks "." / "$" the same
+// way, independent of whether it is paired with a following "\n".
+test("R2-F5: a lone-CR-authored entry parses Status and Target-Harnesses instead of losing them", () => {
+  const lines = [
+    "# Title",
+    "",
+    "Version: 0.1.0",
+    "Type: decision",
+    "Status: accepted",
+    "Target-Harnesses: codex",
+    "",
+    "## Summary",
+    "",
+    "A summary.",
+    "",
+  ];
+  const cr = lines.join("\r");
+  const entry = parseEntry("/abs/cr.md", "decisions/cr.md", "decision", cr);
+  expect(entry.status).toBe("accepted");
+  expect(entry.targetHarnesses).toEqual(["codex"]);
+  expect(entry.targetHarnessesInvalid).toBe(false);
 });
 
 test("AFC-25: author, confirmedBy and caveat are null when an entry never captured them", () => {

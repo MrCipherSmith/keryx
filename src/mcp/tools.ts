@@ -150,6 +150,17 @@ async function filterMemorySearchHitsByHarness(
   const visibility = await memoryHarnessVisibilityByPath(cwd, harnessIdentity);
   const filteredHits = hits.filter((hit) => {
     const path = typeof hit.path === "string" ? hit.path : null;
+    // R2-I1 (evaluated, not applied): a `path` present in the map is decided
+    // by the map (the normal case — the map is built from every on-disk
+    // entry, R1-F4/R1-F14). A `path` absent from the map is `?? true`
+    // deliberately — never true in production, where this map and
+    // `memorySearch`'s ranking read the identical on-disk store, but real
+    // for a decoupled/fake `MetaprojectPort` (e.g. `memory-p0.test.ts`'s
+    // "MCP fake port fixture" purity test), which the review round itself
+    // rates info/"none demonstrated". Flipping this to fail-closed excludes
+    // every such fixture hit with no real on-disk store to match against,
+    // breaking that intentional decoupled-dispatch test for no production
+    // security gain — see `memoryHarnessVisibilityByPath`'s doc comment.
     return path === null || (visibility.get(path) ?? true);
   });
   return { ...result, hits: filteredHits };

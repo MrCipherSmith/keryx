@@ -20,6 +20,21 @@ function decodeStrictUtf8(bytes: Buffer): string {
   return STRICT_UTF8_DECODER.decode(bytes);
 }
 
+// Flow 313 (W4) review R2-F5: normalises `\r\n` and lone `\r` to `\n` once,
+// before any header/field/section parsing. JS regex "." and "$" (without the
+// "m" flag) both treat `\r` as a line terminator that "." never matches and
+// that a trailing, un-consumed `\r` prevents "$" from ever reaching — so a
+// CRLF- or CR-only line such as `Target-Harnesses: claude\r` silently fails
+// EVERY per-line pattern in this file (`headerBlockMatches`/`field`/
+// `bulletField`), not just partially matches it. Pre-fix, that made a
+// restricted entry parse as *unrestricted* (visible to every harness) and a
+// `Status:`/`Source-Harness:` line parse as *absent* (silently dropped from
+// a strict-mode handoff while still reporting `complete`). Every line-based
+// parse in this module MUST run on normalised content, not raw bytes.
+function normalizeLineEndings(content: string): string {
+  return content.replace(/\r\n|\r/g, "\n");
+}
+
 const STATUSES = new Set<MemoryStatus>([
   "draft",
   "accepted",
@@ -77,6 +92,7 @@ export type MemoryScanProblemReason =
   | "invalid-source-harness"
   | "invalid-target-harnesses"
   | "duplicate-harness-header"
+  | "misplaced-harness-header"
   | "not-a-regular-file"
   | "unexpected-entry";
 
@@ -199,7 +215,11 @@ export async function collectEntriesStrict(root: string): Promise<MemoryStrictSc
       }
       let content: string;
       try {
-        content = decodeStrictUtf8(raw);
+        // R2-F5: normalise line endings BEFORE any of this function's own
+        // line-based checks run — `parseEntry` below normalises again
+        // (idempotent), but this scan's own `lines`/header checks must see
+        // the same normalised text, not the raw CRLF/CR bytes.
+        content = normalizeLineEndings(decodeStrictUtf8(raw));
       } catch {
         problems.push({ path: relativePath, reason: "unreadable-file" });
         continue;
@@ -210,19 +230,29 @@ export async function collectEntriesStrict(root: string): Promise<MemoryStrictSc
       if (!lines.some((line) => line.startsWith("# "))) {
         problems.push({ path: relativePath, reason: "missing-title" });
       }
-      const sourceMatches = headerBlockMatches(lines, "Source-Harness");
-      if (sourceMatches.length > 1) {
+      // R2-F14: a Source-/Target-Harnesses line found OUTSIDE the header
+      // block (below the first `## ` heading) is not "absent" — it is a
+      // misplaced, invalid header, and the entry must be hidden from every
+      // harness rather than left unrestricted for all of them.
+      const sourceInfo = locateHeaderField(lines, "Source-Harness");
+      if (sourceInfo.misplaced) {
+        problems.push({ path: relativePath, reason: "misplaced-harness-header" });
+        harnessInvalid = true;
+      } else if (sourceInfo.matches.length > 1) {
         problems.push({ path: relativePath, reason: "duplicate-harness-header" });
         harnessInvalid = true;
-      } else if (sourceMatches.length === 1 && !entry.sourceHarness) {
+      } else if (sourceInfo.matches.length === 1 && !entry.sourceHarness) {
         problems.push({ path: relativePath, reason: "invalid-source-harness" });
         harnessInvalid = true;
       }
-      const targetMatches = headerBlockMatches(lines, "Target-Harnesses");
-      if (targetMatches.length > 1) {
+      const targetInfo = locateHeaderField(lines, "Target-Harnesses");
+      if (targetInfo.misplaced) {
+        problems.push({ path: relativePath, reason: "misplaced-harness-header" });
+        harnessInvalid = true;
+      } else if (targetInfo.matches.length > 1) {
         problems.push({ path: relativePath, reason: "duplicate-harness-header" });
         harnessInvalid = true;
-      } else if (targetMatches.length === 1 && entry.targetHarnesses === null) {
+      } else if (targetInfo.matches.length === 1 && entry.targetHarnesses === null) {
         problems.push({ path: relativePath, reason: "invalid-target-harnesses" });
         harnessInvalid = true;
       }
@@ -288,8 +318,21 @@ async function collectUnexpectedTopLevel(root: string, problems: MemoryScanProbl
   let names: string[];
   try {
     names = await readdir(root);
-  } catch {
-    return; // Already reported (or root is unreadable, reported above).
+  } catch (error) {
+    // R1-F5 remainder: the earlier root check only `lstat`s `root` (which
+    // needs search/execute permission on `root`'s PARENT, not read
+    // permission on `root` itself) — a root at mode 0300 (traversable,
+    // unreadable) passes that check, so this `readdir` failure is the FIRST
+    // and only place that permission gap is observed. Pre-fix this was
+    // silently swallowed on the theory it was "already reported above",
+    // which was false for exactly this mode; a root that vanished between
+    // the earlier `lstat` and here (ENOENT) is a genuine race and stays
+    // silent, but any other error (EACCES, EPERM, ...) is a named problem
+    // that must never let `status` read as `"complete"`.
+    if (!isNotFound(error)) {
+      problems.push({ path: ".", reason: "unreadable-folder" });
+    }
+    return;
   }
   for (const name of names) {
     if (MEMORY_TYPE_FOLDERS.has(name)) {
@@ -313,31 +356,46 @@ async function collectUnexpectedTopLevel(root: string, problems: MemoryScanProbl
   }
 }
 
+type HeaderFieldLocation = { matches: string[]; misplaced: boolean };
+
 // Header-block-scoped scan: lines strictly before the first `## ` section
 // heading (Flow 313 (W4) review R1-F3). Returns every RAW match for
-// `<name>:` found in that block, trimmed — never scanning `## Summary`/
-// `## Details`/etc. content, so a `Source-Harness:`/`Target-Harnesses:` line
-// smuggled into free text (a proposal's `summary`/`details`, or a `title`
-// rendered as the first line) is never read as the entry's real header.
-// More than one match in the block means the header is present but
-// AMBIGUOUS (a smuggled duplicate racing the stamped one) — callers treat
-// that exactly like an unparsable value, never "first match wins".
-function headerBlockMatches(lines: string[], name: string): string[] {
-  const block = headerBlockLines(lines);
+// `<name>:` found in that block, trimmed — never reading `## Summary`/
+// `## Details`/etc. content as the entry's real header, so a
+// `Source-Harness:`/`Target-Harnesses:` line smuggled into free text (a
+// proposal's `summary`/`details`, or a `title` rendered as the first line)
+// is never read as the entry's real header. More than one match in the
+// block means the header is present but AMBIGUOUS (a smuggled duplicate
+// racing the stamped one) — callers treat that exactly like an unparsable
+// value, never "first match wins".
+//
+// Flow 313 (W4) review R2-F14: a line matching `<name>:` found AFTER the
+// first `## ` heading (i.e. inside a section body, not the header block) is
+// reported separately as `misplaced` rather than being invisible to this
+// scan the way pre-fix `headerBlockMatches` left it — that "invisible"
+// behaviour is exactly the bug: a hand-authored `Target-Harnesses:` line
+// placed below `## Summary` was silently read as absent, so the entry
+// stayed visible to every harness instead of being treated as an invalid,
+// hidden-from-everyone restriction. `misplaced: true` always overrides
+// `matches` for callers — a misplaced header is invalid regardless of
+// whether a well-formed one also exists in the block.
+function locateHeaderField(lines: string[], name: string): HeaderFieldLocation {
+  const sectionIndex = lines.findIndex((line) => /^##\s+/.test(line));
   const pattern = new RegExp(`^\\s*${name}\\s*:\\s*(.*)$`, "i");
   const matches: string[] = [];
-  for (const line of block) {
+  let misplaced = false;
+  lines.forEach((line, index) => {
     const match = line.match(pattern);
-    if (match) {
-      matches.push((match[1] ?? "").trim());
+    if (!match) {
+      return;
     }
-  }
-  return matches;
-}
-
-function headerBlockLines(lines: string[]): string[] {
-  const sectionIndex = lines.findIndex((line) => /^##\s+/.test(line));
-  return sectionIndex === -1 ? lines : lines.slice(0, sectionIndex);
+    if (sectionIndex === -1 || index < sectionIndex) {
+      matches.push((match[1] ?? "").trim());
+    } else {
+      misplaced = true;
+    }
+  });
+  return { matches, misplaced };
 }
 
 export function parseEntry(
@@ -346,7 +404,9 @@ export function parseEntry(
   folderType: string,
   content: string,
 ): MemoryEntry {
-  const lines = content.split("\n");
+  // R2-F5: normalise before any split/regex parse below — idempotent when
+  // the caller (e.g. `collectEntriesStrict`) already normalised.
+  const lines = normalizeLineEndings(content).split("\n");
   const titleLine = lines.find((line) => line.startsWith("# "));
   const sections = splitSections(lines);
 
@@ -381,23 +441,31 @@ export function parseEntry(
   // `## Details` (or into a `title` whose injected line ends up above the
   // first section) is invisible to this parse, not merely "first match
   // wins" over the real one.
-  const sourceHarnessMatches = headerBlockMatches(lines, "Source-Harness");
-  const rawSourceHarness = sourceHarnessMatches.length === 1 ? sourceHarnessMatches[0] : null;
-  const sourceHarness = rawSourceHarness && isMemoryHarnessId(rawSourceHarness) ? rawSourceHarness : null;
-  // R1-F14: "present but invalid" (including "present more than once", i.e.
-  // ambiguous) is a DIFFERENT state from "absent" — `sourceHarnessInvalid`
-  // keeps that distinction visible to callers instead of collapsing both to
-  // the same `null`.
-  const sourceHarnessInvalid = sourceHarnessMatches.length > 0 && !sourceHarness;
+  const sourceInfo = locateHeaderField(lines, "Source-Harness");
+  const rawSourceHarness = sourceInfo.matches.length === 1 ? sourceInfo.matches[0] : null;
+  const sourceHarness =
+    !sourceInfo.misplaced && rawSourceHarness && isMemoryHarnessId(rawSourceHarness) ? rawSourceHarness : null;
+  // R1-F14/R2-F14: "present but invalid" (present more than once, i.e.
+  // ambiguous, OR present outside the header block, i.e. misplaced) is a
+  // DIFFERENT state from "absent" — `sourceHarnessInvalid` keeps that
+  // distinction visible to callers instead of collapsing all three to the
+  // same `null`.
+  const sourceHarnessInvalid = sourceInfo.misplaced || (sourceInfo.matches.length > 0 && !sourceHarness);
 
-  const targetHarnessesMatches = headerBlockMatches(lines, "Target-Harnesses");
-  const rawTargetHarnesses = targetHarnessesMatches.length === 1 ? targetHarnessesMatches[0] : null;
-  const targetHarnesses = rawTargetHarnesses !== null ? parseHarnessList(rawTargetHarnesses) : null;
+  const targetInfo = locateHeaderField(lines, "Target-Harnesses");
+  const rawTargetHarnesses = targetInfo.matches.length === 1 ? targetInfo.matches[0] : null;
+  const targetHarnesses =
+    !targetInfo.misplaced && rawTargetHarnesses !== null ? parseHarnessList(rawTargetHarnesses) : null;
   // Same "present but invalid != absent" distinction as sourceHarnessInvalid
   // above — this is the flag `filterEntriesForHarness` (`./service.ts`) reads
   // to hide a malformed-restriction entry from EVERY harness (fail closed)
-  // instead of the pre-fix behaviour of treating it as "unrestricted".
-  const targetHarnessesInvalid = targetHarnessesMatches.length > 0 && targetHarnesses === null;
+  // instead of the pre-fix behaviour of treating it as "unrestricted". A
+  // misplaced Target-Harnesses line (R2-F14) is exactly such a malformed
+  // restriction: it forces `targetHarnesses` to `null` above regardless of
+  // any well-formed header also present in the block, and is flagged
+  // invalid here so it is hidden from every harness rather than treated as
+  // the back-compatible "no restriction" default.
+  const targetHarnessesInvalid = targetInfo.misplaced || (targetInfo.matches.length > 0 && targetHarnesses === null);
 
   return {
     absolutePath,

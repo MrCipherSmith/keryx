@@ -248,6 +248,97 @@ test("R1-F14: an entry with a malformed Target-Harnesses header is excluded from
   ).toBe(true);
 });
 
+// Flow 313 (W4) review R2-F5: a CRLF-authored entry's Source-Harness header
+// used to fail the header-block regex entirely (see store.test.ts), so
+// `collectEntriesStrict` read it as though the header were simply absent —
+// the entry stayed IN `entries` (handoff-visible) and the scan still
+// reported `"complete"`, silently dropping the fact that the header could
+// not be trusted. Discriminating: this repro fails on pre-fix code (which
+// does not normalise line endings before its own header-block scan) by
+// reporting `status: "complete"` with the CRLF entry present.
+test("R2-F5: a CRLF Source-Harness header parses correctly; the scan still reports complete", async () => {
+  const root = path.join(tmpRoot, "memory-root");
+  await mkdir(path.join(root, "decisions"), { recursive: true });
+  const crlf = [
+    "# CRLF entry",
+    "",
+    "Version: 0.1.0",
+    "Type: decision",
+    "Status: accepted",
+    "Source-Harness: claude",
+    "",
+    "## Summary",
+    "",
+    "A summary.",
+    "",
+  ].join("\r\n");
+  await writeFile(path.join(root, "decisions", "crlf.md"), crlf, "utf8");
+
+  const result = await collectEntriesStrict(root);
+  expect(result.status).toBe("complete");
+  expect(result.problems).toEqual([]);
+  const entry = result.entries.find((e) => e.relativePath === "decisions/crlf.md");
+  expect(entry?.sourceHarness).toBe("claude");
+});
+
+// Flow 313 (W4) review R2-F14: a hand-authored Target-Harnesses line placed
+// BELOW the first `## ` heading (i.e. in a section body, not the header
+// block) used to be invisible to `locateHeaderField`'s predecessor — the
+// entry read as unrestricted (`targetHarnesses: null`, not invalid) and
+// stayed visible to every harness. Discriminating: pre-fix this scan reports
+// `status: "complete"` with no problems and the entry present with a null
+// `targetHarnesses`; post-fix it must be `"incomplete"`, carry a
+// `misplaced-harness-header` problem, and exclude the entry from `entries`.
+test("R2-F14: a Target-Harnesses line below the header block is a misplaced-harness-header problem, entry excluded", async () => {
+  const root = path.join(tmpRoot, "memory-root");
+  await mkdir(path.join(root, "decisions"), { recursive: true });
+  const md = `# Misplaced target
+
+Version: 0.1.0
+Type: decision
+Status: accepted
+Source-Harness: claude
+
+## Summary
+
+Target-Harnesses: codex
+A summary line that happens to follow a misplaced header.
+`;
+  await writeFile(path.join(root, "decisions", "misplaced.md"), md, "utf8");
+
+  const result = await collectEntriesStrict(root);
+  expect(result.status).toBe("incomplete");
+  expect(
+    result.problems.some(
+      (p) => p.reason === "misplaced-harness-header" && p.path === "decisions/misplaced.md",
+    ),
+  ).toBe(true);
+  expect(result.entries.map((e) => e.relativePath)).not.toContain("decisions/misplaced.md");
+});
+
+// R1-F5 remainder: `lstat(root)` alone (the top-of-function check) needs
+// only search/execute permission on root's PARENT, not read permission on
+// root itself — a root at mode 0300 (traversable, unreadable) passes that
+// check cleanly, so the later `readdir(root)` inside
+// `collectUnexpectedTopLevel` was the only place this gap could be caught,
+// and pre-fix its failure was swallowed on the (false, for this exact mode)
+// assumption that it was "already reported above". Discriminating: this
+// repro fails on pre-fix code by reporting `status: "complete"`.
+test("R1-F5: a root at mode 0300 (traversable, unreadable) is an incomplete scan, never complete", async () => {
+  if (IS_ROOT) return; // chmod is unenforced running as root.
+  const root = path.join(tmpRoot, "memory-root-0300");
+  await mkdir(path.join(root, "lessons"), { recursive: true });
+  await writeFile(path.join(root, "lessons", "a.md"), entryMd({ title: "A" }), "utf8");
+  await chmod(root, 0o300);
+  try {
+    const result = await collectEntriesStrict(root);
+    expect(result.status).toBe("incomplete");
+    expect(result.problems.some((p) => p.path === "." && p.reason === "unreadable-folder")).toBe(true);
+  } finally {
+    await chmod(root, 0o755);
+  }
+});
+
 test("selectHandoffEntries: filters by sourceHarness and targetHarnesses inclusion", () => {
   const entries = [
     parseEntry("/a", "decisions/a.md", "decision", entryMd({ title: "A", sourceHarness: "claude", targetHarnesses: "codex" })),
