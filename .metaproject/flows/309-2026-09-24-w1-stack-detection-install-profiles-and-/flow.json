@@ -9,7 +9,7 @@
   "title": "W1: stack detection, install profiles and catalog governance gates (scout, eval, stocktake)",
   "status": "in-progress",
   "createdAt": "2026-09-24T04:09:00.843Z",
-  "updatedAt": "2026-09-24T04:13:42.534Z",
+  "updatedAt": "2026-09-24T05:03:41.512Z",
   "source": {
     "type": "description",
     "ref": null
@@ -90,63 +90,91 @@
       "id": "T5",
       "title": "Lane A: keryx stack detect (src/stack/, command, persistence, determinism)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:14:00.675Z",
+            "outcome": "started",
+            "detail": "309-T5 lane A"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Lane B: install manifest, plan/apply, install-state, doctor, uninstall",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:14:00.764Z",
+            "outcome": "started",
+            "detail": "309-T6 lane B"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Lane C: governance gates scout/eval/stocktake + authoring lint + metadata.origin",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:14:00.855Z",
+            "outcome": "started",
+            "detail": "309-T7 lane C"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Lane D: minimal python stack pack + stack-pack guard tests (paths/extends, scout record, eval-for-stable, export limits)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:44:05.710Z",
+            "outcome": "started",
+            "detail": "309-T8"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Verify: stack detect twice offline on fixture repo, identical output (Wave-2 exit)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -154,13 +182,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Verify: scout/eval/stocktake run on the existing bundled catalog; record outputs in journal",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -168,21 +197,92 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Docs: W1 spec status + CLI help for stack/skills commands",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:33:19.501Z",
+            "outcome": "started",
+            "detail": "309-T11"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Fix: investigate eval trigger grader 0/5 on review-frontend and scout calibration (react/mobx query -> create)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:33:19.413Z",
+            "outcome": "started",
+            "detail": "309-T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Fix: stack.json reasons use repo-relative paths (portable fingerprint); matched lists marker hits too",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:44:54.459Z",
+            "outcome": "started",
+            "detail": "309-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix: python/full profiles plan the pack (split pack modules into rule+skill, destination for pack layout, test full/python plan ok)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:57:14.404Z",
+            "outcome": "started",
+            "detail": "309-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -248,6 +348,111 @@
     {
       "at": "2026-09-24T04:13:42.534Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-24T04:14:00.675Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 309-T5 lane A"
+    },
+    {
+      "at": "2026-09-24T04:14:00.764Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 309-T6 lane B"
+    },
+    {
+      "at": "2026-09-24T04:14:00.856Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 309-T7 lane C"
+    },
+    {
+      "at": "2026-09-24T04:24:59.578Z",
+      "event": "task-done",
+      "detail": "T5: Lane A: keryx stack detect (src/stack/, command, persistence, determinism)"
+    },
+    {
+      "at": "2026-09-24T04:29:16.939Z",
+      "event": "task-done",
+      "detail": "T7: Lane C: governance gates scout/eval/stocktake + authoring lint + metadata.origin"
+    },
+    {
+      "at": "2026-09-24T04:29:17.020Z",
+      "event": "task-added",
+      "detail": "T12: Fix: investigate eval trigger grader 0/5 on review-frontend and scout calibration (react/mobx query -> create)"
+    },
+    {
+      "at": "2026-09-24T04:33:06.190Z",
+      "event": "task-done",
+      "detail": "T6: Lane B: install manifest, plan/apply, install-state, doctor, uninstall"
+    },
+    {
+      "at": "2026-09-24T04:33:19.413Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 309-T12"
+    },
+    {
+      "at": "2026-09-24T04:33:19.501Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 309-T11"
+    },
+    {
+      "at": "2026-09-24T04:38:53.377Z",
+      "event": "task-done",
+      "detail": "T11: Docs: W1 spec status + CLI help for stack/skills commands"
+    },
+    {
+      "at": "2026-09-24T04:44:05.596Z",
+      "event": "task-done",
+      "detail": "T12: Fix: investigate eval trigger grader 0/5 on review-frontend and scout calibration (react/mobx query -> create)"
+    },
+    {
+      "at": "2026-09-24T04:44:05.710Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 309-T8"
+    },
+    {
+      "at": "2026-09-24T04:44:54.370Z",
+      "event": "task-added",
+      "detail": "T13: Fix: stack.json reasons use repo-relative paths (portable fingerprint); matched lists marker hits too"
+    },
+    {
+      "at": "2026-09-24T04:44:54.460Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 309-T13"
+    },
+    {
+      "at": "2026-09-24T04:49:02.774Z",
+      "event": "task-done",
+      "detail": "T13: Fix: stack.json reasons use repo-relative paths (portable fingerprint); matched lists marker hits too"
+    },
+    {
+      "at": "2026-09-24T04:49:08.854Z",
+      "event": "task-done",
+      "detail": "T9: Verify: stack detect twice offline on fixture repo, identical output (Wave-2 exit)"
+    },
+    {
+      "at": "2026-09-24T04:57:14.227Z",
+      "event": "task-done",
+      "detail": "T8: Lane D: minimal python stack pack + stack-pack guard tests (paths/extends, scout record, eval-for-stable, export limits)"
+    },
+    {
+      "at": "2026-09-24T04:57:14.306Z",
+      "event": "task-added",
+      "detail": "T14: Fix: python/full profiles plan the pack (split pack modules into rule+skill, destination for pack layout, test full/python plan ok)"
+    },
+    {
+      "at": "2026-09-24T04:57:14.404Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 309-T14"
+    },
+    {
+      "at": "2026-09-24T04:58:05.322Z",
+      "event": "task-done",
+      "detail": "T10: Verify: scout/eval/stocktake run on the existing bundled catalog; record outputs in journal"
+    },
+    {
+      "at": "2026-09-24T05:03:41.512Z",
+      "event": "task-done",
+      "detail": "T14: Fix: python/full profiles plan the pack (split pack modules into rule+skill, destination for pack layout, test full/python plan ok)"
     }
   ]
 }
