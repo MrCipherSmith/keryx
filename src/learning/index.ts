@@ -143,9 +143,26 @@ export {
 
 export { pruneLearning, type ExpiredRecord, type PruneOptions, type PruneReport } from "./prune";
 
-// --- T9/T10 stubs (final signatures; bodies land with those tasks) ---------
+// --- T9: Apply / reviewer profiles ------------------------------------------
 
-export { applyLearnedPattern, LearningApplyError, type ApplyLearnedPatternOptions } from "./apply";
+export {
+  applyLearnedPattern,
+  learnedPatternToProposal,
+  LearningApplyError,
+  type ApplyLearnedPatternOptions,
+  type ApplyLearnedPatternResult,
+} from "./apply";
+
+export {
+  applyReviewerProfile,
+  renderReviewerProfile,
+  LearningReviewerProfileError,
+  type ApplyReviewerProfileOptions,
+  type ApplyReviewerProfileResult,
+  type RenderReviewerProfileOptions,
+} from "./reviewer-profile";
+
+// --- T10 stub (final signature; body lands with that task) -----------------
 
 export { promotePattern, LearningPromoteError, type PromotePatternOptions } from "./promote";
 
