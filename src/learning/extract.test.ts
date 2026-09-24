@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { LearningExtractError, loadObservationWindow, runExtract, type ModelExtractor } from "./extract";
@@ -275,6 +275,25 @@ describe("loadObservationWindow", () => {
       const window = await loadObservationWindow(root, "2026-09-01");
       expect(window.length).toBe(1);
       expect(window[0]?.event.toolUseId).toBe("keep-me");
+    });
+  });
+});
+
+// O-7: the observation-file TTL pass used to run only under a manual `keryx
+// learn prune`; `runExtract` now carries it too, so it happens on the normal
+// human-triggered `extract` cadence.
+describe("runExtract — O-7: prunes stale observation files as its first step", () => {
+  test("a daily file more than 30 days old is deleted by the time runExtract returns", async () => {
+    await withProjectRoot(async (root) => {
+      const dir = observationsDir(root);
+      mkdirSync(dir, { recursive: true });
+      // 54 days before NOW (2026-09-24): stale, same convention as prune.test.ts.
+      writeFileSync(path.join(dir, "2026-08-01.jsonl"), '{"schemaVersion":1}\n');
+      appendObservation(root, "2026-09-24", { toolUseId: "fresh" });
+
+      await runExtract(root, { now: NOW });
+
+      expect(readdirSync(dir).sort()).toEqual(["2026-09-24.jsonl"]);
     });
   });
 });

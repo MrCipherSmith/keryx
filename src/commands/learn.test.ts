@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { learnCommand, type LearnCommandDeps } from "./learn";
-import { observationFilePath } from "../learning";
+import { observationFilePath } from "../learning/service";
 
 interface Run {
   stdout: string;
@@ -123,6 +123,7 @@ describe("keryx learn observe --hook claude", () => {
 
   test("a valid PostToolUse payload: exits 0, prints nothing, appends one observation line", async () => {
     await withTempHome(async (root, env) => {
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
       const payload = {
         hook_event_name: "PostToolUse",
         session_id: "session-1",
@@ -144,6 +145,52 @@ describe("keryx learn observe --hook claude", () => {
       expect(line.event).toBe("tool-complete");
       expect(line.sessionId).toBe("session-1");
       expect(line.tool).toBe("Bash");
+    });
+  });
+
+  // O-3
+  test("cwd inside a subdirectory: the observation is still written at the project root (nearest .metaproject/)", async () => {
+    await withTempHome(async (root, env) => {
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      const subdir = path.join(root, "src", "deep", "nested");
+      mkdirSync(subdir, { recursive: true });
+      const payload = { hook_event_name: "SessionEnd", session_id: "session-1", cwd: subdir };
+      const deps: LearnCommandDeps = { cwd: subdir, env, readStdin: async () => JSON.stringify(payload) };
+      const run = await capture(() => learnCommand(["observe", "--hook", "claude"], deps));
+      expect(run.exitCode).toBe(0);
+
+      const today = new Date().toISOString().slice(0, 10);
+      // Written at the project ROOT's observations dir, not under the subdirectory.
+      const raw = readFileSync(observationFilePath(root, today), "utf8");
+      expect(raw.split("\n").filter((l) => l.length > 0)).toHaveLength(1);
+      expect(() => readFileSync(observationFilePath(subdir, today), "utf8")).toThrow();
+    });
+  });
+
+  // O-3
+  test("no .metaproject/ anywhere above cwd: exits 0 and writes nothing (never creates one)", async () => {
+    const bareDir = mkdtempSync(path.join(tmpdir(), "keryx-learn-cmd-bare-"));
+    try {
+      const payload = { hook_event_name: "SessionEnd", session_id: "session-1", cwd: bareDir };
+      const deps: LearnCommandDeps = { cwd: bareDir, env: {}, readStdin: async () => JSON.stringify(payload) };
+      const run = await capture(() => learnCommand(["observe", "--hook", "claude"], deps));
+      expect(run.exitCode).toBe(0);
+      expect(() => readFileSync(path.join(bareDir, ".metaproject"), "utf8")).toThrow();
+    } finally {
+      rmSync(bareDir, { recursive: true, force: true });
+    }
+  });
+
+  // O-6
+  test("stdin over 1 MiB is dropped: exits 0, writes nothing", async () => {
+    await withTempHome(async (root, env) => {
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      const oversized = `{"hook_event_name":"SessionEnd","session_id":"s1","cwd":"${root}","padding":"${"a".repeat(1024 * 1024 + 1)}"}`;
+      const deps: LearnCommandDeps = { cwd: root, env, readStdin: async () => oversized };
+      const run = await capture(() => learnCommand(["observe", "--hook", "claude"], deps));
+      expect(run.exitCode).toBe(0);
+      const today = new Date().toISOString().slice(0, 10);
+      expect(() => readFileSync(observationFilePath(root, today), "utf8")).toThrow();
     });
   });
 

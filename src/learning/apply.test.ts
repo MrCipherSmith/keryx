@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { applyLearningProposal } from "../gdskills/learn";
@@ -230,6 +230,26 @@ describe("applyLearnedPattern", () => {
       const skillMd = await readFile(path.join(root, ".metaproject", "project-skills", "alpha", "module", "SKILL.md"), "utf8");
       expect(skillMd).toContain("Version: 0.1.0");
       expect(skillMd).not.toContain("check the first edit's assumptions");
+    });
+  });
+
+  // T9 concern: --dry-run must write NOTHING durable — not the proposal JSON,
+  // not its rendered .md, not a leftover scratch file.
+  test("dry-run writes nothing durable: no proposal JSON/MD, no scratch leftovers", async () => {
+    await withProject(async (root) => {
+      await seedRegistry(root, [{ module: "alpha", name: "module" }]);
+      await seedSkill(root, "alpha", "module");
+      const record = makeAccepted();
+      await writePattern(root, record, { capability: createAcceptCapability() });
+
+      const result = await applyLearnedPattern(root, record.id, { skill: "alpha/module", dryRun: true });
+
+      const proposalsDir = path.join(root, ".metaproject", "data", "gdskills", "proposals");
+      await expect(readFile(path.join(root, result.proposalPath), "utf8")).rejects.toThrow();
+      await expect(readdir(proposalsDir)).rejects.toThrow(); // never created at all
+      await expect(
+        readdir(path.join(root, ".metaproject", "data", "learning", ".apply-dry-run")),
+      ).rejects.toThrow();
     });
   });
 });

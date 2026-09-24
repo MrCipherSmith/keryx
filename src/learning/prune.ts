@@ -33,6 +33,13 @@ export interface PruneReport {
   deletedObservationFiles: string[];
   /** Candidate records expired (or, under `dryRun`, that would be). */
   expired: ExpiredRecord[];
+  /**
+   * O-7: one message per failure, from either pass — a failure in one pass
+   * (e.g. one file's `rm` fails, or one record's `writePattern` fails) never
+   * aborts the rest of that pass or skips the other pass; it is recorded here
+   * instead and everything else still runs to completion.
+   */
+  errors: string[];
 }
 
 /** The file's own UTC date, from its `YYYY-MM-DD.jsonl` name — or undefined for anything else in the directory (a lockfile, a non-matching name). */
@@ -43,7 +50,7 @@ function fileDate(name: string): Date | undefined {
   return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
 }
 
-async function pruneObservationFiles(root: string, now: Date, dryRun: boolean): Promise<string[]> {
+async function pruneObservationFiles(root: string, now: Date, dryRun: boolean, errors: string[]): Promise<string[]> {
   const dir = observationsDir(root);
   let entries: string[];
   try {
@@ -57,7 +64,15 @@ async function pruneObservationFiles(root: string, now: Date, dryRun: boolean): 
     if (date === undefined) continue;
     const ageDays = (now.getTime() - date.getTime()) / MS_PER_DAY;
     if (ageDays <= OBSERVATION_TTL_DAYS) continue;
-    if (!dryRun) await rm(path.join(dir, name), { force: true });
+    if (!dryRun) {
+      try {
+        await rm(path.join(dir, name), { force: true });
+      } catch (error) {
+        // One file's removal failing must not skip the rest of the directory.
+        errors.push(`failed to delete observation file "${name}": ${error instanceof Error ? error.message : String(error)}`);
+        continue;
+      }
+    }
     deleted.push(name);
   }
   return deleted.sort();
@@ -69,15 +84,27 @@ function withoutTtl(record: LearnedPattern): LearnedPattern {
   return rest;
 }
 
-async function expireCandidates(root: string, now: Date, dryRun: boolean, storeOptions: StoreEnvOptions): Promise<ExpiredRecord[]> {
+async function expireCandidates(
+  root: string,
+  now: Date,
+  dryRun: boolean,
+  storeOptions: StoreEnvOptions,
+  errors: string[],
+): Promise<ExpiredRecord[]> {
   const candidates = await listPatterns(root, { status: "candidate" }, storeOptions);
   const expired: ExpiredRecord[] = [];
   for (const record of candidates) {
     if (record.ttl === undefined) continue;
     if (new Date(record.ttl.expiresAt).getTime() >= now.getTime()) continue;
     if (!dryRun) {
-      const updated: LearnedPattern = { ...withoutTtl(record), status: "expired", updatedAt: now.toISOString() };
-      await writePattern(root, updated, storeOptions);
+      try {
+        const updated: LearnedPattern = { ...withoutTtl(record), status: "expired", updatedAt: now.toISOString() };
+        await writePattern(root, updated, storeOptions);
+      } catch (error) {
+        // One record failing to write must not skip the rest of the list.
+        errors.push(`failed to expire "${record.id}" (${record.scope}): ${error instanceof Error ? error.message : String(error)}`);
+        continue;
+      }
     }
     expired.push({ id: record.id, scope: record.scope });
   }
@@ -85,10 +112,31 @@ async function expireCandidates(root: string, now: Date, dryRun: boolean, storeO
 }
 
 /**
+ * The observation-file pass alone (O-7): `runExtract` calls this at the start
+ * of every `keryx learn extract` run, so a project's daily observation files
+ * are pruned on a normal, human-triggered cadence rather than only by a
+ * separate `keryx learn prune` nobody may run — never from a hook (the W3
+ * spec: "a maintenance pass ... never by the hook itself"). Never throws:
+ * every failure is collected into `errors` instead.
+ */
+export async function pruneObservationFilesPass(root: string, now: Date = new Date()): Promise<{ deleted: string[]; errors: string[] }> {
+  const errors: string[] = [];
+  let deleted: string[] = [];
+  try {
+    deleted = await pruneObservationFiles(root, now, false, errors);
+  } catch (error) {
+    errors.push(`observation-file prune pass failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return { deleted, errors };
+}
+
+/**
  * Runs both maintenance passes. Deleting an observation file and expiring a
- * candidate are independent — a failure in one pass does not skip the other.
- * `writePattern` for `status: "expired"` needs no accept capability (only a
- * transition TO `"accepted"` does), so this never touches `accept-capability.ts`.
+ * candidate are independent — a failure in one pass does not skip the other
+ * (each runs in its own try/catch, O-7), and within a pass one item's failure
+ * does not skip its siblings either. `writePattern` for `status: "expired"`
+ * needs no accept capability (only a transition TO `"accepted"` does), so
+ * this never touches `accept-capability.ts`.
  */
 export async function pruneLearning(root: string, opts: PruneOptions = {}): Promise<PruneReport> {
   const now = opts.now ?? new Date();
@@ -97,9 +145,21 @@ export async function pruneLearning(root: string, opts: PruneOptions = {}): Prom
     ...(opts.env !== undefined ? { env: opts.env } : {}),
     ...(opts.homeDir !== undefined ? { homeDir: opts.homeDir } : {}),
   };
+  const errors: string[] = [];
 
-  const deletedObservationFiles = await pruneObservationFiles(root, now, dryRun);
-  const expired = await expireCandidates(root, now, dryRun, storeOptions);
+  let deletedObservationFiles: string[] = [];
+  try {
+    deletedObservationFiles = await pruneObservationFiles(root, now, dryRun, errors);
+  } catch (error) {
+    errors.push(`observation-file prune pass failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
-  return { deletedObservationFiles, expired };
+  let expired: ExpiredRecord[] = [];
+  try {
+    expired = await expireCandidates(root, now, dryRun, storeOptions, errors);
+  } catch (error) {
+    errors.push(`candidate-expiry prune pass failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return { deletedObservationFiles, expired, errors };
 }

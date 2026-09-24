@@ -84,7 +84,7 @@ describe("(a) install writes all seven hook entries; absent without the selector
         const group = ownGroup(settings, event);
         expect(group, `missing ${event} group`).toBeDefined();
         const hooks = group!["hooks"] as Array<Record<string, unknown>>;
-        expect(hooks).toEqual([{ type: "command", command: learningObserverCommand() }]);
+        expect(hooks).toEqual([{ type: "command", command: learningObserverCommand(), timeout: 5 }]);
       }
       // Tool events carry a matcher; the four lifecycle-only events do not.
       expect((ownGroup(settings, "PreToolUse") as Record<string, unknown>)["matcher"]).toBe("*");

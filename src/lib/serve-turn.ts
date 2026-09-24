@@ -35,7 +35,7 @@ import type { ToolExecutorPort, ToolInvocation, ToolResult } from "../harness/to
 import type { HarnessRunInput } from "../harness/types";
 import { createSecurityService } from "../security/service";
 import type { SecurityService } from "../security/types";
-import { createLearningObservationSink } from "../learning/observe";
+import { createLearningObservationSink } from "../learning/service";
 import { createShellImpactEvidenceProvider } from "./impact-evidence-hook-adapter";
 import { listProjects } from "./project-registry";
 import {

@@ -3,7 +3,7 @@ import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
 import { learnProjectSkill } from "../gdskills/learn";
-import { applyReviewerProfile } from "../learning";
+import { applyReviewerProfile } from "../learning/service";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import {
   learningRecordPath,

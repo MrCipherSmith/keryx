@@ -287,6 +287,26 @@ describe("validateObservationEvent", () => {
     expect(validateObservationEvent(event).ok).toBe(false);
   });
 
+  // O-4
+  test("rejects an unbounded/out-of-pattern sessionId or toolUseId", () => {
+    expect(validateObservationEvent(baseObservation({ sessionId: "has spaces" })).ok).toBe(false);
+    expect(validateObservationEvent(baseObservation({ sessionId: "x".repeat(129) })).ok).toBe(false);
+    expect(validateObservationEvent(baseObservation({ toolUseId: "has spaces" })).ok).toBe(false);
+    expect(validateObservationEvent(baseObservation({ toolUseId: "x".repeat(129) })).ok).toBe(false);
+  });
+
+  test("rejects an out-of-pattern tool name", () => {
+    expect(validateObservationEvent(baseObservation({ tool: "has spaces" })).ok).toBe(false);
+    expect(validateObservationEvent(baseObservation({ tool: "x".repeat(129) })).ok).toBe(false);
+  });
+
+  test("accepts sessionId/toolUseId/tool at the pattern's edges", () => {
+    expect(validateObservationEvent(baseObservation({ sessionId: "a", toolUseId: "a", tool: "a" })).ok).toBe(true);
+    expect(
+      validateObservationEvent(baseObservation({ sessionId: "x".repeat(128), toolUseId: "x".repeat(128), tool: "x".repeat(128) })).ok,
+    ).toBe(true);
+  });
+
   test("rejects additional properties", () => {
     const event = { ...baseObservation(), extra: 1 };
     expect(validateObservationEvent(event).ok).toBe(false);

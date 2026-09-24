@@ -141,7 +141,7 @@ export {
   type RejectResult,
 } from "./accept";
 
-export { pruneLearning, type ExpiredRecord, type PruneOptions, type PruneReport } from "./prune";
+export { pruneLearning, pruneObservationFilesPass, type ExpiredRecord, type PruneOptions, type PruneReport } from "./prune";
 
 // --- T9: Apply / reviewer profiles ------------------------------------------
 

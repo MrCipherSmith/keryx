@@ -18,10 +18,13 @@
 // named reason and no bypass (W3 spec "Promotion rule" #2; plan D2). None of
 // the three is agent-invocable through MCP: `src/mcp/tools.ts` is a hand-
 // curated allowlist of tool entries, and this file adds none there.
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
+import path from "node:path";
 import { readStdinBounded } from "../lib/bounded-stdin";
 import { optionValue } from "../lib/args";
+import { resolveProjectRoot } from "../lib/contained-path";
 import {
   acceptPattern,
   applyGraduation,
@@ -44,9 +47,13 @@ import {
   type LearningDomain,
   type LearningScope,
   type LearningStatus,
-} from "../learning";
+} from "../learning/service";
 
 const STDIN_DEADLINE_MS = 2_000;
+// O-6: a hook payload larger than this is dropped rather than parsed/stored —
+// bounds the memory/CPU cost of a single hook invocation regardless of what
+// the host chooses to put on stdin.
+const MAX_HOOK_STDIN_BYTES = 1024 * 1024; // 1 MiB
 
 const STATUSES: readonly LearningStatus[] = ["candidate", "accepted", "rejected", "superseded", "expired"];
 const SCOPES: readonly LearningScope[] = ["project", "user"];
@@ -77,8 +84,42 @@ export interface LearnCommandDeps {
   readStdin?: () => Promise<string | null>;
 }
 
+// O-3: every manual verb resolves the project root the same way `keryx ctx`
+// does (`resolveProjectRoot`: walk up from cwd to the nearest `.metaproject/`
+// or `.git/`, falling back to the starting directory when neither exists) —
+// not a bare `process.cwd()`, which put `.metaproject/data/learning/` (and
+// `.gitignore`-less) under whatever subdirectory the command happened to run
+// from.
 function resolveRoot(deps: LearnCommandDeps): string {
-  return deps.cwd ?? process.cwd();
+  return resolveProjectRoot(deps.cwd ?? process.cwd());
+}
+
+/**
+ * Stricter root resolution for `observe --hook`, which fires automatically
+ * and silently from wherever the host process's cwd happens to be — unlike
+ * the manual verbs above, it must never widen its search to `.git/` (that
+ * would write learning data into a bare git checkout with no `.metaproject/`
+ * at all) and it must never fall back to the starting directory when no
+ * project is found. `$CLAUDE_PROJECT_DIR` is checked first (the host's own
+ * notion of the project root, when it supplies one and that directory really
+ * does have a `.metaproject/`); otherwise walks up from `startDir` to the
+ * nearest ancestor with one. Returns `undefined` — write nothing — when
+ * neither finds one, rather than creating a new, wrongly-rooted
+ * `.metaproject/` as a side effect of passive observation.
+ */
+function resolveLearnRoot(startDir: string, env: NodeJS.ProcessEnv): string | undefined {
+  const hasMetaproject = (dir: string): boolean => existsSync(path.join(dir, ".metaproject"));
+  const fromEnv = env.CLAUDE_PROJECT_DIR;
+  if (typeof fromEnv === "string" && fromEnv.length > 0 && hasMetaproject(fromEnv)) {
+    return fromEnv;
+  }
+  let current = path.resolve(startDir);
+  for (;;) {
+    if (hasMetaproject(current)) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
 }
 
 function resolveEnv(deps: LearnCommandDeps): NodeJS.ProcessEnv {
@@ -167,13 +208,16 @@ async function runObserveHook(deps: LearnCommandDeps): Promise<void> {
     const readStdin = deps.readStdin ?? ((): Promise<string | null> => readStdinBounded(STDIN_DEADLINE_MS));
     const raw = await readStdin();
     if (raw === null || raw.trim().length === 0) return;
+    if (Buffer.byteLength(raw, "utf8") > MAX_HOOK_STDIN_BYTES) return; // O-6: drop, don't parse/store, still exit 0.
     let payload: unknown;
     try {
       payload = JSON.parse(raw);
     } catch {
       return; // invalid JSON: no line written, still exit 0.
     }
-    const root = resolveRoot(deps);
+    const env = resolveEnv(deps);
+    const root = resolveLearnRoot(deps.cwd ?? process.cwd(), env); // O-3
+    if (root === undefined) return; // no `.metaproject/` found anywhere above cwd: write nothing.
     await observeHostHookPayload(root, "claude", payload, {
       ...storeOptionsOf(deps),
       now: () => resolveNow(deps).toISOString(),
@@ -515,10 +559,13 @@ async function runPrune(args: readonly string[], deps: LearnCommandDeps): Promis
       return;
     }
     console.log(
-      `keryx learn prune: deleted ${report.deletedObservationFiles.length} observation file(s), expired ${report.expired.length} candidate(s).`,
+      `keryx learn prune: deleted ${report.deletedObservationFiles.length} observation file(s), expired ${report.expired.length} candidate(s)${
+        report.errors.length > 0 ? `, ${report.errors.length} error(s)` : ""
+      }.`,
     );
     for (const file of report.deletedObservationFiles) console.log(`  - observations/${file}`);
     for (const entry of report.expired) console.log(`  - ${entry.id} (${entry.scope})`);
+    for (const message of report.errors) console.error(`keryx learn prune: WARNING — ${message}`);
   } catch (error) {
     reportError(error);
   }

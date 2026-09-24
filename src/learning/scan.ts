@@ -3,7 +3,28 @@
 // record can leave `status: candidate` review or before apply/graduate write
 // anything. A finding is reported as a category name only — never the
 // matched text (schema: `redaction.findings`).
-import { analyze } from "../security/service";
+import { loadSecurityConfig } from "../security/config";
+import { memoizeResolved, scanContent } from "../security/service";
+import type { SecurityConfig } from "../security/types";
+
+// O-5: `scanContent` (unlike `analyze`) never touches
+// `.metaproject/data/security/` — no state read/write, no incident append —
+// so a redaction scan run on every observation event does not race a
+// concurrent `keryx security scan`/`check-output` writer, or grow an
+// incidents log the operator never asked this path to write to.
+//
+// O-6: the security config is loaded once per project root per process
+// (`memoizeResolved`), not on every `redactPreview`/`scanLearnedText` call —
+// this path can run once per hook event.
+const configLoaders = new Map<string, () => Promise<SecurityConfig>>();
+function configFor(root: string): () => Promise<SecurityConfig> {
+  let loader = configLoaders.get(root);
+  if (loader === undefined) {
+    loader = memoizeResolved(() => loadSecurityConfig(root));
+    configLoaders.set(root, loader);
+  }
+  return loader;
+}
 
 export interface ScanResult {
   /** Distinct category names only, sorted — never the matched text. */
@@ -46,11 +67,12 @@ export function detectInjectionShape(text: string): "prompt-injection" | undefin
  */
 export async function scanLearnedText(root: string, texts: string[]): Promise<ScanResult> {
   const categories = new Set<string>();
+  const config = await configFor(root)();
   for (const text of texts) {
     if (text.length === 0) continue;
     const shape = detectInjectionShape(text);
     if (shape !== undefined) categories.add(shape);
-    const { decision } = await analyze(root, { content: text, source: "untrusted-external" });
+    const { decision } = await scanContent(root, { content: text, source: "untrusted-external" }, { config });
     for (const finding of decision.findings) categories.add(finding.category);
   }
   return { findings: [...categories].sort() };
@@ -64,7 +86,12 @@ export async function scanLearnedText(root: string, texts: string[]): Promise<Sc
  * to the category name... rather than dropping the line" rule.
  */
 export async function redactPreview(root: string, text: string, maxLen = 200): Promise<string> {
-  const { findings } = await scanLearnedText(root, [text]);
+  // O-6: scan only what could ever survive into the preview, plus a little
+  // slack for a finding that starts just past `maxLen` — not the whole
+  // (potentially very large) raw tool input/output.
+  const scanBudget = maxLen + 1024;
+  const scanText = text.length > scanBudget ? text.slice(0, scanBudget) : text;
+  const { findings } = await scanLearnedText(root, [scanText]);
   if (findings.length > 0) {
     return `[redacted:${findings[0]}]`;
   }

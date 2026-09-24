@@ -25,7 +25,7 @@ import {
 } from "../harness/hooks";
 import { resolveProjectRoot as resolveProjectRootFromCwd } from "../lib/contained-path";
 import { createShellImpactEvidenceProvider } from "../lib/impact-evidence-hook-adapter";
-import { createLearningObservationSink, type LearningObservationSink } from "../learning/observe";
+import { createLearningObservationSink, type LearningObservationSink } from "../learning/service";
 import type { PolicyProfileId } from "../harness/policy/types";
 
 /**

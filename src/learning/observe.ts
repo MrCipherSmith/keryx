@@ -19,6 +19,7 @@
 // `LearningObservationSink`.
 import { createHash } from "node:crypto";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { pathExists, toPosix, withFileLock } from "../lib/fs";
 import { assertInsideLearningRoot, learningDataDir, observationFilePath, observationsDir } from "./paths";
@@ -29,6 +30,13 @@ import type { ObservationEvent, ObservationEventName, ProjectIdentity } from "./
 
 const MAX_PREVIEW_LEN = 200;
 const DEFAULT_MAX_LINES_PER_FILE = 5000;
+
+// O-4: `sessionId`/`toolUseId` (free-form host-supplied strings) and `tool`
+// (a host-supplied tool name) are bounded and shape-checked before they ever
+// reach a stored line — an unbounded or exotic value is replaced with a
+// deterministic, harmless stand-in rather than stored verbatim.
+const SESSION_OR_TOOL_USE_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+const TOOL_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -110,27 +118,87 @@ export interface BuildObservationLineDeps {
   warn?: (message: string, error?: unknown) => void;
 }
 
-function rawInputPreviewText(input: BuildObservationLineInput): string {
+// O-1: a preview must never carry an absolute path (which can embed a
+// username), raw edit content, or the raw project root / home directory —
+// only what's needed to be useful for extraction while remaining safe to
+// persist and, eventually, review on screen.
+
+/** Path-shaped keys across Claude's own tool-input/tool-response shapes (snake_case input, camelCase response) and Keryx's own (`file_path`). */
+const PATH_LIKE_KEYS = new Set(["file_path", "path", "filePath", "notebook_path"]);
+
+/** Raw-content-bearing keys on an edit-like tool's input or Claude's `tool_response` for one — never previewed; the D3 `edit` hash-only field covers them instead. */
+const CONTENT_DROP_KEYS = new Set([
+  "old_string",
+  "new_string",
+  "oldString",
+  "newString",
+  "content",
+  "edits",
+  "originalFile",
+  "structuredPatch",
+]);
+
+/** Replaces every occurrence of the project root with `.` and the caller's home directory with `~` in free text (a Bash command, stdout/stderr, …). Root is checked first (longer, more specific) so a project rooted under `$HOME` is not double-replaced. */
+function scrubPathsInText(root: string, text: string): string {
+  let out = text;
+  const resolvedRoot = path.resolve(root);
+  const home = os.homedir();
+  if (resolvedRoot.length > 0) out = out.split(resolvedRoot).join(".");
+  if (home.length > 0 && home !== resolvedRoot) out = out.split(home).join("~");
+  return out;
+}
+
+/** One path-like field's preview value: project-relative when inside root, basename-only (never a full path) when outside it or unresolvable. */
+function relativizePathForPreview(root: string, filePath: string): string {
+  if (!path.isAbsolute(filePath)) return toPosix(filePath);
+  const relative = path.relative(path.resolve(root), filePath);
+  if (relative.length === 0) return ".";
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    const base = filePath.split(/[/\\]/).pop();
+    return base !== undefined && base.length > 0 ? base : "[outside-project]";
+  }
+  return toPosix(relative);
+}
+
+/** Recursively sanitizes a tool-input/tool-output JSON value for preview: drops raw edit content, relativizes path-like fields, and scrubs root/home from remaining free text. Never mutates `value`. */
+function sanitizeForPreview(root: string, value: unknown): unknown {
+  if (typeof value === "string") return scrubPathsInText(root, value);
+  if (Array.isArray(value)) return value.map((entry) => sanitizeForPreview(root, entry));
+  if (isPlainObject(value)) {
+    const out: Record<string, unknown> = {};
+    for (const [key, v] of Object.entries(value)) {
+      if (CONTENT_DROP_KEYS.has(key)) continue;
+      if (PATH_LIKE_KEYS.has(key) && typeof v === "string") {
+        out[key] = relativizePathForPreview(root, v);
+        continue;
+      }
+      out[key] = sanitizeForPreview(root, v);
+    }
+    return out;
+  }
+  return value;
+}
+
+function rawInputPreviewText(root: string, input: BuildObservationLineInput): string {
   const obj = isPlainObject(input.toolInput) ? input.toolInput : undefined;
-  if (obj !== undefined && typeof obj.command === "string") return obj.command;
-  if (typeof input.prompt === "string" && input.prompt.length > 0) return input.prompt;
-  if (input.toolInput !== undefined) return canonicalJson(input.toolInput);
+  if (obj !== undefined && typeof obj.command === "string") return scrubPathsInText(root, obj.command);
+  if (input.toolInput !== undefined) return canonicalJson(sanitizeForPreview(root, input.toolInput));
   return "";
 }
 
-function rawOutputPreviewText(toolOutput: unknown): string {
-  if (typeof toolOutput === "string") return toolOutput;
+function rawOutputPreviewText(root: string, toolOutput: unknown): string {
+  if (typeof toolOutput === "string") return scrubPathsInText(root, toolOutput);
   if (isPlainObject(toolOutput)) {
     const parts: string[] = [];
     for (const key of ["stdout", "stderr", "output", "content"]) {
       const value = toolOutput[key];
-      if (typeof value === "string" && value.length > 0) parts.push(value);
+      if (typeof value === "string" && value.length > 0) parts.push(scrubPathsInText(root, value));
     }
     if (parts.length > 0) return parts.join("\n");
-    return canonicalJson(toolOutput);
+    return canonicalJson(sanitizeForPreview(root, toolOutput));
   }
   if (toolOutput === undefined || toolOutput === null) return "";
-  return canonicalJson(toolOutput);
+  return canonicalJson(sanitizeForPreview(root, toolOutput));
 }
 
 function normalizeProjectRelativePath(root: string, filePath: string): string {
@@ -255,23 +323,44 @@ export async function buildObservationLine(
   const digestSource =
     input.event === "user-prompt" ? (input.prompt ?? "") : input.toolInput !== undefined ? canonicalJson(input.toolInput) : "";
   const inputDigest = sha256Hex(digestSource);
-  const inputPreview = await redactPreview(root, rawInputPreviewText(input), MAX_PREVIEW_LEN);
+  // O-2: a prompt's *content* is never previewed — the observation must stay
+  // useful for detecting repetition/correction (via `inputDigest`) without
+  // ever storing user-prompt text, even truncated.
+  const inputPreview =
+    input.event === "user-prompt" ? "" : await redactPreview(root, rawInputPreviewText(root, input), MAX_PREVIEW_LEN);
 
   const isOutputEvent = input.event === "tool-complete" || input.event === "tool-failed";
-  const outputPreview = isOutputEvent ? await redactPreview(root, rawOutputPreviewText(input.toolOutput), MAX_PREVIEW_LEN) : null;
+  const outputPreview = isOutputEvent
+    ? await redactPreview(root, rawOutputPreviewText(root, input.toolOutput), MAX_PREVIEW_LEN)
+    : null;
 
   const cwdHash = sha256Hex(path.resolve(input.cwd));
   const edit = input.event === "tool-complete" ? computeEditField(input.tool, input.toolInput, root) : null;
 
+  // O-4: bound and shape-check host-supplied identifiers before they are
+  // ever stored — an out-of-pattern value (unbounded length, unexpected
+  // characters) is replaced with a deterministic digest-derived stand-in
+  // rather than stored as-is.
+  const sessionId = SESSION_OR_TOOL_USE_ID_PATTERN.test(input.sessionId)
+    ? input.sessionId
+    : `h-${sha256Hex(input.sessionId).slice(0, 32)}`;
+  const toolUseId =
+    input.toolUseId === null
+      ? null
+      : SESSION_OR_TOOL_USE_ID_PATTERN.test(input.toolUseId)
+        ? input.toolUseId
+        : `h-${sha256Hex(input.toolUseId).slice(0, 32)}`;
+  const tool = input.tool === null ? null : TOOL_NAME_PATTERN.test(input.tool) ? input.tool : "other";
+
   const line: ObservationEvent = {
     schemaVersion: 1,
     event: input.event,
-    tool: input.tool,
+    tool,
     inputDigest,
     inputPreview,
     outputPreview,
-    sessionId: input.sessionId,
-    toolUseId: input.toolUseId,
+    sessionId,
+    toolUseId,
     cwdHash,
     project: { identity: identity.identity, identityKind: identity.identityKind },
     observedAt: input.observedAt,

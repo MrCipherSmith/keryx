@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createAcceptCapability } from "./accept-capability";
 import { observationsDir } from "./paths";
-import { pruneLearning } from "./prune";
+import { pruneLearning, pruneObservationFilesPass } from "./prune";
 import { readPattern, writePattern } from "./store";
 import type { LearnedPattern } from "./types";
 
@@ -150,6 +150,51 @@ describe("pruneLearning: candidate TTL expiry", () => {
 
       const report = await pruneLearning(root, { now: NOW });
       expect(report.expired).toEqual([]);
+    });
+  });
+});
+
+// O-7
+describe("pruneLearning: per-pass error collection", () => {
+  test("report carries an empty errors array when both passes succeed", async () => {
+    await withProjectRoot(async (root) => {
+      writeObservationFile(root, "2026-08-01"); // > 30 days before NOW: deleted
+      const record = makeCandidate({ ttl: { expiresAt: "2026-09-01T00:00:00.000Z" } }); // expired
+      await writePattern(root, record);
+
+      const report = await pruneLearning(root, { now: NOW });
+
+      expect(report.errors).toEqual([]);
+      expect(report.deletedObservationFiles).toEqual(["2026-08-01.jsonl"]);
+      expect(report.expired).toEqual([{ id: record.id, scope: "project" }]);
+    });
+  });
+});
+
+// O-7
+describe("pruneObservationFilesPass (the pass `runExtract` runs automatically)", () => {
+  test("deletes only observation files past their TTL, leaving candidates untouched, never throws", async () => {
+    await withProjectRoot(async (root) => {
+      writeObservationFile(root, "2026-08-01"); // > 30 days before NOW
+      writeObservationFile(root, "2026-09-20"); // within TTL
+      const record = makeCandidate({ ttl: { expiresAt: "2026-09-01T00:00:00.000Z" } }); // would be expired by the OTHER pass
+      await writePattern(root, record);
+
+      const result = await pruneObservationFilesPass(root, NOW);
+
+      expect(result.errors).toEqual([]);
+      expect(result.deleted).toEqual(["2026-08-01.jsonl"]);
+      expect(readdirSync(observationsDir(root)).sort()).toEqual(["2026-09-20.jsonl"]);
+      // Candidate expiry is NOT this pass's job — untouched.
+      const stored = await readPattern(root, record.id, "project");
+      expect(stored?.status).toBe("candidate");
+    });
+  });
+
+  test("an unreadable observations directory (e.g. never created) is reported as zero deletions, not an error", async () => {
+    await withProjectRoot(async (root) => {
+      const result = await pruneObservationFilesPass(root, NOW);
+      expect(result).toEqual({ deleted: [], errors: [] });
     });
   });
 });

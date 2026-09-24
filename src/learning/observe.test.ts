@@ -247,6 +247,182 @@ describe("createLearningObservationSink through a real createHookRuntime (AC1)",
   });
 });
 
+describe("O-1: no absolute path, home directory, username, or raw edit content in any preview", () => {
+  test("Edit: file_path is relativized and old_string/new_string never appear in inputPreview", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      const absolutePath = path.join(root, "src", "secret-module.ts");
+      await sink.record({
+        kind: "tool-start",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Edit",
+          toolInput: { file_path: absolutePath, old_string: "const password = 'old-value';", new_string: "const password = readSecret();" },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { inputPreview: string };
+      expect(line.inputPreview).toContain("src/secret-module.ts");
+      expect(line.inputPreview).not.toContain(root);
+      expect(line.inputPreview).not.toContain("old-value");
+      expect(line.inputPreview).not.toContain("readSecret");
+    });
+  });
+
+  test("Write tool_response (filePath/originalFile) is relativized and content dropped from outputPreview", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      const absolutePath = path.join(root, "src", "config.ts");
+      await sink.record({
+        kind: "tool-complete",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Edit",
+          toolInput: { file_path: absolutePath, old_string: "a", new_string: "b" },
+          toolOutput: { filePath: absolutePath, originalFile: "line one\nline two\nSECRET_LOOKING_TEXT", structuredPatch: [{ lines: ["-a", "+b"] }] },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { outputPreview: string | null };
+      expect(line.outputPreview).not.toContain(root);
+      expect(line.outputPreview).not.toContain("SECRET_LOOKING_TEXT");
+      expect(line.outputPreview).not.toContain("structuredPatch");
+    });
+  });
+
+  test("Bash: a `cd <absolute project path>` command has the root replaced with '.'", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      await sink.record({
+        kind: "tool-start",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Bash",
+          toolInput: { command: `cd ${root}/src && ls` },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { inputPreview: string };
+      expect(line.inputPreview).not.toContain(root);
+      expect(line.inputPreview).toContain("cd ./src");
+    });
+  });
+
+  test("a path outside the project is reduced to its basename only, never the full path", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      await sink.record({
+        kind: "tool-start",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Read",
+          toolInput: { file_path: "/etc/some-other-user-home/secrets.env" },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { inputPreview: string };
+      expect(line.inputPreview).toContain("secrets.env");
+      expect(line.inputPreview).not.toContain("/etc/some-other-user-home");
+    });
+  });
+});
+
+describe("O-2: user-prompt events never preview prompt content", () => {
+  test("inputPreview is the empty string; inputDigest still carries the prompt hash", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      await sink.record({
+        kind: "user-prompt",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: { sessionId: "s1", runId: "r1", prompt: "here is my super secret plan, do not tell anyone" },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { inputPreview: string; inputDigest: string };
+      expect(line.inputPreview).toBe("");
+      expect(line.inputDigest).toMatch(/^[a-f0-9]{64}$/);
+      const raw = await readFile(observationFilePath(root, "2026-09-24"), "utf8");
+      expect(raw).not.toContain("super secret plan");
+    });
+  });
+});
+
+describe("O-4: sessionId/toolUseId/tool are bounded and shape-checked", () => {
+  test("an out-of-pattern sessionId/toolUseId is replaced with a deterministic hash-derived id", async () => {
+    await withTempRoot(async (root) => {
+      const line = await buildObservationLine(
+        root,
+        {
+          event: "tool-start",
+          tool: "Bash",
+          sessionId: "not a valid session id! (has spaces and punctuation)",
+          toolUseId: "also not valid #1",
+          cwd: root,
+          observedAt: "2026-09-24T12:00:00.000Z",
+        },
+        {},
+      );
+      expect(line).not.toBeNull();
+      expect(line!.sessionId).toMatch(/^h-[0-9a-f]{32}$/);
+      expect(line!.toolUseId).toMatch(/^h-[0-9a-f]{32}$/);
+      expect(validateObservationEvent(line).ok).toBe(true);
+    });
+  });
+
+  test("an out-of-pattern tool name is replaced with 'other'", async () => {
+    await withTempRoot(async (root) => {
+      const line = await buildObservationLine(
+        root,
+        {
+          event: "tool-start",
+          tool: "some tool with spaces & symbols!",
+          sessionId: "s1",
+          toolUseId: null,
+          cwd: root,
+          observedAt: "2026-09-24T12:00:00.000Z",
+        },
+        {},
+      );
+      expect(line).not.toBeNull();
+      expect(line!.tool).toBe("other");
+    });
+  });
+
+  test("a well-formed sessionId/toolUseId/tool passes through unchanged", async () => {
+    await withTempRoot(async (root) => {
+      const line = await buildObservationLine(
+        root,
+        { event: "tool-start", tool: "Bash", sessionId: "sess-1.2:3", toolUseId: "tu_1", cwd: root, observedAt: "2026-09-24T12:00:00.000Z" },
+        {},
+      );
+      expect(line!.sessionId).toBe("sess-1.2:3");
+      expect(line!.toolUseId).toBe("tu_1");
+      expect(line!.tool).toBe("Bash");
+    });
+  });
+});
+
 describe("appendObservation bounding (5000 lines/day, rolls to next UTC day)", () => {
   test("a small injected maxLinesPerFile rolls the third line into the next UTC day's file", async () => {
     await withTempRoot(async (root) => {

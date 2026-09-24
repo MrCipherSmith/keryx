@@ -12,6 +12,7 @@ import { applyDecay, applyEvidence, confidenceLevelFor, SEED_DETERMINISTIC, SEED
 import { loadLearningConfig } from "./config";
 import { resolveProjectIdentity } from "./identity";
 import { observationsDir } from "./paths";
+import { pruneObservationFilesPass } from "./prune";
 import { scanLearnedText } from "./scan";
 import { validateObservationEvent } from "./schema";
 import { FAILING_TO_PASSING_TEST_SIGNAL } from "./signals/failing-to-passing-test";
@@ -271,6 +272,16 @@ async function upsertDraft(
  */
 export async function runExtract(root: string, opts: RunExtractOptions = {}): Promise<ExtractReport> {
   const now = opts.now ?? new Date();
+  // O-7: the observation-file TTL pass used to run only under `keryx learn
+  // prune`, which nothing ever called automatically — so a daily file could
+  // sit well past its 30-day TTL until a human happened to run `prune`
+  // directly. `extract` is the one human-triggered command guaranteed to run
+  // on a normal cadence (it is the step that makes observations useful at
+  // all), so it carries the observation-file pass with it. Never a hook
+  // (W3 spec) and never throws into this call — failures are swallowed here
+  // (each is still collected internally) since a prune failure must not
+  // block extraction itself.
+  await pruneObservationFilesPass(root, now);
   const storeOptions: StoreEnvOptions = {
     ...(opts.env !== undefined ? { env: opts.env } : {}),
     ...(opts.homeDir !== undefined ? { homeDir: opts.homeDir } : {}),

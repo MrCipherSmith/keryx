@@ -52,6 +52,14 @@ function unknownKeys(record: Record<string, unknown>, allowed: readonly string[]
 const ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const PROJECT_IDENTITY_PATTERN = /^[a-f0-9]{64}$/;
 const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
+// O-4: `sessionId`/`toolUseId` are host-supplied — bounded and shape-checked
+// rather than accepted as any non-empty string. `observe.ts`'s
+// `buildObservationLine` already normalizes any out-of-pattern value to a
+// digest-derived stand-in before it reaches this validator; this check is
+// the second, independent enforcement point (defense in depth: a line built
+// by anything other than `buildObservationLine` is still refused).
+const SESSION_OR_TOOL_USE_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+const TOOL_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 const DOMAINS: readonly LearningDomain[] = [
   "code-style",
@@ -444,8 +452,8 @@ export function validateObservationEvent(value: unknown): ValidationResult {
     errors.push(`event: must be one of ${OBSERVATION_EVENT_NAMES.join(", ")}`);
   }
 
-  if (value.tool !== null && typeof value.tool !== "string") {
-    errors.push("tool: must be a string or null");
+  if (value.tool !== null && (typeof value.tool !== "string" || !TOOL_NAME_PATTERN.test(value.tool))) {
+    errors.push(`tool: must be null or match ${TOOL_NAME_PATTERN}`);
   }
 
   if (typeof value.inputDigest !== "string" || !SHA256_HEX_PATTERN.test(value.inputDigest)) {
@@ -460,12 +468,12 @@ export function validateObservationEvent(value: unknown): ValidationResult {
     errors.push(`outputPreview: must be null or a string of at most ${MAX_PREVIEW_LEN} chars`);
   }
 
-  if (typeof value.sessionId !== "string" || value.sessionId.length < 1) {
-    errors.push("sessionId: must be a non-empty string");
+  if (typeof value.sessionId !== "string" || !SESSION_OR_TOOL_USE_ID_PATTERN.test(value.sessionId)) {
+    errors.push(`sessionId: must match ${SESSION_OR_TOOL_USE_ID_PATTERN}`);
   }
 
-  if (value.toolUseId !== null && typeof value.toolUseId !== "string") {
-    errors.push("toolUseId: must be a string or null");
+  if (value.toolUseId !== null && (typeof value.toolUseId !== "string" || !SESSION_OR_TOOL_USE_ID_PATTERN.test(value.toolUseId))) {
+    errors.push(`toolUseId: must be null or match ${SESSION_OR_TOOL_USE_ID_PATTERN}`);
   }
 
   if (typeof value.cwdHash !== "string" || !SHA256_HEX_PATTERN.test(value.cwdHash)) {

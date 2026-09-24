@@ -13,9 +13,11 @@ observe  ->  extract  ->  review / accept  ->  apply (or reviewer apply)  ->  pr
 
 - **Observe.** A hook or `keryx learn observe` appends redacted, digest-only
   events to a daily JSONL file. Nothing is interpreted yet.
-- **Extract.** `keryx learn extract` runs five deterministic signals (plus an
-  optional, disabled-by-default model extractor) over the observation window
-  and writes/updates `status: candidate` records.
+- **Extract.** `keryx learn extract` first runs the observation-file TTL
+  prune pass (never candidate expiry — that stays `prune`'s own job), then
+  runs five deterministic signals (plus an optional, disabled-by-default
+  model extractor) over the observation window and writes/updates `status:
+  candidate` records.
 - **Review / accept.** A human reads a candidate with `keryx learn review
   [<id>]` and decides with `keryx learn accept <id>` or `keryx learn reject
   <id>` — both require a real terminal.
@@ -48,7 +50,7 @@ guarantees](#consent-guarantees) below.
 | `keryx learn review [<id>] [--scope <s>]` | Prints one candidate, or all candidates, with its evidence, for a human to read before deciding. |
 | `keryx learn accept <id> [--scope user] [--refresh]` | `status: candidate -> accepted`. Terminal-only; project scope also writes one index entry (see [Cross-project index and promotion](#cross-project-index-and-promotion)). `--refresh` overwrites only the current project's index entry, without changing status. |
 | `keryx learn reject <id> [--scope user]` | `status: candidate -> rejected`. |
-| `keryx learn apply <id> --skill <module/name> [--dry-run]` | Renders the accepted record as a `LearningProposal` and calls the existing `applyLearningProposal` — the only writer under `.metaproject/project-skills/`. |
+| `keryx learn apply <id> --skill <module/name> [--dry-run]` | Renders the accepted record as a `LearningProposal` and calls the existing `applyLearningProposal` — the only writer under `.metaproject/project-skills/`. `--dry-run` computes and returns the proposal only; it writes nothing durable to disk (not even the proposal JSON). |
 | `keryx learn promote <id>` | Terminal-only; see [Cross-project index and promotion](#cross-project-index-and-promotion). |
 | `keryx learn graduate [--domain <d>]` | Clusters accepted records and writes a graduation proposal. |
 | `keryx learn graduate apply <proposal-id>` | Terminal-only; writes an agent candidate. A skill-target proposal is not applied by this command — see below. |
@@ -93,7 +95,24 @@ What this rules out by construction:
 
 - **No transcripts.** No full tool input, no full tool output, no prompt
   text, no file content, no diff content — only sha256 digests and 200-char
-  redacted previews.
+  redacted previews. `user-prompt` events go further: `inputPreview` is
+  always the empty string (never even a truncated slice of the prompt) —
+  only `inputDigest` carries anything about the prompt's content, and that is
+  a one-way hash.
+- **No absolute paths, no home directory, no username.** Before a preview is
+  built, every path-shaped field (`file_path`/`path`/`filePath`/
+  `notebook_path`) is rewritten project-relative — or, for a path outside the
+  project, to its basename only, never the full path — and any remaining
+  occurrence of the project root or the caller's home directory in free text
+  (a Bash command, stdout/stderr) is replaced with `.`/`~`. Raw edit content
+  (`old_string`/`new_string`/`content`/`edits`/`originalFile`/
+  `structuredPatch`, in either Claude's snake_case tool-input or camelCase
+  tool-response shape) is dropped from every preview outright — the `edit`
+  field's hashes cover it instead.
+- **Bounded identifiers.** `sessionId`/`toolUseId` must match
+  `^[A-Za-z0-9._:-]{1,128}$` and `tool` must match `^[A-Za-z0-9_.:-]{1,128}$`;
+  anything else is replaced with a deterministic `h-<hash prefix>` (ids) or
+  `"other"` (tool name) rather than stored as-is.
 - **Redaction before write, not after.** Every `*Preview` field passes
   `keryx security check-output` before it is written; a finding (secret,
   credential, …) replaces the preview with `"[redacted:<category>]"` rather
@@ -107,7 +126,10 @@ What this rules out by construction:
   `keryx init`'s managed ignore block — neither ships in your repository.
 - **Off switch.** `KERYX_LEARNING=off` makes both the manual `keryx learn
   observe` path and the host-hook `--hook claude` path no-ops; nothing is
-  appended.
+  appended. The comparison is an exact, case-sensitive match against the
+  literal string `"off"` — `"OFF"`, `"0"`, `"false"`, and `"no"` are **not**
+  recognized and do **not** disable observation; only `KERYX_LEARNING=off`
+  does.
 
 ### Opt-in host observer (Claude Code)
 
@@ -131,7 +153,21 @@ surface is opt-in — only naming its flag or id does. It shares
 composing by sentinel so none of them clobber each other's hook entries. The
 command it installs, `keryx learn observe --hook claude`, always exits `0`
 and prints nothing to stdout, so it never affects Claude's own control flow —
-regardless of what happens inside the observation sink.
+regardless of what happens inside the observation sink. Each installed hook
+entry carries a 5-second `timeout`, stdin is read with a 2-second internal
+deadline and capped at 1 MiB (a larger payload is dropped, not parsed —
+still exit `0`), and the security scan run over every preview never touches
+`.metaproject/data/security/` (no state or incident write), so a busy
+session's observation traffic cannot race or pollute a `keryx security scan`
+run.
+
+`observe --hook claude` resolves the project root from `$CLAUDE_PROJECT_DIR`
+(when it names a directory that already has a `.metaproject/`) or by walking
+up from the process's working directory to the nearest ancestor that does —
+never by creating one. When neither is found, it writes nothing and still
+exits `0`; it never falls back to treating a bare `.git` checkout, or the raw
+working directory, as the project root the way the manual `keryx learn`
+verbs do.
 
 ## The confidence model
 

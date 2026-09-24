@@ -69,8 +69,20 @@ const TOOL_EVENTS = new Set<LearningObserverEvent>(["PreToolUse", "PostToolUse",
 /** `"*"` matches every tool — this hook only observes, it never narrows to a subset of tools. */
 const TOOL_MATCHER = "*";
 
+/**
+ * Seconds Claude Code allows this hook command to run before it kills it —
+ * O-6: an unbounded hook is a stuck-observer risk (the command itself always
+ * exits promptly under normal operation, via `readStdinBounded`'s own
+ * deadline, but the host-side timeout is the outer bound that holds even if
+ * that inner one is ever defeated).
+ */
+const HOOK_TIMEOUT_SECONDS = 5;
+
 function learningObserverGroup(event: LearningObserverEvent): Settings {
-  const hooksEntry = { hooks: [{ type: "command", command: learningObserverCommand() }], [MANAGED_KEY]: LEARNING_OBSERVER_SENTINEL };
+  const hooksEntry = {
+    hooks: [{ type: "command", command: learningObserverCommand(), timeout: HOOK_TIMEOUT_SECONDS }],
+    [MANAGED_KEY]: LEARNING_OBSERVER_SENTINEL,
+  };
   return TOOL_EVENTS.has(event) ? { matcher: TOOL_MATCHER, ...hooksEntry } : hooksEntry;
 }
 

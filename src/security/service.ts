@@ -178,6 +178,42 @@ export async function analyze(
   return { decision, warnings: selfProtection.warnings, config };
 }
 
+/**
+ * Side-effect-free variant of `analyze`: runs the same detectors + decision
+ * resolution, with NO state/incident I/O (no `readState`/`writeState`, no
+ * `appendIncidents`). For a caller that scans very frequently and does not
+ * itself want to participate in the self-protection state machine — e.g.
+ * `src/learning/scan.ts`'s per-preview redaction scan, which would otherwise
+ * write `.metaproject/data/security/raw/state.json` and risk appending
+ * incidents on every observation event. Accepts an already-loaded `config`
+ * so a repeat caller in the same process can load it once (`loadSecurityConfig`)
+ * rather than re-reading it from disk on every call.
+ */
+export async function scanContent(
+  cwd: string,
+  input: SecurityCheck,
+  opts: { config?: SecurityConfig } = {},
+): Promise<{ decision: SecurityDecision; config: SecurityConfig }> {
+  const config = opts.config ?? (await loadSecurityConfig(cwd));
+  const matches = await runDetectorsAsync(cwd, input.content, config);
+  const hashFn = await hashFnFor(cwd);
+
+  const buildOpts: BuildFindingOptions = {
+    source: input.source,
+    content: input.content,
+    hashFn,
+  };
+  if (input.target !== undefined) {
+    buildOpts.target = input.target;
+  }
+  if (input.path !== undefined) {
+    buildOpts.path = input.path;
+  }
+
+  const decision = resolveDecision(config, { ...buildOpts, matches });
+  return { decision, config };
+}
+
 // Scan a file/content, build a report, and write committable artifacts.
 export async function runScan(
   cwd: string,
