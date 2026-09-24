@@ -147,7 +147,6 @@ interface DecisionContext {
   files: string[];
   config: ImpactEvidenceConfig;
   hookClass: ImpactEvidenceHookClass;
-  env: Record<string, string | undefined>;
   computeEvidence: typeof computeImpactEvidence;
 }
 
@@ -184,6 +183,33 @@ export function createImpactEvidenceProvider(
 
     const { files, rejected } = normalizeRequestFiles(request.root, request.files);
     const extraWarnings: string[] = [];
+
+    // NEW-3 (review round 3): the kill switches (env override, then
+    // config.enabled:false) are evaluated BEFORE the path-rejection deny
+    // below. Previously an unrelated out-of-root path in the same request
+    // pre-empted a disabled gate with a `path-outside-root` deny — under
+    // `gate`/`unattended-untrusted` that meant a disabled gate could still
+    // deny, and no `disabled-env`/`disabled-config` event was ever recorded
+    // (AC15 requires "disabled" to never be confused with "ran and found
+    // nothing"). Trust resolution (`tampered`, just above) still runs first:
+    // a tampered config already forces `config.enabled` to `true`, so this
+    // ordering never lets a tampered "disabled" config bypass the gate.
+    if (killSwitchEnabled(env)) {
+      const record = await appendLogRecord(request.root, {
+        sessionId: request.sessionId,
+        event: "disabled-env",
+        files,
+      });
+      return { hookId: IMPACT_EVIDENCE_HOOK_ID, hookClass, outcome: "allow", warnings: [], record };
+    }
+    if (!config.enabled) {
+      const record = await appendLogRecord(request.root, {
+        sessionId: request.sessionId,
+        event: "disabled-config",
+        files,
+      });
+      return { hookId: IMPACT_EVIDENCE_HOOK_ID, hookClass, outcome: "allow", warnings: [], record };
+    }
 
     if (rejected.length > 0) {
       const record = await appendLogRecord(request.root, {
@@ -230,35 +256,18 @@ export function createImpactEvidenceProvider(
       );
     }
 
-    const decision = await computeDecision({ request, files, config, hookClass, env, computeEvidence });
+    const decision = await computeDecision({ request, files, config, hookClass, computeEvidence });
     return extraWarnings.length > 0 ? { ...decision, warnings: [...extraWarnings, ...decision.warnings] } : decision;
   };
 }
 
 async function computeDecision(ctx: DecisionContext): Promise<ImpactEvidenceDecision> {
-  const { request, files, config, hookClass, env, computeEvidence } = ctx;
+  const { request, files, config, hookClass, computeEvidence } = ctx;
 
-  // --- Kill switch: bypasses the rollback gate too, and is itself logged
-  // so "disabled" is never confused with "ran and found nothing" (AC15).
-  if (killSwitchEnabled(env)) {
-    const record = await appendLogRecord(request.root, {
-      sessionId: request.sessionId,
-      event: "disabled-env",
-      files,
-    });
-    return { hookId: IMPACT_EVIDENCE_HOOK_ID, hookClass, outcome: "allow", warnings: [], record };
-  }
-  // F11: when the config was tampered, `config.enabled` is already forced
-  // `true` by `resolveImpactEvidenceConfigTrusted` — this branch simply never
-  // fires for a tampered "disabled" config, which is the fix.
-  if (!config.enabled) {
-    const record = await appendLogRecord(request.root, {
-      sessionId: request.sessionId,
-      event: "disabled-config",
-      files,
-    });
-    return { hookId: IMPACT_EVIDENCE_HOOK_ID, hookClass, outcome: "allow", warnings: [], record };
-  }
+  // NEW-3: the kill switch (env override) and `config.enabled:false` are now
+  // evaluated by the caller (`createImpactEvidenceProvider`), before path
+  // normalization/rejection — see the comment there. Both already returned
+  // by the time `computeDecision` runs, so there is nothing to check here.
 
   // --- Shell path: a command was given. `isDestructiveCommand` decides
   // whether a rollback line is required — EVERY time, not just on first
@@ -380,8 +389,17 @@ async function computeDecision(ctx: DecisionContext): Promise<ImpactEvidenceDeci
   const pendingAckSet = new Set(state.pendingAck ?? []);
   const pendingReAsk =
     config.strict && !hasAcknowledgement ? firstTouch.filter((file) => pendingAckSet.has(file)) : [];
-  for (const file of pendingReAsk) {
-    denials[file] = (denials[file] ?? 0) + 1;
+  // I1 (review round 3): `request.denied` above already bumped `denials` for
+  // every file in this request (a superset of `pendingReAsk`, since
+  // `pendingReAsk` is filtered from `firstTouch` which is filtered from
+  // `files`). Bumping again here for the same request would count one
+  // actual denial twice toward the dampening threshold — only bump the
+  // "never acknowledged" penalty when this request did NOT already report a
+  // denial for these files.
+  if (!request.denied) {
+    for (const file of pendingReAsk) {
+      denials[file] = (denials[file] ?? 0) + 1;
+    }
   }
 
   // F17 (review round 1): dampening used to be an ALL-OR-NOTHING call over

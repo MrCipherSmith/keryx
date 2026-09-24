@@ -397,16 +397,30 @@ export function checkHookExfiltrationShape(relativePath: string, hookCommand: st
   ];
 }
 
-const TRAILING_EXIT0_RE = /\s*(?:;|&&)\s*exit\s+0\s*$/;
+// I2 (review round 3, investigated): only the SEPARATOR set was widened here
+// (adding `||`, alongside the already-handled `;`/`&&`) — the anchor to the
+// END of the string stays. A genuinely mid-command `exit 0` with more
+// command chained after it (`echo hi && exit 0 && continue-cmd`) is NOT
+// stripped here, on purpose, per F20's existing rationale below: removing it
+// would not just unsuppress a failing gate, it would also change the
+// command's CONTROL FLOW by resurrecting code that `exit 0` currently makes
+// unreachable (`continue-cmd` never runs today; strip the `exit 0` and it
+// would). That is not a "simple, safe regex change" — a blind global strip
+// was tried and reverted here after `F20`'s own test (mid-command exit 0
+// must stay a no-op) caught exactly this. `||` is safe to add to the
+// TRAILING case because the reasoning is identical to `;`/`&&` there:
+// nothing follows a trailing `exit 0` for control flow to change.
+const TRAILING_EXIT0_RE = /\s*(?:;|&&|\|\|)\s*exit\s+0\s*$/;
 
 /**
  * N4: strip EVERY `|| true` and `2>/dev/null` occurrence (not just the
- * first), plus a trailing `; exit 0` / `&& exit 0` (repeated, if the command
- * chains more than one), then trim. Pure string transform — used to build the
- * `json-set` edit's replacement VALUE directly (no text search against the
- * raw file bytes), so a command containing JSON-escaped quotes is unaffected:
- * the value is assigned into the already-parsed object graph and re-serialized,
- * never spliced into the file's text.
+ * first), plus a trailing `; exit 0` / `&& exit 0` / `|| exit 0` (I2: now
+ * including `||`) (repeated, if the command chains more than one), then
+ * trim. Pure string transform — used to build the `json-set` edit's
+ * replacement VALUE directly (no text search against the raw file bytes), so
+ * a command containing JSON-escaped quotes is unaffected: the value is
+ * assigned into the already-parsed object graph and re-serialized, never
+ * spliced into the file's text.
  */
 function stripHookSuppression(command: string): string {
   let next = command.replace(/\s*\|\|\s*true\b/g, "").replace(/\s*2>\/dev\/null/g, "");
@@ -423,7 +437,8 @@ export function checkHookSilentSuppression(relativePath: string, hookCommand: st
     /\|\|\s*true\b/.test(hookCommand) ||
     /2>\/dev\/null/.test(hookCommand) ||
     /;\s*exit\s+0\b/.test(hookCommand) ||
-    /&&\s*exit\s+0\b/.test(hookCommand);
+    /&&\s*exit\s+0\b/.test(hookCommand) ||
+    /\|\|\s*exit\s+0\b/.test(hookCommand);
   if (!suppressed) return [];
   const rewritten = stripHookSuppression(hookCommand);
   // N4: `checkHookSilentSuppression` is only ever called (from `index.ts`)

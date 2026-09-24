@@ -412,6 +412,32 @@ test("N4: two hook entries with the identical command each apply independently v
   expect(after.securityHooks[1]?.command).toBe("echo hi");
 });
 
+// I2 (review round 3): `|| exit 0` was not previously recognized as a
+// suppression shape at all — only `;`/`&&` were, for both detection and the
+// TRAILING stripper. `||` is added alongside them. (A genuinely mid-command
+// `exit 0` — something chained after it — stays untouched on purpose: see
+// F20's test above and the comment on `TRAILING_EXIT0_RE` in checks.ts for
+// why stripping it would change control flow, not just remove a
+// suppression; that case was investigated for I2 and deliberately left
+// alone.)
+test("I2: a trailing `|| exit 0` is detected and stripped, the same as `; exit 0` / `&& exit 0`", async () => {
+  await mkdir(path.join(root, ".claude"), { recursive: true });
+  const settings = {
+    securityHooks: [{ on: "input", command: "run-checks || exit 0" }],
+  };
+  await writeFile(path.join(root, ".claude", "settings.json"), `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+
+  const report = await runHarnessAudit(root, { fixProposals: true });
+  const finding_ = report.findings.find((f) => f.check === "hook-silent-suppression");
+  expect(finding_?.fixProposal).toBeTruthy();
+
+  await applyAuditProposal(root, finding_!.fixProposal!.id);
+  const after = JSON.parse(await readFile(path.join(root, ".claude", "settings.json"), "utf8")) as {
+    securityHooks: Array<{ command: string }>;
+  };
+  expect(after.securityHooks[0]?.command).toBe("run-checks");
+});
+
 // N4: checks.ts ~l.430 — the previous proposal text-spliced the raw file
 // bytes, which broke on a JSON-escaped command (an embedded `"`), never
 // stripped a trailing `; exit 0`, and only removed the FIRST `|| true`. The
@@ -816,6 +842,31 @@ test("N3: a symlinked skill DIRECTORY resolving inside root is followed (with a 
   const surface = report.surfaces.find((s) => s.surface === "skills");
   expect(surface?.status).toBe("scanned");
   expect(surface?.pathsScanned).toContain(".claude/skills/linked/run.sh");
+});
+
+// I3 (review round 3): unlike the two N3 tests above (a symlinked directory
+// NESTED under `.claude/skills`), here `.claude/skills` ITSELF is the
+// symlink — the top-level entry point `discoverSkillScripts` hands straight
+// to `walkScripts`, never through the parent-directory loop that applies
+// `resolvesInsideRoot` to a nested entry. Before the fix this walked the
+// escape target's contents as if they were an ordinary in-root directory,
+// reporting its scripts as `found` with no containment check at all.
+test("I3: a top-level `.claude/skills` that is ITSELF a symlink resolving outside root is reported unreadable, not walked", async () => {
+  const outsideDir = await mkdtemp(path.join(tmpdir(), "keryx-audit-harness-outside-topdir-"));
+  await writeFile(path.join(outsideDir, "evil.sh"), "echo hi\n", "utf8");
+  try {
+    await mkdir(path.join(root, ".claude"), { recursive: true });
+    await symlink(outsideDir, path.join(root, ".claude", "skills"), "dir");
+
+    const report = await runHarnessAudit(root);
+    const surface = report.surfaces.find((s) => s.surface === "skills");
+    expect(surface?.status).toBe("error");
+    expect(surface?.pathsUnreadable).toContain(".claude/skills");
+    expect(surface?.pathsScanned ?? []).not.toContain(".claude/skills/evil.sh");
+    expect(report.coverage.status).toBe("incomplete");
+  } finally {
+    await rm(outsideDir, { recursive: true, force: true });
+  }
 });
 
 // N3: a walk truncated by the depth cap is reported as a coverage reason

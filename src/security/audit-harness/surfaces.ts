@@ -7,7 +7,7 @@
 // `pathsUnreadable` fields read directly off these.
 
 import path from "node:path";
-import { readdir, realpath, stat } from "node:fs/promises";
+import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import { isPathInside, pathExists, toPosix } from "../../lib/fs";
 import { SETTINGS_FILE_OWNERS, HARNESS_ADAPTERS } from "../../integrations/index";
 import type { SurfaceId } from "./types";
@@ -224,6 +224,21 @@ async function walkScripts(
   }
   const dirAbsolute = path.join(root, dirRelative);
   if (!(await pathExists(dirAbsolute))) {
+    return;
+  }
+  // I3 (review round 3): a TOP-LEVEL entry point (`.metaproject/skills`,
+  // `.claude/skills` — the two calls in `discoverSkillScripts`) reaches this
+  // function directly, never through the nested `entry.isSymbolicLink()`
+  // branch below that already applies `resolvesInsideRoot` before recursing.
+  // A top-level directory that is ITSELF a symlink pointing outside root
+  // (or dangling) was walked — and any script under it silently reported as
+  // `found` — without ever being containment-checked. Applying the same
+  // check here, uniformly, regardless of how this directory was reached,
+  // closes that gap; for a nested symlinked directory it is a harmless
+  // repeat of the check the caller already made.
+  const lst = await lstat(dirAbsolute).catch(() => undefined);
+  if (lst?.isSymbolicLink() && !(await resolvesInsideRoot(root, dirAbsolute))) {
+    acc.unreadable.push(toPosix(dirRelative));
     return;
   }
   const dirReal = await realpath(dirAbsolute).catch(() => undefined);

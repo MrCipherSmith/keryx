@@ -10,7 +10,7 @@ import {
   normalizeRequestFiles,
   redactCommandForLog,
 } from "./provider";
-import { readLogRecords } from "./state";
+import { loadSessionState, readLogRecords } from "./state";
 import type { ImpactEvidence, ImpactEvidenceRequest } from "./types";
 import type { ImpactEvidenceConfig } from "../types";
 import { computeConfigChecksum, mergeSecurityConfig, renderSecurityConfig } from "../config";
@@ -468,5 +468,71 @@ describe("impact-evidence provider", () => {
     expect(decision.record.event).toBe("disabled-config");
     const records = await readLogRecords(root);
     expect(records.some((r) => r.sessionId === "s-sealed" && r.event === "config-untrusted")).toBe(false);
+  });
+
+  test("NEW-3: the env kill switch wins over an out-of-root path in the same request — allow + disabled-env, not deny + path-outside-root", async () => {
+    const computeEvidence = async (_root: string, file: string) => fakeEvidence(file);
+    const provider = createImpactEvidenceProvider({ computeEvidence, loadConfig: async () => DEFAULT_CONFIG });
+    const outside = path.join(path.dirname(root), "elsewhere-kill-switch", "secret.ts");
+
+    const decision = await provider(
+      baseRequest(root, {
+        sessionId: "s-killswitch-outside",
+        files: [outside],
+        profile: "unattended-untrusted",
+        env: { KERYX_DISABLE_IMPACT_GATE: "1" },
+      }),
+    );
+
+    expect(decision.outcome).toBe("allow");
+    expect(decision.record.event).toBe("disabled-env");
+    const records = await readLogRecords(root);
+    expect(records.some((r) => r.sessionId === "s-killswitch-outside" && r.event === "path-rejected")).toBe(false);
+  });
+
+  test("NEW-3: config.enabled:false wins over an out-of-root path in the same request — allow + disabled-config, not deny + path-outside-root", async () => {
+    const computeEvidence = async (_root: string, file: string) => fakeEvidence(file);
+    const provider = createImpactEvidenceProvider({
+      computeEvidence,
+      loadConfig: async () => ({ ...DEFAULT_CONFIG, enabled: false }),
+    });
+    const outside = path.join(path.dirname(root), "elsewhere-disabled-config", "secret.ts");
+
+    const decision = await provider(
+      baseRequest(root, {
+        sessionId: "s-disabled-outside",
+        files: [outside],
+        profile: "unattended-untrusted",
+      }),
+    );
+
+    expect(decision.outcome).toBe("allow");
+    expect(decision.record.event).toBe("disabled-config");
+    const records = await readLogRecords(root);
+    expect(records.some((r) => r.sessionId === "s-disabled-outside" && r.event === "path-rejected")).toBe(false);
+  });
+
+  test("I1: a request that reports `denied` for a file already awaiting acknowledgement bumps its denial counter once, not twice", async () => {
+    const computeEvidence = async (_root: string, file: string) => fakeEvidence(file);
+    const strictConfig: ImpactEvidenceConfig = { ...DEFAULT_CONFIG, strict: true, dampenAfter: 100 };
+    const provider = createImpactEvidenceProvider({ computeEvidence, loadConfig: async () => strictConfig });
+
+    // 1st request: first touch, strict, no acknowledgement -> ask, and the
+    // file is recorded as awaiting acknowledgement (pendingAck).
+    const first = await provider(baseRequest(root, { sessionId: "s-i1", files: ["src/a.ts"] }));
+    expect(first.outcome).toBe("ask");
+    const afterFirst = await loadSessionState(root, "s-i1");
+    expect(afterFirst.denials["src/a.ts"] ?? 0).toBe(0);
+
+    // 2nd request for the SAME file: still no acknowledgement (so it also
+    // matches the pendingAck re-ask path) AND reports `denied: true` (a
+    // single real denial event). Only one of the two bookkeeping paths may
+    // bump the counter for this one event.
+    const second = await provider(
+      baseRequest(root, { sessionId: "s-i1", files: ["src/a.ts"], denied: true }),
+    );
+    expect(second.outcome).toBe("ask");
+    const afterSecond = await loadSessionState(root, "s-i1");
+    expect(afterSecond.denials["src/a.ts"]).toBe(1);
   });
 });

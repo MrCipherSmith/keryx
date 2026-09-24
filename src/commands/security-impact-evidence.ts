@@ -5,20 +5,24 @@
 // file's own tests do).
 
 import {
+  appendLogRecord,
   computeImpactEvidence,
   createImpactEvidenceProvider,
   hostDeliveryStatus,
   loadSecurityConfig,
   normalizeRequestFiles,
   readLogRecords,
+  redactSensitiveText,
   renderEvidenceBlock,
   resolveImpactEvidenceConfigTrusted,
   verifyConfigChecksum,
   type ImpactEvidenceProfile,
   type ImpactEvidenceRequest,
 } from "../security/service";
+import path from "node:path";
 import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
+import { isPathInside } from "../lib/fs";
 
 /**
  * F13 (review round 1): the real signature reads `process.stdin`; tests
@@ -186,21 +190,86 @@ function isStrictHookClass(strict: boolean, profile: ImpactEvidenceProfile): boo
   return strict || profile === "unattended-untrusted";
 }
 
-function emitHookFailure(message: string, strict: boolean, profile: ImpactEvidenceProfile): void {
+/**
+ * NEW-2 (review round 3): two bugs in the failure-mapping above.
+ *
+ *   1. The fail-CLOSED branch always logged `permissionDecisionReason:
+ *      "hook-crashed"` — including when `isStrictHookClass` is true only
+ *      because `profile === "unattended-untrusted"` while `config.strict` is
+ *      false. `provider.ts`'s own analogous failure mapping
+ *      (`computeDecision`'s `service-failed` branch) distinguishes exactly
+ *      this: `hookClass === "gate"` (real strict mode) uses `hook-crashed`,
+ *      `gate-advisory` failing closed under `unattended-untrusted` uses
+ *      `hook-advisory-failed`. This mirrors that, using the same `strict`
+ *      boolean this function is already given (not `isStrictHookClass`'s
+ *      combined result).
+ *   2. Neither branch left any durable trace: a hook-level crash (malformed
+ *      stdin, the provider throwing) was never written to `log.jsonl`, and
+ *      the supervised fail-open path's warning reached stderr only — nothing
+ *      in the hook's own JSON output surfaced it the way `decision.warnings`
+ *      does for an ordinary decision (F18). Both branches now append a
+ *      `service-failed` log record (redacted `detail` text, since a crash
+ *      message can embed request content) and emit the warning as
+ *      `systemMessage` (still with no `permissionDecision` key on the
+ *      fail-open path — it remains a true refuse-without-blocking, just no
+ *      longer a SILENT one). `appendLogRecord` now reaches this CLI file
+ *      through `security/service.ts` (the facade `commands/*` must go
+ *      through per `lib/import-policy.live.test.ts`'s Rule 2), not by
+ *      importing `security/impact-evidence/state.ts` directly.
+ *
+ *      The log write is best-effort: it is wrapped so that a failure to
+ *      write it (disk full, an unwritable `.metaproject`, …) is swallowed
+ *      and never changes — or throws past — the decision this function is
+ *      about to emit. A hook that fails because it could not fail-closed
+ *      loudly enough would be the wrong kind of fragile.
+ */
+async function emitHookFailure(
+  root: string,
+  sessionId: string,
+  message: string,
+  strict: boolean,
+  profile: ImpactEvidenceProfile,
+): Promise<void> {
+  const logFailure = async (): Promise<void> => {
+    try {
+      await appendLogRecord(root, {
+        sessionId,
+        event: "service-failed",
+        files: [],
+        detail: redactSensitiveText(`${message} (profile=${profile}, strict=${strict})`),
+      });
+    } catch {
+      // Best-effort: a log write failure must not change the decision below,
+      // and must not surface as an unhandled rejection either.
+    }
+  };
+
   if (isStrictHookClass(strict, profile)) {
-    console.error(`impact-evidence hook: ${message} — denying (fail-closed).`);
+    const reason = strict ? "hook-crashed" : "hook-advisory-failed";
+    const warning = `impact-evidence hook: ${message} — denying (fail-closed).`;
+    console.error(warning);
+    await logFailure();
     console.log(
       JSON.stringify({
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
-          permissionDecisionReason: "hook-crashed",
+          permissionDecisionReason: reason,
         },
+        systemMessage: warning,
       }),
     );
     return;
   }
-  console.error(`impact-evidence hook: ${message} — refusing without blocking (no decision).`);
+  const warning = `impact-evidence hook: ${message} — refusing without blocking (no decision).`;
+  console.error(warning);
+  await logFailure();
+  console.log(
+    JSON.stringify({
+      hookSpecificOutput: { hookEventName: "PreToolUse" },
+      systemMessage: warning,
+    }),
+  );
 }
 
 async function handleHook(cwd: string, args: string[], deps: ImpactEvidenceCliDeps = {}): Promise<void> {
@@ -222,17 +291,9 @@ async function handleHook(cwd: string, args: string[], deps: ImpactEvidenceCliDe
     return;
   }
 
-  // F14 (review round 2): stdin must be parsed BEFORE the project root is
-  // decided, because the root itself depends on `payload.cwd` — Claude's
-  // hook payload carries the tool-call's own cwd, which can be a
-  // subdirectory of the project (or a different directory than this
-  // process's own `cwd`, e.g. an MCP server invoked from elsewhere). Using
-  // the raw, un-resolved `cwd` as `request.root` used to write session
-  // state/log entries under whatever subdirectory happened to invoke the
-  // hook instead of the one true project root `loadSecurityConfig` itself
-  // already walks up to — splitting a single project's impact-evidence
-  // state across directories exactly the way `resolveProjectRoot`'s own doc
-  // comment (`lib/contained-path.ts`) describes for the security config.
+  // F14 (review round 2): stdin must be parsed BEFORE the request is built,
+  // because file paths in the payload may need the tool call's own cwd to
+  // resolve correctly (see `fileBaseDir` below).
   const raw = await readStdin(deps.stdin ?? process.stdin);
   let payload: Record<string, unknown> = {};
   let payloadOk = true;
@@ -242,7 +303,40 @@ async function handleHook(cwd: string, args: string[], deps: ImpactEvidenceCliDe
     payloadOk = false;
   }
   const payloadCwd = payloadOk && typeof payload.cwd === "string" ? payload.cwd : undefined;
-  const root = resolveProjectRoot(payloadCwd ?? cwd);
+
+  // NEW-1 (review round 3): the project root — where config, session state,
+  // and the log all live — used to be anchored on the hook payload's own
+  // `cwd`. That field is agent-steerable: a tool call run after `cd
+  // ../sibling-project` reports THAT directory as `cwd`, and
+  // `resolveProjectRoot` walks up from it to whatever `.metaproject`/`.git`
+  // it finds first — a foreign ancestor's own project, not this one. Every
+  // security property this gate has (strict's acknowledgement requirement,
+  // dampening, the log) is scoped to whatever `root` resolves to, so an
+  // agent-controlled root silently moves the whole gate to a directory the
+  // operator never configured, and the real project's state/log stop
+  // recording it at all.
+  //
+  // The root is now anchored on `CLAUDE_PROJECT_DIR` (set by the harness
+  // itself, not by the tool-call payload) when present, else on THIS
+  // process's own `cwd` (the `cwd` this function was called with, which is
+  // the hook process's own working directory — also not agent-steerable
+  // from inside a tool call). `payload.cwd` is used only below, to resolve a
+  // RELATIVE file path's base directory, and only after it is verified to
+  // still resolve inside this anchored root.
+  const root = process.env.CLAUDE_PROJECT_DIR
+    ? path.resolve(process.env.CLAUDE_PROJECT_DIR)
+    : resolveProjectRoot(cwd);
+
+  let fileBaseDir = root;
+  let payloadCwdWarning: string | undefined;
+  if (payloadCwd !== undefined) {
+    const resolvedPayloadCwd = path.resolve(payloadCwd);
+    if (resolvedPayloadCwd === root || isPathInside(root, resolvedPayloadCwd)) {
+      fileBaseDir = resolvedPayloadCwd;
+    } else {
+      payloadCwdWarning = `ignoring hook payload cwd "${payloadCwd}" — it does not resolve inside the project root ${root}; file paths are resolved against the project root instead`;
+    }
+  }
 
   // Needed to decide fail-open vs fail-closed on a hook-level failure below
   // BEFORE the provider (which resolves this same config) ever runs — a
@@ -254,19 +348,19 @@ async function handleHook(cwd: string, args: string[], deps: ImpactEvidenceCliDe
   const strict = effective.strict;
 
   if (!payloadOk) {
-    emitHookFailure("stdin was not valid JSON", strict, profile);
+    await emitHookFailure(root, "unknown-session", "stdin was not valid JSON", strict, profile);
     process.exitCode = 0;
     return;
   }
 
-  const request = requestFromClaudePayload(root, profile, payload);
+  const request = requestFromClaudePayload(root, fileBaseDir, profile, payload);
   const provider = createImpactEvidenceProvider();
   let decision: Awaited<ReturnType<typeof provider>>;
   try {
     decision = await provider(request);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    emitHookFailure(`provider threw (${message})`, strict, profile);
+    await emitHookFailure(root, request.sessionId, `provider threw (${message})`, strict, profile);
     process.exitCode = 0;
     return;
   }
@@ -280,6 +374,7 @@ async function handleHook(cwd: string, args: string[], deps: ImpactEvidenceCliDe
   // "ask"/"deny" are real decisions this hook is entitled to make; "allow"
   // means "defer to Claude Code's own prompt", which is what omitting the
   // key does.
+  const warnings = payloadCwdWarning ? [payloadCwdWarning, ...decision.warnings] : decision.warnings;
   const output: Record<string, unknown> = {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -297,9 +392,9 @@ async function handleHook(cwd: string, args: string[], deps: ImpactEvidenceCliDe
     // surfaced them anywhere a human or the model would see them. Claude
     // Code's hook JSON supports a top-level `systemMessage` shown to the
     // user; stderr carries the same text for anyone reading hook logs.
-    ...(decision.warnings.length > 0 ? { systemMessage: decision.warnings.join("\n") } : {}),
+    ...(warnings.length > 0 ? { systemMessage: warnings.join("\n") } : {}),
   };
-  for (const warning of decision.warnings) {
+  for (const warning of warnings) {
     console.error(`impact-evidence: ${warning}`);
   }
   console.log(JSON.stringify(output));
@@ -324,7 +419,8 @@ async function handleHook(cwd: string, args: string[], deps: ImpactEvidenceCliDe
  * payload ever does carry them.
  */
 function requestFromClaudePayload(
-  cwd: string,
+  root: string,
+  fileBaseDir: string,
   profile: ImpactEvidenceProfile,
   payload: Record<string, unknown>,
 ): ImpactEvidenceRequest {
@@ -335,28 +431,38 @@ function requestFromClaudePayload(
     unknown
   >;
 
+  // NEW-1: a relative `file_path` in the payload names a file relative to the
+  // tool call's OWN cwd, not necessarily the project root — resolve it
+  // against `fileBaseDir` (the verified-contained `payload.cwd`, or `root`
+  // when there was none/it was rejected) into an absolute path here.
+  // `normalizeRequestFiles` downstream already realpaths + contains any
+  // absolute path against `root`, so this is purely about picking the right
+  // BASE for a relative one; it changes nothing for an already-absolute path.
   const files: string[] = [];
+  const pushFile = (file: string): void => {
+    files.push(path.isAbsolute(file) ? file : path.resolve(fileBaseDir, file));
+  };
   if (typeof toolInput.file_path === "string") {
-    files.push(toolInput.file_path);
+    pushFile(toolInput.file_path);
   }
   if (Array.isArray(toolInput.edits)) {
     for (const edit of toolInput.edits) {
       if (edit && typeof edit === "object" && typeof (edit as Record<string, unknown>).file_path === "string") {
-        files.push((edit as Record<string, unknown>).file_path as string);
+        pushFile((edit as Record<string, unknown>).file_path as string);
       }
     }
   }
   if (Array.isArray(toolInput.file_paths)) {
     for (const file of toolInput.file_paths) {
       if (typeof file === "string") {
-        files.push(file);
+        pushFile(file);
       }
     }
   }
   const command = typeof toolInput.command === "string" ? toolInput.command : undefined;
 
   return {
-    root: cwd,
+    root,
     sessionId,
     toolName,
     files: [...new Set(files)],

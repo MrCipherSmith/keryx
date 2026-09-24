@@ -90,6 +90,7 @@ export { resolveImpactEvidenceConfig, resolveImpactEvidenceConfigTrusted, verify
 // which would collide with it as a duplicate identifier.
 export { loadSecurityConfig };
 export {
+  appendLogRecord,
   computeImpactEvidence,
   createImpactEvidenceProvider,
   hostDeliveryStatus,
@@ -97,7 +98,7 @@ export {
   readLogRecords,
   renderEvidenceBlock,
 } from "./impact-evidence";
-export type { ImpactEvidenceProfile, ImpactEvidenceRequest } from "./impact-evidence";
+export type { ImpactEvidenceLogRecord, ImpactEvidenceProfile, ImpactEvidenceRequest } from "./impact-evidence";
 
 export function validateSerializedOutput(
   content: string,
