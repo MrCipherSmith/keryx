@@ -237,15 +237,35 @@ describe("AC11: exported agents are audit-clean", () => {
     const catalog = loadAgentCatalog(process.cwd());
     expect(catalog.errors).toEqual([]);
 
+    const writtenRelativePaths: string[] = [];
     for (const runtime of ["claude", "codex", "kiro", "opencode"] as const) {
       for (const agent of catalog.agents) {
         const plan = await planAgentExport(root, agent.definition, runtime);
         expect(plan.action === "create" || plan.action === "unchanged").toBe(true);
         await writeAgentExport(root, plan);
+        expect(plan.relativePath).toBeDefined();
+        writtenRelativePaths.push(plan.relativePath!);
       }
     }
 
     const report = await runHarnessAudit(root);
     expect(report.findings).toEqual([]);
+
+    // Flow 310 (W2) T13: the "scanned clean" promise is vacuous if the
+    // codex/kiro/opencode files this test just wrote were never actually
+    // discovered by the agent-definitions surface in the first place (a
+    // discovery gap reports zero findings for the same reason an audit of an
+    // empty directory does). Assert the coverage actually saw every file
+    // this test wrote, not just that nothing bad was found in whatever it
+    // did see.
+    for (const surface of report.surfaces) {
+      expect(surface.status).not.toBe("error");
+    }
+    const agentDefinitionsSurface = report.surfaces.find((s) => s.surface === "agent-definitions");
+    expect(agentDefinitionsSurface).toBeDefined();
+    expect(agentDefinitionsSurface!.status).toBe("scanned");
+    for (const relativePath of writtenRelativePaths) {
+      expect(agentDefinitionsSurface!.pathsScanned).toContain(relativePath);
+    }
   });
 });

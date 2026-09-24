@@ -524,6 +524,16 @@ export function checkHookSilentSuppressionInScript(relativePath: string, content
 }
 
 // --- agent-definitions -------------------------------------------------------
+//
+// Flow 310 (W2) T13: format-aware. `src/agents/compile.ts` writes three
+// non-markdown shapes (`.codex/agents/*.toml`, `.kiro/agents/*.json`) plus
+// two markdown shapes (`.claude/agents/*.md`, `.opencode/agents/*.md`) —
+// only claude's frontmatter carries a first-party `tools`/`model` field of
+// the kind the original markdown-only checks below looked for. Every other
+// format's own allowlist/tier signal is checked in its own native shape
+// (never re-derived by re-parsing a markdown-shaped check against
+// non-markdown content); the check ids and the plain-markdown behavior below
+// are UNCHANGED from before this task.
 
 function parseFrontmatter(content: string): Record<string, string> | undefined {
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content);
@@ -538,9 +548,61 @@ function parseFrontmatter(content: string): Record<string, string> | undefined {
   return fields;
 }
 
+type AgentFileFormat = "md" | "toml" | "json";
+
+function agentFileFormat(relativePath: string): AgentFileFormat {
+  if (relativePath.endsWith(".toml")) return "toml";
+  if (relativePath.endsWith(".json")) return "json";
+  return "md";
+}
+
+/** Whether a TOML top-level `key = ...` assignment appears anywhere in `content` — a dependency-free check (this module never pulls in a TOML parser), sufficient for the single-line keys (`sandbox_mode`, `model`) codex's renderer ever emits. */
+function tomlHasKey(content: string, key: string): boolean {
+  return new RegExp(`^\\s*${key}\\s*=`, "m").test(content);
+}
+
+function parseJsonObject(content: string): Record<string, unknown> | undefined {
+  try {
+    const value: unknown = JSON.parse(content);
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `model_tier=<tier>` inside the keryx-managed sentinel line
+ * (`compile.ts#agentManagedSentinelText`) — the one tier signal available on
+ * a host format with no first-party `model`/`model_tier` field of its own
+ * (codex/kiro omit `model` entirely; opencode's documented frontmatter has
+ * no tier field). Only ever a FALLBACK: a format's own explicit field is
+ * checked first, so this never masks a hand-authored file that carries
+ * neither the field nor the sentinel.
+ */
+const MODEL_TIER_SENTINEL_RE = /\bmodel_tier=(?:light|standard|deep)\b/;
+
 export function checkAgentUnrestrictedTools(relativePath: string, content: string): RawFinding[] {
-  const fields = parseFrontmatter(content);
-  if (fields && "tools" in fields) return [];
+  const format = agentFileFormat(relativePath);
+  let hasAllowlist: boolean;
+  if (format === "toml") {
+    // codex governs access entirely via `sandbox_mode` (read-only |
+    // workspace-write) — it has no per-tool allowlist at all, so the
+    // presence of that key IS the closest analog to a restriction here
+    // (`compile.ts#renderCodexExport`'s own documented rationale).
+    hasAllowlist = tomlHasKey(content, "sandbox_mode");
+  } else if (format === "json") {
+    // kiro's `tools` is a JSON array of coarse tags/builtin names
+    // (`compile.ts#renderKiroExport`).
+    const doc = parseJsonObject(content);
+    hasAllowlist = Array.isArray(doc?.tools);
+  } else {
+    // md: claude's `tools` frontmatter key, or opencode's `permission` block
+    // (frontmatter `permission:` parses as a present-but-empty-value key
+    // above, which is enough to detect the block exists).
+    const fields = parseFrontmatter(content);
+    hasAllowlist = !!fields && ("tools" in fields || "permission" in fields);
+  }
+  if (hasAllowlist) return [];
   return [
     {
       surface: "agent-definitions",
@@ -555,8 +617,18 @@ export function checkAgentUnrestrictedTools(relativePath: string, content: strin
 }
 
 export function checkAgentMissingModelTier(relativePath: string, content: string): RawFinding[] {
-  const fields = parseFrontmatter(content);
-  if (fields && ("model_tier" in fields || "model" in fields)) return [];
+  const format = agentFileFormat(relativePath);
+  let hasTier: boolean;
+  if (format === "toml") {
+    hasTier = tomlHasKey(content, "model") || MODEL_TIER_SENTINEL_RE.test(content);
+  } else if (format === "json") {
+    const doc = parseJsonObject(content);
+    hasTier = typeof doc?.model === "string" || MODEL_TIER_SENTINEL_RE.test(content);
+  } else {
+    const fields = parseFrontmatter(content);
+    hasTier = !!(fields && ("model_tier" in fields || "model" in fields)) || MODEL_TIER_SENTINEL_RE.test(content);
+  }
+  if (hasTier) return [];
   return [
     {
       surface: "agent-definitions",

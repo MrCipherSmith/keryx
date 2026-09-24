@@ -118,15 +118,27 @@ export function definitionSourceHash(definition: AgentDefinition): string {
 /**
  * The ONE managed-sentinel wording every host renderer below embeds (task
  * text, T7): `<!-- keryx-managed: keryx agents export (<name>,
- * sha256:<hash-of-canonical-source>) -->` for markdown, `# keryx-managed: ...`
- * for TOML (codex), and — for kiro's JSON, whose unknown-key tolerance is
- * undocumented — the SAME text as the first line of the `prompt` field
- * instead of a new top-level key. Sharing this one string (with only the
- * comment delimiter varying) is what lets `export.ts`'s refuse-unmanaged /
- * unchanged detection substring-match ONE pattern across every target.
+ * sha256:<hash-of-canonical-source>, model_tier=<tier>) -->` for markdown,
+ * `# keryx-managed: ...` for TOML (codex), and — for kiro's JSON, whose
+ * unknown-key tolerance is undocumented — the SAME text as the first line of
+ * the `prompt` field instead of a new top-level key. Sharing this one string
+ * (with only the comment delimiter varying) is what lets `export.ts`'s
+ * refuse-unmanaged / unchanged detection substring-match ONE pattern across
+ * every target.
+ *
+ * Flow 310 (W2) T13: `model_tier=<tier>` travels inside this sentinel on
+ * EVERY target, including claude, so the canonical tier is always readable
+ * straight off the exported file even for a host format with no first-party
+ * `model`/`model_tier` field of its own (codex/kiro omit `model` entirely —
+ * "omit = inherit parent" per their docs; opencode's frontmatter carries no
+ * tier field either). `src/security/audit-harness/checks.ts`'s
+ * `checkAgentMissingModelTier` reads this same annotation as a fallback for
+ * those formats — never in place of a format's own explicit `model`/
+ * `model_tier` field where one exists (claude's frontmatter is checked
+ * first), only as the one signal available where none does.
  */
 export function agentManagedSentinelText(definition: AgentDefinition): string {
-  return `keryx-managed: keryx agents export (${definition.name}, sha256:${definitionSourceHash(definition)})`;
+  return `keryx-managed: keryx agents export (${definition.name}, sha256:${definitionSourceHash(definition)}, model_tier=${definition.model_tier})`;
 }
 
 /**
