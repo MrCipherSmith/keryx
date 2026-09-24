@@ -1,0 +1,61 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.js", "**/*.mjs", "**/*.cjs"]
+metadata:
+  origin: authored
+---
+
+# TypeScript/JavaScript (Node.js) patterns
+
+Idiomatic design patterns and anti-patterns for Node.js services, libraries
+and CLIs written in TypeScript or JavaScript. Scoped to server/library/CLI
+code; component composition patterns belong to the `react` pack.
+
+## Idiomatic patterns
+
+- Validate external input (HTTP body, CLI args, env vars, file content) at
+  the boundary where it enters the process, with a schema library (`zod`,
+  `valibot`, `ajv`) if the project already has one, or explicit checks if
+  not -- do not let unvalidated `unknown` data flow deep into business
+  logic and get treated as trusted.
+- Use dependency injection (constructor/factory parameters) for anything
+  that talks to the outside world (DB client, HTTP client, clock, RNG) so
+  it can be swapped for a test double -- do not reach for a global
+  singleton in code that needs to be testable.
+- Prefer small, composable functions over a class hierarchy when there is
+  no shared mutable state to encapsulate; reach for a class specifically
+  when you need to hold state across calls (a connection pool, a cache).
+- Use `Array.prototype` methods (`map`/`filter`/`reduce`/`flatMap`) for
+  data transforms instead of manual index loops with push, unless a hot
+  loop's profiling shows the allocation cost matters.
+- Return a discriminated union (`{ ok: true, value } | { ok: false, error
+  }`) or throw a typed error class for an operation with an expected
+  failure mode -- do not overload a return value's meaning with `null`/
+  `undefined`/`-1` for both "not found" and "failed".
+- Use `EventEmitter`/`AsyncIterator` for a genuine stream of events over
+  time; do not reach for either to model a single async result -- that is
+  what a `Promise` is for.
+
+## Anti-patterns to flag
+
+- **God module / barrel re-export cycle**: an `index.ts` that re-exports
+  everything from a package and gets imported back into one of the modules
+  it re-exports -- creates a circular dependency the bundler/`tsc` may
+  tolerate but that breaks initialization order at runtime.
+- **Synchronous work in an async-looking function**: an `async function`
+  whose body is entirely synchronous CPU work with no `await` -- it still
+  blocks the event loop exactly like a non-async function; the `async`
+  keyword adds a microtask, not a thread.
+- **Manual promise construction around an already-async API**: wrapping a
+  callback-based Node API in `new Promise(...)` when `node:util`'s
+  `promisify` or the API's own `.promises`/`fs/promises` variant already
+  exists -- duplicates logic the platform maintains for you.
+- **Mutating a shared config/options object**: a function that receives an
+  options object and mutates it in place instead of returning a new one --
+  surprises every other caller holding a reference to the same object.
+- **Deep relative import chains** (`../../../../lib/x`) reaching across
+  module boundaries instead of a package-level export -- signals the
+  module boundary itself is wrong, not that the import needs a path alias.
+- **try/catch that only rethrows the same error unchanged**: adds a stack
+  frame and nothing else; either add context (`cause`, a wrapped error
+  type) or remove the try/catch.

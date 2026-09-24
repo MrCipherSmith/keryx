@@ -1,0 +1,4 @@
+{
+  "agents": [],
+  "note": "Per-stack agents (W2's compiler output, one agent generated per pack from its rules+skills) are Wave 4. This pack ships no agent yet; the empty list is intentional, not an omission."
+}

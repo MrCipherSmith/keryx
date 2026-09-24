@@ -1,0 +1,39 @@
+{
+  "triggers": {
+    "positive": [
+      "Fix this tsc error: Type 'string | undefined' is not assignable to type 'string'",
+      "Resolve this Node.js 'Cannot find module' error after adding a new import",
+      "Fix this require() of ES Module error in our Node service",
+      "The build fails with a moduleResolution nodenext error on this import",
+      "Fix this eslint no-floating-promises failure blocking CI",
+      "package.json exports map is breaking the build with ERR_PACKAGE_PATH_NOT_EXPORTED"
+    ],
+    "negative": [
+      "go vet ./... is failing on this package, help resolve the compile error",
+      "Write a CLI command in this Node.js project that lists pending jobs from the queue",
+      "Upgrade this codebase from React 18 to React 19 and fix the deprecated lifecycle warnings",
+      "Review this diff for floating promises and unhandled rejections",
+      "Write vitest tests to cover this new order calculation function",
+      "Fix this mypy type error in the Python data pipeline"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-ts-ignore-suppression",
+      "prompt": "tsc reports: Property 'total' does not exist on type 'OrderDraft'. What's the right way to fix this?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "not-contains", "value": "@ts-ignore" },
+        { "grader": "not-contains", "value": "as any" }
+      ]
+    },
+    {
+      "id": "reproduce-before-fix",
+      "prompt": "The Node.js build is failing but I haven't run anything yet. What's the first step to fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "tsc|eslint|npm test|reproduce" }
+      ]
+    }
+  ]
+}

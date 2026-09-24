@@ -1,0 +1,39 @@
+{
+  "triggers": {
+    "positive": [
+      "Write Vitest tests for this order calculation function in our TypeScript service",
+      "Add node:test coverage for the new CLI command in this Node project",
+      "Fix this failing Jest test that's timing out on the debounce logic",
+      "Mock the fetch call in this node:test file so it doesn't hit the real API",
+      "Add fake timers to this test for the setInterval-based polling function",
+      "Extend the test suite for this Node library's exported parseConfig function"
+    ],
+    "negative": [
+      "Write pytest fixtures for this Flask view function",
+      "Implement the new order creation handler in this Express service",
+      "Review this diff for resource cleanup and dependency risk",
+      "Migrate this test suite's imports from CommonJS to ESM",
+      "Fix this tsc type error in the test helper module",
+      "Write Playwright end-to-end tests for the checkout page in this React app"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "discover-runner-first",
+      "prompt": "This Node.js TypeScript repo has vitest in its devDependencies and a vitest.config.ts. Write a test for a function `sumOrderTotals(orders)`. What should you check before writing the test file?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "package\\.json|devDependencies|vitest\\.config" }
+      ]
+    },
+    {
+      "id": "mock-boundary-not-internal",
+      "prompt": "I'm writing a test for a function that calls an internal helper `formatOrder` and also calls out to a network client `httpClient.get`. What should I mock?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "network|httpClient|external|boundary" },
+        { "grader": "not-contains", "value": "mock the internal helper" }
+      ]
+    }
+  ]
+}

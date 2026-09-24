@@ -1,0 +1,73 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.js", "**/*.mjs", "**/*.cjs"]
+metadata:
+  origin: authored
+---
+
+# TypeScript/JavaScript (Node.js) coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to Node.js server,
+library and CLI code written in TypeScript or JavaScript. Applies to
+`*.ts`/`*.js`/`*.mjs`/`*.cjs` files; JSX/TSX component code belongs to the
+`react` pack, which extends this one. Everything not Node/TS-specific still
+comes from the common rules this file `extends`.
+
+## Typing and module shape
+
+- Keep `tsconfig.json`'s `strict: true` on; do not narrow it or add
+  per-file `// @ts-nocheck` to make new code compile.
+- Prefer `unknown` over `any` for a value whose shape is not yet known;
+  narrow it with a type guard before use. An untyped external payload
+  (parsed JSON, a fetch body) is `unknown`, not `any`.
+- Match `moduleResolution` to what the project already declares
+  (`nodenext` or `bundler`) -- do not mix `require()` and `import` in code
+  the project already runs as ESM (`"type": "module"` in `package.json`).
+- Import Node built-ins with the `node:` prefix (`node:fs`, `node:path`,
+  `node:crypto`) -- some built-ins (`node:sea`, `node:sqlite`, `node:test`)
+  require it outright, and it disambiguates a built-in from a same-named
+  npm package everywhere else.
+- Use `import type { X } from "..."` (or `verbatimModuleSyntax`, when the
+  project enables it) for type-only imports so they are erased from the
+  emitted JS.
+
+## Naming and structure
+
+- `camelCase` for functions/variables, `PascalCase` for classes/types/
+  interfaces/enums, `UPPER_SNAKE_CASE` for module-level constants that are
+  effectively compile-time -- the ecosystem baseline, not a house variant.
+- One cohesive export group per module; a file mixing unrelated public
+  exports should split along the seam its imports already show.
+- Prefer named exports over a single default export in a module with more
+  than one thing to export -- named exports survive a rename/refactor with
+  a traceable diff; a default export does not.
+
+## Async and errors
+
+- `async`/`await` over raw `.then()` chains for new code; a `.then()` chain
+  longer than one link should become `await` with a `try`/`catch`.
+- Every `Promise` is awaited, returned to a caller that awaits it, or
+  explicitly discarded with `void somePromise()` when firing-and-forgetting
+  is genuinely intended -- never a bare unreferenced promise statement.
+- Pass `AbortSignal` (`AbortSignal.timeout(ms)` or a caller-supplied
+  `signal`) into `fetch` and other cancelable APIs instead of hand-rolled
+  timeout races with `setTimeout` + `Promise.race`.
+- Throw `Error` (or a subclass) with a message that names what failed and
+  the relevant value; chain the original cause with `new Error("...", {
+  cause })` rather than swallowing it or string-concatenating it into the
+  new message.
+- Never catch an error only to `console.log` and continue as if it
+  succeeded -- rethrow, return a typed failure, or handle it for real.
+
+## Imports and formatting
+
+- Format and lint with the project's own configured tool (`eslint`,
+  `prettier`, `biome`) -- do not hand-format around a tool that is already
+  configured, and do not introduce a second formatter.
+- Group imports: Node built-ins, then third-party packages, then local
+  (relative) imports, one blank line between groups -- the shape
+  `eslint-plugin-import`/`simple-import-sort` enforce when configured; run
+  it instead of hand-ordering when the project has it.
+- Explicit `.js` extensions on relative ESM imports when
+  `moduleResolution: nodenext` requires them (Node's own ESM resolver does
+  not add extensions); match whatever the surrounding files already do.
