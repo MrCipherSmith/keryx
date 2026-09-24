@@ -33,3 +33,13 @@
 - 2026-09-24T07:52:08Z - T8 DONE_WITH_CONCERNS accepted: --harness lives in src/commands/serve-mcp.ts (mcp.ts is a deprecation alias); MCP tools route through src/memory/service.ts (M-3 boundary); memory.search filtering matches by relativePath instead of editing metaproject-adapter.ts. No fix task needed.
 - 2026-09-24T07:52:08Z - T6 concern for T10: callers must read refusals before treating empty written/removed as no-op; audit.ts local structural type to be swapped for security/service RunAuditOptions in T10.
 - 2026-09-24T07:52:08.401Z - task-attempt: T10: started (attempt 1) — 313-T10 dispatch
+- 2026-09-24T07:58:35.734Z - task-done: T11: CLI reference + portability guide + spec status notes (AC15)
+- 2026-09-24T07:58:35Z - T11 concern: W4 spec status table cites src/bundle/external.ts for W4-AC9 as in progress; firm up after T10 lands (folded into T13 verification).
+- 2026-09-24T08:11:36.604Z - task-done: T10: keryx bundle CLI + --render-for + external catalog import + scout --include-imports wiring (AC9, AC15)
+- 2026-09-24T08:11:36.691Z - task-done: T2: Implement per plan
+- 2026-09-24T08:22:02.667Z - task-done: T12: Verify Wave-3 exit: fixture bundle round trip byte-identical and user-modified file never overwritten (AC13)
+- 2026-09-24T08:22:02.773Z - task-added: T16: Fix: bundle import validates --render-for harness ids before any write (exit 2)
+- 2026-09-24T08:24:07.803Z - task-done: T16: Fix: bundle import validates --render-for harness ids before any write (exit 2)
+- 2026-09-24T08:24:07.886Z - task-done: T13: Verify every AC has passing automated evidence; targeted tests, typecheck, eslint (AC1-AC15)
+- 2026-09-24T08:24:07.988Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-24T08:24:07Z - T12/T13: real-CLI e2e transcript (scratchpad/w4-e2e/e2e.out) proves export→verify→inspect→import→inspect(identical)→user-modified refused→--force→uninstall keeps modified; tar.gz tamper fails closed. AC evidence list recorded for AC1-AC15 (targeted suite 2189 pass, 0 fail; tsc clean; matrix --check ok). Found bug: --render-for not validated before writes → fixed in T16.
