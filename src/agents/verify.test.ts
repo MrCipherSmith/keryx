@@ -6,7 +6,8 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { computeSkillEvalDigest, PACK_MIN_TRIALS } from "../gdskills/governance/eval";
+import type { EvalSpecFile } from "../gdskills/governance/eval";
+import { buildGateReadyReport } from "../gdskills/governance/eval-fixtures";
 import { generateStackAgentPair } from "./generate";
 import { checkStackPackGateCleared, verifyAgents } from "./verify";
 
@@ -251,43 +252,21 @@ describe("verifyAgents", () => {
       "utf8",
     );
     writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n", "utf8");
-    writeFileSync(
-      path.join(skillDir, "evals.json"),
-      JSON.stringify({
-        triggers: { positive: ["p"], negative: ["n"] },
-        scenarios: [
-          { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
-        ],
-      }),
-      "utf8",
-    );
-    const skillDigest = computeSkillEvalDigest(skillDir);
+    const evalSpec: EvalSpecFile = {
+      triggers: { positive: ["p"], negative: ["n"] },
+      scenarios: [
+        { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
+      ],
+    };
+    writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+    // Flow 316: an allowlisted runner, per-trial `trialRecords`, and a
+    // `catalogDigest` matching the real bundled catalog — everything the
+    // hardened gate now requires, on top of the provenance this fixture
+    // already carried.
+    const report0 = buildGateReadyReport({ packId: "fixture-stable", skillName: "fixture-skill", skillDir, evalSpec, recordedAt: "2026-01-01T00:00:00.000Z" });
     writeFileSync(
       path.join(packDir, "governance", "eval.json"),
-      JSON.stringify({
-        schemaVersion: "1.0.0",
-        reports: [
-          {
-            schemaVersion: "1.0.0",
-            skillId: "fixture-stable/fixture-skill",
-            strictness: "high",
-            trials: PACK_MIN_TRIALS,
-            triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
-            evidence: "authored",
-            scope: "bundled",
-            skillDigest,
-            runner: "ollama",
-            model: "llama3.1:latest",
-            recordedAt: "2026-01-01T00:00:00.000Z",
-            scenarios: [
-              { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-              { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-              { id: "behavior-1", kind: "behavior", prompt: "Do the thing", strictness: "high", trials: PACK_MIN_TRIALS, passes: PACK_MIN_TRIALS, passRate: 1, passAtK: 1, grader: "contains", status: "ran" },
-            ],
-            verdict: "pass",
-          },
-        ],
-      }),
+      JSON.stringify({ schemaVersion: "1.0.0", reports: [report0] }),
       "utf8",
     );
     const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
@@ -636,41 +615,17 @@ describe("checkStackPackGateCleared", () => {
     const skillDir = path.join(packDir, "skills", "fixture-skill");
     mkdirSync(skillDir, { recursive: true });
     writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n", "utf8");
-    writeFileSync(
-      path.join(skillDir, "evals.json"),
-      JSON.stringify({
-        triggers: { positive: ["p"], negative: ["n"] },
-        scenarios: [
-          { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
-        ],
-      }),
-      "utf8",
-    );
-    const skillDigest = computeSkillEvalDigest(skillDir);
-    const doc = {
-      schemaVersion: "1.0.0",
-      reports: [
-        {
-          schemaVersion: "1.0.0",
-          skillId: "fixture-lang/fixture-skill",
-          strictness: "high",
-          trials: PACK_MIN_TRIALS,
-          triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
-          evidence: "authored",
-          scope: "bundled",
-          skillDigest,
-          runner: "ollama",
-          model: "llama3.1:latest",
-          recordedAt: "2026-01-01T00:00:00.000Z",
-          scenarios: [
-            { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-            { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-            { id: "behavior-1", kind: "behavior", prompt: "Do the thing", strictness: "high", trials: PACK_MIN_TRIALS, passes: PACK_MIN_TRIALS, passRate: 1, passAtK: 1, grader: "contains", status: "ran" },
-          ],
-          verdict: "pass",
-        },
+    const evalSpec: EvalSpecFile = {
+      triggers: { positive: ["p"], negative: ["n"] },
+      scenarios: [
+        { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
       ],
     };
+    writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+    // Flow 316: an allowlisted runner, per-trial `trialRecords`, and a
+    // `catalogDigest` matching the real bundled catalog.
+    const report = buildGateReadyReport({ packId: "fixture-lang", skillName: "fixture-skill", skillDir, evalSpec, recordedAt: "2026-01-01T00:00:00.000Z" });
+    const doc = { schemaVersion: "1.0.0", reports: [report] };
     writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
   }
 

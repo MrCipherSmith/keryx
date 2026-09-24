@@ -11,6 +11,7 @@
 // `python` pack is never the only thing standing between a broken rule and a
 // green suite — the check itself is proven to fire.
 
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -21,8 +22,9 @@ import installManifestSchemaJson from "../../docs/requirements/keryx-agent-platf
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { lintSkill, lintStackRule, STACK_EXTENSIONS } from "./governance/authoring-lint";
 import { readScoutRecord } from "./governance/scout";
-import type { EvalReport, EvalScenarioResult, EvalSpecFile, PackEvalDocument } from "./governance/eval";
-import { checkStablePackGate, computeSkillEvalDigest, PACK_BEHAVIOR_PASS_FLOOR, validateEvalReport } from "./governance/eval";
+import type { EvalReport, EvalScenarioResult, EvalSpecFile, PackEvalDocument, TrialRecord } from "./governance/eval";
+import { checkStablePackGate, PACK_BEHAVIOR_PASS_FLOOR, validateEvalReport } from "./governance/eval";
+import { buildGateReadyReport } from "./governance/eval-fixtures";
 import { exportProjectSkill } from "./export";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 import { defaultBundledRoot } from "./bundled-eval";
@@ -645,75 +647,46 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
    * evals.json) — so the gate's digest and content-agreement checks are
    * satisfied by construction rather than by coincidence.
    */
+  /**
+   * Flow 316: builds on `buildGateReadyReport` (an allowlisted runner,
+   * `trialRecords`, and a `catalogDigest` matching the real bundled catalog
+   * — everything `checkSkillReportForPackGate` now requires) and, when
+   * `behaviorPassRate` is below 1, replaces the one behavior scenario's
+   * trial records with a genuine mix of passing/failing trials (a failing
+   * trial's output deliberately does not satisfy the scenario's own
+   * deterministic expectation) so `regradeRecordedReport` still finds the
+   * report internally consistent at a partial pass rate — this is what lets
+   * the `PACK_BEHAVIOR_PASS_FLOOR` fixture below prove the floor check
+   * fires on a report that is otherwise entirely honest.
+   */
   function passingSkillReport(packDir: string, name: string, packId: string, evalSpec: EvalSpecFile, behaviorPassRate: number): EvalReport {
-    const skillId = `${packId}/${name}`;
-    const skillDigest = computeSkillEvalDigest(path.join(packDir, "skills", name));
-    const positives = evalSpec.triggers?.positive ?? [];
-    const negatives = evalSpec.triggers?.negative ?? [];
-    const behavior = evalSpec.scenarios?.[0];
-    const behaviorScenarios: EvalScenarioResult[] = behavior
-      ? [
-          {
-            id: behavior.id,
-            kind: "behavior",
-            prompt: behavior.prompt,
-            strictness: "high",
-            trials: 5,
-            passes: Math.round(behaviorPassRate * 5),
-            passRate: behaviorPassRate,
-            passAtK: behaviorPassRate > 0 ? 1 : 0,
-            grader: behavior.expected_behavior.map((expected) => expected.grader).join("+") || "none",
-            status: "ran",
-          },
-        ]
-      : [];
-    return {
-      schemaVersion: "1.0.0",
-      skillId,
-      strictness: "high",
-      trials: 5,
-      triggerAccuracy: { truePositive: positives.length, falsePositive: 0, positives: positives.length, negatives: negatives.length },
-      evidence: "authored",
-      scope: "bundled",
-      skillDigest,
-      runner: "ollama",
-      model: "llama3.1:latest",
-      recordedAt: new Date().toISOString(),
-      scenarios: [
-        ...positives.map(
-          (prompt, index): EvalScenarioResult => ({
-            id: `trigger-positive-${index + 1}`,
-            kind: "trigger-positive",
-            prompt,
-            strictness: "high",
-            trials: 1,
-            passes: 1,
-            passRate: 1,
-            passAtK: 1,
-            grader: "trigger-rank-fork-family",
-            status: "ran",
-            deterministic: true,
-          }),
-        ),
-        ...negatives.map(
-          (prompt, index): EvalScenarioResult => ({
-            id: `trigger-negative-${index + 1}`,
-            kind: "trigger-negative",
-            prompt,
-            strictness: "high",
-            trials: 1,
-            passes: 1,
-            passRate: 1,
-            passAtK: 1,
-            grader: "trigger-rank-fork-family",
-            status: "ran",
-            deterministic: true,
-          }),
-        ),
-        ...behaviorScenarios,
-      ],
-      verdict: positives.length > 0 && negatives.length > 0 && behaviorPassRate >= 0.5 ? "pass" : "fail",
+    const base = buildGateReadyReport({ packId, skillName: name, skillDir: path.join(packDir, "skills", name), evalSpec });
+    if (behaviorPassRate >= 1) return base;
+
+    const behaviorScenario = base.scenarios.find((scenario) => scenario.kind === "behavior");
+    if (behaviorScenario === undefined || behaviorScenario.trialRecords === undefined || behaviorScenario.trialRecords.length === 0) {
+      return base;
+    }
+    const trials = behaviorScenario.trials;
+    const passes = Math.round(behaviorPassRate * trials);
+    const passingRecord = behaviorScenario.trialRecords[0]!;
+    const failingOutput = "not-a-match";
+    const failingRecord: TrialRecord = {
+      output: failingOutput,
+      outputSha256: createHash("sha256").update(failingOutput).digest("hex"),
+      deterministic: passingRecord.deterministic.map(() => false),
+      passed: false,
     };
+    const trialRecords: TrialRecord[] = Array.from({ length: trials }, (_, index) => (index < passes ? passingRecord : failingRecord));
+    const updatedBehavior: EvalScenarioResult = {
+      ...behaviorScenario,
+      passes,
+      passRate: passes / trials,
+      passAtK: passes > 0 ? 1 : 0,
+      trialRecords,
+    };
+    const scenarios = base.scenarios.map((scenario) => (scenario.id === updatedBehavior.id ? updatedBehavior : scenario));
+    return { ...base, scenarios, verdict: passes / trials >= 0.5 ? "pass" : "fail" };
   }
 
   test("checkStablePackGate (pack-level doc): every listed skill passing, every behavior scenario >= floor -> pass", () => {

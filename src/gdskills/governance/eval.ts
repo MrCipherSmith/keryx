@@ -66,22 +66,38 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import type { CatalogEntry, CatalogScope } from "./catalog-index";
+import { loadSkillCatalog, type CatalogEntry, type CatalogScope } from "./catalog-index";
+import { isAllowlistedJudge, isAllowlistedRunner } from "./gate-policy";
+import {
+  gradeScenarioAnswer,
+  JUDGE_PROMPT_VERSION,
+  type DeterministicExpectation,
+  type Judge,
+  type JudgeExpectation,
+  type JudgeVerdict,
+  type ScenarioCalibration,
+} from "./judge";
 import { checkSkillSelected, checkSkillSelectedLeaveOneOut, nearestSkills } from "./scout";
 
 export type Strictness = "low" | "medium" | "high";
+/** Kept for backward compatibility — the deterministic graders only. `"judge"` is its own expectation kind (see `JudgeExpectation`), not a `Grader` value, since it carries no `value` field. */
 export type Grader = "contains" | "regex" | "not-contains" | "model";
 
-export interface ExpectedBehavior {
-  readonly grader: Grader;
-  readonly value: string;
-}
+/** The deterministic shape, re-exported under its original name — unchanged (`grader`/`value`), so every existing `evals.json` and every existing caller stays byte-for-byte compatible. */
+export type ExpectedBehavior = DeterministicExpectation | JudgeExpectation;
+
+export type { DeterministicExpectation, Judge, JudgeExpectation, JudgeVerdict, ScenarioCalibration } from "./judge";
+export { JUDGE_PROMPT_VERSION } from "./judge";
 
 export interface EvalScenarioSpec {
   readonly id: string;
   readonly prompt: string;
   readonly strictness: Strictness;
   readonly expected_behavior: readonly ExpectedBehavior[];
+  /** Required when `expected_behavior` carries a `judge` expectation (flow 316) — the hand-written correct/wrong answers `antiGamingAnswers` and the integrity guard's calibration checks key off. */
+  readonly calibration?: ScenarioCalibration;
+  /** Optional literal tokens naming an anti-pattern this skill forbids — surfaced to the judge via `calibration.known_wrong` and checked against the skill's own `SKILL.md` by the integrity guard (I6/I7), not consumed by this module directly. */
+  readonly anti_patterns?: readonly string[];
 }
 
 /** The optional `evals.json` a skill author ships beside `SKILL.md`. */
@@ -105,6 +121,25 @@ export type Runner = (prompt: string, skill: CatalogEntry) => Promise<RunnerOutp
  */
 export type ModelGrader = (output: string, expected: ExpectedBehavior, skill: CatalogEntry) => Promise<boolean> | boolean;
 
+/**
+ * One trial's full, re-gradable evidence (flow 316): the raw model output,
+ * its hash (so `regradeRecordedReport` can catch a tampered `output`
+ * without re-running anything), the per-expectation deterministic results,
+ * the judge verdict (when the scenario carries one), and the `passed`
+ * conclusion — every one of these is independently recomputable from
+ * `output` alone except the judge verdict itself, which is trusted as
+ * recorded (there is no offline way to know what a live judge would have
+ * said).
+ */
+export interface TrialRecord {
+  readonly output: string;
+  readonly outputSha256: string;
+  /** One boolean per non-judge expectation, in `expected_behavior` order. */
+  readonly deterministic: readonly boolean[];
+  readonly judge?: JudgeVerdict;
+  readonly passed: boolean;
+}
+
 export interface EvalScenarioResult {
   readonly id: string;
   readonly kind: "trigger-positive" | "trigger-negative" | "behavior";
@@ -121,6 +156,8 @@ export interface EvalScenarioResult {
   readonly reason?: string;
   /** `true` for trigger scenarios (F11): one deterministic scoring call, never N repeated trials — see `triggerScenario`'s doc comment. Omitted (not `false`) for behavior scenarios, which are genuinely trial-repeatable. */
   readonly deterministic?: boolean;
+  /** Flow 316: one entry per trial for every RAN behavior scenario — the full record `regradeRecordedReport` and the stable-pack gate check for tampering. Absent for trigger scenarios (one deterministic call, not a trial series) and for a scenario that never ran. */
+  readonly trialRecords?: readonly TrialRecord[];
 }
 
 export interface EvalTriggerAccuracy {
@@ -175,6 +212,14 @@ export interface EvalReport {
   readonly model?: string;
   /** R1-15: ISO timestamp of when the CLI recorded this report. */
   readonly recordedAt?: string;
+  /** Flow 316: the judge provider this report's judge-graded behavior scenarios actually ran against (e.g. `"deepseek"`) — stamped by the CLI alongside `judgeModel`, mirroring `runner`/`model`. Absent when no scenario carried a judge expectation. */
+  readonly judge?: string;
+  /** Flow 316: the judge model id (e.g. `"deepseek-chat"`). */
+  readonly judgeModel?: string;
+  /** Flow 316: `JUDGE_PROMPT_VERSION` at the time this report's judge scenarios ran — stamped by `evalSkill` itself whenever a judge was actually invoked, so a later prompt-text edit makes an old report's judge verdicts detectably stale. */
+  readonly judgePromptVersion?: string;
+  /** Flow 316: `computeCatalogTriggerDigest` of the catalog `evalSkill` scored the trigger scenarios against — always stamped, from the catalog passed in. The stable-pack gate re-scores the triggers live when this disagrees with the current bundled catalog's digest. */
+  readonly catalogDigest?: string;
 }
 
 export interface EvalOptions {
@@ -187,6 +232,8 @@ export interface EvalOptions {
   readonly modelGraderFn?: ModelGrader;
   /** R1-11: the catalog scope `catalog` was loaded with — stamped onto the report's `scope` field verbatim (this function does not re-derive it from `catalog` itself, since a caller may hand-build a catalog array with no scope of its own). */
   readonly scope?: CatalogScope;
+  /** Flow 316: the injectable judge capability — when absent, a scenario carrying a `judge` expectation is reported `status: "skipped"`, never counted as passed (mirrors `modelGraderFn`'s contract for the older `"model"` grader). */
+  readonly judge?: Judge;
 }
 
 /** Thrown when the requested eval violates its own contract (e.g. high strictness with < 3 trials) — the CLI maps this to exit 1. */
@@ -211,6 +258,7 @@ export class EvalContractError extends Error {}
 export class EvalSpecError extends Error {}
 
 const VALID_GRADERS: readonly Grader[] = ["contains", "regex", "not-contains", "model"];
+const VALID_EXPECTATION_GRADERS: readonly string[] = [...VALID_GRADERS, "judge"];
 
 function isValidRegexPattern(value: string): boolean {
   try {
@@ -267,15 +315,37 @@ function validateEvalSpec(value: unknown, specPath: string): asserts value is Ev
     if (!Array.isArray(scenario.expected_behavior) || scenario.expected_behavior.length === 0) {
       throw new EvalSpecError(`${specPath}: scenario "${label}" must have at least one "expected_behavior" entry`);
     }
+    let judgeExpectationCount = 0;
     scenario.expected_behavior.forEach((expectedValue, expectedIndex) => {
       if (typeof expectedValue !== "object" || expectedValue === null || Array.isArray(expectedValue)) {
         throw new EvalSpecError(`${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] must be an object`);
       }
       const expected = expectedValue as Record<string, unknown>;
-      if (typeof expected.grader !== "string" || !VALID_GRADERS.includes(expected.grader as Grader)) {
+      if (typeof expected.grader !== "string" || !VALID_EXPECTATION_GRADERS.includes(expected.grader)) {
         throw new EvalSpecError(
-          `${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] has an unknown grader ${JSON.stringify(expected.grader)} (must be one of ${VALID_GRADERS.join(", ")})`,
+          `${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] has an unknown grader ${JSON.stringify(expected.grader)} (must be one of ${VALID_EXPECTATION_GRADERS.join(", ")})`,
         );
+      }
+      if (expected.grader === "judge") {
+        judgeExpectationCount += 1;
+        if (judgeExpectationCount > 1) {
+          throw new EvalSpecError(`${specPath}: scenario "${label}" must not carry more than one "judge" expectation`);
+        }
+        if (typeof expected.rubric !== "string" || expected.rubric.length === 0) {
+          throw new EvalSpecError(`${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] (judge) must have a non-empty "rubric" string`);
+        }
+        if (!Array.isArray(expected.pass_criteria) || expected.pass_criteria.length === 0 || !expected.pass_criteria.every((c) => typeof c === "string" && c.length > 0)) {
+          throw new EvalSpecError(`${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] (judge) must have a non-empty "pass_criteria" array of non-empty strings`);
+        }
+        if (expected.fail_criteria !== undefined) {
+          if (!Array.isArray(expected.fail_criteria) || !expected.fail_criteria.every((c) => typeof c === "string" && c.length > 0)) {
+            throw new EvalSpecError(`${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] (judge) "fail_criteria" must be an array of non-empty strings`);
+          }
+        }
+        if (expected.value !== undefined) {
+          throw new EvalSpecError(`${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] (judge) must not carry a "value"`);
+        }
+        return;
       }
       if (typeof expected.value !== "string" || expected.value.length === 0) {
         throw new EvalSpecError(`${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] must have a non-empty "value" string`);
@@ -284,6 +354,27 @@ function validateEvalSpec(value: unknown, specPath: string): asserts value is Ev
         throw new EvalSpecError(`${specPath}: scenario "${label}" expected_behavior[${expectedIndex}] has an invalid regex value ${JSON.stringify(expected.value)}`);
       }
     });
+
+    if (judgeExpectationCount > 0) {
+      if (typeof scenario.calibration !== "object" || scenario.calibration === null || Array.isArray(scenario.calibration)) {
+        throw new EvalSpecError(`${specPath}: scenario "${label}" carries a "judge" expectation and must have a "calibration" object`);
+      }
+      const calibration = scenario.calibration as Record<string, unknown>;
+      if (typeof calibration.known_right !== "string" || calibration.known_right.length === 0) {
+        throw new EvalSpecError(`${specPath}: scenario "${label}" calibration.known_right must be a non-empty string`);
+      }
+      if (typeof calibration.known_wrong !== "string" || calibration.known_wrong.length === 0) {
+        throw new EvalSpecError(`${specPath}: scenario "${label}" calibration.known_wrong must be a non-empty string`);
+      }
+      if (calibration.known_right === calibration.known_wrong) {
+        throw new EvalSpecError(`${specPath}: scenario "${label}" calibration.known_right and calibration.known_wrong must differ`);
+      }
+    }
+    if (scenario.anti_patterns !== undefined) {
+      if (!Array.isArray(scenario.anti_patterns) || !scenario.anti_patterns.every((token) => typeof token === "string" && token.length > 0)) {
+        throw new EvalSpecError(`${specPath}: scenario "${label}" "anti_patterns" must be an array of non-empty strings`);
+      }
+    }
   });
 }
 
@@ -367,7 +458,8 @@ function selectsSkillSynthesized(prompt: string, skill: CatalogEntry, catalog: r
   return checkSkillSelectedLeaveOneOut(prompt, skill.id, catalog, sourceTrigger).selected;
 }
 
-function gradeDeterministic(output: string, expected: ExpectedBehavior): boolean | undefined {
+/** Exported so the pack-level gate fixtures (`eval-fixtures.ts`) and `regradeRecordedReport` share the exact same deterministic semantics `evalSkill`'s own trial loop applies. */
+export function gradeDeterministic(output: string, expected: ExpectedBehavior): boolean | undefined {
   switch (expected.grader) {
     case "contains":
       return output.includes(expected.value);
@@ -376,7 +468,7 @@ function gradeDeterministic(output: string, expected: ExpectedBehavior): boolean
     case "regex":
       return new RegExp(expected.value).test(output);
     default:
-      return undefined; // "model" — graded by the caller, only with --model-grader and a runner.
+      return undefined; // "model"/"judge" — graded by the caller (a ModelGrader or a Judge), never here.
   }
 }
 
@@ -434,26 +526,26 @@ function triggerScenario(
   };
 }
 
+export interface TriggerScoreResult {
+  readonly scenarios: readonly EvalScenarioResult[];
+  readonly triggerAccuracy: EvalTriggerAccuracy;
+  readonly evidence: EvalEvidence;
+}
+
 /**
- * Run the trigger-accuracy and behavior-scenario evaluation for `skillId`
- * against `catalog`. Throws `EvalContractError` when the request or the
- * resulting report violates the output contract (`validateEvalReport`).
+ * Scores every trigger-positive/negative prompt for `skill` against
+ * `catalog` — the exact logic `evalSkill` runs for its own trigger-accuracy
+ * half, extracted (flow 316) so the stable-pack gate's live re-score on
+ * catalog drift (`checkSkillReportForPackGate`, `checkStablePackGate`) calls
+ * this SAME function and can never disagree with `evalSkill` about what
+ * "this prompt selects this skill" means.
  */
-export async function evalSkill(
-  skillId: string,
+export function scoreTriggerScenarios(
+  skill: CatalogEntry,
   catalog: readonly CatalogEntry[],
-  options: EvalOptions = {},
-): Promise<EvalReport> {
-  const skill = catalog.find((entry) => entry.id === skillId);
-  if (skill === undefined) throw new Error(`unknown skill id: ${skillId}`);
-
-  const strictness = options.strictness ?? "low";
-  const trials = options.trials ?? 3;
-  if (strictness === "high" && trials < 3) {
-    throw new EvalContractError(`--strictness high requires --trials >= 3 (got ${trials})`);
-  }
-
-  const spec = readEvalSpec(skill.path);
+  spec: EvalSpecFile | undefined,
+  strictness: Strictness,
+): TriggerScoreResult {
   // R2-4 (flow 309 review round 2): an authored `evals.json` with an EMPTY
   // `triggers.positive`/`negative` array used to still count as "authored"
   // (only `!== undefined` was checked) and then vacuously satisfy the
@@ -490,6 +582,102 @@ export async function evalSkill(
     scenarios.push(triggerScenario(`trigger-negative-${index + 1}`, "trigger-negative", prompt, strictness, selected, false));
   });
 
+  return {
+    scenarios,
+    triggerAccuracy: { truePositive, falsePositive, positives: positives.length, negatives: negatives.length },
+    evidence,
+  };
+}
+
+/**
+ * `sha256` over every catalog entry's `id` + its own content `sha256`,
+ * sorted by id — identifies exactly which catalog (and which skill content)
+ * the trigger scenarios were scored against, so the stable-pack gate can
+ * tell whether the bundled catalog has drifted since a report was recorded
+ * without needing to re-score anything when it has not.
+ */
+export function computeCatalogTriggerDigest(catalog: readonly CatalogEntry[]): string {
+  const sorted = [...catalog].sort((a, b) => a.id.localeCompare(b.id));
+  const hash = createHash("sha256");
+  for (const entry of sorted) {
+    hash.update(entry.id).update("\0").update(entry.sha256).update("\n");
+  }
+  return hash.digest("hex");
+}
+
+function sha256Hex(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * Runs one behavior scenario's trial loop and returns both the aggregate
+ * `EvalScenarioResult` and the per-trial `TrialRecord`s that back it. Shared
+ * by the "judge" and legacy "model"/deterministic-only code paths in
+ * `evalSkill` below so both produce the same re-gradable evidence shape.
+ */
+async function runBehaviorTrials(
+  behaviorSpec: EvalScenarioSpec,
+  skill: CatalogEntry,
+  runner: Runner,
+  trials: number,
+  gradeOneTrial: (output: string) => Promise<{ readonly deterministic: readonly boolean[]; readonly judge?: JudgeVerdict; readonly passed: boolean }>,
+): Promise<EvalScenarioResult> {
+  const trialRecords: TrialRecord[] = [];
+  let passes = 0;
+  for (let trial = 0; trial < trials; trial++) {
+    const { output } = await runner(behaviorSpec.prompt, skill);
+    const graded = await gradeOneTrial(output);
+    if (graded.passed) passes += 1;
+    trialRecords.push({
+      output,
+      outputSha256: sha256Hex(output),
+      deterministic: graded.deterministic,
+      ...(graded.judge !== undefined ? { judge: graded.judge } : {}),
+      passed: graded.passed,
+    });
+  }
+  return {
+    id: behaviorSpec.id,
+    kind: "behavior",
+    prompt: behaviorSpec.prompt,
+    strictness: behaviorSpec.strictness,
+    trials,
+    passes,
+    passRate: passes / trials,
+    passAtK: passes > 0 ? 1 : 0,
+    grader: behaviorSpec.expected_behavior.map((expected) => expected.grader).join("+") || "none",
+    status: "ran",
+    trialRecords,
+  };
+}
+
+/**
+ * Run the trigger-accuracy and behavior-scenario evaluation for `skillId`
+ * against `catalog`. Throws `EvalContractError` when the request or the
+ * resulting report violates the output contract (`validateEvalReport`).
+ */
+export async function evalSkill(
+  skillId: string,
+  catalog: readonly CatalogEntry[],
+  options: EvalOptions = {},
+): Promise<EvalReport> {
+  const skill = catalog.find((entry) => entry.id === skillId);
+  if (skill === undefined) throw new Error(`unknown skill id: ${skillId}`);
+
+  const strictness = options.strictness ?? "low";
+  const trials = options.trials ?? 3;
+  if (strictness === "high" && trials < 3) {
+    throw new EvalContractError(`--strictness high requires --trials >= 3 (got ${trials})`);
+  }
+
+  const spec = readEvalSpec(skill.path);
+  const triggerScore = scoreTriggerScenarios(skill, catalog, spec, strictness);
+  const { evidence } = triggerScore;
+  const scenarios: EvalScenarioResult[] = [...triggerScore.scenarios];
+  const { truePositive, falsePositive, positives, negatives } = triggerScore.triggerAccuracy;
+
+  let judgeUsed = false;
+
   for (const behaviorSpec of spec?.scenarios ?? []) {
     if (options.runner === undefined) {
       scenarios.push({
@@ -505,6 +693,39 @@ export async function evalSkill(
         status: "not-run",
         reason: "no runner capability (pass --runner <provider>)",
       });
+      continue;
+    }
+
+    const hasJudgeExpectation = behaviorSpec.expected_behavior.some((expected) => expected.grader === "judge");
+
+    // Flow 316: a scenario carrying a `judge` expectation is graded through
+    // `gradeScenarioAnswer` — the ONE grading function shared with the
+    // anti-gaming harness and `judge-check`. Without a live judge capability
+    // the WHOLE scenario is `status: "skipped"`, mirroring the pre-existing
+    // "model" rule below rather than silently treating "not checked" as
+    // "checked and fine".
+    if (hasJudgeExpectation) {
+      if (options.judge === undefined) {
+        scenarios.push({
+          id: behaviorSpec.id,
+          kind: "behavior",
+          prompt: behaviorSpec.prompt,
+          strictness: behaviorSpec.strictness,
+          trials,
+          passes: 0,
+          passRate: 0,
+          passAtK: 0,
+          grader: behaviorSpec.expected_behavior.map((expected) => expected.grader).join("+") || "none",
+          status: "skipped",
+          reason: "judge-graded expectation with no judge capability (pass --judge <provider>[:<model>])",
+        });
+        continue;
+      }
+      judgeUsed = true;
+      const judgeFn = options.judge;
+      const runnerFn = options.runner;
+      const result = await runBehaviorTrials(behaviorSpec, skill, runnerFn, trials, (output) => gradeScenarioAnswer(output, behaviorSpec, judgeFn));
+      scenarios.push(result);
       continue;
     }
 
@@ -534,14 +755,16 @@ export async function evalSkill(
       continue;
     }
 
-    let passes = 0;
-    for (let trial = 0; trial < trials; trial++) {
-      const { output } = await options.runner(behaviorSpec.prompt, skill);
+    const runnerFn = options.runner;
+    const modelGraderFn = options.modelGraderFn;
+    const result = await runBehaviorTrials(behaviorSpec, skill, runnerFn, trials, async (output) => {
+      const deterministic: boolean[] = [];
       let trialPassed = true;
       for (const expected of behaviorSpec.expected_behavior) {
         if (expected.grader === "model") {
-          // `options.modelGraderFn` is guaranteed defined here (checked above).
-          const graded = await (options.modelGraderFn as ModelGrader)(output, expected, skill);
+          // `modelGraderFn` is guaranteed defined here (checked above).
+          const graded = await (modelGraderFn as ModelGrader)(output, expected, skill);
+          deterministic.push(graded === true);
           if (!graded) trialPassed = false;
           continue;
         }
@@ -552,30 +775,16 @@ export async function evalSkill(
         // by hand, a future spec source) must not have `gradeDeterministic`
         // returning `undefined` for a non-"model" grader silently read as
         // "nothing to check, so it passed".
-        if (gradeDeterministic(output, expected) !== true) trialPassed = false;
+        const graded = gradeDeterministic(output, expected) === true;
+        deterministic.push(graded);
+        if (!graded) trialPassed = false;
       }
-      if (trialPassed) passes += 1;
-    }
-    scenarios.push({
-      id: behaviorSpec.id,
-      kind: "behavior",
-      prompt: behaviorSpec.prompt,
-      strictness: behaviorSpec.strictness,
-      trials,
-      passes,
-      passRate: passes / trials,
-      passAtK: passes > 0 ? 1 : 0,
-      grader: behaviorSpec.expected_behavior.map((expected) => expected.grader).join("+") || "none",
-      status: "ran",
+      return { deterministic, passed: trialPassed };
     });
+    scenarios.push(result);
   }
 
-  const triggerAccuracy: EvalTriggerAccuracy = {
-    truePositive,
-    falsePositive,
-    positives: positives.length,
-    negatives: negatives.length,
-  };
+  const triggerAccuracy: EvalTriggerAccuracy = { truePositive, falsePositive, positives, negatives };
 
   // R2-4: a `"skipped"` scenario (a model-graded expectation with no model
   // grader capability) used to count as "ran" for verdict purposes — nothing
@@ -590,7 +799,7 @@ export async function evalSkill(
   // trigger prompts could still satisfy "every positive selected, no false
   // positives" by construction. Both sides must actually carry at least one
   // checked prompt.
-  const triggersOk = positives.length > 0 && negatives.length > 0 && truePositive === positives.length && falsePositive === 0;
+  const triggersOk = positives > 0 && negatives > 0 && truePositive === positives && falsePositive === 0;
   const behaviorOk = scenarios
     .filter((scenario) => scenario.kind === "behavior" && scenario.status === "ran")
     .every((scenario) => scenario.passRate >= 0.5);
@@ -619,6 +828,11 @@ export async function evalSkill(
     skillDigest = undefined;
   }
 
+  // Flow 316: always stamped, from the catalog `evalSkill` was actually
+  // called with — the gate compares this against a freshly-loaded bundled
+  // catalog's own digest to detect drift.
+  const catalogDigest = computeCatalogTriggerDigest(catalog);
+
   const report: EvalReport = {
     schemaVersion: "1.0.0",
     skillId,
@@ -630,6 +844,8 @@ export async function evalSkill(
     verdict,
     ...(options.scope !== undefined ? { scope: options.scope } : {}),
     ...(skillDigest !== undefined ? { skillDigest } : {}),
+    catalogDigest,
+    ...(judgeUsed ? { judgePromptVersion: JUDGE_PROMPT_VERSION } : {}),
   };
 
   const errors = validateEvalReport(report);
@@ -795,6 +1011,73 @@ export function computeSkillEvalDigest(skillDir: string): string {
   return createHash("sha256").update(skillMdBytes).update("\n\u0000\n").update(evalsJsonBytes).digest("hex");
 }
 
+/**
+ * Flow 316: re-derives every RAN behavior scenario's grading from its own
+ * recorded `trialRecords`, against `spec` (the skill's CURRENT `evals.json`
+ * — the caller re-reads it, never trusts the report's own copy of a
+ * scenario's expectations), and returns every disagreement found. `[]` means
+ * the report is internally consistent — its `output`s really do hash to
+ * `outputSha256`, its `deterministic` results really do recompute the same
+ * way from those outputs, and its `passed`/`passes` really do follow from
+ * `deterministic` and (for a judge scenario) the recorded judge verdict.
+ * This is what lets the stable-pack gate refuse a report whose evidence was
+ * tampered with after recording, without re-running the model or the judge.
+ */
+export function regradeRecordedReport(report: EvalReport, spec: EvalSpecFile | undefined): string[] {
+  const errors: string[] = [];
+  const specScenarios = new Map((spec?.scenarios ?? []).map((scenario) => [scenario.id, scenario] as const));
+
+  for (const scenario of report.scenarios) {
+    if (scenario.kind !== "behavior" || scenario.status !== "ran") continue;
+
+    const records = scenario.trialRecords;
+    if (records === undefined || records.length === 0) {
+      errors.push(`scenario ${scenario.id}: missing trialRecords`);
+      continue;
+    }
+
+    const specScenario = specScenarios.get(scenario.id);
+    if (specScenario === undefined) {
+      errors.push(`scenario ${scenario.id}: no matching scenario in the current evals.json to regrade against`);
+      continue;
+    }
+
+    const deterministicExpectations = specScenario.expected_behavior.filter(
+      (expected): expected is DeterministicExpectation => expected.grader !== "judge",
+    );
+    const hasJudgeExpectation = specScenario.expected_behavior.some((expected) => expected.grader === "judge");
+
+    let passes = 0;
+    records.forEach((record, index) => {
+      const label = `scenario ${scenario.id} trial ${index + 1}`;
+      if (sha256Hex(record.output) !== record.outputSha256) {
+        errors.push(`${label}: output does not match its recorded outputSha256 (output was tampered with)`);
+      }
+      const recomputedDeterministic = deterministicExpectations.map((expected) => gradeDeterministic(record.output, expected) === true);
+      const deterministicMatches =
+        recomputedDeterministic.length === record.deterministic.length &&
+        recomputedDeterministic.every((value, i) => value === record.deterministic[i]);
+      if (!deterministicMatches) {
+        errors.push(`${label}: recomputed deterministic results disagree with the recorded ones`);
+      }
+      if (hasJudgeExpectation && record.judge === undefined) {
+        errors.push(`${label}: a judge scenario is missing a recorded judge verdict`);
+      }
+      const deterministicOk = record.deterministic.every((value) => value === true);
+      const expectedPassed = hasJudgeExpectation ? deterministicOk && record.judge?.verdict === "pass" : deterministicOk;
+      if (record.passed !== expectedPassed) {
+        errors.push(`${label}: recorded "passed" disagrees with its own deterministic/judge results`);
+      }
+      if (record.passed) passes += 1;
+    });
+    if (passes !== scenario.passes) {
+      errors.push(`scenario ${scenario.id}: recorded passes (${scenario.passes}) disagrees with its trialRecords (${passes})`);
+    }
+  }
+
+  return errors;
+}
+
 /** The pack-level document form of `<pack>/governance/eval.json` — one `EvalReport` per skill the pack ships, keyed by `report.skillId` (flow 314, W4 Wave 4). Distinguished from the single-report form by its `reports` array field. */
 export interface PackEvalDocument {
   readonly schemaVersion: "1.0.0";
@@ -830,11 +1113,17 @@ function sameStringSet(a: readonly string[], b: readonly string[]): boolean {
  * throws — a malformed/missing `SKILL.md`/`evals.json` on the skill side is
  * reported as a named failure reason, same as a malformed report.
  */
+export interface StablePackGateOptions {
+  /** Overrides the catalog `catalogDigest` drift-check and any resulting trigger re-score are computed against — tests inject a fixture catalog here instead of relying on the real bundled tree. Defaults to `loadSkillCatalog(process.cwd(), { scope: "bundled" })`. */
+  readonly catalog?: readonly CatalogEntry[];
+}
+
 function checkSkillReportForPackGate(
   packDir: string,
   packId: string,
   name: string,
   report: EvalReport | undefined,
+  options: StablePackGateOptions,
 ): string | undefined {
   const skillId = `${packId}/${name}`;
   if (report === undefined) {
@@ -872,6 +1161,12 @@ function checkSkillReportForPackGate(
   }
   if (typeof report.model !== "string" || report.model.length === 0) {
     return `skill "${skillId}": eval report is missing a non-empty "model"`;
+  }
+  // Flow 316: the runner that scored the deterministic checks must be
+  // pinned — a forged/unapproved (runner, model) pair never clears the
+  // gate, regardless of how clean the rest of the report looks.
+  if (!isAllowlistedRunner(report.runner, report.model)) {
+    return `skill "${skillId}": eval report runner/model "${report.runner}"/"${report.model}" is not an allowlisted gate runner`;
   }
 
   const skillDir = path.join(packDir, "skills", name);
@@ -925,6 +1220,61 @@ function checkSkillReportForPackGate(
   if (belowFloor !== undefined) {
     return `skill "${skillId}": behavior scenario "${belowFloor.id}" passRate ${belowFloor.passRate} is below the pack floor ${PACK_BEHAVIOR_PASS_FLOOR}`;
   }
+
+  // Flow 316: when the CURRENT evals.json carries any judge scenario, the
+  // judge that scored it must also be pinned, and the report must have run
+  // against the CURRENT judge prompt text (an old recording under a
+  // superseded prompt version proves nothing about the current one).
+  const specHasJudgeScenario = (spec?.scenarios ?? []).some((scenario) => scenario.expected_behavior.some((expected) => expected.grader === "judge"));
+  if (specHasJudgeScenario) {
+    if (!isAllowlistedJudge(report.judge, report.judgeModel)) {
+      return `skill "${skillId}": eval report judge/judgeModel "${report.judge}"/"${report.judgeModel}" is not an allowlisted gate judge`;
+    }
+    if (report.judgePromptVersion !== JUDGE_PROMPT_VERSION) {
+      return `skill "${skillId}": eval report judgePromptVersion "${report.judgePromptVersion}" is not the current judge prompt version "${JUDGE_PROMPT_VERSION}"`;
+    }
+  }
+
+  // Flow 316: every ran behavior scenario must carry re-gradable evidence,
+  // and that evidence must actually be internally consistent — a report
+  // whose `output`, `deterministic`, `judge`, or `passed` was tampered with
+  // after recording is refused here, not trusted at face value.
+  const missingTrialRecords = ranBehaviorScenarios.find((scenario) => scenario.trialRecords === undefined || scenario.trialRecords.length === 0);
+  if (missingTrialRecords !== undefined) {
+    return `skill "${skillId}": behavior scenario "${missingTrialRecords.id}" is missing trialRecords`;
+  }
+  const regradeErrors = regradeRecordedReport(report, spec);
+  if (regradeErrors.length > 0) {
+    return `skill "${skillId}": recorded report failed regrade: ${regradeErrors.join("; ")}`;
+  }
+
+  // Flow 316: the catalog the trigger scenarios were scored against must be
+  // named, and pinned as closely as possible — a mismatch against the
+  // CURRENT bundled catalog re-scores the trigger scenarios live rather than
+  // failing outright (a catalog-wide digest that invalidated every report on
+  // any bundled skill edit would make CI fail on unrelated PRs), and fails
+  // only when a trigger result actually changed.
+  if (typeof report.catalogDigest !== "string" || report.catalogDigest.length === 0) {
+    return `skill "${skillId}": eval report is missing a "catalogDigest"`;
+  }
+  const catalog = options.catalog ?? loadSkillCatalog(process.cwd(), { scope: "bundled" });
+  const currentCatalogDigest = computeCatalogTriggerDigest(catalog);
+  if (report.catalogDigest !== currentCatalogDigest) {
+    const skillEntry = catalog.find((entry) => entry.id === skillId);
+    if (skillEntry === undefined) {
+      return `skill "${skillId}": catalogDigest is stale and the skill could not be found in the current catalog to re-score`;
+    }
+    const rescored = scoreTriggerScenarios(skillEntry, catalog, spec, report.strictness);
+    const recordedTriggerScenarios = report.scenarios.filter((scenario) => scenario.kind === "trigger-positive" || scenario.kind === "trigger-negative");
+    const changed = rescored.scenarios.find((freshScenario) => {
+      const recorded = recordedTriggerScenarios.find((scenario) => scenario.id === freshScenario.id);
+      return recorded === undefined || recorded.passRate !== freshScenario.passRate;
+    });
+    if (changed !== undefined) {
+      return `skill "${skillId}": trigger results changed since recording (catalogDigest is stale) — "${changed.id}" now scores differently`;
+    }
+  }
+
   return undefined;
 }
 
@@ -941,7 +1291,7 @@ function checkSkillReportForPackGate(
  * `checkSkillReportForPackGate`. Any gap fails the whole gate, naming the
  * offending skill.
  */
-function checkPackEvalDocument(packDir: string, doc: PackEvalDocument): StablePackGateResult {
+function checkPackEvalDocument(packDir: string, doc: PackEvalDocument, options: StablePackGateOptions): StablePackGateResult {
   const packJsonPath = path.join(packDir, "pack.json");
   let pack: { readonly id?: unknown; readonly skills?: unknown };
   try {
@@ -973,7 +1323,7 @@ function checkPackEvalDocument(packDir: string, doc: PackEvalDocument): StablePa
 
   const reportsBySkillId = new Map(doc.reports.map((report) => [report.skillId, report] as const));
   for (const name of [...skillNames].sort()) {
-    const reason = checkSkillReportForPackGate(packDir, pack.id, name, reportsBySkillId.get(`${pack.id}/${name}`));
+    const reason = checkSkillReportForPackGate(packDir, pack.id, name, reportsBySkillId.get(`${pack.id}/${name}`), options);
     if (reason !== undefined) {
       return { status: "fail", reason };
     }
@@ -993,7 +1343,7 @@ function checkPackEvalDocument(packDir: string, doc: PackEvalDocument): StablePa
  * (one with a passing eval.json, and one with none) — `stack-packs.test.ts`
  * now calls this function for both the real tree and the fixtures.
  */
-export function checkStablePackGate(packDir: string, stability: string): StablePackGateResult {
+export function checkStablePackGate(packDir: string, stability: string, options: StablePackGateOptions = {}): StablePackGateResult {
   if (stability !== "stable") {
     return { status: "not-applicable", reason: `pack stability is "${stability}", not "stable"` };
   }
@@ -1025,7 +1375,7 @@ export function checkStablePackGate(packDir: string, stability: string): StableP
     return { status: "fail", reason: "stack packs must ship a pack-level eval document" };
   }
   try {
-    return checkPackEvalDocument(packDir, parsed);
+    return checkPackEvalDocument(packDir, parsed, options);
   } catch (error) {
     // R1-5 (flow 314 review round 1): `checkPackEvalDocument` and everything
     // it calls now validate shapes before iterating them (no bare `for...of`

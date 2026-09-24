@@ -308,7 +308,7 @@ describe("generateStackAgentPair", () => {
     const fs = require("node:fs") as typeof import("node:fs");
     const os = require("node:os") as typeof import("node:os");
     const { checkStackPackGateCleared } = require("./verify") as typeof import("./verify");
-    const { computeSkillEvalDigest, PACK_MIN_TRIALS } = require("../gdskills/governance/eval") as typeof import("../gdskills/governance/eval");
+    const { buildGateReadyReport } = require("../gdskills/governance/eval-fixtures") as typeof import("../gdskills/governance/eval-fixtures");
 
     const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "keryx-generate-r2-4-"));
     try {
@@ -336,41 +336,24 @@ describe("generateStackAgentPair", () => {
       const skillDir = path.join(packDir, "skills", "forged-skill");
       fs.mkdirSync(skillDir, { recursive: true });
       fs.writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: forged-skill\ndescription: forged skill\n---\n\nBody.\n", "utf8");
-      fs.writeFileSync(
-        path.join(skillDir, "evals.json"),
-        JSON.stringify({
-          triggers: { positive: ["p"], negative: ["n"] },
-          scenarios: [
-            { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
-          ],
-        }),
-        "utf8",
-      );
-      const skillDigest = computeSkillEvalDigest(skillDir);
-      const evalDoc = {
-        schemaVersion: "1.0.0",
-        reports: [
-          {
-            schemaVersion: "1.0.0",
-            skillId: `${packId}/forged-skill`,
-            strictness: "high",
-            trials: PACK_MIN_TRIALS,
-            triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
-            evidence: "authored",
-            scope: "bundled",
-            skillDigest,
-            runner: "ollama",
-            model: "llama3.1:latest",
-            recordedAt: "2026-01-01T00:00:00.000Z",
-            scenarios: [
-              { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-              { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
-              { id: "behavior-1", kind: "behavior", prompt: "Do the thing", strictness: "high", trials: PACK_MIN_TRIALS, passes: PACK_MIN_TRIALS, passRate: 1, passAtK: 1, grader: "contains", status: "ran" },
-            ],
-            verdict: "pass",
-          },
+      const evalSpec = {
+        triggers: { positive: ["p"], negative: ["n"] },
+        scenarios: [
+          { id: "behavior-1", prompt: "Do the thing", strictness: "high" as const, expected_behavior: [{ grader: "contains" as const, value: "thing" }] },
         ],
       };
+      fs.writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+      // Flow 316: an allowlisted runner, per-trial `trialRecords`, and a
+      // `catalogDigest` matching the real bundled catalog — everything the
+      // hardened gate now requires.
+      const report = buildGateReadyReport({
+        packId,
+        skillName: "forged-skill",
+        skillDir,
+        evalSpec,
+        recordedAt: "2026-01-01T00:00:00.000Z",
+      });
+      const evalDoc = { schemaVersion: "1.0.0", reports: [report] };
       fs.writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(evalDoc, null, 2), "utf8");
 
       const gate = checkStackPackGateCleared(packDir);
