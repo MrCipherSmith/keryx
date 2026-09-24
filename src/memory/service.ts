@@ -275,18 +275,81 @@ export async function memoryHandoff(input: MemoryHandoffInput): Promise<MemoryHa
 }
 
 /**
- * A relativePath -> targetHarnesses lookup over the project-scope memory
- * store, for `src/mcp/` `memory.search` filtering (W4-AC6): the search
- * result's own hit shape does not carry `targetHarnesses`, so the tool
- * cross-references this map by path instead of importing `./store` itself.
+ * Flow 313 (W4) review R1-F4/R1-F14: the ONE read primitive every MCP memory
+ * read filters entries through before scoring/listing/citing them —
+ * `memory.search`, `memory_search` (the metaproject-operations projection),
+ * MCP `memory` resources (list + read), and `wiki.ask`/`wiki_ask`'s memory
+ * citations. Before this, only `memory.search` and `memory.handoff` applied
+ * any `target_harnesses` restriction at all — the other three surfaces read
+ * `collectEntries`/`collectPages` directly and leaked every restricted
+ * entry to every harness.
+ *
+ * `targetHarnessesInvalid` (set by `./store.ts#parseEntry`, R1-F14) hides the
+ * entry from EVERY harness identity, bound or unbound — a malformed/
+ * ambiguous restriction must never collapse to "unrestricted"; that is
+ * exactly the fail-open bug this flag exists to close. An absent/empty
+ * `targetHarnesses` (the back-compatible "no restriction" default) is
+ * visible to everyone, including an unbound (`null`) caller. A present,
+ * valid restriction is visible only to a bound identity it names — an
+ * unbound caller never matches a named restriction, because there is no
+ * caller identity a restricted entry could legitimately be shown to.
  */
-export async function memoryTargetHarnessesByPath(cwd: string): Promise<Map<string, string[] | null>> {
+export function filterEntriesForHarness<
+  T extends {
+    targetHarnesses?: string[] | null | undefined;
+    targetHarnessesInvalid?: boolean | undefined;
+  },
+>(entries: readonly T[], harnessIdentity: string | null): T[] {
+  return entries.filter((entry) => {
+    if (entry.targetHarnessesInvalid) {
+      return false;
+    }
+    const targets = entry.targetHarnesses;
+    if (!targets || targets.length === 0) {
+      return true;
+    }
+    return harnessIdentity !== null && targets.includes(harnessIdentity);
+  });
+}
+
+/**
+ * The set of project-scope memory `relativePath`s a given (or unbound)
+ * harness identity may read, per `filterEntriesForHarness` above. For a
+ * caller that lists/reads relativePaths taken DIRECTLY from the same memory
+ * root (MCP `memory` resources, `./store.ts` output) — every such path
+ * necessarily corresponds to a real, filtered-or-not entry, so absence from
+ * this set always means "restricted for this harness", never "unknown path".
+ */
+export async function memoryAllowedRelativePaths(
+  cwd: string,
+  harnessIdentity: string | null,
+): Promise<Set<string>> {
   const entries = await collectEntries(cwd);
-  const map = new Map<string, string[] | null>();
+  return new Set(filterEntriesForHarness(entries, harnessIdentity).map((entry) => entry.relativePath));
+}
+
+/**
+ * `relativePath -> visible?` for every ON-DISK entry, for a caller that
+ * cross-references a SEPARATELY computed hit list (`memory.search`,
+ * `memory_search`) by path rather than reading `relativePath`s straight off
+ * the memory root. A hit whose path has NO matching on-disk entry — never
+ * true in production, where the ranking and this map read the identical
+ * store, but possible with a decoupled/fake `MetaprojectPort` in tests — is
+ * treated as "unknown, not this filter's concern" (visible), exactly
+ * mirroring the pre-fix behaviour for that case; a hit backed by a real
+ * entry is filtered exactly as `filterEntriesForHarness` decides.
+ */
+export async function memoryHarnessVisibilityByPath(
+  cwd: string,
+  harnessIdentity: string | null,
+): Promise<Map<string, boolean>> {
+  const entries = await collectEntries(cwd);
+  const allowed = new Set(filterEntriesForHarness(entries, harnessIdentity).map((entry) => entry.relativePath));
+  const visibility = new Map<string, boolean>();
   for (const entry of entries) {
-    map.set(entry.relativePath, entry.targetHarnesses ?? null);
+    visibility.set(entry.relativePath, allowed.has(entry.relativePath));
   }
-  return map;
+  return visibility;
 }
 
 export type MemoryProposeInput = {

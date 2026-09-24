@@ -146,7 +146,10 @@ export async function dispatchListResources(ctx: McpContext): Promise<ResourceLi
   if (!ctx.discovery.mcpEnabled || !ctx.discovery.exposeResources) {
     return [];
   }
-  return listResources(ctx.cwd, ctx.config.resources.roots);
+  // Flow 313 (W4) review R1-F4: the server's bound launch identity, never a
+  // caller-supplied value — restricted `memory` entries are excluded from
+  // the listing before it ever leaves this layer.
+  return listResources(ctx.cwd, ctx.config.resources.roots, ctx.harnessIdentity);
 }
 
 export async function dispatchReadResource(
@@ -157,7 +160,7 @@ export async function dispatchReadResource(
     throw new Error("Resources are not exposed for this workspace.");
   }
   try {
-    const contents = await readResource(ctx.cwd, ctx.config.resources.roots, uri);
+    const contents = await readResource(ctx.cwd, ctx.config.resources.roots, uri, ctx.harnessIdentity);
     const safe = contents.mimeType === "application/json"
       ? validateToolOutput(JSON.parse(contents.text))
       : validateTextOutput(contents.text);

@@ -25,8 +25,8 @@ import { toMcpTools } from "./metaproject-tools";
 import {
   isMemoryHarnessId,
   memoryHandoff,
+  memoryHarnessVisibilityByPath,
   memoryPropose,
-  memoryTargetHarnessesByPath,
   MEMORY_TYPE_VALUES,
 } from "../memory/service";
 import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, requireWorkspaceReference, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
@@ -63,6 +63,23 @@ const SAC_WORKSPACE_LOOKUP_CODE: Record<Exclude<WorkspaceLookup["outcome"], "wor
 function stringParam(params: Record<string, unknown>, key: string): string | undefined {
   const value = params[key];
   return typeof value === "string" ? value : undefined;
+}
+
+// Flow 313 (W4) review R1-F3: an early, friendlier-error pre-check for
+// `memory.propose` at the MCP boundary. `src/mcp/` may import only service
+// facades (M-3), never `../memory/templates` internals, so this duplicates
+// (rather than imports) the same two patterns `renderMemoryEntry`
+// (`../memory/templates.ts`) enforces authoritatively for EVERY caller,
+// including the CLI's `keryx memory new --title` — that function is the real
+// defense; this one exists only to fail fast with a tool-specific message
+// before a write is even attempted.
+// eslint-disable-next-line no-control-regex -- matching control characters is the point of this guard.
+const MCP_CONTROL_OR_LINE_BREAK_RE = new RegExp("[\\u0000-\\u001F\\u007F\\u2028\\u2029]");
+const MCP_HARNESS_HEADER_LINE_RE = /^[ \t]*(Source-Harness|Target-Harnesses)[ \t]*:/i;
+const MCP_LINE_SPLIT_RE = new RegExp("\\r\\n|\\r|\\n|\\u2028|\\u2029");
+
+function containsHarnessHeaderLine(value: string): boolean {
+  return value.split(MCP_LINE_SPLIT_RE).some((line) => MCP_HARNESS_HEADER_LINE_RE.test(line));
 }
 
 /**
@@ -113,16 +130,14 @@ async function loadGraphSafe(cwd: string): Promise<GraphData> {
   }
 }
 
-// Flow 313 (W4-AC6): drops `memory.search` hits whose entry has a non-null
-// `targetHarnesses` that does not include the bound `harnessIdentity`. An
-// unbound identity (`null`) filters out every restricted entry (there is no
-// caller identity a restricted entry could legitimately be shown to);
-// entries with a null/absent `targetHarnesses` ("all") are unaffected either
-// way. The adapter's structured hit shape does not itself carry
-// `targetHarnesses`, so this cross-references `memoryTargetHarnessesByPath`
-// (the `../memory/service` facade — the only memory-module import `src/mcp/`
-// may make, M-3) by relative path rather than duplicating the adapter's
-// ranking/validation logic here.
+// Flow 313 (W4-AC6 / R1-F4 / R1-F14): drops `memory.search` hits whose entry
+// is not visible to the bound `harnessIdentity`, per the single
+// `filterEntriesForHarness` primitive (`../memory/service`, the only
+// memory-module import `src/mcp/` may make, M-3) — never a second,
+// independently-maintained filter. The adapter's structured hit shape does
+// not itself carry `targetHarnesses`, so this cross-references
+// `memoryHarnessVisibilityByPath` by relative path rather than duplicating
+// the adapter's ranking/validation logic here.
 async function filterMemorySearchHitsByHarness(
   cwd: string,
   result: Record<string, unknown>,
@@ -132,14 +147,10 @@ async function filterMemorySearchHitsByHarness(
   if (hits.length === 0) {
     return result;
   }
-  const targetsByPath = await memoryTargetHarnessesByPath(cwd);
+  const visibility = await memoryHarnessVisibilityByPath(cwd, harnessIdentity);
   const filteredHits = hits.filter((hit) => {
     const path = typeof hit.path === "string" ? hit.path : null;
-    if (path === null) return true;
-    const targets = targetsByPath.get(path);
-    if (targets === undefined || !targets || targets.length === 0) return true;
-    if (harnessIdentity === null) return false;
-    return targets.includes(harnessIdentity);
+    return path === null || (visibility.get(path) ?? true);
   });
   return { ...result, hits: filteredHits };
 }
@@ -951,10 +962,26 @@ export function buildToolRegistry(): ToolEntry[] {
             }
           }
         }
-        // A smuggled `Source-Harness:` header in free text must not be able to
-        // override the value stamped below — checked before anything is written.
-        if (/^Source-Harness:/im.test(summary) || /^Source-Harness:/im.test(details)) {
-          throw new Error("memory.propose: summary/details may not contain a Source-Harness: line.");
+        // Flow 313 (W4) review R1-F3: `title` is rendered as `# ${title}` on
+        // the file's first line — a control character or any line-terminator
+        // codepoint in it (not only `\n`; CR, U+2028 and U+2029 too) can turn
+        // one "line" into two, the second of which can smuggle a
+        // `Source-Harness:`/`Target-Harnesses:` header line above the real
+        // one. Refused outright, before summary/details are even checked.
+        if (MCP_CONTROL_OR_LINE_BREAK_RE.test(title)) {
+          throw new Error(
+            "memory.propose: title may not contain control characters or line separators (CR, LF, U+2028, U+2029).",
+          );
+        }
+        // A smuggled `Source-Harness:`/`Target-Harnesses:` header in free
+        // text must not be able to override the values stamped below —
+        // checked before anything is written. Line-terminator-aware (CR,
+        // U+2028, U+2029), not only `\n`, and checks BOTH header names, not
+        // only Source-Harness.
+        if (containsHarnessHeaderLine(summary) || containsHarnessHeaderLine(details)) {
+          throw new Error(
+            "memory.propose: summary/details may not contain a Source-Harness:/Target-Harnesses: line.",
+          );
         }
         const harnessIdentity = context?.harnessIdentity ?? null;
         const result = await memoryPropose({
@@ -1050,10 +1077,18 @@ export function buildToolRegistry(): ToolEntry[] {
         ["question"],
       ),
       mutating: false,
-      async invoke(cwd, params) {
+      async invoke(cwd, params, context) {
         const question = stringParam(params, "question") ?? "";
         const k = typeof params.k === "number" ? params.k : undefined;
-        return createGdWikiService().ask({ cwd, question, ...(k ? { k } : {}) });
+        // Flow 313 (W4) review R1-F4: the bound launch identity, never a
+        // caller param — `wikiAsk`'s memory citations must obey the same
+        // `target_harnesses` restriction `memory.search` does.
+        return createGdWikiService().ask({
+          cwd,
+          question,
+          ...(k ? { k } : {}),
+          harnessIdentity: context?.harnessIdentity ?? null,
+        });
       },
     },
     {
@@ -1081,7 +1116,7 @@ export function buildToolRegistry(): ToolEntry[] {
         ["question"],
       ),
       mutating: false,
-      async invoke(cwd, params) {
+      async invoke(cwd, params, context) {
         const question = stringParam(params, "question") ?? "";
         const k = typeof params.k === "number" ? params.k : undefined;
         const budgetTokens = typeof params.budgetTokens === "number" ? params.budgetTokens : undefined;
@@ -1089,13 +1124,18 @@ export function buildToolRegistry(): ToolEntry[] {
         // The live service object this file already constructs for `wiki.ask`
         // and `wiki.query`. The envelope is returned as-is: a re-map here would
         // be a second place for fields to go missing, which is the exact defect
-        // this tool was added to close.
+        // this tool was added to close. Flow 313 (W4) review R1-F4: threaded
+        // through to the underlying `wikiAsk` the same way `wiki.ask` is —
+        // `evidence()` currently never surfaces a memory citation as an item
+        // (only sectioned wiki citations seed the evidence package), so this
+        // closes the gap defensively rather than because a leak was proven.
         return createGdWikiService().evidence({
           cwd,
           question,
           ...(k !== undefined ? { k } : {}),
           ...(budgetTokens !== undefined ? { budgetTokens } : {}),
           ...(maxItems !== undefined ? { maxItems } : {}),
+          harnessIdentity: context?.harnessIdentity ?? null,
         });
       },
     },

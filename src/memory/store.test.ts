@@ -123,6 +123,81 @@ A real summary here.
   expect(entry.author).toBe("author:carol");
 });
 
+// Flow 313 (W4) review R1-F3: `parseEntry`'s Source-Harness/Target-Harnesses
+// lookup must be scoped to the HEADER BLOCK (before the first `## ` section)
+// — never the generic all-lines scan `field()` uses for every other header.
+// Discriminating: pre-fix, a `Source-Harness:` line inside `## Summary`/
+// `## Details` was read exactly like the real header (first match wins),
+// which is how a proposal's own free-text fields could spoof the stamped
+// harness identity.
+test("R1-F3: a Source-Harness/Target-Harnesses line inside ## Summary or ## Details is not read as the header", () => {
+  const md = `# Title
+
+Version: 0.1.0
+Type: decision
+Status: accepted
+Source-Harness: claude
+
+## Summary
+
+Source-Harness: codex
+An ordinary summary line.
+
+## Details
+
+Target-Harnesses: zed
+`;
+  const entry = parseEntry("/abs/x.md", "decisions/x.md", "decision", md);
+  expect(entry.sourceHarness).toBe("claude");
+  expect(entry.targetHarnesses ?? null).toBeNull();
+  expect(entry.targetHarnessesInvalid ?? false).toBe(false);
+});
+
+// R1-F14: a duplicate Source-Harness/Target-Harnesses header line WITHIN the
+// header block (e.g. a smuggled title line landing above the real, stamped
+// one) is ambiguous, not "first match wins" — the entry must read as
+// present-but-invalid, never silently resolve to the attacker's value.
+test("R1-F3/R1-F14: a duplicate Source-Harness header in the block is invalid, not first-match", () => {
+  const md = `# Title
+Source-Harness: codex
+
+Version: 0.1.0
+Type: decision
+Status: accepted
+Source-Harness: claude
+
+## Summary
+
+s
+`;
+  const entry = parseEntry("/abs/y.md", "decisions/y.md", "decision", md);
+  expect(entry.sourceHarness).toBeNull();
+  expect(entry.sourceHarnessInvalid).toBe(true);
+});
+
+// R1-F14: a malformed Target-Harnesses value (an unknown id in the list, or
+// bad capitalization) must not collapse to "unrestricted" — the pre-fix
+// behaviour was exactly this: `parseHarnessList` returning null made
+// `targetHarnesses` indistinguishable from "the header was never written",
+// so the entry became visible/handoff-eligible to every harness.
+test("R1-F14: a malformed Target-Harnesses value is flagged invalid, not treated as absent", () => {
+  const md = `# Title
+
+Version: 0.1.0
+Type: decision
+Status: accepted
+Source-Harness: claude
+Target-Harnesses: codex, Claude
+
+## Summary
+
+s
+`;
+  const entry = parseEntry("/abs/z.md", "decisions/z.md", "decision", md);
+  expect(entry.targetHarnesses ?? null).toBeNull();
+  expect(entry.targetHarnessesInvalid).toBe(true);
+});
+
 test("AFC-25: author, confirmedBy and caveat are null when an entry never captured them", () => {
   const entry = parseEntry(
     "/abs/y.md",

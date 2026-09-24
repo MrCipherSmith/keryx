@@ -1,10 +1,24 @@
-import { readFile, readdir } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { pathExists } from "../lib/fs";
+import { isNotFound, pathExists } from "../lib/fs";
 import { userStorePaths } from "../lib/keryx-home";
 import { isMemoryHarnessId, parseHarnessList } from "./harness-identity";
 import { MEMORY_CLASS_VALUES, MEMORY_TYPES, classForType } from "./types";
 import type { Confidence, MemoryClass, MemoryEntry, MemoryStatus } from "./types";
+
+const MEMORY_TYPE_FOLDERS: ReadonlySet<string> = new Set(MEMORY_TYPES.map((entry) => entry.folder));
+
+// Flow 313 (W4) review R1-F5/F27: a strict-mode UTF-8 decoder. `readFile(...,
+// "utf8")` silently replaces invalid byte sequences (U+FFFD) rather than
+// reporting them — an entry with truncated/corrupt bytes would read as
+// "complete" with mangled content instead of a named `unreadable-file`
+// problem. `fatal: true` throws instead, which the strict scan below turns
+// into that problem.
+const STRICT_UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
+
+function decodeStrictUtf8(bytes: Buffer): string {
+  return STRICT_UTF8_DECODER.decode(bytes);
+}
 
 const STATUSES = new Set<MemoryStatus>([
   "draft",
@@ -62,7 +76,9 @@ export type MemoryScanProblemReason =
   | "missing-title"
   | "invalid-source-harness"
   | "invalid-target-harnesses"
-  | "not-a-regular-file";
+  | "duplicate-harness-header"
+  | "not-a-regular-file"
+  | "unexpected-entry";
 
 export type MemoryScanProblem = { path: string; reason: MemoryScanProblemReason };
 
@@ -89,9 +105,45 @@ export async function collectEntriesStrict(root: string): Promise<MemoryStrictSc
   const entries: MemoryEntry[] = [];
   const problems: MemoryScanProblem[] = [];
 
+  // R1-F5: `lstat` the root itself, never `pathExists`/`stat` (which follow
+  // symlinks and, for `pathExists`, swallow EACCES as "absent" — the exact
+  // "unreadable root reports complete" bug). Only ENOENT means "there is
+  // nothing to scan yet"; anything else is a named, incomplete refusal.
+  let rootStats;
+  try {
+    rootStats = await lstat(root);
+  } catch (error) {
+    if (isNotFound(error)) {
+      return { status: "complete", entries: [], problems: [] };
+    }
+    return { status: "incomplete", entries: [], problems: [{ path: ".", reason: "unreadable-folder" }] };
+  }
+  if (rootStats.isSymbolicLink()) {
+    return { status: "incomplete", entries: [], problems: [{ path: ".", reason: "not-a-regular-file" }] };
+  }
+  if (!rootStats.isDirectory()) {
+    return { status: "incomplete", entries: [], problems: [{ path: ".", reason: "not-a-regular-file" }] };
+  }
+
   for (const { type, folder } of MEMORY_TYPES) {
     const dir = path.join(root, folder);
-    if (!(await pathExists(dir))) {
+    let dirStats;
+    try {
+      dirStats = await lstat(dir);
+    } catch (error) {
+      if (isNotFound(error)) {
+        continue; // Absent is fine — collectEntries's own tolerant convention.
+      }
+      problems.push({ path: `${folder}/`, reason: "unreadable-folder" });
+      continue;
+    }
+    if (dirStats.isSymbolicLink() || !dirStats.isDirectory()) {
+      // A symlinked type folder (live or dangling) is never traversed: this
+      // is exactly the "dangling symlink for a type folder is silently
+      // skipped" gap (R1-F5) and the "symlinked folder pointing outside the
+      // root is scanned" gap (R1-F27) closed the same way — refuse before
+      // ever resolving the link's target.
+      problems.push({ path: `${folder}/`, reason: "not-a-regular-file" });
       continue;
     }
     let names: string[];
@@ -102,42 +154,190 @@ export async function collectEntriesStrict(root: string): Promise<MemoryStrictSc
       continue;
     }
     for (const name of names) {
-      if (!name.endsWith(".md")) {
-        continue;
-      }
       const relativePath = `${folder}/${name}`;
       const abs = path.join(dir, name);
+      let entryStats;
+      try {
+        entryStats = await lstat(abs);
+      } catch {
+        problems.push({ path: relativePath, reason: "unreadable-file" });
+        continue;
+      }
+      if (entryStats.isSymbolicLink()) {
+        // Never followed, live or dangling target: R1-F27 (symlinked memory
+        // file reading content from outside the root).
+        problems.push({ path: relativePath, reason: "not-a-regular-file" });
+        continue;
+      }
+      if (entryStats.isDirectory()) {
+        // A nested directory inside a type folder (`lessons/sub/`) is not a
+        // memory entry; report anything `.md` under it rather than silently
+        // ignoring the subtree (R1-F27 "nested folders").
+        await collectUnexpectedMarkdown(abs, relativePath, problems);
+        continue;
+      }
+      if (!entryStats.isFile()) {
+        problems.push({ path: relativePath, reason: "not-a-regular-file" });
+        continue;
+      }
+      if (!name.endsWith(".md")) {
+        if (name.toLowerCase().endsWith(".md")) {
+          // A case variant of the canonical extension (`.MD`) is never
+          // silently accepted or silently ignored — flagged and excluded,
+          // mirroring this codebase's other case-insensitive-refusal
+          // conventions (R1-F27).
+          problems.push({ path: relativePath, reason: "unexpected-entry" });
+        }
+        continue;
+      }
+      let raw: Buffer;
+      try {
+        raw = await readFile(abs);
+      } catch {
+        problems.push({ path: relativePath, reason: "unreadable-file" });
+        continue;
+      }
       let content: string;
       try {
-        content = await readFile(abs, "utf8");
+        content = decodeStrictUtf8(raw);
       } catch {
         problems.push({ path: relativePath, reason: "unreadable-file" });
         continue;
       }
       const entry = parseEntry(abs, relativePath, type, content);
-      if (!content.split("\n").some((line) => line.startsWith("# "))) {
+      const lines = content.split("\n");
+      let harnessInvalid = false;
+      if (!lines.some((line) => line.startsWith("# "))) {
         problems.push({ path: relativePath, reason: "missing-title" });
       }
-      if (headerPresentButInvalid(content, "Source-Harness", entry.sourceHarness ?? null)) {
+      const sourceMatches = headerBlockMatches(lines, "Source-Harness");
+      if (sourceMatches.length > 1) {
+        problems.push({ path: relativePath, reason: "duplicate-harness-header" });
+        harnessInvalid = true;
+      } else if (sourceMatches.length === 1 && !entry.sourceHarness) {
         problems.push({ path: relativePath, reason: "invalid-source-harness" });
+        harnessInvalid = true;
       }
-      if (headerPresentButInvalid(content, "Target-Harnesses", entry.targetHarnesses ? "present" : null)) {
+      const targetMatches = headerBlockMatches(lines, "Target-Harnesses");
+      if (targetMatches.length > 1) {
+        problems.push({ path: relativePath, reason: "duplicate-harness-header" });
+        harnessInvalid = true;
+      } else if (targetMatches.length === 1 && entry.targetHarnesses === null) {
         problems.push({ path: relativePath, reason: "invalid-target-harnesses" });
+        harnessInvalid = true;
       }
-      entries.push(entry);
+      // R1-F14: a present-but-invalid Source-Harness/Target-Harnesses must
+      // not read as "absent" (which would be visible/handoff-eligible to
+      // everyone). Excluded from `entries` here — still named in `problems`
+      // — rather than silently included with a misleading null.
+      if (!harnessInvalid) {
+        entries.push(entry);
+      }
     }
   }
+
+  // R1-F27: a `.md` file sitting in a folder that is not one of the known
+  // memory types (e.g. `misc/`) is never silently invisible — walked and
+  // reported the same way a nested subfolder is, above.
+  await collectUnexpectedTopLevel(root, problems);
 
   entries.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
   return { status: problems.length === 0 ? "complete" : "incomplete", entries, problems };
 }
 
-// True when the raw header line is present in `content` but the parsed value
-// came back null/falsy — i.e. the field exists but failed to parse, distinct
-// from the field simply being absent.
-function headerPresentButInvalid(content: string, name: string, parsed: string | null): boolean {
-  const raw = field(content.split("\n"), name);
-  return raw !== null && !parsed;
+// Walks a directory that is NOT a recognized memory-type folder (a nested
+// subdirectory inside one, or an unrelated top-level folder) and reports
+// every `.md`/`.MD` file found under it as `unexpected-entry`, without ever
+// following a symlink.
+async function collectUnexpectedMarkdown(
+  dir: string,
+  relativeDir: string,
+  problems: MemoryScanProblem[],
+): Promise<void> {
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    problems.push({ path: `${relativeDir}/`, reason: "unreadable-folder" });
+    return;
+  }
+  for (const name of names) {
+    const abs = path.join(dir, name);
+    const relativePath = `${relativeDir}/${name}`;
+    let stats;
+    try {
+      stats = await lstat(abs);
+    } catch {
+      continue;
+    }
+    if (stats.isSymbolicLink()) {
+      continue; // Never followed; not reachable as memory content either way.
+    }
+    if (stats.isDirectory()) {
+      await collectUnexpectedMarkdown(abs, relativePath, problems);
+      continue;
+    }
+    if (stats.isFile() && name.toLowerCase().endsWith(".md")) {
+      problems.push({ path: relativePath, reason: "unexpected-entry" });
+    }
+  }
+}
+
+// Top-level entries of `root` that are not one of `MEMORY_TYPES`'s folders.
+async function collectUnexpectedTopLevel(root: string, problems: MemoryScanProblem[]): Promise<void> {
+  let names: string[];
+  try {
+    names = await readdir(root);
+  } catch {
+    return; // Already reported (or root is unreadable, reported above).
+  }
+  for (const name of names) {
+    if (MEMORY_TYPE_FOLDERS.has(name)) {
+      continue;
+    }
+    const abs = path.join(root, name);
+    let stats;
+    try {
+      stats = await lstat(abs);
+    } catch {
+      continue;
+    }
+    if (stats.isSymbolicLink()) {
+      continue;
+    }
+    if (stats.isDirectory()) {
+      await collectUnexpectedMarkdown(abs, name, problems);
+    } else if (stats.isFile() && name.toLowerCase().endsWith(".md")) {
+      problems.push({ path: name, reason: "unexpected-entry" });
+    }
+  }
+}
+
+// Header-block-scoped scan: lines strictly before the first `## ` section
+// heading (Flow 313 (W4) review R1-F3). Returns every RAW match for
+// `<name>:` found in that block, trimmed — never scanning `## Summary`/
+// `## Details`/etc. content, so a `Source-Harness:`/`Target-Harnesses:` line
+// smuggled into free text (a proposal's `summary`/`details`, or a `title`
+// rendered as the first line) is never read as the entry's real header.
+// More than one match in the block means the header is present but
+// AMBIGUOUS (a smuggled duplicate racing the stamped one) — callers treat
+// that exactly like an unparsable value, never "first match wins".
+function headerBlockMatches(lines: string[], name: string): string[] {
+  const block = headerBlockLines(lines);
+  const pattern = new RegExp(`^\\s*${name}\\s*:\\s*(.*)$`, "i");
+  const matches: string[] = [];
+  for (const line of block) {
+    const match = line.match(pattern);
+    if (match) {
+      matches.push((match[1] ?? "").trim());
+    }
+  }
+  return matches;
+}
+
+function headerBlockLines(lines: string[]): string[] {
+  const sectionIndex = lines.findIndex((line) => /^##\s+/.test(line));
+  return sectionIndex === -1 ? lines : lines.slice(0, sectionIndex);
 }
 
 export function parseEntry(
@@ -173,11 +373,31 @@ export function parseEntry(
   const recordedAt = field(lines, "Recorded-At") ?? created;
   const supersedes = field(lines, "Supersedes");
   const supersededBy = field(lines, "Superseded-By");
-  // Flow 313 (W4): tolerant, matching this file's existing convention —
-  // absent or unparseable -> null, never thrown.
-  const rawSourceHarness = field(lines, "Source-Harness");
+  // Flow 313 (W4) / R1-F3: tolerant, matching this file's existing
+  // convention — absent or unparseable -> null, never thrown. Restricted to
+  // the HEADER BLOCK (before the first `## ` section) via
+  // `headerBlockMatches`, never the generic all-lines `field()` — a
+  // `Source-Harness:`/`Target-Harnesses:` line smuggled into `## Summary`/
+  // `## Details` (or into a `title` whose injected line ends up above the
+  // first section) is invisible to this parse, not merely "first match
+  // wins" over the real one.
+  const sourceHarnessMatches = headerBlockMatches(lines, "Source-Harness");
+  const rawSourceHarness = sourceHarnessMatches.length === 1 ? sourceHarnessMatches[0] : null;
   const sourceHarness = rawSourceHarness && isMemoryHarnessId(rawSourceHarness) ? rawSourceHarness : null;
-  const targetHarnesses = parseHarnessList(field(lines, "Target-Harnesses"));
+  // R1-F14: "present but invalid" (including "present more than once", i.e.
+  // ambiguous) is a DIFFERENT state from "absent" — `sourceHarnessInvalid`
+  // keeps that distinction visible to callers instead of collapsing both to
+  // the same `null`.
+  const sourceHarnessInvalid = sourceHarnessMatches.length > 0 && !sourceHarness;
+
+  const targetHarnessesMatches = headerBlockMatches(lines, "Target-Harnesses");
+  const rawTargetHarnesses = targetHarnessesMatches.length === 1 ? targetHarnessesMatches[0] : null;
+  const targetHarnesses = rawTargetHarnesses !== null ? parseHarnessList(rawTargetHarnesses) : null;
+  // Same "present but invalid != absent" distinction as sourceHarnessInvalid
+  // above — this is the flag `filterEntriesForHarness` (`./service.ts`) reads
+  // to hide a malformed-restriction entry from EVERY harness (fail closed)
+  // instead of the pre-fix behaviour of treating it as "unrestricted".
+  const targetHarnessesInvalid = targetHarnessesMatches.length > 0 && targetHarnesses === null;
 
   return {
     absolutePath,
@@ -208,6 +428,8 @@ export function parseEntry(
     supersededBy,
     sourceHarness,
     targetHarnesses,
+    sourceHarnessInvalid,
+    targetHarnessesInvalid,
   };
 }
 

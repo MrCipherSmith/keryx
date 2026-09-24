@@ -11,6 +11,7 @@ import { loadMemoryConfig } from "../memory/config";
 import { memoryEmbeddingSpec, type Embedder } from "../memory/embedding/adapter";
 import { cosine } from "../memory/embedding/index";
 import { computeLifecycle, type LifecycleState } from "../memory/lifecycle";
+import { filterEntriesForHarness } from "../memory/service";
 import { collectEntries } from "../memory/store";
 import { isValidAt, validateAsOf } from "../memory/temporal";
 import { collectPages } from "./collect";
@@ -105,7 +106,7 @@ export async function wikiAsk(input: WikiAskInput): Promise<WikiAskResult> {
 
   const candidates = [
     ...(await wikiCandidates(input.cwd, observedAt, historicalMode, asOf)),
-    ...(await memoryCandidates(input.cwd, observedAt, historicalMode, asOf)),
+    ...(await memoryCandidates(input.cwd, observedAt, historicalMode, asOf, input.harnessIdentity ?? null)),
   ];
 
   // AFC-07 (flow 235) T5. The old scorer was raw Jaccard over unfiltered token
@@ -469,8 +470,16 @@ async function memoryCandidates(
   observedAt: Date,
   historicalMode: boolean,
   asOf: string | undefined,
+  harnessIdentity: string | null,
 ): Promise<Candidate[]> {
-  const entries = await collectEntries(cwd);
+  // Flow 313 (W4) review R1-F4: filtered by the SAME `target_harnesses`
+  // restriction `memory.search` applies, through the one shared primitive
+  // (`filterEntriesForHarness`, `../memory/service`) — applied here, before
+  // scoring, rather than as an after-the-fact citation filter, so a
+  // restricted entry never enters the BM25 candidate pool at all (it cannot
+  // even be counted toward `ubiquitousTerms`/ranking for a harness it is not
+  // visible to).
+  const entries = filterEntriesForHarness(await collectEntries(cwd), harnessIdentity);
   // AFC-06 (flow 234) AC1: the shared lifecycle formula (`computeLifecycle`,
   // `../memory/lifecycle.ts`) replaces the local ad hoc check this used to
   // run, which never looked at `validFrom`/`status` and compared `validTo`

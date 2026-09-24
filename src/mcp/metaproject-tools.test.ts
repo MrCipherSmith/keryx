@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { toMcpTools } from "./metaproject-tools";
 import { METAPROJECT_OPERATIONS } from "../harness/tool/metaproject-operations";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
@@ -60,4 +63,63 @@ test("every unified metaproject tool is invocable via MCP (no 'unknown operation
     );
     expect(tool.mutating).toBe(false); // M-10 read-only preserved
   }
+});
+
+// Flow 313 (W4) review R1-F4: the `memory_search` MCP projection
+// (METAPROJECT_OPERATIONS -> toMcpTools, distinct from `src/mcp/tools.ts`'s
+// `memory.search`) never applied any `target_harnesses` filter before this
+// fix — every restricted entry was returned to every bound harness.
+// Discriminating: pre-fix, `invokeStructured`'s `memory_search` case
+// returned `port.memorySearch(...)`'s hits UNFILTERED regardless of
+// `context.harnessIdentity`.
+test("R1-F4: memory_search filters hits by the bound harness identity in context", async () => {
+  const project = mkdtempSync(path.join(tmpdir(), "keryx-metaproject-tools-mem-"));
+  try {
+    const decisionsDir = path.join(project, ".metaproject", "memory", "decisions");
+    mkdirSync(decisionsDir, { recursive: true });
+    writeFileSync(
+      path.join(decisionsDir, "codex-only.md"),
+      "# Codex only\n\nVersion: 0.1.0\nType: decision\nStatus: accepted\nConfidence: high\nSource-Harness: claude\nTarget-Harnesses: codex\n\n## Summary\n\nrestricted\n",
+      "utf8",
+    );
+    const port: MetaprojectPort = {
+      ...fullFakePort(),
+      memorySearch: async ({ query }) => ({
+        query,
+        hits: [{ path: "decisions/codex-only.md", title: "Codex only", score: 1 }],
+      }),
+    };
+    const tool = toMcpTools(METAPROJECT_OPERATIONS, () => port).find((t) => t.name === "memory_search");
+
+    const asClaude = (await tool?.invoke(project, { query: "x" }, { transport: "in-process", harnessIdentity: "claude" })) as {
+      hits: unknown[];
+    };
+    expect(asClaude.hits).toEqual([]);
+
+    const asCodex = (await tool?.invoke(project, { query: "x" }, { transport: "in-process", harnessIdentity: "codex" })) as {
+      hits: unknown[];
+    };
+    expect(asCodex.hits.length).toBe(1);
+  } finally {
+    rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// R1-F4: `wiki_ask`'s MCP projection previously went through the shared
+// `op.invoke`, which never threads a bound MCP harness identity through to
+// `port.wikiAsk` at all — this asserts the identity now actually reaches
+// the port call.
+test("R1-F4: wiki_ask threads context.harnessIdentity into port.wikiAsk", async () => {
+  const seen: Array<string | null | undefined> = [];
+  const port: MetaprojectPort = {
+    ...fullFakePort(),
+    wikiAsk: async ({ question, harnessIdentity }) => {
+      seen.push(harnessIdentity);
+      return { question, answer: "", citations: [] };
+    },
+  };
+  const tool = toMcpTools(METAPROJECT_OPERATIONS, () => port).find((t) => t.name === "wiki_ask");
+  await tool?.invoke("/proj", { question: "why" }, { transport: "in-process", harnessIdentity: "claude" });
+  await tool?.invoke("/proj", { question: "why" });
+  expect(seen).toEqual(["claude", null]);
 });
