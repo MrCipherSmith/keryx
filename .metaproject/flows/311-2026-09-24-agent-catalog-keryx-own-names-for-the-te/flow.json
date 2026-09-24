@@ -7,17 +7,46 @@
   "id": "311",
   "slug": "agent-catalog-keryx-own-names-for-the-te",
   "title": "Agent catalog: Keryx-own names for the ten bundled agents",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-24T07:14:17.951Z",
-  "updatedAt": "2026-09-24T07:36:31.599Z",
+  "updatedAt": "2026-09-24T07:46:18.504Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:55227d54feef68289c3cc394b7acf3049b2815263139d8f1d6047d00fa539e9a",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-24T07:45:28.600Z",
+      "note": "10 clean git mv renames in PR #688 (85afe87c); old filenames gone from src/gdskills/bundled/agents/"
+    },
+    "AC2": {
+      "at": "2026-09-24T07:45:28.683Z",
+      "note": "bun ./src/cli.ts agents verify -> ok: true, all ten new names listed"
+    },
+    "AC3": {
+      "at": "2026-09-24T07:45:28.768Z",
+      "note": "bun ./src/cli.ts integrations matrix --check -> pass"
+    },
+    "AC4": {
+      "at": "2026-09-24T07:45:28.858Z",
+      "note": "bun test src/agents src/commands/agents-catalog-commands.test.ts src/gdskills/agent-catalogue-xref.test.ts src/security/audit-harness -> 292 pass, 0 fail"
+    },
+    "AC5": {
+      "at": "2026-09-24T07:45:28.937Z",
+      "note": "agent-catalog.md, cli-reference.md, W2-agent-catalog.md (v0.1.4) updated; bun run check:doc-links -> 0 broken"
+    },
+    "AC6": {
+      "at": "2026-09-24T07:45:29.020Z",
+      "note": "keryx ctx rg -i sweep for all ten old names: zero in-scope hits; remaining are confirmed false positives (planning/planner skill, common-word architect/planner prose, one historical changelog heading)"
+    },
+    "AC7": {
+      "at": "2026-09-24T07:45:29.103Z",
+      "note": "PR #688 merged (squash 85afe87c) into feat/agent-platform-expansion; opus review round r01 fixed + clean r02; CI 18/18 green"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/688"
   },
   "baseBranch": "feat/agent-platform-expansion",
   "tasks": [
@@ -87,7 +116,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 2,
@@ -106,7 +135,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -229,6 +259,74 @@
       "at": "2026-09-24T07:36:31.599Z",
       "event": "task-attempt",
       "detail": "T4: started (attempt 2) — r01 findings fixed (stray </content>, narrowed scope, version bumps, plan.md numbering); CI green; quick re-check clean"
+    },
+    {
+      "at": "2026-09-24T07:37:59.852Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T07:45:21.622Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/688 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T07:45:28.600Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: 10 clean git mv renames in PR #688 (85afe87c); old filenames gone from src/gdskills/bundled/agents/"
+    },
+    {
+      "at": "2026-09-24T07:45:28.683Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: bun ./src/cli.ts agents verify -> ok: true, all ten new names listed"
+    },
+    {
+      "at": "2026-09-24T07:45:28.768Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: bun ./src/cli.ts integrations matrix --check -> pass"
+    },
+    {
+      "at": "2026-09-24T07:45:28.858Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: bun test src/agents src/commands/agents-catalog-commands.test.ts src/gdskills/agent-catalogue-xref.test.ts src/security/audit-harness -> 292 pass, 0 fail"
+    },
+    {
+      "at": "2026-09-24T07:45:28.937Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: agent-catalog.md, cli-reference.md, W2-agent-catalog.md (v0.1.4) updated; bun run check:doc-links -> 0 broken"
+    },
+    {
+      "at": "2026-09-24T07:45:29.020Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: keryx ctx rg -i sweep for all ten old names: zero in-scope hits; remaining are confirmed false positives (planning/planner skill, common-word architect/planner prose, one historical changelog heading)"
+    },
+    {
+      "at": "2026-09-24T07:45:29.103Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: PR #688 merged (squash 85afe87c) into feat/agent-platform-expansion; opus review round r01 fixed + clean r02; CI 18/18 green"
+    },
+    {
+      "at": "2026-09-24T07:45:32.702Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T07:45:40.143Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — head-commit (violated): the latest round ran against e16ea6fcaf8023d8d498d9515e3c4a851a1d9af6, but the PR head is 4bb5139ef31d93b181e5c2c4b5fbe61917f2c49e. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#688 was last collected against e16ea6fcaf8023d8d498d9515e3c4a851a1d9af6 (round 1), but the PR head is 4bb5139ef31d93b181e5c2c4b5fbe61917f2c49e. Everything anyone said after e16ea6fcaf8023d8d498d9515e3c4a851a1d9af6 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 688 --sha <pr-head>`."
+    },
+    {
+      "at": "2026-09-24T07:46:11.145Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/688 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T07:46:11.253Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T07:46:18.504Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
