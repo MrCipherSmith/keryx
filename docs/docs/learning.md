@@ -290,7 +290,7 @@ source record's live confidence, without changing `status`.
   outside `~/.keryx/learning/`.
 
 See also the skill-lifecycle amendment in
-[`.metaproject/rules/core/skill-lifecycle.mdc`](../../.metaproject/rules/core/skill-lifecycle.mdc)
+[`.metaproject/rules/core/skill-lifecycle.mdc`](https://github.com/MrCipherSmith/keryx/blob/main/.metaproject/rules/core/skill-lifecycle.mdc)
 ("Passive observation is not mutation"): a hook may append an observation
 event, and nothing more — extraction, accept, apply, promote, and graduate
 are all agent-loop, human-triggered work, never hook-triggered.
@@ -351,7 +351,7 @@ disabled.
 | `~/.keryx/learning/decisions.jsonl` | user | User-scope decision log |
 | `~/.keryx/learning/learn.lock` | user | File lock for the user-scope writers above |
 
-See also: [W3 — Self-Learning Loop](../requirements/keryx-agent-platform-expansion/workstreams/W3-self-learning.md)
+See also: [W3 — Self-Learning Loop](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-agent-platform-expansion/workstreams/W3-self-learning.md)
 (the design spec this page tracks) and
-[`learned-pattern.schema.json`](../requirements/keryx-agent-platform-expansion/schemas/learned-pattern.schema.json)
+[`learned-pattern.schema.json`](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-agent-platform-expansion/schemas/learned-pattern.schema.json)
 (the record schema).

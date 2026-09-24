@@ -18,13 +18,12 @@
 // byte-for-byte in sync with `builtins.ts`'s `LearningObservation`/
 // `LearningObservationSink`.
 import { createHash } from "node:crypto";
-import { realpathSync } from "node:fs";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { pathExists, toPosix, withFileLock } from "../lib/fs";
 import { assertInsideLearningRoot, learningDataDir, observationFilePath, observationsDir } from "./paths";
 import { resolveProjectIdentity, type ResolveProjectIdentityDeps } from "./identity";
+import { relativizePathForPreview, scrubPathsInText } from "./preview-scrub";
 import { redactPreview } from "./scan";
 import { validateObservationEvent } from "./schema";
 import type { ObservationEvent, ObservationEventName, ProjectIdentity } from "./types";
@@ -159,106 +158,7 @@ const CONTENT_DROP_KEYS = new Set([
 /** Edit-like tool names (Claude's own + Keryx's `apply_patch`/`shell_exec` aliases) whose `tool_response` can carry a raw file body — O2-1: their output preview is a fixed summary, never a `content`/`originalFile`/... extraction. */
 const EDIT_LIKE_TOOLS = new Set(["Edit", "MultiEdit", "Write", "NotebookEdit", "apply_patch"]);
 
-/** `root`'s resolved form plus its realpath (O2-5: macOS `/private/var` vs `/var`), longest-first so a more specific path is tried before a shorter prefix of it. Memoized per root — cheap, and `root` does not change within a process. */
-const rootVariantsCache = new Map<string, readonly string[]>();
-function rootVariants(root: string): readonly string[] {
-  let variants = rootVariantsCache.get(root);
-  if (variants === undefined) {
-    const resolved = path.resolve(root);
-    const set = new Set<string>();
-    if (resolved.length > 0) set.add(resolved);
-    try {
-      const real = realpathSync(resolved);
-      if (real.length > 0) set.add(real);
-    } catch {
-      // root may not exist yet (fixtures, dry runs) — resolved form only.
-    }
-    variants = [...set].sort((a, b) => b.length - a.length);
-    rootVariantsCache.set(root, variants);
-  }
-  return variants;
-}
-
-/** The caller's home directory plus its realpath, same rationale as `rootVariants`. Memoized once per process — `os.homedir()` does not change mid-run. */
-let homeVariantsCache: readonly string[] | undefined;
-function homeVariants(): readonly string[] {
-  if (homeVariantsCache === undefined) {
-    const home = os.homedir();
-    const set = new Set<string>();
-    if (home.length > 0) {
-      set.add(home);
-      try {
-        const real = realpathSync(home);
-        if (real.length > 0) set.add(real);
-      } catch {
-        // home may not exist under a sandboxed HOME — resolved form only.
-      }
-    }
-    homeVariantsCache = [...set].sort((a, b) => b.length - a.length);
-  }
-  return homeVariantsCache;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** Replaces `target` in `text` only where it ends at a path-segment boundary (end of string, or the next char is not part of the same path component) — O2-5: a root of `/a/proj` must not rewrite `/a/proj-secret` into `.-secret`. */
-function replaceAtPathBoundary(text: string, target: string, replacement: string): string {
-  if (target.length === 0) return text;
-  const pattern = new RegExp(`${escapeRegExp(target)}(?![A-Za-z0-9_.-])`, "g");
-  return text.replace(pattern, replacement);
-}
-
-/** Best-effort basename (or `[abs-path]` when none) for a matched absolute-path token — never the full path. */
-function basenameOfToken(token: string): string {
-  const trimmed = token.replace(/[\\/]+$/, "");
-  const base = trimmed.split(/[/\\]/).pop();
-  return base !== undefined && base.length > 0 ? base : "[abs-path]";
-}
-
-// O2-5: after root/home are scrubbed, anything still shaped like an absolute
-// path (someone else's `/home/<user>/…` or `/Users/<user>/…`, a Windows
-// `C:\Users\…`/`C:/Users/…`, a sibling `~otheruser/…`) is reduced to its
-// basename rather than surviving verbatim in free text. A leading boundary
-// (`(?<![\w:./~-])`) keeps these from matching mid-token (e.g. inside a URL).
-const POSIX_ABS_PATH = /(?<![\w:./~-])\/[^\s"'<>|]+\/[^\s"'<>|]*/g;
-const WINDOWS_ABS_PATH = /(?<![\w:./~-])[A-Za-z]:[\\/][^\s"'<>|]*/g;
-const TILDE_USER_PATH = /(?<![\w:./~-])~[A-Za-z0-9_.-]+(?:\/[^\s"'<>|]*)?/g;
-
-function replaceRemainingAbsolutePaths(text: string): string {
-  return text
-    .replace(POSIX_ABS_PATH, basenameOfToken)
-    .replace(WINDOWS_ABS_PATH, basenameOfToken)
-    .replace(TILDE_USER_PATH, basenameOfToken);
-}
-
-/** Replaces every occurrence of the project root with `.` and the caller's home directory with `~` in free text (a Bash command, stdout/stderr, …), then reduces any other absolute-path-shaped token to its basename. Root variants are tried first (longer, more specific) so a project rooted under `$HOME` is not double-replaced; each replacement only fires at a path-segment boundary (O2-5). */
-function scrubPathsInText(root: string, text: string): string {
-  let out = text;
-  const roots = rootVariants(root);
-  for (const variant of roots) out = replaceAtPathBoundary(out, variant, ".");
-  const rootSet = new Set(roots);
-  for (const variant of homeVariants()) {
-    if (rootSet.has(variant)) continue;
-    out = replaceAtPathBoundary(out, variant, "~");
-  }
-  return replaceRemainingAbsolutePaths(out);
-}
-
-/** One path-like field's preview value: project-relative when inside root, basename-only (never a full path) when outside it or unresolvable. */
-function relativizePathForPreview(root: string, filePath: string): string {
-  if (!path.isAbsolute(filePath)) return toPosix(filePath);
-  const relative = path.relative(path.resolve(root), filePath);
-  if (relative.length === 0) return ".";
-  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-    const base = filePath.split(/[/\\]/).pop();
-    return base !== undefined && base.length > 0 ? base : "[outside-project]";
-  }
-  return toPosix(relative);
-}
-
-/** Recursively sanitizes a tool-input/tool-output JSON value for preview: drops raw edit content, relativizes path-like fields, and scrubs root/home from remaining free text. Never mutates `value`. */
+/** Recursively sanitizes a tool-input/tool-output JSON value for preview: drops raw edit content, relativizes path-like fields, and scrubs root/home from remaining free text. Never mutates `value`. Path classification itself lives in `./preview-scrub` (`scrubPathsInText`/`relativizePathForPreview`), shared between this free-text path and the `PATH_LIKE_KEYS`/`PATH_LIST_KEYS` structured-field path below. */
 function sanitizeForPreview(root: string, value: unknown): unknown {
   if (typeof value === "string") return scrubPathsInText(root, value);
   if (Array.isArray(value)) return value.map((entry) => sanitizeForPreview(root, entry));
