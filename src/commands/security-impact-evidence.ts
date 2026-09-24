@@ -4,16 +4,18 @@
 // is reachable only by calling `handleImpactEvidence` directly (as this
 // file's own tests do).
 
-import { loadSecurityConfig, resolveImpactEvidenceConfig, verifyConfigChecksum } from "../security/config";
 import {
   computeImpactEvidence,
   createImpactEvidenceProvider,
   hostDeliveryStatus,
+  loadSecurityConfig,
   readLogRecords,
   renderEvidenceBlock,
+  resolveImpactEvidenceConfig,
+  verifyConfigChecksum,
   type ImpactEvidenceProfile,
   type ImpactEvidenceRequest,
-} from "../security/impact-evidence";
+} from "../security/service";
 import { optionValue } from "../lib/args";
 
 async function readStdin(): Promise<string> {

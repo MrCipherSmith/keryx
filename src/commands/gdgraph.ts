@@ -6,7 +6,7 @@ import { runAssetsSubcommand } from "../assets/command";
 import { buildGraph } from "../gdgraph/build";
 import { getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 import { computeAffected, type AffectedResult } from "../gdgraph/affected";
-import { buildAffectedReport } from "../gdgraph/affected-report";
+import { buildAffectedReport } from "../gdgraph/service";
 import { findCandidates } from "../gdgraph/find";
 import { querySymbol, resolveSymbolCandidates, resolveSymbols, transitiveCallers } from "../gdgraph/symbol";
 import {

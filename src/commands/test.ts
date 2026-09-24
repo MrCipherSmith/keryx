@@ -1,5 +1,6 @@
 import {
   analyzeTestingProject,
+  buildRelatedTestsReport,
   computeTestingContext,
   loadTestingConfig,
   loadTestingContext,
@@ -10,7 +11,6 @@ import {
 } from "../testing/service";
 import { buildCoverageMap, coverageMapPath, loadCoverageMap } from "../testing/coverage-map";
 import { isTestingCapabilityEnabled } from "../testing/capability";
-import { buildRelatedTestsReport } from "../testing/related-report";
 import { optionValue } from "../lib/args";
 
 export async function testCommand(args: string[]): Promise<void> {

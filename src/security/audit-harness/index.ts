@@ -8,7 +8,7 @@ import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { pathExists } from "../../lib/fs";
 import { readJsonObjectFile } from "../../lib/json";
-import { parseGrokToml } from "../../mcp-servers/compat";
+import { parseCodexToml } from "./codex-toml";
 import { securityDataRoot } from "../config";
 import {
   discoverAgentDefinitions,
@@ -99,27 +99,6 @@ function collectHookCommands(value: unknown, pointer: string, out: Array<{ comma
       collectHookCommands(nested, `${pointer}/${key}`, out);
     }
   }
-}
-
-/**
- * Line number of each `[mcp_servers.<name>]` table header in a `.codex/
- * config.toml`-shaped file — `parseGrokToml` (reused below for the actual
- * command/args extraction, since it already handles this exact TOML subset
- * safely) tracks line numbers only for its own problem messages, not per
- * server, so this is a second, deliberately tiny pass purely to answer
- * "which line does server X's table start on" for `location.line`.
- */
-function codexTomlServerLines(text: string): Map<string, number> {
-  const lines = text.split("\n");
-  const byName = new Map<string, number>();
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i]!.trim();
-    const match = /^\[mcp_servers\.([^.\]]+)\]$/.exec(line);
-    if (match && !byName.has(match[1]!)) {
-      byName.set(match[1]!, i + 1);
-    }
-  }
-  return byName;
 }
 
 function surfaceResult(
@@ -227,31 +206,30 @@ export async function computeAuditInternal(
     const { tools: baselineTools, state: baselineState } = await mcpBaselineTools(root);
     for (const relativePath of uniqueFiles) {
       if (relativePath.endsWith(".toml")) {
-        // `.codex/config.toml`'s `[mcp_servers.<name>]` tables. Reuses
-        // `parseGrokToml` — Codex writes the SAME TOML subset Grok does — so
-        // the security-hardened (prototype-pollution-safe, refuses rather
-        // than guesses) parsing logic is not duplicated here. A file with
-        // ANY unreadable line is reported unreadable wholesale rather than
-        // partially scanned: a partly-parsed launcher config that comes back
-        // "clean" is worse than one flagged as not scanned at all.
+        // `.codex/config.toml`'s `[mcp_servers.<name>]` tables, via the
+        // dependency-free reader in `./codex-toml` (kept out of
+        // `mcp-servers/compat.ts` on purpose — see that module's header). A
+        // file with ANY unreadable line is reported unreadable wholesale
+        // rather than partially scanned: a partly-parsed launcher config
+        // that comes back "clean" is worse than one flagged as not scanned
+        // at all.
         const content = await safeReadText(path.join(root, relativePath));
         if (content === undefined) {
           unreadable.push(relativePath);
           continue;
         }
-        const parsedToml = parseGrokToml(relativePath, content);
-        if (parsedToml.problems.length > 0) {
+        const parsedToml = parseCodexToml(content);
+        if (!parsedToml.ok) {
           unreadable.push(relativePath);
           continue;
         }
         sawMcpConfig = true;
-        const lineByName = codexTomlServerLines(content);
-        for (const [name, server] of Object.entries(parsedToml.servers)) {
-          if (typeof server.command !== "string" || server.command.length === 0) continue;
-          const argv = Array.isArray(server.args) ? server.args.filter((a): a is string => typeof a === "string") : [];
-          const line = lineByName.get(name);
+        for (const server of parsedToml.servers) {
+          if (server.command.length === 0) continue;
           raw.push(
-            ...checkUnpinnedMcpLauncher(relativePath, name, server.command, argv, line !== undefined ? { line } : {}),
+            ...checkUnpinnedMcpLauncher(relativePath, server.name, server.command, [...server.args], {
+              line: server.line,
+            }),
           );
         }
         continue;

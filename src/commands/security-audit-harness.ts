@@ -14,8 +14,8 @@ import {
   auditGate,
   defaultBaselinePath,
   runHarnessAudit,
-} from "../security/audit-harness";
-import type { AuditFinding, AuditReport, AuditSeverity } from "../security/audit-harness";
+} from "../security/service";
+import type { AuditFinding, AuditReport, AuditSeverity } from "../security/service";
 import { isPassGate } from "./security-gate";
 
 const SEVERITIES: readonly AuditSeverity[] = ["critical", "high", "medium", "low"];

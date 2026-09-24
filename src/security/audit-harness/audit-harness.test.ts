@@ -158,7 +158,11 @@ test("flow 308-T11: .codex/config.toml mcp_servers is scanned for unpinned launc
 
 test("flow 308-T11: an unparseable .codex/config.toml is reported unreadable, never scanned as clean", async () => {
   await mkdir(path.join(root, ".codex"), { recursive: true });
-  const toml = ["[mcp_servers.broken]", "args = [", '  "--read-only",', "]", ""].join("\n");
+  // A multi-line `args` array is understood (see `codex-toml.ts`'s own unit
+  // tests); what is NOT understood is an array that never closes — the
+  // reader reaches end-of-file still waiting for a "]" and refuses rather
+  // than guess where the caller meant to close it.
+  const toml = ["[mcp_servers.broken]", 'command = "npx"', "args = [", '  "--read-only",', ""].join("\n");
   await writeFile(path.join(root, ".codex", "config.toml"), toml, "utf8");
 
   const report = await runHarnessAudit(root);
