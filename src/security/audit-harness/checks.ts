@@ -8,7 +8,7 @@ import { detectInjection } from "../detect/injection";
 import { detectSecrets } from "../detect/secrets";
 import { scanMcpManifest } from "../detect/mcp";
 import { touchesAgentCredentials } from "../../lib/command-risk";
-import type { AuditSeverity, InternalProposal, RawFinding, SurfaceId } from "./types";
+import type { AuditSeverity, FindingLocation, InternalProposal, RawFinding, SurfaceId } from "./types";
 
 function lineOfOffset(content: string, offset: number): number {
   let line = 1;
@@ -288,7 +288,7 @@ export function checkUnpinnedMcpLauncher(
   serverName: string,
   command: string,
   argv: string[],
-  pointer: string,
+  location: FindingLocation,
 ): RawFinding[] {
   const { launcher, spec } = packageArgFromLauncher(command, argv);
   if (!launcher || spec === undefined) {
@@ -304,7 +304,7 @@ export function checkUnpinnedMcpLauncher(
       severity: "high",
       confidence: 0.85,
       path: relativePath,
-      location: { pointer },
+      location,
       message: `MCP server "${serverName}" launches an unpinned package via ${command} (no @version pin).`,
       evidence: { category: "artifact-safety", matchedToken: `server:${serverName}` },
       internalProposal: {
@@ -428,9 +428,30 @@ export function checkHookSilentSuppression(relativePath: string, hookCommand: st
 
 const EMPTY_CATCH_RE = /catch\s*(?:\([^)]*\))?\s*\{\s*\}/;
 
+/**
+ * The same shell-suppression shapes `checkHookSilentSuppression` looks for
+ * in a JSON hook `command` string — a non-JSON hook artifact (a generated
+ * script/plugin file, e.g. OpenCode's bridge plugin) can embed the exact same
+ * shell fragment as a string literal it shells out with, so the same three
+ * patterns apply here too, not just the JS-specific empty-catch shape below.
+ */
+const SCRIPT_SHELL_SUPPRESSION_RE = /\|\|\s*true\b|2>\/dev\/null|;\s*exit\s+0\b/;
+
 export function checkHookSilentSuppressionInScript(relativePath: string, content: string): RawFinding[] {
-  const match = EMPTY_CATCH_RE.exec(content);
+  const emptyCatch = EMPTY_CATCH_RE.exec(content);
+  const shellSuppression = SCRIPT_SHELL_SUPPRESSION_RE.exec(content);
+  const match =
+    emptyCatch && shellSuppression
+      ? emptyCatch.index <= shellSuppression.index
+        ? emptyCatch
+        : shellSuppression
+      : (emptyCatch ?? shellSuppression);
   if (!match) return [];
+  const matchedToken = match === emptyCatch ? "empty-catch" : "shell-suppression";
+  const message =
+    match === emptyCatch
+      ? `${relativePath} has an empty catch block that silently swallows a hook failure.`
+      : `${relativePath} silently suppresses a failing hook's exit status.`;
   return [
     {
       surface: "hooks",
@@ -439,8 +460,8 @@ export function checkHookSilentSuppressionInScript(relativePath: string, content
       confidence: 0.7,
       path: relativePath,
       location: { line: lineOfOffset(content, match.index) },
-      message: `${relativePath} has an empty catch block that silently swallows a hook failure.`,
-      evidence: { category: "artifact-safety", matchedToken: "empty-catch" },
+      message,
+      evidence: { category: "artifact-safety", matchedToken },
     },
   ];
 }

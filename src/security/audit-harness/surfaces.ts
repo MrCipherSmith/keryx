@@ -57,7 +57,7 @@ export async function discoverSettings(root: string): Promise<string[]> {
 
 // --- mcp-configs -------------------------------------------------------------
 
-const MCP_CONFIG_PATHS = [".mcp.json", ".cursor/mcp.json"];
+const MCP_CONFIG_PATHS = [".mcp.json", ".cursor/mcp.json", ".codex/config.toml"];
 
 /**
  * Settings files that may carry an inline `mcpServers` object are the same
@@ -76,11 +76,22 @@ export async function discoverMcpConfigCandidates(root: string): Promise<{
 
 // --- hooks -------------------------------------------------------------------
 
+/**
+ * Every `HARNESS_ADAPTERS[].surfaces[]` file that is NOT owned by a JSON
+ * `SettingsFileOwner` is a hook ARTIFACT this surface scans as text (a
+ * generated script/plugin file), not merged JSON. This mirrors
+ * `SETTINGS_FILE_OWNERS`'s own ownership test in `registry.ts` exactly:
+ * "owned by JSON" there means `merge`/`strip` both defined — whatever that
+ * builder excludes as a non-JSON artifact is what this list picks up.
+ * Previously this only matched `relativePath.endsWith(".js")`, which missed
+ * any future non-JSON artifact with a different extension (e.g. `.py`,
+ * `.sh`) — a surface with a `relativePath` but no `merge`/`strip` pair.
+ */
 const NON_JSON_HOOK_SURFACE_PATHS = (() => {
   const paths = new Set<string>();
   for (const adapter of HARNESS_ADAPTERS) {
     for (const surface of adapter.surfaces) {
-      if (surface.relativePath && surface.relativePath.endsWith(".js")) {
+      if (surface.relativePath && !(surface.merge && surface.strip)) {
         paths.add(surface.relativePath);
       }
     }
