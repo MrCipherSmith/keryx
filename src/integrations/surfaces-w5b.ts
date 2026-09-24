@@ -150,8 +150,15 @@ export const CTX_GUARD_KIRO: SurfaceAdapter = {
   strip: (s) => {
     const existing = arrayAt(s, undefined, "hooks");
     const remaining = existing.filter((g) => !isManagedBy(CTX_HOOK_SENTINEL)(g));
-    if (remaining.length > 0) s.hooks = remaining;
-    else delete s.hooks;
+    if (remaining.length > 0) {
+      s.hooks = remaining;
+    } else {
+      // F6: no hooks left in this Keryx-owned file — also drop `version` so
+      // the settings object collapses to `{}` once the sentinel clears
+      // below, letting `uninstallSurfaces` delete the file itself.
+      delete s.hooks;
+      delete s.version;
+    }
     removeSentinelFrom(s, CTX_HOOK_SENTINEL);
     return s;
   },
@@ -161,6 +168,9 @@ export const CTX_GUARD_KIRO: SurfaceAdapter = {
   },
   label: ".kiro/hooks/keryx-ctx-guard.json",
   payloadCodec: parseKiroCommand,
+  // F6: this file is written by no one but this surface — safe to delete
+  // outright on uninstall once stripped to `{}` (see `settings-file.ts`).
+  ownsWholeFile: true,
 };
 
 const KIRO_STEERING_FRONT_MATTER = "---\ninclusion: always\n---\n\n";
@@ -234,7 +244,20 @@ export const CTX_GUARD_GITHUB_COPILOT_AGENT: SurfaceAdapter = {
     s.version = typeof s.version === "number" ? s.version : 1;
     return mergeIntoHookArray(s, COPILOT_KEY, copilotHookEntry(), CTX_HOOK_SENTINEL);
   },
-  strip: (s) => stripFromHookArray(s, COPILOT_KEY, CTX_HOOK_SENTINEL),
+  strip: (s) => {
+    const stripped = stripFromHookArray(s, COPILOT_KEY, CTX_HOOK_SENTINEL);
+    // F6: `stripFromHookArray` is the SHARED walker (also used by
+    // `surfaces.ts` on files other surfaces may still legitimately own keys
+    // on) — it never touches `version`, so that narrowing is done here,
+    // scoped to this one Keryx-owned file, not in the shared function. Once
+    // no hooks/unmigratedHooks/sentinel remain, drop `version` too so the
+    // settings object collapses to `{}` and `uninstallSurfaces` deletes the
+    // file itself.
+    if (!("hooks" in stripped) && !("unmigratedHooks" in stripped) && !(MANAGED_KEY in stripped)) {
+      delete stripped.version;
+    }
+    return stripped;
+  },
   validate: (s) => {
     const command = ctxHookCommand("github-copilot-agent");
     const present = arrayAt(s, "hooks", COPILOT_KEY).some(
@@ -247,6 +270,9 @@ export const CTX_GUARD_GITHUB_COPILOT_AGENT: SurfaceAdapter = {
   groupKey: COPILOT_KEY,
   groupContainer: "hooks",
   payloadCodec: parseCopilotToolArgsCommand,
+  // F6: this file is written by no one but this surface — safe to delete
+  // outright on uninstall once stripped to `{}` (see `settings-file.ts`).
+  ownsWholeFile: true,
 };
 
 export const INSTRUCTIONS_GITHUB_COPILOT_AGENT: SurfaceAdapter = {
@@ -302,15 +328,17 @@ export const ACP_PERMISSION_ZED: SurfaceAdapter = {
 };
 
 /**
- * Probe-only: Zed uses the FIRST matching rules file among `.rules`,
- * `.cursorrules`, `.windsurfrules`, `.clinerules`,
- * `.github/copilot-instructions.md`, `AGENT.md`, `AGENTS.md`, `CLAUDE.md`,
- * `GEMINI.md`, ... — an earlier file in that list shadows AGENTS.md even when
- * AGENTS.md itself is present and well-formed. There is nothing for Keryx to
- * install here beyond what `keryx init`/`keryx update` already write
- * (`src/rules/agent-entrypoints.ts`), so `customInstall` never writes
- * anything — it reports whether AGENTS.md already carries Keryx's
- * `<!-- keryx:index -->` block, and `customUninstall` never deletes AGENTS.md.
+ * Probe-only (F2 — no `merge`/`strip` AND no `customInstall`, which is the
+ * installer's signal to route a surface to `satisfied`/probe-only: it is
+ * never recorded as installed and can never fail install/uninstall). Zed
+ * uses the FIRST matching rules file among `.rules`, `.cursorrules`,
+ * `.windsurfrules`, `.clinerules`, `.github/copilot-instructions.md`,
+ * `AGENT.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, ... — an earlier file in
+ * that list shadows AGENTS.md even when AGENTS.md itself is present and
+ * well-formed. There is nothing for Keryx to install here beyond what
+ * `keryx init`/`keryx update` already write (`src/rules/agent-entrypoints.ts`);
+ * `probe` only reports whether AGENTS.md already carries Keryx's
+ * `<!-- keryx:index -->` block and flags the shadowing risk.
  */
 const ZED_SHADOWING_RULES_FILES = [
   ".rules",
@@ -341,11 +369,6 @@ export const INSTRUCTIONS_ZED: SurfaceAdapter = {
   settingsFile: (root) => path.join(root, "AGENTS.md"),
   relativePath: "AGENTS.md",
   slots: [],
-  customInstall: async (root) =>
-    (await agentsMdHasKeryxBlock(root))
-      ? []
-      : ["zed: AGENTS.md is missing Keryx's block — run `keryx update` (AGENTS.md is managed by keryx init/update, not this installer)"],
-  customUninstall: async () => false,
   probe: async (root) =>
     (await agentsMdHasKeryxBlock(root)) ? [] : ["zed: AGENTS.md is missing or missing Keryx's block — run `keryx update`"],
 };

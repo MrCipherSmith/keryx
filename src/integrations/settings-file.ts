@@ -1,6 +1,7 @@
 // Flow 305 (W5-a): the `SettingsFileOwner` implementation and the on-disk
 // installSurfaces/uninstallSurfaces every installer routes through.
 
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { readSettingsFile, writeSettingsFile } from "./settings-json";
 import type { Settings, SettingsFileOwner, SurfaceAdapter } from "./types";
@@ -113,7 +114,16 @@ export async function installSurfaces(
   return { file, errors: [] };
 }
 
-/** The uninstall counterpart of `installSurfaces`. */
+/**
+ * The uninstall counterpart of `installSurfaces`. When the strip leaves
+ * `settings` completely empty AND this file is `ownsWholeFile` (review round
+ * 1, F6 — a file Keryx itself creates and is the only writer of, e.g.
+ * `.kiro/hooks/keryx-ctx-guard.json`), the file is deleted outright instead
+ * of being left behind holding `{}`. A file any other surface on this owner
+ * does NOT mark `ownsWholeFile` (e.g. `.claude/settings.json`, shared with
+ * other tools/the user's own config) is never deleted this way, regardless of
+ * whether stripping happened to empty it out.
+ */
 export async function uninstallSurfaces(
   root: string,
   relativePath: string,
@@ -124,6 +134,11 @@ export async function uninstallSurfaces(
   const existing = await readSettingsFile(file);
   const { settings, errors } = owner.apply(existing, { uninstall: surfaceIds });
   if (errors.length > 0) return { file, errors };
-  await writeSettingsFile(file, settings);
+  const ownsWholeFile = owner.surfaces().some((s) => s.ownsWholeFile);
+  if (ownsWholeFile && Object.keys(settings).length === 0) {
+    await rm(file, { force: true });
+  } else {
+    await writeSettingsFile(file, settings);
+  }
   return { file, errors: [] };
 }

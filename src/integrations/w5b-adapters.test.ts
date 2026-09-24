@@ -93,12 +93,21 @@ describe("AC2 (W5-b): zed is policy-travels-with-agent, block surface verified w
     expect(zed.unsupported.block).toBeUndefined();
   });
 
-  test("zed has an instructions surface too (probe-only, AGENTS.md)", () => {
+  test("zed has an instructions surface too (probe-only, AGENTS.md, no merge/strip/customInstall)", () => {
     const zed = getHarnessAdapter("zed")!;
     const instructions = surfacesOf(zed, { flag: "instructions" });
     expect(instructions.length).toBe(1);
-    expect(instructions[0]!.confidence).toBe("experimental");
-    expect((instructions[0]!.riskNotes ?? []).length).toBeGreaterThan(0);
+    const surface = instructions[0]!;
+    expect(surface.confidence).toBe("experimental");
+    expect((surface.riskNotes ?? []).length).toBeGreaterThan(0);
+    // F2: probe-only — neither merge/strip nor customInstall/customUninstall,
+    // which is the installer's own signal to route this to satisfied/probe-only
+    // (never recorded as installed, never able to fail install/uninstall).
+    expect(surface.merge).toBeUndefined();
+    expect(surface.strip).toBeUndefined();
+    expect(surface.customInstall).toBeUndefined();
+    expect(surface.customUninstall).toBeUndefined();
+    expect(surface.probe).toBeDefined();
   });
 
   test("`keryx ctx hook zed` still resolves to no runtime (zed has no ctx-guard surface)", () => {
@@ -259,6 +268,69 @@ describe("install -> validate -> uninstall round trips for the new JSON block su
       });
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// F6: uninstall deletes the Keryx-owned hook JSON file itself once emptied,
+// but never touches an unrelated sibling file in the same directory.
+// ---------------------------------------------------------------------------
+
+describe("F6: uninstall removes the Keryx-owned ctx-guard JSON file itself, leaving siblings untouched", () => {
+  const cases: Array<{ id: string; relativePath: string; siblingRelativePath: string }> = [
+    { id: "kiro", relativePath: ".kiro/hooks/keryx-ctx-guard.json", siblingRelativePath: ".kiro/hooks/user-own-hook.json" },
+    {
+      id: "github-copilot-agent",
+      relativePath: ".github/hooks/keryx-ctx-guard.json",
+      siblingRelativePath: ".github/hooks/user-own-hook.json",
+    },
+  ];
+
+  for (const { id, relativePath, siblingRelativePath } of cases) {
+    test(`${id}: install then uninstall leaves no ${relativePath}; a user-authored sibling hook is untouched`, async () => {
+      await withTempDir(async (root) => {
+        const adapter = getHarnessAdapter(id)!;
+        const surface = surfacesOf(adapter, { subsystem: "ctx-guard" })[0]!;
+        expect(surface.ownsWholeFile).toBe(true);
+
+        const siblingFile = path.join(root, ...siblingRelativePath.split("/"));
+        await mkdir(path.dirname(siblingFile), { recursive: true });
+        const siblingContent = JSON.stringify({ someUserHook: true }, null, 2) + "\n";
+        await writeFile(siblingFile, siblingContent, "utf8");
+
+        const owner = createSettingsFileOwner(relativePath, [surface]);
+        const installed = await installSurfaces(root, relativePath, [surface.id], owner);
+        expect(installed.errors).toEqual([]);
+        expect(existsSync(path.join(root, ...relativePath.split("/")))).toBe(true);
+
+        const uninstalled = await uninstallSurfaces(root, relativePath, [surface.id], owner);
+        expect(uninstalled.errors).toEqual([]);
+        expect(existsSync(path.join(root, ...relativePath.split("/")))).toBe(false);
+
+        // The sibling file in the same directory is a completely different
+        // relativePath/owner — untouched byte for byte.
+        expect(await readFile(siblingFile, "utf8")).toBe(siblingContent);
+      });
+    });
+  }
+
+  test("a settings file NOT marked ownsWholeFile is never deleted, even when stripping empties it out", async () => {
+    await withTempDir(async (root) => {
+      const gemini = getHarnessAdapter("gemini-cli")!;
+      const surface = surfacesOf(gemini, { subsystem: "ctx-guard" })[0]!;
+      expect(surface.ownsWholeFile).toBeUndefined();
+      const relativePath = surface.relativePath!;
+
+      const owner = createSettingsFileOwner(relativePath, [surface]);
+      const installed = await installSurfaces(root, relativePath, [surface.id], owner);
+      expect(installed.errors).toEqual([]);
+
+      const uninstalled = await uninstallSurfaces(root, relativePath, [surface.id], owner);
+      expect(uninstalled.errors).toEqual([]);
+      // File stays behind holding `{}` rather than being deleted.
+      expect(existsSync(path.join(root, ...relativePath.split("/")))).toBe(true);
+      expect((await readFile(path.join(root, ...relativePath.split("/")), "utf8")).trim()).toBe("{}");
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -432,22 +504,21 @@ describe("instructions surfaces: customInstall/customUninstall/probe end to end"
 });
 
 describe("zed instructions surface: probe-only, never writes/deletes AGENTS.md", () => {
-  test("customInstall reports the missing-block problem without writing AGENTS.md; customUninstall never deletes it", async () => {
+  test("probe reports the missing-block problem without writing AGENTS.md; adding the block makes probe clean", async () => {
     await withTempDir(async (root) => {
       const zed = getHarnessAdapter("zed")!;
       const surface = surfacesOf(zed, { flag: "instructions" })[0]!;
 
-      const errors = await surface.customInstall!(root);
-      expect(errors.length).toBeGreaterThan(0);
+      const missing = await surface.probe!(root);
+      expect(missing.length).toBeGreaterThan(0);
       expect(existsSync(path.join(root, "AGENTS.md"))).toBe(false);
 
       await writeFile(path.join(root, "AGENTS.md"), "# repo\n\n<!-- keryx:index -->\nstuff\n<!-- /keryx:index -->\n", "utf8");
-      expect(await surface.customInstall!(root)).toEqual([]);
       expect(await surface.probe!(root)).toEqual([]);
-
-      const removed = await surface.customUninstall!(root);
-      expect(removed).toBe(false);
-      expect(existsSync(path.join(root, "AGENTS.md"))).toBe(true);
+      // Nothing ever writes/deletes AGENTS.md through this surface — it has
+      // no merge/strip/customInstall/customUninstall to do so with.
+      const content = await readFile(path.join(root, "AGENTS.md"), "utf8");
+      expect(content).toBe("# repo\n\n<!-- keryx:index -->\nstuff\n<!-- /keryx:index -->\n");
     });
   });
 });

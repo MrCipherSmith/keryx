@@ -141,6 +141,16 @@ export interface SurfaceAdapter {
    */
   readonly relativePath?: string;
   readonly slots: readonly SurfaceSlot[];
+  /**
+   * True when `relativePath` is a file Keryx itself creates and is the ONLY
+   * writer of (e.g. `.kiro/hooks/keryx-ctx-guard.json`) — as opposed to a
+   * file other tools or the user's own config may also hold keys in (e.g.
+   * `.claude/settings.json`). `uninstallSurfaces` (review round 1, F6) deletes
+   * the file outright, instead of writing `{}`, only when this is set AND the
+   * post-strip settings are empty — never for a shared file, regardless of
+   * whether stripping happened to empty it out.
+   */
+  readonly ownsWholeFile?: boolean;
   merge?(settings: Settings): Settings;
   strip?(settings: Settings): Settings;
   validate?(settings: Settings): string[];
