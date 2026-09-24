@@ -49,3 +49,8 @@
 - 2026-09-24 - T15 DONE (verify invalid-source-ref + policy-tool-conflict, sentinel-scoped audit tier, empty tools flagged, guide corrected). Orchestrator fixed one doc anchor (D-2 link) that check:doc-links rejected; its slug collapses the em-dash gap to a single hyphen.
 - 2026-09-24T05:35:56.347Z - task-done: T14: Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle
 - 2026-09-24 - T14 DONE: R1-F1..F10, F14 fixed with regression tests (555 targeted pass). Left: frontmatter.ts read-side quote-doubling (info).
+- 2026-09-24T05:36:25.225Z - task-attempt: T12: started (attempt 2) — review round 2
+- 2026-09-24T05:41:34.626Z - task-added: T16: Fix round 2: sentinel must be the managed header line, hash self-reference, null tools audit, guide codex empty-tools, doctor --surface, kiro tier line
+- 2026-09-24T05:41:34.704Z - task-attempt: T16: started (attempt 1) — 310-T16
+- 2026-09-24T06:13:21.508Z - task-done: T16: Fix round 2: sentinel must be the managed header line, hash self-reference, null tools audit, guide codex empty-tools, doctor --surface, kiro tier line
+- 2026-09-24 - Round 2 (opus): 0 blocker/0 major/4 minor/2 info (ingested r02). CI round 1: test:core failed on cli-reference coverage (agents subcommands), docs index (guide), SAC core-graph AFC-19 (stale CLIENT_ZONES src/agents/ entry after client→core reclassification). T16 fixed all six R2 findings + three CI failures (new src/agents/sentinel.ts leaf; audit imports it instead of compile.ts).

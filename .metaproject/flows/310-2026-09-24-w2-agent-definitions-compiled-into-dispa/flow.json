@@ -9,7 +9,7 @@
   "title": "W2: agent definitions compiled into dispatch contracts, per-harness exporters, initial generic agent catalog",
   "status": "in-progress",
   "createdAt": "2026-09-24T04:09:02.681Z",
-  "updatedAt": "2026-09-24T05:35:56.347Z",
+  "updatedAt": "2026-09-24T06:13:21.508Z",
   "source": {
     "type": "description",
     "ref": null
@@ -227,12 +227,17 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 1,
+        "count": 2,
         "log": [
           {
             "at": "2026-09-24T05:08:01.407Z",
             "outcome": "started",
             "detail": "review round 1"
+          },
+          {
+            "at": "2026-09-24T05:36:25.225Z",
+            "outcome": "started",
+            "detail": "review round 2"
           }
         ]
       },
@@ -295,6 +300,27 @@
             "at": "2026-09-24T05:18:05.682Z",
             "outcome": "started",
             "detail": "310-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Fix round 2: sentinel must be the managed header line, hash self-reference, null tools audit, guide codex empty-tools, doctor --surface, kiro tier line",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T05:41:34.704Z",
+            "outcome": "started",
+            "detail": "310-T16"
           }
         ]
       },
@@ -487,6 +513,26 @@
       "at": "2026-09-24T05:35:56.347Z",
       "event": "task-done",
       "detail": "T14: Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle"
+    },
+    {
+      "at": "2026-09-24T05:36:25.225Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 2) — review round 2"
+    },
+    {
+      "at": "2026-09-24T05:41:34.626Z",
+      "event": "task-added",
+      "detail": "T16: Fix round 2: sentinel must be the managed header line, hash self-reference, null tools audit, guide codex empty-tools, doctor --surface, kiro tier line"
+    },
+    {
+      "at": "2026-09-24T05:41:34.704Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 310-T16"
+    },
+    {
+      "at": "2026-09-24T06:13:21.508Z",
+      "event": "task-done",
+      "detail": "T16: Fix round 2: sentinel must be the managed header line, hash self-reference, null tools audit, guide codex empty-tools, doctor --surface, kiro tier line"
     }
   ]
 }
