@@ -124,3 +124,35 @@ export {
   renderInstructionsBlock,
   uninstallMarkdownBlock,
 } from "./markdown-block";
+
+// ---------------------------------------------------------------------------
+// Flow 307 (W5-b), T6: the installer core (install/uninstall/doctor per
+// runtime, with per-surface install-state) — new modules, appended here
+// rather than interleaved with the W5-a exports above.
+// ---------------------------------------------------------------------------
+export {
+  INSTALL_STATE_SCHEMA_VERSION,
+  installStatePath,
+  readInstallState,
+  recordSurfaceInstalled,
+  recordSurfaceUninstalled,
+  sha256OfFile,
+} from "./install-state";
+export type { InstallState, InstalledModuleRecord } from "./install-state";
+
+export {
+  doctorIntegration,
+  installIntegration,
+  resolveSurfaceSelection,
+  uninstallIntegration,
+} from "./installer";
+export type {
+  DoctorIntegrationResult,
+  DoctorSurfaceResult,
+  InstallIntegrationResult,
+  InstallOptions,
+  InstallSurfaceStatus,
+  SurfaceResult,
+  UninstallIntegrationResult,
+  UninstallSurfaceStatus,
+} from "./installer";

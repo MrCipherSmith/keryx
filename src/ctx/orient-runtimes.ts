@@ -2,10 +2,9 @@ import {
   HARNESS_ADAPTERS,
   ORIENT_SENTINEL,
   UNSUPPORTED_ORIENT,
-  installSurfaces,
-  settingsFileOwnerFor,
+  installIntegration,
   surfacesOf,
-  uninstallSurfaces,
+  uninstallIntegration,
   type Confidence as IntegrationConfidence,
   type Settings as IntegrationSettings,
   type SettingsFileOwner,
@@ -121,10 +120,12 @@ export function getOrientRuntime(id: string): OrientRuntime | undefined {
   return ORIENT_RUNTIMES.find((r) => r.id === id);
 }
 /**
- * Install the orient surface for one runtime through its `SettingsFileOwner`
- * (`src/integrations/settings-file.ts`), so a re-install can never leave a
- * ctx-guard/security surface sharing the same file invalid without saying so.
- * Returns the rendered file's validation errors ([] = ok).
+ * Install the orient surface for one runtime, through the installer core
+ * (flow 307, W5-b, T6: `installIntegration` in `src/integrations/installer.ts`)
+ * so a re-install can never leave a ctx-guard/security surface sharing the
+ * same file invalid without saying so, and so this and `keryx integrations`
+ * share one implementation (and one install-state record). Returns the
+ * rendered file's validation errors ([] = ok).
  */
 export async function installOrientRuntime(
   projectRoot: string,
@@ -133,9 +134,10 @@ export async function installOrientRuntime(
 ): Promise<string[]> {
   const runtime = getOrientRuntime(runtimeId);
   if (!runtime) return [`${runtimeId}: unknown orient runtime`];
-  const owner = ownerOverride ?? settingsFileOwnerFor(runtime.relativePath);
-  if (!owner) return [`${runtimeId}: no settings-file owner registered for ${runtime.relativePath}`];
-  const { errors } = await installSurfaces(projectRoot, runtime.relativePath, [ORIENT_SURFACE_ID], owner);
+  const { errors } = await installIntegration(projectRoot, runtimeId, {
+    surfaces: [ORIENT_SURFACE_ID],
+    ...(ownerOverride ? { ownerOverride } : {}),
+  });
   return errors;
 }
 
@@ -149,11 +151,11 @@ export async function uninstallOrientRuntime(
   runtimeId: string,
   ownerOverride?: SettingsFileOwner,
 ): Promise<void> {
-  const runtime = getOrientRuntime(runtimeId);
-  if (!runtime) return;
-  const owner = ownerOverride ?? settingsFileOwnerFor(runtime.relativePath);
-  if (!owner) return;
-  const { errors } = await uninstallSurfaces(projectRoot, runtime.relativePath, [ORIENT_SURFACE_ID], owner);
+  if (!getOrientRuntime(runtimeId)) return;
+  const { errors } = await uninstallIntegration(projectRoot, runtimeId, {
+    surfaces: [ORIENT_SURFACE_ID],
+    ...(ownerOverride ? { ownerOverride } : {}),
+  });
   if (errors.length > 0) {
     throw new Error(errors.join("; "));
   }

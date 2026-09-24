@@ -1,5 +1,4 @@
-import { pathExists } from "../lib/fs";
-import { installSurfaces, settingsFileOwnerFor, uninstallSurfaces, type SettingsFileOwner } from "../integrations";
+import { installIntegration, settingsFileOwnerFor, uninstallIntegration, type SettingsFileOwner } from "../integrations";
 import {
   CLAUDE_RUNTIME,
   MANAGED_KEY,
@@ -53,8 +52,10 @@ export function securityAgentHookEntries(): {
 
 // Install the managed guard hooks for one runtime, creating the settings file
 // if absent, preserving every pre-existing key/entry, and staying idempotent.
-// Routes through the runtime's `SettingsFileOwner` so this install can never
-// silently invalidate a ctx-guard/orient surface sharing the same file.
+// Delegates to the installer core (flow 307, W5-b, T6: `installIntegration`
+// in `src/integrations/installer.ts`), which routes through the runtime's
+// `SettingsFileOwner` so this install can never silently invalidate a
+// ctx-guard/orient surface sharing the same file, and records install-state.
 // Returns the owner's errors (empty = written and valid) instead of
 // discarding them, so a caller (CLI, or `installSecurityAgentHooks` below)
 // can tell a refused write from a successful one.
@@ -68,7 +69,10 @@ export async function installRuntimeHooks(
     // registry these surfaces come from) — unreachable in practice.
     throw new Error(`${runtime.id}: no settings-file owner registered for ${runtime.relativePath}`);
   }
-  const { errors } = await installSurfaces(projectRoot, runtime.relativePath, [...SECURITY_SURFACE_IDS], owner);
+  const { errors } = await installIntegration(projectRoot, runtime.id, {
+    surfaces: [...SECURITY_SURFACE_IDS],
+    ownerOverride: owner,
+  });
   return { ok: errors.length === 0, errors };
 }
 
@@ -79,15 +83,17 @@ export async function uninstallRuntimeHooks(
   runtime: RuntimeHook,
   owner: SettingsFileOwner | undefined = settingsFileOwnerFor(runtime.relativePath),
 ): Promise<{ ok: boolean; errors: string[] }> {
-  const file = runtime.settingsPath(projectRoot);
-  if (!(await pathExists(file))) {
-    return { ok: false, errors: [] };
-  }
   if (!owner) {
     return { ok: false, errors: [] };
   }
-  const { errors } = await uninstallSurfaces(projectRoot, runtime.relativePath, [...SECURITY_SURFACE_IDS], owner);
-  return { ok: errors.length === 0, errors };
+  const { results, errors } = await uninstallIntegration(projectRoot, runtime.id, {
+    surfaces: [...SECURITY_SURFACE_IDS],
+    ownerOverride: owner,
+  });
+  if (errors.length > 0) {
+    return { ok: false, errors };
+  }
+  return { ok: results.some((r) => r.status === "removed"), errors: [] };
 }
 
 // Resolve requested runtime ids (`"all"` ⇒ every registered runtime). Unknown
