@@ -23,6 +23,7 @@ import path from "node:path";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
 import {
+  containsHarnessHeaderLine,
   isMemoryHarnessId,
   memoryHandoff,
   memoryHarnessVisibilityByPath,
@@ -65,22 +66,19 @@ function stringParam(params: Record<string, unknown>, key: string): string | und
   return typeof value === "string" ? value : undefined;
 }
 
-// Flow 313 (W4) review R1-F3: an early, friendlier-error pre-check for
-// `memory.propose` at the MCP boundary. `src/mcp/` may import only service
-// facades (M-3), never `../memory/templates` internals, so this duplicates
-// (rather than imports) the same two patterns `renderMemoryEntry`
-// (`../memory/templates.ts`) enforces authoritatively for EVERY caller,
-// including the CLI's `keryx memory new --title` — that function is the real
-// defense; this one exists only to fail fast with a tool-specific message
-// before a write is even attempted.
+// Flow 313 (W4) review R1-F3 / R3-F8 (choke point d): an early,
+// friendlier-error pre-check for `memory.propose` at the MCP boundary.
+// `src/mcp/` may import only service facades (M-3), never `../memory/
+// templates` internals — `containsHarnessHeaderLine` is imported from
+// `../memory/service` (which re-exports the real `../memory/templates.ts`
+// function) rather than re-derived here, so the guard and the parser can
+// never drift apart on what counts as a line break or a near-miss header
+// key. `renderMemoryEntry` (`../memory/templates.ts`) is still the
+// authoritative defense for EVERY caller, including the CLI's `keryx memory
+// new --title`; this pre-check exists only to fail fast with a
+// tool-specific message before a write is even attempted.
 // eslint-disable-next-line no-control-regex -- matching control characters is the point of this guard.
 const MCP_CONTROL_OR_LINE_BREAK_RE = new RegExp("[\\u0000-\\u001F\\u007F\\u2028\\u2029]");
-const MCP_HARNESS_HEADER_LINE_RE = /^[ \t]*(Source-Harness|Target-Harnesses)[ \t]*:/i;
-const MCP_LINE_SPLIT_RE = new RegExp("\\r\\n|\\r|\\n|\\u2028|\\u2029");
-
-function containsHarnessHeaderLine(value: string): boolean {
-  return value.split(MCP_LINE_SPLIT_RE).some((line) => MCP_HARNESS_HEADER_LINE_RE.test(line));
-}
 
 /**
  * A page-size argument: absent, or a positive integer. Anything else throws.

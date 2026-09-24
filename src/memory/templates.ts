@@ -1,3 +1,4 @@
+import { splitLogicalLines } from "../lib/text-lines";
 import { MEMORY_TYPES } from "./types";
 
 // Flow 313 (W4) review R1-F3: the LAST line of defense against a
@@ -19,15 +20,28 @@ import { MEMORY_TYPES } from "./types";
 // must not itself depend on a tool treating those bytes as ordinary text.
 // eslint-disable-next-line no-control-regex -- matching control characters is the point of this guard.
 const CONTROL_OR_LINE_BREAK_RE = new RegExp("[\\u0000-\\u001F\\u007F\\u2028\\u2029]");
-const HARNESS_HEADER_LINE_RE = /^[ \t]*(Source-Harness|Target-Harnesses)[ \t]*:/i;
-// Splits on every line terminator this codebase's header parser (`./store.ts`
-// `headerBlockMatches`) and this guard must agree on treating as a line
-// break: LF, CR (bare or as part of CRLF), U+2028 (LINE SEPARATOR) and
-// U+2029 (PARAGRAPH SEPARATOR) — not only `\n`.
-const LINE_SPLIT_RE = new RegExp("\\r\\n|\\r|\\n|\\u2028|\\u2029");
+// Flow 313 (W4) review R3-F8: leading whitespace uses `\s`, the SAME class
+// `./store.ts`'s `locateHeaderField` uses (`^\s*${name}\s*:`) — not the
+// narrower `[ \t]*` this guard used pre-fix. That mismatch let a header line
+// prefixed with a whitespace codepoint OUTSIDE `[ \t]` (NBSP U+00A0, vertical
+// tab, form feed, the U+FEFF BOM, the U+3000 ideographic space) slip past
+// this guard while the parser still read it as a real header once written —
+// the guard and the parser must agree on one whitespace class, not two.
+// The header NAME itself is also loosened to match `./store.ts`'s
+// R3-F7 near-key fold (optional hyphen/underscore/whitespace between the two
+// words), so a near-miss spelling is refused here too, not only left to be
+// caught as an "invalid" (not "absent") header after the fact.
+const HARNESS_HEADER_LINE_RE = /^\s*(?:Source[\s_-]*Harness|Target[\s_-]*Harnesses)\s*:/i;
 
-function containsHarnessHeaderLine(value: string): boolean {
-  return value.split(LINE_SPLIT_RE).some((line) => HARNESS_HEADER_LINE_RE.test(line));
+// Flow 313 (W4) review R3-F8, choke point d: exported (and re-exported
+// through `./service.ts`, the ONLY module `src/mcp/` may import — M-3) so
+// the MCP `memory.propose` boundary's early pre-check uses this SAME
+// function instead of a second, independently-drifting copy of the pattern
+// and the line-split rule. `renderMemoryEntry` below remains the real,
+// authoritative guard for every caller; the MCP boundary's use of this
+// export is only a friendlier, fail-fast duplicate of the same check.
+export function containsHarnessHeaderLine(value: string): boolean {
+  return splitLogicalLines(value).some((line) => HARNESS_HEADER_LINE_RE.test(line.normalize("NFKC")));
 }
 
 export function renderMemoryEntry({

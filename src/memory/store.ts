@@ -2,11 +2,26 @@ import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, pathExists } from "../lib/fs";
 import { userStorePaths } from "../lib/keryx-home";
+import { splitLogicalLines } from "../lib/text-lines";
 import { isMemoryHarnessId, parseHarnessList } from "./harness-identity";
 import { MEMORY_CLASS_VALUES, MEMORY_TYPES, classForType } from "./types";
 import type { Confidence, MemoryClass, MemoryEntry, MemoryStatus } from "./types";
 
 const MEMORY_TYPE_FOLDERS: ReadonlySet<string> = new Set(MEMORY_TYPES.map((entry) => entry.folder));
+
+// Flow 313 (W4) review R3-F3: `keryx init`'s memory scaffold writes these
+// files/directories directly under the memory root — never inside a
+// `MEMORY_TYPES` folder, so `collectEntriesStrict`'s "unexpected top-level
+// content" walk (below) would otherwise report every initialized project's
+// OWN scaffold as `unexpected-entry` forever, making `memory handoff`
+// permanently `incomplete` (AC7 unreachable, including in this repo).
+// `index.md` is `renderMemoryIndexScaffold()`, `templates/entry.md` is
+// `renderMemoryEntryTemplate()` (both `./templates.ts`, written by
+// `src/commands/init.ts`); `README.md` is reserved for a future scaffold
+// file at the same root. These are KERYX-WRITTEN, recognised by exact
+// relative path/prefix — never a wildcard — so arbitrary user content still
+// gets reported exactly as before.
+const MEMORY_SCAFFOLD_TOP_LEVEL_FILES: ReadonlySet<string> = new Set(["index.md", "README.md"]);
 
 // Flow 313 (W4) review R1-F5/F27: a strict-mode UTF-8 decoder. `readFile(...,
 // "utf8")` silently replaces invalid byte sequences (U+FFFD) rather than
@@ -18,21 +33,6 @@ const STRICT_UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 
 function decodeStrictUtf8(bytes: Buffer): string {
   return STRICT_UTF8_DECODER.decode(bytes);
-}
-
-// Flow 313 (W4) review R2-F5: normalises `\r\n` and lone `\r` to `\n` once,
-// before any header/field/section parsing. JS regex "." and "$" (without the
-// "m" flag) both treat `\r` as a line terminator that "." never matches and
-// that a trailing, un-consumed `\r` prevents "$" from ever reaching — so a
-// CRLF- or CR-only line such as `Target-Harnesses: claude\r` silently fails
-// EVERY per-line pattern in this file (`headerBlockMatches`/`field`/
-// `bulletField`), not just partially matches it. Pre-fix, that made a
-// restricted entry parse as *unrestricted* (visible to every harness) and a
-// `Status:`/`Source-Harness:` line parse as *absent* (silently dropped from
-// a strict-mode handoff while still reporting `complete`). Every line-based
-// parse in this module MUST run on normalised content, not raw bytes.
-function normalizeLineEndings(content: string): string {
-  return content.replace(/\r\n|\r/g, "\n");
 }
 
 const STATUSES = new Set<MemoryStatus>([
@@ -77,6 +77,26 @@ export async function collectEntries(cwd: string): Promise<MemoryEntry[]> {
         continue;
       }
       const abs = path.join(dir, name);
+      // Flow 313 (W4) review R3-F9/R3-F10: this lenient path feeds
+      // `memory.search`, `wiki.ask` and the MCP resources list — every one of
+      // them a caller that must never hang or throw an unhandled EISDIR
+      // because one memory-type folder holds a FIFO, a directory, a socket,
+      // or a symlink named `*.md`. `readFile` on a FIFO blocks forever; a
+      // symlink can serve content from OUTSIDE the memory root (the same
+      // "restricted-to-one-harness" content could otherwise leak). `lstat`
+      // (never `stat`, which follows the link) then a strict "regular file
+      // only" check gives this lenient scan the SAME refusal
+      // `collectEntriesStrict` already applies — an odd entry is skipped,
+      // never opened, and never breaks the rest of the listing.
+      let stats;
+      try {
+        stats = await lstat(abs);
+      } catch {
+        continue; // Vanished between readdir and lstat: nothing to serve.
+      }
+      if (!stats.isFile()) {
+        continue;
+      }
       const content = await readFile(abs, "utf8");
       entries.push(parseEntry(abs, `${folder}/${name}`, type, content));
     }
@@ -215,17 +235,18 @@ export async function collectEntriesStrict(root: string): Promise<MemoryStrictSc
       }
       let content: string;
       try {
-        // R2-F5: normalise line endings BEFORE any of this function's own
-        // line-based checks run — `parseEntry` below normalises again
-        // (idempotent), but this scan's own `lines`/header checks must see
-        // the same normalised text, not the raw CRLF/CR bytes.
-        content = normalizeLineEndings(decodeStrictUtf8(raw));
+        content = decodeStrictUtf8(raw);
       } catch {
         problems.push({ path: relativePath, reason: "unreadable-file" });
         continue;
       }
       const entry = parseEntry(abs, relativePath, type, content);
-      const lines = content.split("\n");
+      // Flow 313 (W4) review R2-F5/R3-F7/R3-F8, choke point d: the SAME
+      // `splitLogicalLines` `parseEntry` uses below, on the SAME raw
+      // `content` — not a locally re-normalised copy — so this scan's own
+      // `missing-title`/header checks can never disagree with what
+      // `parseEntry` actually parsed from the same bytes.
+      const lines = splitLogicalLines(content);
       let harnessInvalid = false;
       if (!lines.some((line) => line.startsWith("# "))) {
         problems.push({ path: relativePath, reason: "missing-title" });
@@ -238,6 +259,14 @@ export async function collectEntriesStrict(root: string): Promise<MemoryStrictSc
       if (sourceInfo.misplaced) {
         problems.push({ path: relativePath, reason: "misplaced-harness-header" });
         harnessInvalid = true;
+      } else if (sourceInfo.nearInvalid) {
+        // R3-F7: a near-miss key (case variant, missing hyphen, extra
+        // whitespace, embedded zero-width character, fullwidth colon, or
+        // the singular/plural slip) is present but unparsable — reported
+        // the same way an actually-malformed value is, never silently
+        // dropped as absent.
+        problems.push({ path: relativePath, reason: "invalid-source-harness" });
+        harnessInvalid = true;
       } else if (sourceInfo.matches.length > 1) {
         problems.push({ path: relativePath, reason: "duplicate-harness-header" });
         harnessInvalid = true;
@@ -248,6 +277,9 @@ export async function collectEntriesStrict(root: string): Promise<MemoryStrictSc
       const targetInfo = locateHeaderField(lines, "Target-Harnesses");
       if (targetInfo.misplaced) {
         problems.push({ path: relativePath, reason: "misplaced-harness-header" });
+        harnessInvalid = true;
+      } else if (targetInfo.nearInvalid) {
+        problems.push({ path: relativePath, reason: "invalid-target-harnesses" });
         harnessInvalid = true;
       } else if (targetInfo.matches.length > 1) {
         problems.push({ path: relativePath, reason: "duplicate-harness-header" });
@@ -348,15 +380,70 @@ async function collectUnexpectedTopLevel(root: string, problems: MemoryScanProbl
     if (stats.isSymbolicLink()) {
       continue;
     }
+    // R3-F3: `keryx init`'s own memory scaffold (`index.md`, `README.md`,
+    // `templates/`), only when it is the plain regular file/directory init
+    // actually writes — never a same-named symlink or a directory standing
+    // in for `index.md`, which fall through to the ordinary checks below and
+    // are still reported exactly as before.
     if (stats.isDirectory()) {
+      if (name === "templates") {
+        continue;
+      }
       await collectUnexpectedMarkdown(abs, name, problems);
-    } else if (stats.isFile() && name.toLowerCase().endsWith(".md")) {
-      problems.push({ path: name, reason: "unexpected-entry" });
+    } else if (stats.isFile()) {
+      if (MEMORY_SCAFFOLD_TOP_LEVEL_FILES.has(name)) {
+        continue;
+      }
+      if (name.toLowerCase().endsWith(".md")) {
+        problems.push({ path: name, reason: "unexpected-entry" });
+      }
     }
   }
 }
 
-type HeaderFieldLocation = { matches: string[]; misplaced: boolean };
+type HeaderFieldLocation = { matches: string[]; misplaced: boolean; nearInvalid: boolean };
+
+// Flow 313 (W4) review R3-F7: characters that are invisible or purely
+// presentational and must be stripped before a header KEY is folded for
+// near-match comparison — a zero-width space/joiner/non-joiner, the
+// byte-order-mark-as-ZWNBSP, and the soft hyphen. None of these ever belongs
+// in a header key; their only effect pre-fix was to make an
+// otherwise-exact key fail the exact-match regex and read as absent.
+// eslint-disable-next-line no-misleading-character-class -- each codepoint is matched independently; U+200B/U+200C/U+200D are not meant to combine here.
+const HEADER_KEY_IGNORABLE_RE = new RegExp("[\u200B\u200C\u200D\uFEFF\u00AD]", "g");
+// Every codepoint this codebase treats as an interchangeable "word
+// separator" inside a header key: ASCII/Unicode whitespace (`\s`, which
+// already covers NBSP and U+3000), the underscore, the ASCII hyphen, and
+// the Unicode hyphen/dash family (HYPHEN, NON-BREAKING HYPHEN, FIGURE DASH,
+// EN DASH, EM DASH). Folding all of these to nothing before comparison is
+// what makes `Source_Harness`, `Source Harness` and `Source‐Harness`
+// (U+2010) all fold to the same canonical key as `Source-Harness`.
+const HEADER_KEY_SEPARATOR_RE = new RegExp("[\\s_\u2010\u2011\u2012\u2013\u2014-]", "g");
+
+function foldHeaderKey(rawKey: string): string {
+  return rawKey
+    .normalize("NFKC")
+    .replace(HEADER_KEY_IGNORABLE_RE, "")
+    .replace(HEADER_KEY_SEPARATOR_RE, "")
+    .toLowerCase();
+}
+
+// Canonical folded forms for each header name, plus the one singular/plural
+// slip R3-F7's evidence named explicitly ("singular-key"). This is
+// deliberately a short, explicit list — not a Levenshtein-distance fuzzy
+// match — so it catches exactly the near-misses the finding demonstrated
+// without ever mistaking an unrelated "Name:" line (e.g. a `- Source:`
+// provenance bullet) for a harness header.
+const HEADER_NEAR_KEY_FOLDS: Readonly<Record<string, ReadonlySet<string>>> = {
+  "Source-Harness": new Set(["sourceharness", "sourceharnesses"]),
+  "Target-Harnesses": new Set(["targetharnesses", "targetharness"]),
+};
+
+// A generic "<key>: <value>" line shape, used only to extract the KEY text
+// for near-match folding — matched against the line after NFKC
+// normalisation, so a fullwidth colon (U+FF1A) is already an ASCII `:` by
+// the time this runs.
+const GENERIC_KEY_LINE_RE = /^\s*(.*?)\s*:\s*(.*)$/;
 
 // Header-block-scoped scan: lines strictly before the first `## ` section
 // heading (Flow 313 (W4) review R1-F3). Returns every RAW match for
@@ -382,20 +469,39 @@ type HeaderFieldLocation = { matches: string[]; misplaced: boolean };
 function locateHeaderField(lines: string[], name: string): HeaderFieldLocation {
   const sectionIndex = lines.findIndex((line) => /^##\s+/.test(line));
   const pattern = new RegExp(`^\\s*${name}\\s*:\\s*(.*)$`, "i");
+  const nearFolds = HEADER_NEAR_KEY_FOLDS[name] ?? new Set<string>();
   const matches: string[] = [];
   let misplaced = false;
+  let nearInvalid = false;
   lines.forEach((line, index) => {
     const match = line.match(pattern);
-    if (!match) {
+    if (match) {
+      if (sectionIndex === -1 || index < sectionIndex) {
+        matches.push((match[1] ?? "").trim());
+      } else {
+        misplaced = true;
+      }
       return;
     }
-    if (sectionIndex === -1 || index < sectionIndex) {
-      matches.push((match[1] ?? "").trim());
-    } else {
+    // Flow 313 (W4) review R3-F7: the exact pattern above did not match —
+    // before concluding the header is genuinely absent, check whether the
+    // line's KEY nearly matches `name` (case variant, missing/extra hyphen,
+    // extra whitespace, an embedded zero-width character, a fullwidth
+    // colon, or the named singular/plural slip). A near-miss is NOT
+    // "absent": it is present but invalid, and must hide the entry from
+    // every harness the same way `misplaced` already does, rather than
+    // silently falling through to the unrestricted default.
+    const generic = line.normalize("NFKC").match(GENERIC_KEY_LINE_RE);
+    const key = generic?.[1] ?? "";
+    if (key.length === 0 || !nearFolds.has(foldHeaderKey(key))) {
+      return;
+    }
+    nearInvalid = true;
+    if (!(sectionIndex === -1 || index < sectionIndex)) {
       misplaced = true;
     }
   });
-  return { matches, misplaced };
+  return { matches, misplaced, nearInvalid };
 }
 
 export function parseEntry(
@@ -404,9 +510,10 @@ export function parseEntry(
   folderType: string,
   content: string,
 ): MemoryEntry {
-  // R2-F5: normalise before any split/regex parse below — idempotent when
-  // the caller (e.g. `collectEntriesStrict`) already normalised.
-  const lines = normalizeLineEndings(content).split("\n");
+  // Flow 313 (W4) review R2-F5/R3-F7/R3-F8, choke point d: the shared
+  // splitter — idempotent when the caller (e.g. `collectEntriesStrict`)
+  // already split on the same rule.
+  const lines = splitLogicalLines(content);
   const titleLine = lines.find((line) => line.startsWith("# "));
   const sections = splitSections(lines);
 
@@ -450,7 +557,8 @@ export function parseEntry(
   // DIFFERENT state from "absent" — `sourceHarnessInvalid` keeps that
   // distinction visible to callers instead of collapsing all three to the
   // same `null`.
-  const sourceHarnessInvalid = sourceInfo.misplaced || (sourceInfo.matches.length > 0 && !sourceHarness);
+  const sourceHarnessInvalid =
+    sourceInfo.misplaced || sourceInfo.nearInvalid || (sourceInfo.matches.length > 0 && !sourceHarness);
 
   const targetInfo = locateHeaderField(lines, "Target-Harnesses");
   const rawTargetHarnesses = targetInfo.matches.length === 1 ? targetInfo.matches[0] : null;
@@ -465,7 +573,8 @@ export function parseEntry(
   // any well-formed header also present in the block, and is flagged
   // invalid here so it is hidden from every harness rather than treated as
   // the back-compatible "no restriction" default.
-  const targetHarnessesInvalid = targetInfo.misplaced || (targetInfo.matches.length > 0 && targetHarnesses === null);
+  const targetHarnessesInvalid =
+    targetInfo.misplaced || targetInfo.nearInvalid || (targetInfo.matches.length > 0 && targetHarnesses === null);
 
   return {
     absolutePath,

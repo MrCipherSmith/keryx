@@ -13,7 +13,7 @@ import { collectEntries, collectEntriesStrict, memoryRoot, memoryRootFor, type M
 import { supersedeEntry } from "./supersede";
 import { transitionMemoryStatus } from "./lifecycle";
 import { resolveCanonicalEntryPath, writeCanonicalEntry } from "./write";
-import { renderMemoryEntry } from "./templates";
+import { containsHarnessHeaderLine, renderMemoryEntry } from "./templates";
 import { selectHandoffEntries } from "./handoff";
 import { isMemoryHarnessId, MEMORY_HARNESS_IDS } from "./harness-identity";
 import { memoryEmbeddingSpec, type Embedder } from "./embedding/adapter";
@@ -30,6 +30,11 @@ import type { MemoryConfig, MemoryEntry, ScoredEntry, SearchFilters } from "./ty
 // facade, never `./harness-identity` directly — M-3 boundary test) can
 // validate a harness id without a second cross-module import.
 export { isMemoryHarnessId, MEMORY_HARNESS_IDS, MEMORY_TYPE_VALUES };
+
+// Flow 313 (W4) review R3-F8, choke point d: re-exported for the same M-3
+// reason — `src/mcp/tools.ts`'s `memory.propose` boundary check uses this
+// SAME function (never a locally re-derived copy of the pattern).
+export { containsHarnessHeaderLine };
 
 export { selectHandoffEntries } from "./handoff";
 import type {

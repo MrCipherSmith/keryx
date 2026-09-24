@@ -1,5 +1,9 @@
 import { test, expect } from "bun:test";
-import { parseEntry } from "./store";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { execSync } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
+import { collectEntries, collectEntriesStrict, memoryRoot, parseEntry } from "./store";
 
 const MD = `# Title Here
 
@@ -269,6 +273,201 @@ test("R2-F5: a lone-CR-authored entry parses Status and Target-Harnesses instead
   expect(entry.status).toBe("accepted");
   expect(entry.targetHarnesses).toEqual(["codex"]);
   expect(entry.targetHarnessesInvalid).toBe(false);
+});
+
+// Flow 313 (W4) review R3-F7 (re-listed under R2-F5), choke point d: the
+// shared `splitLogicalLines` handles U+2028/U+2029/U+0085 the same way it
+// already handles CRLF/CR — a `Target-Harnesses:` header separated from the
+// rest of the header block by one of these codepoints must not read as
+// absent. Discriminating: pre-fix `normalizeLineEndings` only replaced
+// `\r\n`/`\r`; `content.split("\n")` never split on U+2028/U+2029/U+0085 at
+// all, so the WHOLE file (title through Provenance) was one "line" and every
+// per-line pattern failed to match, exactly like the CRLF regression above.
+for (const [label, sep] of [
+  ["U+2028 LINE SEPARATOR", "\u2028"],
+  ["U+2029 PARAGRAPH SEPARATOR", "\u2029"],
+  ["U+0085 NEXT LINE", "\u0085"],
+] as const) {
+  test(`R2-F5/R3-F7: an entry separated by ${label} parses Status and Target-Harnesses instead of losing them`, () => {
+    const lines = [
+      "# Title",
+      "",
+      "Version: 0.1.0",
+      "Type: decision",
+      "Status: accepted",
+      "Source-Harness: claude",
+      "Target-Harnesses: codex",
+      "",
+      "## Summary",
+      "",
+      "A summary.",
+      "",
+    ];
+    const content = lines.join(sep);
+    const entry = parseEntry("/abs/sep.md", "decisions/sep.md", "decision", content);
+    expect(entry.status).toBe("accepted");
+    expect(entry.sourceHarness).toBe("claude");
+    expect(entry.targetHarnesses).toEqual(["codex"]);
+    expect(entry.targetHarnessesInvalid).toBe(false);
+  });
+}
+
+// Flow 313 (W4) review R3-F7: a header KEY that nearly matches
+// `Source-Harness`/`Target-Harnesses` (case variant, missing/extra hyphen,
+// underscore, extra whitespace, a fullwidth colon, an embedded zero-width
+// space, a Unicode hyphen, or the named singular/plural slip) must be
+// treated as an ATTEMPTED but invalid header — hiding the entry from every
+// harness — never as "absent" (which would leave the entry visible to
+// every harness, silently dropping the intended restriction).
+const NEAR_MISS_TARGET_LINES: Array<[string, string]> = [
+  ["space-key", "Target Harnesses: codex"],
+  ["underscore-key", "Target_Harnesses: codex"],
+  ["singular-key", "Target-Harness: codex"],
+  ["fullwidth-colon", "Target-Harnesses\uff1a codex"],
+  ["zwsp-key", "Target-Har\u200bnesses: codex"],
+  ["u2010-hyphen-key", "Target\u2010Harnesses: codex"],
+];
+
+for (const [label, headerLine] of NEAR_MISS_TARGET_LINES) {
+  test(`R3-F7: a near-miss Target-Harnesses key (${label}) is invalid, not absent`, () => {
+    const md = [
+      "# Title",
+      "",
+      "Version: 0.1.0",
+      "Type: decision",
+      "Status: accepted",
+      headerLine,
+      "",
+      "## Summary",
+      "",
+      "s",
+      "",
+    ].join("\n");
+    const entry = parseEntry("/abs/near.md", "decisions/near.md", "decision", md);
+    expect(entry.targetHarnesses ?? null).toBeNull();
+    expect(entry.targetHarnessesInvalid).toBe(true);
+  });
+}
+
+test("R3-F7: an unrelated 'Name:' line near the header block is never mistaken for a near-miss header", () => {
+  const md = [
+    "# Title",
+    "",
+    "Version: 0.1.0",
+    "Type: decision",
+    "Status: accepted",
+    "",
+    "## Summary",
+    "",
+    "s",
+    "",
+    "## Provenance",
+    "",
+    "- Source: review",
+    "- Target: nowhere",
+    "",
+  ].join("\n");
+  const entry = parseEntry("/abs/unrelated.md", "decisions/unrelated.md", "decision", md);
+  expect(entry.targetHarnesses ?? null).toBeNull();
+  expect(entry.targetHarnessesInvalid).toBe(false);
+});
+
+// Flow 313 (W4) review R3-F3: `keryx init`'s own memory scaffold
+// (`index.md`, `templates/entry.md`) must never make `collectEntriesStrict`
+// report `incomplete` — that made `memory handoff` permanently unable to
+// report `complete` in ANY initialized project, including this repo.
+test("R3-F3: collectEntriesStrict recognises the keryx init memory scaffold and stays complete", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "keryx-store-scaffold-"));
+  try {
+    await mkdir(path.join(root, "lessons"), { recursive: true });
+    await writeFile(
+      path.join(root, "lessons", "ok.md"),
+      "# Ok\n\nVersion: 0.1.0\nType: lesson\nStatus: accepted\n\n## Summary\n\nFine.\n",
+    );
+    await writeFile(path.join(root, "index.md"), "# Project Memory\n\nScaffold.\n");
+    await mkdir(path.join(root, "templates"), { recursive: true });
+    await writeFile(path.join(root, "templates", "entry.md"), "# <Title>\n\nScaffold template.\n");
+
+    const result = await collectEntriesStrict(root);
+    expect(result.status).toBe("complete");
+    expect(result.problems).toEqual([]);
+    expect(result.entries.map((entry) => entry.relativePath)).toEqual(["lessons/ok.md"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("R3-F3: a genuinely unexpected top-level markdown file is still reported", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "keryx-store-unexpected-"));
+  try {
+    await writeFile(path.join(root, "misc.md"), "# Misc\n\nNot a scaffold file.\n");
+    const result = await collectEntriesStrict(root);
+    expect(result.status).toBe("incomplete");
+    expect(result.problems).toEqual([{ path: "misc.md", reason: "unexpected-entry" }]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Flow 313 (W4) review R3-F9/R3-F10: the LENIENT scan (`collectEntries`) is
+// what feeds `memory.search`, `wiki.ask` and the MCP resources list —
+// exactly the callers that must never hang on a FIFO or serve content from
+// outside the memory root via a symlink. This mirrors the strict scan's
+// existing symlink/non-regular refusal, applied to the lenient path.
+test("R3-F9/R3-F10: collectEntries skips a symlinked *.md file instead of following it outside the root", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "keryx-store-lenient-symlink-"));
+  try {
+    const root = memoryRoot(cwd);
+    await mkdir(path.join(root, "lessons"), { recursive: true });
+    await writeFile(
+      path.join(root, "lessons", "ok.md"),
+      "# Ok\n\nVersion: 0.1.0\nType: lesson\nStatus: accepted\n\n## Summary\n\nFine.\n",
+    );
+    const outside = path.join(cwd, "outside.md");
+    await writeFile(outside, "# Outside\n\nVersion: 0.1.0\nType: lesson\nStatus: accepted\n\n## Summary\n\nSECRET.\n");
+    await symlink(await realpath(outside), path.join(root, "lessons", "link.md"));
+
+    const entries = await collectEntries(cwd);
+    expect(entries.map((entry) => entry.relativePath)).toEqual(["lessons/ok.md"]);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("R3-F9: collectEntries skips a directory named *.md instead of throwing EISDIR", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "keryx-store-lenient-dir-"));
+  try {
+    const root = memoryRoot(cwd);
+    await mkdir(path.join(root, "lessons", "folder.md"), { recursive: true });
+    await writeFile(
+      path.join(root, "lessons", "ok.md"),
+      "# Ok\n\nVersion: 0.1.0\nType: lesson\nStatus: accepted\n\n## Summary\n\nFine.\n",
+    );
+
+    const entries = await collectEntries(cwd);
+    expect(entries.map((entry) => entry.relativePath)).toEqual(["lessons/ok.md"]);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("R3-F9: collectEntries skips a FIFO named *.md instead of hanging on readFile", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "keryx-store-lenient-fifo-"));
+  try {
+    const root = memoryRoot(cwd);
+    await mkdir(path.join(root, "lessons"), { recursive: true });
+    await writeFile(
+      path.join(root, "lessons", "ok.md"),
+      "# Ok\n\nVersion: 0.1.0\nType: lesson\nStatus: accepted\n\n## Summary\n\nFine.\n",
+    );
+    const fifoPath = path.join(root, "lessons", "pipe.md");
+    execSync(`mkfifo ${JSON.stringify(fifoPath)}`);
+
+    const entries = await collectEntries(cwd);
+    expect(entries.map((entry) => entry.relativePath)).toEqual(["lessons/ok.md"]);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
 });
 
 test("AFC-25: author, confirmedBy and caveat are null when an entry never captured them", () => {
