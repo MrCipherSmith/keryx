@@ -177,3 +177,31 @@ describe("syncAgentRules propagates the refusal (does not swallow or fall back t
     expect(existsSync(path.join(metaprojectRoot, "skills", "project-rules"))).toBe(false);
   });
 });
+
+// R3-F14: `findAgentEntrypoints` used to call `realpath` on every discovered
+// candidate with no try/catch — a dangling or cyclic symlink named
+// `CLAUDE.md`/`AGENTS.md` (an easy state to reach: `CLAUDE.md -> AGENTS.md`
+// created before `AGENTS.md` itself exists) threw a raw ENOENT/ELOOP straight
+// out of `syncAgentRules`, crashing `keryx init`/`rules sync`/`rules distill`
+// with no named reason. These fail on that pre-fix behavior (an unhandled
+// rejection with no `SymlinkRefusedError`, no readable message).
+describe("R3-F14: a dangling or cyclic entrypoint symlink refuses with a named reason instead of crashing", () => {
+  test("a dangling CLAUDE.md -> AGENTS.md (AGENTS.md never created) refuses, not crashes", async () => {
+    symlinkSync(path.join(projectRoot, "AGENTS.md"), path.join(projectRoot, "CLAUDE.md"));
+
+    await expect(
+      syncAgentRules(projectRoot, metaprojectRoot, { createDefault: false }),
+    ).rejects.toThrow(SymlinkRefusedError);
+  });
+
+  test("a symlink cycle refuses, not crashes", async () => {
+    const a = path.join(projectRoot, "CLAUDE.md");
+    const b = path.join(projectRoot, "agents.md");
+    symlinkSync(b, a);
+    symlinkSync(a, b);
+
+    await expect(
+      syncAgentRules(projectRoot, metaprojectRoot, { createDefault: false }),
+    ).rejects.toThrow(SymlinkRefusedError);
+  });
+});

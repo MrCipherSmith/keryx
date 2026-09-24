@@ -23,9 +23,10 @@
 //   3. `writeAgentExport`/`removeManagedAgentExports` — the only code in
 //      this zone that actually touches the filesystem for an export.
 
-import { readFile, mkdir, writeFile, rm, readdir, lstat, realpath } from "node:fs/promises";
+import { readFile, readdir, lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, isNotFound, isPathInside } from "../lib/fs";
+import { removeContained, writeContained } from "../lib/contained-write";
 import { getHarnessAdapter, surfacesOf } from "../integrations/registry";
 import { classifySurfaceState, type MatrixSurfaceState } from "../integrations/matrix";
 import {
@@ -395,9 +396,7 @@ export async function writeAgentExport(
     return { written: false, plan: { ...plan, action: "refuse-unmanaged", reason: safetyReason } };
   }
 
-  const absolute = path.join(projectRoot, ...plan.relativePath.split("/"));
-  await mkdir(path.dirname(absolute), { recursive: true });
-  await writeFile(absolute, plan.content, "utf8");
+  await writeContained(projectRoot, plan.relativePath, plan.content);
   return { written: true, plan };
 }
 
@@ -520,7 +519,7 @@ export async function removeManagedAgentExportsDetailed(
   const { verified, handEdited } = await scanManagedAgentExports(projectRoot, runtime);
   const removed: string[] = [];
   for (const relativePath of verified) {
-    await rm(path.join(projectRoot, ...relativePath.split("/")));
+    await removeContained(projectRoot, relativePath);
     removed.push(relativePath);
   }
   const kept: KeptAgentExport[] = handEdited.map((relativePath) => ({

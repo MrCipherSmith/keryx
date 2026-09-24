@@ -1,0 +1,187 @@
+// Flow 313 (W4 portability), re-plan lane C1: coverage for the contained
+// write primitive — every reason `ContainedWriteError` can name, plus the
+// happy paths (write/remove/mkdir/rename) each retrofitted call site now
+// depends on.
+
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import {
+  ContainedWriteError,
+  mkdirContained,
+  removeContained,
+  renameContained,
+  rmdirIfEmptyContained,
+  writeContained,
+} from "./contained-write";
+
+let root = "";
+let outsideDir = "";
+
+beforeEach(async () => {
+  const base = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-cw-")));
+  root = path.join(base, "project");
+  outsideDir = path.join(base, "elsewhere");
+  await mkdir(root, { recursive: true });
+  await mkdir(outsideDir, { recursive: true });
+});
+
+afterEach(async () => {
+  if (root.length > 0) await rm(path.dirname(root), { recursive: true, force: true });
+});
+
+async function reasonOf(fn: () => Promise<unknown>): Promise<string> {
+  try {
+    await fn();
+  } catch (error) {
+    if (error instanceof ContainedWriteError) return error.reason;
+    throw error;
+  }
+  throw new Error("expected ContainedWriteError");
+}
+
+describe("writeContained", () => {
+  test("creates parent directories and writes the file", async () => {
+    await writeContained(root, "a/b/c.txt", "hello\n");
+    expect(await readFile(path.join(root, "a/b/c.txt"), "utf8")).toBe("hello\n");
+  });
+
+  test("is atomic: no temp file survives a successful write", async () => {
+    await writeContained(root, "note.txt", "one");
+    const dirents = await import("node:fs/promises").then((m) => m.readdir(root));
+    expect(dirents).toEqual(["note.txt"]);
+  });
+
+  test("overwrites an existing regular file", async () => {
+    await writeContained(root, "note.txt", "one");
+    await writeContained(root, "note.txt", "two");
+    expect(await readFile(path.join(root, "note.txt"), "utf8")).toBe("two");
+  });
+
+  test("exclusive refuses an existing file", async () => {
+    await writeContained(root, "note.txt", "one");
+    expect(await reasonOf(() => writeContained(root, "note.txt", "two", { exclusive: true }))).toBe(
+      "already-exists",
+    );
+  });
+
+  test("refuses an absolute rel path", async () => {
+    expect(await reasonOf(() => writeContained(root, "/etc/passwd", "x"))).toBe("absolute-path");
+  });
+
+  test("refuses a lexical .. segment", async () => {
+    expect(await reasonOf(() => writeContained(root, "../escape.txt", "x"))).toBe("lexical-traversal");
+  });
+
+  test("refuses a .git path segment", async () => {
+    expect(await reasonOf(() => writeContained(root, ".git/hooks/pre-commit", "x"))).toBe("git-directory");
+  });
+
+  test("refuses writing over a directory", async () => {
+    await mkdir(path.join(root, "dir"), { recursive: true });
+    expect(await reasonOf(() => writeContained(root, "dir", "x"))).toBe("not-a-regular-file");
+  });
+
+  test("refuses a symlink that resolves outside root", async () => {
+    const outsideFile = path.join(outsideDir, "secret.txt");
+    await writeFile(outsideFile, "TOP SECRET\n", "utf8");
+    await symlink(outsideFile, path.join(root, "escape.txt"));
+    expect(await reasonOf(() => writeContained(root, "escape.txt", "x"))).toBe("escaping-symlink");
+  });
+
+  test("refuses a dangling symlink on the path", async () => {
+    await symlink(path.join(outsideDir, "does-not-exist"), path.join(root, "broken.txt"));
+    expect(await reasonOf(() => writeContained(root, "broken.txt", "x"))).toBe("dangling-symlink");
+  });
+
+  test("refuses a symlink cycle on the path", async () => {
+    await symlink(path.join(root, "cycle-b"), path.join(root, "cycle-a"));
+    await symlink(path.join(root, "cycle-a"), path.join(root, "cycle-b"));
+    expect(await reasonOf(() => writeContained(root, "cycle-a", "x"))).toBe("symlink-cycle");
+  });
+
+  test("allows a symlink that resolves back inside root", async () => {
+    await writeFile(path.join(root, "real.txt"), "r\n", "utf8");
+    await mkdir(path.join(root, "linked-dir"));
+    await symlink(path.join(root, "linked-dir"), path.join(root, "alias"));
+    await writeContained(root, "alias/inside.txt", "ok\n");
+    expect(await readFile(path.join(root, "linked-dir/inside.txt"), "utf8")).toBe("ok\n");
+  });
+});
+
+describe("removeContained", () => {
+  test("removes an existing file and returns true", async () => {
+    await writeContained(root, "note.txt", "one");
+    expect(await removeContained(root, "note.txt")).toBe(true);
+    expect(await Bun.file(path.join(root, "note.txt")).exists()).toBe(false);
+  });
+
+  test("returns false, not an error, when nothing is there", async () => {
+    expect(await removeContained(root, "missing.txt")).toBe(false);
+  });
+
+  test("refuses a lexical .. segment", async () => {
+    expect(await reasonOf(() => removeContained(root, "../x"))).toBe("lexical-traversal");
+  });
+
+  test("refuses an escaping symlink", async () => {
+    const outsideFile = path.join(outsideDir, "secret.txt");
+    await writeFile(outsideFile, "TOP SECRET\n", "utf8");
+    await symlink(outsideFile, path.join(root, "escape.txt"));
+    expect(await reasonOf(() => removeContained(root, "escape.txt"))).toBe("escaping-symlink");
+  });
+});
+
+describe("mkdirContained", () => {
+  test("creates a nested directory", async () => {
+    await mkdirContained(root, "a/b/c");
+    const st = await import("node:fs/promises").then((m) => m.lstat(path.join(root, "a/b/c")));
+    expect(st.isDirectory()).toBe(true);
+  });
+
+  test("is idempotent", async () => {
+    await mkdirContained(root, "a/b");
+    await mkdirContained(root, "a/b");
+  });
+
+  test("refuses when a file is already there", async () => {
+    await writeContained(root, "a", "x");
+    expect(await reasonOf(() => mkdirContained(root, "a"))).toBe("not-a-directory");
+  });
+});
+
+describe("renameContained", () => {
+  test("moves a file, creating destination parents", async () => {
+    await writeContained(root, "src/a.txt", "content");
+    await renameContained(root, "src/a.txt", "dst/b.txt");
+    expect(await readFile(path.join(root, "dst/b.txt"), "utf8")).toBe("content");
+    expect(await Bun.file(path.join(root, "src/a.txt")).exists()).toBe(false);
+  });
+
+  test("refuses when the source does not exist", async () => {
+    expect(await reasonOf(() => renameContained(root, "missing.txt", "dst.txt"))).toBe("not-contained");
+  });
+
+  test("refuses an escaping destination", async () => {
+    await writeContained(root, "a.txt", "x");
+    expect(await reasonOf(() => renameContained(root, "a.txt", "../escape.txt"))).toBe("lexical-traversal");
+  });
+});
+
+describe("rmdirIfEmptyContained", () => {
+  test("removes an empty directory", async () => {
+    await mkdirContained(root, "empty");
+    expect(await rmdirIfEmptyContained(root, "empty")).toBe(true);
+  });
+
+  test("leaves a non-empty directory alone", async () => {
+    await writeContained(root, "full/a.txt", "x");
+    expect(await rmdirIfEmptyContained(root, "full")).toBe(false);
+    expect(await Bun.file(path.join(root, "full/a.txt")).exists()).toBe(true);
+  });
+
+  test("returns false for a missing directory", async () => {
+    expect(await rmdirIfEmptyContained(root, "nope")).toBe(false);
+  });
+});

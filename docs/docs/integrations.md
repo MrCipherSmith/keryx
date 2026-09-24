@@ -275,6 +275,40 @@ task (`keryx bundle import --render-for`) drives; they go through the same
 installer core and install-state as every other surface, rather than a
 second bookkeeping layer.
 
+## Write containment
+
+Every write, remove, rename, and directory-create this module performs into a
+project tree — the markdown-block managed installs above, the JSON
+settings-file owner, install-state, the capability matrix artifact, the
+OpenCode plugin file, `rules distill`/`rules sync`'s writes into
+`.metaproject/` and back into the entrypoint files themselves, and agent
+export — goes through the ONE primitive in `src/lib/contained-write.ts`
+(`writeContained`/`removeContained`/`mkdirContained`/`renameContained`),
+never a raw `node:fs/promises` call. A `src/lib/contained-write.ratchet.test.ts`
+test scans these modules' source for a raw `writeFile`/`rm`/`unlink`/
+`rename`/`mkdir`/`appendFile`/`copyFile` import and fails the build if one
+creeps back in outside that one file.
+
+The primitive refuses (with a named `ContainedWriteError.reason`, never a
+silent no-op or a bare exception) on:
+
+- an absolute `rel` path, or one containing a lexical `..` segment;
+- a path that steps through a literal `.git` directory segment;
+- a symlink segment (intermediate or final) whose resolved real path leaves
+  the project root — same rule `src/lib/symlink-safety.ts` already used for
+  reads and the managed-block installs above, so both agree byte-for-byte;
+- a symlink CYCLE or a DANGLING symlink anywhere on the path;
+- overwriting an existing non-regular-file entry (writes), or a non-directory
+  entry already sitting where a directory is expected (`mkdirContained`).
+
+A symlink whose resolved target stays INSIDE the project root (the
+`CLAUDE.md -> AGENTS.md` layout mentioned above) is followed, not refused —
+the write lands in the symlink's target, exactly like a plain `writeFile`
+would, and the symlink itself is left in place. Every other write is
+atomic: the payload goes to a temporary file beside the target, then is
+renamed into place, so a reader never observes a partially written file and
+a crash mid-write leaves either the old content or none, never a truncation.
+
 ## Legacy command aliases
 
 `keryx ctx install-hook`/`uninstall-hook`, `keryx orient install-hook`, and

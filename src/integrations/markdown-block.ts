@@ -51,10 +51,11 @@
 // `computeFencedRanges` (which walks raw content directly rather than a
 // normalised copy).
 
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { refuseEscapingSymlink, SymlinkRefusedError } from "../lib/symlink-safety";
+import { removeContained, writeContained } from "../lib/contained-write";
 
 export const INSTRUCTIONS_START_MARKER = "<!-- keryx:instructions -->";
 export const INSTRUCTIONS_END_MARKER = "<!-- /keryx:instructions -->";
@@ -375,8 +376,7 @@ export async function installMarkdownBlock(
 
   const file = fileFor(root, relativePath);
   if (!(await pathExists(file))) {
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, `${frontMatter ?? ""}${spec.render()}`, "utf8");
+    await writeContained(root, relativePath, `${frontMatter ?? ""}${spec.render()}`);
     return [];
   }
   const raw = await readFile(file, "utf8");
@@ -399,7 +399,7 @@ export async function installMarkdownBlock(
 
   const block = applyEol(spec.render(), eol);
   const next = blocks.length === 0 ? appendBlock(raw, block, eol) : collapseBlocks(raw, blocks, block);
-  if (next !== raw) await writeFile(file, next, "utf8");
+  if (next !== raw) await writeContained(root, relativePath, next);
   return [];
 }
 
@@ -449,10 +449,10 @@ export async function uninstallMarkdownBlock(
     normalizedRemainder === "" || (frontMatter !== undefined && normalizedRemainder === normalizeForCompare(frontMatter));
 
   if (deletable) {
-    await rm(file, { force: true });
+    await removeContained(root, relativePath);
     return true;
   }
-  if (remainder !== raw) await writeFile(file, remainder, "utf8");
+  if (remainder !== raw) await writeContained(root, relativePath, remainder);
   return true;
 }
 

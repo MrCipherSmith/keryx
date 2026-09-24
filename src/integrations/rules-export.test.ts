@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { installIntegration, uninstallIntegration } from "./installer";
+import { doctorIntegration, installIntegration, uninstallIntegration } from "./installer";
 import { installedRulesExportHarnesses, renderRulesForHarnesses } from "./rules-export";
 
 let root: string;
@@ -317,6 +317,25 @@ describe("rules-export surface: R2-F6 an unsafe rule name is skipped with a warn
     const real = await installIntegration(root, "claude", { surfaces: ["rules-export"] });
     expect(real.errors).toEqual([]);
     expect(real.results[0]!.status).toBe("installed");
+  });
+
+  // R3-F6 (the still-open half of R2-F6): `probe` used to merge the same
+  // skipped-rule warning into its `problems`, and `installer.ts`'s
+  // `liveStatusOf` treats ANY non-empty `probe` result as `invalid` — so
+  // `doctor` reported this surface `invalid` (exit 1) immediately after an
+  // install that itself reported `installed`. This fails on the pre-fix
+  // `probeRulesExport`, which returned `[...skippedMessages(skipped), ...problems]`.
+  test("doctor reports valid right after an install that skipped an unsafe rule name", async () => {
+    await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    await writeRule("bad<name>.mdc", "Would forge a marker via its own path.");
+
+    const install = await installIntegration(root, "claude", { surfaces: ["rules-export"] });
+    expect(install.results[0]!.status).toBe("installed");
+
+    const doctor = await doctorIntegration(root, "claude", { surfaces: ["rules-export"] });
+    const rulesExport = doctor.surfaces.find((s) => s.surfaceId === "rules-export");
+    expect(rulesExport?.live).toBe("valid");
+    expect(rulesExport?.problems).toEqual([]);
   });
 });
 

@@ -1,10 +1,10 @@
 // Flow 305 (W5-a): the `SettingsFileOwner` implementation and the on-disk
 // installSurfaces/uninstallSurfaces every installer routes through.
 
-import { rm } from "node:fs/promises";
 import path from "node:path";
 import { readSettingsFile, writeSettingsFile } from "./settings-json";
 import { refuseEscapingSymlink } from "../lib/symlink-safety";
+import { removeContained } from "../lib/contained-write";
 import type { Settings, SettingsFileOwner, SurfaceAdapter } from "./types";
 
 /** A JSON round-trip clone: what actually survives `JSON.stringify`/parse. */
@@ -116,7 +116,7 @@ export async function installSurfaces(
   const existing = await readSettingsFile(file);
   const { settings, errors } = owner.apply(existing, { install: surfaceIds });
   if (errors.length > 0) return { file, errors };
-  await writeSettingsFile(file, settings);
+  await writeSettingsFile(root, relativePath, settings);
   return { file, errors: [] };
 }
 
@@ -144,9 +144,9 @@ export async function uninstallSurfaces(
   if (errors.length > 0) return { file, errors };
   const ownsWholeFile = owner.surfaces().some((s) => s.ownsWholeFile);
   if (ownsWholeFile && Object.keys(settings).length === 0) {
-    await rm(file, { force: true });
+    await removeContained(root, relativePath);
   } else {
-    await writeSettingsFile(file, settings);
+    await writeSettingsFile(root, relativePath, settings);
   }
   return { file, errors: [] };
 }

@@ -95,10 +95,21 @@ async function uninstallRulesExport(
   return skipped.length === 0 ? removed : { removed, warnings: skippedMessages(skipped) };
 }
 
+/**
+ * Review round 3 fix (R3-F6, the still-open half of R2-F6): `probe` feeds
+ * `installer.ts`'s `liveStatusOf`/`doctorIntegration`, which reports a
+ * surface `invalid` — command exit 1 — the moment `probe` returns anything
+ * non-empty. A skipped-rule warning is NOT a health problem with the
+ * INSTALLED block (the block itself is fine; a rule with an unsafe name was
+ * simply left out of it, exactly as install already reported at install
+ * time) — merging it into `problems` here made `doctor` report `invalid`
+ * immediately after an install that itself succeeded with warnings. `probe`
+ * now reports only real block-health problems (missing file, stale content,
+ * an unterminated/malformed block); a skipped rule is never one of them.
+ */
 async function probeRulesExport(root: string, relativePath: string): Promise<string[]> {
-  const { spec, skipped } = await rulesSpec(root);
-  const problems = await probeMarkdownBlock(root, relativePath, spec);
-  return [...skippedMessages(skipped), ...problems];
+  const { spec } = await rulesSpec(root);
+  return probeMarkdownBlock(root, relativePath, spec);
 }
 
 async function inspectRulesExport(root: string, relativePath: string) {

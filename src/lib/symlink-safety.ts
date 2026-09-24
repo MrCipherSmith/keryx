@@ -69,6 +69,16 @@ export async function refuseEscapingSymlink(root: string, relativePath: string):
     if (escapes) {
       return `${relativePath}: refuses to write through a symlink at ${path.relative(rootResolved, current) || "."} that resolves outside the project root`;
     }
+    // R3-F13: a symlink can stay technically "inside root" while still
+    // resolving into `.git/` — `GEMINI.md -> .git/config` corrupts the repo's
+    // git config, `CLAUDE.md -> .git/hooks/pre-commit` appends into a hook
+    // that then runs on every commit. Neither is an "escape" by the check
+    // above, so it needs its own refusal: the resolved real path itself
+    // (never merely the lexical `relativePath`, which a symlink can route
+    // around) is refused the moment it lands inside `<root>/.git`.
+    if (rel === ".git" || rel.startsWith(`.git${path.sep}`)) {
+      return `${relativePath}: refuses to write through a symlink at ${path.relative(rootResolved, current) || "."} that resolves into the project's .git directory`;
+    }
   }
   return undefined;
 }

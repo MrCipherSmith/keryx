@@ -384,6 +384,47 @@ export async function installIntegration(
   const results: SurfaceResult<InstallSurfaceStatus>[] = [];
   const errors: string[] = [];
 
+  // R3-F12: without this pass, the write loops below wrote (and recorded
+  // install-state for) each JSON settings file — and ran each custom
+  // surface's real `customInstall` — as soon as ITS OWN check passed, with
+  // no regard for whether a LATER surface in the same `install` call was
+  // about to fail. A repro: `.gemini/settings.json` writes and its
+  // install-state is recorded, then a later custom surface (e.g. one whose
+  // target resolves through an escaping symlink) refuses and the whole
+  // command exits non-zero — leaving the runtime half-installed with no way
+  // to tell from the exit code alone. Every selected target is checked here,
+  // with NO write, BEFORE the first real write happens; on any failure the
+  // whole call returns failed results for everything it touched and writes
+  // nothing at all, exactly like a single-surface refusal always did.
+  if (!opts.dryRun) {
+    const preflightErrors: string[] = [];
+    for (const [relativePath, groupSurfaces] of jsonByPath) {
+      const owner = opts.ownerOverride ?? settingsFileOwnerFor(relativePath);
+      if (!owner) {
+        preflightErrors.push(`no settings-file owner registered for ${relativePath}`);
+        continue;
+      }
+      const existing = await readSettingsFile(fileFor(root, relativePath));
+      const { errors: applyErrors } = owner.apply(existing, { install: groupSurfaces.map((s) => s.id) });
+      preflightErrors.push(...applyErrors);
+    }
+    for (const surface of custom) {
+      const dryRun = await customInstallDryRun(root, surface);
+      preflightErrors.push(...dryRun.errors);
+    }
+    if (preflightErrors.length > 0) {
+      for (const [relativePath, groupSurfaces] of jsonByPath) {
+        for (const surface of groupSurfaces) {
+          results.push({ ...baseResult(surface, relativePath), status: "failed", errors: preflightErrors, warnings: warningsFor(surface) });
+        }
+      }
+      for (const surface of custom) {
+        results.push({ ...baseResult(surface, surface.relativePath), status: "failed", errors: preflightErrors, warnings: warningsFor(surface) });
+      }
+      return { runtimeId, results, errors: preflightErrors };
+    }
+  }
+
   for (const [relativePath, groupSurfaces] of jsonByPath) {
     const owner = opts.ownerOverride ?? settingsFileOwnerFor(relativePath);
     if (!owner) {

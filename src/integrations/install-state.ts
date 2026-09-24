@@ -15,9 +15,10 @@
 // actually wrote something.
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { removeContained, writeContained } from "../lib/contained-write";
 import { currentWriterVersion } from "../lib/install-plan";
 import type { SurfaceFlag } from "./types";
 
@@ -49,6 +50,11 @@ function metaprojectDir(root: string): string {
 
 export function installStatePath(root: string, runtimeId: string): string {
   return path.join(metaprojectDir(root), "data", "integrations", "install-state", `${runtimeId}.json`);
+}
+
+/** `installStatePath`'s target, relative to `root` — the `rel` `writeContained`/`removeContained` take. */
+function installStateRelPath(runtimeId: string): string {
+  return `.metaproject/data/integrations/install-state/${runtimeId}.json`;
 }
 
 /**
@@ -210,9 +216,7 @@ function sortedRecords(records: readonly InstalledModuleRecord[]): InstalledModu
 }
 
 async function writeInstallState(root: string, runtimeId: string, state: InstallState): Promise<void> {
-  const file = installStatePath(root, runtimeId);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  await writeContained(root, installStateRelPath(runtimeId), `${JSON.stringify(state, null, 2)}\n`);
 }
 
 /**
@@ -291,7 +295,7 @@ export async function recordSurfaceUninstalled(root: string, runtimeId: string, 
   if (remaining.length === existing.installedModules.length) return;
 
   if (remaining.length === 0) {
-    await rm(installStatePath(root, runtimeId), { force: true });
+    await removeContained(root, installStateRelPath(runtimeId));
     return;
   }
 

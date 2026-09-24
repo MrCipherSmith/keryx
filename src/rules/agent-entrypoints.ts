@@ -1,8 +1,9 @@
-import { mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import { readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { renderProjectMetaprojectReferenceBlock } from "../lib/agent-entrypoint-blocks";
 import { pathExists } from "../lib/fs";
 import { refuseEscapingSymlink, SymlinkRefusedError } from "../lib/symlink-safety";
+import { mkdirContained, writeContained } from "../lib/contained-write";
 import {
   renderAgentEntrypoint,
   renderImportedAgentRules,
@@ -73,8 +74,8 @@ export async function syncAgentRules(
     existingSources.push({ source, sourcePath });
   }
 
-  await mkdir(path.join(metaprojectRoot, "rules"), { recursive: true });
-  await mkdir(path.join(metaprojectRoot, "skills", "project-rules"), { recursive: true });
+  await mkdirContained(metaprojectRoot, "rules");
+  await mkdirContained(metaprojectRoot, "skills/project-rules");
 
   const synced: SyncedAgentRule[] = [];
   for (const { source, sourcePath } of existingSources) {
@@ -84,15 +85,13 @@ export async function syncAgentRules(
     });
     const ruleFile = ruleFileNameFor(source);
     const sourceContent = await readFile(sourcePath, "utf8");
-    await writeTextIfChanged(
-      path.join(metaprojectRoot, "rules", ruleFile),
-      renderImportedAgentRules({ source, content: sourceContent }),
-    );
+    await writeTextIfChanged(metaprojectRoot, `rules/${ruleFile}`, renderImportedAgentRules({ source, content: sourceContent }));
     synced.push({ source, ruleFile, priority: "high", version: "1.0.0" });
   }
 
   await writeTextIfChanged(
-    path.join(metaprojectRoot, "skills", "project-rules", "README.md"),
+    metaprojectRoot,
+    "skills/project-rules/README.md",
     renderProjectRulesSkillReadme({ sources: synced.map((rule) => rule.source) }),
   );
 
@@ -175,13 +174,31 @@ export async function ensureMetaprojectReference(
   if (hasMarkerLine(content, marker)) {
     const next = replaceManagedBlock(content, filePath, marker, endMarker, block);
     if (next !== content) {
-      await writeFile(filePath, next, "utf8");
+      await writeManagedFile(filePath, next, options.root);
     }
 
     return;
   }
 
-  await writeFile(filePath, insertMetaprojectBlockNearTop(content, block), "utf8");
+  await writeManagedFile(filePath, insertMetaprojectBlockNearTop(content, block), options.root);
+}
+
+/**
+ * `writeContained`, but usable from a call site that only has an absolute
+ * `filePath` — `ensureMetaprojectReference`'s callers do not all know a
+ * project root (a direct unit test on a bare temp file, in particular). When
+ * `root` IS given the write is contained against it, same as every other
+ * write in this module; when it is not, `filePath`'s own parent directory
+ * stands in as the containment root, which still gets the write its
+ * atomicity and non-regular-file refusal — matching the symlink check
+ * immediately above, which is likewise skipped only when `root` is omitted.
+ */
+async function writeManagedFile(filePath: string, content: string, root?: string): Promise<void> {
+  if (root !== undefined) {
+    await writeContained(root, path.relative(root, filePath), content);
+    return;
+  }
+  await writeContained(path.dirname(filePath), path.basename(filePath), content);
 }
 
 export function ruleFileNameFor(source: string): string {
@@ -204,7 +221,23 @@ async function findAgentEntrypoints(projectRoot: string, manifestSources: string
       continue;
     }
     const candidatePath = path.join(projectRoot, candidate);
-    const resolved = await realpath(candidatePath);
+    // R3-F14: `candidate` is a name `readdir` reported — it EXISTS as a
+    // directory entry, but a dangling or cyclic symlink still throws a raw
+    // ENOENT/ELOOP out of `realpath`, which used to escape this function
+    // uncaught and crash the whole `sync`/`distill`/`init` call with no named
+    // reason. Refused explicitly instead, naming the candidate and the
+    // underlying code, so the caller sees exactly which entrypoint is broken
+    // and why — the same "refuse hard, name the file" idiom every other
+    // symlink problem in this module already uses.
+    let resolved: string;
+    try {
+      resolved = await realpath(candidatePath);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      throw new SymlinkRefusedError(
+        `${candidatePath}: refuses a ${code === "ELOOP" ? "symlink cycle" : "dangling symlink"} at this entrypoint`,
+      );
+    }
     if (seenRealPaths.has(resolved)) {
       continue;
     }
@@ -218,7 +251,7 @@ async function ensureDefaultAgentEntrypoints(projectRoot: string, entrypoints: s
   const sources = [...entrypoints];
   for (const source of ["AGENTS.md", "CLAUDE.md"]) {
     if (!sources.includes(source)) {
-      await writeTextIfMissing(path.join(projectRoot, source), renderAgentEntrypoint({ source }));
+      await writeTextIfMissing(projectRoot, source, renderAgentEntrypoint({ source }));
       sources.push(source);
     }
   }
@@ -286,19 +319,21 @@ function insertMetaprojectBlockNearTop(content: string, block: string): string {
   return `${prefix}${normalizedBlock}${suffix}`;
 }
 
-async function writeTextIfMissing(filePath: string, content: string): Promise<void> {
+async function writeTextIfMissing(root: string, rel: string, content: string): Promise<void> {
+  const filePath = path.join(root, ...rel.split("/"));
   if (await pathExists(filePath)) {
     return;
   }
-  await writeFile(filePath, content, "utf8");
+  await writeContained(root, rel, content);
 }
 
-async function writeTextIfChanged(filePath: string, content: string): Promise<void> {
+async function writeTextIfChanged(root: string, rel: string, content: string): Promise<void> {
+  const filePath = path.join(root, ...rel.split("/"));
   if (await pathExists(filePath)) {
     const existing = await readFile(filePath, "utf8");
     if (existing === content) {
       return;
     }
   }
-  await writeFile(filePath, content, "utf8");
+  await writeContained(root, rel, content);
 }

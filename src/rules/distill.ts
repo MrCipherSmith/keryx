@@ -1,6 +1,7 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { writeContained } from "../lib/contained-write";
 import {
   ensureMetaprojectReference,
   ruleFileNameFor,
@@ -110,13 +111,61 @@ export async function listRootEntrypoints(projectRoot: string, manifestSources: 
   return candidates.filter((candidate) => entries.has(candidate));
 }
 
+// R3-F4 fix: every marker below is matched as a WHOLE LINE (its trimmed
+// content equals the marker exactly), never a bare substring, and a marker
+// found inside a fenced code block is never trusted either way — mirroring
+// `agent-entrypoints.ts`'s `indexOfMarkerLine` (whole-line) and
+// `markdown-block.ts`'s `computeFencedRanges` (fence-aware). Before this fix,
+// `content.indexOf(marker)` matched an inline prose MENTION of the marker
+// (e.g. a sentence documenting `<!-- keryx:index -->`) exactly like a real
+// block boundary, silently deleting every human section between that mention
+// and the next real marker it happened to pair with.
+
+/** Char ranges (start inclusive, end exclusive) covered by fenced code blocks (``` or ~~~, >=3 backticks/tildes). */
+function computeFencedRanges(content: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  const lines = content.split("\n");
+  let offset = 0;
+  let fenceStart: number | null = null;
+  for (const line of lines) {
+    if (/^(`{3,}|~{3,})/.test(line.trim())) {
+      if (fenceStart === null) fenceStart = offset;
+      else {
+        ranges.push([fenceStart, offset + line.length]);
+        fenceStart = null;
+      }
+    }
+    offset += line.length + 1;
+  }
+  if (fenceStart !== null) ranges.push([fenceStart, content.length]);
+  return ranges;
+}
+
+function isWithinRanges(offset: number, ranges: Array<[number, number]>): boolean {
+  return ranges.some(([s, e]) => offset >= s && offset < e);
+}
+
+/** The character offset of the first LINE whose trimmed content equals `marker` exactly, skipping any match inside a fenced code block, or -1. */
+function indexOfMarkerLine(content: string, marker: string, fenced: Array<[number, number]>): number {
+  const lines = content.split("\n");
+  let offset = 0;
+  for (const line of lines) {
+    if (line.trim() === marker && !isWithinRanges(offset, fenced)) return offset;
+    offset += line.length + 1;
+  }
+  return -1;
+}
+
 function stripManagedBlock(content: string): string {
-  const index = content.indexOf(marker);
+  const fenced = computeFencedRanges(content);
+  const index = indexOfMarkerLine(content, marker, fenced);
   if (index < 0) {
     return content.trim();
   }
-  const endIndex = content.indexOf(endMarker, index + marker.length);
-  if (endIndex >= 0) {
+  const searchFrom = index + marker.length;
+  const endOffset = indexOfMarkerLine(content.slice(searchFrom), endMarker, computeFencedRanges(content.slice(searchFrom)));
+  if (endOffset >= 0) {
+    const endIndex = searchFrom + endOffset;
     return `${content.slice(0, index)}\n${content.slice(endIndex + endMarker.length)}`.trim();
   }
   return content.slice(0, index).trim();
@@ -130,16 +179,21 @@ function stripManagedBlock(content: string): string {
  * where it is rather than guessed at; the section splitter downstream may
  * still mishandle that pre-existing corruption, which is no worse than
  * before this fix and is a `markdown-block.ts` install/probe concern, not
- * distill's.
+ * distill's. Markers are matched whole-line and fence-aware (R3-F4) — a
+ * prose sentence quoting `<!-- keryx:rules -->`, or an example inside a
+ * fenced code block, is never mistaken for a real block boundary.
  */
 function extractOtherManagedBlocks(content: string): { body: string; blocks: string[] } {
   let body = content;
   const blocks: string[] = [];
   for (const { start, end } of OTHER_MANAGED_BLOCK_MARKERS) {
-    const startIndex = body.indexOf(start);
+    const fenced = computeFencedRanges(body);
+    const startIndex = indexOfMarkerLine(body, start, fenced);
     if (startIndex < 0) continue;
-    const endIndex = body.indexOf(end, startIndex + start.length);
-    if (endIndex < 0) continue;
+    const searchFrom = startIndex + start.length;
+    const endOffset = indexOfMarkerLine(body.slice(searchFrom), end, computeFencedRanges(body.slice(searchFrom)));
+    if (endOffset < 0) continue;
+    const endIndex = searchFrom + endOffset;
     blocks.push(body.slice(startIndex, endIndex + end.length));
     body = `${body.slice(0, startIndex)}\n${body.slice(endIndex + end.length)}`;
   }
@@ -213,13 +267,11 @@ async function writeDistilledRule(
   slug: string,
   section: Section,
 ): Promise<string> {
-  const relative = path.join("rules", "entrypoints", `${slug}.md`);
-  const target = path.join(metaprojectRoot, relative);
-  await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(
-    target,
+  const relative = `rules/entrypoints/${slug}.md`;
+  await writeContained(
+    metaprojectRoot,
+    relative,
     `---\ntype: distilled-entrypoint-rule\npriority: high\nsource: ${JSON.stringify(source)}\nversion: "1.0.0"\ngenerated_by: keryx rules distill\n---\n\n# ${section.title}\n\n${section.body}\n`,
-    "utf8",
   );
   return relative;
 }
@@ -230,13 +282,11 @@ async function writeDistilledSkill(
   slug: string,
   section: Section,
 ): Promise<string> {
-  const relative = path.join("project-skills", "entrypoints", slug, "SKILL.md");
-  const target = path.join(metaprojectRoot, relative);
-  await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(
-    target,
+  const relative = `project-skills/entrypoints/${slug}/SKILL.md`;
+  await writeContained(
+    metaprojectRoot,
+    relative,
     `---\nname: ${slug}\ndescription: Use when working with the project-specific workflow extracted from ${source}: ${section.title}.\nmetadata:\n  source: ${source}\n  version: "1.0.0"\n  generated_by: keryx rules distill\n---\n\n# ${section.title}\n\n## When To Use\n\nUse this skill when the task matches the workflow, agent behavior, or project-specific procedure below.\n\n## Procedure\n\n${section.body}\n\n## Source\n\nExtracted from \`${source}\` by \`keryx rules distill\`.\n`,
-    "utf8",
   );
   return relative;
 }
@@ -259,7 +309,7 @@ async function rewriteEntrypoint(
   // `keryx:index` on its own, since it must also handle the "no block yet"
   // insertion case these preserved blocks never need.
   const preserved = preservedBlocks.length > 0 ? `\n\n${preservedBlocks.join("\n\n")}` : "";
-  await writeFile(sourcePath, `${title}\n\n${body}${preserved}\n`, "utf8");
+  await writeContained(projectRoot, source, `${title}\n\n${body}${preserved}\n`);
   await ensureMetaprojectReference(sourcePath, { enableTasks, root: projectRoot });
 }
 
@@ -269,8 +319,6 @@ async function writeDistilledIndex(
   skills: DistilledEntry[],
   keptRootSections: DistilledEntry[],
 ): Promise<void> {
-  const target = path.join(metaprojectRoot, "rules", "entrypoints", "index.md");
-  await mkdir(path.dirname(target), { recursive: true });
   const ruleRows = rules.length > 0
     ? rules.map((entry) => `| ${entry.source} | ${entry.title} | ${entry.path} |`).join("\n")
     : "| _none_ | No project rule sections extracted | - |";
@@ -281,10 +329,10 @@ async function writeDistilledIndex(
     ? keptRootSections.map((entry) => `| ${entry.source} | ${entry.title} |`).join("\n")
     : "| _none_ | No root-only sections kept |";
 
-  await writeFile(
-    target,
+  await writeContained(
+    metaprojectRoot,
+    "rules/entrypoints/index.md",
     `# Distilled Entrypoint Rules\n\nGenerated by \`keryx rules distill\`.\n\n## Extracted Rules\n\n| Source | Section | Entry |\n|--------|---------|-------|\n${ruleRows}\n\n## Extracted Skills\n\n| Source | Section | Entry |\n|--------|---------|-------|\n${skillRows}\n\n## Kept In Root Entrypoints\n\n| Source | Section |\n|--------|---------|\n${rootRows}\n`,
-    "utf8",
   );
 }
 

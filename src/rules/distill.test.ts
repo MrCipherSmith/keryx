@@ -110,3 +110,54 @@ describe("distillAgentEntrypoints: R2-F7 a sibling keryx:rules block survives di
     expect(countOccurrences(after, "<!-- /keryx:rules -->")).toBe(1);
   });
 });
+
+// R3-F4: `stripManagedBlock`/`extractOtherManagedBlocks` used to match every
+// marker as a bare substring (`content.indexOf(marker)`), exactly like
+// `syncAgentRules`'s marker check did before its own R2-F15 fix. A line of
+// PROSE that merely mentions the marker text (documenting it, not using it)
+// was indistinguishable from a real block boundary, and paired with a real
+// `<!-- keryx:index -->`/`<!-- /keryx:index -->` block further down —
+// silently deleting every human section in between. This test fails on the
+// pre-fix `indexOf`-based matchers.
+describe("R3-F4: a prose mention of a marker is not mistaken for a real block boundary", () => {
+  test("distill keeps human sections between a prose mention and the real keryx:index block", async () => {
+    const claudeMd = path.join(projectRoot, "CLAUDE.md");
+    const content = [
+      "# Project",
+      "",
+      "Our docs mention the `<!-- keryx:index -->` marker inline in prose.",
+      "",
+      "## Personal tone",
+      "",
+      "KEEP-ME-1 never use emojis in replies.",
+      "",
+      "## Build",
+      "",
+      "KEEP-ME-2 run bun test src/ before pushing.",
+      "",
+      "<!-- keryx:index -->",
+      "old index",
+      "<!-- /keryx:index -->",
+      "",
+    ].join("\n");
+    await writeFile(claudeMd, content, "utf8");
+
+    const result = await distillAgentEntrypoints(projectRoot, metaprojectRoot, { enableTasks: false });
+
+    // KEEP-ME-1/2 must survive SOMEWHERE distill's own output accounts for —
+    // either kept in the rewritten entrypoint (root section) or moved into a
+    // distilled rule/skill file under `metaprojectRoot` — never silently
+    // dropped, which is what the pre-fix substring match did (both sections
+    // ended up BETWEEN the false marker match and the real one, and the
+    // whole span between them was deleted).
+    const after = await readFile(claudeMd, "utf8");
+    const distilledTexts = await Promise.all(
+      [...result.rules, ...result.skills]
+        .filter((entry): entry is typeof entry & { path: string } => entry.path !== undefined)
+        .map((entry) => readFile(path.join(metaprojectRoot, entry.path), "utf8")),
+    );
+    const everywhere = [after, ...distilledTexts].join("\n---\n");
+    expect(everywhere).toContain("KEEP-ME-1");
+    expect(everywhere).toContain("KEEP-ME-2");
+  });
+});
