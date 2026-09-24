@@ -48,6 +48,7 @@ import { forgettingCommand } from "./commands/forgetting";
 import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
+import { hooksCommand, printHooksHelp } from "./commands/hooks";
 import { sandboxNetForwardCommand } from "./commands/sandbox-net-forward";
 import { helpCommand } from "./commands/help";
 import packageJson from "../package.json" with { type: "json" };
@@ -122,6 +123,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   trigger: triggerCommand,
   schedule: scheduleCommand,
   governance: governanceCommand,
+  hooks: hooksCommand,
   // Flow 301 (AC5): internal helper only — `planUnattendedSandbox.wrap()` invokes this
   // from inside the sandbox; no operator ever types it. Excluded from the CLI
   // reference with a reason (`DOCUMENTED_ELSEWHERE` in `cli-reference-coverage.test.ts`).
@@ -333,6 +335,12 @@ export const USAGE_BODY = `Usage:
                                                Spend, confirmations, signatures and gate outcomes,
                                                unified across flows; writes latest.md/latest.json
   keryx governance show [--json]                Reprint the most recently written governance report
+  keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)
+  keryx hooks validate [--json] [--ci]          Validate .metaproject/hooks.json and ~/.keryx/hooks.json
+  keryx hooks test <id> [--event <name>] [--payload-file <path>] [--json] [--profile <id>]
+                                               Run one hook once against a synthetic or captured payload
+  keryx hooks enable <id> [--user]              Flip a hook's enabled state (project file, or --user for ~/.keryx/hooks.json)
+  keryx hooks disable <id> [--user]
   keryx --version
 
 Commands:
@@ -383,6 +391,7 @@ Commands:
   trigger   Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code
   schedule  Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove
   governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
+  hooks     Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration
 `;
 
 function printHelp(): void {
@@ -448,6 +457,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, () => void> = new Map([
   ["trigger", printTriggerHelp],
   ["serve-mcp", printServeMcpHelp],
   ["governance", printGovernanceHelp],
+  ["hooks", printHooksHelp],
 ]);
 
 /**
