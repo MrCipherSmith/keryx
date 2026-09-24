@@ -1748,7 +1748,8 @@ Usage:
   keryx skills sync --runtime codex|claude --target <dir>
   keryx skills contracts list
   keryx skills contracts validate <file> --schema <name>
-  keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all] [--json]
+  keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all]
+              [--origin learned --source-ref <id>] [--json]
   keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>] [--model-grader] [--json]
   keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 

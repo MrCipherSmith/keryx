@@ -25,6 +25,11 @@
           "settingsFile": ".claude/settings.json"
         },
         {
+          "surface": "observe",
+          "state": "native",
+          "settingsFile": ".claude/settings.json"
+        },
+        {
           "surface": "agents",
           "state": "native",
           "settingsFile": ".claude/agents"
@@ -33,12 +38,16 @@
       "surfaces_unsupported": [],
       "install_command": "keryx integrations install --runtime claude",
       "verification_command": "keryx integrations doctor --runtime claude",
-      "risk_notes": "",
+      "risk_notes": "Passive observation only: appends a redacted, 200-char-bounded-preview JSONL line per event under .metaproject/data/learning/observations/ (gitignored) — never blocks, never returns a decision, always exits 0.",
       "last_verified": "2026-09-23",
       "source_docs": [
+        "docs/requirements/keryx-agent-platform-expansion/workstreams/W3-self-learning.md",
+        "https://code.claude.com/docs/en/agent-sdk/hooks",
+        "https://code.claude.com/docs/en/hooks",
         "https://code.claude.com/docs/en/sub-agents",
         "src/ctx/orient-runtimes.ts",
         "src/ctx/runtimes.ts",
+        "src/learning/observe.ts",
         "src/security/agent-hooks/runtimes.ts"
       ]
     },

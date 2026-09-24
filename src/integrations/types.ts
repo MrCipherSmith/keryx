@@ -117,6 +117,16 @@ export const SUBSYSTEM_AGENTS = "agents";
 // (`src/harness/hooks/`) — a `policy-travels-with-agent` capability like
 // `SUBSYSTEM_ACP_PERMISSION`, not a settings file keryx installs into.
 export const SUBSYSTEM_SHELL_HOOKS = "shell-hooks";
+/**
+ * Flow 312 (W3, T11): the opt-in host-harness learning observer — a passive,
+ * never-blocking hook that forwards a harness's own hook payload to `keryx
+ * learn observe --hook <runtime>` (`src/learning/observe.ts`'s
+ * `observeHostHookPayload`). Distinct from `SUBSYSTEM_SHELL_HOOKS` (W6's own
+ * compiled-in runtime, `policy-travels-with-agent`): this subsystem writes
+ * INTO a host's own settings file, the same `host-hook` shape ctx-guard/
+ * orient/security already use.
+ */
+export const SUBSYSTEM_LEARNING = "learning";
 
 /**
  * T17: the richer `customUninstall` return shape for a surface that may keep

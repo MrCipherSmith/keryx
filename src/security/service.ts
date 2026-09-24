@@ -8,6 +8,7 @@ import { readFile } from "node:fs/promises";
 import { pathExists } from "../lib/fs";
 import { loadSecurityConfig } from "./config";
 import { runDetectorsAsync } from "./detect";
+import { randomBytes } from "node:crypto";
 import { getHmacKey, hmacHash } from "./redact";
 import {
   computeGate,
@@ -127,6 +128,24 @@ async function hashFnFor(cwd: string): Promise<(value: string) => string> {
   return (value: string) => hmacHash(value, key);
 }
 
+// O2-4: `scanContent` must perform NO security-state I/O at all (see its own
+// doc comment below) — `getHmacKey` persists `.metaproject/data/security/
+// raw/hmac.key` non-atomically (`writeFile` then a best-effort `chmod`) on
+// first use, which a high-frequency caller like the learning observer's
+// per-preview redaction scan would trigger on every process's first call. A
+// fresh, process-local, never-persisted key is generated instead: findings'
+// hash fields still hash with a real random key (never a fixed/empty one),
+// they are just not stable across process restarts or comparable to
+// `analyze`'s on-disk key — which `scanContent`'s only caller
+// (`src/learning/scan.ts`) never relies on, since it only ever reads
+// `decision.findings[].category`.
+let ephemeralHmacKey: string | undefined;
+function ephemeralHashFn(): (value: string) => string {
+  if (ephemeralHmacKey === undefined) ephemeralHmacKey = randomBytes(32).toString("hex");
+  const key = ephemeralHmacKey;
+  return (value: string) => hmacHash(value, key);
+}
+
 // Core analysis: run detectors, resolve the decision, and apply self-protection
 // (checksum/downgrade/disabled-policy). Persists incidents + state. Findings from
 // self-protection are folded into the decision so they gate.
@@ -176,6 +195,46 @@ export async function analyze(
   }
 
   return { decision, warnings: selfProtection.warnings, config };
+}
+
+/**
+ * Side-effect-free variant of `analyze`: runs the same detectors + decision
+ * resolution, with NO state/incident I/O (no `readState`/`writeState`, no
+ * `appendIncidents`). For a caller that scans very frequently and does not
+ * itself want to participate in the self-protection state machine — e.g.
+ * `src/learning/scan.ts`'s per-preview redaction scan, which would otherwise
+ * write `.metaproject/data/security/raw/state.json` and risk appending
+ * incidents on every observation event. Accepts an already-loaded `config`
+ * so a repeat caller in the same process can load it once (`loadSecurityConfig`)
+ * rather than re-reading it from disk on every call.
+ */
+export async function scanContent(
+  cwd: string,
+  input: SecurityCheck,
+  opts: { config?: SecurityConfig } = {},
+): Promise<{ decision: SecurityDecision; config: SecurityConfig }> {
+  const config = opts.config ?? (await loadSecurityConfig(cwd));
+  const matches = await runDetectorsAsync(cwd, input.content, config);
+  // O2-4: never `getHmacKey`/`hashFnFor` here — that reads-then-writes
+  // `.metaproject/data/security/raw/hmac.key` on first use, which is exactly
+  // the security-state I/O this function's own contract (below) promises not
+  // to do.
+  const hashFn = ephemeralHashFn();
+
+  const buildOpts: BuildFindingOptions = {
+    source: input.source,
+    content: input.content,
+    hashFn,
+  };
+  if (input.target !== undefined) {
+    buildOpts.target = input.target;
+  }
+  if (input.path !== undefined) {
+    buildOpts.path = input.path;
+  }
+
+  const decision = resolveDecision(config, { ...buildOpts, matches });
+  return { decision, config };
 }
 
 // Scan a file/content, build a report, and write committable artifacts.

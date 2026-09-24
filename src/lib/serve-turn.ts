@@ -35,6 +35,7 @@ import type { ToolExecutorPort, ToolInvocation, ToolResult } from "../harness/to
 import type { HarnessRunInput } from "../harness/types";
 import { createSecurityService } from "../security/service";
 import type { SecurityService } from "../security/types";
+import { createLearningObservationSink } from "../learning/service";
 import { createShellImpactEvidenceProvider } from "./impact-evidence-hook-adapter";
 import { listProjects } from "./project-registry";
 import {
@@ -419,7 +420,15 @@ function buildRemoteHookRuntime(opts: {
     // Fix round 3 (F-005/hermeticity): forward the same resolved `env` local
     // this function already checked `KERYX_HOOKS` against — see
     // `commands/agent-hooks.ts`'s identical wiring for the full rationale.
-    ports: { impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot, env }) },
+    ports: {
+      impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot, env }),
+      // W3 T6: same real observation sink `commands/agent-hooks.ts`'s
+      // `buildShellHookRuntime` wires — a remote turn's session gets the same
+      // Observe stage, not a silent NOOP. Harmless unless `keryx.learning-
+      // observer`'s builtin registrations fire; disabled by `KERYX_LEARNING=off`
+      // (checked inside the sink itself).
+      learningSink: createLearningObservationSink(opts.projectRoot, { env }),
+    },
   });
 }
 

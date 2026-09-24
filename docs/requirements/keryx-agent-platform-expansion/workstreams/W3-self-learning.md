@@ -1,5 +1,5 @@
 # W3 — Self-Learning Loop
-Version: 0.1.3
+Version: 0.1.4
 
 ## Summary
 
@@ -666,6 +666,74 @@ still never happens in a hook; only the accumulation of raw evidence does.
   project, or fixed constants like the confidence formula's rates — fixed
   constants are simpler to audit but a project with unusually noisy or
   unusually clean signal may want different thresholds.
-- Does a `scope: user` candidate need its own, separate TTL from a
+- ~~Does a `scope: user` candidate need its own, separate TTL from a
   `scope: project` candidate, given it has already survived one review cycle
-  to get there?
+  to get there?~~ Answered by decision D4 (see Amendments below): no — both
+  scopes use the same 30-day candidate TTL.
+
+## Amendments (0.1.4, flow 312)
+
+Implemented against `brainstorm.md` decisions D1–D6. Nothing below rewrites
+an acceptance criterion; each amendment either fills a gap the ACs already
+assumed or answers an open question above.
+
+- **D1 — every project record lives in `candidates/<id>.json`.** Not only
+  pre-review candidates: `accepted`, `rejected`, `superseded`, and `expired`
+  project-scope records are also stored under
+  `.metaproject/data/learning/candidates/<id>.json`, which is the record's
+  only store regardless of its current `status`. There is no separate
+  `accepted/` or `rejected/` directory. `candidates/` (the whole directory) is
+  gitignored per W3-AC9.
+- **D2 — accept requires a terminal.** `keryx learn accept` refuses outside a
+  real interactive terminal with a named reason and no bypass flag — the same
+  "no unattended mutation" invariant this document already states for
+  `promote`, extended explicitly to `accept` itself. A successful accept
+  appends one `{schemaVersion:1, action:"accept", id, scope, actor, tty:true,
+  at}` line to `.metaproject/data/learning/decisions.jsonl` (or the user-scope
+  equivalent under `~/.keryx/learning/`).
+- **D3 — optional hash-only `edit` observation field.** The observation event
+  shape (`Observation event contract` above) gains one optional field,
+  `edit`, present only for a tool call that edited a file:
+  `{ pathDigest, removedDigest, addedDigest }`, each a sha256 hex digest
+  (`pathDigest` of the project-relative file path, `removedDigest` /
+  `addedDigest` of the removed/added text, either possibly `null` for a
+  pure insert/delete) — never the raw path or diff content. This is what lets
+  the `reverted-edit` and `repeated-correction` deterministic signals detect
+  same-file, opposing or non-reverting edits across two observation events
+  without ever storing what was edited. See also the skill-lifecycle
+  amendment below: this field is filled only by the passive observation hook,
+  never inferred at extract time.
+- **D4 — candidate TTL is 30 days, both scopes.** Answers the open question
+  above: a `scope: user` candidate gets no separate, longer TTL just because
+  it already survived one project-scope review cycle. `ttl.expiresAt` is set
+  at creation/reinforcement to `updatedAt + 30 days` for both `scope:
+  project` and `scope: user` candidates; `keryx learn prune` expires either
+  the same way.
+- **D5 — host observer, this flow: Claude Code only.** The opt-in host-harness
+  observer W5 registers is, for flow 312, limited to Claude Code: a
+  `learning-observer` surface (id `learning-observer`, flag `observe` —
+  `keryx integrations install --runtime claude --surface observe`, or
+  equivalently `--surface learning-observer`) installs hooks on all seven
+  events in the "Hook event to observation event mapping" table above,
+  running `keryx learn observe --hook claude`, which maps Claude's own hook
+  payload shape onto the observation event shape. It is `optIn: true`:
+  installing the `claude` runtime with no `--surface` never installs it.
+  Other harnesses are not wired to the observer at all in this flow;
+  extending host-observer coverage to them is out of scope here, not barred
+  by design.
+- **D6 — extraction is command/schedule-triggered, never a hook.** `keryx
+  learn extract` (and the deterministic signals it runs) is invoked by a
+  human or by `keryx schedule`, never registered as a hook callback. Only the
+  passive observation append (D-3 in `brainstorm.md`, and the skill-lifecycle
+  amendment it produced — see
+  `.metaproject/rules/core/skill-lifecycle.mdc`) is permitted from inside a
+  hook; extraction, like accept/apply/promote/graduate, is agent-loop,
+  human- or schedule-triggered work.
+- **Graduation apply target.** `keryx learn graduate apply <proposal-id>`
+  writes an agent candidate only (`.metaproject/agents/<name>.md`, `origin.kind:
+  "learned"`, `sourceRef` = the source pattern's `id`). A graduation proposal
+  whose cluster resolves to a `skill` target is not applied by this command at
+  all — it prints the equivalent `keryx skills scout --record <dir>
+  --origin learned --source-ref <id>` invocation for a human to run through
+  the existing W1 scout/record path, which already owns skill-candidate
+  creation.

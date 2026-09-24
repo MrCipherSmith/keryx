@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx://schemas/agent-platform/learned-pattern.schema.json",
+  "title": "Learned Pattern",
+  "description": "Planned. A candidate or accepted unit of self-learned knowledge produced by the Observe/Extract/Candidate stages of the self-learning loop (workstream W3). Nothing in this schema is written automatically to a skill, rule or memory entry; only `keryx learn accept` followed by the existing `applyLearningProposal`/rule-writer path may cause a record here to affect durable content, and only after human consent (status transition candidate -> accepted).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "trigger",
+    "action",
+    "domain",
+    "scope",
+    "project",
+    "confidence",
+    "status",
+    "evidence",
+    "provenance",
+    "redaction",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable slug. Deterministic function of domain + normalized trigger text, not a random id, so the same observed pattern reinforces the same record instead of creating a duplicate.",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "trigger": {
+      "type": "string",
+      "description": "The condition under which the pattern applies, in the project's own words. Free text, bounded; never generalized past what the evidence actually shows.",
+      "minLength": 8,
+      "maxLength": 400
+    },
+    "action": {
+      "type": "string",
+      "description": "The recommended behavior when the trigger holds. Free text, bounded.",
+      "minLength": 8,
+      "maxLength": 400
+    },
+    "domain": {
+      "type": "string",
+      "description": "Coarse category used for clustering and routing to a graduation target (W1/W2).",
+      "enum": [
+        "code-style",
+        "architecture",
+        "testing",
+        "security",
+        "review-conventions",
+        "workflow",
+        "documentation",
+        "performance",
+        "tooling",
+        "other"
+      ]
+    },
+    "scope": {
+      "type": "string",
+      "description": "project: visible only inside the originating project. user: promoted candidate visible across the user's projects (never written automatically; see promotion rule). A `scope: user` record still carries `status: candidate` until a human accepts it at that scope.",
+      "enum": ["project", "user"]
+    },
+    "project": {
+      "type": "object",
+      "description": "Identity of the originating project, used for the >=2-projects promotion count and for refusing cross-project writes.",
+      "additionalProperties": false,
+      "required": ["identity", "identityKind"],
+      "properties": {
+        "identity": {
+          "type": "string",
+          "description": "sha256 of the normalized git remote URL (credentials and query string stripped, trailing `.git` and slash removed, lowercased) when the project has a remote. When no remote exists, the identity falls back to a sha256 of the resolved, absolute worktree root path, and `identityKind` records which case applies.",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "identityKind": {
+          "type": "string",
+          "enum": ["remote-hash", "path-hash"]
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Optional human-readable label (repo name or directory basename) for review UIs only; never used for identity comparison or deduplication."
+        }
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Numeric confidence in [0,1], maintained only by the deterministic update formula in W3-self-learning.md (Numeric confidence model). Never set directly to an arbitrary value by an extractor; a new candidate starts at its extractor's fixed seed value.",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "confidenceLevel": {
+      "type": "string",
+      "description": "Derived, not authored: the enum bucket existing consumers (skill-changelog provenance, review-note memory entries) expect. low: confidence < 0.5. medium: 0.5 <= confidence < 0.8. high: confidence >= 0.8. Recomputed whenever confidence changes; never edited independently of it.",
+      "enum": ["low", "medium", "high"]
+    },
+    "status": {
+      "type": "string",
+      "description": "candidate: extracted, not yet reviewed. accepted: a human ran `keryx learn accept`; still requires a separate apply/graduate step to touch a skill, rule or memory entry. rejected: a human ran `keryx learn reject`; kept for dedup so the same observation does not re-surface immediately. superseded: replaced by a newer record (a new id, derived from the changed action text) after reinforcement or contradiction crossed a boundary that changed the action text. expired: TTL elapsed with no human decision.",
+      "enum": ["candidate", "accepted", "rejected", "superseded", "expired"]
+    },
+    "supersededBy": {
+      "type": ["string", "null"],
+      "description": "id of the record that replaced this one. Required non-null when status is superseded; null otherwise."
+    },
+    "evidence": {
+      "type": "array",
+      "description": "Every reinforcement and contradiction that touched this record's confidence. A record with an empty array cannot exist; an extracted pattern always has at least one observation behind it.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "sourceType", "sourceRef", "observedAt"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["reinforcement", "contradiction"]
+          },
+          "sourceType": {
+            "type": "string",
+            "description": "Same vocabulary as `LearningSourceType` in src/gdskills/learn.ts, extended with hook-sourced observation kinds.",
+            "enum": [
+              "review",
+              "test",
+              "failure",
+              "health",
+              "memory",
+              "observation",
+              "reviewer-comment"
+            ]
+          },
+          "sourceRef": {
+            "type": "string",
+            "description": "Path (relative to the project root) to the observation JSONL line, review-learning source file, health report, or memory entry that produced this evidence item. Never a raw quoted snippet of the source text.",
+            "minLength": 1
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "weight": {
+            "type": "number",
+            "description": "Contribution to the confidence update, before the deterministic formula's own scaling. Defaults to 1.0 (a single observation) when absent. Bounded at 1.5, the ceiling documented in W3-self-learning.md's Numeric confidence model for the strongest deterministic signal (a failing-to-passing test pair); no signal may claim more certainty than that.",
+            "minimum": 0,
+            "maximum": 1.5
+          }
+        }
+      }
+    },
+    "reviewerProfile": {
+      "type": ["object", "null"],
+      "description": "Present only for domain: review-conventions records sourced from configured reviewers' comments (the reviewer-profile learning path). Null for every other domain.",
+      "additionalProperties": false,
+      "required": ["reviewerId", "generalizedFrom"],
+      "properties": {
+        "reviewerId": {
+          "type": "string",
+          "description": "Opaque per-project identifier for the configured comment author (e.g. a hash of the login), never the literal login or display name, matching the no-attribution guardrail carried over from the existing learned-review consumer skill.",
+          "minLength": 1
+        },
+        "generalizedFrom": {
+          "type": "integer",
+          "description": "Count of distinct source comments generalized into this record's trigger/action text.",
+          "minimum": 1
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "description": "Result of the mandatory security check-output pass over trigger/action/evidence text before this record could reach status candidate.",
+      "additionalProperties": false,
+      "required": ["scanned", "findings"],
+      "properties": {
+        "scanned": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for a stored record: a non-`true` scan result means the record was refused before it could reach this store, per `findings`' own description below."
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Category names only (e.g. \"secret\", \"prompt-injection\"), never the matched text. A non-empty array means the record was refused before reaching this store; this field exists for the audit trail of a refusal, not for a record that carries the flagged content."
+        }
+      }
+    },
+    "graduation": {
+      "type": ["object", "null"],
+      "description": "Set once a cluster containing this record produced a skill/agent/rule proposal via the W1/W2 creators. Null until then.",
+      "additionalProperties": false,
+      "required": ["target", "proposalPath"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": ["skill", "agent", "rule"]
+        },
+        "proposalPath": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extractor"],
+      "properties": {
+        "extractor": {
+          "type": "string",
+          "description": "Name of the deterministic signal or capability that produced the first evidence item, e.g. \"repeated-correction\", \"reverted-edit\", \"failing-to-passing-test\", \"reviewer-comment\", \"health-regression\", or a model-backed extractor id.",
+          "minLength": 1
+        },
+        "extractorKind": {
+          "type": "string",
+          "enum": ["deterministic", "model-backed"]
+        }
+      }
+    },
+    "ttl": {
+      "type": "object",
+      "description": "TTL bookkeeping for a candidate that has not been reviewed. Absent once status leaves candidate.",
+      "additionalProperties": false,
+      "required": ["expiresAt"],
+      "properties": {
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "superseded" } }
+      },
+      "then": {
+        "properties": { "supersededBy": { "type": "string", "minLength": 1 } },
+        "required": ["supersededBy"]
+      },
+      "else": {
+        "properties": { "supersededBy": { "const": null } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "domain": { "const": "review-conventions" } },
+        "required": ["domain"]
+      },
+      "else": {
+        "properties": { "reviewerProfile": { "const": null } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "candidate" } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["ttl"]
+      },
+      "else": {
+        "not": { "required": ["ttl"] }
+      }
+    }
+  ]
+}

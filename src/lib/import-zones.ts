@@ -200,6 +200,16 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // dependency this creates and why it is not a cycle either side treats as
   // accidental.
   { segment: "agents", zone: "core" },
+  // Flow 312, W3: the self-learning loop's record store (`learned-pattern`
+  // records, the confidence model, project identity, the observation/
+  // candidate/decision stores). Deterministic project-state bookkeeping over
+  // hand-authored JSON files, no provider registry and no model call by
+  // default — same shape as `sync`/`forgetting`/`trigger`/`stack` above. It
+  // deliberately duplicates `resolveHookHomeDir` (`src/harness/hooks/config.ts`,
+  // zone `client`) as a private two-line function in `paths.ts` rather than
+  // importing it, since core may never import client (see this table's header
+  // comment) — see that file's own comment for why the duplication is safe.
+  { segment: "learning", zone: "core" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(
