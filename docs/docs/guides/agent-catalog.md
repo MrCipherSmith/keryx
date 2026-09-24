@@ -58,9 +58,12 @@ Ten generic, stack-agnostic definitions ship with Keryx:
 | `performance-auditor` | stack-agnostic performance-pattern review |
 | `end-to-end-tester` | drives and reports on an end-to-end test pass |
 
-Per-stack generated pairs (a reviewer and a build-error-resolver per stack
-pack) are not part of this initial catalogue — they arrive later, generated
-only from a stack pack that has already cleared its own governance gates.
+Per-stack generated pairs (a `<stack>-code-auditor` and a `<stack>-build-fixer`
+per stack pack) are not part of this hand-authored initial catalogue — each
+pair is generated only from a stack pack that has already cleared its own
+governance gates, via `keryx agents generate --stack <id> [--check] [--json]`.
+As of flow 314 Wave 4 batch 1, pairs exist for `ts-js-node`, `python`, and
+`go`; `react` has none yet because its pack is still experimental.
 
 A project can drop its own files under `.metaproject/agents/<name>.md`. A
 project definition with the same `name` as a bundled one **overrides** it;

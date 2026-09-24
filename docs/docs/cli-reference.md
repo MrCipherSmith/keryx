@@ -3141,6 +3141,7 @@ keryx agents list [--stack <id>] [--json]
 keryx agents show <name>
 keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--force] [--dry-run] [--json]
 keryx agents verify [<name>] [--json]
+keryx agents generate --stack <id> [--check] [--json]
 ```
 
 | Subcommand | Flags / args | Description |
@@ -3148,7 +3149,8 @@ keryx agents verify [<name>] [--json]
 | `list` | `--stack <id>`, `--json` | List every catalog definition (bundled and project-local), optionally filtered to one stack pack. Read-only. |
 | `show` | `<name>` | Print one definition's fields and its resolved export-support level for every runtime. Read-only. |
 | `export` | `--runtime <id>`, `<name>`, `--force`, `--dry-run`, `--json` | Compile one definition for one runtime and write its managed file (or, for `keryx-shell`, print the compiled dispatch input — nothing is written for that runtime). A file with no keryx-managed sentinel for this agent at all is never overwritten, even with `--force`. A managed file whose content-sha256 no longer matches its own recorded hash (hand-edited since export) is refused unless `--force` is passed. A managed, unedited file from an older source version is updated with no flag needed. |
-| `verify` | `[<name>]`, `--json` | Validate every definition (or just `<name>`) against the schema, tool/skill vocabularies, `policy_profile`, origin/sourceRef rules, and the baseline-in-body guard, and resolve its export support for every runtime. |
+| `verify` | `[<name>]`, `--json` | Validate every definition (or just `<name>`) against the schema, tool/skill vocabularies, `policy_profile`, origin/sourceRef rules, and the baseline-in-body guard, and resolve its export support for every runtime. Also reports `stack-pack-not-gate-cleared` for a generated pair whose source stack pack is no longer gate-cleared, and `generated-drift` when a bundled generated file no longer matches a fresh run of the generator. |
+| `generate` | `--stack <id>`, `--check`, `--json` | Flow 314: write the `<stack>-code-auditor` (read-only review) and `<stack>-build-fixer` (build/lint/type/test-failure resolution, worktree-isolated) pair for one stack pack, derived from that pack's `pack.json`. Refuses a pack that is not gate-cleared (`stability: stable` and a passing stable-pack gate check). `--check` reports drift without writing, exiting non-zero if either generated file differs from what is on disk. |
 
 To export the whole catalog for one harness at once, use
 `keryx integrations install --runtime <id> --surface agents` (opt-in — the

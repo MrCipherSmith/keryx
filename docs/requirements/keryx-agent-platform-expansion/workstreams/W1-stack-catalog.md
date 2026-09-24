@@ -1,5 +1,5 @@
 # W1 — Stack-aware skills & rules catalog
-Version: 0.2.0
+Version: 0.2.1
 
 ## Summary
 
@@ -20,9 +20,11 @@ an authoring standard aligned to the public Agent Skills format, and (5)
 governance gates (scout, eval, stocktake) so catalog growth is checked rather
 than bulk-generated. Flow 309 (Wave 2) implemented (1) stack detection, (3)
 the install profile→module→component lifecycle (plan/apply/doctor/uninstall),
-and (5) the three governance gates; (2) stack pack content and (4) the
-authoring-standard lint remain planned — see "Implementation notes (flow 309)"
-below for what landed and what is still a target contract.
+and (5) the three governance gates; (2) stack pack content was scoped as a
+Wave 4 target and (4) the authoring-standard lint remains planned. Flow 314
+(Wave 4 batch 1) authored the first four stack packs against gate (5) — see
+"Implementation notes (flow 309)" and "Implementation notes: Wave 4 batch 1
+(flow 314)" below for what landed and what is still a target contract.
 
 ## Current state (with code paths)
 
@@ -511,13 +513,71 @@ history is inspectable without guessing from a git blame.
   capability is configured (`--runner`), rather than failing or being
   skipped silently — the eval's `verdict` reflects only scenarios that
   actually ran.
-- **Stack-pack content is still deferred to Wave 4**, per this document's
-  original scope, with one exception: `src/gdskills/bundled/install-manifest.json`
-  registers a `python` profile and a `python-pack-module` component marked
-  `stability: experimental` that resolves to zero files today (the Python
-  pack itself is not authored yet) — installing the `python` profile
-  succeeds and installs the common modules only; `full` excludes
-  `python-pack-module` from its file count for the same reason.
+- **Stack-pack content was deferred to Wave 4** at flow 309 time, per this
+  document's original scope, with one exception: `src/gdskills/bundled/
+  install-manifest.json` registered a `python` profile and a
+  `python-pack-module` component marked `stability: experimental` that
+  resolved to zero files at the time (the Python pack itself was not yet
+  authored) — installing the `python` profile succeeded and installed the
+  common modules only; `full` excluded `python-pack-module` from its file
+  count for the same reason. The Python pack (and three further packs) were
+  authored in flow 314, Wave 4 batch 1 — see "Implementation notes: Wave 4
+  batch 1 (flow 314)" below for what landed.
+
+## Implementation notes: Wave 4 batch 1 (flow 314)
+
+- **Packs authored.** Four stack packs now exist under
+  `src/gdskills/bundled/stacks/<id>/`: `ts-js-node` and `go` (new, authored in
+  flow 314), `python` (started in flow 309 as an empty-file placeholder,
+  completed in flow 314), and `react` (new, `extends: ts-js-node`). Each pack
+  carries `pack.json`, per-skill `SKILL.md` + `evals.json` under `skills/`,
+  and a pack-level `governance/eval.json`. Skill names (from each pack's
+  `pack.json` `skills` map), four rules apiece, and `migrate` coverage:
+  - `ts-js-node`: `nodejs-implementation`, `nodejs-testing`,
+    `nodejs-code-review`, `nodejs-build-fix`, `nodejs-esm-migration`
+    (`migrate` is populated).
+  - `react` (extends `ts-js-node`): `react-implementation`, `react-testing`,
+    `react-code-review`, `react-build-fix`, `react-upgrade-migration`
+    (`migrate` is populated).
+  - `python`: `python-implementation`, `python-testing`,
+    `python-code-review`, `python-build-fix`; `migrate: []` (no
+    schema/version-migration concept for this pack).
+  - `go`: `go-implementation`, `go-testing`, `go-code-review`,
+    `go-build-fix`; `migrate: []`.
+- **Per-skill behavioral evals.** Every skill under `skills/*/evals.json` is
+  hand-authored with at least 10 trigger-accuracy prompts (positive and
+  negative) plus at least 4 negative (should-not-trigger) cases, and at least
+  one deterministic `behavior` scenario graded against `expected_behavior`.
+  Presence and shape are guarded by `src/gdskills/stack-packs.test.ts`.
+- **Model-backed eval runner.** `keryx skills eval --runner
+  <provider>[:<model>]` is wired through `src/commands/model-eval-runner.ts`,
+  which dispatches each scenario as a single-turn `runModelTurn` call (from
+  `src/harness/provider/single-turn.ts`) with the skill's `SKILL.md` as the
+  system prompt; a missing/unconfigured runner fails closed (`status:
+  "not-run"` with a reason) rather than fabricating a result.
+- **Pack-level governance eval.** Each pack's `governance/eval.json`
+  (`{schemaVersion, reports[]}`) aggregates its skills' eval reports; a
+  pack's `stability` may only be `"stable"` when every report's pass rate
+  clears `PACK_BEHAVIOR_PASS_FLOOR = 0.8`
+  (`src/gdskills/governance/eval.ts`).
+- **Scout self-match exclusion.** `keryx skills scout --record
+  --skill-name --candidate` now excludes the candidate's own catalog entry
+  from its overlap scoring, so re-scouting an already-recorded skill surfaces
+  a genuinely different neighbour instead of matching itself.
+- **pack.json ↔ install-manifest stability guard.** A guard test
+  (`src/gdskills/stack-packs.test.ts`) checks that a pack's `pack.json`
+  `stability` and the corresponding install-manifest component's `stability`
+  agree, so the two records cannot silently diverge.
+- **Batch 1 results.** `ts-js-node`, `python`, and `go` are `stability:
+  stable`, gate-cleared against `ollama` `llama3.1:latest` at `--strictness
+  high` / `--trials 5` — every skill's report passes
+  `PACK_BEHAVIOR_PASS_FLOOR`. `react` stays `stability: experimental`: its
+  `react-code-review` pack's `flag-rules-of-hooks` behavior scenario scored a
+  `passRate` of `0.6`, below the `0.8` floor. Stack coverage (packs with any
+  authored content beyond review-only) went from 2 (NestJS/Prisma,
+  React/MobX review-only) to 5 with this batch (`ts-js-node`, `python`, `go`
+  full packs added; `react` gets a full pack but stays ungated pending a
+  fix to the failing behavior scenario).
 
 ## Data contracts
 
