@@ -18,13 +18,13 @@
 
 import { randomUUID } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import type { HarnessConfig } from "../harness/config";
 import {
   createHookRuntime,
   createRealHookRunner,
   loadHookConfig,
+  resolveHookHomeDir,
   type HookRuntime,
 } from "../harness/hooks";
 import type { PolicyDecision, PolicyProfile } from "../harness/policy/types";
@@ -394,7 +394,12 @@ function buildRemoteHookRuntime(opts: {
   if (env.KERYX_HOOKS === "off") {
     return undefined;
   }
-  const loaded = loadHookConfig({ projectRoot: opts.projectRoot, homeDir: os.homedir() });
+  // Flow 306 fix round 2 (finding E): the SAME resolver `keryx hooks` and
+  // `buildShellHookRuntime` (`commands/agent-hooks.ts`) use, not a bare
+  // `os.homedir()` that (unlike them) never honored a `KERYX_HOME`
+  // operator/test override. `lib/` may not import from `commands/`, so the
+  // pure resolver lives in `harness/hooks/config.ts` and all three share it.
+  const loaded = loadHookConfig({ projectRoot: opts.projectRoot, homeDir: resolveHookHomeDir(env) });
   if (!loaded.ok) {
     return invalidHookConfigRuntime();
   }

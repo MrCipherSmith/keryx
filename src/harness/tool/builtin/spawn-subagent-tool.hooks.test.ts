@@ -2,7 +2,11 @@
 // (flow 306, W6, task T6): the external `deps.runExternal` seam and the
 // native/internal in-process `runAgentTurn` path.
 import { expect, test } from "bun:test";
-import { createSpawnSubagentTool, type StructuredSubagentResult } from "./spawn-subagent-tool";
+import {
+  createSpawnSubagentTool,
+  DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS,
+  type StructuredSubagentResult,
+} from "./spawn-subagent-tool";
 import type { HookFireResult, HookRegistration, HookRuntime } from "../../hooks";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
 
@@ -345,6 +349,121 @@ test("native: a registration scoped appliesToChildAgents:false is absent from th
   expect(ranHookIds.some((r) => r.hookIds.includes("parent-only"))).toBe(false);
   expect(ranHookIds.some((r) => r.event === "PreToolUse")).toBe(true); // the fire still happens...
   expect(ranHookIds.find((r) => r.event === "PreToolUse")?.hookIds).toEqual([]); // ...but with nothing to run
+});
+
+// Flow 306 fix round 2 (finding G, missing regression test — review round 1
+// finding 10 fixed the bug, nothing pinned it). Before that fix, a
+// `makeProvider` throw AFTER `fireSubagentStart("internal")` already ran
+// leaked BOTH the `SubagentStart`/`SubagentStop` bracket (no `SubagentStop`
+// ever balanced it) and the ledger reservation (never released, held for the
+// rest of the run — eventually starving every later `spawn_subagent` call
+// with a `spawned.ok: false` MAE denial that never even reaches
+// `fireSubagentStart`).
+test("native: makeProvider throwing AFTER SubagentStart fires SubagentStop and releases the ledger reservation", async () => {
+  const { runtime, fires } = fakeHookRuntime({});
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => {
+      throw new Error("provider construction boom");
+    },
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+  });
+
+  await expect(
+    tool.invoke({ task: "Review auth module", mode: "read_only", label: "auth-check" }),
+  ).rejects.toThrow("provider construction boom");
+
+  const startFire = fires.find((f) => f.event === "SubagentStart");
+  expect(startFire).toBeDefined();
+  const stopFire = fires.find((f) => f.event === "SubagentStop");
+  expect(stopFire).toBeDefined();
+  expect(stopFire?.payload.outcome).toBe("Error");
+
+  // The reservation was released, not leaked. Each reservation requests
+  // `5 * 60_000`ms (the tool's own fixed per-spawn runtime request) against a
+  // `DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS` (30 minutes) pool — exactly 6
+  // admissions' worth. `maxChildren` (16) is a LIFETIME cap the ledger never
+  // gives back, so it cannot tell release apart from a leak; the BUDGET can,
+  // because it is returned on release and NOT on a leak. Six further calls
+  // (each hitting the same throwing `makeProvider`) must EACH still reach
+  // `fireSubagentStart` — if the first call's reservation had leaked, the
+  // budget would already be half-spent, and this loop alone would exhaust it
+  // (6 more reservations against 1_500_000ms remaining) before the last one,
+  // which would then be denied by MAE admission BEFORE `SubagentStart` ever
+  // fires, never reaching `makeProvider` at all.
+  const perChildReservationMs = 5 * 60_000;
+  const rounds = DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS / perChildReservationMs;
+  for (let i = 0; i < rounds; i++) {
+    await expect(
+      tool.invoke({ task: "again", mode: "read_only", label: `auth-check-${i}` }),
+    ).rejects.toThrow("provider construction boom");
+  }
+  const startFires = fires.filter((f) => f.event === "SubagentStart");
+  expect(startFires.length).toBe(1 + rounds);
+});
+
+// Flow 306 fix round 2 (finding G, missing regression test — review round 1
+// finding 10 fixed this too). `fireSubagentStart`'s own `try/catch` reads a
+// REJECTING `HookRuntime.fire()` as `deny` specifically so the reservation
+// (already admitted before this fires) is released on the SAME path an
+// explicit `deny` decision takes — a rejection that escaped that helper would
+// skip the release entirely.
+test("native: a rejecting fire() on SubagentStart is treated as deny and releases the reservation", async () => {
+  const fires: { event: string; payload: Record<string, unknown> }[] = [];
+  const runtime: HookRuntime = {
+    interactive: true,
+    registrations: (): readonly HookRegistration[] => [],
+    inheritedHookIds: () => [],
+    forChild: () => runtime,
+    fire: async (event, payload) => {
+      fires.push({ event, payload });
+      if (event === "SubagentStart") {
+        throw new Error("hook runner crashed (simulated)");
+      }
+      return { decisions: [], additionalContext: [], records: [], warnings: [], anomalies: [] };
+    },
+  };
+  let streamed = false;
+  const provider: ProviderPort = {
+    ...stubProvider("native answer"),
+    async *stream(_req, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+      streamed = true;
+      yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "should not run" };
+      yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+    },
+  };
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => provider,
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+  });
+
+  const result = await tool.invoke({ task: "Review auth module", mode: "read_only", label: "auth-check" });
+
+  expect(streamed).toBe(false);
+  expect(result.status).toBe("Denied");
+  expect(result.isError).toBe(true);
+  // Denied before the child ever started — no SubagentStop for it (mirrors
+  // the ordinary `deny` case above).
+  expect(fires.some((f) => f.event === "SubagentStop")).toBe(false);
+
+  // The reservation was released despite the rejection (same budget-based
+  // proof as the sibling test above — see its comment for why the BUDGET,
+  // not the lifetime `maxChildren` count, is what actually distinguishes a
+  // release from a leak here). Six further calls must EACH still reach the
+  // point of invoking `fire()` for SubagentStart.
+  const perChildReservationMs = 5 * 60_000;
+  const rounds = DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS / perChildReservationMs;
+  for (let i = 0; i < rounds; i++) {
+    const again = await tool.invoke({ task: "again", mode: "read_only", label: `auth-check-${i}` });
+    expect(again.status).toBe("Denied");
+  }
+  const startFires = fires.filter((f) => f.event === "SubagentStart");
+  expect(startFires.length).toBe(1 + rounds);
 });
 
 test("hooks absent: neither SubagentStart nor SubagentStop ever fires (byte-identical)", async () => {

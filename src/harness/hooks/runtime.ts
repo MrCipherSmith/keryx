@@ -69,8 +69,24 @@ export function resolveBuiltinCommandRunsIn(
   if (reg.scope !== "builtin" || reg.handler.kind !== "command") {
     return reg.runsIn;
   }
-  const isolationRequired = resolveLocalProfile(profileId).requiredControls.isolation === "required-fail-closed";
-  return isolationRequired ? "sandbox" : "unsandboxed";
+  return isIsolationRequired(profileId) ? "sandbox" : "unsandboxed";
+}
+
+/**
+ * Whether `profileId`'s active policy profile requires fail-closed OS
+ * isolation (`requiredControls.isolation === "required-fail-closed"`) — the
+ * SAME question the real runner refuses `runsIn: "unsandboxed"` against
+ * (`runner.ts`'s `req.isolationRequired === true` check).
+ *
+ * Flow 306 fix round 2 (finding F): extracted from the inline computation
+ * this function and {@link runCommandHook} each carried, so `commands/
+ * hooks.ts`'s `hooks test`/`hooks list` — which used to resolve
+ * `runsIn`/spawn a hook WITHOUT ever computing this — apply the exact same
+ * refusal a live session would, instead of two call sites quietly agreeing by
+ * coincidence (or, as found, one of them not agreeing at all).
+ */
+export function isIsolationRequired(profileId: PolicyProfileId): boolean {
+  return resolveLocalProfile(profileId).requiredControls.isolation === "required-fail-closed";
 }
 
 export interface HookRuntimePorts {
@@ -395,7 +411,7 @@ class HookRuntimeImpl implements HookRuntime {
       policyProfile: fireProfileId,
     });
     const argv = this.argvResolver(reg.handler.argv);
-    const isolationRequired = resolveLocalProfile(fireProfileId).requiredControls.isolation === "required-fail-closed";
+    const isolationRequired = isIsolationRequired(fireProfileId);
     const raw = await this.runner.run({
       argv,
       cwd: reg.handler.cwd ?? ".",
@@ -552,11 +568,15 @@ class HookRuntimeImpl implements HookRuntime {
 
   async fire(event: HookEventName, payload: Record<string, unknown>, ctx: FireContext = {}): Promise<HookFireResult> {
     // T14: a per-fire `ctx.profileId` overrides the runtime's own constructed
-    // `profileId` for SELECTION only (which registrations' `profiles` match)
-    // — never for failure semantics (`buildFailureOutcome` below still reads
-    // the base `this.profileId`, matching the failure-matrix tests pinned to
-    // construction-time profile). Absent ⇒ byte-identical to before this
-    // field existed.
+    // `profileId` for SELECTION (which registrations' `profiles` match) AND,
+    // since flow 306 fix round 1 finding 16, for FAILURE SEMANTICS too —
+    // `buildFailureOutcome` takes this same `fireProfileId` (defaulting to
+    // `this.profileId` only when no fire is in flight yet), so a gate-advisory
+    // failure (e.g. `unattended-untrusted`'s deny-instead-of-proceed) reasons
+    // about the LIVE per-fire profile, not the runtime's construction-time
+    // one — a `ctx.profileId` override that changed which registrations ran
+    // must also change what a crash under them means. Absent ⇒ byte-identical
+    // to before this field existed.
     const fireProfileId = ctx.profileId ?? this.profileId;
     const candidates = this.selectCandidates(event, ctx.toolName ?? "", fireProfileId);
     const gateGroup = candidates.filter((r) => r.class === "gate" || r.class === "gate-advisory");

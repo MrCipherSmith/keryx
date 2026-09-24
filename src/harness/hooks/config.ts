@@ -13,6 +13,7 @@
 // duplicate full-registration id within one event — is an error diagnostic
 // and the whole load reports `ok: false`. Nothing is silently dropped.
 import { readFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../../contracts/validator";
 import { BUILTIN_HOOK_REGISTRATIONS } from "./builtins";
@@ -44,6 +45,27 @@ export interface LoadHookConfigInput {
   homeDir: string;
   /** Injectable file reader: returns file contents, or `undefined` when absent. Real errors (e.g. EACCES) throw. */
   readFile?: (filePath: string) => string | undefined;
+}
+
+/**
+ * Shared home-dir resolver for `~/.keryx/hooks.json` — `KERYX_HOME` first (an
+ * explicit `homeDir` override, e.g. from a test, wins over even that), then
+ * the real `os.homedir()`.
+ *
+ * Flow 306 fix round 2 (finding E): moved down from `commands/agent-hooks.ts`
+ * (review finding 11's fix) because it is a PURE function of `env`/`homeDir`
+ * with no dependency on `commands/`, and `src/lib/serve-turn.ts` — which
+ * `lib/` rule forbids importing from `commands/` — needed the exact same
+ * resolution `keryx hooks` and `buildShellHookRuntime` already share, not a
+ * third copy calling `os.homedir()` unconditionally (which is what it had:
+ * `serve-turn.ts` never honored a `KERYX_HOME` override at all).
+ * `commands/agent-hooks.ts` and `commands/hooks.ts` both now call this one
+ * function too, so all three call sites resolve the same home directory.
+ */
+export function resolveHookHomeDir(env: NodeJS.ProcessEnv, homeDir?: string): string {
+  if (homeDir !== undefined) return homeDir;
+  const fromEnv = env.KERYX_HOME;
+  return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : os.homedir();
 }
 
 /** Default `readFile`: absent file (ENOENT) reads as `undefined`; anything else rethrows. */

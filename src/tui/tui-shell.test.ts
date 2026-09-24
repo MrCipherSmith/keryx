@@ -28,6 +28,7 @@ import {
   estimateContextTokens,
   fmtTokens,
   isShellApproved,
+  isUserPromptApprovalCard,
   mountCwdPanel,
   mountTitlePanel,
   resolveSidebarMetadata,
@@ -296,6 +297,20 @@ test("shouldAutoApproveReadOnlySpawn: hookAsk overrides the read_only fast path 
   // `general` mode was never auto-approved and hookAsk changes nothing there.
   expect(shouldAutoApproveReadOnlySpawn("general", undefined)).toBe(false);
   expect(shouldAutoApproveReadOnlySpawn("general", true)).toBe(false);
+});
+
+test("isUserPromptApprovalCard: routes user_prompt away from the schedule confirmation (review finding C)", () => {
+  // The `UserPromptSubmit` hook-ask shape (`agent.ts`'s `alwaysAsk`+`card` on
+  // the synthetic tool `user_prompt`) must be recognised so it is NOT routed
+  // to `confirmScheduleCard`'s "Create this schedule and install its
+  // background timer?" wording — the two calls share `alwaysAsk`+`card` but
+  // not a question.
+  expect(isUserPromptApprovalCard("user_prompt")).toBe(true);
+  // `schedule_create` (and everything else carrying `alwaysAsk`+`card`) must
+  // still fall through to the schedule confirmation unchanged.
+  expect(isUserPromptApprovalCard("schedule_create")).toBe(false);
+  expect(isUserPromptApprovalCard("shell_exec")).toBe(false);
+  expect(isUserPromptApprovalCard("spawn_subagent")).toBe(false);
 });
 
 test("estimateContextTokens: ~4 chars/token over the history", () => {

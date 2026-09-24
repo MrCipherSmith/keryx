@@ -19,9 +19,23 @@ import type { NormalizedRequest, ProviderPort } from "../provider/types";
 import type { PolicyProfile } from "../policy/types";
 import { FAKE_READONLY_TOOL, FakeToolExecutor } from "../tool/fake-tool";
 import { ToolRegistry } from "../tool/registry";
+import type { ToolDefinition } from "../tool/types";
 import type { HarnessRunInput } from "../types";
 import { runOffline } from "./run";
 import type { RunDeps, RunResult } from "./run";
+
+/**
+ * A `shell`-risk fixture tool with the real built-in's own toolId
+ * (`shell_exec`) — the alias table `RUN_HOOK_TOOL_NAME_ALIASES` this test
+ * pins is keyed on that literal id, not on `risk`, so a tool of ANY other
+ * name would not exercise it.
+ */
+const FAKE_SHELL_TOOL: ToolDefinition = {
+  ...FAKE_READONLY_TOOL,
+  toolId: "shell_exec",
+  risk: "shell",
+  classification: { read: false, write: false, network: false, subprocess: true, credential: false },
+};
 
 const SCHEMA_DIR = path.join(
   import.meta.dir,
@@ -261,6 +275,34 @@ test("AC15 subset: every hook firing allow leaves the composed decision and tool
   for (const expected of ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "SessionEnd"]) {
     expect(eventNames).toContain(expected);
   }
+});
+
+// Flow 306 fix round 2 (finding G, missing regression test): a project hook
+// authored with a `matcher: "Bash"` (the Claude-Code-shaped name) must fire
+// for Keryx's own `shell_exec` tool — `RUN_HOOK_TOOL_NAME_ALIASES`'s whole
+// reason for existing (finding 7) — and the payload must still carry the
+// ORIGINAL Keryx tool name as `keryxToolName` so a hook command can recover
+// it. Nothing pinned this before.
+test("finding G: PreToolUse fires for shell_exec aliased as 'Bash', payload carries keryxToolName", async () => {
+  const registry = buildRegistry(FAKE_SHELL_TOOL);
+  const transcript = makeTranscript("t-hooks-shell-alias", [
+    { toolCallId: "call-1", toolName: FAKE_SHELL_TOOL.toolId, input: { key: "value" } },
+  ]);
+  const provider = fixtureProvider(transcript, "req-hooks-shell-alias");
+  const executor = new FakeToolExecutor(registry, { schemaDir: SCHEMA_DIR });
+  const { runtime, fires } = fakeHookRuntime({});
+  const deps = buildRunDeps({ provider, toolRegistry: registry, toolExecutor: executor, hooks: runtime });
+
+  await runOffline(buildInput(), buildConfig(), deps);
+
+  const preToolUseFires = fires.filter((f) => f.event === "PreToolUse");
+  expect(preToolUseFires).toHaveLength(1);
+  const payload = preToolUseFires[0]!.payload;
+  // The alias, not the Keryx name, is what a hook's `matcher` is tested
+  // against (`RUN_HOOK_TOOL_NAME_ALIASES.shell_exec === "Bash"`).
+  expect(payload.toolName).toBe("Bash");
+  // The original Keryx tool name is still recoverable from the payload.
+  expect(payload.keryxToolName).toBe("shell_exec");
 });
 
 test("PostToolUseFailure fires when the executor throws; observe-only (blocker recorded, hook cannot change it)", async () => {

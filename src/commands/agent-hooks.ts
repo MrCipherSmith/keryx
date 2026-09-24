@@ -15,11 +15,11 @@
 // (`resolveHooksHomeDir`/`resolveHooksProjectRoot`, review finding 11), so
 // the two agree on which `hooks.json`/project root a session and the CLI
 // each resolve.
-import os from "node:os";
 import {
   createHookRuntime,
   createRealHookRunner,
   loadHookConfig,
+  resolveHookHomeDir,
   type HookRegistration,
   type HookRuntime,
 } from "../harness/hooks";
@@ -34,13 +34,14 @@ import type { PolicyProfileId } from "../harness/policy/types";
  * DIFFERENT home directories (the CLI honored `KERYX_HOME`; the runtime only
  * ever read `os.homedir()`) — a `KERYX_HOME` operator/test override could
  * make `keryx hooks list` show registrations a live session would never
- * actually load. Both now call this one function.
+ * actually load. All three now call the one PURE resolver, {@link
+ * resolveHookHomeDir} in `harness/hooks/config.ts` (flow 306 fix round 2,
+ * finding E — moved there so `lib/serve-turn.ts`, which may not import from
+ * `commands/`, can share it too instead of carrying its own unconditional
+ * `os.homedir()`). Re-exported under this module's established name so
+ * `./hooks.ts` and every existing caller keep working unchanged.
  */
-export function resolveHooksHomeDir(env: NodeJS.ProcessEnv, homeDir?: string): string {
-  if (homeDir !== undefined) return homeDir;
-  const fromEnv = env.KERYX_HOME;
-  return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : os.homedir();
-}
+export const resolveHooksHomeDir = resolveHookHomeDir;
 
 /**
  * Shared project-root resolver — review finding 11's second half: `keryx

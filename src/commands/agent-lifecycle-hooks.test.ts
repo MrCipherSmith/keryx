@@ -235,6 +235,82 @@ test("PreToolUse ask forces requestApproval even under auto mode, with hookAsk s
   expect(ran()).toBe(true);
 });
 
+// Flow 306 fix round 2 (finding B): under the DEFAULT `ask` permission mode,
+// a `shell`-risk call already asks on its own — `rawDecision` is `ask` before
+// any hook runs. A `PreToolUse` hook that ALSO asks then agrees with
+// `rawDecision`, so `composeWithHook`'s tighten step reports no change
+// (`hookTightened: false`). Before the fix, `hookAsk` was derived from
+// `hookTightened` alone, so this exact case — a hook asking on a call the
+// mode already asked on — silently dropped `meta.hookAsk`, and the TUI
+// read-only spawn fast path / saved shell allowlist / ACP `allow_always`
+// would have auto-answered an approval the hook specifically demanded.
+test("PreToolUse ask under default ask mode still sets hookAsk (the mode already asked too)", async () => {
+  const { tool, ran } = fakeTool("shell_exec", "shell");
+  const seen: { hookAsk?: boolean }[] = [];
+  const { hooks } = fakeHooks(true, (event) =>
+    event === "PreToolUse" ? { ...EMPTY_RESULT, decisions: [{ hookId: "keryx.ask-all", decision: "ask" }] } : EMPTY_RESULT,
+  );
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async (_t, _i, meta) => {
+      seen.push(meta?.hookAsk === true ? { hookAsk: true } : {});
+      return true;
+    },
+    // permissionMode absent -> DEFAULT_PERMISSION_MODE ("ask"), which already
+    // asks for a `shell`-risk call BEFORE the hook is even consulted.
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git status"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+      hooks,
+    },
+    [],
+    "go",
+  );
+  expect(seen).toEqual([{ hookAsk: true }]);
+  expect(ran()).toBe(true);
+});
+
+test("PreToolUse ask under default ask mode sets hookAsk for spawn_subagent (delegate risk) too", async () => {
+  const { tool, ran } = fakeTool("spawn_subagent", "delegate");
+  const seen: { hookAsk?: boolean }[] = [];
+  const { hooks } = fakeHooks(true, (event) =>
+    event === "PreToolUse" ? { ...EMPTY_RESULT, decisions: [{ hookId: "keryx.ask-all", decision: "ask" }] } : EMPTY_RESULT,
+  );
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async (_t, _i, meta) => {
+      seen.push(meta?.hookAsk === true ? { hookAsk: true } : {});
+      return true;
+    },
+    // permissionMode absent -> DEFAULT_PERMISSION_MODE ("ask"), which already
+    // asks for a `delegate`-risk call (no approver-absent default-deny path
+    // exercised here — an approver IS present).
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("spawn_subagent", '{"command":"x"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+      hooks,
+    },
+    [],
+    "go",
+  );
+  expect(seen).toEqual([{ hookAsk: true }]);
+  expect(ran()).toBe(true);
+});
+
 test("PreToolUse ask with no approver present is refused (default-deny)", async () => {
   const { tool, ran } = fakeTool("shell_exec", "shell");
   const { hooks } = fakeHooks(true, (event) =>
@@ -856,7 +932,22 @@ test.skipIf(!detectSandboxLauncher().available)(
       expect(hooks.runtime.registrations().some((r) => r.id === "real-deny-bash")).toBe(true);
 
       const { tool, ran } = fakeTool("shell_exec", "shell");
-      const io: AgentIO = { write: () => {}, permissionMode: () => "auto" };
+      // Flow 306 fix round 2 (finding H): `ran() === false` alone does not
+      // distinguish the hook's real exit-2 deny from a CRASH-class failure
+      // (e.g. this machine's sandbox launcher going unavailable mid-test) —
+      // `runOneHook`'s fail-closed crash handling also denies a gate hook, so
+      // either path leaves `ran()` false. Captured here so the assertion below
+      // can pin WHICH one actually happened: the tool's own denied-call output
+      // (`composeWithHook`'s `denyMessage`) carries the hook's real stderr
+      // text only on the genuine exit-2 path.
+      const toolResults: { name: string; output: string; isError: boolean }[] = [];
+      const io: AgentIO = {
+        write: () => {},
+        permissionMode: () => "auto",
+        onToolResult: (name, toolResult) => {
+          toolResults.push({ name, output: toolResult.output, isError: toolResult.isError });
+        },
+      };
       const result = await runAgentTurn(
         io,
         {
@@ -875,6 +966,15 @@ test.skipIf(!detectSandboxLauncher().available)(
       // The real spawned script exited 2 (gate deny) — the tool must never
       // have run.
       expect(ran()).toBe(false);
+      // And the denial came from the hook's real exit 2 / stderr (the record
+      // the runner actually parsed from the spawned process), not from a
+      // crash/sandbox-unavailable failure denying the gate class closed —
+      // both leave `ran()` false, but only the genuine exit-2 path produces
+      // this exact stderr-derived reason.
+      const shellResult = toolResults.find((r) => r.name === "shell_exec");
+      expect(shellResult?.isError).toBe(true);
+      expect(shellResult?.output).toContain("refused by hook real-deny-bash");
+      expect(shellResult?.output).toContain("denied by real gate hook");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

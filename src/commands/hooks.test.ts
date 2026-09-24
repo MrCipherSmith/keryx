@@ -73,6 +73,63 @@ describe("keryx hooks list", () => {
     expect(observer).toBeDefined();
     expect(observer!.events.length).toBe(7);
   });
+
+  // Flow 306 fix round 2 (finding F): `list` used to report `runsIn:
+  // "unsandboxed"` for a project hook with nothing saying the runner would
+  // actually REFUSE it under a profile requiring fail-closed isolation — the
+  // same `isolationRequired` check `runtime.ts` (and, since this fix, `hooks
+  // test`) applies.
+  test("finding F: a runsIn:unsandboxed project hook is reported refused under --profile unattended-untrusted", async () => {
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: {
+        PreToolUse: [
+          {
+            id: "unsandboxed-project-hook",
+            matcher: "*",
+            class: "observe",
+            command: { argv: ["true"] },
+            runsIn: "unsandboxed",
+            network: "none",
+            timeoutMs: 5000,
+          },
+        ],
+      },
+    });
+
+    await hooksCommand(["list", "--json", "--profile", "unattended-untrusted"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    const result = jsonOutput() as { hooks: Array<{ id: string; runsIn: string; refused: boolean }> };
+    const row = result.hooks.find((h) => h.id === "unsandboxed-project-hook");
+    expect(row).toBeDefined();
+    expect(row!.runsIn).toBe("unsandboxed");
+    expect(row!.refused).toBe(true);
+  });
+
+  test("finding F: the SAME project hook is NOT refused under a profile that does not require isolation", async () => {
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: {
+        PreToolUse: [
+          {
+            id: "unsandboxed-project-hook",
+            matcher: "*",
+            class: "observe",
+            command: { argv: ["true"] },
+            runsIn: "unsandboxed",
+            network: "none",
+            timeoutMs: 5000,
+          },
+        ],
+      },
+    });
+
+    await hooksCommand(["list", "--json", "--profile", "monitored-trusted-local"], { cwd: project, homeDir: home });
+    const result = jsonOutput() as { hooks: Array<{ id: string; runsIn: string; refused: boolean }> };
+    const row = result.hooks.find((h) => h.id === "unsandboxed-project-hook");
+    expect(row).toBeDefined();
+    expect(row!.refused).toBe(false);
+  });
 });
 
 describe("keryx hooks validate", () => {
@@ -354,5 +411,71 @@ describe("keryx hooks test", () => {
     expect(process.exitCode).toBe(1);
     expect(errors.filter((e) => e.includes("is not valid JSON")).length).toBe(1);
     expect(errors.some((e) => e.includes("must contain a JSON object"))).toBe(false);
+  });
+
+  // Flow 306 fix round 2 (finding F): `hooks test` used to omit
+  // `isolationRequired` from its `runner.run()` request entirely, so a
+  // project hook explicitly configured `runsIn: "unsandboxed"` would actually
+  // SPAWN here even under `unattended-untrusted` — while a live session
+  // (`runtime.ts`'s `runCommandHook`) refuses that exact same call. Same
+  // `isIsolationRequired` helper, same runner refusal now on both paths.
+  test("finding F: --profile unattended-untrusted refuses a runsIn:unsandboxed project hook (same refusal as the runtime)", async () => {
+    const scriptPath = path.join(project, "fixture-marker-hook.js");
+    await writeFile(scriptPath, "process.exit(0);\n", "utf8");
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: {
+        PreToolUse: [
+          {
+            id: "unsandboxed-project-hook",
+            matcher: "*",
+            class: "gate",
+            command: { argv: [process.execPath, scriptPath] },
+            runsIn: "unsandboxed",
+            network: "none",
+            timeoutMs: 5000,
+          },
+        ],
+      },
+    });
+
+    await hooksCommand(["test", "unsandboxed-project-hook", "--profile", "unattended-untrusted", "--json"], {
+      cwd: project,
+      homeDir: home,
+    });
+    expect(process.exitCode).toBe(0); // "test" itself never fails for a hook's own refusal — same posture as AC12's deny.
+    const report = jsonOutput() as { failure?: string; runsIn?: string };
+    expect(report.runsIn).toBe("unsandboxed");
+    expect(report.failure).toBe("refused");
+  });
+
+  test("finding F: the SAME project hook actually runs under a profile that does not require isolation", async () => {
+    const scriptPath = path.join(project, "fixture-marker-hook.js");
+    await writeFile(scriptPath, "process.exit(0);\n", "utf8");
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: {
+        PreToolUse: [
+          {
+            id: "unsandboxed-project-hook",
+            matcher: "*",
+            class: "gate",
+            command: { argv: [process.execPath, scriptPath] },
+            runsIn: "unsandboxed",
+            network: "none",
+            timeoutMs: 5000,
+          },
+        ],
+      },
+    });
+
+    await hooksCommand(["test", "unsandboxed-project-hook", "--profile", "monitored-trusted-local", "--json"], {
+      cwd: project,
+      homeDir: home,
+    });
+    expect(process.exitCode).toBe(0);
+    const report = jsonOutput() as { failure?: string; exitCode?: number };
+    expect(report.failure).toBeUndefined();
+    expect(report.exitCode).toBe(0);
   });
 });

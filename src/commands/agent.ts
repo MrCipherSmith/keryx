@@ -3688,16 +3688,25 @@ function composeWithHook(
   rawDecision: HookComposedDecision,
   hookResult: HookFireResult | undefined,
   interactive: boolean,
-): { decision: HookComposedDecision; hookTightened: boolean; denyMessage?: string } {
+): { decision: HookComposedDecision; hookTightened: boolean; hookAsked: boolean; denyMessage?: string } {
   if (hookResult === undefined || hookResult.decisions.length === 0) {
-    return { decision: rawDecision, hookTightened: false };
+    return { decision: rawDecision, hookTightened: false, hookAsked: false };
   }
+  // Flow 306 fix round 2 (finding B): a hook `ask` decision must surface to the
+  // approver even when it did not itself CHANGE the composed decision — e.g. the
+  // default `ask` permission mode already asks, so the hook's own `ask` agrees
+  // with `rawDecision` and `tightenOutcome` reports no tightening at all. Without
+  // this, `hookAsk` (below) went unset for exactly that case, and the TUI
+  // read-only spawn fast path / saved shell allowlist / ACP `allow_always` all
+  // auto-answered an approval a hook specifically asked for. Computed from the
+  // raw hook decisions directly, independent of whether the outcome moved.
+  const hookAsked = hookResult.decisions.some((d) => d.decision === "ask" || d.decision === "deny");
   const base: PolicyOutcome = rawDecision === "deny" ? "deny" : rawDecision === "auto" ? "allow" : "ask";
   const tightened = tightenOutcome(base, hookResult.decisions, interactive);
   const decision: HookComposedDecision =
     tightened.outcome === "deny" ? "deny" : tightened.outcome === "allow" ? "auto" : "ask";
   if (decision === rawDecision) {
-    return { decision: rawDecision, hookTightened: false };
+    return { decision: rawDecision, hookTightened: false, hookAsked };
   }
   let denyMessage: string | undefined;
   if (decision === "deny") {
@@ -3706,7 +3715,7 @@ function composeWithHook(
     const reason = hookResult.records.find((r) => r.hookId === hookId)?.reason ?? "denied by policy hook";
     denyMessage = `${toolName} refused by hook ${hookId}: ${reason}`;
   }
-  return { decision, hookTightened: true, ...(denyMessage !== undefined ? { denyMessage } : {}) };
+  return { decision, hookTightened: true, hookAsked, ...(denyMessage !== undefined ? { denyMessage } : {}) };
 }
 
 /** Resolve, gate (risk + approval + permission mode), validate, and invoke a call → a content result. */
@@ -3867,7 +3876,7 @@ async function executeCall(
               ...(publishLease && publishLeaseHolder !== undefined
                 ? { publishLeaseDetail: `held by @${publishLeaseHolder.name} — "${publishLeaseHolder.reason}"` }
                 : {}),
-              ...(gated.hookTightened ? { hookAsk: true } : {}),
+              ...(gated.hookAsked ? { hookAsk: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
         return { output: `command not approved by the user; not executed`, isError: true };
@@ -3905,7 +3914,7 @@ async function executeCall(
           : await requestApproval(call.name, call.input, {
               fingerprint,
               destructive: false,
-              ...(gated.hookTightened ? { hookAsk: true } : {}),
+              ...(gated.hookAsked ? { hookAsk: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
         return { output: `subagent spawn not approved by the user; not executed`, isError: true };
@@ -3969,7 +3978,7 @@ async function executeCall(
               destructive,
               ...(credentials ? { credentials } : {}),
               ...(card !== undefined ? { alwaysAsk: true, card } : {}),
-              ...(gated.hookTightened ? { hookAsk: true } : {}),
+              ...(gated.hookAsked ? { hookAsk: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
         if (confirmationToken !== undefined) tool.confirmationDeclined?.(confirmationToken);

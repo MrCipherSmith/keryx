@@ -24,6 +24,7 @@ import {
   buildHookStdin,
   createRealHookRunner,
   failureEffect,
+  isIsolationRequired,
   loadHookConfig,
   parseHookResult,
   resolveBuiltinCommandRunsIn,
@@ -125,6 +126,16 @@ export interface HooksListRow {
    * always identical to its registration's.
    */
   runsIn: "sandbox" | "unsandboxed";
+  /**
+   * Flow 306 fix round 2 (finding F): true when this row's `runsIn` would
+   * actually be REFUSED by the runner under `profileId` — `runsIn ===
+   * "unsandboxed"` while the profile's `requiredControls.isolation ===
+   * "required-fail-closed"` (`isIsolationRequired`, the SAME predicate
+   * `runner.ts` refuses on and `hooks test` now passes through). Before this,
+   * `list` reported `runsIn: "unsandboxed"` for such a row with nothing
+   * saying the hook would never actually spawn that way.
+   */
+  refused: boolean;
   /** `{kind:"command", argv}` for a spawned hook, `{kind:"builtin", name}` for the two in-process built-ins. */
   handler: { kind: "command"; argv: string[] } | { kind: "builtin"; name: string };
   description?: string;
@@ -148,6 +159,7 @@ function groupById(registrations: readonly HookRegistration[], profileId: Policy
       appliesToChildAgents: reg.appliesToChildAgents,
       timeoutMs: reg.timeoutMs,
       runsIn: resolveBuiltinCommandRunsIn(reg, profileId),
+      refused: resolveBuiltinCommandRunsIn(reg, profileId) === "unsandboxed" && isIsolationRequired(profileId),
       handler:
         reg.handler.kind === "command"
           ? { kind: "command", argv: reg.handler.argv }
@@ -165,7 +177,7 @@ function renderListText(rows: readonly HooksListRow[], profileId: PolicyProfileI
       `${row.id}`,
       `  scope=${row.scope} class=${row.class} enabled=${String(row.enabled)} appliesToChildAgents=${String(row.appliesToChildAgents)}`,
       `  events=${row.events.join(",")} matcher=${row.matcher} timeoutMs=${row.timeoutMs}`,
-      `  runsIn=${row.runsIn} (effective under profile "${profileId}"; command hooks only)`,
+      `  runsIn=${row.runsIn}${row.refused ? " REFUSED (profile requires fail-closed isolation)" : ""} (effective under profile "${profileId}"; command hooks only)`,
       `  command: ${command}`,
     ].join("\n");
   });
@@ -401,6 +413,16 @@ async function runOneCommandHook(
   if (reg.handler.kind !== "command") throw new Error("runOneCommandHook requires a command handler");
   const argv = resolveKeryxArgv(reg.handler.argv);
   const effectiveRunsIn = resolveBuiltinCommandRunsIn(reg, profileId);
+  // Flow 306 fix round 2 (finding F): `hooks test` used to omit
+  // `isolationRequired` entirely, so a project/user hook explicitly
+  // configured `runsIn: "unsandboxed"` would actually SPAWN under
+  // `unattended-untrusted` (or any profile requiring fail-closed isolation)
+  // here, while a live session's `runtime.ts` refuses that exact same call
+  // (`req.isolationRequired === true`). Same `isIsolationRequired` helper,
+  // same runner, same refusal (`spawnError: "refused"` -> `failure:
+  // "refused"`) — `hooks test` can no longer report success on a call that
+  // would never actually run.
+  const isolationRequired = isIsolationRequired(profileId);
   const raw = await runner.run({
     argv,
     cwd: reg.handler.cwd ?? ".",
@@ -409,6 +431,7 @@ async function runOneCommandHook(
     timeoutMs: reg.timeoutMs,
     network: reg.network,
     runsIn: effectiveRunsIn,
+    isolationRequired,
   });
   const parsed = parseHookResult(
     {

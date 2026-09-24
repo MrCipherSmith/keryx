@@ -12,6 +12,7 @@ import { MAX_CONTEXT_BYTES } from "../context/manifest";
 import { GATE_CAPABLE_EVENTS } from "./types";
 import type { HookAnomalyName, HookClass, HookEventName, HookFailureKind } from "./types";
 import type { PolicyOutcome } from "../policy/types";
+import { OUTCOME_RANK } from "../policy/ranks";
 
 /**
  * One hook's `additionalContext` must not be able to single-handedly consume
@@ -121,8 +122,6 @@ function mapDecisionString(raw: unknown): PolicyOutcome | undefined | "invalid" 
   return "invalid";
 }
 
-const POLICY_OUTCOME_RANK: Record<PolicyOutcome, number> = { allow: 0, ask: 1, deny: 2 };
-
 /**
  * The stricter of two decisions (flow 306, W6, fix round 1, finding 8). A
  * hook's stdout can carry BOTH a top-level `decision` and a nested
@@ -137,7 +136,9 @@ const POLICY_OUTCOME_RANK: Record<PolicyOutcome, number> = { allow: 0, ask: 1, d
 function mostRestrictiveDecision(a: PolicyOutcome | undefined, b: PolicyOutcome | undefined): PolicyOutcome | undefined {
   if (a === undefined) return b;
   if (b === undefined) return a;
-  return POLICY_OUTCOME_RANK[a] >= POLICY_OUTCOME_RANK[b] ? a : b;
+  // OUTCOME_RANK is a permissiveness ordering (deny < ask < allow), so the
+  // more restrictive of the two is the one with the LOWER rank.
+  return OUTCOME_RANK[a] <= OUTCOME_RANK[b] ? a : b;
 }
 
 /** Whether a hook's `class`+`event` combination is ever allowed to change the outcome. */

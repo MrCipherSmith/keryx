@@ -49,6 +49,14 @@ Only three events are **per-tool**: `PreToolUse`, `PostToolUse`,
 `PostToolUseFailure`. Their `matcher` is a regex tested against the tool
 name; every other event's `matcher` must be `"*"`.
 
+`SubagentStart` is gate-capable, but `spawn_subagent` (the only caller that
+fires it) has no operator-facing approval callback of its own — there is no
+surface for a live human decision to route an `ask` to. So on this one event,
+`ask` and `deny` are treated identically: **both deny the spawn.** In v1
+there is no approval path for a subagent spawn a hook only wants to ask
+about; author a `SubagentStart` hook as a hard gate (`allow` or `deny` in
+effect), not as a prompt for the operator.
+
 ### Payload fields
 
 Every payload carries the shared base fields, plus event-specific fields.
@@ -288,7 +296,13 @@ first.
   hook process ever starts, not merely left unset.
 - **Timeouts**: per-registration `timeoutMs`, default 5000ms, clamped to
   [1ms, 60000ms]. A hook that exceeds it is SIGKILLed (its whole process
-  group on POSIX) and classified as a `timeout` failure.
+  group on POSIX) and classified as a `timeout` failure. A hook that leaves a
+  background process holding its stdout open (an escaped/detached
+  grandchild, `setsid`-style) does not resolve early just because the hook
+  itself exited: the runner still fully resolves the call, but only at
+  `timeoutMs` plus a fixed ~500ms grace period after the kill signal, not
+  the moment the hook process itself terminates — and it is still classified
+  as a `timeout` failure, exactly like a hook that never exits at all.
 - **Ordering**: deterministic — built-in → user → project, file order within
   each, ties by `id` — never wall-clock, so a hook run replays the same way
   `decide()` does.

@@ -1262,6 +1262,21 @@ export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | 
   return mode === "read_only" && hookAsk !== true;
 }
 
+/**
+ * Flow 306 fix round 2 (finding C): whether an `alwaysAsk`+`card` approval
+ * (`agent.ts`'s shape for both `schedule_create` and a `UserPromptSubmit`
+ * hook's `ask`) is the `user_prompt` one, which must NOT be routed to
+ * `confirmScheduleCard` — the two calls share a meta shape but not a
+ * question, and routing on the shape alone put "Create this schedule and
+ * install its background timer?" in front of an operator being asked whether
+ * their own chat message may reach the model. Extracted as a pure predicate,
+ * same reason as {@link shouldAutoApproveReadOnlySpawn}: unit-testable
+ * without mounting the whole TUI shell.
+ */
+export function isUserPromptApprovalCard(tool: string): boolean {
+  return tool === "user_prompt";
+}
+
 /** Outcomes of the interactive shell_exec approval picker (OpenCode-style). */
 export type ShellApprovalChoice = "once" | "always-exact" | "always-prefix" | "deny";
 
@@ -4514,6 +4529,47 @@ export async function launchTuiAgentShell(opts: {
       );
       return id === "create";
     };
+    // Flow 306 fix round 2 (finding C): a `UserPromptSubmit` hook `ask` (routed
+    // here as the synthetic tool `user_prompt`, `agent.ts`'s `alwaysAsk: true` +
+    // `card`) is NOT a schedule confirmation — it was falling into
+    // `confirmScheduleCard` below purely because both shapes carry
+    // `alwaysAsk`+`card`, which put "Create this schedule and install its
+    // background timer?" in front of an operator being asked whether their own
+    // chat message may reach the model. Same card-then-choice shape, accurate
+    // wording, never remembered — like `confirmScheduleCard`, this answers a
+    // gate a hook raised, not a grant a saved pattern could stand in for.
+    const confirmUserPromptCard = async (card: readonly string[]): Promise<boolean> => {
+      for (const line of card) {
+        transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
+      }
+      chrome.hideMenu();
+      setMainAgent("blocked", "approval");
+      const id = await chrome.withOverlay(() =>
+        showComposerChoice(otui, r, chrome.dock, {
+          title: "Send this message to the model?",
+          subtitle: card[0] ?? "",
+          cancelId: "cancel",
+          onOpen: () => chrome.blurComposer(),
+          signal: foregroundOperation.signal,
+          options: [
+            { id: "send", label: "Send", description: "Let the message reach the model as written" },
+            { id: "cancel", label: "Cancel", description: "The message is not sent" },
+          ],
+        }),
+      );
+      input.focus();
+      setMainAgent("running", id === "send" ? "prompt" : "denied");
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `ap${uid++}`,
+          content:
+            id === "send"
+              ? otui.t`${roleChunk(otui, "ok", "◇ message approved")}`
+              : otui.t`${roleChunk(otui, "error", "◇ message not sent")}`,
+        }),
+      );
+      return id === "send";
+    };
     io.requestApproval = async (tool, inputJson, meta) => {
       if (meta?.untrustedOrigin === true) {
         // `agent.ts`'s untrusted-content gate asks the human instead of refusing
@@ -4524,6 +4580,14 @@ export async function launchTuiAgentShell(opts: {
             content: otui.t`${roleChunk(otui, "attention", "⚠ follows untrusted external content — it cannot authorize this call; your answer does")}`,
           }),
         );
+      }
+
+      // Flow 306 fix round 2 (finding C): a `UserPromptSubmit` hook ask, before
+      // the schedule branch below — both shapes carry `alwaysAsk`+`card`, and
+      // `confirmScheduleCard`'s schedule-install wording is wrong for a chat
+      // message.
+      if (isUserPromptApprovalCard(tool) && meta?.alwaysAsk === true && meta.card !== undefined) {
+        return confirmUserPromptCard(meta.card);
       }
 
       // Flow 295 (AC6/AC7): an operator-confirmed call (schedule_create). The

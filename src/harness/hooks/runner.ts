@@ -7,8 +7,17 @@
 // (`wrapWithSandbox` + `detectSandboxLauncher`, D2) — an unavailable/refusing
 // launcher is a fail-closed `spawnError: "sandbox-unavailable"`, never an
 // unsandboxed fallback. `runsIn: "unsandboxed"` is refused (`spawnError:
-// "refused"`) whenever the active `SandboxProfile.required` is true (derived
-// from the policy's `requiredControls.isolation === "required-fail-closed"`).
+// "refused"`) whenever EITHER the active `SandboxProfile.required` is true OR
+// the caller-supplied `req.isolationRequired` is true (flow 306, W6, fix
+// round 1, finding 1) — the latter is the one that actually fires in
+// production: every real caller constructs its runner with
+// `defaultSandboxProfile`, whose `required` is always `false`, so
+// `isolationRequired` (computed by the caller from the active policy's
+// `requiredControls.isolation === "required-fail-closed"` — see
+// `runtime.ts`'s `isIsolationRequired`, also now reused by `commands/
+// hooks.ts`'s `hooks test`/`hooks list`, flow 306 fix round 2 finding F) is
+// the check that carries the profile's own isolation requirement through to
+// this refusal.
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { detectSandboxLauncher } from "../process/sandbox/detect";
