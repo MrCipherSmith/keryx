@@ -50,7 +50,8 @@ export type SessionEntryPayload =
         | "evidence_link"
         | "run_pause"
         | "run_resume"
-        | "run_end";
+        | "run_end"
+        | "hook_invocation";
       artifactRef: ArtifactRef;
     };
 

@@ -22,6 +22,8 @@ import {
   evaluateCompletion,
 } from "../completion/gate";
 import { redactForPersistence, type ScanResult } from "../evidence/redaction";
+import { composeDecision } from "../hooks/compose";
+import type { HookFireResult, HookInvocationRecord, HookRuntime, HookWarning } from "../hooks";
 import { decide } from "../policy/engine";
 import { escalateForBlastRadius, metaprojectBlastRadius } from "../policy/metaproject-escalation";
 import type { PolicyContext, PolicyDecision, PolicyProfile } from "../policy/types";
@@ -163,6 +165,60 @@ export interface RunDeps {
    * ad-hoc run with no flow behind it does not start failing.
    */
   completionRequirements?: CompletionRequirements;
+  /**
+   * OPTIONAL lifecycle hook runtime (flow 306 / W6, task T6).
+   *
+   * Absent ⇒ byte-identical to a run built without this field: no
+   * `SessionStart`/`UserPromptSubmit`/`PreToolUse`/`PostToolUse`/
+   * `PostToolUseFailure`/`Stop`/`SessionEnd` event ever fires, no
+   * `hook_invocation` session entries are appended, and `RunResult` carries
+   * neither `hookInvocations` nor `hookWarnings` — preserving the replay
+   * suite's fixture hashes and every existing caller's behaviour.
+   *
+   * When present:
+   *  - `SessionStart` fires once, after `startRun()` returns `started`, before
+   *    the first provider request; its `additionalContext` (joined) is
+   *    appended to the request's `systemInstruction`.
+   *  - `UserPromptSubmit` fires once per run, before `deps.provider.stream` is
+   *    ever called, with the raw `input.request` text; its `additionalContext`
+   *    is appended to the first user message. A composed `deny` (a tightened
+   *    `ask` under `interactive: false` also reads as `deny` — there is no
+   *    interactive approver inside `runOffline`) never opens the stream: the
+   *    run ends `blocked` with a typed blocker
+   *    `blocker:hook-denied:UserPromptSubmit`.
+   *  - `PreToolUse` fires per resolved tool call BEFORE `decide()` runs (so
+   *    `ctx.decideOutcome` is not yet known to the hook at that point — a
+   *    known asymmetry vs. the gate malformed-output failure table, which is
+   *    outside this task's owned acceptance criteria); its decisions are
+   *    composed with the policy decision (and the MP-6 escalation) via
+   *    `composeDecision` afterwards, and the composed decision is what is
+   *    pushed/persisted/gates execution. `additionalContext` from a
+   *    `PreToolUse` hook has no mid-stream injection point in this offline
+   *    loop; it is dropped after being fired (only the hook's decision and its
+   *    `hook_invocation` record survive) — the same is true whenever a
+   *    downstream consumer needs it (see the module doc for a future
+   *    injection point).
+   *  - `PostToolUse` fires after a successfully executed tool
+   *    (`result.status === "succeeded"`); `PostToolUseFailure` fires when the
+   *    executor throws OR resolves with any other status. Both are
+   *    observe-only: neither can change `blockerIds` or a tool's `ToolResult`.
+   *  - `Stop` fires once per `model_end` event with `stopReason: "model_end"`;
+   *    a tightened `deny` adds the typed blocker `blocker:hook-denied:Stop`
+   *    (does not retroactively un-execute anything already run).
+   *  - `SessionEnd` fires once at the very end of the run, observe-only, with
+   *    `endReason` set to the run's own terminal status
+   *    (`completed`/`blocked`/`failed`).
+   *  - Every `HookInvocationRecord` any of the above produces becomes one
+   *    append-only `hook_invocation` session entry, correlated by
+   *    `toolCallId` for the per-tool events and by the session's own
+   *    deterministic id sequence otherwise.
+   *
+   * Determinism is preserved because the only non-determinism a hook record
+   * could introduce (ids, timestamps) is drawn from `deps.clock`/`deps.idSeq`
+   * — the runtime itself is required to be built the same way (see
+   * `src/harness/hooks/runtime.ts`).
+   */
+  hooks?: HookRuntime;
 }
 
 /**
@@ -197,6 +253,15 @@ export interface RunResult {
   toolRegistryHash: string;
   transcriptHash: string;
   expectedStateHash: string;
+  /**
+   * Every hook invocation recorded during this run, in fire order. ONLY
+   * present when `deps.hooks` was supplied (conditional property, so a
+   * hooks-absent `RunResult` stays deep-equal to one from before this field
+   * existed).
+   */
+  hookInvocations?: HookInvocationRecord[];
+  /** Named hook warnings (e.g. `hook-observer-failed`) accumulated over the run. Present under the same condition as {@link hookInvocations}. */
+  hookWarnings?: HookWarning[];
 }
 
 // Stable, key-sorted serialization so a content fingerprint is independent of
@@ -303,19 +368,96 @@ export async function runOffline(
   let executedToolCalls = 0;
   let finalMessageEmitted = false;
 
+  // --- Hook runtime bookkeeping (flow 306 / W6, T6). Every branch below is a
+  // no-op when `deps.hooks` is absent, preserving byte-identical behaviour. ---
+  const hookInvocations: HookInvocationRecord[] = [];
+  const hookWarnings: HookWarning[] = [];
+  let hookRecordSeq = 0;
+
+  /** Append every record from one `fire()` result as a `hook_invocation` session entry. */
+  function recordHookFire(fire: HookFireResult, opts?: { toolCallId?: string }): void {
+    for (const record of fire.records) {
+      hookInvocations.push(record);
+      const artifactRef = makeArtifactRef(
+        `hook-${hookRecordSeq++}-${record.hookId}`,
+        "hook-invocation",
+        sha256(canonicalize(record)),
+      );
+      session.append(
+        { type: "hook_invocation", artifactRef },
+        opts?.toolCallId !== undefined ? { correlationId: opts.toolCallId } : {},
+      );
+    }
+    hookWarnings.push(...fire.warnings);
+  }
+
+  // --- SessionStart: after `startRun()`'s `started` outcome, before the first
+  // provider request. Observe/context-only (never in `GATE_CAPABLE_EVENTS`);
+  // its `additionalContext` (joined) is appended to the system instruction. ---
+  let sessionStartContext: string | undefined;
+  if (deps.hooks !== undefined) {
+    const sessionStartFire = await deps.hooks.fire("SessionStart", {
+      sessionId,
+      runId,
+      projectRoot: input.projectRoot,
+      policyProfile: deps.policyProfile.profileId,
+      contextHash: manifest.contextHash,
+      provider,
+      model,
+    });
+    recordHookFire(sessionStartFire);
+    if (sessionStartFire.additionalContext.length > 0) {
+      sessionStartContext = sessionStartFire.additionalContext.join("\n");
+    }
+  }
+  const baseSystemInstruction = "Keryx harness offline run (Release 0).";
+  const systemInstruction =
+    sessionStartContext !== undefined
+      ? `${baseSystemInstruction}\n\n${sessionStartContext}`
+      : baseSystemInstruction;
+
+  // --- UserPromptSubmit: before the prompt ever reaches the model. A tightened
+  // `deny` (headless-fail-closed folds a tightened `ask` into `deny` too, since
+  // `runOffline` has no interactive approver of its own) never opens the
+  // provider stream: the run ends `blocked` with a typed blocker instead. ---
+  let userPromptDenied = false;
+  let userPromptContext: string | undefined;
+  if (deps.hooks !== undefined) {
+    const userPromptFire = await deps.hooks.fire("UserPromptSubmit", {
+      sessionId,
+      runId,
+      prompt: input.request,
+    });
+    recordHookFire(userPromptFire);
+    if (userPromptFire.additionalContext.length > 0) {
+      userPromptContext = userPromptFire.additionalContext.join("\n");
+    }
+    if (userPromptFire.tightened === "deny") {
+      userPromptDenied = true;
+      blockerIds.push("blocker:hook-denied:UserPromptSubmit");
+    }
+  }
+
+  const maxToolCalls = input.budget.maxToolCalls;
+  let modelRequests = 0;
+
+  if (!userPromptDenied) {
   const request: NormalizedRequest = {
     providerId: provider,
     modelId: model,
-    systemInstruction: "Keryx harness offline run (Release 0).",
-    messages: [{ role: "user", content: input.request, provenance: "project" }],
+    systemInstruction,
+    messages: [
+      {
+        role: "user",
+        content: userPromptContext !== undefined ? `${input.request}\n\n${userPromptContext}` : input.request,
+        provenance: "project",
+      },
+    ],
     budget: { maxOutputTokens: 1000, runReservation: 1000 },
     stream: true,
     requestId: `req-${manifest.contextHash.slice(0, 32)}`,
     parentRunId: runId,
   };
-
-  const maxToolCalls = input.budget.maxToolCalls;
-  let modelRequests = 0;
 
   modelRequests += 1;
   const stream = deps.provider.stream(request, { attemptId: `attempt-${runId}` });
@@ -325,6 +467,13 @@ export async function runOffline(
 
     if (event.kind === "model_end") {
       finalMessageEmitted = true;
+      if (deps.hooks !== undefined) {
+        const stopFire = await deps.hooks.fire("Stop", { sessionId, runId, stopReason: "model_end" });
+        recordHookFire(stopFire);
+        if (stopFire.tightened === "deny") {
+          blockerIds.push("blocker:hook-denied:Stop");
+        }
+      }
       continue;
     }
 
@@ -371,6 +520,31 @@ export async function runOffline(
       approvals: [],
       actionFingerprint,
     };
+
+    // --- PreToolUse: fires BEFORE `decide()` (per the W6 spec's event-list
+    // entry for this event). Composition against the real `PolicyDecision`
+    // happens AFTER `decide()` + the MP-6 escalation below, via
+    // `composeDecision` — so `ctx.decideOutcome` is not yet known to the hook
+    // at fire time (a documented asymmetry vs. the gate malformed-output
+    // failure table; outside this task's owned ACs). `additionalContext` from
+    // this event has no mid-stream injection point in this offline loop and is
+    // dropped after being recorded (see `RunDeps.hooks` doc comment). ---
+    let preToolUseFire: HookFireResult | undefined;
+    if (deps.hooks !== undefined) {
+      preToolUseFire = await deps.hooks.fire(
+        "PreToolUse",
+        {
+          toolCallId,
+          toolName,
+          toolInput: parsedInput,
+          risk,
+          policyProfile: deps.policyProfile.profileId,
+        },
+        { toolName },
+      );
+      recordHookFire(preToolUseFire, { toolCallId });
+    }
+
     let decision = decide({ toolCallId, risk }, policyContext, {
       clock: deps.clock,
       idSeq: deps.idSeq,
@@ -390,6 +564,12 @@ export async function runOffline(
         const blastRadius = await metaprojectBlastRadius(deps.metaprojectPort, targetPath);
         decision = escalateForBlastRadius(decision, { blastRadius }, blastRadiusThreshold);
       }
+    }
+
+    // The composed decision (hooks can only tighten) is what is
+    // pushed/persisted and gates execution below.
+    if (preToolUseFire !== undefined) {
+      decision = composeDecision(decision, preToolUseFire.decisions, { interactive: deps.interactive });
     }
 
     decisions.push(decision);
@@ -443,15 +623,65 @@ export async function runOffline(
     let result: ToolResult | undefined;
     try {
       result = await deps.toolExecutor.invoke(invocation);
-    } catch {
+    } catch (err) {
       // Malformed / schema-invalid input rejected by the executor gate before
       // any receipt: record a typed blocker, never a tool_result with an
       // artifactRef (@SC_R04_MALFORMED_TOOL_INPUT — "no execution receipt").
+      if (deps.hooks !== undefined) {
+        const failFire = await deps.hooks.fire(
+          "PostToolUseFailure",
+          {
+            toolCallId,
+            toolName,
+            toolInput: parsedInput,
+            error: { message: err instanceof Error ? err.message : String(err) },
+          },
+          { toolName },
+        );
+        recordHookFire(failFire, { toolCallId });
+      }
       blockerIds.push(`blocker:tool-rejected:${toolCallId}`);
       continue;
     }
 
     executed.push({ toolCallId, toolName, result });
+
+    // PostToolUse / PostToolUseFailure: observe-only, fired AFTER execution.
+    // Neither can change `blockerIds` or the recorded `ToolResult` — both
+    // events are outside `GATE_CAPABLE_EVENTS`, so `fire()` never computes a
+    // `tightened` outcome for them; only their `hook_invocation` records and
+    // any warnings are kept.
+    if (deps.hooks !== undefined) {
+      if (result.status === "succeeded") {
+        const postFire = await deps.hooks.fire(
+          "PostToolUse",
+          {
+            toolCallId,
+            toolName,
+            toolInput: parsedInput,
+            toolOutput: result,
+            policyDecision: decision.decision,
+          },
+          { toolName },
+        );
+        recordHookFire(postFire, { toolCallId });
+      } else {
+        const failFire = await deps.hooks.fire(
+          "PostToolUseFailure",
+          {
+            toolCallId,
+            toolName,
+            toolInput: parsedInput,
+            error: {
+              message: `Tool ${toolName} reported status ${result.status}.`,
+              ...(result.errorCode !== undefined ? { code: result.errorCode } : {}),
+            },
+          },
+          { toolName },
+        );
+        recordHookFire(failFire, { toolCallId });
+      }
+    }
 
     // Redact the tool result for persistence (S4) before it is recorded.
     const redaction = redactForPersistence(canonicalize(result), { scan });
@@ -474,6 +704,7 @@ export async function runOffline(
       blockerIds.push(`blocker:tool-${result.errorCode ?? "failed"}:${toolCallId}`);
     }
   }
+  } // end `if (!userPromptDenied)`
 
   // --- Completion gate (S4): the single authority on whether the run passed. ---
   // The two requirement lists come from the caller (flow 134 / S3); absent ⇒
@@ -522,6 +753,13 @@ export async function runOffline(
   if (input.flowId !== undefined) output.flowId = input.flowId;
   if (unresolvedRisks.length > 0) output.unresolvedRisks = [...unresolvedRisks];
 
+  // --- SessionEnd: observe-only, fired once at the very end of the run. ---
+  if (deps.hooks !== undefined) {
+    const endReason = status === "completed" ? "completed" : status === "blocked" ? "blocked" : "failed";
+    const sessionEndFire = await deps.hooks.fire("SessionEnd", { sessionId, runId, endReason });
+    recordHookFire(sessionEndFire);
+  }
+
   const sessionEntries = session.entries();
   const sessionManifestHash = sha256(canonicalize(session.manifest()));
   const eventLogHash = sha256(canonicalize(events));
@@ -544,6 +782,7 @@ export async function runOffline(
     toolRegistryHash,
     transcriptHash,
     expectedStateHash,
+    ...(deps.hooks !== undefined ? { hookInvocations, hookWarnings } : {}),
   };
 }
 

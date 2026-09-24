@@ -19,6 +19,7 @@ import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
 import { spawnSubagent, foldChildSummary, DEFAULT_MAX_CHILDREN } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
+import type { HookRuntime } from "../../hooks";
 import { shellChildReadOnlyProfile, shellParentProfile } from "../../policy/profiles";
 import type { Provenance } from "../../session/types";
 import { runAgentTurn, type AgentDeps, type AgentIO, type RunAgentTurnResult } from "../../../commands/agent";
@@ -302,6 +303,23 @@ export interface SpawnSubagentToolDeps {
     readonly workerId: string;
     readonly label: string;
   }) => Promise<StructuredSubagentResult>;
+  /**
+   * OPTIONAL lifecycle hook runtime (flow 306 / W6, task T6). Absent ⇒
+   * byte-identical to today: neither `SubagentStart` nor `SubagentStop` ever
+   * fires, for either the external (`deps.runExternal`) or native/internal
+   * (in-process `runAgentTurn`) child path below.
+   *
+   * When present, `SubagentStart` fires before either path actually starts
+   * the child (external: before `deps.runExternal`; native: before the tools/
+   * history are built for `runAgentTurn`) with `inheritedHookIds` from
+   * `hooks.inheritedHookIds()`; a composed `deny` prevents that path from
+   * starting the child at all — the ledger reservation is still released and
+   * a `failed`/`"hook-denied"` fleet upsert is still emitted, matching every
+   * other denial path in this file. `SubagentStop` fires, observe-only, once
+   * the child's outcome is known on every exit branch (success, timeout,
+   * error) of whichever path ran.
+   */
+  hooks?: HookRuntime;
 }
 
 /**
@@ -497,6 +515,32 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             : labelRaw
           : `sub-${childSeq}`;
 
+      // --- SubagentStart/SubagentStop helpers (flow 306 / W6, T6). No-ops
+      // when `deps.hooks` is absent (D1: byte-identical). `fireSubagentStart`
+      // returns the composed tightened outcome so a caller can decide whether
+      // to proceed; `fireSubagentStop` is always observe-only. ---
+      const fireSubagentStart = async (spawnKind: "external" | "internal"): Promise<"allow" | "ask" | "deny" | undefined> => {
+        if (deps.hooks === undefined) return undefined;
+        const fire = await deps.hooks.fire("SubagentStart", {
+          sessionId: parentSessionId,
+          runId: parentRunId,
+          subagentId: workerId,
+          parentSessionId,
+          spawnKind,
+          inheritedHookIds: deps.hooks.inheritedHookIds(),
+        });
+        return fire.tightened;
+      };
+      const fireSubagentStop = async (outcome: string): Promise<void> => {
+        if (deps.hooks === undefined) return;
+        await deps.hooks.fire("SubagentStop", {
+          sessionId: parentSessionId,
+          runId: parentRunId,
+          subagentId: workerId,
+          outcome,
+        });
+      };
+
       const parent = deps.getParentModel();
       const detected = deps.getDetectedProviders();
       const session = { providerId: parent.providerId, modelId: parent.modelId };
@@ -644,6 +688,30 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // identically to a native one.
       if (externalRuntime !== undefined && deps.runExternal !== undefined) {
         const externalStartedAt = performance.now();
+        // SubagentStart (flow 306 / W6, T6): fires BEFORE `deps.runExternal`.
+        // A composed deny prevents the external run from ever starting; the
+        // reservation is still released and a failed fleet upsert still
+        // emitted, matching every other denial path in this file.
+        const startOutcome = await fireSubagentStart("external");
+        if (startOutcome === "deny") {
+          emitFleetEvent({
+            kind: "upsert",
+            id: workerId,
+            label,
+            status: "failed",
+            detail: "hook-denied",
+            task,
+            ...externalMark,
+          });
+          ledger.release(spawned.reservation.reservationId, {
+            maxRuntimeMs: Math.round(performance.now() - externalStartedAt),
+          });
+          return {
+            status: "Denied",
+            output: `spawn_subagent denied by a SubagentStart hook for ${workerId}`,
+            isError: true,
+          };
+        }
         try {
           const external = await deps.runExternal({ runtime: externalRuntime, task, mode, workerId, label });
           emitFleetEvent({
@@ -655,6 +723,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             task,
             ...externalMark,
           });
+          await fireSubagentStop(external.status);
           return external;
         } catch (err) {
           // A throwing hook is a keryx bug, not an agent failure, and must not
@@ -668,6 +737,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             task,
             ...externalMark,
           });
+          await fireSubagentStop("Error");
           return {
             status: "Error",
             output: `external runtime failed before the agent could report: ${(err as Error).message}`,
@@ -682,6 +752,26 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             maxRuntimeMs: Math.round(performance.now() - externalStartedAt),
           });
         }
+      }
+
+      // SubagentStart (flow 306 / W6, T6) for the native/internal path: fires
+      // before the child's tools/history are built or `runAgentTurn` is ever
+      // called. A composed deny yields the same `{ok:false}`-shaped
+      // `StructuredSubagentResult` as an MAE admission denial above — the
+      // ledger reservation is released and a failed fleet upsert emitted, and
+      // `runAgentTurn` is never invoked.
+      const nativeStartedAt = performance.now();
+      const nativeStartOutcome = await fireSubagentStart("internal");
+      if (nativeStartOutcome === "deny") {
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "hook-denied", task });
+        ledger.release(spawned.reservation.reservationId, {
+          maxRuntimeMs: Math.round(performance.now() - nativeStartedAt),
+        });
+        return {
+          status: "Denied",
+          output: `spawn_subagent denied by a SubagentStart hook for ${workerId}`,
+          isError: true,
+        };
       }
 
       const cwd = deps.cwd;
@@ -1155,6 +1245,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             releaseBudget();
             emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout", task });
             await foldChildSlateAndCleanup("incomplete");
+            await fireSubagentStop("Timeout");
             const partial = assistant.trim();
             return {
               status: "Timeout",
@@ -1208,6 +1299,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           task,
         });
         await foldChildSlateAndCleanup("completed");
+        await fireSubagentStop(status);
         return {
           status,
           isError,
@@ -1234,6 +1326,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           task,
         });
         await foldChildSlateAndCleanup("incomplete");
+        await fireSubagentStop("Error");
         return { status: "Error", output: `subagent ${label} failed: ${msg}`, isError: true };
       }
     },
