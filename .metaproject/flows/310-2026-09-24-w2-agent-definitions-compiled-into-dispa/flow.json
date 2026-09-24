@@ -9,7 +9,7 @@
   "title": "W2: agent definitions compiled into dispatch contracts, per-harness exporters, initial generic agent catalog",
   "status": "in-progress",
   "createdAt": "2026-09-24T04:09:02.681Z",
-  "updatedAt": "2026-09-24T04:14:50.404Z",
+  "updatedAt": "2026-09-24T05:07:25.493Z",
   "source": {
     "type": "description",
     "ref": null
@@ -42,7 +42,7 @@
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -50,14 +50,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -65,7 +66,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -86,77 +88,112 @@
       "id": "T5",
       "title": "Core src/agents module: types, schema validator, frontmatter, catalog loader, baseline, tool vocabulary, policy map, compiler + tests",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:14:59.759Z",
+            "outcome": "started",
+            "detail": "310-T5"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Author ten bundled generic agent definitions in src/gdskills/bundled/agents",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:14:59.840Z",
+            "outcome": "started",
+            "detail": "310-T6"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Exporters (claude/codex/kiro/opencode/keryx-shell) + opt-in W5 agents surfaces + matrix regeneration with first-party docs check",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:32:37.145Z",
+            "outcome": "started",
+            "detail": "310-T7"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "CLI keryx agents list/show/export/verify + xref guard extension + agent-commands regression",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:32:37.242Z",
+            "outcome": "started",
+            "detail": "310-T8"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Docs: D-2 cross-reference in multi-agent-engine README, agent catalogue guide",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:15:40.786Z",
+            "outcome": "started",
+            "detail": "310-T9"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Verify: every generic agent passes keryx agents verify (exit criterion)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -164,13 +201,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Verify: every exporter output scanned clean by keryx security audit-harness (exit criterion)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -178,7 +216,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -193,6 +232,27 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Fix: audit-harness hooks discovery errors on agents surfaces; extend agent-definitions scan to codex/kiro/opencode exports",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:56:27.546Z",
+            "outcome": "started",
+            "detail": "310-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -253,6 +313,91 @@
       "at": "2026-09-24T04:14:50.404Z",
       "event": "task-done",
       "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T04:14:59.759Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 310-T5"
+    },
+    {
+      "at": "2026-09-24T04:14:59.840Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 310-T6"
+    },
+    {
+      "at": "2026-09-24T04:15:40.786Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 310-T9"
+    },
+    {
+      "at": "2026-09-24T04:17:32.456Z",
+      "event": "task-done",
+      "detail": "T9: Docs: D-2 cross-reference in multi-agent-engine README, agent catalogue guide"
+    },
+    {
+      "at": "2026-09-24T04:19:22.582Z",
+      "event": "task-done",
+      "detail": "T6: Author ten bundled generic agent definitions in src/gdskills/bundled/agents"
+    },
+    {
+      "at": "2026-09-24T04:32:25.886Z",
+      "event": "task-done",
+      "detail": "T5: Core src/agents module: types, schema validator, frontmatter, catalog loader, baseline, tool vocabulary, policy map, compiler + tests"
+    },
+    {
+      "at": "2026-09-24T04:32:37.145Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 310-T7"
+    },
+    {
+      "at": "2026-09-24T04:32:37.243Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 310-T8"
+    },
+    {
+      "at": "2026-09-24T04:46:34.901Z",
+      "event": "task-done",
+      "detail": "T8: CLI keryx agents list/show/export/verify + xref guard extension + agent-commands regression"
+    },
+    {
+      "at": "2026-09-24T04:51:59.698Z",
+      "event": "task-done",
+      "detail": "T7: Exporters (claude/codex/kiro/opencode/keryx-shell) + opt-in W5 agents surfaces + matrix regeneration with first-party docs check"
+    },
+    {
+      "at": "2026-09-24T04:56:27.466Z",
+      "event": "task-added",
+      "detail": "T13: Fix: audit-harness hooks discovery errors on agents surfaces; extend agent-definitions scan to codex/kiro/opencode exports"
+    },
+    {
+      "at": "2026-09-24T04:56:27.546Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 310-T13"
+    },
+    {
+      "at": "2026-09-24T05:06:01.614Z",
+      "event": "task-done",
+      "detail": "T13: Fix: audit-harness hooks discovery errors on agents surfaces; extend agent-definitions scan to codex/kiro/opencode exports"
+    },
+    {
+      "at": "2026-09-24T05:06:44.528Z",
+      "event": "task-done",
+      "detail": "T10: Verify: every generic agent passes keryx agents verify (exit criterion)"
+    },
+    {
+      "at": "2026-09-24T05:06:44.615Z",
+      "event": "task-done",
+      "detail": "T11: Verify: every exporter output scanned clean by keryx security audit-harness (exit criterion)"
+    },
+    {
+      "at": "2026-09-24T05:06:44.707Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T05:07:25.493Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ]
 }

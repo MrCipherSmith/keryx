@@ -16,3 +16,25 @@
 - 2026-09-24T04:14:50.243Z - frozen: 12 criteria; checksum recorded
 - 2026-09-24T04:14:50.325Z - started
 - 2026-09-24T04:14:50.404Z - task-done: T1: Collect remaining context
+- 2026-09-24T04:14:59.759Z - task-attempt: T5: started (attempt 1) — 310-T5
+- 2026-09-24T04:14:59.840Z - task-attempt: T6: started (attempt 1) — 310-T6
+- 2026-09-24T04:15:40.786Z - task-attempt: T9: started (attempt 1) — 310-T9
+- 2026-09-24T04:17:32.456Z - task-done: T9: Docs: D-2 cross-reference in multi-agent-engine README, agent catalogue guide
+- 2026-09-24T04:19:22.582Z - task-done: T6: Author ten bundled generic agent definitions in src/gdskills/bundled/agents
+- 2026-09-24 - T6 DONE_WITH notes: tiers deep=architect,security-reviewer; light=code-explorer; rest standard. workspace-write: tdd-guide, refactor-cleaner (worktree), doc-updater, e2e-runner. Judgment calls accepted: architect has web_search; doc-updater/e2e-runner/code-explorer/silent-failure-hunter declare no skills. Verified by `keryx agents verify` in T10 once T5/T8 land. T9 DONE (docs). Host-format research recorded in context.md.
+- 2026-09-24T04:32:25.886Z - task-done: T5: Core src/agents module: types, schema validator, frontmatter, catalog loader, baseline, tool vocabulary, policy map, compiler + tests
+- 2026-09-24T04:32:37.145Z - task-attempt: T7: started (attempt 1) — 310-T7
+- 2026-09-24T04:32:37.243Z - task-attempt: T8: started (attempt 1) — 310-T8
+- 2026-09-24T04:46:34.901Z - task-done: T8: CLI keryx agents list/show/export/verify + xref guard extension + agent-commands regression
+- 2026-09-24 - T5 DONE_WITH_CONCERNS: `agents` import-zone segment reclassified client→core (pre-existing bootstrap.ts only imports src/lib) — flagged for T12 reviewer. T8 DONE: verify.ts + agents-catalog CLI; `keryx agents verify` ok for all ten bundled agents; `list --stack` includes only definitions tagged with that stack (by design). Concern: claude export resolved instruction-only until T7 registers the verified agents surface — re-check after T7 (T10/T11). T8 committed while T7 still in flight (T8 imports T7's export.ts; HEAD compiles once T7 lands).
+- 2026-09-24T04:51:59.698Z - task-done: T7: Exporters (claude/codex/kiro/opencode/keryx-shell) + opt-in W5 agents surfaces + matrix regeneration with first-party docs check
+- 2026-09-24T04:56:27.466Z - task-added: T13: Fix: audit-harness hooks discovery errors on agents surfaces; extend agent-definitions scan to codex/kiro/opencode exports
+- 2026-09-24T04:56:27.546Z - task-attempt: T13: started (attempt 1) — 310-T13
+- 2026-09-24T05:06:01.614Z - task-done: T13: Fix: audit-harness hooks discovery errors on agents surfaces; extend agent-definitions scan to codex/kiro/opencode exports
+- 2026-09-24 - T13: manual verification found audit-harness vacuous for codex/kiro/opencode exports and a hooks coverage error on agents dirs; fixed (format-aware checks, registry-derived discovery, sentinel carries model_tier=). Facade-bypass ratchet fixed by routing commands through src/agents/service.ts.
+- 2026-09-24 - T10 evidence: `bun ./src/cli.ts agents verify --json` → ok=true, 10/10 bundled agents. T11 evidence: 10 agents × {claude,codex,kiro,opencode,keryx-shell} exported into a temp git repo (keryx-shell compiled-only, no file) + the 10 canonical definitions under .metaproject/agents; `security audit-harness --json` → 0 findings, coverage complete, agent-definitions scanned 50 files, hooks not-applicable. Local-only failures in src/lib/git-hooks.test.ts and security-pre-push.test.ts come from this machine's global git author-email guard (unrelated to this diff); CI decides.
+- 2026-09-24T05:06:44.528Z - task-done: T10: Verify: every generic agent passes keryx agents verify (exit criterion)
+- 2026-09-24T05:06:44.615Z - task-done: T11: Verify: every exporter output scanned clean by keryx security audit-harness (exit criterion)
+- 2026-09-24T05:06:44.707Z - task-done: T2: Implement per plan
+- 2026-09-24 - T3: targeted suites (src/agents, src/integrations, src/security/audit-harness, agents commands, src/gdskills, import-policy/zones, src/standard) 1141 pass; 1 local failure src/gdskills/install.test.ts read-only retired-rule (EACCES) reproduces identically on the base branch worktree — pre-existing, unrelated. tsc + eslint on changed files clean.
+- 2026-09-24T05:07:25.493Z - task-done: T3: Add/adjust tests and make them pass
