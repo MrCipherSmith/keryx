@@ -347,43 +347,44 @@
     {
       "id": "keryx-shell",
       "label": "Keryx shell",
-      "state": "unsupported",
+      "state": "adapter",
       "adapterKind": "policy-travels-with-agent",
-      "confidence": "experimental",
-      "surfaces_supported": [],
-      "surfaces_unsupported": [
+      "confidence": "verified",
+      "surfaces_supported": [
         {
           "surface": "block",
-          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+          "state": "adapter"
         },
         {
           "surface": "prompt-gate",
-          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+          "state": "adapter"
         },
         {
           "surface": "inject-context",
-          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+          "state": "adapter"
         },
         {
           "surface": "pre-tool-context",
-          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+          "state": "adapter"
         },
         {
           "surface": "observe",
-          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+          "state": "adapter"
         },
         {
           "surface": "post-tool",
-          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+          "state": "adapter"
         },
         {
           "surface": "session-start",
-          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
+          "state": "adapter"
         },
         {
           "surface": "stop",
-          "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
-        },
+          "state": "adapter"
+        }
+      ],
+      "surfaces_unsupported": [
         {
           "surface": "skills",
           "reason": "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet."
@@ -403,10 +404,15 @@
       ],
       "install_command": "keryx integrations install --runtime keryx-shell",
       "verification_command": "keryx integrations doctor --runtime keryx-shell",
-      "risk_notes": "No surfaces are implemented yet; every flag below is a W6 target, not a shipped capability.",
+      "risk_notes": "A `class: \"gate\"` registration on `PreToolUse` can deny a tool call outright. Installs nothing into any file — the built-in hook is compiled into the `keryx` binary and configured only via `.metaproject/hooks.json`/`~/.keryx/hooks.json` (owned by `keryx hooks`, not `keryx integrations`). A `class: \"gate\"` registration on `UserPromptSubmit` can deny a submitted prompt. Installs nothing into any file — the built-in hook is compiled into the `keryx` binary and configured only via `.metaproject/hooks.json`/`~/.keryx/hooks.json` (owned by `keryx hooks`, not `keryx integrations`). A `class: \"context\"` (or `\"gate-advisory\"`) registration on `PreToolUse` injects `additionalContext` before a tool runs — the built-in `keryx.impact-evidence` uses this. Installs nothing into any file — the built-in hook is compiled into the `keryx` binary and configured only via `.metaproject/hooks.json`/`~/.keryx/hooks.json` (owned by `keryx hooks`, not `keryx integrations`). A `class: \"context\"` registration on any other event (most usefully `UserPromptSubmit`) injects `additionalContext`. Installs nothing into any file — the built-in hook is compiled into the `keryx` binary and configured only via `.metaproject/hooks.json`/`~/.keryx/hooks.json` (owned by `keryx hooks`, not `keryx integrations`). A `class: \"observe\"` registration runs side-effect-only, on any event — the built-in `keryx.learning-observer` uses this. Installs nothing into any file — the built-in hook is compiled into the `keryx` binary and configured only via `.metaproject/hooks.json`/`~/.keryx/hooks.json` (owned by `keryx hooks`, not `keryx integrations`). A `class: \"observe\"` registration on `PostToolUse` specifically. Installs nothing into any file — the built-in hook is compiled into the `keryx` binary and configured only via `.metaproject/hooks.json`/`~/.keryx/hooks.json` (owned by `keryx hooks`, not `keryx integrations`). The runtime fires a `SessionStart` lifecycle event a project/user hook can register on. Installs nothing into any file — the built-in hook is compiled into the `keryx` binary and configured only via `.metaproject/hooks.json`/`~/.keryx/hooks.json` (owned by `keryx hooks`, not `keryx integrations`). The runtime fires a `Stop` lifecycle event (`class: \"gate\"` can also deny it — a gate-capable event) a project/user hook can register on. Installs nothing into any file — the built-in hook is compiled into the `keryx` binary and configured only via `.metaproject/hooks.json`/`~/.keryx/hooks.json` (owned by `keryx hooks`, not `keryx integrations`).",
       "last_verified": "2026-09-24",
       "source_docs": [
-        "docs/requirements/keryx-agent-platform-expansion/workstreams/W6-shell-hooks.md"
+        "docs/docs/hooks.md",
+        "docs/requirements/keryx-agent-platform-expansion/workstreams/W6-shell-hooks.md",
+        "src/harness/hooks/builtins.ts",
+        "src/harness/hooks/runtime.test.ts",
+        "src/harness/hooks/runtime.ts",
+        "src/harness/hooks/types.ts"
       ]
     }
   ]

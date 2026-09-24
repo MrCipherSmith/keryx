@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { readLogRecords } from "../security/service";
 import {
   aliasHookToolName,
   buildShellHookRuntime,
@@ -117,6 +118,61 @@ test("an invalid project hooks.json builds a runtime that denies every PreToolUs
 // resolve `~/.keryx/hooks.json` to two DIFFERENT paths — the CLI honored
 // `KERYX_HOME`, the runtime always read `os.homedir()`. Both now share
 // `resolveHooksHomeDir`/`resolveHooksProjectRoot`.
+// Flow 306 (W6, T20): `buildShellHookRuntime` wires the real
+// `keryx.impact-evidence` port (W8's gate, via `lib/impact-evidence-hook-adapter.ts`)
+// by default, not the runtime's own NOOP fallback. Proven with an observable
+// side effect only the REAL provider produces (a `disabled-env` record
+// appended to W8's own log via `KERYX_DISABLE_IMPACT_GATE`) — the NOOP port
+// never touches that log at all, and the in-runtime invocation record's
+// `outcome` field is identical ("none") for both a NOOP port and a real
+// "allow" decision, so the log is the only reliable signal.
+test("buildShellHookRuntime wires a real keryx.impact-evidence provider by default", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-impact-"));
+  const previousKillSwitch = process.env.KERYX_DISABLE_IMPACT_GATE;
+  try {
+    await writeFile(path.join(dir, "a.ts"), "export const a = 1;\n", "utf8");
+    process.env.KERYX_DISABLE_IMPACT_GATE = "1";
+
+    const result = buildShellHookRuntime({
+      projectRoot: dir,
+      sessionId: "impact-session",
+      runId: "r",
+      interactive: true,
+      profileId: "monitored-trusted-local",
+      homeDir: dir,
+      env: {},
+    });
+    expect(result).toBeDefined();
+
+    const fire = await result!.runtime.fire(
+      "PreToolUse",
+      {
+        sessionId: "impact-session",
+        runId: "r",
+        toolCallId: "c1",
+        toolName: "Write",
+        toolInput: { file_path: path.join(dir, "a.ts") },
+        policyProfile: "monitored-trusted-local",
+      },
+      // `matcherMatches`/`selectCandidates` read the tool name from `ctx`, not
+      // from the payload — see `runtime.ts`'s `fire()`.
+      { toolName: "Write" },
+    );
+    // gate-advisory: the kill switch's "allow" never denies the tool call.
+    expect(fire.decisions.some((d) => d.decision === "deny")).toBe(false);
+
+    const records = await readLogRecords(dir);
+    expect(records.some((r) => r.sessionId === "impact-session" && r.event === "disabled-env")).toBe(true);
+  } finally {
+    if (previousKillSwitch === undefined) {
+      delete process.env.KERYX_DISABLE_IMPACT_GATE;
+    } else {
+      process.env.KERYX_DISABLE_IMPACT_GATE = previousKillSwitch;
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("resolveHooksHomeDir: an explicit homeDir wins, then KERYX_HOME, then the real homedir", () => {
   expect(resolveHooksHomeDir({}, "/explicit")).toBe("/explicit");
   expect(resolveHooksHomeDir({ KERYX_HOME: "/from-env" })).toBe("/from-env");

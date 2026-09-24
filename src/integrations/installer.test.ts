@@ -289,17 +289,25 @@ describe("doctor: drift reporting for a recorded surface that is now missing or 
 });
 
 describe("keryx-shell and unknown runtime ids", () => {
-  test("keryx-shell (no surfaces): install/uninstall error quoting its unsupported reasons; doctor throws", async () => {
+  // Flow 306 (W6, T20): keryx-shell's eight native surfaces are all
+  // `policy-travels-with-agent`, satisfied entirely by the compiled-in hook
+  // runtime (no `merge`/`strip`/`customInstall`) — same shape as zed's
+  // `acp-permission` surface. Install/uninstall report `satisfied-by-runtime`
+  // for every one of them, with no errors, and doctor reports healthy.
+  test("keryx-shell (native surfaces, nothing installable): install/uninstall/doctor are all clean, satisfied-by-runtime", async () => {
     await withMetaproject(async (root) => {
       const install = await installIntegration(root, "keryx-shell");
-      expect(install.errors.length).toBeGreaterThan(0);
-      expect(install.errors[0]).toContain("keryx-shell");
+      expect(install.errors).toEqual([]);
+      expect(install.results.length).toBeGreaterThan(0);
+      expect(install.results.every((r) => r.status === "satisfied-by-runtime")).toBe(true);
 
       const uninstall = await uninstallIntegration(root, "keryx-shell");
-      expect(uninstall.errors.length).toBeGreaterThan(0);
-      expect(uninstall.errors[0]).toContain("keryx-shell");
+      expect(uninstall.errors).toEqual([]);
+      expect(uninstall.results.every((r) => r.status === "satisfied-by-runtime")).toBe(true);
 
-      await expect(doctorIntegration(root, "keryx-shell")).rejects.toThrow(/keryx-shell/);
+      const doctor = await doctorIntegration(root, "keryx-shell");
+      expect(doctor.ok).toBe(true);
+      expect(doctor.problems).toEqual([]);
     });
   });
 

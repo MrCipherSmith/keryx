@@ -24,6 +24,7 @@ import {
   type HookRuntime,
 } from "../harness/hooks";
 import { resolveProjectRoot as resolveProjectRootFromCwd } from "../lib/contained-path";
+import { createShellImpactEvidenceProvider } from "../lib/impact-evidence-hook-adapter";
 import type { PolicyProfileId } from "../harness/policy/types";
 
 /**
@@ -210,6 +211,13 @@ export function buildShellHookRuntime(opts: BuildShellHookRuntimeOptions): Shell
       sessionId: opts.sessionId,
       runId: opts.runId,
       projectRoot: opts.projectRoot,
+      // T20: the real `keryx.impact-evidence` port (W8's gate) for every
+      // production session. Tests that build a runtime through this function
+      // get the real provider too (it is harmless/no-op unless
+      // `.metaproject/security.config.json` enables it) — a test that wants a
+      // fake instead constructs `createHookRuntime` directly with its own
+      // `ports`, as `harness/hooks/runtime.test.ts` already does.
+      ports: { impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot }) },
     });
   } else {
     opts.onConfigError?.(loaded.diagnostics);

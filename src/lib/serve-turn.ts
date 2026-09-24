@@ -35,6 +35,7 @@ import type { ToolExecutorPort, ToolInvocation, ToolResult } from "../harness/to
 import type { HarnessRunInput } from "../harness/types";
 import { createSecurityService } from "../security/service";
 import type { SecurityService } from "../security/types";
+import { createShellImpactEvidenceProvider } from "./impact-evidence-hook-adapter";
 import { listProjects } from "./project-registry";
 import {
   appendTurnEvent,
@@ -412,6 +413,10 @@ function buildRemoteHookRuntime(opts: {
     sessionId: opts.sessionId,
     runId: opts.runId,
     projectRoot: opts.projectRoot,
+    // T20: same real `keryx.impact-evidence` port `commands/agent-hooks.ts`'s
+    // `buildShellHookRuntime` wires for `keryx shell`/ACP — a remote turn gets
+    // the same gate, not a silent NOOP.
+    ports: { impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot }) },
   });
 }
 
