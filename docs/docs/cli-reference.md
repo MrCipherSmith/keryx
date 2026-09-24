@@ -2431,7 +2431,7 @@ keryx skills sync --runtime codex|claude --target <dir>
 keryx skills contracts validate <file> --schema <name>
 keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all]
     [--origin learned --source-ref <id>] [--json]
-keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>] [--model-grader] [--json]
+keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>[:<model>]] [--scope bundled|all] [--model-grader] [--json]
 keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 ```
 
@@ -2458,7 +2458,7 @@ keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 | `contracts list` | — | Print name/path/description for all contract schemas. |
 | `contracts validate <file>` | `--schema <name>` | Validate a JSON file against a named contract schema. Exits `1` on failure. |
 | `scout <name-or-description>` | `--record <pack-dir>`, `--include-imports`, `--candidate <dir>`, `--scope bundled\|all`, `--json` | Flow 309 (W1): pre-creation dedupe gate — does an existing skill already cover this? Scores the query against the catalog (bundled by default, `--scope all` includes project-skills); `--candidate` vets a not-yet-created skill directory; `--record` persists the scout result under a pack directory. `--include-imports` (flow 313, W4) additionally scores the query against every recorded entry in `~/.keryx/skills/external-imports.json` (see [bundle import --external](#bundle)), with the same lexical scorer, reporting `searched: false` and a named reason when the registry is absent or corrupt rather than a silently empty match list. |
-| `eval <skill-id>` | `--strictness low\|medium\|high`, `--trials N`, `--runner <provider>`, `--model-grader`, `--json` | Flow 309 (W1): behavioral compliance eval — trigger accuracy + scenario pass rate. Scenarios that need a runner capability are reported `not-run`, not failed, when none is configured. |
+| `eval <skill-id>` | `--strictness low\|medium\|high`, `--trials N`, `--runner <provider>[:<model>]`, `--scope bundled\|all`, `--model-grader`, `--json` | Flow 309 (W1): behavioral compliance eval — trigger accuracy + scenario pass rate. Scenarios that need a runner capability are reported `not-run`, not failed, when none is configured. `--runner` splits at the first `:` into provider and optional model (e.g. `--runner deepseek:deepseek-chat`, `--runner ollama:llama3.1:latest`); flow 314 wires this through `src/commands/model-eval-runner.ts`, dispatching each scenario as a single-turn call with the skill's `SKILL.md` as the system prompt. `--scope` (default `all`) selects which catalog the skill id resolves against, same as `scout`/`stocktake` — a stack-pack eval gate document requires `--scope bundled` explicitly; the pack gate refuses a report recorded with `scope: "all"`. |
 | `stocktake` | `--scope bundled\|all`, `--quick`, `--json` | Flow 309 (W1): periodic catalog health check — buckets each skill `keep\|improve\|update\|retire\|merge`. `--quick` skips the slower checks. |
 
 Profiles: `minimal`, `recommended` (default), `full`, `custom`. Contract schemas:
@@ -3243,6 +3243,7 @@ keryx agents list [--stack <id>] [--json]
 keryx agents show <name>
 keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--force] [--dry-run] [--json]
 keryx agents verify [<name>] [--json]
+keryx agents generate --stack <id> [--check] [--json]
 ```
 
 | Subcommand | Flags / args | Description |
@@ -3250,7 +3251,8 @@ keryx agents verify [<name>] [--json]
 | `list` | `--stack <id>`, `--json` | List every catalog definition (bundled and project-local), optionally filtered to one stack pack. Read-only. |
 | `show` | `<name>` | Print one definition's fields and its resolved export-support level for every runtime. Read-only. |
 | `export` | `--runtime <id>`, `<name>`, `--force`, `--dry-run`, `--json` | Compile one definition for one runtime and write its managed file (or, for `keryx-shell`, print the compiled dispatch input — nothing is written for that runtime). A file with no keryx-managed sentinel for this agent at all is never overwritten, even with `--force`. A managed file whose content-sha256 no longer matches its own recorded hash (hand-edited since export) is refused unless `--force` is passed. A managed, unedited file from an older source version is updated with no flag needed. |
-| `verify` | `[<name>]`, `--json` | Validate every definition (or just `<name>`) against the schema, tool/skill vocabularies, `policy_profile`, origin/sourceRef rules, and the baseline-in-body guard, and resolve its export support for every runtime. |
+| `verify` | `[<name>]`, `--json` | Validate every definition (or just `<name>`) against the schema, tool/skill vocabularies, `policy_profile`, origin/sourceRef rules, and the baseline-in-body guard, and resolve its export support for every runtime. Also reports `stack-pack-not-gate-cleared` for a generated pair whose source stack pack is no longer gate-cleared, and `generated-drift` when a bundled generated file no longer matches a fresh run of the generator. |
+| `generate` | `--stack <id>`, `--check`, `--json` | Flow 314: write the `<stack>-code-auditor` (read-only review) and `<stack>-build-fixer` (build/lint/type/test-failure resolution, worktree-isolated) pair for one stack pack, derived from that pack's `pack.json`. Refuses a pack that is not gate-cleared (`stability: stable` and a passing stable-pack gate check). `--check` reports drift without writing, exiting non-zero if either generated file differs from what is on disk. |
 
 To export the whole catalog for one harness at once, use
 `keryx integrations install --runtime <id> --surface agents` (opt-in — the

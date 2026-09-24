@@ -1,10 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { CatalogEntry } from "./catalog-index";
 import { loadSkillCatalog } from "./catalog-index";
-import { checkStablePackGate, EvalContractError, EvalSpecError, type EvalReport, evalSkill, validateEvalReport } from "./eval";
+import {
+  checkStablePackGate,
+  computeSkillEvalDigest,
+  EvalContractError,
+  EvalSpecError,
+  gradeExpectations,
+  PACK_MIN_TRIALS,
+  type EvalReport,
+  evalSkill,
+  validateEvalReport,
+} from "./eval";
 
 const catalog = loadSkillCatalog(process.cwd(), { scope: "bundled" });
 const sampleSkillId = catalog.find((entry) => entry.triggers.length > 0)?.id;
@@ -990,5 +1000,400 @@ describe("R3-1 (flow 309 review round 3): evals.json is validated on load, never
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+// Flow 314 review round 1 (R1-3/R1-4/R1-5): the pack-level branch of
+// `checkStablePackGate` now checks the report against what was actually
+// evaluated (`gate.ts`'s probe evidence), never trusts a self-declared shape
+// blindly, and never throws on a malformed `pack.json`. One fixture per
+// mutation named in the review's evidence table.
+describe("R1-3/R1-4/R1-5 (flow 314 review round 1): pack-level gate fixtures", () => {
+  const PACK_ID = "widgetpack";
+  const SKILL_NAME = "widget-skill";
+
+  interface PackFixture {
+    readonly root: string;
+    readonly packDir: string;
+    readonly skillDir: string;
+    readonly skillMdPath: string;
+    readonly evalsJsonPath: string;
+    readonly packJsonPath: string;
+    readonly governanceEvalPath: string;
+  }
+
+  /**
+   * Builds a minimal, fully PASSING pack-level fixture on disk: one skill,
+   * one authored trigger pair, one authored behavior scenario at
+   * trials=PACK_MIN_TRIALS/strictness high, and a `governance/eval.json`
+   * pack-level document whose report matches it exactly (right digest,
+   * right scenario ids/prompts, scope "bundled", non-empty runner/model).
+   * Every test below mutates exactly ONE thing away from this baseline.
+   */
+  function buildPassingFixture(): PackFixture {
+    const root = mkdtempSync(path.join(tmpdir(), "pack-gate-fixture-"));
+    const packDir = path.join(root, PACK_ID);
+    const skillDir = path.join(packDir, "skills", SKILL_NAME);
+    mkdirSync(skillDir, { recursive: true });
+
+    const skillMdPath = path.join(skillDir, "SKILL.md");
+    writeFileSync(
+      skillMdPath,
+      `---\nname: ${SKILL_NAME}\ndescription: Use when widget tasks need help.\ntriggers:\n  - widget task help\n---\n\nBody.\n`,
+      "utf8",
+    );
+
+    const evalsJsonPath = path.join(skillDir, "evals.json");
+    writeFileSync(
+      evalsJsonPath,
+      JSON.stringify({
+        triggers: { positive: ["help with a widget task"], negative: ["unrelated other thing"] },
+        scenarios: [
+          { id: "s1", prompt: "do the widget thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "done" }] },
+        ],
+      }),
+      "utf8",
+    );
+
+    const packJsonPath = path.join(packDir, "pack.json");
+    writeFileSync(packJsonPath, JSON.stringify({ id: PACK_ID, skills: { implement: [SKILL_NAME] } }), "utf8");
+
+    const governanceDir = path.join(packDir, "governance");
+    mkdirSync(governanceDir, { recursive: true });
+    const governanceEvalPath = path.join(governanceDir, "eval.json");
+    const report: EvalReport = {
+      schemaVersion: "1.0.0",
+      skillId: `${PACK_ID}/${SKILL_NAME}`,
+      strictness: "high",
+      trials: PACK_MIN_TRIALS,
+      triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+      evidence: "authored",
+      scenarios: [
+        {
+          id: "trigger-positive-1",
+          kind: "trigger-positive",
+          prompt: "help with a widget task",
+          strictness: "high",
+          trials: 1,
+          passes: 1,
+          passRate: 1,
+          passAtK: 1,
+          grader: "trigger-rank-fork-family",
+          status: "ran",
+          deterministic: true,
+        },
+        {
+          id: "trigger-negative-1",
+          kind: "trigger-negative",
+          prompt: "unrelated other thing",
+          strictness: "high",
+          trials: 1,
+          passes: 1,
+          passRate: 1,
+          passAtK: 1,
+          grader: "trigger-rank-fork-family",
+          status: "ran",
+          deterministic: true,
+        },
+        {
+          id: "s1",
+          kind: "behavior",
+          prompt: "do the widget thing",
+          strictness: "high",
+          trials: PACK_MIN_TRIALS,
+          passes: PACK_MIN_TRIALS,
+          passRate: 1,
+          passAtK: 1,
+          grader: "contains",
+          status: "ran",
+        },
+      ],
+      verdict: "pass",
+      scope: "bundled",
+      skillDigest: computeSkillEvalDigest(skillDir),
+      runner: "ollama",
+      model: "llama3.1:latest",
+      recordedAt: new Date().toISOString(),
+    };
+    writeFileSync(governanceEvalPath, JSON.stringify({ schemaVersion: "1.0.0", reports: [report] }), "utf8");
+
+    return { root, packDir, skillDir, skillMdPath, evalsJsonPath, packJsonPath, governanceEvalPath };
+  }
+
+  function readJson(filePath: string): any {
+    return JSON.parse(readFileSync(filePath, "utf8"));
+  }
+
+  function writeJson(filePath: string, value: unknown): void {
+    writeFileSync(filePath, JSON.stringify(value), "utf8");
+  }
+
+  test("baseline: a correctly-shaped pack-level fixture passes", () => {
+    const fx = buildPassingFixture();
+    try {
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result).toEqual({ status: "pass" });
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  // Editing evals.json also changes `computeSkillEvalDigest` (it hashes
+  // evals.json's own bytes), so that edit is caught by the digest check
+  // first (see the "digest mismatch" fixture below) — a STRONGER signal
+  // that subsumes "the scenario ids drifted". To isolate the
+  // scenario-id-vs-evals.json comparison itself, this fixture instead forges
+  // the RECORDED report's own scenario id while leaving every on-disk file
+  // (and therefore the digest) untouched — the shape a hand-edited eval.json
+  // could take without also touching evals.json.
+  test("stale scenarios: the recorded report's behavior-scenario id disagrees with the current evals.json -> fail, naming the mismatch", () => {
+    const fx = buildPassingFixture();
+    try {
+      const doc = readJson(fx.governanceEvalPath);
+      doc.reports[0].scenarios.find((s: any) => s.kind === "behavior").id = "brand-new-scenario-id";
+      writeJson(fx.governanceEvalPath, doc);
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain("behavior-scenario ids do not match");
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("deleted SKILL.md: fails naming the missing file, not a fabricated pass", () => {
+    const fx = buildPassingFixture();
+    try {
+      rmSync(fx.skillMdPath);
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain("SKILL.md is missing");
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("strictness downgraded to 'low': fails naming the strictness requirement, not silently accepted", () => {
+    const fx = buildPassingFixture();
+    try {
+      const doc = readJson(fx.governanceEvalPath);
+      doc.reports[0].strictness = "low";
+      doc.reports[0].scenarios.find((s: any) => s.kind === "behavior").strictness = "low";
+      writeJson(fx.governanceEvalPath, doc);
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain('not "high"');
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("trials below PACK_MIN_TRIALS (3, still >= 3 so validateEvalReport itself is fine): fails naming the pack minimum", () => {
+    const fx = buildPassingFixture();
+    try {
+      const doc = readJson(fx.governanceEvalPath);
+      doc.reports[0].trials = 3;
+      writeJson(fx.governanceEvalPath, doc);
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain(`below the pack minimum ${PACK_MIN_TRIALS}`);
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("pack.json id != directory name: fails naming the mismatch, never silently trusts the id", () => {
+    const fx = buildPassingFixture();
+    try {
+      const pack = readJson(fx.packJsonPath);
+      pack.id = "someotherpack";
+      writeJson(fx.packJsonPath, pack);
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain("does not match its directory name");
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("empty skills map (skills: {}): fails rather than vacuously passing", () => {
+    const fx = buildPassingFixture();
+    try {
+      const pack = readJson(fx.packJsonPath);
+      pack.skills = {};
+      writeJson(fx.packJsonPath, pack);
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain("lists no skills");
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("legacy single-report eval.json (no 'reports' wrapper): fails for a stack pack with the named reason", () => {
+    const fx = buildPassingFixture();
+    try {
+      const doc = readJson(fx.governanceEvalPath);
+      writeJson(fx.governanceEvalPath, doc.reports[0]); // the OLD single-report shape
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result).toEqual({ status: "fail", reason: "stack packs must ship a pack-level eval document" });
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("a skill bucket that is a number, not a string[]: fails, never throws (R1-5)", () => {
+    const fx = buildPassingFixture();
+    try {
+      const pack = readJson(fx.packJsonPath);
+      pack.skills.implement = 5;
+      writeJson(fx.packJsonPath, pack);
+      let result: ReturnType<typeof checkStablePackGate> | undefined;
+      expect(() => {
+        result = checkStablePackGate(fx.packDir, "stable");
+      }).not.toThrow();
+      expect(result?.status).toBe("fail");
+      expect(result?.reason).toContain("must be an array of strings");
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("a skill bucket that is a string, not a string[]: fails, never iterates it character-by-character", () => {
+    const fx = buildPassingFixture();
+    try {
+      const pack = readJson(fx.packJsonPath);
+      pack.skills.implement = SKILL_NAME; // a bare string, not [SKILL_NAME]
+      writeJson(fx.packJsonPath, pack);
+      let result: ReturnType<typeof checkStablePackGate> | undefined;
+      expect(() => {
+        result = checkStablePackGate(fx.packDir, "stable");
+      }).not.toThrow();
+      expect(result?.status).toBe("fail");
+      expect(result?.reason).toContain("must be an array of strings");
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("digest mismatch: SKILL.md edited after the report was recorded -> fails as stale, not a silent pass", () => {
+    const fx = buildPassingFixture();
+    try {
+      writeFileSync(fx.skillMdPath, `${readFileSync(fx.skillMdPath, "utf8")}\nAn extra paragraph added after recording.\n`, "utf8");
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain("skillDigest is stale");
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("scope 'all' instead of 'bundled': fails, since a repo-local skill outside the shipped bundle may have tipped a trigger score (R1-11)", () => {
+    const fx = buildPassingFixture();
+    try {
+      const doc = readJson(fx.governanceEvalPath);
+      doc.reports[0].scope = "all";
+      writeJson(fx.governanceEvalPath, doc);
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain('not "bundled"');
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("missing runner: fails naming the missing provenance field (R1-15)", () => {
+    const fx = buildPassingFixture();
+    try {
+      const doc = readJson(fx.governanceEvalPath);
+      delete doc.reports[0].runner;
+      writeJson(fx.governanceEvalPath, doc);
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain('missing a non-empty "runner"');
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
+  test("missing model: fails naming the missing provenance field (R1-15)", () => {
+    const fx = buildPassingFixture();
+    try {
+      const doc = readJson(fx.governanceEvalPath);
+      delete doc.reports[0].model;
+      writeJson(fx.governanceEvalPath, doc);
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain('missing a non-empty "model"');
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("computeSkillEvalDigest (R1-3/R1-15)", () => {
+  test("changes when SKILL.md content changes", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "digest-skillmd-"));
+    try {
+      writeFileSync(path.join(root, "SKILL.md"), "one", "utf8");
+      const before = computeSkillEvalDigest(root);
+      writeFileSync(path.join(root, "SKILL.md"), "two", "utf8");
+      const after = computeSkillEvalDigest(root);
+      expect(before).not.toBe(after);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("changes when evals.json content changes, SKILL.md untouched", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "digest-evalsjson-"));
+    try {
+      writeFileSync(path.join(root, "SKILL.md"), "same body", "utf8");
+      writeFileSync(path.join(root, "evals.json"), JSON.stringify({ scenarios: [] }), "utf8");
+      const before = computeSkillEvalDigest(root);
+      writeFileSync(path.join(root, "evals.json"), JSON.stringify({ scenarios: [{ id: "x" }] }), "utf8");
+      const after = computeSkillEvalDigest(root);
+      expect(before).not.toBe(after);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("is stable (same digest) for the same content computed twice, and tolerates a missing evals.json", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "digest-stable-"));
+    try {
+      writeFileSync(path.join(root, "SKILL.md"), "stable body", "utf8");
+      expect(computeSkillEvalDigest(root)).toBe(computeSkillEvalDigest(root));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("throws when SKILL.md itself is missing", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "digest-missing-skillmd-"));
+    try {
+      expect(() => computeSkillEvalDigest(root)).toThrow();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("gradeExpectations (shared grading semantics for the eval-integrity guard test)", () => {
+  test("fails when the expectation list is empty", () => {
+    expect(gradeExpectations("anything", [])).toBe(false);
+  });
+
+  test("passes only when EVERY expectation passes", () => {
+    const expected = [
+      { grader: "contains" as const, value: "done" },
+      { grader: "not-contains" as const, value: "nolint" },
+    ];
+    expect(gradeExpectations("the task is done", expected)).toBe(true);
+    expect(gradeExpectations("the task is done, //nolint", expected)).toBe(false);
+    expect(gradeExpectations("", expected)).toBe(false);
+  });
+
+  test("a 'model' grader with no runner-supplied verdict counts as failing (this helper is deterministic-only)", () => {
+    expect(gradeExpectations("anything", [{ grader: "model", value: "judged well" }])).toBe(false);
   });
 });

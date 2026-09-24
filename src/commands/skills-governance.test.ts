@@ -278,3 +278,167 @@ describe("R4-2: an unreadable skill is named, not silently dropped or misreporte
     });
   });
 });
+
+// Flow 314 review round 1 (R1-14): CLI-level coverage for the new `eval
+// --runner`/`--scope` wiring and `scout --record ... --skill-name`'s own-id
+// exclusion — none of this was pinned at the CLI layer before, only checked
+// by hand per the review's own evidence section.
+describe("R1-14: keryx skills eval --runner / --scope CLI wiring", () => {
+  test("eval --runner not-a-provider fails closed: exit 1, a named reason, never a thrown/uncaught error", async () => {
+    await skillsGovernanceCommand(["eval", "core/reviewer-skill-creator", "--runner", "not-a-provider"]);
+    expect(process.exitCode).toBe(1);
+    expect(errors.some((line) => line.includes("unknown provider"))).toBe(true);
+  });
+
+  // R2-5 (review round 2, PR #692): this test used to rely on
+  // `ANTHROPIC_API_KEY` being unset in whatever environment `bun test` runs
+  // in. On a machine/CI that exports a real key, `buildEvalRunner`'s
+  // build-time check (`hasCredential`, `src/harness/provider/single-turn.ts`)
+  // passes, and `skillsGovernanceCommand` proceeds to run a REAL,
+  // network-calling, spend-incurring eval of `core/reviewer-skill-creator`
+  // against Anthropic — inside a unit test. `hasCredential("anthropic", env)`
+  // checks only `env.ANTHROPIC_API_KEY` (no other provider key applies to
+  // "anthropic"); the saved-`auth.json` merge (`envWithSavedApiKeys`) is
+  // already isolated globally by `src/lib/test-preload.ts` setting
+  // `XDG_DATA_HOME` to a per-test-run temp dir, so only the raw env var needs
+  // isolating here. Save/delete/restore it around the call so this test is
+  // deterministic and never reaches the network regardless of the host env.
+  test("eval --runner anthropic with no credential in env fails closed: exit 1, named reason", async () => {
+    const savedKey = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      await skillsGovernanceCommand(["eval", "core/reviewer-skill-creator", "--runner", "anthropic"]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.some((line) => line.includes("no credential"))).toBe(true);
+    } finally {
+      if (savedKey === undefined) {
+        delete process.env.ANTHROPIC_API_KEY;
+      } else {
+        process.env.ANTHROPIC_API_KEY = savedKey;
+      }
+    }
+  });
+
+  test("eval --scope bogus is refused up front, not silently defaulted", async () => {
+    await skillsGovernanceCommand(["eval", "core/reviewer-skill-creator", "--scope", "bogus"]);
+    expect(process.exitCode).toBe(1);
+    expect(errors.some((line) => line.includes("--scope must be 'bundled' or 'all'"))).toBe(true);
+  });
+
+  test("eval --scope with no value is refused, not silently defaulted to 'all'", async () => {
+    await skillsGovernanceCommand(["eval", "core/reviewer-skill-creator", "--scope"]);
+    expect(process.exitCode).toBe(1);
+    expect(errors.some((line) => line.includes("--scope requires a value"))).toBe(true);
+  });
+
+  test("eval with a valid --scope bundled is accepted and recorded on the report", async () => {
+    const logs: string[] = [];
+    const logSpy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+    try {
+      await skillsGovernanceCommand(["eval", "core/reviewer-skill-creator", "--scope", "bundled", "--json"]);
+      expect(errors.some((line) => line.includes("--scope must be"))).toBe(false);
+      const report = JSON.parse(logs.join("\n")) as { scope?: string };
+      expect(report.scope).toBe("bundled");
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("eval with no --runner leaves runner/model/recordedAt off the report", async () => {
+    const logs: string[] = [];
+    const logSpy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+    try {
+      await skillsGovernanceCommand(["eval", "core/reviewer-skill-creator", "--json"]);
+      const report = JSON.parse(logs.join("\n")) as { runner?: string; model?: string; recordedAt?: string };
+      expect(report.runner).toBeUndefined();
+      expect(report.model).toBeUndefined();
+      expect(report.recordedAt).toBeUndefined();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe("R1-14: keryx skills scout --record --skill-name excludes the candidate's own id", () => {
+  // No fixture-bundled-root injection point exists for `loadSkillCatalog`
+  // (`defaultBundledRoot()` is fixed to the real `src/gdskills/bundled`) —
+  // the project-local `.metaproject/project-skills/**` tree IS an injection
+  // point under `--scope all`, and exercises the exact same
+  // `scoutCommand` code path (`excludeIds` built from `--record`/
+  // `--skill-name`) the bundled case would. `category/name` for a project
+  // skill is derived from its own two parent directory names
+  // (`walkLooseSkillTree` in `catalog-index.ts`), so a `SKILL.md` at
+  // `.metaproject/project-skills/<record-basename>/<skill-name>/SKILL.md`
+  // gets exactly the catalog id `scoutCommand` would exclude.
+  async function withCandidateProjectSkill<T>(
+    body: string,
+    run: (root: string, recordDir: string, skillName: string) => Promise<T>,
+  ): Promise<T> {
+    const root = mkdtempSync(path.join(tmpdir(), "skills-governance-scout-exclude-"));
+    const recordBasename = "widget-pack";
+    const skillName = "widget-dashboard-helper";
+    const skillDir = path.join(root, ".metaproject", "project-skills", recordBasename, skillName);
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(path.join(skillDir, "SKILL.md"), body, "utf8");
+    try {
+      await acquireCwd(root);
+      try {
+        return await run(root, path.join(".metaproject", "project-skills", recordBasename), skillName);
+      } finally {
+        releaseCwd();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  test("the candidate's own catalog id is excluded from its own scout matches", async () => {
+    const logs: string[] = [];
+    const logSpy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+    const distinctivePhrase = "acme corp global widget dashboard configuration helper utility";
+    const body = `---\nname: widget-dashboard-helper\ndescription: Use when ${distinctivePhrase} is needed.\ntriggers:\n  - ${distinctivePhrase}\n---\n\nBody.\n`;
+    try {
+      await withCandidateProjectSkill(body, async (_root, recordDir, skillName) => {
+        await skillsGovernanceCommand([
+          "scout",
+          distinctivePhrase,
+          "--record",
+          recordDir,
+          "--skill-name",
+          skillName,
+          "--scope",
+          "all",
+          "--json",
+        ]);
+      });
+    } finally {
+      logSpy.mockRestore();
+    }
+    const output = JSON.parse(logs.join("\n")) as { matches: ReadonlyArray<{ skillId: string }> };
+    expect(output.matches.some((match) => match.skillId === "widget-pack/widget-dashboard-helper")).toBe(false);
+  });
+
+  test("without --record/--skill-name, the same query DOES find the candidate itself (control case)", async () => {
+    const logs: string[] = [];
+    const logSpy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+    const distinctivePhrase = "acme corp global widget dashboard configuration helper utility";
+    const body = `---\nname: widget-dashboard-helper\ndescription: Use when ${distinctivePhrase} is needed.\ntriggers:\n  - ${distinctivePhrase}\n---\n\nBody.\n`;
+    try {
+      await withCandidateProjectSkill(body, async () => {
+        await skillsGovernanceCommand(["scout", distinctivePhrase, "--scope", "all", "--json"]);
+      });
+    } finally {
+      logSpy.mockRestore();
+    }
+    const output = JSON.parse(logs.join("\n")) as { matches: ReadonlyArray<{ skillId: string }> };
+    expect(output.matches.some((match) => match.skillId === "widget-pack/widget-dashboard-helper")).toBe(true);
+  });
+});

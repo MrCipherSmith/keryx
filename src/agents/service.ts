@@ -13,6 +13,7 @@ export * from "./baseline";
 export * from "./tools";
 export * from "./policy";
 export * from "./compile";
+export * from "./generate";
 export * from "./catalog";
 export * from "./export";
 export * from "./verify";

@@ -1,8 +1,9 @@
 // Tests for `keryx agents list|show|export|verify` (flow 310, W2-AC8).
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { computeSkillEvalDigest, PACK_MIN_TRIALS } from "../gdskills/governance/eval";
 import { agentsCatalogCommand } from "./agents-catalog";
 
 function collect(): { lines: string[]; errors: string[]; log: (l: string) => void; error: (l: string) => void } {
@@ -176,14 +177,28 @@ describe("keryx agents export", () => {
 });
 
 describe("keryx agents verify", () => {
-  test("the real bundled catalog verifies ok", async () => {
+  // Flow 314 fix attempt 1: the honest DeepSeek gate run failed all four
+  // batch-1 packs (go, python, react, ts-js-node all stay `experimental`),
+  // so none of them ships a generated agent pair right now. This assertion
+  // stays true generically, independent of which packs happen to be
+  // gate-cleared on any given day: the real, un-stubbed CLI path reports
+  // zero problems across the whole catalog, and no bundled agent name uses
+  // the `<id>-code-auditor` / `<id>-build-fixer` generated-pair naming
+  // convention because none is currently generated.
+  test("the real bundled catalog verifies ok with zero problems (no batch-1 pack is gate-cleared yet)", async () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("verify", ["--json"], { cwd: REPO_ROOT, log, error });
-    const report = JSON.parse(lines.join("\n")) as { ok: boolean; agents: Array<{ problems: unknown[] }> };
+    const report = JSON.parse(lines.join("\n")) as {
+      ok: boolean;
+      agents: Array<{ name: string; problems: Array<{ reason: string }> }>;
+    };
+    expect(report.agents.length).toBeGreaterThanOrEqual(9);
+    const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
+    expect(withProblems).toEqual([]);
     expect(report.ok).toBe(true);
-    expect(report.agents.length).toBeGreaterThanOrEqual(10);
-    for (const agent of report.agents) expect(agent.problems).toEqual([]);
-    expect(process.exitCode).not.toBe(1);
+    expect(
+      report.agents.some((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer")),
+    ).toBe(false);
   });
 
   test("narrows to one agent by name", async () => {
@@ -235,5 +250,521 @@ describe("keryx agents verify", () => {
     await agentsCatalogCommand("verify", ["--nope"], { cwd: REPO_ROOT, log, error });
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("Unknown flag");
+  });
+});
+
+describe("keryx agents generate", () => {
+  // `generate` always resolves the bundled agents/stacks tree via
+  // `defaultBundledRoot()` (the same real-tree resolution every other
+  // subcommand's bundled reads use) — it is not `cwd`-relocatable the way
+  // `.metaproject/agents` project reads are, EXCEPT through the injectable
+  // `bundledRoot` seam on `AgentsCatalogDeps` (flow 314 T13a), which exists
+  // specifically so a test can point `generate` at an isolated fixture tree.
+  //
+  // Flow 314 fix attempt 1: the honest DeepSeek gate run failed all four
+  // real batch-1 packs (go/python/react/ts-js-node all stay `experimental`),
+  // so `generate --stack go` now refuses with `stack-pack-not-gate-cleared`
+  // on the real tree — there is no longer a real, already-generated pack to
+  // exercise `--check`/write against. The three tests below build their own
+  // isolated, gate-cleared fixture pack (the same pack-level
+  // `{ schemaVersion, reports: [...] }` eval-document shape
+  // `checkStackPackGateCleared`/`checkStablePackGate` require — see
+  // `verify.test.ts`'s "R1-4" fixture) so this behavior is verified
+  // independent of which real pack, if any, happens to be gate-cleared.
+  const REAL_BUNDLED_AGENTS_DIR = path.join(REPO_ROOT, "src", "gdskills", "bundled", "agents");
+
+  let fixtureRoot: string;
+  let fixtureBundledRoot: string;
+  let fixtureAgentsDir: string;
+  const FIXTURE_STACK_ID = "fixture-lang";
+
+  beforeEach(() => {
+    fixtureRoot = mkdtempSync(path.join(tmpdir(), "keryx-agents-generate-fixture-"));
+    // `generate` resolves `<bundledRoot>/agents` and `<bundledRoot>/agents/../stacks`
+    // (i.e. `<bundledRoot>/stacks`) — the same two-subdirectory shape as the
+    // real `src/gdskills/bundled` tree — so the injected `bundledRoot` must
+    // itself be the parent of both, not the agents directory directly.
+    fixtureBundledRoot = path.join(fixtureRoot, "bundled");
+    fixtureAgentsDir = path.join(fixtureBundledRoot, "agents");
+    const stacksRoot = path.join(fixtureBundledRoot, "stacks");
+    const packDir = path.join(stacksRoot, FIXTURE_STACK_ID);
+    const skillDir = path.join(packDir, "skills", "fixture-skill");
+    mkdirSync(fixtureAgentsDir, { recursive: true });
+    mkdirSync(path.join(packDir, "governance"), { recursive: true });
+    mkdirSync(skillDir, { recursive: true });
+
+    writeFileSync(
+      path.join(packDir, "pack.json"),
+      JSON.stringify({
+        id: FIXTURE_STACK_ID,
+        family: "language",
+        modules: [],
+        stability: "stable",
+        skills: { review: ["fixture-skill"], "build-fix": [] },
+        agentProfile: {
+          displayName: "Fixture Lang",
+          auditFocus: ["fixture risk pattern"],
+          buildCommands: ["fixture build"],
+          fixGuardrails: ["never do the fixture-bad thing"],
+        },
+      }),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n",
+      "utf8",
+    );
+    writeFileSync(
+      path.join(skillDir, "evals.json"),
+      JSON.stringify({
+        triggers: { positive: ["p"], negative: ["n"] },
+        scenarios: [
+          {
+            id: "behavior-1",
+            prompt: "Do the thing",
+            strictness: "high",
+            expected_behavior: [{ grader: "contains", value: "thing" }],
+          },
+        ],
+      }),
+      "utf8",
+    );
+    const skillDigest = computeSkillEvalDigest(skillDir);
+    writeFileSync(
+      path.join(packDir, "governance", "eval.json"),
+      JSON.stringify({
+        schemaVersion: "1.0.0",
+        reports: [
+          {
+            schemaVersion: "1.0.0",
+            skillId: `${FIXTURE_STACK_ID}/fixture-skill`,
+            strictness: "high",
+            trials: PACK_MIN_TRIALS,
+            triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+            evidence: "authored",
+            scope: "bundled",
+            skillDigest,
+            runner: "ollama",
+            model: "llama3.1:latest",
+            recordedAt: "2026-01-01T00:00:00.000Z",
+            scenarios: [
+              {
+                id: "trigger-positive-1",
+                kind: "trigger-positive",
+                prompt: "p",
+                strictness: "high",
+                trials: 1,
+                passes: 1,
+                passRate: 1,
+                passAtK: 1,
+                grader: "trigger-rank-fork-family",
+                status: "ran",
+                deterministic: true,
+              },
+              {
+                id: "trigger-negative-1",
+                kind: "trigger-negative",
+                prompt: "n",
+                strictness: "high",
+                trials: 1,
+                passes: 1,
+                passRate: 1,
+                passAtK: 1,
+                grader: "trigger-rank-fork-family",
+                status: "ran",
+                deterministic: true,
+              },
+              {
+                id: "behavior-1",
+                kind: "behavior",
+                prompt: "Do the thing",
+                strictness: "high",
+                trials: PACK_MIN_TRIALS,
+                passes: PACK_MIN_TRIALS,
+                passRate: 1,
+                passAtK: 1,
+                grader: "contains",
+                status: "ran",
+              },
+            ],
+            verdict: "pass",
+          },
+        ],
+      }),
+      "utf8",
+    );
+  });
+
+  afterEach(() => {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  });
+
+  test("--check reports no drift for a gate-cleared fixture pack once its pair has been generated", async () => {
+    const written = collect();
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log: written.log,
+      error: written.error,
+    });
+    expect(process.exitCode).not.toBe(1);
+
+    const { lines, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--check", "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log,
+      error,
+    });
+    const doc = JSON.parse(lines.join("\n")) as {
+      stack: string;
+      check: boolean;
+      files: Array<{ fileName: string; changed: boolean; existed: boolean }>;
+    };
+    expect(doc.stack).toBe(FIXTURE_STACK_ID);
+    expect(doc.files).toHaveLength(2);
+    expect(doc.files.map((f) => f.fileName).sort()).toEqual([
+      `${FIXTURE_STACK_ID}-build-fixer.md`,
+      `${FIXTURE_STACK_ID}-code-auditor.md`,
+    ]);
+    for (const file of doc.files) {
+      expect(file.existed).toBe(true);
+      expect(file.changed).toBe(false);
+    }
+    expect(process.exitCode).not.toBe(1);
+  });
+
+  test("--check exits 1 and reports drift when a generated file was hand-edited, without writing", async () => {
+    const written = collect();
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log: written.log,
+      error: written.error,
+    });
+    expect(process.exitCode).not.toBe(1);
+
+    const filePath = path.join(fixtureAgentsDir, `${FIXTURE_STACK_ID}-code-auditor.md`);
+    const original = readFileSync(filePath, "utf8");
+    writeFileSync(filePath, `${original}\n<!-- hand edit -->\n`, "utf8");
+
+    const { lines, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--check", "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log,
+      error,
+    });
+    const doc = JSON.parse(lines.join("\n")) as { files: Array<{ fileName: string; changed: boolean }> };
+    const auditor = doc.files.find((f) => f.fileName === `${FIXTURE_STACK_ID}-code-auditor.md`);
+    expect(auditor?.changed).toBe(true);
+    expect(process.exitCode).toBe(1);
+    // --check never writes — the hand edit must still be on disk.
+    expect(readFileSync(filePath, "utf8")).toBe(`${original}\n<!-- hand edit -->\n`);
+    process.exitCode = 0;
+  });
+
+  test("writing (no --check) restores a hand-edited file back to the generated content", async () => {
+    const written = collect();
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log: written.log,
+      error: written.error,
+    });
+    expect(process.exitCode).not.toBe(1);
+
+    const filePath = path.join(fixtureAgentsDir, `${FIXTURE_STACK_ID}-build-fixer.md`);
+    const original = readFileSync(filePath, "utf8");
+    writeFileSync(filePath, `${original}\n<!-- hand edit -->\n`, "utf8");
+
+    const { lines, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log,
+      error,
+    });
+    const doc = JSON.parse(lines.join("\n")) as { files: Array<{ fileName: string; changed: boolean }> };
+    const fixer = doc.files.find((f) => f.fileName === `${FIXTURE_STACK_ID}-build-fixer.md`);
+    expect(fixer?.changed).toBe(true);
+    expect(readFileSync(filePath, "utf8")).toBe(original);
+  });
+
+  test("an invalid --stack id is refused", async () => {
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "Not-Valid!"], { cwd: REPO_ROOT, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("--stack");
+  });
+
+  test("no --stack at all is refused", async () => {
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", [], { cwd: REPO_ROOT, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("--stack");
+  });
+
+  test("a --stack naming a pack that does not exist is refused", async () => {
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "no-such-pack"], { cwd: REPO_ROOT, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("no-such-pack");
+  });
+
+  test("a --stack pack with no agentProfile is refused (e.g. mobx, which is deliberately not gated for generation)", async () => {
+    // mobx is a real bundled stack directory with no `agentProfile` block
+    // (W2 §"Initial catalogue": it extends react rather than getting its
+    // own generated pair) — a real, on-disk negative case rather than a
+    // synthetic one.
+    const mobxPackPath = path.join(REPO_ROOT, "src", "gdskills", "bundled", "stacks", "mobx", "pack.json");
+    if (!existsSync(mobxPackPath)) return; // skip if this repo's stack layout ever changes
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "mobx"], { cwd: REPO_ROOT, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("agentProfile");
+  });
+
+  test("an unknown flag is refused rather than ignored", async () => {
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "go", "--bogus"], { cwd: REPO_ROOT, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("Unknown flag");
+  });
+
+  test("a real, on-disk experimental pack (react) is refused with stack-pack-not-gate-cleared, and no generated files exist", async () => {
+    // react's generated pair was deleted from the bundled tree by flow 314
+    // T13a (its pack stays `experimental`); this proves `generate` itself
+    // now refuses to recreate it rather than merely "nobody ran it since".
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "react"], { cwd: REPO_ROOT, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("stack-pack-not-gate-cleared");
+    expect(existsSync(path.join(REAL_BUNDLED_AGENTS_DIR, "react-code-auditor.md"))).toBe(false);
+    expect(existsSync(path.join(REAL_BUNDLED_AGENTS_DIR, "react-build-fixer.md"))).toBe(false);
+  });
+});
+
+describe("keryx agents generate — gate enforcement on fixture packs (flow 314 T13a)", () => {
+  // Isolated from the real bundled tree via the `bundledRoot` deps seam
+  // (`AgentsCatalogDeps.bundledRoot`) added for exactly this purpose — these
+  // fixture packs never touch `src/gdskills/bundled/**`, so they need no
+  // hand-edit/restore dance and cannot race other test files that scan the
+  // real tree.
+  function makeFixtureStack(
+    stability: "stable" | "experimental",
+    id = "fixture-lang",
+  ): { bundledRoot: string; packDir: string; agentsDir: string } {
+    const bundledRoot = path.join(tmpRoot, "bundled");
+    const agentsDir = path.join(bundledRoot, "agents");
+    const packDir = path.join(bundledRoot, "stacks", id);
+    mkdirSync(agentsDir, { recursive: true });
+    mkdirSync(path.join(packDir, "governance"), { recursive: true });
+    writeFileSync(
+      path.join(packDir, "pack.json"),
+      JSON.stringify(
+        {
+          id,
+          family: "language",
+          modules: [],
+          stability,
+          skills: { review: ["fixture-skill"] },
+          agentProfile: {
+            displayName: "Fixture Lang",
+            auditFocus: ["risk one"],
+            buildCommands: ["fixture build"],
+            fixGuardrails: ["never do the bad thing"],
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    return { bundledRoot, packDir, agentsDir };
+  }
+
+  // R1-4 (review round 1, PR #692): the stack-pack gate now requires the
+  // pack-level `{ schemaVersion, reports: EvalReport[] }` eval document form
+  // — the legacy single-report shape this fixture used to build no longer
+  // clears the gate. Builds a real `skills/fixture-skill/SKILL.md` +
+  // `evals.json` and a `governance/eval.json` pack-level document whose one
+  // report clears every requirement `checkSkillReportForPackGate` enforces
+  // (see `src/agents/verify.test.ts`'s matching fixture for the same shape).
+  function writePassingEval(packDir: string, packId = "fixture-lang"): void {
+    const skillDir = path.join(packDir, "skills", "fixture-skill");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n", "utf8");
+    writeFileSync(
+      path.join(skillDir, "evals.json"),
+      JSON.stringify({
+        triggers: { positive: ["p"], negative: ["n"] },
+        scenarios: [
+          { id: "behavior-1", prompt: "Do the thing", strictness: "high", expected_behavior: [{ grader: "contains", value: "thing" }] },
+        ],
+      }),
+      "utf8",
+    );
+    const skillDigest = computeSkillEvalDigest(skillDir);
+    const doc = {
+      schemaVersion: "1.0.0",
+      reports: [
+        {
+          schemaVersion: "1.0.0",
+          skillId: `${packId}/fixture-skill`,
+          strictness: "high",
+          trials: PACK_MIN_TRIALS,
+          triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+          evidence: "authored",
+          scope: "bundled",
+          skillDigest,
+          runner: "ollama",
+          model: "llama3.1:latest",
+          recordedAt: "2026-01-01T00:00:00.000Z",
+          scenarios: [
+            { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+            { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "high", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+            { id: "behavior-1", kind: "behavior", prompt: "Do the thing", strictness: "high", trials: PACK_MIN_TRIALS, passes: PACK_MIN_TRIALS, passRate: 1, passAtK: 1, grader: "contains", status: "ran" },
+          ],
+          verdict: "pass",
+        },
+      ],
+    };
+    writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
+  }
+
+  test("refuses an experimental fixture pack: named reason, no files written", async () => {
+    const { bundledRoot, agentsDir } = makeFixtureStack("experimental");
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("stack-pack-not-gate-cleared");
+    expect(existsSync(path.join(agentsDir, "fixture-lang-code-auditor.md"))).toBe(false);
+    expect(existsSync(path.join(agentsDir, "fixture-lang-build-fixer.md"))).toBe(false);
+  });
+
+  test("refuses a stable fixture pack whose eval gate fails (no governance/eval.json): named reason, no files written", async () => {
+    const { bundledRoot, agentsDir } = makeFixtureStack("stable");
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("stack-pack-not-gate-cleared");
+    expect(existsSync(path.join(agentsDir, "fixture-lang-code-auditor.md"))).toBe(false);
+    expect(existsSync(path.join(agentsDir, "fixture-lang-build-fixer.md"))).toBe(false);
+  });
+
+  test("--check on a non-cleared pack refuses the same way as the write path (documented choice — see agents-catalog.ts's generateCommand)", async () => {
+    const { bundledRoot } = makeFixtureStack("experimental");
+    const { lines, errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "fixture-lang", "--check"], { cwd: REPO_ROOT, bundledRoot, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("stack-pack-not-gate-cleared");
+    expect(lines.join("\n")).toBe(""); // no report of "no generated pair expected" — a plain refusal instead
+  });
+
+  test("succeeds for a gate-cleared fixture pack, writing both generated files", async () => {
+    const { bundledRoot, packDir, agentsDir } = makeFixtureStack("stable");
+    writePassingEval(packDir);
+    const { lines, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "fixture-lang", "--json"], { cwd: REPO_ROOT, bundledRoot, log, error });
+    expect(process.exitCode).not.toBe(1);
+    const doc = JSON.parse(lines.join("\n")) as { files: Array<{ fileName: string; changed: boolean }> };
+    expect(doc.files.map((f) => f.fileName).sort()).toEqual(["fixture-lang-build-fixer.md", "fixture-lang-code-auditor.md"]);
+    expect(existsSync(path.join(agentsDir, "fixture-lang-code-auditor.md"))).toBe(true);
+    expect(existsSync(path.join(agentsDir, "fixture-lang-build-fixer.md"))).toBe(true);
+  });
+
+  // R1-6 (review round 1, PR #692): `pack.json`'s own `id` is untrusted — it
+  // must equal the `--stack`/directory name (`gen-escape.ts`'s probe: a
+  // pack.json `id` of `"../escaped"` under `stacks/go` used to write
+  // `../escaped-code-auditor.md`/`../escaped-build-fixer.md` OUTSIDE the
+  // bundled agents directory entirely).
+  describe("R1-6: pack.json id trust and write containment", () => {
+    test("a pack.json id that disagrees with the --stack directory name is refused, and nothing is written", async () => {
+      const { bundledRoot, packDir, agentsDir } = makeFixtureStack("stable");
+      writePassingEval(packDir);
+      // Overwrite the id AFTER writePassingEval so the eval report's
+      // skillId ("fixture-lang/fixture-skill") still matches what the gate
+      // reads — the mismatch under test is purely pack.json "id" vs. the
+      // "--stack fixture-lang" directory name, not the eval report.
+      const raw = JSON.parse(readFileSync(path.join(packDir, "pack.json"), "utf8")) as Record<string, unknown>;
+      raw.id = "not-fixture-lang";
+      writeFileSync(path.join(packDir, "pack.json"), JSON.stringify(raw), "utf8");
+      const { errors, log, error } = collect();
+      await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+      expect(process.exitCode).toBe(1);
+      expect(errors.join("\n")).toContain("fixture-lang");
+      expect(existsSync(path.join(agentsDir, "not-fixture-lang-code-auditor.md"))).toBe(false);
+      expect(existsSync(path.join(agentsDir, "fixture-lang-code-auditor.md"))).toBe(false);
+    });
+
+    test("a path-traversal pack.json id (gen-escape.ts's case) never writes outside the bundled agents directory", async () => {
+      const { bundledRoot, packDir, agentsDir } = makeFixtureStack("stable");
+      writePassingEval(packDir);
+      const raw = JSON.parse(readFileSync(path.join(packDir, "pack.json"), "utf8")) as Record<string, unknown>;
+      raw.id = "../escaped";
+      writeFileSync(path.join(packDir, "pack.json"), JSON.stringify(raw), "utf8");
+      const { log, error } = collect();
+      await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+      expect(process.exitCode).toBe(1);
+      // Nothing escaped: neither inside `agents/` nor one level up from it.
+      expect(existsSync(path.join(agentsDir, "..", "escaped-code-auditor.md"))).toBe(false);
+      expect(existsSync(path.join(agentsDir, "escaped-code-auditor.md"))).toBe(false);
+    });
+
+    test("a symlinked destination file is never written through", async () => {
+      const { bundledRoot, packDir, agentsDir } = makeFixtureStack("stable");
+      writePassingEval(packDir);
+      const outsideTarget = path.join(tmpRoot, "outside-target.md");
+      writeFileSync(outsideTarget, "should never be overwritten\n", "utf8");
+      symlinkSync(outsideTarget, path.join(agentsDir, "fixture-lang-code-auditor.md"));
+      const { errors, log, error } = collect();
+      await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+      expect(process.exitCode).toBe(1);
+      expect(errors.join("\n")).toContain("symlink");
+      expect(readFileSync(outsideTarget, "utf8")).toBe("should never be overwritten\n");
+      expect(lstatSync(path.join(agentsDir, "fixture-lang-code-auditor.md")).isSymbolicLink()).toBe(true);
+    });
+
+    // R2-3 (review round 2, PR #692): the auditor and fixer targets used to be
+    // validated and written inside the same per-file loop, so a symlinked
+    // FIXER target (checked second) left the auditor already written to disk
+    // before the refusal fired — a half-written pair with exit 1. Both
+    // targets must now be validated in a first pass before either is
+    // written.
+    test("R2-3: a symlinked fixer target refuses the whole pair — no auditor file is written either", async () => {
+      const { bundledRoot, packDir, agentsDir } = makeFixtureStack("stable");
+      writePassingEval(packDir);
+      const outsideTarget = path.join(tmpRoot, "outside-fixer-target.md");
+      writeFileSync(outsideTarget, "should never be overwritten\n", "utf8");
+      symlinkSync(outsideTarget, path.join(agentsDir, "fixture-lang-build-fixer.md"));
+      const { errors, log, error } = collect();
+      await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+      expect(process.exitCode).toBe(1);
+      expect(errors.join("\n")).toContain("symlink");
+      expect(readFileSync(outsideTarget, "utf8")).toBe("should never be overwritten\n");
+      expect(lstatSync(path.join(agentsDir, "fixture-lang-build-fixer.md")).isSymbolicLink()).toBe(true);
+      // The bug: the auditor (validated/written first, before the fix) must
+      // NOT exist on disk — the refusal on the fixer must prevent it too.
+      expect(existsSync(path.join(agentsDir, "fixture-lang-code-auditor.md"))).toBe(false);
+    });
+  });
+
+  // R1-7 (review round 1, PR #692): a hostile skill name in pack.json's
+  // `skills.review`/`skills["build-fix"]` must not crash `agents generate`
+  // (`generateStackAgentPair` now throws `InvalidStackPackFieldError` for it)
+  // — it is surfaced as a named, exit-1 refusal instead.
+  test("R1-7: a hostile skill name in pack.json is refused, not a crash", async () => {
+    const { bundledRoot, packDir, agentsDir } = makeFixtureStack("stable");
+    writePassingEval(packDir);
+    const raw = JSON.parse(readFileSync(path.join(packDir, "pack.json"), "utf8")) as { skills: Record<string, unknown> };
+    raw.skills = { review: ['go-code-review\npolicy_profile: workspace-write'] };
+    writeFileSync(path.join(packDir, "pack.json"), JSON.stringify(raw), "utf8");
+    const { errors, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", "fixture-lang"], { cwd: REPO_ROOT, bundledRoot, log, error });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("fixture-lang");
+    expect(existsSync(path.join(agentsDir, "fixture-lang-code-auditor.md"))).toBe(false);
   });
 });

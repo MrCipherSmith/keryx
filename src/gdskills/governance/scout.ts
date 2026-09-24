@@ -88,6 +88,22 @@ export interface ScoutOptions {
   readonly threshold?: { readonly use?: number; readonly fork?: number };
   /** Which entry fields to score against — see `LexicalField`'s doc comment. Defaults to `"full"`. */
   readonly field?: LexicalField;
+  /**
+   * Catalog entry ids scored out entirely (not just skipped as the top
+   * match) before ranking — flow 314 T15: `keryx skills scout` for a NAMED
+   * candidate (`--skill-name <name>` with `--record <pack-dir>`, or a
+   * `--candidate <dir>` that already has an on-disk `SKILL.md`) is scored
+   * against a catalog that already contains that candidate's own,
+   * already-written `SKILL.md` — its description trivially covers itself,
+   * so the decision/topMatch/matches were reporting the candidate matching
+   * ITSELF at score 1.0 (`decision: "use"`) instead of scoring it against
+   * OTHER skills, making the pre-creation dedupe check meaningless. Callers
+   * that identify the candidate's own catalog id pass it here so the
+   * ranking reflects only other skills; `stocktake`'s equivalent self-check
+   * (`candidate.id !== entry.id`) does the same filtering for its own
+   * comparison.
+   */
+  readonly excludeIds?: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -214,7 +230,9 @@ export function scoutSkill(query: string, catalog: readonly CatalogEntry[], opti
   const use = options.threshold?.use ?? SCOUT_USE_THRESHOLD;
   const fork = options.threshold?.fork ?? SCOUT_FORK_THRESHOLD;
 
-  const scored = rankCatalog(query, catalog);
+  const excludeIds = options.excludeIds;
+  const scoredCatalog = excludeIds !== undefined && excludeIds.length > 0 ? catalog.filter((entry) => !excludeIds.includes(entry.id)) : catalog;
+  const scored = rankCatalog(query, scoredCatalog);
   const matches = scored.slice(0, 5);
   const top = scored[0];
   let decision: ScoutDecision = "create";

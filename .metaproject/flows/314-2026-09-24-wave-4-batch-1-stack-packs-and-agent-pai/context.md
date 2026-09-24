@@ -54,4 +54,30 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+flow-orchestrator, 2026-09-24:
+
+- Spec: docs/requirements/keryx-agent-platform-expansion/workstreams/W1-stack-catalog.md
+  (pack layout, authoring standard, gates), W2-agent-catalog.md (per-stack pairs,
+  AC6), implementation-plan.md Wave 4, metrics-and-validation.md (trigger bank
+  >=10 prompts, negatives >=90%, behavior pass@3 >= 80%).
+- Existing pack: src/gdskills/bundled/stacks/python/ (pack.json, agent-refs.json,
+  governance/scout.json, rules/coding-style.mdc, skills/python-testing).
+- Gates: src/gdskills/governance/{authoring-lint,scout,eval,stocktake,catalog-index}.ts,
+  CLI src/commands/skills-governance.ts. STACK_EXTENSIONS already lists
+  python, ts-js-node, react, go. Stack skill catalog id = `<stack-id>/<name>`.
+- eval: behavior scenarios are `not-run` without a runner -> verdict
+  `incomplete`; `--runner` prints "not wired". Single-turn provider helper:
+  src/harness/provider/single-turn.ts `runModelTurn`. Local ollama
+  `llama3.1:latest` answers (smoke-tested via `harness run`).
+- checkStablePackGate reads ONE EvalReport from governance/eval.json.
+- Agents: src/agents/verify.ts default skillExists = BUNDLED_GDSKILLS names only
+  (no stack skills); default stackPackExists = directory exists only.
+  Bundled agents live in src/gdskills/bundled/agents/*.md (tiers fast|standard|deep,
+  profiles read-only|workspace-write).
+- install-manifest: src/gdskills/bundled/install-manifest.json (profiles
+  minimal/core/react/nestjs/python/full; modules python-rules/python-skills;
+  components lang:ts-js-node, framework:react, lang:python ...).
+- Stocktake baseline (bundled, 73 skills): keep 50, improve 17, merge 6 =
+  planning/autodoc-writer, planning/consistency-checker, planning/docpack-review,
+  planning/spec-writer, quality/metaproject-security, quality/pr.
+  python/python-testing = keep.

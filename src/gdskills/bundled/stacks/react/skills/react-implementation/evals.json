@@ -1,0 +1,41 @@
+{
+  "triggers": {
+    "positive": [
+      "Implement a new React function component with useState and useEffect for the user profile page",
+      "This component has a useEffect that just copies a prop into state, can you clean it up",
+      "Add a save button to this form using useActionState with an optimistic update",
+      "Wrap this list render in a Suspense boundary with an error boundary fallback",
+      "Convert this class component to a function component with hooks",
+      "This ref prop is throwing a type error, wire it up the React 19 way without forwardRef",
+      "Add useTransition to this React component so typing in the search input does not block rendering"
+    ],
+    "negative": [
+      "Write pytest fixtures for this Django view",
+      "Review this component diff for Rules of Hooks violations and stale closures",
+      "The vite build is failing with a JSX syntax error, fix the build",
+      "Upgrade our app from React 18 to React 19 and run the codemods",
+      "Write a React Testing Library test that clicks a button and checks the modal opens",
+      "Add error handling and structured logging to this Node Express route handler"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "derive-not-sync",
+      "prompt": "This React component has a useEffect that calls setState every time the `user` prop changes, just to copy user.name into a local `displayName` state variable used only for rendering. How should I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "[Dd]erive" },
+        { "grader": "not-contains", "value": "useEffect(() => { setDisplayName" }
+      ]
+    },
+    {
+      "id": "key-as-index",
+      "prompt": "I'm rendering a filterable list of todo items with `<TodoItem key={index} .../>` inside a .map. Is that ok?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "[Ii]ndex" },
+        { "grader": "regex", "value": "\\bid\\b" }
+      ]
+    }
+  ]
+}

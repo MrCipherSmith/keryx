@@ -1,0 +1,39 @@
+{
+  "triggers": {
+    "positive": [
+      "Implement a new Go package under internal/order that wraps errors with %w",
+      "Add a Go worker pool under cmd/worker that bounds concurrency with errgroup",
+      "Add a Go endpoint and wire it into cmd/ and internal/, propagating context.Context correctly",
+      "What's the right Go interface placement for this new client -- producer or consumer package?",
+      "Add a goroutine in Go that watches a channel and joins with sync.WaitGroup",
+      "Implement this feature in a Go cmd/api binary using log/slog for structured logging"
+    ],
+    "negative": [
+      "Implement this feature in Rust using tokio for async",
+      "Add this endpoint in a Python FastAPI service",
+      "Implement this React component with the new form fields",
+      "Review this Go diff for goroutine leaks and data races",
+      "Fix this failing go test -race in the worker package",
+      "Write table-driven pytest cases for this Python function"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "context-propagation",
+      "prompt": "I'm adding a new function to internal/order that calls a downstream client. How should I handle the context and errors?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "context\\.Context" },
+        { "grader": "regex", "value": "%w" }
+      ]
+    },
+    {
+      "id": "goroutine-lifetime",
+      "prompt": "I want to start a few goroutines to process items concurrently in Go. What should I watch out for?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "[Ee]rrgroup|WaitGroup" }
+      ]
+    }
+  ]
+}

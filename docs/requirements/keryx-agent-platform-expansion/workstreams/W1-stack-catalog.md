@@ -1,5 +1,5 @@
 # W1 — Stack-aware skills & rules catalog
-Version: 0.2.0
+Version: 0.2.2
 
 ## Summary
 
@@ -20,9 +20,11 @@ an authoring standard aligned to the public Agent Skills format, and (5)
 governance gates (scout, eval, stocktake) so catalog growth is checked rather
 than bulk-generated. Flow 309 (Wave 2) implemented (1) stack detection, (3)
 the install profile→module→component lifecycle (plan/apply/doctor/uninstall),
-and (5) the three governance gates; (2) stack pack content and (4) the
-authoring-standard lint remain planned — see "Implementation notes (flow 309)"
-below for what landed and what is still a target contract.
+and (5) the three governance gates; (2) stack pack content was scoped as a
+Wave 4 target and (4) the authoring-standard lint remains planned. Flow 314
+(Wave 4 batch 1) authored the first four stack packs against gate (5) — see
+"Implementation notes (flow 309)" and "Implementation notes: Wave 4 batch 1
+(flow 314)" below for what landed and what is still a target contract.
 
 ## Current state (with code paths)
 
@@ -511,13 +513,123 @@ history is inspectable without guessing from a git blame.
   capability is configured (`--runner`), rather than failing or being
   skipped silently — the eval's `verdict` reflects only scenarios that
   actually ran.
-- **Stack-pack content is still deferred to Wave 4**, per this document's
-  original scope, with one exception: `src/gdskills/bundled/install-manifest.json`
-  registers a `python` profile and a `python-pack-module` component marked
-  `stability: experimental` that resolves to zero files today (the Python
-  pack itself is not authored yet) — installing the `python` profile
-  succeeds and installs the common modules only; `full` excludes
-  `python-pack-module` from its file count for the same reason.
+- **Stack-pack content was deferred to Wave 4** at flow 309 time, per this
+  document's original scope, with one exception: `src/gdskills/bundled/
+  install-manifest.json` registered a `python` profile and a
+  `python-pack-module` component marked `stability: experimental` that
+  resolved to zero files at the time (the Python pack itself was not yet
+  authored) — installing the `python` profile succeeded and installed the
+  common modules only; `full` excluded `python-pack-module` from its file
+  count for the same reason. The Python pack (and three further packs) were
+  authored in flow 314, Wave 4 batch 1 — see "Implementation notes: Wave 4
+  batch 1 (flow 314)" below for what landed.
+
+## Implementation notes: Wave 4 batch 1 (flow 314)
+
+- **Packs authored.** Four stack packs now exist under
+  `src/gdskills/bundled/stacks/<id>/`: `ts-js-node` and `go` (new, authored in
+  flow 314), `python` (started in flow 309 as an empty-file placeholder,
+  completed in flow 314), and `react` (new, `extends: ts-js-node`). Each pack
+  carries `pack.json`, per-skill `SKILL.md` + `evals.json` under `skills/`,
+  and a pack-level `governance/eval.json`. Skill names (from each pack's
+  `pack.json` `skills` map), four rules apiece, and `migrate` coverage:
+  - `ts-js-node`: `nodejs-implementation`, `nodejs-testing`,
+    `nodejs-code-review`, `nodejs-build-fix`, `nodejs-esm-migration`
+    (`migrate` is populated).
+  - `react` (extends `ts-js-node`): `react-implementation`, `react-testing`,
+    `react-code-review`, `react-build-fix`, `react-upgrade-migration`
+    (`migrate` is populated).
+  - `python`: `python-implementation`, `python-testing`,
+    `python-code-review`, `python-build-fix`; `migrate: []` (no
+    schema/version-migration concept for this pack).
+  - `go`: `go-implementation`, `go-testing`, `go-code-review`,
+    `go-build-fix`; `migrate: []`.
+- **Per-skill behavioral evals.** Every skill under `skills/*/evals.json` is
+  hand-authored with at least 10 trigger-accuracy prompts (positive and
+  negative) plus at least 4 negative (should-not-trigger) cases, and at least
+  one deterministic `behavior` scenario graded against `expected_behavior`.
+  Presence and shape are guarded by `src/gdskills/stack-packs.test.ts`.
+- **Model-backed eval runner.** `keryx skills eval --runner
+  <provider>[:<model>]` is wired through `src/commands/model-eval-runner.ts`,
+  which dispatches each scenario as a single-turn `runModelTurn` call (from
+  `src/harness/provider/single-turn.ts`) with the skill's `SKILL.md` as the
+  system prompt; a missing/unconfigured runner fails closed (`status:
+  "not-run"` with a reason) rather than fabricating a result.
+- **Pack-level governance eval.** Each pack's `governance/eval.json`
+  (`{schemaVersion, reports[]}`) aggregates its skills' eval reports; a
+  pack's `stability` may only be `"stable"` when every report's pass rate
+  clears `PACK_BEHAVIOR_PASS_FLOOR = 0.8`
+  (`src/gdskills/governance/eval.ts`).
+- **Scout self-match exclusion.** `keryx skills scout --record
+  --skill-name --candidate` now excludes the candidate's own catalog entry
+  from its overlap scoring, so re-scouting an already-recorded skill surfaces
+  a genuinely different neighbour instead of matching itself.
+- **pack.json ↔ install-manifest stability guard.** A guard test
+  (`src/gdskills/stack-packs.test.ts`) checks that a pack's `pack.json`
+  `stability` and the corresponding install-manifest component's `stability`
+  agree, so the two records cannot silently diverge.
+- **Batch 1 results (flow 314, fix attempt 1 — honest gate re-run).** Review
+  round 1 found the skills and their graders had effectively been tuned to
+  each other, so the owner decided the gate model for the real run had to be
+  independent of both: `deepseek` `deepseek-chat` at `--strictness high` /
+  `--trials 5`,
+  `--scope bundled`, `PACK_BEHAVIOR_PASS_FLOOR = 0.8`. Every report's
+  `skillDigest` binds it to the current skill directory contents, so
+  editing a skill invalidates its recorded report rather than triggering a
+  re-run. The honest run failed all four
+  batch-1 packs — every one stays `stability: experimental`, and no
+  generated `<id>-code-auditor`/`<id>-build-fixer` agent pair ships for any
+  of them (each pack's `agent-refs.json` lists `"agents": []` with a note):
+  - `ts-js-node`: `nodejs-implementation` and `nodejs-code-review` pass;
+    `nodejs-testing` fails (`mock-boundary-not-internal`, `passRate` 0),
+    `nodejs-build-fix` fails (`no-ts-ignore-suppression`, `passRate` 0), and
+    `nodejs-esm-migration` fails (`convert-before-flip-type`, `passRate`
+    `0.2`).
+  - `python`: `python-code-review` passes; `python-implementation` fails (a
+    trigger-positive false negative plus `resource-with-block`, `passRate`
+    `0.2`), `python-testing` fails (`mock-external-not-internal`, `passRate`
+    0), and `python-build-fix` fails (`mypy-error-no-blanket-suppress`,
+    `passRate` 0).
+  - `go`: `go-implementation`, `go-code-review`, and `go-build-fix` pass;
+    only `go-testing` fails (`table-driven-subtests`, `passRate` `0.4`) —
+    but a pack needs every report to pass, so the whole pack stays
+    experimental.
+  - `react`: `react-implementation`, `react-code-review`, and
+    `react-upgrade-migration` pass. `react-build-fix` fails
+    (`no-disable-hooks-lint`, `passRate` 0). `react-testing`'s own report
+    verdict reads `pass` — `evalSkill`'s per-report verdict threshold is
+    `0.5`, and its `mock-network-boundary` behavior scenario scores
+    `passRate` `0.6`, which clears that — but `0.6` is below the pack gate's
+    `PACK_BEHAVIOR_PASS_FLOOR` of `0.8`, so `react-testing` fails the pack
+    gate too. That makes two failing react skills, not one.
+
+  A local `ollama` `llama3.1:latest` run at the same strictness/trials is
+  kept only as a supplementary signal, not a gate outcome (its raw
+  per-skill reports live outside this repo, alongside the flow's working
+  notes): `go` clears all four of its skills under `llama3.1`; `ts-js-node`
+  clears four of five (only `nodejs-testing` fails); `python` clears two of
+  four (`python-build-fix`, `python-code-review` pass; `python-implementation`,
+  `python-testing` fail); `react` clears three of five (`react-build-fix`,
+  `react-implementation`, `react-testing` pass; `react-code-review`,
+  `react-upgrade-migration` fail). The two models disagree on which skills
+  fail, which is itself evidence for the grader-audit follow-up below rather
+  than a reason to trust either run alone.
+
+  Stack coverage (packs with any authored content beyond review-only) stays
+  at 2 (NestJS/Prisma, React/MobX review-only): none of the four batch-1
+  packs cleared the honest gate, so the coverage count does not move from
+  this batch.
+
+  **Follow-up: grader audit.** A strong model (DeepSeek `deepseek-chat`)
+  scoring `0` on three suppression-avoidance behavior scenarios —
+  `ts-js-node/nodejs-build-fix`'s `no-ts-ignore-suppression`,
+  `react/react-build-fix`'s `no-disable-hooks-lint`, and
+  `python/python-build-fix`'s `mypy-error-no-blanket-suppress` — suggests
+  these graders may be mis-specified (too strict a regex/not-contains match,
+  or a prompt that doesn't elicit the graded behavior) rather than the model
+  genuinely reaching for a suppression every time. Before re-authoring any
+  skill content, audit these three scenarios' graders and prompts, fix what
+  is actually mis-specified, and re-run the gate.
 
 ## Data contracts
 

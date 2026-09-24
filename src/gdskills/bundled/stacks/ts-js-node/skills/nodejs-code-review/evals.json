@@ -1,0 +1,40 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this Node.js pull request for floating promises and unhandled rejections",
+      "Check this TypeScript diff for any `any` leaks and blocking synchronous calls",
+      "Audit this Express route handler change for resource cleanup issues",
+      "Review this npm package change and flag any risky new dependencies",
+      "Check this async order-processing function for unhandled promise rejections",
+      "Review this Node service diff for event-loop-blocking file reads"
+    ],
+    "negative": [
+      "Review this React component for unnecessary re-renders",
+      "Implement the fix for the floating promise you found in this file",
+      "Write tests for this Node.js service's new endpoint",
+      "Do a full OWASP security audit of this Node application's auth flow",
+      "Fix this tsc type error that's blocking the build",
+      "Review this Python Flask service for SQL injection risk"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "flag-floating-promise",
+      "prompt": "Review this Node.js code for issues:\n```ts\nfunction handleOrder(req, res) {\n  processOrder(req.body);\n  res.status(202).send();\n}\n```\nwhere processOrder is an async function.",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "floating|[Uu]nhandled|not awaited|void" }
+      ]
+    },
+    {
+      "id": "read-only-no-edits",
+      "prompt": "Review this Node.js diff for a synchronous fs.readFileSync call inside an Express request handler. Should you fix it yourself in this review?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "(flag|report|note|call out|point out|finding)[\\s\\S]{0,150}(readFileSync|synchronous|blocking)" },
+        { "grader": "regex", "value": "fs\\.promises|fs/promises|await\\s+readFile|non-blocking" },
+        { "grader": "not-contains", "value": "I fixed it" }
+      ]
+    }
+  ]
+}

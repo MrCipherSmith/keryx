@@ -1,0 +1,39 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this Python diff for mutable default argument bugs",
+      "Check this pull request for broad except clauses swallowing errors",
+      "Audit this Python module for resource leaks and unclosed files",
+      "Review this async Python code for blocking calls inside async def",
+      "Check this Python code review for typing holes like Any or missing Optional",
+      "Review this Django ORM code for N+1 query issues"
+    ],
+    "negative": [
+      "Implement a new Python feature that fetches user data",
+      "Write pytest tests for this module",
+      "Fix the mypy type errors so the build passes",
+      "Review this TypeScript React component for MobX store misuse",
+      "Run review-security-code on our whole repository for OWASP issues",
+      "Fix this ModuleNotFoundError in our Python package"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "mutable-default-finding",
+      "prompt": "Review this Python function for bugs:\n\ndef add_item(item, items=[]):\n    items.append(item)\n    return items",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "mutable default" }
+      ]
+    },
+    {
+      "id": "broad-except-finding",
+      "prompt": "Review this Python code:\n\ntry:\n    process(data)\nexcept Exception:\n    pass",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "swallow" },
+        { "grader": "not-contains", "value": "looks fine" }
+      ]
+    }
+  ]
+}

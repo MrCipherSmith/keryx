@@ -1,0 +1,39 @@
+{
+  "triggers": {
+    "positive": [
+      "Migrate this Node.js package from CommonJS to ES modules",
+      "Convert all the require() calls in this project to ESM imports",
+      "Fix this 'require() of ES Module not supported' error",
+      "Add type: module to package.json and fix everything that breaks",
+      "Replace __dirname with import.meta in this codebase during our ESM migration",
+      "This library needs a dual CJS/ESM exports map, help fix it"
+    ],
+    "negative": [
+      "Implement a brand new Node.js service from scratch using ESM from the start",
+      "Upgrade this npm dependency to its latest major version",
+      "Fix this eslint no-unused-vars warning in a single utility function",
+      "Review this diff for floating promises",
+      "Write tests for this already-ESM Node service",
+      "Migrate this Python 2 codebase to Python 3"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "convert-before-flip-type",
+      "prompt": "I'm migrating this Node.js package to ES modules. Should the package.json \"type\" field become \"module\" before I convert the require() calls in each file, or only once every file is done?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "require\\([^\\n]{0,150}break|break[^\\n]{0,150}require\\(|remaining[\\s\\S]{0,80}require\\(" },
+        { "grader": "regex", "value": "[Cc]onvert[\\s\\S]{0,150}(then|once|before|prior to|ahead of)[\\s\\S]{0,100}(add|flip|set|switch)[\\s\\S]{0,30}\"?type|(once|after)[\\s\\S]{0,60}(every|all|each)[\\s\\S]{0,30}(file|code)[\\s\\S]{0,300}(then|add|flip|set)[\\s\\S]{0,30}\"?type" }
+      ]
+    },
+    {
+      "id": "dirname-replacement",
+      "prompt": "In this Node.js file being migrated to ESM, __dirname is undefined. What should replace it?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "import\\.meta\\.dirname|fileURLToPath" }
+      ]
+    }
+  ]
+}

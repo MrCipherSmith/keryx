@@ -1,0 +1,42 @@
+{
+  "id": "react",
+  "family": "framework",
+  "extends": "ts-js-node",
+  "modules": ["react-rules", "react-skills"],
+  "detectionMarkers": ["react"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 314, Wave 4 batch 1"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["react-implementation"],
+    "test": ["react-testing"],
+    "review": ["react-code-review"],
+    "build-fix": ["react-build-fix"],
+    "migrate": ["react-upgrade-migration"]
+  },
+  "agentProfile": {
+    "displayName": "React",
+    "auditFocus": [
+      "Rules of Hooks violations and conditional/loop-nested hook calls",
+      "effect dependency arrays that are wrong, missing, or paper over a needed effect",
+      "state or props mutated in place instead of replaced",
+      "keys on list items that are array index or missing where order can change",
+      "accessibility of interactive elements: semantic tags, labels, focus management",
+      "dangerouslySetInnerHTML or unsanitized user data reaching a DOM sink"
+    ],
+    "buildCommands": [
+      "the project's type-check script (e.g. tsc --noEmit, or its package.json equivalent)",
+      "the project's lint script with the react-hooks plugin enabled",
+      "the project's test script (Vitest/Jest run of React Testing Library suites)",
+      "the project's bundler build (Vite/webpack/Next.js production build)"
+    ],
+    "fixGuardrails": [
+      "never disable or downgrade an eslint-plugin-react-hooks rule to silence a warning",
+      "never cast a component's props, ref, or event handler to any to satisfy the type checker",
+      "never delete or loosen a failing assertion in a React Testing Library test to make it pass",
+      "never wrap a component in unnecessary memo/useMemo/useCallback as a build-fix when the project runs the React Compiler"
+    ]
+  }
+}

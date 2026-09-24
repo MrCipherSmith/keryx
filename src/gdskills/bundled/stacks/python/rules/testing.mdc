@@ -1,0 +1,77 @@
+---
+extends: common
+paths: ["**/*.py", "**/*.pyi"]
+metadata:
+  origin: authored
+---
+
+# Python testing
+
+Narrows `core-common-rules`' stack-agnostic testing guidance to `pytest`
+conventions. Applies only to `*.py`/`*.pyi` files (W1-AC8); see
+`skills/python-testing/SKILL.md` for the full test-authoring workflow this
+rule file backs.
+
+## Layout and discovery
+
+- Match the project's existing layout: a `tests/` tree mirroring `src/`, or
+  co-located `test_*.py`/`*_test.py` files — do not introduce the other
+  layout alongside it.
+- Name test files, classes, and functions so `pytest`'s default discovery
+  finds them (`test_*.py`/`*_test.py`, `Test*` classes with no `__init__`,
+  `test_*` functions) rather than relying on manual `testpaths` overrides.
+- Keep a fixture in the narrowest `conftest.py` that covers every test
+  needing it; do not hoist a single-file fixture to the suite root.
+
+## Fixtures and parametrization
+
+- Prefer the pytest default `function` scope; widen to `module`/`session`
+  only for expensive, read-only setup, and never for a fixture that mutates
+  shared state.
+- Use `@pytest.mark.parametrize` when only inputs vary; use a fixture (or
+  `pytest.fixture(params=[...])`) when setup/teardown logic itself varies
+  between cases.
+- Give parametrized cases explicit `ids=` when the parameter values are not
+  self-describing in pytest's default test-ID output.
+
+## Mocking
+
+- Patch at the point of use (`mocker.patch("mypkg.module.dependency")`), not
+  at the dependency's definition site.
+- Mock only external dependencies (network, filesystem, other services,
+  wall-clock time); an internal collaborator mocked away stops the test
+  verifying real integration between your own modules.
+- Prefer `unittest.mock.AsyncMock` (or `pytest-mock`'s `mocker.patch` with
+  `new=AsyncMock()`) for mocking an `async def` dependency, not a plain
+  `Mock` that returns a coroutine-shaped object nothing ever awaits.
+
+## Async tests
+
+- Mark an async test with `pytest.mark.asyncio` (or the project's configured
+  async plugin/mode) — a sync test function that merely calls a coroutine
+  without awaiting it silently never runs the coroutine's body.
+- Use the project's configured event-loop fixture scope; do not create a new
+  event loop per test unless the project's async plugin requires it.
+
+## Determinism
+
+- Never depend on real wall-clock time, network access, or filesystem state
+  outside a fixture-managed temp directory (`tmp_path`) — freeze time
+  (`freezegun` or the project's equivalent) and mock the network.
+- Never depend on dict/set iteration order for test correctness beyond
+  Python's own guaranteed dict insertion order; sort collections before
+  comparing when the underlying data structure does not guarantee order.
+- A flaky test (passes/fails nondeterministically) gets fixed at its root
+  cause (a missing await, an unmocked clock, a race) — never retried into
+  passing or skipped to hide the flake.
+
+## Coverage expectations
+
+- Every new or touched public function/class/endpoint gets at least one
+  test covering its happy path, its documented edge cases, and any raised
+  exception type.
+- A test asserts one behavior; a test with several unrelated assertions
+  should split so a failure names the specific behavior that broke.
+- Run the project's configured coverage tool (`pytest --cov` when
+  configured) and treat an uncovered branch in touched code as a gap to
+  close, not to suppress with a `# pragma: no cover` on real logic.

@@ -1,0 +1,40 @@
+{
+  "triggers": {
+    "positive": [
+      "This component's ref prop is throwing a TSX type error after the React 19 upgrade, fix it",
+      "eslint-plugin-react-hooks is failing on exhaustive-deps in this file",
+      "The Vite build fails with a JSX syntax error in this component",
+      "I'm getting a hydration mismatch warning on this page, fix it",
+      "Fix this children prop type error in the component",
+      "The tsc build fails because this event handler's type doesn't match onChange"
+    ],
+    "negative": [
+      "Write a new test for this component's error state",
+      "Review this component for Rules of Hooks violations",
+      "Migrate this codebase from React 18 to React 19",
+      "Build a new dashboard component with charts",
+      "Fix a Node.js module resolution error unrelated to any component",
+      "This component re-renders too often, help me optimize it"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-disable-hooks-lint",
+      "prompt": "react-hooks/exhaustive-deps is failing on my useEffect because it's missing a dependency. What should I do to fix the build?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "not-contains", "value": "eslint-disable" },
+        { "grader": "regex", "value": "dependency array" }
+      ]
+    },
+    {
+      "id": "no-any-cast",
+      "prompt": "I have a TSX prop type error on an event handler and the build is failing. Should I just cast it to any to unblock the build?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "not-contains", "value": "cast it to any" },
+        { "grader": "regex", "value": "React\\.(Change|Mouse|Form)?Event<" }
+      ]
+    }
+  ]
+}

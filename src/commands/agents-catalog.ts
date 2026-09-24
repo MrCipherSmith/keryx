@@ -10,6 +10,8 @@
 // or verification logic itself (D-2). `export` is the one subcommand that
 // writes a file; `list`/`show`/`verify` are read-only.
 
+import { existsSync, lstatSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import {
   compileAgentDefinition,
   loadAgentCatalog,
@@ -22,7 +24,11 @@ import {
   verifyAgents,
   type AgentVerifyResult,
   type VerifyAgentsReport,
+  generateStackAgentPair,
+  type StackPackForAgentGeneration,
+  checkStackPackGateCleared,
 } from "../agents/service";
+import { defaultBundledRoot } from "../gdskills/bundled-eval";
 import { optionValue } from "../lib/args";
 import { helpOptions, helpTitle, helpUsage } from "../lib/ui";
 
@@ -31,6 +37,14 @@ export interface AgentsCatalogDeps {
   readonly cwd?: string;
   readonly log?: (line: string) => void;
   readonly error?: (line: string) => void;
+  /**
+   * Flow 314 T13a: `generate`-only seam mirroring `verifyAgents`'s own
+   * `bundledRoot` option (`verify.ts`) — overrides `defaultBundledRoot()` so
+   * a test can point `generate` at an isolated fixture `<root>/agents` +
+   * `<root>/stacks/<id>` tree instead of the real shipped one. Every other
+   * subcommand ignores this field.
+   */
+  readonly bundledRoot?: string;
 }
 
 function resolveDeps(deps: AgentsCatalogDeps): { cwd: string; log: (line: string) => void; error: (line: string) => void } {
@@ -54,12 +68,13 @@ function isExportRuntime(value: string | undefined): value is AgentExportRuntime
   return value !== undefined && (AGENT_EXPORT_RUNTIMES as readonly string[]).includes(value);
 }
 
-/** `keryx agents list|show|export|verify` dispatcher, called from `agents.ts`. */
+/** `keryx agents list|show|export|verify|generate` dispatcher, called from `agents.ts`. */
 export async function agentsCatalogCommand(subcommand: string, args: string[], deps: AgentsCatalogDeps = {}): Promise<void> {
   if (subcommand === "list") return listCommand(args, deps);
   if (subcommand === "show") return showCommand(args, deps);
   if (subcommand === "export") return exportCommand(args, deps);
   if (subcommand === "verify") return verifyCommand(args, deps);
+  if (subcommand === "generate") return generateCommand(args, deps);
   throw new Error(`agentsCatalogCommand: unknown subcommand "${subcommand}"`);
 }
 
@@ -365,6 +380,249 @@ function printVerifyHelp(): void {
   helpOptions([{ flag: "--json", desc: "Emit the full verification report as JSON." }]);
 }
 
+// ---------------------------------------------------------------------------
+// generate
+// ---------------------------------------------------------------------------
+
+const STACK_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+
+interface GenerateFileOutcome {
+  readonly fileName: string;
+  readonly name: string;
+  readonly changed: boolean;
+  readonly existed: boolean;
+}
+
+/**
+ * Same narrowing `verify.ts`'s `defaultLoadStackPackForGeneration` uses —
+ * kept local rather than imported (that resolver is `verify.ts`-internal,
+ * not exported).
+ *
+ * R1-6 (review round 1, PR #692): `pack.json`'s `id` field is untrusted —
+ * nothing previously checked it equalled the `--stack`/directory name it was
+ * read from, so a mismatched or path-traversal `id` could make
+ * `generateStackAgentPair` derive a file name that escapes the bundled
+ * agents directory. `stackId` (the directory name, already matched against
+ * `STACK_ID_PATTERN` by the caller) is now REQUIRED to equal `pack.id`, and
+ * `pack.id` is independently re-checked against the same pattern rather than
+ * trusting the caller's check transitively.
+ */
+function readStackPackForGeneration(packJsonPath: string, stackId: string): StackPackForAgentGeneration | undefined {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(packJsonPath, "utf8"));
+  } catch {
+    return undefined;
+  }
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const pack = raw as {
+    id?: unknown;
+    skills?: { review?: unknown; "build-fix"?: unknown };
+    agentProfile?: { displayName?: unknown; auditFocus?: unknown; buildCommands?: unknown; fixGuardrails?: unknown };
+  };
+  if (typeof pack.id !== "string" || pack.id.length === 0) return undefined;
+  if (!STACK_ID_PATTERN.test(pack.id) || pack.id !== stackId) return undefined;
+  const profile = pack.agentProfile;
+  const isStringArray = (v: unknown): v is readonly string[] => Array.isArray(v) && v.every((i) => typeof i === "string");
+  if (
+    typeof profile !== "object" ||
+    profile === null ||
+    typeof profile.displayName !== "string" ||
+    !isStringArray(profile.auditFocus) ||
+    !isStringArray(profile.buildCommands) ||
+    !isStringArray(profile.fixGuardrails)
+  ) {
+    return undefined;
+  }
+  const review = pack.skills?.review;
+  const buildFix = pack.skills?.["build-fix"];
+  return {
+    id: pack.id,
+    skills: {
+      ...(isStringArray(review) ? { review } : {}),
+      ...(isStringArray(buildFix) ? { "build-fix": buildFix } : {}),
+    },
+    agentProfile: {
+      displayName: profile.displayName,
+      auditFocus: profile.auditFocus,
+      buildCommands: profile.buildCommands,
+      fixGuardrails: profile.fixGuardrails,
+    },
+  };
+}
+
+function generateCommand(args: string[], depsIn: AgentsCatalogDeps): void {
+  const { log, error } = resolveDeps(depsIn);
+  if (args.includes("--help") || args.includes("-h")) {
+    printGenerateHelp();
+    return;
+  }
+  const bad = unknownFlags(args, ["--stack", "--check", "--json"]);
+  if (bad.length > 0) {
+    error(`Unknown flag(s): ${bad.join(", ")}`);
+    process.exitCode = 1;
+    return;
+  }
+  const json = args.includes("--json");
+  const check = args.includes("--check");
+  const stackId = optionValue(args, "--stack");
+
+  if (stackId === undefined || !STACK_ID_PATTERN.test(stackId)) {
+    error(
+      `Provide a valid --stack id (${STACK_ID_PATTERN.source}): keryx agents generate --stack <id> [--check] [--json]`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const bundledAgentsRoot = path.join(depsIn.bundledRoot ?? defaultBundledRoot(), "agents");
+  const stacksRoot = path.join(bundledAgentsRoot, "..", "stacks");
+  const packDir = path.join(stacksRoot, stackId);
+  const packJsonPath = path.join(packDir, "pack.json");
+
+  if (!existsSync(packJsonPath)) {
+    error(`No stack pack "${stackId}" found at ${packJsonPath}.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Flow 314 T13a (W2 "Per-stack pairs" + AC6): generation is refused for a
+  // pack that is not gate-cleared — same definition `agents verify` uses via
+  // the shared `checkStackPackGateCleared` (stability "stable" AND
+  // `checkStablePackGate(packDir, "stable").status === "pass"`). `packDir`
+  // itself is path-safe by construction here (built from a `--stack` value
+  // already matched against `STACK_ID_PATTERN`, joined under the fixed
+  // `stacksRoot`), but mirror `verify.ts`'s `defaultStackPackGateCleared`
+  // defense-in-depth: refuse a symlinked or non-directory `packDir` before
+  // ever reading `pack.json` through it.
+  //
+  // Deliberate choice for `--check`: refusal applies BEFORE the `--check`
+  // branch is reached, so `--check` on a non-cleared pack refuses the same
+  // way the write path does (named `stack-pack-not-gate-cleared` error, exit
+  // 1) rather than reporting "no generated pair expected" and passing. A
+  // gate-cleared/not-cleared distinction is a precondition for generation
+  // existing at all, not a drift question `--check` is meant to answer — so
+  // there is exactly one refusal path for both modes, and nothing is ever
+  // written or compared for an ungated pack.
+  let packDirStats: ReturnType<typeof lstatSync>;
+  try {
+    packDirStats = lstatSync(packDir);
+  } catch {
+    error(`No stack pack "${stackId}" found at ${packDir}.`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!packDirStats.isDirectory() || packDirStats.isSymbolicLink()) {
+    error(`stack-pack-not-gate-cleared: pack directory "${stackId}" is not a real directory`);
+    process.exitCode = 1;
+    return;
+  }
+  const gate = checkStackPackGateCleared(packDir);
+  if (!gate.cleared) {
+    error(`stack-pack-not-gate-cleared: ${gate.reason ?? `stack pack "${stackId}" is not gate-cleared`}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const pack = readStackPackForGeneration(packJsonPath, stackId);
+  if (pack === undefined) {
+    error(
+      `Stack pack "${stackId}" has no usable agentProfile in ${packJsonPath}, or its pack.json "id" is missing/invalid/does not match the "${stackId}" directory — cannot generate an agent pair.`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  // R1-7: `generateStackAgentPair` now validates `pack.id` and every
+  // review/build-fix skill name (plus rejects control characters in
+  // body-interpolated fields) and THROWS on a hostile value, rather than
+  // trusting the caller to have pre-validated it. That must never crash this
+  // CLI command — surface it as the same kind of named, exit-1 refusal every
+  // other bad-input path here already uses.
+  let pair: ReturnType<typeof generateStackAgentPair>;
+  try {
+    pair = generateStackAgentPair(pack);
+  } catch (cause) {
+    error(`Stack pack "${stackId}" cannot be generated: ${cause instanceof Error ? cause.message : String(cause)}`);
+    process.exitCode = 1;
+    return;
+  }
+  // R2-3: validate BOTH targets in a first pass before writing either one.
+  // The containment and lstat checks used to run inside the write loop, so a
+  // refusal on the fixer's target (e.g. a planted symlink) left the auditor
+  // already written to disk — a half-written pair with exit 1. Now nothing
+  // is written until both targets have cleared every check.
+  const prepared: { file: typeof pair.auditor; filePath: string; existed: boolean }[] = [];
+  for (const file of [pair.auditor, pair.fixer]) {
+    const filePath = path.join(bundledAgentsRoot, file.fileName);
+
+    // R1-6: `file.fileName` is derived from `pack.id`, which is now checked
+    // (above) to equal `stackId` and to match `STACK_ID_PATTERN` — but this
+    // containment check is a second, independent layer that does not rely on
+    // that upstream validation staying correct. Refuse to write anywhere the
+    // resolved path is not actually inside `bundledAgentsRoot`, and refuse to
+    // write through a symlinked or otherwise non-regular target (an
+    // attacker-planted symlink, device file, FIFO, etc. at the destination
+    // name pointing elsewhere).
+    const relative = path.relative(bundledAgentsRoot, filePath);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      error(`Refusing to write "${file.fileName}": it resolves outside the bundled agents directory.`);
+      process.exitCode = 1;
+      return;
+    }
+    let existed: boolean;
+    try {
+      const targetStats = lstatSync(filePath);
+      existed = true;
+      if (targetStats.isSymbolicLink() || !targetStats.isFile()) {
+        error(`Refusing to write "${file.fileName}": the target is a symlink or not a regular file.`);
+        process.exitCode = 1;
+        return;
+      }
+    } catch {
+      existed = false;
+    }
+    prepared.push({ file, filePath, existed });
+  }
+
+  const outcomes: GenerateFileOutcome[] = [];
+  for (const { file, filePath, existed } of prepared) {
+    const previous = existed ? readFileSync(filePath, "utf8") : undefined;
+    const changed = previous !== file.content;
+
+    if (!check && changed) {
+      writeFileSync(filePath, file.content, "utf8");
+    }
+    outcomes.push({ fileName: file.fileName, name: file.name, changed, existed });
+  }
+
+  if (json) {
+    log(JSON.stringify({ stack: stackId, check, files: outcomes }, null, 2));
+  } else {
+    log(`# agents generate --stack ${stackId}${check ? " --check" : ""}`);
+    log("");
+    for (const outcome of outcomes) {
+      const state = !outcome.existed ? "new" : outcome.changed ? "drifted" : "unchanged";
+      const action = check ? state : outcome.changed ? (outcome.existed ? "updated" : "written") : "unchanged";
+      log(`  ${outcome.fileName}  ${action}`);
+    }
+  }
+
+  if (check && outcomes.some((o) => o.changed)) {
+    process.exitCode = 1;
+  }
+}
+
+function printGenerateHelp(): void {
+  helpTitle("keryx agents generate", "regenerate a stack pack's <id>-code-auditor/<id>-build-fixer agent pair from its pack.json");
+  helpUsage(["keryx agents generate --stack <id> [--check] [--json]"]);
+  helpOptions([
+    { flag: "--stack", desc: "Stack pack id (its directory name under the bundled stacks tree)." },
+    { flag: "--check", desc: "Report drift without writing; exits 1 if either generated file differs from what is on disk." },
+    { flag: "--json", desc: "Emit the per-file outcome as JSON." },
+  ]);
+}
+
 // Re-exported for CLI help composition in `agents.ts`.
-export { printListHelp, printShowHelp, printExportHelp, printVerifyHelp };
+export { printListHelp, printShowHelp, printExportHelp, printVerifyHelp, printGenerateHelp };
 export type { AgentVerifyResult };

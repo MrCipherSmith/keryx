@@ -1,0 +1,40 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this pull request's React components for Rules of Hooks violations",
+      "Check this useEffect for a dependency array bug before we merge",
+      "Look at this diff for stale closures in the event handlers",
+      "Review this list render for key misuse",
+      "Check this component diff for a dangerouslySetInnerHTML XSS risk",
+      "Review this modal component for accessibility gaps"
+    ],
+    "negative": [
+      "Review the MobX store actions and reactions in this diff",
+      "Review this diff against our repository's CLAUDE.md frontend conventions",
+      "Write a React Testing Library test for this component",
+      "Fix the failing react-hooks lint error in this file",
+      "Review this NestJS controller's DTO validation",
+      "Build a new component that renders a paginated user list"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "flag-rules-of-hooks",
+      "prompt": "Review this snippet: `function UserPanel({ id }) { if (!id) return null; const [user, setUser] = useState(null); useEffect(() => { fetchUser(id).then(setUser); }, [id]); return <div>{user?.name}</div>; }` What's wrong?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "[Rr]ules of [Hh]ooks|conditional" },
+        { "grader": "regex", "value": "early return|before" }
+      ]
+    },
+    {
+      "id": "no-mobx-scope",
+      "prompt": "Review this component diff: it uses a MobX observer wrapping a component with a useEffect that has a missing dependency, and the store action mutates an array in place. What do you flag, and what do you leave to another reviewer?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "add (the )?missing dependency|dependency array" },
+        { "grader": "regex", "value": "store-review|separate (review|skill)|defer (it )?to|not this skill" }
+      ]
+    }
+  ]
+}

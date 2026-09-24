@@ -1,0 +1,40 @@
+{
+  "triggers": {
+    "positive": [
+      "Write a React Testing Library test for this UserCard component's loading, success, and error states",
+      "Test this custom hook with renderHook",
+      "This component test throws an act warning, help me fix it",
+      "Add an MSW request handler to mock the API call in this React component test",
+      "Add tests for the form's validation error and successful submit states",
+      "Write a user-event test that clicks the button and checks the modal opens"
+    ],
+    "negative": [
+      "Write pytest tests for this FastAPI endpoint",
+      "Build a new SearchBar React component with a debounced input",
+      "Review this component diff for accessibility issues",
+      "Set up Playwright end-to-end tests for the checkout flow",
+      "Fix the failing tsc type-check in this component after the react types upgrade",
+      "Write unit tests for this plain TypeScript date-formatting utility function"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "query-by-role",
+      "prompt": "I need a React Testing Library test that clicks the submit button on a login form and checks an error message appears when the password is empty. How should I query for the button and the error?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "getByRole" },
+        { "grader": "regex", "value": "user[Ee]vent" }
+      ]
+    },
+    {
+      "id": "mock-network-boundary",
+      "prompt": "My component test needs to mock an API call that the component makes on mount. Where should I put the mock?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "MSW|boundary|request" },
+        { "grader": "not-contains", "value": "mock the component's own" }
+      ]
+    }
+  ]
+}

@@ -63,9 +63,10 @@
 // the skill-under-test's own text). `stocktake.ts`'s own-trigger-routes-back
 // check shares this exact grader for the same reason.
 
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import type { CatalogEntry } from "./catalog-index";
+import type { CatalogEntry, CatalogScope } from "./catalog-index";
 import { checkSkillSelected, checkSkillSelectedLeaveOneOut, nearestSkills } from "./scout";
 
 export type Strictness = "low" | "medium" | "high";
@@ -150,6 +151,30 @@ export interface EvalReport {
   readonly evidence: EvalEvidence;
   readonly scenarios: readonly EvalScenarioResult[];
   readonly verdict: "pass" | "fail" | "incomplete";
+  /**
+   * Flow 314 review round 1 (R1-11, R1-15): the catalog scope the trigger
+   * scenarios were scored against — `evalSkill` stamps this from
+   * `options.scope` when the caller supplies one. The stable-pack gate
+   * requires `"bundled"` (the catalog users actually install); an `"all"`
+   * report may have passed only because a repo-local skill outside the
+   * shipped bundle tipped a trigger score.
+   */
+  readonly scope?: CatalogScope;
+  /**
+   * R1-3/R1-15: `computeSkillEvalDigest(skillDir)` at the time `evalSkill`
+   * ran — sha256 of the skill's `SKILL.md` bytes plus its `evals.json`
+   * bytes (empty when absent). The stable-pack gate recomputes this from the
+   * CURRENT skill directory and refuses a report whose digest disagrees, so
+   * an eval.json edited after the skill (or left stale after a skill edit)
+   * cannot clear the gate.
+   */
+  readonly skillDigest?: string;
+  /** R1-15: the model-backed provider this report's behavior scenarios actually ran against (e.g. `"ollama"`) — the CLI stamps this when `--runner` was used. Absent for a report with no runner (behavior scenarios `not-run`). */
+  readonly runner?: string;
+  /** R1-15: the model id (e.g. `"llama3.1:latest"`) — stamped by the CLI alongside `runner`. */
+  readonly model?: string;
+  /** R1-15: ISO timestamp of when the CLI recorded this report. */
+  readonly recordedAt?: string;
 }
 
 export interface EvalOptions {
@@ -160,6 +185,8 @@ export interface EvalOptions {
   readonly modelGrader?: boolean;
   /** The injectable grading capability itself (F10) — when absent, `"model"`-graded expectations are reported `status: "skipped"`, never counted as passed. */
   readonly modelGraderFn?: ModelGrader;
+  /** R1-11: the catalog scope `catalog` was loaded with — stamped onto the report's `scope` field verbatim (this function does not re-derive it from `catalog` itself, since a caller may hand-build a catalog array with no scope of its own). */
+  readonly scope?: CatalogScope;
 }
 
 /** Thrown when the requested eval violates its own contract (e.g. high strictness with < 3 trials) — the CLI maps this to exit 1. */
@@ -351,6 +378,23 @@ function gradeDeterministic(output: string, expected: ExpectedBehavior): boolean
     default:
       return undefined; // "model" — graded by the caller, only with --model-grader and a runner.
   }
+}
+
+/**
+ * Flow 314 review round 1 fix (I1-I5 integrity rules,
+ * `src/gdskills/stack-pack-eval-integrity.test.ts`): grades one `output`
+ * against a scenario's full `expected_behavior` list, using the EXACT SAME
+ * deterministic semantics `evalSkill`'s own trial loop applies —
+ * `gradeDeterministic` per expectation, AND across every expectation (a
+ * scenario fails when ANY expectation fails). A `"model"`-graded expectation
+ * with no grader supplied counts as a failure here (there is no runner/CLI
+ * context to skip it against) — this helper is for the deterministic
+ * empty/echo/self-match integrity probes only, never a substitute for
+ * `evalSkill`'s real trial loop.
+ */
+export function gradeExpectations(output: string, expected: readonly ExpectedBehavior[]): boolean {
+  if (expected.length === 0) return false;
+  return expected.every((one) => gradeDeterministic(output, one) === true);
 }
 
 /**
@@ -563,6 +607,18 @@ export async function evalSkill(
         : "pass"
       : "fail";
 
+  // R1-3/R1-15: stamp the digest of the skill's CURRENT SKILL.md + evals.json
+  // so a later edit (or a hand-edited/stale report) is detectable by the
+  // stable-pack gate. Best-effort — a skill entry built from a fixture with
+  // no real file on disk (several tests in this file construct one) must not
+  // make `evalSkill` itself throw; `skillDigest` is simply omitted then.
+  let skillDigest: string | undefined;
+  try {
+    skillDigest = computeSkillEvalDigest(path.dirname(skill.path));
+  } catch {
+    skillDigest = undefined;
+  }
+
   const report: EvalReport = {
     schemaVersion: "1.0.0",
     skillId,
@@ -572,6 +628,8 @@ export async function evalSkill(
     evidence,
     scenarios,
     verdict,
+    ...(options.scope !== undefined ? { scope: options.scope } : {}),
+    ...(skillDigest !== undefined ? { skillDigest } : {}),
   };
 
   const errors = validateEvalReport(report);
@@ -705,6 +763,225 @@ export interface StablePackGateResult {
 }
 
 /**
+ * Flow 314, W4 Wave 4: the pack-level behavior-eval floor
+ * (docs/requirements/keryx-agent-platform-expansion/metrics-and-validation.md
+ * "Behavior-eval pass@k": "pass@3 ≥ 80% before graduating from `candidate`").
+ * Applied per RAN behavior scenario in a pack-level eval document — see
+ * `checkStablePackGate`'s pack-level branch below.
+ */
+export const PACK_BEHAVIOR_PASS_FLOOR = 0.8;
+
+/**
+ * Flow 314 review round 1 (R1-3): the minimum `trials` a pack-level report
+ * must carry — named so the gate's requirement reads as one number, not a
+ * magic `5` repeated at every call site.
+ */
+export const PACK_MIN_TRIALS = 5;
+
+/**
+ * Flow 314 review round 1 (R1-3, R1-15): `sha256(SKILL.md bytes + "\n\u0000\n"
+ * + evals.json bytes)`, `evals.json` bytes empty when the file is absent.
+ * Both `evalSkill` (stamping a FRESH report's `skillDigest`) and the
+ * stable-pack gate (recomputing the CURRENT digest to compare against a
+ * report's stamped one) call this same function, so they can never disagree
+ * about what "the skill's content" means. Throws when `SKILL.md` itself is
+ * missing/unreadable — callers that need a non-throwing answer (the gate)
+ * check `existsSync` on `SKILL.md` first and report their own named reason.
+ */
+export function computeSkillEvalDigest(skillDir: string): string {
+  const skillMdBytes = readFileSync(path.join(skillDir, "SKILL.md"));
+  const evalsJsonPath = path.join(skillDir, "evals.json");
+  const evalsJsonBytes = existsSync(evalsJsonPath) ? readFileSync(evalsJsonPath) : Buffer.alloc(0);
+  return createHash("sha256").update(skillMdBytes).update("\n\u0000\n").update(evalsJsonBytes).digest("hex");
+}
+
+/** The pack-level document form of `<pack>/governance/eval.json` — one `EvalReport` per skill the pack ships, keyed by `report.skillId` (flow 314, W4 Wave 4). Distinguished from the single-report form by its `reports` array field. */
+export interface PackEvalDocument {
+  readonly schemaVersion: "1.0.0";
+  readonly reports: readonly EvalReport[];
+}
+
+function isPackEvalDocument(value: unknown): value is PackEvalDocument {
+  return typeof value === "object" && value !== null && Array.isArray((value as { reports?: unknown }).reports);
+}
+
+function sortedStrings(values: readonly string[]): string[] {
+  return [...values].sort();
+}
+
+function sameStringSet(a: readonly string[], b: readonly string[]): boolean {
+  const sa = sortedStrings(a);
+  const sb = sortedStrings(b);
+  return sa.length === sb.length && sa.every((value, index) => value === sb[index]);
+}
+
+/**
+ * Evaluates ONE skill's report from a pack-level document against the
+ * stable-pack gate's requirements (flow 314, W4 Wave 4 dispatch, hardened
+ * flow 314 review round 1 — R1-3/R1-11/R1-15): the report must validate
+ * against its own contract (`validateEvalReport`), carry verdict `"pass"`,
+ * evidence `"authored"`, strictness `"high"` with `trials >= PACK_MIN_TRIALS`,
+ * `scope: "bundled"`, a non-empty `runner`/`model`, a `skillDigest` matching
+ * the skill's CURRENT `SKILL.md`+`evals.json` on disk, behavior-scenario ids
+ * and trigger prompts matching the current `evals.json` exactly, at least one
+ * RAN behavior scenario, and every RAN behavior scenario clearing
+ * `PACK_BEHAVIOR_PASS_FLOOR`. Returns a reason string naming the skill on any
+ * gap, or `undefined` when the skill's report clears every requirement. Never
+ * throws — a malformed/missing `SKILL.md`/`evals.json` on the skill side is
+ * reported as a named failure reason, same as a malformed report.
+ */
+function checkSkillReportForPackGate(
+  packDir: string,
+  packId: string,
+  name: string,
+  report: EvalReport | undefined,
+): string | undefined {
+  const skillId = `${packId}/${name}`;
+  if (report === undefined) {
+    return `no eval report for skill "${skillId}"`;
+  }
+  if (report.skillId !== skillId) {
+    return `report for "${skillId}" carries a mismatched skillId "${report.skillId}"`;
+  }
+  let errors: string[];
+  try {
+    errors = validateEvalReport(report);
+  } catch (error) {
+    return `skill "${skillId}": eval report could not be validated: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  if (errors.length > 0) {
+    return `skill "${skillId}": eval report fails its own contract: ${errors.join("; ")}`;
+  }
+  if (report.verdict !== "pass") {
+    return `skill "${skillId}": eval report verdict is "${report.verdict}", not "pass"`;
+  }
+  if (report.evidence !== "authored") {
+    return `skill "${skillId}": eval report evidence is "${report.evidence}", not "authored"`;
+  }
+  if (report.strictness !== "high") {
+    return `skill "${skillId}": eval report strictness is "${report.strictness}", not "high"`;
+  }
+  if (report.trials < PACK_MIN_TRIALS) {
+    return `skill "${skillId}": eval report trials ${report.trials} is below the pack minimum ${PACK_MIN_TRIALS}`;
+  }
+  if (report.scope !== "bundled") {
+    return `skill "${skillId}": eval report scope is ${JSON.stringify(report.scope)}, not "bundled"`;
+  }
+  if (typeof report.runner !== "string" || report.runner.length === 0) {
+    return `skill "${skillId}": eval report is missing a non-empty "runner"`;
+  }
+  if (typeof report.model !== "string" || report.model.length === 0) {
+    return `skill "${skillId}": eval report is missing a non-empty "model"`;
+  }
+
+  const skillDir = path.join(packDir, "skills", name);
+  const skillMdPath = path.join(skillDir, "SKILL.md");
+  if (!existsSync(skillMdPath)) {
+    return `skill "${skillId}": SKILL.md is missing at ${skillMdPath}`;
+  }
+
+  let currentDigest: string;
+  try {
+    currentDigest = computeSkillEvalDigest(skillDir);
+  } catch (error) {
+    return `skill "${skillId}": could not compute the current eval digest: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  if (report.skillDigest !== currentDigest) {
+    return `skill "${skillId}": eval report skillDigest is stale — SKILL.md or evals.json has changed since it was recorded`;
+  }
+
+  let spec: EvalSpecFile | undefined;
+  try {
+    spec = readEvalSpec(skillMdPath);
+  } catch (error) {
+    return `skill "${skillId}": evals.json could not be read: ${error instanceof Error ? error.message : String(error)}`;
+  }
+
+  const currentBehaviorIds = (spec?.scenarios ?? []).map((scenario) => scenario.id);
+  const reportBehaviorIds = report.scenarios.filter((scenario) => scenario.kind === "behavior").map((scenario) => scenario.id);
+  if (!sameStringSet(currentBehaviorIds, reportBehaviorIds)) {
+    return `skill "${skillId}": eval report behavior-scenario ids do not match the skill's current evals.json`;
+  }
+
+  const currentPositives = spec?.triggers?.positive ?? [];
+  const reportPositives = report.scenarios.filter((scenario) => scenario.kind === "trigger-positive").map((scenario) => scenario.prompt);
+  if (!sameStringSet(currentPositives, reportPositives)) {
+    return `skill "${skillId}": eval report trigger-positive prompts do not match the skill's current evals.json`;
+  }
+
+  const currentNegatives = spec?.triggers?.negative ?? [];
+  const reportNegatives = report.scenarios.filter((scenario) => scenario.kind === "trigger-negative").map((scenario) => scenario.prompt);
+  if (!sameStringSet(currentNegatives, reportNegatives)) {
+    return `skill "${skillId}": eval report trigger-negative prompts do not match the skill's current evals.json`;
+  }
+
+  const ranBehaviorScenarios = report.scenarios.filter(
+    (scenario) => scenario.kind === "behavior" && scenario.status === "ran",
+  );
+  if (ranBehaviorScenarios.length === 0) {
+    return `skill "${skillId}": eval report has zero ran behavior scenarios`;
+  }
+  const belowFloor = ranBehaviorScenarios.find((scenario) => scenario.passRate < PACK_BEHAVIOR_PASS_FLOOR);
+  if (belowFloor !== undefined) {
+    return `skill "${skillId}": behavior scenario "${belowFloor.id}" passRate ${belowFloor.passRate} is below the pack floor ${PACK_BEHAVIOR_PASS_FLOOR}`;
+  }
+  return undefined;
+}
+
+/**
+ * The pack-level branch of `checkStablePackGate` (flow 314, W4 Wave 4;
+ * hardened flow 314 review round 1 — R1-3/R1-4/R1-5): reads
+ * `<packDir>/pack.json`, requires `id` to be a non-empty string equal to
+ * `basename(packDir)` (R1-3), requires `skills` to be an object whose every
+ * bucket is a `string[]` — never iterated blindly, so a non-array bucket
+ * (e.g. a stray number) is a named `"fail"`, never a thrown `TypeError`
+ * (R1-5) — and requires the resulting skill-name union to be non-empty
+ * (R1-4). Then, for EVERY skill name across all buckets, requires a report in
+ * `doc.reports` whose `skillId` is `"<pack.id>/<name>"` and clears
+ * `checkSkillReportForPackGate`. Any gap fails the whole gate, naming the
+ * offending skill.
+ */
+function checkPackEvalDocument(packDir: string, doc: PackEvalDocument): StablePackGateResult {
+  const packJsonPath = path.join(packDir, "pack.json");
+  let pack: { readonly id?: unknown; readonly skills?: unknown };
+  try {
+    pack = JSON.parse(readFileSync(packJsonPath, "utf8")) as typeof pack;
+  } catch (error) {
+    return { status: "fail", reason: `pack.json could not be read/parsed: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  if (typeof pack.id !== "string" || pack.id.length === 0) {
+    return { status: "fail", reason: `pack.json "id" must be a non-empty string` };
+  }
+  const expectedId = path.basename(packDir);
+  if (pack.id !== expectedId) {
+    return { status: "fail", reason: `pack.json id "${pack.id}" does not match its directory name "${expectedId}"` };
+  }
+  if (typeof pack.skills !== "object" || pack.skills === null || Array.isArray(pack.skills)) {
+    return { status: "fail", reason: `pack.json "skills" must be an object` };
+  }
+
+  const skillNames = new Set<string>();
+  for (const [bucket, names] of Object.entries(pack.skills as Record<string, unknown>)) {
+    if (!Array.isArray(names) || !names.every((name) => typeof name === "string")) {
+      return { status: "fail", reason: `pack.json skills."${bucket}" must be an array of strings` };
+    }
+    for (const name of names) skillNames.add(name);
+  }
+  if (skillNames.size === 0) {
+    return { status: "fail", reason: `pack.json "skills" lists no skills` };
+  }
+
+  const reportsBySkillId = new Map(doc.reports.map((report) => [report.skillId, report] as const));
+  for (const name of [...skillNames].sort()) {
+    const reason = checkSkillReportForPackGate(packDir, pack.id, name, reportsBySkillId.get(`${pack.id}/${name}`));
+    if (reason !== undefined) {
+      return { status: "fail", reason };
+    }
+  }
+  return { status: "pass" };
+}
+
+/**
  * F19 (flow 309 review round 1): the "a stable stack pack ships a passing
  * governance/eval.json" gate used to live only as inline assertions inside
  * `stack-packs.test.ts`, against the REAL bundled `python` pack — which
@@ -724,46 +1001,39 @@ export function checkStablePackGate(packDir: string, stability: string): StableP
   if (!existsSync(evalPath)) {
     return { status: "fail", reason: "governance/eval.json is missing" };
   }
-  let report: EvalReport;
+  let parsed: unknown;
   try {
-    report = JSON.parse(readFileSync(evalPath, "utf8")) as EvalReport;
+    parsed = JSON.parse(readFileSync(evalPath, "utf8"));
   } catch (error) {
     return { status: "fail", reason: `governance/eval.json could not be parsed: ${error instanceof Error ? error.message : String(error)}` };
   }
-  // R2-6 (flow 309 review round 2): `validateEvalReport` itself is now
-  // defensive against a missing `triggerAccuracy`/`scenarios` (it returns
-  // errors instead of throwing), but this call is wrapped regardless — a
-  // gate that is supposed to answer "fail" for a broken report must never
-  // let an unexpected exception propagate to the caller instead.
-  let errors: string[];
+  // Flow 314, W4 Wave 4: a PACK-LEVEL eval.json (`{ schemaVersion, reports:
+  // EvalReport[] }`) is distinguished from the original single-report form by
+  // its `reports` array field — every skill pack.json lists must carry a
+  // passing, authored report with >=1 ran behavior scenario, each clearing
+  // `PACK_BEHAVIOR_PASS_FLOOR`.
+  //
+  // R1-4 (flow 314 review round 1): the original single-report form used to
+  // keep working here too — a stable STACK PACK could ship one report for
+  // ANY one skill, with trigger scenarios only and no behavior scenario at
+  // all, and it counted as gate-cleared. `checkStablePackGate` is only ever
+  // called with a stack-pack directory (both callers, `agents/verify.ts` and
+  // `agents-catalog.ts`, resolve one from `stacks/*`) — a stack pack MUST
+  // ship the pack-level form, so the legacy shape is now a named failure
+  // rather than a second, weaker code path.
+  if (!isPackEvalDocument(parsed)) {
+    return { status: "fail", reason: "stack packs must ship a pack-level eval document" };
+  }
   try {
-    errors = validateEvalReport(report);
+    return checkPackEvalDocument(packDir, parsed);
   } catch (error) {
+    // R1-5 (flow 314 review round 1): `checkPackEvalDocument` and everything
+    // it calls now validate shapes before iterating them (no bare `for...of`
+    // over an unchecked `pack.skills` bucket, no unchecked property access),
+    // but this call stays wrapped regardless — the gate's own doc comment
+    // says it "must never let an unexpected exception propagate", and that
+    // must hold even against a future edit to this function that reintroduces
+    // an unchecked path.
     return { status: "fail", reason: `governance/eval.json could not be validated: ${error instanceof Error ? error.message : String(error)}` };
   }
-  if (errors.length > 0) {
-    return { status: "fail", reason: `governance/eval.json fails its own contract: ${errors.join("; ")}` };
-  }
-  if (report.verdict !== "pass") {
-    return { status: "fail", reason: `governance/eval.json verdict is "${report.verdict}", not "pass"` };
-  }
-  // R2-4: the gate must not simply trust a self-declared `verdict`/`evidence`
-  // — recompute the two load-bearing facts directly from the report's own
-  // data. `validateEvalReport`'s "pass requires a ran trigger-positive and
-  // ran trigger-negative, no skipped/not-run" rule already guards the
-  // "nothing checked" shape; this adds the two checks this workstream's
-  // dispatch calls out explicitly for the stable-pack gate: evidence must be
-  // `"authored"` (a stable pack's shipped eval.json is meant to be
-  // human-verified, not merely synthesized-and-happened-to-pass — though
-  // `validateEvalReport` already forbids synthesized+pass, this is belt and
-  // suspenders against a hand-edited report that skips validation some other
-  // way in the future), and at least one scenario must have actually `ran`.
-  if (report.evidence !== "authored") {
-    return { status: "fail", reason: `governance/eval.json evidence is "${report.evidence}", not "authored"` };
-  }
-  const ranScenarios = report.scenarios.filter((scenario) => scenario.status === "ran").length;
-  if (ranScenarios === 0) {
-    return { status: "fail", reason: "governance/eval.json has zero ran scenarios" };
-  }
-  return { status: "pass" };
 }

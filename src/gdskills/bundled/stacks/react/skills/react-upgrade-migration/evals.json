@@ -1,0 +1,40 @@
+{
+  "triggers": {
+    "positive": [
+      "Upgrade this codebase from React 18 to React 19",
+      "Remove all string refs from this project before the React upgrade",
+      "Migrate ReactDOM.render to createRoot across the app",
+      "Fix the propTypes deprecation warnings after upgrading React",
+      "Run the official React codemods for the ref-as-prop change",
+      "Update @types/react to match the new React major we just installed"
+    ],
+    "negative": [
+      "Add a settings page that lets a user update their email address",
+      "Write unit tests for this date-formatting utility function",
+      "Review this component diff for accessibility",
+      "The build is failing with a plain TSX syntax error, unrelated to any version upgrade",
+      "Bump the pinned Node.js version in package.json engines and the CI workflow",
+      "Fix a re-render performance issue in this list component"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "read-guide-first",
+      "prompt": "We're upgrading from React 18 to React 19. Where should I start?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "upgrade guide|release notes" },
+        { "grader": "regex", "value": "codemod" }
+      ]
+    },
+    {
+      "id": "no-forced-resolution",
+      "prompt": "One of our dependencies isn't compatible with React 19 yet. Should I just force the version with a package.json resolution override so the install succeeds?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "not-contains", "value": "yes, force the version" },
+        { "grader": "regex", "value": "blocker|report|incompatib" }
+      ]
+    }
+  ]
+}

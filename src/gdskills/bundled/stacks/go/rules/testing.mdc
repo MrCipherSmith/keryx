@@ -1,0 +1,68 @@
+---
+extends: common
+paths: ["**/*.go"]
+metadata:
+  origin: authored
+---
+
+# Go testing
+
+Narrows `core-common-rules`' stack-agnostic testing rules to the standard
+`testing` package and its modern (1.23-1.25) additions. Applies only to
+`*.go` files (W1-AC8).
+
+## Layout and naming
+
+- Tests live beside the code they cover as `<file>_test.go` in the same
+  package (or `<pkg>_test` for a black-box test that only exercises the
+  exported API) — no separate `tests/` tree.
+- Table-driven tests with `t.Run(tc.name, func(t *testing.T) { ... })`
+  subtests are the default shape for anything with more than one case;
+  name each case descriptively, not `case1`/`case2`.
+- `testdata/` holds golden files and fixtures a test reads; Go's tooling
+  already excludes it from builds — do not invent another fixture
+  directory convention.
+
+## Test helpers and lifecycle
+
+- Mark a helper function `t.Helper()` as its first line so failures report
+  the caller's line, not the helper's.
+- Use `t.Cleanup(func() { ... })` for teardown instead of a manual
+  `defer` chain scattered across a subtest — it composes correctly with
+  `t.Run` and parallel subtests.
+- Use `t.Context()` (Go 1.24+) for a context that is canceled when the
+  test completes, instead of hand-rolling `context.WithCancel` plus a
+  `defer cancel()` in every test.
+- Call `t.Parallel()` deliberately, only when the subtest's fixtures are
+  genuinely independent — a parallel subtest sharing mutable fixture
+  state races silently.
+
+## Assertions and determinism
+
+- Plain `if got != want { t.Errorf(...) }` (or the project's already-
+  configured assertion library) — do not introduce a new assertion
+  library into a project that has not adopted one.
+- Never synchronize with `time.Sleep` to wait for a goroutine/async result
+  — use a channel, `sync.WaitGroup`, `context` deadline, or a polling
+  helper with a timeout so the test is deterministic and not flaky under
+  load.
+- `httptest.NewServer`/`httptest.NewRecorder` for HTTP handler tests
+  instead of binding a real port.
+
+## Fuzzing and benchmarks
+
+- `func FuzzX(f *testing.F)` with `f.Add(...)` seed corpus entries for
+  parsers, decoders, or anything that touches untrusted input formats;
+  run locally with `go test -fuzz=FuzzX` before relying on it in CI.
+- Benchmarks use `for b.Loop() { ... }` (Go 1.24+) rather than the older
+  `for i := 0; i < b.N; i++`; `b.Loop()` resets the timer automatically
+  and keeps loop-body values alive against dead-code elimination, so
+  results are not accidentally optimized away.
+
+## Race detection and coverage
+
+- Run `go test -race ./...` for any change touching goroutines, shared
+  state, or channels — the race detector catches data races unit
+  assertions cannot see.
+- New behavior gets a new test in the same change; a bug fix gets a
+  regression test that fails before the fix and passes after.

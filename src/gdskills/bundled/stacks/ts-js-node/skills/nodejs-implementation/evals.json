@@ -1,0 +1,39 @@
+{
+  "triggers": {
+    "positive": [
+      "Implement this Express route handler for creating an order, including request body validation",
+      "Add a new async function to this Node.js library that reads a config file and returns parsed settings",
+      "Write a CLI command in our Node.js CLI tool that lists pending jobs from the queue",
+      "Implement async handler with AbortSignal for this outbound fetch call so it doesn't hang",
+      "Add input validation to this Node.js API route before it reaches the service layer",
+      "Build this Node.js order processing function that totals line items and applies discounts"
+    ],
+    "negative": [
+      "Write pytest tests for this Django view",
+      "Review this pull request for floating promises and unhandled rejections",
+      "Migrate this package from CommonJS to ESM",
+      "Fix this tsc type error about incompatible generic instantiation",
+      "Implement a new React component that renders the order list with pagination",
+      "Add fake timers to this Vitest test for the debounce function"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "validate-and-abort-signal",
+      "prompt": "Implement a Node.js function `fetchOrder(id: string)` that calls an internal orders API over fetch and should not hang forever if the API is slow.",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "[Aa]bort[Ss]ignal" }
+      ]
+    },
+    {
+      "id": "unknown-over-any",
+      "prompt": "I'm implementing a Node.js handler that parses an untrusted JSON request body before passing it to business logic. What type should the parsed body have before I validate it?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "contains", "value": "unknown" },
+        { "grader": "not-contains", "value": "use `any`" }
+      ]
+    }
+  ]
+}

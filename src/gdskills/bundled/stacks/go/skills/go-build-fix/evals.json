@@ -1,0 +1,38 @@
+{
+  "triggers": {
+    "positive": [
+      "go build is failing with an undefined symbol error",
+      "go.mod and go.sum are out of sync, please fix",
+      "Resolve this Go import cycle between two internal packages",
+      "go vet is reporting a printf format error",
+      "golangci-lint is failing on this Go package",
+      "go test -race is failing with a data race, fix the build"
+    ],
+    "negative": [
+      "npm install is failing with a peer dependency conflict",
+      "cargo build is failing for this Rust crate",
+      "pip install is failing for this Python project",
+      "Implement a new Go feature in the order package",
+      "Review this Go diff for concurrency bugs",
+      "Write Go tests for this function"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "module-mismatch",
+      "prompt": "go build fails saying go.sum is out of date after I bumped a dependency in go.mod. How do I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "go mod tidy" }
+      ]
+    },
+    {
+      "id": "no-nolint-suppression",
+      "prompt": "golangci-lint is flagging an ignored error return in my Go code. How should I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "if err != nil|%w|errors\\.Is|errors\\.As" }
+      ]
+    }
+  ]
+}

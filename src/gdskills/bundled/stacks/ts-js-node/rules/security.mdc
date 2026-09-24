@@ -1,0 +1,71 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.js", "**/*.mjs", "**/*.cjs"]
+metadata:
+  origin: authored
+---
+
+# TypeScript/JavaScript (Node.js) security
+
+Node.js-specific risks beyond the OWASP baseline in the common rules --
+process/OS-level surface (child processes, the filesystem, the module
+loader) that a Node runtime exposes and a generic web-security checklist
+does not name directly.
+
+## Command and process execution
+
+- Never build a shell command string from untrusted input and pass it to
+  `child_process.exec`/`execSync` -- the shell reinterprets `;`, `|`, `` ` ``,
+  `$()` in the input. Use `execFile`/`execFileSync`/`spawn` with the
+  command and an **argument array** (`spawn("git", ["log", userBranch])`),
+  never string-concatenated into one command line.
+- If `shell: true` is passed to `spawn`/`exec` at all, treat every argument
+  as attacker-controlled and reject/escape it -- prefer removing `shell:
+  true` over trying to escape correctly.
+
+## Filesystem
+
+- Resolve a user-supplied path with `path.resolve`/`path.join` against a
+  fixed root, then verify the result still starts with that root
+  (`resolved.startsWith(root + path.sep)`) before any `fs` call --
+  otherwise `../../etc/passwd`-style traversal escapes the intended
+  directory.
+- Never pass an unvalidated path straight from a request/CLI arg to
+  `fs.readFile`/`fs.writeFile`/`fs.unlink` without that containment check.
+
+## Data handling
+
+- Guard against prototype pollution when merging/assigning JSON into an
+  existing object (`Object.assign`, a hand-rolled deep merge, or an older
+  `lodash.merge`): reject or strip `__proto__`, `constructor`, and
+  `prototype` keys, or use `Object.create(null)`/`structuredClone` for the
+  target instead of a plain object literal.
+- Never pass untrusted input to `eval`, `new Function(...)`, or a `vm`
+  module context expecting it to sandbox safely -- Node's `vm` module is
+  not a security boundary against a determined attacker; use a real
+  out-of-process sandbox if untrusted code must run at all.
+- Treat any `RegExp` built from user input, or a hand-written pattern with
+  nested quantifiers (`(a+)+`, `(a|a)*`), as a ReDoS risk on
+  attacker-controlled input length -- prefer a linear-time match, an
+  input length cap before the regex runs, or a known-safe regex engine.
+
+## Network and secrets
+
+- Validate and allowlist the target of any outbound `fetch`/`http(s)`
+  request built from user input (a URL, hostname, or webhook target) --
+  an unchecked outbound request lets an attacker probe internal services
+  (SSRF), including cloud metadata endpoints (`169.254.169.254`).
+- Never `console.log`/log a request body, header, or env var wholesale in
+  a path that might carry a token, password, or API key -- log an
+  identifier (user id, request id), not the credential-bearing payload.
+- Run `npm audit` (or the project's package manager's equivalent) and keep
+  the lockfile committed and in sync with `package.json`; do not add a
+  dependency with a known-critical advisory without a documented reason.
+
+## Runtime posture
+
+- Where the deployment target supports it, know that Node's permission
+  model (`--permission` plus `--allow-fs-read`/`--allow-fs-write`/
+  `--allow-child-process`) exists to restrict what a process may touch --
+  flag when a service handling untrusted input runs with no such
+  restriction and no containerization either.

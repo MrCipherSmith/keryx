@@ -1,0 +1,40 @@
+{
+  "triggers": {
+    "positive": [
+      "Fix this ModuleNotFoundError: No module named 'mypkg.util'",
+      "Our editable pip install is broken, the package won't import",
+      "mypy is failing with a type error I don't understand, please fix it",
+      "ruff check is failing on our CI, fix the violations",
+      "pip is reporting a dependency resolver conflict between two packages",
+      "pytest collection is erroring out before any tests even run"
+    ],
+    "negative": [
+      "Implement a new feature that uses asyncio.TaskGroup",
+      "Write pytest tests for the new widgets module",
+      "Review this Python diff for security issues",
+      "Fix the TypeScript build failure in our Node service",
+      "Run a full test-generation pass over this untested module",
+      "Review this code for architecture violations"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "module-not-found-diagnosis",
+      "prompt": "Our Python project fails with `ModuleNotFoundError: No module named 'mypkg.util'` when running pytest. How do you diagnose and fix this?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "[Rr]oot [Cc]ause" },
+        { "grader": "not-contains", "value": "type: ignore" }
+      ]
+    },
+    {
+      "id": "mypy-error-no-blanket-suppress",
+      "prompt": "mypy reports a type error on a function I touched. Fix it.",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "(signature|annotation|the actual (type|mismatch))" },
+        { "grader": "not-contains", "value": "# type: ignore" }
+      ]
+    }
+  ]
+}

@@ -40,7 +40,15 @@ export async function agentsCommand(args: string[] = []): Promise<void> {
   // Flow 310 (W2 agent-definitions catalog): the bundled + project agent
   // catalog surface. `list`/`show`/`verify` are read-only; `export` is the
   // one subcommand that writes a file, and only into a keryx-managed path.
-  if (subcommand === "list" || subcommand === "show" || subcommand === "export" || subcommand === "verify") {
+  // `generate` (flow 314 T10) writes only into the bundled agents tree, and
+  // only for the stack pack named by `--stack`.
+  if (
+    subcommand === "list" ||
+    subcommand === "show" ||
+    subcommand === "export" ||
+    subcommand === "verify" ||
+    subcommand === "generate"
+  ) {
     await agentsCatalogCommand(subcommand, args.slice(1));
     return;
   }
@@ -220,6 +228,7 @@ function printAgentsHelp(): void {
     "keryx agents show <name> [--json]",
     `keryx agents export --runtime <${AGENT_EXPORT_RUNTIMES.join("|")}> <name> [--dry-run] [--json]`,
     "keryx agents verify [<name>] [--json]",
+    "keryx agents generate --stack <id> [--check] [--json]",
   ]);
 }
 

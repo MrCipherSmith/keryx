@@ -1,4 +1,4 @@
 {
   "agents": [],
-  "note": "Per-stack agents (W2's compiler output, one agent generated per pack from its rules+skills) are Wave 4. This pack ships no agent yet; the empty list is intentional, not an omission."
+  "note": "no pair until the python pack clears the eval gate (python-build-fix's mypy-error-no-blanket-suppress behavior scenario passRate 0, below the 0.8 floor; python-implementation's resource-with-block at 0.2 and python-testing's mock-external-not-internal at 0 also fail, deepseek-chat gate run, flow 314 fix attempt 1)"
 }

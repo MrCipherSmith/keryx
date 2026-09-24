@@ -1,0 +1,40 @@
+{
+  "triggers": {
+    "positive": [
+      "Implement a Widget dataclass and a build_widget() function in src/mypkg/widgets.py",
+      "Add a new async function that fetches user records with asyncio.TaskGroup",
+      "Write a Python module that reads a config file and returns a typed Protocol object",
+      "I need to add type hints to this untyped Python function",
+      "Implement a context manager for our database connection pool in Python",
+      "Add a new feature to this Python service that logs each request with the logging module",
+      "Package this Python code with a src/ layout and pyproject.toml entry point"
+    ],
+    "negative": [
+      "Write pytest tests for the widgets module I just added",
+      "Review this Python pull request for bugs before I merge it",
+      "Fix this ModuleNotFoundError when importing mypkg.util",
+      "Implement this new feature in TypeScript for our Node service",
+      "Review the frontend React component for MobX store violations",
+      "Run a generic security audit across the whole repository"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "async-taskgroup-feature",
+      "prompt": "Implement a Python async function `fetch_all(urls)` that fetches several URLs concurrently and returns their results. Use current best practice for grouping the concurrent calls.",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "[Tt]ask[Gg]roup" },
+        { "grader": "not-contains", "value": "requests.get" }
+      ]
+    },
+    {
+      "id": "resource-with-block",
+      "prompt": "Write a Python function that opens a file, reads its JSON contents, and returns the parsed data.",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "with open" }
+      ]
+    }
+  ]
+}
