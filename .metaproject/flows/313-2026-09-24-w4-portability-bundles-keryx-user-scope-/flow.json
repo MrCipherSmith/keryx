@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T08:24:07.988Z",
+  "updatedAt": "2026-09-24T08:48:02.262Z",
   "source": {
     "type": "description",
     "ref": null
@@ -74,7 +74,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -82,7 +82,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -256,8 +257,19 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T08:33:25.271Z",
+            "outcome": "started",
+            "detail": "review round 1 on PR #690"
+          },
+          {
+            "at": "2026-09-24T08:48:02.262Z",
+            "outcome": "failed",
+            "detail": "round 1: 8 blocker, 12 major, 9 minor, 4 info; fix loop attempt 1 dispatched in 5 lanes"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -462,6 +474,21 @@
       "at": "2026-09-24T08:24:07.988Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T08:33:25.176Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T08:33:25.271Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — review round 1 on PR #690"
+    },
+    {
+      "at": "2026-09-24T08:48:02.262Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 2) — round 1: 8 blocker, 12 major, 9 minor, 4 info; fix loop attempt 1 dispatched in 5 lanes"
     }
   ]
 }
