@@ -22,3 +22,48 @@
 - 2026-09-24T07:30:42.035Z - started
 - 2026-09-24 - flow-orchestrator (dispatched, operator_confirmed=true): completion_outcome=create-pr-and-merge from the dispatch brief, base feat/agent-platform-expansion. Execution-metrics and completion-choice questions skipped per brief.
 - 2026-09-24 - T1 context collected (Explore worker); interface map in context.md. Plan decisions D1-D6 in plan.md. T2/T3 scaffolds skipped (superseded by T5-T16).
+- 2026-09-24T07:31:03.431Z - task-attempt: T5: started (attempt 1) — 312-T5 sonnet
+- 2026-09-24T07:44:48.139Z - task-done: T5: Core learning module: types, schema validator, confidence, identity, paths, scan, store, decisions
+- 2026-09-24T07:44:48.283Z - task-attempt: T6: started (attempt 1) — 312-T6 sonnet
+- 2026-09-24T07:44:48.402Z - task-attempt: T7: started (attempt 1) — 312-T7 sonnet
+- 2026-09-24T07:57:13.195Z - task-done: T6: Observe: real LearningObservationSink, shell runtime wiring, ignore block + guard test
+- 2026-09-24T08:00:34.530Z - task-done: T7: Extract: five deterministic signals, candidate upsert, capability-gated model extractor port
+- 2026-09-24 - T6 DONE (87f89097): sink wired in shell/ACP/trigger + remote turns. Concern: multi-file apply_patch carries only the first file's edit digest — accepted, documented limitation.
+- 2026-09-24 - T7 DONE: store allows an accepted write without the capability only when the stored record is already accepted (non-transition) so extract can reinforce accepted records — flagged for the T13 guard and the opus review.
+- 2026-09-24T08:00:34.669Z - task-attempt: T8: started (attempt 1) — 312-T8 sonnet
+- 2026-09-24T08:03:44.055Z - task-attempt: T8: blocked (attempt 2) — isolation worktree mis-dispatch (worker env reported a separate worktree root; no files written)
+- 2026-09-24T08:03:53.951Z - task-attempt: T8: started (attempt 3) — 312-T8 re-dispatch, no isolation, no sub-delegation
+- 2026-09-24 - T8 attempt 1 BLOCKED: worker sub-delegated and one nested instance ran with worktree isolation; confirmed no files written in the flow worktree. Re-dispatched T8 (attempt 3) with no isolation and no sub-delegation.
+- 2026-09-24T08:21:12.429Z - task-done: T8: Consent CLI: keryx learn list/review/accept/reject/prune/observe/extract + index
+- 2026-09-24T08:21:12.579Z - task-attempt: T9: started (attempt 1) — 312-T9
+- 2026-09-24T08:21:12.712Z - task-attempt: T10: started (attempt 1) — 312-T10
+- 2026-09-24T08:21:12.847Z - task-attempt: T11: started (attempt 1) — 312-T11
+- 2026-09-24T08:21:12.975Z - task-attempt: T12: started (attempt 1) — 312-T12
+- 2026-09-24 - T8 DONE. Concern: flow 313 edits the same CLI registration files (cli.ts, cli.test.ts, help-groups, cli-reference.md) — resolve conflicts by keeping both.
+- 2026-09-24T08:30:08.207Z - task-done: T11: Host observer: opt-in Claude observe surface in W5 registry, matrix regenerated
+- 2026-09-24T08:30:12.418Z - task-attempt: T15: started (attempt 1) — 312-T15 opus observe review
+- 2026-09-24T08:31:25.946Z - task-done: T12: D-3 skill-lifecycle amendment + learning docs + W3 doc amendments
+- 2026-09-24 - T11 DONE (learning-observer surface, opt-in, claude). T12 DONE: install.test.ts EACCES failure reported as pre-existing sandbox issue — verify in CI.
+- 2026-09-24T08:35:22.605Z - task-done: T9: Apply + reviewer profiles: learn apply via applyLearningProposal, review learn --reviewer
+- 2026-09-24T08:35:31.698Z - task-added: T17: Fix Observe review findings O-1..O-9 and T9 concerns (learning service facade, apply dry-run)
+- 2026-09-24T08:35:31.829Z - task-attempt: T17: started (attempt 1) — 312-T17 sonnet
+- 2026-09-24T08:35:31.960Z - task-attempt: T15: failed (attempt 2) — round 1: 3 major, 4 minor, 2 info — fixes in T17
+- 2026-09-24 - T9 DONE_WITH_CONCERNS: worker used git stash (forbidden) while T10 was running. Stash list shows no new entry; T10 re-verified that its files are intact (166 pass). Concerns (facade service.ts, apply --dry-run writes a proposal, docs --reviewer) moved to T17.
+- 2026-09-24 - T15 round 1 (opus): 3 major, 4 minor, 2 info. Observe previews leaked raw paths, edit content and prompts; also cwd root, unbounded ids, security state writes, hook timeout, manual-only prune. Fix task T17 dispatched.
+- 2026-09-24T08:54:50.260Z - task-done: T17: Fix Observe review findings O-1..O-9 and T9 concerns (learning service facade, apply dry-run)
+- 2026-09-24 - T17 DONE_WITH_CONCERNS (c9ffa77e): O-1..O-7 fixed, plus the service.ts facade and apply --dry-run. O-9: only 'off' is accepted, documented. O-8 was a documentation-only info finding and remains unaddressed; left for the PR-round fix list.
+- 2026-09-24 - O-8 (info) disposition: accepted as a documented limitation. Unsalted digests are acceptable while observation data is local, gitignored, 30-day pruned and never exported. The guide now says so, and says an export must switch to a salted HMAC.
+- 2026-09-24T10:39:32.714Z - task-done: T10: Promote + graduate: promote gate, graduation proposals, scout learned origin, agent candidate apply
+- 2026-09-24 - T10 DONE_WITH_CONCERNS. The import-policy facade concern was already fixed by T17 (service.ts). The learn graduate CLI does not print GraduateReport; that goes to T14. Journal note: the O-9 dispatch asked for off/0/false/no; the T17 worker kept 'off' only and documented it. Accepted as info.
+- 2026-09-24T10:39:38.465Z - task-attempt: T13: started (attempt 1) — 312-T13
+- 2026-09-24T10:39:38.598Z - task-attempt: T14: started (attempt 1) — 312-T14
+- 2026-09-24T10:39:38.727Z - task-attempt: T15: started (attempt 3) — round 2 re-review after T17
+- 2026-09-24T10:43:56.812Z - task-attempt: T15: failed (attempt 4) — round 2: 1 major (O2-1 Write content), 4 minor, 1 info; fixes in T18
+- 2026-09-24T10:43:56.938Z - task-added: T18: Fix Observe round-2 findings O2-1..O2-6
+- 2026-09-24T10:43:57.059Z - task-attempt: T18: started (attempt 1) — 312-T18 sonnet
+- 2026-09-24 - T15 round 2 (opus): O-3/O-4/O-6/O-7 fixed; O-1/O-5 partial. New: O2-1 major (Write tool_response content stored), O2-2..O2-5 minor, O2-6 info. Fix task T18.
+- 2026-09-24T10:49:02.720Z - task-done: T14: Verify: end-to-end CLI run observe->extract->accept->apply in a temp project
+- 2026-09-24T10:49:36.166Z - task-done: T13: Verify: wave-3 exit guard test (no accepted without recorded human accept)
+- 2026-09-24T10:55:31.326Z - task-done: T18: Fix Observe round-2 findings O2-1..O2-6
+- 2026-09-24T10:55:31.476Z - task-attempt: T15: started (attempt 5) — round 3 re-check after T18
+- 2026-09-24 - T18 DONE. The stdin byte cap is now opt-in (default unbounded) so the ctx guard behaves as before; learn observe passes 1 MiB+1 explicitly (haiku fix, bounded-stdin test proves an unbounded 2 MiB read).
