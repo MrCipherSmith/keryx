@@ -55,4 +55,40 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+### Code (W5-a registry on stack/wave0)
+
+- `src/integrations/{types,registry,surfaces,settings-file,settings-json,codecs}.ts`; views `src/ctx/runtimes.ts`
+  (CTX_RUNTIMES = every surface with subsystem `ctx-guard`), `src/ctx/orient-runtimes.ts`, `src/security/agent-hooks/runtimes.ts`.
+- `keryx ctx hook <id>` resolves the runtime through `getRuntime(id)` over CTX_RUNTIMES (`src/ctx/hook.ts`), so a new
+  ctx-guard surface makes the handler serve a new harness with no handler change.
+- Legacy installers: `src/ctx/hook-install.ts`, `src/ctx/orient-runtimes.ts` (install/uninstallOrientRuntime),
+  `src/security/agent-hooks.ts` (install/uninstallRuntimeHooks); CLI in `src/commands/{ctx,orient,security}.ts`.
+- Schema validator: `src/contracts/validator.ts` (`validateAgainstSchema`, `validateAgainstSchemaObject`, 2020-12 subset).
+- `keryx integrate` (`src/commands/integrate.ts`) is the MCP client-config command — distinct from `keryx integrations`.
+
+### First-party docs (T1 research, 2026-09-24)
+
+- Gemini CLI hooks — https://geminicli.com/docs/hooks/ , https://geminicli.com/docs/hooks/reference/ ,
+  https://geminicli.com/docs/hooks/writing-hooks/ : `.gemini/settings.json` `hooks.BeforeTool[] = {matcher (regex),
+  hooks:[{type:"command",command,timeout}]}`; payload `{tool_name:"run_shell_command", tool_input:{command}}`; exit 2 =
+  block with stderr reason; stdout JSON `{decision:"deny",reason}`; `hookSpecificOutput.additionalContext` for
+  SessionStart/BeforeAgent. Not found: default-enabled flag / introduction version.
+- GEMINI.md — https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md (context.fileName may list AGENTS.md).
+- Kiro hooks — https://kiro.dev/docs/hooks/ , https://kiro.dev/docs/hooks/types/ , https://kiro.dev/docs/hooks/actions/ ,
+  https://kiro.dev/docs/cli/v3/hooks-migration/ : `.kiro/hooks/<id>.json` `{version:"v1",hooks:[{name,trigger:"PreToolUse",
+  matcher,action:{type:"command",command}}]}`; failing shell command blocks PreToolUse/PromptSubmit. Stdin field names
+  and the shell tool's name: THIRD-PARTY ONLY → risk note.
+- Kiro steering — https://kiro.dev/docs/steering/ : `.kiro/steering/*.md`, front matter `inclusion: always`; reads AGENTS.md.
+  Open issues report inclusion modes not always honoured.
+- Copilot hooks — https://docs.github.com/en/copilot/reference/hooks-reference ,
+  https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-hooks ,
+  https://docs.github.com/en/copilot/concepts/agents/hooks : `.github/hooks/<name>.json` `{version:1,hooks:{preToolUse:[
+  {type:"command",bash,powershell,cwd,timeoutSec,matcher}]}}`; payload `{toolName, toolArgs:{...}}` (object); deny =
+  stdout `{permissionDecision:"deny",permissionDecisionReason}` or exit 2; honoured by Copilot CLI and cloud coding agent.
+  Not found: whether sessionStart/userPromptSubmitted output is injected.
+- Copilot instructions — https://docs.github.com/en/copilot/how-tos/configure-custom-instructions-in-your-ide/add-repository-instructions-in-your-ide ,
+  https://github.blog/changelog/2025-08-28-copilot-coding-agent-now-supports-agents-md-custom-instructions/
+- Zed rules — https://github.com/zed-industries/zed/blob/main/docs/src/ai/rules.md (first match wins among .rules,
+  .cursorrules, .windsurfrules, .clinerules, .github/copilot-instructions.md, AGENT.md, AGENTS.md, CLAUDE.md, GEMINI.md);
+  no scriptable hook (https://github.com/zed-industries/zed/discussions/57943 open proposal); ACP external agents
+  https://zed.dev/docs/ai/external-agents .
