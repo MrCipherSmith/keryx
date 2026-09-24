@@ -7,17 +7,78 @@
   "id": "309",
   "slug": "w1-stack-detection-install-profiles-and-",
   "title": "W1: stack detection, install profiles and catalog governance gates (scout, eval, stocktake)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-24T04:09:00.843Z",
-  "updatedAt": "2026-09-24T07:04:35.873Z",
+  "updatedAt": "2026-09-24T07:21:22.704Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:29833a8937bdcf5d8b4fd4d351bc55c77b0ff7a43cf76046267d442a6f3aecaa",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-24T07:18:46.656Z",
+      "note": "src/stack/detect.test.ts + src/commands/stack.test.ts: react-only package.json -> tags.react true, uncertain false, matched contains react (PR #683, merged 8ef6514d)"
+    },
+    "AC2": {
+      "at": "2026-09-24T07:18:46.738Z",
+      "note": "detect.test.ts: unparseable package.json -> uncertain, all JS-family true, non-JS false, reason names parse failure; broken pyproject beside clean package.json -> only python family uncertain"
+    },
+    "AC3": {
+      "at": "2026-09-24T07:18:46.823Z",
+      "note": "detect.test.ts/stack.test.ts: workspace-root package.json -> JS-family uncertain, reason names workspace globs"
+    },
+    "AC4": {
+      "at": "2026-09-24T07:18:46.908Z",
+      "note": "stack.test.ts 'Wave-2 exit: deterministic and offline': two CLI runs with network disabled -> byte-identical stdout and stack.json; portability test across two checkout paths; static no-network-import test; manual run recorded in journal"
+    },
+    "AC5": {
+      "at": "2026-09-24T07:18:46.995Z",
+      "note": "src/gdskills/manifest tests: bundled manifest + example with minimal/core/stack/full profiles validate against install-manifest.schema.json (2020-12); invalid manifest refused with schema error"
+    },
+    "AC6": {
+      "at": "2026-09-24T07:18:47.078Z",
+      "note": "plan.test.ts: hook-runtime module targeting a harness not native|adapter in the W5 matrix fails the plan with a named reason (every target of every hook-runtime module checked)"
+    },
+    "AC7": {
+      "at": "2026-09-24T07:18:47.157Z",
+      "note": "plan.test.ts: dry-run plan byte-identical across runs, dependency closure, no duplicate modules, --with/--without; skills-install-route.test.ts + install.test.ts: legacy --profile recommended path unchanged"
+    },
+    "AC8": {
+      "at": "2026-09-24T07:18:47.242Z",
+      "note": "apply-doctor-uninstall.test.ts + state.test.ts: install-state validated against $defs/installState with sha256 per path; doctor ok/drifted/missing/orphaned; uninstall removes only recorded hash-matching files, refuses drifted without --force; path containment tests"
+    },
+    "AC9": {
+      "at": "2026-09-24T07:18:47.321Z",
+      "note": "scout.test.ts: use/fork above documented thresholds, create for unrelated; --record writes governance/scout.json; stack-packs.test.ts guard fails a pack skill without a scout record"
+    },
+    "AC10": {
+      "at": "2026-09-24T07:18:47.402Z",
+      "note": "eval.test.ts: trigger positives + nearest-neighbour negatives, deterministic graders first, model grader only behind capability, triggerAccuracy split, per-scenario passRate + pass@k; --strictness high with <3 trials -> contract error (CLI exit 1)"
+    },
+    "AC11": {
+      "at": "2026-09-24T07:18:47.493Z",
+      "note": "stocktake.test.ts: keep|improve|update|retire|merge verdicts with skill-specific reasons (assertReasonsSpecific over bundled), report at stocktake/<date>.json, cache hits for unchanged skills with full-input cache key"
+    },
+    "AC12": {
+      "at": "2026-09-24T07:18:47.583Z",
+      "note": "authoring-lint.test.ts, authoring-lint-guard.test.ts, stack-packs.test.ts: name/description/'Use when'/body/one-level refs/metadata.origin strict for stack content; stack rules require extends: common + paths restricted to STACK_EXTENSIONS; negative fixtures"
+    },
+    "AC13": {
+      "at": "2026-09-24T07:18:47.675Z",
+      "note": "stack-packs.test.ts export check: python-testing exported for claude keeps name <=64, description <=1024"
+    },
+    "AC14": {
+      "at": "2026-09-24T07:18:47.765Z",
+      "note": "journal: scout, eval (one skill per category, --strictness high --trials 3) and stocktake --scope bundled/all ran to completion on the bundled catalog with contract-valid reports (final: stocktake bundled 50 keep/17 improve/6 merge; --scope all exit 0)"
+    },
+    "AC15": {
+      "at": "2026-09-24T07:18:47.851Z",
+      "note": "targeted suites 832 pass at 1e3f5323, tsc + eslint clean, PR #683 CI all green (18 checks), squash-merged 8ef6514d"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/683"
   },
   "baseBranch": "feat/agent-platform-expansion",
   "tasks": [
@@ -664,6 +725,137 @@
       "at": "2026-09-24T07:04:35.873Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T07:18:32.649Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/683 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T07:18:46.656Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/stack/detect.test.ts + src/commands/stack.test.ts: react-only package.json -> tags.react true, uncertain false, matched contains react (PR #683, merged 8ef6514d)"
+    },
+    {
+      "at": "2026-09-24T07:18:46.738Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: detect.test.ts: unparseable package.json -> uncertain, all JS-family true, non-JS false, reason names parse failure; broken pyproject beside clean package.json -> only python family uncertain"
+    },
+    {
+      "at": "2026-09-24T07:18:46.823Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: detect.test.ts/stack.test.ts: workspace-root package.json -> JS-family uncertain, reason names workspace globs"
+    },
+    {
+      "at": "2026-09-24T07:18:46.908Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: stack.test.ts 'Wave-2 exit: deterministic and offline': two CLI runs with network disabled -> byte-identical stdout and stack.json; portability test across two checkout paths; static no-network-import test; manual run recorded in journal"
+    },
+    {
+      "at": "2026-09-24T07:18:46.995Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/gdskills/manifest tests: bundled manifest + example with minimal/core/stack/full profiles validate against install-manifest.schema.json (2020-12); invalid manifest refused with schema error"
+    },
+    {
+      "at": "2026-09-24T07:18:47.078Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: plan.test.ts: hook-runtime module targeting a harness not native|adapter in the W5 matrix fails the plan with a named reason (every target of every hook-runtime module checked)"
+    },
+    {
+      "at": "2026-09-24T07:18:47.157Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: plan.test.ts: dry-run plan byte-identical across runs, dependency closure, no duplicate modules, --with/--without; skills-install-route.test.ts + install.test.ts: legacy --profile recommended path unchanged"
+    },
+    {
+      "at": "2026-09-24T07:18:47.242Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: apply-doctor-uninstall.test.ts + state.test.ts: install-state validated against $defs/installState with sha256 per path; doctor ok/drifted/missing/orphaned; uninstall removes only recorded hash-matching files, refuses drifted without --force; path containment tests"
+    },
+    {
+      "at": "2026-09-24T07:18:47.321Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: scout.test.ts: use/fork above documented thresholds, create for unrelated; --record writes governance/scout.json; stack-packs.test.ts guard fails a pack skill without a scout record"
+    },
+    {
+      "at": "2026-09-24T07:18:47.402Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: eval.test.ts: trigger positives + nearest-neighbour negatives, deterministic graders first, model grader only behind capability, triggerAccuracy split, per-scenario passRate + pass@k; --strictness high with <3 trials -> contract error (CLI exit 1)"
+    },
+    {
+      "at": "2026-09-24T07:18:47.493Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: stocktake.test.ts: keep|improve|update|retire|merge verdicts with skill-specific reasons (assertReasonsSpecific over bundled), report at stocktake/<date>.json, cache hits for unchanged skills with full-input cache key"
+    },
+    {
+      "at": "2026-09-24T07:18:47.583Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: authoring-lint.test.ts, authoring-lint-guard.test.ts, stack-packs.test.ts: name/description/'Use when'/body/one-level refs/metadata.origin strict for stack content; stack rules require extends: common + paths restricted to STACK_EXTENSIONS; negative fixtures"
+    },
+    {
+      "at": "2026-09-24T07:18:47.675Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: stack-packs.test.ts export check: python-testing exported for claude keeps name <=64, description <=1024"
+    },
+    {
+      "at": "2026-09-24T07:18:47.765Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: journal: scout, eval (one skill per category, --strictness high --trials 3) and stocktake --scope bundled/all ran to completion on the bundled catalog with contract-valid reports (final: stocktake bundled 50 keep/17 improve/6 merge; --scope all exit 0)"
+    },
+    {
+      "at": "2026-09-24T07:18:47.851Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: targeted suites 832 pass at 1e3f5323, tsc + eslint clean, PR #683 CI all green (18 checks), squash-merged 8ef6514d"
+    },
+    {
+      "at": "2026-09-24T07:18:57.810Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T07:19:04.809Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 7 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-683#R3-1 (major, round 2026-09-24-ingest-683): no disposition recorded | 2026-09-24-ingest-683#R3-2 (minor, round 2026-09-24-ingest-683): no disposition recorded | 2026-09-24-ingest-683#R3-3 (minor, round 2026-09-24-ingest-683): no disposition recorded | 2026-09-24-ingest-683#R3-4 (minor, round 2026-09-24-ingest-683): no disposition recorded | 2026-09-24-ingest-683#R3-5 (minor, round 2026-09-24-ingest-683): no disposition recorded | 2026-09-24-ingest-683-r02#R4-1 (minor, round 2026-09-24-ingest-683-r02): no disposition recorded | 2026-09-24-ingest-683-r02#R4-2 (minor, round 2026-09-24-ingest-683-r02): no disposition recorded The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T07:19:53.776Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/683 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T07:19:53.900Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T07:20:00.784Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 7 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-683#R3-1 (major, round 2026-09-24-ingest-683): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-683#R3-2 (minor, round 2026-09-24-ingest-683): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-683#R3-3 (minor, round 2026-09-24-ingest-683): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-683#R3-4 (minor, round 2026-09-24-ingest-683): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-683#R3-5 (minor, round 2026-09-24-ingest-683): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-683-r02#R4-1 (minor, round 2026-09-24-ingest-683-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-683-r02#R4-2 (minor, round 2026-09-24-ingest-683-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T07:20:51.161Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/683 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T07:20:51.265Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T07:20:58.135Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 4 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-683#R3-2 (minor, round 2026-09-24-ingest-683): marked fixed at 88753c5e but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-24-ingest-683#R3-3 (minor, round 2026-09-24-ingest-683): marked fixed at 88753c5e but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-24-ingest-683#R3-4 (minor, round 2026-09-24-ingest-683): marked fixed at 88753c5e but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-24-ingest-683#R3-5 (minor, round 2026-09-24-ingest-683): marked fixed at 88753c5e but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | head-commit (violated): the latest round ran against 88753c5e7c03324c0659611e3b0e377075c57633, but the PR head is 1e3f53233feb8e3b8897c03103cf48e65bfbafd8. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T07:21:15.593Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/683 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T07:21:15.687Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T07:21:22.704Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

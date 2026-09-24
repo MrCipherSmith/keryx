@@ -1,0 +1,103 @@
+[
+  {
+    "id": "R4-1",
+    "reviewer": "opus-verification",
+    "severity": "minor",
+    "problem": "The R3-3 fix turned the EISDIR from sha256OfFile into a typed NotARegularFileError, and all three manifest callers now catch it. The other caller of the shared helper does not: shaDriftedSinceInstall, called from doctorIntegration at installer.ts:698. When a recorded install-state sha256 key names a directory, it throws out of doctorIntegration. plan.ts:519 is also unguarded, but it is only reachable through a literal manifest path that is a directory, and the bundled manifest has none.",
+    "impact": "`keryx integrations doctor --runtime all` exits 1 with the one-line error and prints no report for any runtime. This is the same abort-all class that installer.ts's own 'review round 3, M3' comment fixed for invalid settings JSON. It predates this PR (bff0a030 throws a raw EISDIR in the same place), so it is not a regression. The typed error now makes the fix trivial.",
+    "suggested_fix": "In shaDriftedSinceInstall, catch NotARegularFileError and return true, so the surface is reported as drift like any other live-vs-recorded mismatch. Optionally, have resolveGlob in glob.ts return a literal path only when it is a regular file, so plan.ts cannot reach the throw. Add an installer.test.ts case in which a sha256 key names a directory and doctor must return a report.",
+    "evidence": "scratchpad/r4/integ.ts at HEAD: 'doctor THREW NotARegularFileError \"adir\" exists but is not a regular file'. The same repro gives 'install OK' and 'uninstall OK'. On the pre-fix tree (scratchpad/r4/pre, bff0a030): 'doctor THREW Error EISDIR'. CLI: `keryx integrations doctor --runtime all` → the error message, exit=1.",
+    "confidence": "high",
+    "file": "src/integrations/installer.ts",
+    "line": 656,
+    "class_scope": {
+      "sites": [
+        "src/integrations/installer.ts:656",
+        "src/gdskills/manifest/plan.ts:519",
+        "src/integrations/install-state.ts:223 (not reachable: hashPaths is always the surface's settings file)"
+      ],
+      "enumeration_method": "`keryx ctx rg -n \"sha256OfFile\" src` gives 20 matches in 10 files. I classified every call site as guarded, n/a, or unguarded."
+    },
+    "global_id": "2026-09-24-ingest-683-r02#R4-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-checked at af13b02e and 1e3f5323: round 6: after W2 merge 1e3f5323 integrations doctor on a directory-valued recorded path no longer throws (lenient sha256OfFile); src/integrations 265+ tests executed green",
+      "verifier": "opus-narrow-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed af13b02e, superseded by W2 merge 1e3f5323; refuted by round-6 execution"
+    }
+  },
+  {
+    "id": "R4-2",
+    "reviewer": "opus-verification",
+    "severity": "minor",
+    "problem": "R3-4's new `unreadable` diagnostics appear only in `skills stocktake --json`. The human stocktake output never mentions that a skill was skipped. `loadSkillCatalog`, which eval and scout use, drops the diagnostics altogether, so `skills eval project-skills/bad --scope all` on an EACCES skill says 'unknown skill id: project-skills/bad' rather than naming the read error.",
+    "impact": "A project skill disappears silently from a human-readable stocktake, and eval misreports an existing but unreadable skill as nonexistent. Nothing crashes any more; this is a diagnostic gap only.",
+    "suggested_fix": "Print an 'Unreadable: N (path: code)' line in the human stocktake output when report.unreadable is non-empty. In eval and scout, use loadSkillCatalogWithDiagnostics, and when the requested id matches an unreadable path, give the errno instead of 'unknown skill id'.",
+    "evidence": "Fixture scratchpad/r4/stk with a chmod 000 project-skills/bad/SKILL.md. `--json` gives unreadable [{code: EACCES}]. The human output is 'Stocktake (all): 75 skill(s) … Cache: …' with no mention of 'bad'. `skills eval project-skills/bad --scope all` gives 'unknown skill id: project-skills/bad'.",
+    "confidence": "high",
+    "file": "src/commands/skills-governance.ts",
+    "line": 342,
+    "class_scope": {
+      "sites": [
+        "src/commands/skills-governance.ts:342 (stocktake human renderer)",
+        "src/gdskills/governance/catalog-index.ts:loadSkillCatalog (drops diagnostics)"
+      ],
+      "enumeration_method": "Every consumer of loadSkillCatalog and loadSkillCatalogWithDiagnostics reached from the three `--scope all` verbs"
+    },
+    "global_id": "2026-09-24-ingest-683-r02#R4-2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-checked at af13b02e and 1e3f5323: round 5: skills-governance.test.ts regressions for unreadable list in human output and eval read error executed, failing pre-fix, passing at af13b02e",
+      "verifier": "opus-narrow-verification"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed af13b02e; refuted by round-5 execution"
+    }
+  },
+  {
+    "id": "R4-3",
+    "reviewer": "opus-verification",
+    "severity": "info",
+    "problem": "Two cosmetic leftovers. (1) Now that rel === root is refused, a recorded '.claude/skills' produces the message 'path \".claude/skills\" is not under any of this target's known destination roots (.claude/skills, .claude/rules)'. It reads as self-contradictory, because the path is listed as one of those roots. (2) In the merged cli.test.ts, NEW_LINES lists the W1 stack lines before the W6 hooks lines but after integrations, which does not match the CLI's print order (the stack usage prints at line 76, before integrations). The test is order-independent (toContain plus replace), so this has no effect.",
+    "impact": "A confusing refusal message. There is no functional impact.",
+    "suggested_fix": "Special-case rel === root with a message such as 'names a destination root directory itself, not a file'. Optionally, reorder NEW_LINES to match print order.",
+    "evidence": "Output of scratchpad/r3/rootdir.ts at HEAD, and `bun src/cli.ts --help` line numbers 76/117/142/177/190/199.",
+    "confidence": "high",
+    "file": "src/gdskills/manifest/state.ts",
+    "line": 102,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/manifest/state.ts:102",
+        "src/cli.test.ts:104-116"
+      ],
+      "enumeration_method": "Read while re-running the R3-3 repro and checking the merge resolution"
+    },
+    "global_id": "2026-09-24-ingest-683-r02#R4-3"
+  },
+  {
+    "id": "R4-4",
+    "reviewer": "opus-verification",
+    "severity": "info",
+    "problem": "The test 'an unmodified retired rule in a read-only rules/core directory is kept…' fails locally. Bun's fs.cp throws EACCES from unlink inside installBundledRules (install.ts:569).",
+    "impact": "None for this PR. It fails identically on bff0a030, and neither install.ts nor install.test.ts differs from origin/main. It looks environmental (Bun 1.4.2 on macOS, fs.cp over a read-only directory). I list it only so that the one red line in a local run is not blamed on this PR.",
+    "suggested_fix": "None in this PR. If CI also shows it, track it separately.",
+    "evidence": "`bun test src/gdskills/install.test.ts` → 38 pass, 1 fail, both at HEAD and at scratchpad/r4/pre (bff0a030). `git diff --stat origin/main...HEAD -- src/gdskills/install.ts src/gdskills/install.test.ts` is empty.",
+    "confidence": "medium",
+    "file": "src/gdskills/install.test.ts",
+    "line": 894,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/install.test.ts:894",
+        "src/gdskills/install.ts:569"
+      ],
+      "enumeration_method": "The single failure in the targeted suite run, checked against the pre-fix tree and against origin/main"
+    },
+    "global_id": "2026-09-24-ingest-683-r02#R4-4"
+  }
+]
