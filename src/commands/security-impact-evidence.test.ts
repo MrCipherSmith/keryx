@@ -111,8 +111,15 @@ describe("keryx security impact-evidence", () => {
     expect(payload.config.enabled).toBe(true);
     expect(payload.envKillSwitch).toBe(false);
     expect(payload.hostDelivery.length).toBeGreaterThan(0);
-    // No `pre-tool-context` surface is registered for any adapter yet.
-    expect(payload.hostDelivery.every((entry) => entry.status === "not-registered")).toBe(true);
+    // Flow 306 (W6, T20): keryx-shell now registers a `pre-tool-context`
+    // surface (its own compiled-in hook runtime, `verified` confidence) —
+    // every OTHER adapter still has none registered.
+    const byAdapter = new Map(payload.hostDelivery.map((entry) => [entry.adapterId, entry.status]));
+    expect(byAdapter.get("keryx-shell")).toBe("verified");
+    for (const entry of payload.hostDelivery) {
+      if (entry.adapterId === "keryx-shell") continue;
+      expect(entry.status).toBe("not-registered");
+    }
   });
 
   test("`hook --runtime other` refuses without blocking (exit 0, no throw)", async () => {

@@ -74,3 +74,25 @@
 - 2026-09-24T03:03:18.913Z - task-attempt: T4: started (attempt 7) — narrow verification review of T17 (re-planned): 0 findings >= minor; 4 info
 - 2026-09-24 - Narrow verification review (opus) of T17 commit 71557d1d: NEW-1..3, I1..I3 fixed, no regressions, keryx:findings []. Info (not blocking, reported in PR): payload.cwd containment textual (/tmp alias spurious warning); dangling top-level skills symlink skipped by pathExists (comment inaccurate); 'a && exit 0 && b' flagged as suppression (pre-existing); config-untrusted record not written when path-outside-root denies first. Review loop clean at threshold minor.
 - 2026-09-24 - CI green on 71557d1d (all required checks). Review clean at threshold minor. Per the stacked addendum: no gh pr ready / merge; T4 stays open — awaiting owner merge of PR #676 (then retarget to feat/agent-platform-expansion, flow implemented/ac confirm/complete).
+- 2026-09-24T04:09:25.576Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/676 (warning: PR is not a draft)
+- 2026-09-24T04:09:37.945Z - ac-confirmed: AC1: audit-harness.test.ts: CLAUDE.md-only project reports all 7 surfaces, absent ones not-applicable (never scanned), JSON validated against harness-audit-report.schema.json; merged in #676 (412d7121), CI green
+- 2026-09-24T04:09:38.033Z - ac-confirmed: AC2: audit-harness.test.ts compares mcp-tool-poisoning (category, policyId, severity) against scanMcpManifest on the same manifest; fixture mcp-poisoning; #676
+- 2026-09-24T04:09:38.123Z - ac-confirmed: AC3: tests + fixtures mcp-unpinned and mcp-unpinned-codex-toml: unpinned npx flagged high, @1.2.3 not flagged; #676
+- 2026-09-24T04:09:38.219Z - ac-confirmed: AC4: score.ts tests (1 critical -> 75, grade C); CLI on fixture hook-injection gives score 75 grade C; #676
+- 2026-09-24T04:09:38.317Z - ac-confirmed: AC5: file+dir snapshot tests around runHarnessAudit/CLI --fix-proposals; e2e run on 15 fixtures: hashes unchanged; applyAuditProposal writes changelog.jsonl + applied marker, refuses repeat/manual; #676
+- 2026-09-24T04:09:38.415Z - ac-confirmed: AC6: security-audit-harness.test.ts CLI --ci exit 1 high / 0 medium-only via shared isPassGate (src/commands/security-gate.ts); e2e fixture run; #676
+- 2026-09-24T04:09:38.510Z - ac-confirmed: AC7: baseline tests: entry without justification fails schema; without expiresAt valid + low indefinite-suppression; fixture baseline-indefinite; #676
+- 2026-09-24T04:09:38.629Z - ac-confirmed: AC8: baseline tests + fixture baseline-tampered: tamperState mismatch, --ci exit 1 with zero findings; #676
+- 2026-09-24T04:09:38.726Z - ac-confirmed: AC9: affected-report.test.ts compares provider importers JSON with gdgraph affected --json stdout; orchestrator check on repo for 3 files incl. unindexed: byte-identical (journal T9); #676
+- 2026-09-24T04:09:38.824Z - ac-confirmed: AC10: provider.test.ts: repeat edit same session no block, dampened after N denials, different file full block; #676
+- 2026-09-24T04:09:38.916Z - ac-confirmed: AC11: evidence.test.ts: unindexed target renders 'not indexed', never 'no importers found'; #676
+- 2026-09-24T04:09:39.003Z - ac-confirmed: AC12: provider/evidence tests: batch of three first-touch files names all three; #676
+- 2026-09-24T04:09:39.092Z - ac-confirmed: AC13: provider.test.ts: rm -rf / asks rollback-line-required in every profile/mode, non-destructive never asks, KERYX_DISABLE_IMPACT_GATE bypass logged disabled-env; #676
+- 2026-09-24T04:09:39.180Z - ac-confirmed: AC14: provider.test.ts: gate-advisory default / gate strict; forced throw -> unattended-untrusted deny hook-advisory-failed, supervised allow + warning, strict deny hook-crashed; #676
+- 2026-09-24T04:09:39.276Z - ac-confirmed: AC15: provider/config tests: disabled-env and disabled-config log events distinct from injected; unsealed/mismatched config kill switch untrusted (config-untrusted); #676
+- 2026-09-24T04:09:39.384Z - ac-confirmed: AC16: fixtures.test.ts asserts exact check-id set per 15 labeled fixtures incl. clean control; e2e CLI run journal T8; proposals never self-apply (tests); #676
+- 2026-09-24T04:09:39.510Z - ac-confirmed: AC17: git diff stack/wave0 -- src/harness src/integrations empty (T10); W6 slot API documented in src/security/impact-evidence/index.ts header and PR body; #676
+- 2026-09-24T04:09:43.466Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-24T04:10:50.647Z - completing
+- 2026-09-24T04:10:57.812Z - done: all gates passed
+- 2026-09-24 - PR #676 was rebased onto feat/agent-platform-expansion by the program orchestrator and squash-merged as 412d7121 (PR head 7c2626a8). Close: flow implemented --pr #676; AC1-AC17 confirmed with evidence; T4 done; final clean verification round ingested at head 7c2626a8 (r02, 0 findings; round history summarized in its report); keryx health run pass; PR comments collected at 7c2626a8, 0 unanswered; flow complete DONE (all gates). Committed on flow/308-close, closing via PR into feat.

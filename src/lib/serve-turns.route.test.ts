@@ -177,6 +177,13 @@ function ctx(
       ...(overrides.omitContainment === true
         ? {}
         : { containmentAvailable: overrides.containmentAvailable ?? (() => true) }),
+      // Flow 306 (W6, T15): `handleServeRequest` here runs `runRemoteTurn`
+      // IN-PROCESS, inside `bun test` — a built-in command hook's
+      // `resolveKeryxArgv` fallback would resolve the test runner's own
+      // entry script, not `keryx`'s (see `RunTurnInput.hooksEnv`'s own doc
+      // comment). Production `assembleSubmitTurn` (`serve-runner.ts`) leaves
+      // this unset, since a real `keryx serve` process has no such problem.
+      hooksEnv: { KERYX_HOOKS: "off" },
     });
 
   return {

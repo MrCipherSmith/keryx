@@ -34,7 +34,13 @@ import {
   uninstallMarkdownBlock,
 } from "./markdown-block";
 import { pathExists } from "../lib/fs";
-import { SUBSYSTEM_ACP_PERMISSION, SUBSYSTEM_INSTRUCTIONS, type SurfaceAdapter, type SurfaceFlag } from "./types";
+import {
+  SUBSYSTEM_ACP_PERMISSION,
+  SUBSYSTEM_INSTRUCTIONS,
+  SUBSYSTEM_SHELL_HOOKS,
+  type SurfaceAdapter,
+  type SurfaceFlag,
+} from "./types";
 
 export const LAST_VERIFIED_W5B = "2026-09-24";
 
@@ -391,27 +397,137 @@ export const INSTRUCTIONS_ZED: SurfaceAdapter = {
 };
 
 // ---------------------------------------------------------------------------
-// keryx-shell — W6 placeholder adapter (no surfaces yet)
+// keryx-shell — W6's own lifecycle hook runtime (flow 306, W6, T20)
 // ---------------------------------------------------------------------------
+//
+// `src/harness/hooks/` is a `policy-travels-with-agent` capability, the same
+// shape as `ACP_PERMISSION_ZED` above: there is no harness-owned settings
+// file keryx installs into (`merge`/`strip`/`customInstall` are all absent
+// below, on purpose — `installer.ts` routes a surface with none of those to
+// `satisfied`/probe-only), because the built-in hooks are compiled into the
+// `keryx` binary itself and configured only through `.metaproject/hooks.json`
+// / `~/.keryx/hooks.json`, which `keryx hooks` (not `keryx integrations`)
+// owns. Each surface below is `confidence: "verified"` for the same reason
+// `ACP_PERMISSION_ZED` is: it is backed by in-repo code and a pinning test
+// suite, not a third-party doc fetch.
+//
+// Eight of the twelve W5 flags map onto a real, already-shipped runtime
+// capability (`src/harness/hooks/types.ts`'s `HookEventName`/`HookClass`):
+//
+//   - `block`: a `class: "gate"` registration on `PreToolUse` (e.g. the
+//     built-in `keryx.ctx-guard`/`keryx.security-check-output`) can deny a
+//     tool call outright.
+//   - `prompt-gate`: the same `gate` class on `UserPromptSubmit` (the
+//     built-in `keryx.security-check-input`).
+//   - `pre-tool-context`: a `class: "context"` (or `gate-advisory`, which can
+//     also carry `additionalContext` — the built-in `keryx.impact-evidence`)
+//     registration on `PreToolUse` injects `additionalContext` before a tool
+//     runs. This is the exact surface W8's `hostDeliveryStatus()`
+//     (`src/security/impact-evidence/host.ts`) checks for by flag name.
+//   - `inject-context`: the same `context` class on any OTHER event (most
+//     usefully `UserPromptSubmit`) — the general capability `ORIENT_*`'s
+//     Claude/Codex/Cursor-specific host hooks give those harnesses; here it
+//     is native, not installed.
+//   - `observe`/`post-tool`: `class: "observe"` registrations (the built-in
+//     `keryx.learning-observer`, on all seven of its events, PostToolUse
+//     included) — side-effect-only, never a decision.
+//   - `session-start`/`stop`: the runtime fires `SessionStart` and `Stop`
+//     lifecycle events like every other named event; a project/user hook (or
+//     `keryx.learning-observer`) can register on either.
+//
+// The remaining four (`skills`, `agents`, `instructions`, `mcp`) have no
+// runtime capability yet — `KERYX_SHELL_UNSUPPORTED` below still reports
+// those honestly as not-yet-shipped, same as before this task.
 
 export const KERYX_SHELL_UNSUPPORTED_REASON =
   "Registered by W6's keryx shell hook runtime; not installed by keryx integrations yet.";
 
-const ALL_12_SURFACE_FLAGS: readonly SurfaceFlag[] = [
-  "block",
-  "prompt-gate",
-  "pre-tool-context",
-  "inject-context",
-  "observe",
-  "post-tool",
-  "session-start",
-  "stop",
-  "skills",
-  "agents",
-  "instructions",
-  "mcp",
-];
+const KERYX_SHELL_UNSUPPORTED_FLAGS: readonly SurfaceFlag[] = ["skills", "agents", "instructions", "mcp"];
 
 export const KERYX_SHELL_UNSUPPORTED: Partial<Record<SurfaceFlag, string>> = Object.fromEntries(
-  ALL_12_SURFACE_FLAGS.map((flag) => [flag, KERYX_SHELL_UNSUPPORTED_REASON]),
+  KERYX_SHELL_UNSUPPORTED_FLAGS.map((flag) => [flag, KERYX_SHELL_UNSUPPORTED_REASON]),
 ) as Partial<Record<SurfaceFlag, string>>;
+
+const KERYX_SHELL_SOURCE_DOCS = [
+  "docs/docs/hooks.md",
+  "src/harness/hooks/types.ts",
+  "src/harness/hooks/builtins.ts",
+  "src/harness/hooks/runtime.ts",
+  "src/harness/hooks/runtime.test.ts",
+];
+
+/**
+ * Every `keryx-shell` surface shares this shape: no settings artifact (the
+ * `keryx` binary itself is the artifact), so `probe` reports healthy
+ * unconditionally — same reasoning as `ACP_PERMISSION_ZED` above: there is no
+ * FILE whose absence or drift could make this unhealthy, only keryx's own
+ * code, which its test suite already pins. A future task that wants a real
+ * probe (e.g. "is this hook id actually enabled in the merged config") can
+ * replace this per surface without touching the others.
+ */
+function shellHookSurface(id: SurfaceFlag, description: string): SurfaceAdapter {
+  return {
+    id,
+    flag: id,
+    subsystem: SUBSYSTEM_SHELL_HOOKS,
+    sentinel: `shell-hooks:${id}`,
+    confidence: "verified",
+    riskNotes: [
+      `${description} Installs nothing into any file — the built-in hook is compiled into the \`keryx\` binary and configured only via \`.metaproject/hooks.json\`/\`~/.keryx/hooks.json\` (owned by \`keryx hooks\`, not \`keryx integrations\`).`,
+    ],
+    sourceDocs: KERYX_SHELL_SOURCE_DOCS,
+    slots: [],
+    probe: async () => [],
+  };
+}
+
+export const SHELL_HOOKS_BLOCK: SurfaceAdapter = shellHookSurface(
+  "block",
+  "A `class: \"gate\"` registration on `PreToolUse` can deny a tool call outright.",
+);
+
+export const SHELL_HOOKS_PROMPT_GATE: SurfaceAdapter = shellHookSurface(
+  "prompt-gate",
+  "A `class: \"gate\"` registration on `UserPromptSubmit` can deny a submitted prompt.",
+);
+
+export const SHELL_HOOKS_PRE_TOOL_CONTEXT: SurfaceAdapter = shellHookSurface(
+  "pre-tool-context",
+  'A `class: "context"` (or `"gate-advisory"`) registration on `PreToolUse` injects `additionalContext` before a tool runs — the built-in `keryx.impact-evidence` uses this.',
+);
+
+export const SHELL_HOOKS_INJECT_CONTEXT: SurfaceAdapter = shellHookSurface(
+  "inject-context",
+  'A `class: "context"` registration on any other event (most usefully `UserPromptSubmit`) injects `additionalContext`.',
+);
+
+export const SHELL_HOOKS_OBSERVE: SurfaceAdapter = shellHookSurface(
+  "observe",
+  'A `class: "observe"` registration runs side-effect-only, on any event — the built-in `keryx.learning-observer` uses this.',
+);
+
+export const SHELL_HOOKS_POST_TOOL: SurfaceAdapter = shellHookSurface(
+  "post-tool",
+  'A `class: "observe"` registration on `PostToolUse` specifically.',
+);
+
+export const SHELL_HOOKS_SESSION_START: SurfaceAdapter = shellHookSurface(
+  "session-start",
+  "The runtime fires a `SessionStart` lifecycle event a project/user hook can register on.",
+);
+
+export const SHELL_HOOKS_STOP: SurfaceAdapter = shellHookSurface(
+  "stop",
+  'The runtime fires a `Stop` lifecycle event (`class: "gate"` can also deny it — a gate-capable event) a project/user hook can register on.',
+);
+
+export const KERYX_SHELL_SURFACES: readonly SurfaceAdapter[] = [
+  SHELL_HOOKS_BLOCK,
+  SHELL_HOOKS_PROMPT_GATE,
+  SHELL_HOOKS_PRE_TOOL_CONTEXT,
+  SHELL_HOOKS_INJECT_CONTEXT,
+  SHELL_HOOKS_OBSERVE,
+  SHELL_HOOKS_POST_TOOL,
+  SHELL_HOOKS_SESSION_START,
+  SHELL_HOOKS_STOP,
+];

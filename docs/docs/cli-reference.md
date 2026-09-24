@@ -2053,6 +2053,42 @@ only files a run writes are its own two artifacts, below.
 
 ---
 
+## hooks
+
+```
+keryx hooks list [--json]
+keryx hooks validate [--json] [--ci]
+keryx hooks test <id> [--event <name>] [--payload-file <path>] [--json] [--profile <id>]
+keryx hooks enable <id> [--user]
+keryx hooks disable <id> [--user]
+```
+
+The CLI over `keryx shell`'s lifecycle hook runtime (W6): ten named events
+(`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
+`PostToolUseFailure`, `PreCompact`, `Stop`, `SubagentStart`, `SubagentStop`,
+`SessionEnd`), a config-file pair merged over Keryx's five built-in
+registrations: **built-in < user (`~/.keryx/hooks.json`) < project
+(`.metaproject/hooks.json`, version-controlled, highest precedence)**.
+
+| Subcommand | Description |
+|---|---|
+| `list` | Print the merged, resolved registration set — id, event(s), matcher, class, scope, enabled, appliesToChildAgents, timeoutMs, and the command/argv or `builtin` name. A built-in registered on several events (e.g. `keryx.learning-observer`) is one row with an `events` array. With no config files present, exactly the five built-ins (`keryx.ctx-guard`, `keryx.security-check-input`, `keryx.security-check-output`, `keryx.learning-observer`, `keryx.impact-evidence`), all `enabled: true`. A config error prints diagnostics and exits non-zero. |
+| `validate` | Validate both `.metaproject/hooks.json` and `~/.keryx/hooks.json` against `hook-config.schema.json`: schema conformance, a project/user id colliding with a built-in (`hook-id-collides-with-builtin`), a duplicate id, and — best-effort, no execution — that each hook command's `argv[0]` resolves (an absolute path exists, or is found on `PATH`; `keryx` always resolves). An unresolved `argv[0]` is a warning, never a reason to fail. Exit is non-zero on any diagnostic; `--ci` is accepted for a machine-friendly pipeline invocation and changes no exit-code semantics beyond what `--json` already gives. |
+| `test <id>` | Run one registered hook once, through the real runner (`createRealHookRunner`), against a synthetic payload for its event — or the JSON in `--payload-file` — and report its decision (parsed through the same codec the runtime uses), exit code, stdout/stderr (truncated), duration, failure class, and what the failure-semantics effect would be under `--profile` (default `monitored-trusted-local`). The two in-process built-ins (`keryx.learning-observer`, `keryx.impact-evidence`) report their port's result instead of a process exit code. `--event <name>` picks which event to run under when the id is registered on more than one (e.g. the observer). Exit is `0` whenever the hook ran — even when it denied, timed out or crashed — and non-zero only when the id is unknown or the config fails to load. |
+| `enable <id>` / `disable <id>` | Flip a registration's enabled state in the project file by default, or `~/.keryx/hooks.json` with `--user`, creating it with `{schemaVersion:"1.0.0", hooks:{}}` if absent. For a built-in id: `disable` writes a disable-only override (`{id, enabled:false}`) into every event list the built-in is registered on, and `enable` removes exactly that Keryx-managed override — refusing (non-zero, no write) if the override present is not one `_keryxManaged.managedHookIds` records, since that means a person wrote it by hand. For a project/user hook defined in that file: `disable`/`enable` flips its own `enabled` field, without deleting or reordering any other entry. Every write is atomic (temp file + rename) and the resulting document is re-validated against the schema before it lands — an invalid result is refused with nothing written. Unknown id: non-zero, nothing written. |
+
+### `_keryxManaged`
+
+`hooks enable`/`disable` record what THEY added or changed in
+`_keryxManaged: {tool: "keryx", version: <cli version>, managedHookIds: [...]}`,
+so a later call — or a person reading the file — can tell a Keryx-written
+entry from a hand-authored one and never silently overwrites the latter. This
+is the same discipline as the host-config installers `keryx orient
+install-hook`/`keryx security hooks install` already use for `.claude/settings.json`
+and friends, applied to Keryx's own two files.
+
+---
+
 ## commands
 
 The agent-facing command registry: each described keryx command as a

@@ -111,6 +111,10 @@ export const SUBSYSTEM_ORIENT = "orient";
 export const SUBSYSTEM_SECURITY = "security";
 export const SUBSYSTEM_INSTRUCTIONS = "instructions";
 export const SUBSYSTEM_ACP_PERMISSION = "acp-permission";
+// Flow 306 (W6, T20): `keryx shell`'s own compiled-in lifecycle hook runtime
+// (`src/harness/hooks/`) — a `policy-travels-with-agent` capability like
+// `SUBSYSTEM_ACP_PERMISSION`, not a settings file keryx installs into.
+export const SUBSYSTEM_SHELL_HOOKS = "shell-hooks";
 
 /**
  * One installable capability of one harness. `id` is unique within its

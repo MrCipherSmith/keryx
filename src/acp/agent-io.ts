@@ -208,6 +208,38 @@ export function createAcpAgentIo(
    * when nothing matches, and marks the entry unclaimed — the `onToolCall`
    * that follows adopts it instead of minting another id.
    */
+  /**
+   * Flow 306 fix round 2 (finding D): `user_prompt` (the `UserPromptSubmit`
+   * hook-ask gate, `commands/agent.ts`) asks THROUGH this same `requestApproval`
+   * — the ONE seam every approval already goes through — but is not a real
+   * tool call: no `executeCall` ever runs it, so it never reaches
+   * `onToolCall`/`onToolResult` below. `openToolCall` above still announces it
+   * as a `tool_call` (status `in_progress`, then `pending`) so the client can
+   * see the thing it is authorising — F-3's own ordering requirement — but
+   * with nothing to adopt or close it, that pseudo call stayed `pending` in
+   * the client forever. Closed here, right after the answer, for exactly the
+   * pseudo tool_call `openToolCall` opened for THIS call: a real tool's entry
+   * is left alone (`onToolCall`/`onToolResult` still own it) by only acting
+   * when the queue still holds an entry for `toolCallId`.
+   */
+  const closePseudoToolCall = (tool: string, toolCallId: string, approved: boolean): void => {
+    if (tool !== "user_prompt") {
+      return;
+    }
+    const queue = pendingByName.get(tool);
+    const index = queue?.findIndex((entry) => entry.toolCallId === toolCallId) ?? -1;
+    if (index < 0) {
+      return;
+    }
+    queue?.splice(index, 1);
+    emit({
+      sessionUpdate: "tool_call_update",
+      toolCallId,
+      status: approved ? "completed" : "failed",
+      content: [{ type: "content", content: textBlock(approved ? "approved" : "not approved") }],
+    });
+  };
+
   const requestApproval = async (
     tool: string,
     input: string,
@@ -239,9 +271,15 @@ export function createAcpAgentIo(
     });
     if (response === undefined) {
       // The client could not be asked. A call nobody authorised does not run.
+      closePseudoToolCall(tool, toolCallId, false);
       return false;
     }
-    return approvalFromPermissionResponse(response, options, meta?.fingerprint);
+    const approved = approvalFromPermissionResponse(response, options, meta?.fingerprint);
+    // `ApprovalResponse` is `boolean | {approved, fingerprint?}` (the
+    // "allow_always" shape carries a fingerprint for the allowlist match
+    // elsewhere) — `closePseudoToolCall` only needs the plain outcome.
+    closePseudoToolCall(tool, toolCallId, typeof approved === "boolean" ? approved : approved.approved);
+    return approved;
   };
 
   return {

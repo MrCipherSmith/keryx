@@ -49,6 +49,7 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { buildShellHookRuntime } from "./agent-hooks";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { makeCommandRunner, shellExecTool, type CommandRunner } from "../harness/tool/builtin/shell-exec-tool";
@@ -787,6 +788,18 @@ async function dispatchLocked(
     try {
       const tools = buildUnattendedRoster(worktree, unattendedRunner(worktree, sandbox));
       const toolNames = tools.map((t) => t.definition.name);
+      // Flow 306 (W6 T9, AC9): every unattended entry point builds its hook
+      // runtime with `interactive: false` and the `unattended-untrusted`
+      // profile — no mode/approver can lift a hook `ask` here; it fails
+      // closed to `deny` exactly like `decide()`'s own headless posture
+      // (`tightenOutcome`, `../harness/hooks/compose.ts`).
+      const shellHooks = buildShellHookRuntime({
+        projectRoot: worktree,
+        sessionId: flow,
+        runId,
+        interactive: false,
+        profileId: "unattended-untrusted",
+      });
       const agentDeps: AgentDeps = {
         provider,
         providerId: dispatch.provider,
@@ -800,6 +813,7 @@ async function dispatchLocked(
         idSeq: () => randomUUID(),
         unattended: true,
         hardDeny: unattendedRefusal,
+        ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       };
       const io: AgentIO = {
         write: () => {},
