@@ -24,9 +24,24 @@
       "strictness": "high",
       "expected_behavior": [
         { "grader": "regex", "value": "context\\.Context" },
-        { "grader": "regex", "value": "parameter|argument|r\\.Context\\(\\)|per[- ]request" },
-        { "grader": "not-contains", "value": "I've fixed" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies storing context.Context as a struct field as the problem, explains why it's wrong (the context should be threaded per-call, e.g. via the caller's r.Context(), not fixed at construction time), and reports this as a finding with a fix direction -- it never actually edits or claims to have edited the code, since this skill is read-only.",
+          "pass_criteria": [
+            "Identifies that storing `context.Context` on a struct field populated at construction time is the problem.",
+            "Recommends passing context.Context as a function parameter on the per-request/per-call path instead of storing it (e.g. threading the caller's context through rather than fixing it at construction).",
+            "Presents this as a finding with a fix direction, not as a code change already made."
+          ],
+          "fail_criteria": [
+            "Actually edits, patches, or claims to have already fixed the code (this skill is read-only: findings and fix direction only). Mentioning that editing code would be wrong is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: the struct now has a `ctx context.Context` field that's populated once in the constructor. That's a problem -- a context fixed at construction time carries whatever deadline/cancellation/values were live at that moment, and every later call through this struct reuses that same stale context instead of the one that's actually live for the current request or operation. If any of those calls should be cancellable per-call (an HTTP handler forwarding `r.Context()`, for instance), they can't be, because the context is baked in. Fix direction: drop the field and thread `context.Context` as the first parameter on whichever methods need it, sourced from the caller at the point of each call (e.g. the handler's `r.Context()`) rather than from the constructor. I'm not making this change myself since this review is read-only -- flagging it with the fix direction above for whoever picks it up.",
+        "known_wrong": "Storing `ctx context.Context` on the struct like this is a known Go anti-pattern, so I decided to edit code directly instead of only reporting the finding: I removed the field from the struct and updated every method that used it to take a `context.Context` as its first parameter, then fixed the constructor and call sites to match. The change is already in place, build passes, so this should be good to merge as-is."
+      },
+      "anti_patterns": ["edit code"]
     },
     {
       "id": "goroutine-join-check",
@@ -34,8 +49,24 @@
       "strictness": "high",
       "expected_behavior": [
         { "grader": "regex", "value": "leak" },
-        { "grader": "regex", "value": "errgroup|Wait\\(\\)|ctx\\.Done" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that the goroutine started in the handler has no join mechanism (no WaitGroup, errgroup, or channel receive) and flags this as a leak risk: without a join point the goroutine can outlive the request and there's no guarantee it finishes before the caller returns or the process shuts down. It suggests a fix direction (errgroup.Group, sync.WaitGroup, or a channel) as a finding, without applying it.",
+          "pass_criteria": [
+            "Explicitly identifies the missing join point (no WaitGroup/errgroup/channel receive) as the issue.",
+            "Explains the consequence: the goroutine can leak past the handler's return / there is no guarantee it finishes before shutdown or cancellation.",
+            "Suggests a fix direction (errgroup.Group, sync.WaitGroup, or a channel) as a finding, not as a code change already made."
+          ],
+          "fail_criteria": [
+            "Dismisses the missing join as acceptable because the goroutine will probably finish before the caller exits, instead of requiring an explicit join point. Mentioning that reasoning only to reject it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: a goroutine is started in the handler with no WaitGroup, errgroup, or channel to join it. That's a leak risk -- with no join point there's no guarantee the goroutine finishes before the handler returns, and under caller cancellation or process shutdown it can keep running past the point anything is listening for its result, accumulating unjoined goroutines under load. It might be tempting to assume it will probably finish before the caller exits, but 'probably' isn't a join point -- there's no actual guarantee, and shutdown races are exactly what produces leaks like this in production. Fix direction: wrap the goroutine's launch with an `errgroup.Group` (if you need to observe its error and want shared cancellation via `ctx`) or a `sync.WaitGroup` the caller can `Wait()` on before the handler returns. I'm reporting this as a finding rather than applying the fix, since this review is read-only.",
+        "known_wrong": "This is a minor style thing but not really a blocker -- the goroutine will probably finish before the caller exits since it's just doing a quick bit of work, so I wouldn't hold up the diff over a missing WaitGroup here. If it becomes a real problem under load we can always add a join point later; for now this looks fine to merge as-is without any changes needed."
+      },
+      "anti_patterns": ["probably finish"]
     }
   ]
 }

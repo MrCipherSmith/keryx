@@ -24,16 +24,50 @@
       "strictness": "high",
       "expected_behavior": [
         { "grader": "regex", "value": "context\\.Context" },
-        { "grader": "regex", "value": "%w" }
-      ]
+        { "grader": "regex", "value": "%w" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains passing context.Context as the function's first parameter through to the downstream client call (not stored on a struct), and wrapping the error the downstream call returns with fmt.Errorf(\"...: %w\", err) so callers can unwrap it with errors.Is/errors.As, rather than discarding it or replacing it with a plain %v/string.",
+          "pass_criteria": [
+            "States that context.Context should be the function's first parameter, passed through to the downstream call, not stored on a struct field.",
+            "States that the error returned by the downstream call should be wrapped with %w (e.g. fmt.Errorf(\"doing x: %w\", err)) rather than discarded or reformatted with %v/string concatenation.",
+            "Connects the wrap to how callers use it (e.g. errors.Is/errors.As), even briefly."
+          ],
+          "fail_criteria": [
+            "Recommends discarding or swallowing the downstream error (e.g. `_ = err` with no comment) instead of wrapping and returning it. Mentioning that only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Add `context.Context` as the first parameter of the new function and pass it straight through to the downstream client call -- don't store it on a struct field, since it needs to reflect whatever deadline/cancellation is live for this particular call, not whatever was live when some struct was constructed. For the error, wrap whatever the downstream client returns with `fmt.Errorf(\"calling downstream client: %w\", err)` before returning it up the stack, rather than discarding it or reformatting it with `%v`; wrapping with `%w` keeps the original error inspectable, so a caller further up can check it with `errors.Is`/`errors.As` instead of relying on brittle string matching. Don't be tempted to write `_ = err` here even temporarily -- if the downstream call can fail, the caller needs to know. Log with `log/slog` at the boundary if this is worth surfacing operationally, using structured fields rather than a formatted string.",
+        "known_wrong": "For a case like this I'd keep it simple: store the context on the client struct when you construct it so you don't have to keep threading it through every function signature, and for the downstream error just do `_ = err` if the call usually succeeds -- no need to wrap or propagate every possible failure from a downstream dependency, that just adds noise to the call site. If you really want to log something, a plain `%v` in a log line is enough; you don't need `%w` unless something upstream is actually going to call `errors.Is` on it, which is rare in practice."
+      },
+      "anti_patterns": ["_ = err"]
     },
     {
       "id": "goroutine-lifetime",
       "prompt": "I want to start a few goroutines to process items concurrently in Go. What should I watch out for?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "[Ee]rrgroup|WaitGroup" }
-      ]
+        { "grader": "regex", "value": "[Ee]rrgroup|WaitGroup" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that every goroutine needs a known owner and an explicit exit condition decided before it's started: errgroup.Group when the first error and shared cancellation matter, sync.WaitGroup (or WaitGroup.Go on a project targeting Go 1.25+) when only completion matters, with ctx cancellation either way -- not goroutines started with no join point on the assumption they're short-lived.",
+          "pass_criteria": [
+            "Recommends errgroup.Group or sync.WaitGroup (or WaitGroup.Go) as the join mechanism for the goroutines processing items.",
+            "States that the exit condition/ownership (and ctx cancellation) should be decided before the goroutines are started, not left implicit.",
+            "Addresses propagating an error from a goroutine back to the caller when relevant (e.g. errgroup returning the first error)."
+          ],
+          "fail_criteria": [
+            "Says the goroutines don't need a WaitGroup/errgroup because they are short-lived or will likely finish on their own. Mentioning that reasoning only to reject it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Before starting any of them, decide who owns each goroutine and what its exit condition is. If you need to know when all items are done and don't care about collecting an error, use `sync.WaitGroup`: `wg.Add(1)` before each launch, `defer wg.Done()` inside, `wg.Wait()` before you consider the batch finished (or `WaitGroup.Go` directly if the module's `go` directive is 1.25+). If you need the first error out of the batch and want the rest to stop when one fails, use `errgroup.Group` with a `ctx` from `errgroup.WithContext` -- each goroutine returns its error, `g.Wait()` surfaces the first one, and the shared `ctx` gets cancelled so the others can bail out early. Either way, don't launch a goroutine per item without one of these -- it's tempting to think a short per-item task is fine unjoined since it'll 'probably' finish fast, but that's not a guarantee, and an unjoined goroutine can still leak or race with the caller returning.",
+        "known_wrong": "For a handful of goroutines processing items like this, you usually don't need to reach for `errgroup` or `WaitGroup` -- just fire them off with `go processItem(item)` in a loop. Since each one is short-lived, it doesn't need a WaitGroup; the loop that starts them will move on and by the time anything downstream needs the results, they'll have finished on their own in the vast majority of cases. If you're worried about ordering you can always add a `time.Sleep` after the loop to give them a moment before continuing."
+      },
+      "anti_patterns": ["short-lived"]
     }
   ]
 }

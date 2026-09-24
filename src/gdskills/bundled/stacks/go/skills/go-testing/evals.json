@@ -23,17 +23,48 @@
       "prompt": "I need to add several test cases for this Go function that validates an order. How should I structure them?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "t\\.Run" },
-        { "grader": "regex", "value": "table" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct answer structures the test cases as a table -- a slice of a struct per case with fields such as name, inputs, want, and wantErr -- and runs each case as its own subtest via t.Run(tc.name, ...), rather than one flat sequence of asserts or several copy-pasted test functions. Error cases are checked against the specific error (e.g. with errors.Is/errors.As), not just a boolean flag.",
+          "pass_criteria": [
+            "Uses a table of cases (a struct per case with fields like name/input/want/wantErr), not one big sequential function or copy-pasted per-case test functions.",
+            "Runs each case through t.Run with the case's name so failures are reported individually.",
+            "Checks error cases against the specific error (e.g. errors.Is/errors.As) rather than only a boolean wantErr flag."
+          ],
+          "fail_criteria": [
+            "Only checks a boolean wantErr flag for error cases without verifying which error occurred via errors.Is/errors.As. Mentioning that this would be insufficient is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Structure this as a table: define a local struct with fields like `name string`, `order Order`, `want Order` (or whatever the validated result is), and `wantErr error`, then build a slice of cases covering the happy path, zero-value/empty-field inputs, and each distinct validation failure. Iterate with `for _, tc := range cases { t.Run(tc.name, func(t *testing.T) { ... }) }` so each case runs and reports as its own named subtest -- a failure in one case names exactly which one failed instead of failing the whole function. Inside each subtest, call the validator and assert against `tc.want`; for the error cases, don't just check `err != nil` -- compare with `errors.Is(err, tc.wantErr)` (or `errors.As` if you need to inspect a typed error) so the test actually verifies which validation failed, not merely that something did. Put shared setup in a small helper marked `t.Helper()` if the cases need common fixtures.",
+        "known_wrong": "I'd just write a separate test function per case -- `TestValidateOrder_MissingID`, `TestValidateOrder_NegativeTotal`, `TestValidateOrder_Valid`, and so on -- each one builds its own order, calls Validate, and checks the result directly. For the error ones I'll just add `wantErr: true` and check `if wantErr && err == nil` or `if !wantErr && err != nil` -- that's simpler than pulling in errors.Is for every case and is good enough to know whether validation caught the bad input or not. No need to bother with t.Run here since each case already has its own named test function."
+      },
+      "anti_patterns": ["wantErr: true"]
     },
     {
       "id": "no-sleep-sync",
       "prompt": "My Go test starts a goroutine and I want to wait for it to finish before asserting. What's the right way?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "WaitGroup|<-\\s*\\w+|chan\\s" }
-      ]
+        { "grader": "regex", "value": "WaitGroup|<-\\s*\\w+|chan\\s" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer waits for the goroutine to finish using an actual synchronization primitive -- a sync.WaitGroup (Add/Done/Wait) or a channel send/receive -- before running assertions, never a fixed time.Sleep delay as a stand-in for a real join.",
+          "pass_criteria": [
+            "Uses sync.WaitGroup (Add/Done/Wait) or a channel send/receive as the actual join mechanism before asserting.",
+            "Explains why this is reliable/deterministic compared to a fixed delay (e.g. it doesn't depend on how fast the goroutine happens to run)."
+          ],
+          "fail_criteria": [
+            "Recommends time.Sleep (or another fixed delay) to wait for the goroutine before asserting, instead of a real join. Mentioning time.Sleep only to warn against using it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Use a `sync.WaitGroup`: call `wg.Add(1)` before you launch the goroutine, `defer wg.Done()` as the first line inside it, and `wg.Wait()` in the test right before your assertions -- that blocks until the goroutine has actually signaled completion, regardless of how fast or slow it happens to run on a given machine or under `-race`. If the goroutine is producing a value or signaling completion of one specific step rather than 'I'm done', a channel works just as well: send on it from the goroutine when it finishes, and receive (`<-done`) in the test before asserting. Either way, avoid `time.Sleep` for this -- a fixed delay is a guess about how long the goroutine will take, and it either wastes time when the goroutine finishes early or flakes under load/CI contention when it doesn't finish in time. If you also want a safety timeout, pair the channel receive with a `select` against a short deadline rather than sleeping first and then checking.",
+        "known_wrong": "The easiest way is to just add a short `time.Sleep(100 * time.Millisecond)` right after you start the goroutine, then run your assertions -- that gives it enough time to finish in almost every case without needing to wire up a WaitGroup or channel just for a test. If it's occasionally still flaky in CI, bump the sleep up to something like 500ms; that's usually enough headroom and is a lot less code than setting up synchronization for what's really a simple test."
+      },
+      "anti_patterns": ["time.Sleep"]
     }
   ]
 }
