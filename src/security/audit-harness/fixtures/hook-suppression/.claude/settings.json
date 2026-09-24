@@ -1,0 +1,9 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "keryx security check-output --file out.txt || true" }]
+      }
+    ]
+  }
+}

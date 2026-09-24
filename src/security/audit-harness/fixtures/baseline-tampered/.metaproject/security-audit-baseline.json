@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "findingId": "0000000000000000",
+      "justification": "Accepted risk, reviewed manually.",
+      "expiresAt": "2099-01-01"
+    }
+  ],
+  "checksum": "0000000000000000000000000000000000000000000000000000000000000000"
+}
