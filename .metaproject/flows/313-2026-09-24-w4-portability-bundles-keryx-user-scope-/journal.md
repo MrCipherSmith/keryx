@@ -210,3 +210,16 @@ Source: the review-313-r5.md report, with probes in scratchpad/review313-r5/.
     - Otherwise stop and report. No further loop.
 - 2026-09-24T14:02:24.789Z - task-attempt: T20: started (attempt 1) — 313-T20 closure fix 2 dispatch
 - 2026-09-24T14:11:15.470Z - task-done: T20: Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs
+- 2026-09-24T14:19:31.697Z - task-attempt: T14: failed (attempt 8) — closure 2 check r07: R5-F2 and R3-F18 resolved; new minor R7-F1 (UTF-16 BOM non-skill kinds scanned UTF-8 only); stop
+- 2026-09-24T14:20Z - The closure-2 check was recorded as review 2026-09-24-ingest-690-r07 at head 17ea1884. It was a new review id; rounds r01–r06 were not re-ingested. CI was all green at that head.
+  - Result: 0 blocker, 0 major, 1 minor (R7-F1), 4 info (R7-F2..F5).
+  - R5-F2 is resolved.
+  - R3-F18 is resolved. Its remaining trust-on-first-use limit is documented.
+  - R7-F1 (minor, pre-existing — the pre-T20 code behaves the same):
+    - Defect: a genuine UTF-16 rule or memory-entry file with a byte-order mark and an injection directive imports with 0 findings. The audit reads non-skill kinds as UTF-8 only: `src/security/audit-harness/index.ts:106-112`, used at `:459`.
+    - Suggested fix: route every imported-bundle kind through the same dual decode as skills (BOM-aware lossy decode unioned with the lossy UTF-8 view), with a test per kind: rule, agent, memory-entry, learned-pattern, hook-config.
+  - The exit rule applies, so the flow STOPS here:
+    - PR #690 stays a draft and is not merged.
+    - The flow stays in-progress.
+    - No further fix round was started.
+    - The decision passes to the owner. Options: authorize an R7-F1 fix plus a narrow check, merge with R7-F1 as an explicit exception, or move R7-F1 to the follow-up flow together with R5-F1/R5-F3.

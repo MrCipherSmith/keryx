@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T14:11:15.470Z",
+  "updatedAt": "2026-09-24T14:19:31.697Z",
   "source": {
     "type": "description",
     "ref": null
@@ -257,7 +257,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 7,
+        "count": 8,
         "log": [
           {
             "at": "2026-09-24T08:33:25.271Z",
@@ -293,6 +293,11 @@
             "at": "2026-09-24T13:57:40.896Z",
             "outcome": "failed",
             "detail": "closure verification r06: R5-F2 and R3-F18 partial (minor each); merge rule -> stop"
+          },
+          {
+            "at": "2026-09-24T14:19:31.697Z",
+            "outcome": "failed",
+            "detail": "closure 2 check r07: R5-F2 and R3-F18 resolved; new minor R7-F1 (UTF-16 BOM non-skill kinds scanned UTF-8 only); stop"
           }
         ]
       },
@@ -691,6 +696,11 @@
       "at": "2026-09-24T14:11:15.470Z",
       "event": "task-done",
       "detail": "T20: Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs"
+    },
+    {
+      "at": "2026-09-24T14:19:31.697Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 8) — closure 2 check r07: R5-F2 and R3-F18 resolved; new minor R7-F1 (UTF-16 BOM non-skill kinds scanned UTF-8 only); stop"
     }
   ]
 }
