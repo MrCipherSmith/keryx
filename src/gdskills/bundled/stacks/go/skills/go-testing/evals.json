@@ -1,0 +1,39 @@
+{
+  "triggers": {
+    "positive": [
+      "Write table-driven Go tests for this parser function",
+      "Add go test coverage for this package using t.Run subtests",
+      "Fix this failing go test in the worker package",
+      "Add a fuzz test for this Go decoder function",
+      "Write a benchmark for this function using b.Loop",
+      "Test this Go HTTP handler with httptest"
+    ],
+    "negative": [
+      "Write pytest tests for this Python function",
+      "Add Jest tests for this React component",
+      "Review this Go diff for goroutine leaks and races",
+      "Fix the go build error in this module",
+      "Implement a new Go service that calls this downstream API",
+      "Write Rust unit tests for this crate"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "table-driven-subtests",
+      "prompt": "I need to add several test cases for this Go function that validates an order. How should I structure them?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "t\\.Run" },
+        { "grader": "regex", "value": "table" }
+      ]
+    },
+    {
+      "id": "no-sleep-sync",
+      "prompt": "My Go test starts a goroutine and I want to wait for it to finish before asserting. What's the right way?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "not-contains", "value": "time.Sleep" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this Go pull request for goroutine leaks",
+      "Check this Go diff for data races and ignored errors",
+      "Does this Go code store context.Context on a struct incorrectly?",
+      "Review this Go concurrency change for nil map writes",
+      "Check for interface pollution in this Go package",
+      "Review this Go handler for defer inside a loop"
+    ],
+    "negative": [
+      "Review this Go code and also fix the bugs you find",
+      "Review this Python code for SQL injection",
+      "Review this TypeScript diff for missing null checks",
+      "Implement a bounded worker pool in this Go package using errgroup",
+      "Run a general security review on this codebase",
+      "Review this Go diff for naming conventions and formatting only"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "read-only-review",
+      "prompt": "Review this Go diff: a struct field `ctx context.Context` was added and populated in the constructor. What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "context\\.Context" },
+        { "grader": "not-contains", "value": "I've fixed" }
+      ]
+    },
+    {
+      "id": "goroutine-join-check",
+      "prompt": "Review this Go diff: a new goroutine is started inside a request handler with no WaitGroup or channel to join it. What's wrong?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "[Ll]eak|join" }
+      ]
+    }
+  ]
+}

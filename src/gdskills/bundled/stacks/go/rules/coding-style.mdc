@@ -1,0 +1,85 @@
+---
+extends: common
+paths: ["**/*.go"]
+metadata:
+  origin: authored
+---
+
+# Go coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to modern Go
+(1.23-1.25) idiom. Applies only to `*.go` files (W1-AC8) — everything not
+Go-specific still comes from the common rules this file `extends`.
+
+## Naming and structure
+
+- Package names are short, lowercase, no underscores or `mixedCaps`
+  (`user`, not `user_service` or `userService`); do not stutter the package
+  name in exported identifiers (`user.User`, not `user.UserAccount`).
+- `MixedCaps`/`mixedCaps`, never `snake_case`, for identifiers — exported
+  starts with an uppercase letter, unexported with lowercase.
+- Keep `main` thin: business logic lives in packages under `internal/` (or
+  a library's own top-level packages), `cmd/<binary>/main.go` only wires
+  flags/config and calls into them.
+- An identifier's name shrinks with its scope: a loop index is `i`, a
+  package-level exported function gets a full descriptive name.
+
+## Interfaces and structs
+
+- Accept interfaces, return structs: a function parameter should be the
+  narrowest interface the callee needs; a constructor returns the concrete
+  `*Thing`, not an interface, so callers get the full method set and the
+  compiler catches a missing method at the definition site.
+- Define an interface at the consumer (the package that calls through it),
+  not the producer (the package that implements it) — `io.Reader`-sized:
+  one or two methods. A producer-side interface with only one
+  implementation is usually unnecessary indirection.
+- Prefer a zero-value-useful struct (`var b bytes.Buffer` works with no
+  constructor) over requiring `New()` when the zero value is meaningful.
+
+## Errors
+
+- Every returned `error` is checked or explicitly and visibly discarded
+  (`_ = f.Close() // best-effort`) — never silently dropped.
+- Wrap with context using `fmt.Errorf("doing x: %w", err)`, not `%v`, so
+  the original error survives for `errors.Is`/`errors.As` up the call
+  stack. Wrap once per meaningful layer, not at every call site.
+- Compare sentinel errors with `errors.Is`, and unwrap typed errors with
+  `errors.As` — never a string comparison (`err.Error() == "..."` ) or a
+  bare `==` against a wrapped error.
+- A package-level sentinel error is `var ErrNotFound = errors.New("...")`,
+  named `Err<Reason>`; a custom error type implements `Error() string` and,
+  when it wraps another error, `Unwrap() error`.
+
+## Concurrency and context
+
+- `context.Context` is always the first parameter, named `ctx`, and is
+  never stored on a struct field — thread it through call chains instead.
+- Every goroutine a function starts has an explicit owner that knows when
+  it exits: joined with `sync.WaitGroup` (or `WaitGroup.Go` on a toolchain
+  that has it), bounded by `errgroup.Group`, or cancelled through the
+  `ctx` it was given. A goroutine with no join point and no cancellation
+  path is a leak, not fire-and-forget.
+- Check `ctx.Err()` / respect `ctx.Done()` in any loop or blocking call
+  that should stop when the caller cancels.
+
+## Generics and modern idiom
+
+- Reach for a type parameter only when it removes real duplication (a
+  container, a generic algorithm over `constraints.Ordered`-like sets) —
+  do not generify a function with one concrete call site "for the future".
+- Use `log/slog` for structured logging in new code, not `log.Printf` or a
+  bespoke logger, unless the project has already standardized on
+  something else.
+- A `range-over-func` iterator (`func(yield func(T) bool)`) is fine for a
+  package's own lazy sequence API on Go 1.23+; do not introduce it purely
+  to look modern when a plain slice-returning function reads more clearly.
+
+## Formatting and imports
+
+- Format with `gofmt`/`goimports` before finishing a change; do not
+  hand-format around a formatter that is already configured (CI enforces
+  `gofmt -l` in most Go repos).
+- Group imports stdlib / third-party / local with a blank line between
+  groups — `goimports` does this automatically; run it instead of
+  hand-ordering.
