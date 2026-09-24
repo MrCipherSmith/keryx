@@ -10,13 +10,19 @@
 // or verification logic itself (D-2). `export` is the one subcommand that
 // writes a file; `list`/`show`/`verify` are read-only.
 
-import { compileAgentDefinition } from "../agents/compile";
-import { loadAgentCatalog } from "../agents/catalog";
-import type { LoadedAgent } from "../agents/types";
-import { planAgentExport, writeAgentExport } from "../agents/export";
-import type { AgentExportPlan } from "../agents/export";
-import type { AgentExportRuntime } from "../agents/types";
-import { AGENT_EXPORT_RUNTIMES, verifyAgents, type AgentVerifyResult, type VerifyAgentsReport } from "../agents/verify";
+import {
+  compileAgentDefinition,
+  loadAgentCatalog,
+  type LoadedAgent,
+  planAgentExport,
+  writeAgentExport,
+  type AgentExportPlan,
+  type AgentExportRuntime,
+  AGENT_EXPORT_RUNTIMES,
+  verifyAgents,
+  type AgentVerifyResult,
+  type VerifyAgentsReport,
+} from "../agents/service";
 import { optionValue } from "../lib/args";
 import { helpOptions, helpTitle, helpUsage } from "../lib/ui";
 

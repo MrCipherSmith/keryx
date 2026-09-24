@@ -6,10 +6,10 @@ import {
   renderAgentBootstrapBlock,
   resolveAgentBootstrapRuntimes,
   uninstallAgentBootstrap,
+  AGENT_EXPORT_RUNTIMES,
 } from "../agents/service";
 import { agentsExternalCommand } from "./agents-external";
 import { agentsCatalogCommand } from "./agents-catalog";
-import { AGENT_EXPORT_RUNTIMES } from "../agents/verify";
 import { reduceAgents } from "../harness/monitor/reduce";
 import type { AgentEvent, AgentsSnapshot } from "../harness/monitor/reduce";
 import { optionValue } from "../lib/args";
