@@ -362,16 +362,26 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
     return;
   }
 
+  // review round 4, F1: multi-runtime (`all`/comma list) + `--surface` uses
+  // `doctorIntegration`'s lenient selector resolution — same condition
+  // install/uninstall already gate `lenientSelectors` on — so a selector
+  // that only some selected runtimes declare (e.g. `agents`) skips the
+  // runtimes that lack it instead of erroring every one of them.
+  const lenientSelectors = surfaces.length > 0 && isMultiRuntimeRequest(runtimeArg);
+
   const results: DoctorIntegrationResult[] = [];
   for (const adapter of supported) {
-    // T17: `doctorIntegration` now throws on an unknown `--surface` selector
-    // (reusing `resolveSurfaceSelection`'s validation, same as
-    // install/uninstall) — caught here the same way `runAndReportRuntimeOps`
-    // catches an install/uninstall throw, so one bad selector reports as an
-    // error for that runtime instead of crashing the whole command, and a
-    // multi-runtime `--runtime all` still doctors every other runtime.
+    // T17: `doctorIntegration` still throws on an unknown `--surface`
+    // selector for a single explicit runtime (strict `resolveSurfaceSelection`,
+    // same as install/uninstall) — caught here the same way
+    // `runAndReportRuntimeOps` catches an install/uninstall throw, so one bad
+    // selector reports as an error for that runtime instead of crashing the
+    // whole command, and a multi-runtime `--runtime all` still doctors every
+    // other runtime. With `lenientSelectors`, a runtime matching none of
+    // `surfaces` instead comes back as `noMatchingSurface: true` and never
+    // throws.
     try {
-      const result = await doctorIntegration(cwd, adapter.id, { surfaces });
+      const result = await doctorIntegration(cwd, adapter.id, { surfaces, lenientSelectors });
       results.push(result);
       if (!result.ok) process.exitCode = 1;
     } catch (error) {
@@ -381,6 +391,14 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
     }
   }
 
+  // F3 (mirrors `runAndReportRuntimeOps`): error only if a multi-runtime +
+  // `--surface` selection matched nothing on ANY selected runtime — a
+  // partial match (some skipped, some doctored) is success.
+  if (lenientSelectors && results.length > 0 && results.every((r) => r.noMatchingSurface)) {
+    console.error(`No selected runtime declares surface(s): ${surfaces.join(", ")}`);
+    process.exitCode = 1;
+  }
+
   if (json) {
     console.log(JSON.stringify({ results, unsupported }, null, 2));
     return;
@@ -388,6 +406,12 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
 
   heading("keryx integrations doctor");
   for (const result of results) {
+    // N6 (mirrors install/uninstall's no-match line): a runtime with no
+    // matching surface gets ONLY the "· <id> — no matching surface" line.
+    if (result.noMatchingSurface) {
+      printNoMatchingSurface(result.runtimeId);
+      continue;
+    }
     console.log(`  ${style.bold(result.runtimeId)} ${result.ok ? style.green("ok") : style.red("problems found")}`);
     for (const problem of result.problems) {
       console.log(`  ${style.red(symbols.cross)} ${problem}`);

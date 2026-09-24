@@ -538,15 +538,23 @@ export async function removeManagedAgentExports(projectRoot: string, runtime: Ag
 
 /**
  * R1-F8: read-only presence check for a runtime's managed agent exports —
- * whether ANY sentinel-marked file currently exists (verified or
- * hand-edited — either is "something here for uninstall to act on"),
- * without deleting anything. `installer.ts`'s `customUninstallDryRun` uses
- * this (via the `agents` surface's `inspect`) so a dry-run uninstall reports
- * "nothing-to-remove" for a directory holding only unmanaged files, instead
- * of "would-remove" merely because the directory exists.
+ * whether a real `removeManagedAgentExportsDetailed` run would delete
+ * anything, without deleting anything itself. `installer.ts`'s
+ * `customUninstallDryRun` uses this (via the `agents` surface's `inspect`) so
+ * a dry-run uninstall reports "would-remove"/"nothing-to-remove" exactly
+ * matching what the real uninstall then does.
+ *
+ * review round 4, F2: counts only `verified` files — a hand-edited managed
+ * file is never deleted by the real uninstall (see
+ * `removeManagedAgentExportsDetailed`'s `kept`), so a directory holding only
+ * hand-edited exports must report "nothing-to-remove" here too, not
+ * "would-remove" for files the real run then keeps. Hand-edited-file
+ * visibility is unaffected: it is reported separately, as a problem, by
+ * `probeAgentsExports` (`refuse-modified`) and by `uninstallAgentsExports`'s
+ * `kept`-derived warnings — neither goes through this function.
  */
 export async function hasManagedAgentExports(projectRoot: string, runtime: AgentExportRuntime): Promise<boolean> {
   if (runtime === "keryx-shell") return false;
-  const { verified, handEdited } = await scanManagedAgentExports(projectRoot, runtime);
-  return verified.length > 0 || handEdited.length > 0;
+  const { verified } = await scanManagedAgentExports(projectRoot, runtime);
+  return verified.length > 0;
 }

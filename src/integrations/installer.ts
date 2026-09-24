@@ -154,6 +154,8 @@ export interface DoctorIntegrationResult {
   /** F7: top-level problems not tied to any one surface — e.g. an unreadable install-state file. */
   readonly problems: readonly string[];
   readonly ok: boolean;
+  /** review round 4, F1: set (with empty `surfaces`/`problems`, `ok: true`) when `lenientSelectors` found no surface on this runtime matching any requested selector — mirrors `InstallIntegrationResult`/`UninstallIntegrationResult`'s `noMatchingSurface`. */
+  readonly noMatchingSurface?: boolean;
 }
 
 export interface InstallOptions {
@@ -256,6 +258,14 @@ function wasSurfaceInstalled(settings: Settings, surface: SurfaceAdapter): boole
  * `inspect` (the OpenCode plugin, which owns its whole file outright) falls
  * back to plain file existence: any content present means there is something
  * to remove.
+ *
+ * review round 4, F2: this mirroring depends on each `inspect` itself only
+ * reporting `"present"` for what the real uninstall would delete — the
+ * `agents` surface's `inspectAgentsExports` (`src/integrations/
+ * surfaces-agents.ts`) now reports `"present"` only when a VERIFIED (not
+ * hand-edited) managed export exists, matching `removeManagedAgentExports
+ * Detailed`'s `removed` set, since a hand-edited managed export is never
+ * deleted by the real run.
  */
 async function customUninstallDryRun(
   root: string,
@@ -692,6 +702,18 @@ export interface DoctorOptions {
    * behavior for every NON-opt-in surface unchanged.
    */
   readonly surfaces?: readonly string[];
+  /**
+   * review round 4, F1: resolve `surfaces` leniently (see
+   * `resolveSurfaceSelectionLenient`) for a multi-runtime `--runtime
+   * all`/comma-list selection, not a single explicit runtime — same flag,
+   * same meaning as `InstallOptions.lenientSelectors`. A selector that
+   * matches nothing on THIS runtime is dropped instead of throwing, since a
+   * runtime legitimately does not carry every surface every other selected
+   * runtime does; when NONE of `surfaces` match anything on this runtime,
+   * `doctorIntegration` returns `{ noMatchingSurface: true }` instead of
+   * throwing, mirroring `installIntegration`/`uninstallIntegration`.
+   */
+  readonly lenientSelectors?: boolean;
 }
 
 export async function doctorIntegration(root: string, runtimeId: string, opts: DoctorOptions = {}): Promise<DoctorIntegrationResult> {
@@ -708,8 +730,29 @@ export async function doctorIntegration(root: string, runtimeId: string, opts: D
   // independently-maintained check; its resolved list itself is unused here,
   // since doctor's own surface loop below iterates `adapter.surfaces`
   // directly and applies the opt-in/explicitly-selected rule its own way.
+  //
+  // review round 4, F1: that strict validation broke a multi-runtime
+  // `--runtime all`/comma-list doctor combined with `--surface` — a selector
+  // valid on SOME selected runtimes (e.g. `agents`) is unknown on every
+  // runtime that does not declare it, and `resolveSurfaceSelection` threw on
+  // the first one. `opts.lenientSelectors` (set by the CLI for exactly the
+  // multi-runtime case, same condition `installIntegration`/
+  // `uninstallIntegration` already use) switches to
+  // `resolveSurfaceSelectionLenient` instead: a selector matching nothing on
+  // THIS runtime is silently dropped, and only when NONE of `surfaces` match
+  // anything here does doctor skip this runtime via `noMatchingSurface`,
+  // rather than throw. A single explicit runtime still goes through the
+  // strict `resolveSurfaceSelection` below and throws on an unknown
+  // selector, unchanged.
   if (opts.surfaces && opts.surfaces.length > 0) {
-    resolveSurfaceSelection(adapter, opts.surfaces);
+    if (opts.lenientSelectors) {
+      const matched = resolveSurfaceSelectionLenient(adapter, opts.surfaces);
+      if (matched.length === 0) {
+        return { runtimeId, surfaces: [], problems: [], ok: true, noMatchingSurface: true };
+      }
+    } else {
+      resolveSurfaceSelection(adapter, opts.surfaces);
+    }
   }
   if (adapter.surfaces.length === 0) {
     const reasons = [...new Set(Object.values(adapter.unsupported))];
