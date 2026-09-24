@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "315",
+  "slug": "security-follow-up-contained-writes-for-",
+  "title": "Security follow-up: contained writes for init, testing service and .gitignore, plus deferred W3/W4 minors",
+  "status": "initializing",
+  "createdAt": "2026-09-24T18:05:52.943Z",
+  "updatedAt": "2026-09-24T18:05:52.943Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "feat/agent-platform-expansion",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-24T18:05:52.943Z",
+      "event": "created"
+    }
+  ]
+}
