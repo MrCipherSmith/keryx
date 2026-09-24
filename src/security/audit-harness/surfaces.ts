@@ -9,7 +9,7 @@
 import path from "node:path";
 import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import { isPathInside, pathExists, toPosix } from "../../lib/fs";
-import { SETTINGS_FILE_OWNERS, HARNESS_ADAPTERS, SUBSYSTEM_AGENTS, SUBSYSTEM_RULES_EXPORT } from "../../integrations/index";
+import { SETTINGS_FILE_OWNERS, HARNESS_ADAPTERS, SUBSYSTEM_AGENTS, SUBSYSTEM_RULES_EXPORT, SUBSYSTEM_INSTRUCTIONS } from "../../integrations/index";
 import type { SurfaceId } from "./types";
 
 /** A directory or file discovery result that distinguishes "found" from
@@ -152,13 +152,16 @@ export async function discoverMcpConfigCandidates(root: string): Promise<{
  * a project whose CLAUDE.md/AGENTS.md already exists (the ordinary case) got
  * that same file double-reported here as a "hook file", incorrectly turning
  * `hooks` coverage `status: "scanned"` for a project with no hook artifacts
- * at all.
+ * at all. Additionally, the `instructions` SUBSYSTEM
+ * (`SUBSYSTEM_INSTRUCTIONS` — `surfaces-w5b.ts`) manages every instruction
+ * file that surfaces write directly and are already scanned by
+ * `discoverInstructions`, so they are excluded here the same way.
  */
 const NON_JSON_HOOK_SURFACE_PATHS = (() => {
   const paths = new Set<string>();
   for (const adapter of HARNESS_ADAPTERS) {
     for (const surface of adapter.surfaces) {
-      if (surface.subsystem === SUBSYSTEM_AGENTS || surface.subsystem === SUBSYSTEM_RULES_EXPORT) continue;
+      if (surface.subsystem === SUBSYSTEM_AGENTS || surface.subsystem === SUBSYSTEM_RULES_EXPORT || surface.subsystem === SUBSYSTEM_INSTRUCTIONS) continue;
       if (surface.relativePath && !(surface.merge && surface.strip)) {
         paths.add(surface.relativePath);
       }
