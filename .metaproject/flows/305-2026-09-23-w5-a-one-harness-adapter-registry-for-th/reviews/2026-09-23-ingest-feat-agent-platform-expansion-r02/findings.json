@@ -10,7 +10,17 @@
     "confidence": "high",
     "file": "src/integrations/codecs.ts",
     "line": 104,
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F1"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at f7c885bc: decisionCodecFor ignoring the registry is killed by a registry test; ctx hook outputs byte-identical to 90e90931 on 14 payloads. Codec single-sourcing completed at 667fc74f (mutations M1-M2 killed).",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit f7c885bc (squashed into c61784d3, PR #675), re-checked by round 3 mutation testing"
+    }
   },
   {
     "id": "R2-F2",
@@ -23,7 +33,17 @@
     "confidence": "high",
     "file": "src/integrations/registry.test.ts",
     "line": 400,
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F2"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at f7c885bc: a migrates-legacy merge/strip creating hooks:[] from {} is killed by the never-create/retype check with its negative control.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit f7c885bc (squashed into c61784d3, PR #675), re-checked by round 3 mutation testing"
+    }
   },
   {
     "id": "R2-F3",
@@ -36,7 +56,17 @@
     "confidence": "high",
     "file": "src/integrations/registry.ts",
     "line": 187,
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F3"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at f7c885bc: disabling the cross-adapter per-file duplicate-id check is killed by the negative control.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit f7c885bc (squashed into c61784d3, PR #675), re-checked by round 3 mutation testing"
+    }
   },
   {
     "id": "R2-F4",
@@ -49,6 +79,16 @@
     "confidence": "high",
     "file": "src/integrations/settings-file.ts",
     "line": 43,
-    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F4"
+    "global_id": "2026-09-23-ingest-feat-agent-platform-expansion-r02#R2-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at f7c885bc: removing round-trip validation, unknown-id refusal or canonical ordering, or making ctx install-hook exit 0 on refusal, are each killed by owner.test.ts; wrapper-level cases completed at 667fc74f.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit f7c885bc (squashed into c61784d3, PR #675), re-checked by round 3 mutation testing"
+    }
   }
 ]

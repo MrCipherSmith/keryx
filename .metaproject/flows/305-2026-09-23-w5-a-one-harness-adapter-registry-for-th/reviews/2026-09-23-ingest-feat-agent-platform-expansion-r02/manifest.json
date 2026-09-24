@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-23-ingest-feat-agent-platform-expansion-r02",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "branch",
     "ref": "feat/agent-platform-expansion",
-    "head": "9167fa8624b46e8679395f0c76fab9e53e9b6dfd"
+    "head": "f004d1c359796316d63d6017e6be45cafcc00c16"
   },
   "artifacts": {
     "scope": ".metaproject/flows/305-2026-09-23-w5-a-one-harness-adapter-registry-for-th/reviews/2026-09-23-ingest-feat-agent-platform-expansion-r02/scope.md",
@@ -75,8 +75,8 @@
       "source": "the finding's own title"
     }
   ],
-  "createdAt": "2026-09-23T23:25:55.330Z",
-  "updatedAt": "2026-09-23T23:25:55.330Z",
+  "createdAt": "2026-09-24T03:56:19.548Z",
+  "updatedAt": "2026-09-24T03:56:30.566Z",
   "flow": {
     "id": "305",
     "path": ".metaproject/flows/305-2026-09-23-w5-a-one-harness-adapter-registry-for-th"

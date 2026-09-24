@@ -10,7 +10,17 @@
     "confidence": "high",
     "file": "src/integrations/registry.ts",
     "line": 239,
-    "global_id": "2026-09-24-ingest-feat-agent-platform-expansion#R3-F1"
+    "global_id": "2026-09-24-ingest-feat-agent-platform-expansion#R3-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 667fc74f: SurfaceAdapter has no decisionCodec; ctx runtimes take the adapter codec; literal-shape test is non-circular; mutants M1 (cursor->exit-code) and M2 (antigravity->cursor) killed.",
+      "verifier": "round-4-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 667fc74f (squashed into c61784d3, PR #675), re-checked by the narrow verification round"
+    }
   },
   {
     "id": "R3-F2",
@@ -23,6 +33,16 @@
     "confidence": "high",
     "file": "src/integrations/owner.test.ts",
     "line": 78,
-    "global_id": "2026-09-24-ingest-feat-agent-platform-expansion#R3-F2"
+    "global_id": "2026-09-24-ingest-feat-agent-platform-expansion#R3-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 667fc74f: six real wrappers driven with a refusing owner; mutants G5-G10 (each wrapper forced to succeed/swallow) all killed; circular assertion removed.",
+      "verifier": "round-4-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 667fc74f (squashed into c61784d3, PR #675), re-checked by the narrow verification round"
+    }
   }
 ]
