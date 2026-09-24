@@ -1,0 +1,102 @@
+// Canonical tool vocabulary an agent definition's `tools[]` may name, plus a
+// per-target mapping from that vocabulary onto each host harness's own tool
+// names (W2 §Design, `src/agents/tools.ts` in plan.md's module layout).
+//
+// The vocabulary is exactly the ten interactive tools keryx-shell's builtin
+// registry defines under `src/harness/tool/builtin/` — never re-derived, and
+// checked against the real `name: "..."` literals by `tools.test.ts` rather
+// than trusted by inspection:
+//   read_file, list_dir, get_cwd       (interactive-tools.ts)
+//   search_code, graph_affected, memory_search  (metaproject-tools.ts)
+//   apply_patch                        (apply-patch-tool.ts)
+//   shell_exec                         (shell-exec-tool.ts)
+//   web_fetch                          (web-fetch-tool.ts)
+//   web_search                         (web-search-tool.ts)
+//
+// A tool with no mapping entry for a target is DROPPED from that target's
+// export and reported in `droppedTools` — never silently. codex/kiro ship
+// with empty maps: T7 fills them once a first-party docs check confirms each
+// runtime's tool-permission vocabulary (plan.md "Host formats"); an empty map
+// is an honest "unverified", not a guess.
+
+export const AGENT_TOOL_VOCABULARY = [
+  "read_file",
+  "list_dir",
+  "get_cwd",
+  "search_code",
+  "graph_affected",
+  "memory_search",
+  "apply_patch",
+  "shell_exec",
+  "web_fetch",
+  "web_search",
+] as const;
+
+export type AgentToolName = (typeof AGENT_TOOL_VOCABULARY)[number];
+
+export function isAgentToolName(value: string): value is AgentToolName {
+  return (AGENT_TOOL_VOCABULARY as readonly string[]).includes(value);
+}
+
+/** Host export targets that carry a tool-permission vocabulary of their own. `keryx-shell` uses the vocabulary directly (no mapping). */
+export type HostToolTarget = "claude" | "opencode" | "codex" | "kiro";
+
+/**
+ * Per-target tool-name mapping. Claude Code's and OpenCode's vocabularies are
+ * per W2's "Per-harness exporters" table and plan.md's module layout
+ * ("claude: Read/Glob/Grep/Edit/Write/Bash/WebFetch/WebSearch; opencode:
+ * read/glob/grep/edit/write/bash/webfetch"); entries with no keryx-tool
+ * analog (`get_cwd`, `graph_affected`, `memory_search`, and — for OpenCode,
+ * whose documented vocabulary this table draws from has no web-search
+ * primitive — `web_search`) are intentionally absent so they surface as
+ * `droppedTools` rather than being force-mapped to something that does not
+ * exist on that host.
+ */
+const TOOL_TARGET_MAPS: Readonly<Record<HostToolTarget, ReadonlyMap<AgentToolName, string>>> = {
+  claude: new Map<AgentToolName, string>([
+    ["read_file", "Read"],
+    ["list_dir", "Glob"],
+    ["search_code", "Grep"],
+    ["apply_patch", "Edit"],
+    ["shell_exec", "Bash"],
+    ["web_fetch", "WebFetch"],
+    ["web_search", "WebSearch"],
+  ]),
+  opencode: new Map<AgentToolName, string>([
+    ["read_file", "read"],
+    ["list_dir", "glob"],
+    ["search_code", "grep"],
+    ["apply_patch", "edit"],
+    ["shell_exec", "bash"],
+    ["web_fetch", "webfetch"],
+  ]),
+  // Left empty until T7 confirms codex's tool-permission vocabulary against
+  // its first-party docs (plan.md "Host formats: Codex").
+  codex: new Map<AgentToolName, string>(),
+  // Left empty until T7 confirms kiro's tool-permission vocabulary against
+  // its first-party docs (plan.md "Host formats: Kiro").
+  kiro: new Map<AgentToolName, string>(),
+};
+
+export interface HostToolMapping {
+  /** Mapped host tool names, in the input `tools[]` order, de-duplicated. */
+  readonly mappedTools: readonly string[];
+  /** `tools[]` entries with no mapping for this target — unknown vocabulary entries AND unmapped known ones alike. */
+  readonly droppedTools: readonly string[];
+}
+
+/** Map `tools` onto `target`'s own tool vocabulary. Every entry lands in exactly one of `mappedTools`/`droppedTools`; nothing is silently discarded. */
+export function mapToolsForTarget(tools: readonly string[], target: HostToolTarget): HostToolMapping {
+  const map = TOOL_TARGET_MAPS[target];
+  const mapped = new Set<string>();
+  const dropped: string[] = [];
+  for (const tool of tools) {
+    const mappedName = isAgentToolName(tool) ? map.get(tool) : undefined;
+    if (mappedName !== undefined) {
+      mapped.add(mappedName);
+    } else {
+      dropped.push(tool);
+    }
+  }
+  return { mappedTools: [...mapped], droppedTools: dropped };
+}

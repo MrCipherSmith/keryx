@@ -6,7 +6,7 @@ import {
   renderAgentBootstrapBlock,
   resolveAgentBootstrapRuntimes,
   uninstallAgentBootstrap,
-} from "../agents/bootstrap";
+} from "../agents/service";
 import { agentsExternalCommand } from "./agents-external";
 import { reduceAgents } from "../harness/monitor/reduce";
 import type { AgentEvent, AgentsSnapshot } from "../harness/monitor/reduce";

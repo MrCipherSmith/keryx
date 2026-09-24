@@ -101,7 +101,6 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // an adapter: nothing outside keryx speaks to it, and it owns no project
   // state a core module could want.
   { segment: "mcp-servers", zone: "client" },
-  { segment: "agents", zone: "client" },
   // The agent bus (flow 272): presence, event log and pause leases shared by
   // interactive shells of one clone. Client because it sits beside the session
   // store it builds on (`src/session/paths.ts`) and is consumed by the TUI,
@@ -172,6 +171,18 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // (both core) are its only intended importers; `src/commands` reaches it
   // only indirectly, through those two.
   { segment: "integrations", zone: "core" },
+  // Flow 310, W2: the agent-definition catalog (`types`/`schema`/
+  // `frontmatter`/`catalog`/`baseline`/`tools`/`policy`/`compile`) —
+  // deterministic schema validation, catalog loading and dispatch-input
+  // compilation, no provider registry and no model call. RECLASSIFIED from
+  // `client` (this segment pre-existed as the home of `bootstrap.ts`, the
+  // unrelated `keryx agents bootstrap` global-routing-block installer, which
+  // only imports `src/lib` and stays valid under `core`). Deliberately never
+  // imports `src/harness/policy/profiles.ts` or
+  // `src/harness/child/quarantine.ts` (both `client`): `policy.ts` resolves
+  // profile NAMES only, and `baseline.ts` mirrors `quarantine.ts`'s posture
+  // in its own constant rather than importing it — see both files' headers.
+  { segment: "agents", zone: "core" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(
