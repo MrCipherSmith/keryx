@@ -530,18 +530,48 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // --- SubagentStart/SubagentStop helpers (flow 306 / W6, T6). No-ops
       // when `deps.hooks` is absent (D1: byte-identical). `fireSubagentStart`
       // returns the composed tightened outcome so a caller can decide whether
-      // to proceed; `fireSubagentStop` is always observe-only. ---
+      // to proceed; `fireSubagentStop` is always observe-only.
+      //
+      // Flow 306 fix (review round 1, finding 4): both call sites below treat
+      // a tightened `ask` exactly like `deny`. `SpawnSubagentToolDeps` (see
+      // its doc comment above) carries no operator-facing approval callback
+      // of its own — no `requestApproval`/`io` field a `SubagentStart` `ask`
+      // could be routed to for a live decision, on either the interactive
+      // `keryx shell` path or `runOffline`/`serve`. Without an approval path
+      // to route to, "ask" read as "allow" here would be a gate hook's `ask`
+      // failing OPEN precisely where a project operator would expect it to
+      // pause. If a real approval surface is ever wired into this tool, this
+      // is the one place to change: route the `ask` to it and fall back to
+      // deny only when no approver answers. ---
       const fireSubagentStart = async (spawnKind: "external" | "internal"): Promise<"allow" | "ask" | "deny" | undefined> => {
         if (deps.hooks === undefined) return undefined;
-        const fire = await deps.hooks.fire("SubagentStart", {
-          sessionId: parentSessionId,
-          runId: parentRunId,
-          subagentId: workerId,
-          parentSessionId,
-          spawnKind,
-          inheritedHookIds: deps.hooks.inheritedHookIds(),
-        });
-        return fire.tightened;
+        try {
+          const fire = await deps.hooks.fire("SubagentStart", {
+            sessionId: parentSessionId,
+            runId: parentRunId,
+            subagentId: workerId,
+            parentSessionId,
+            spawnKind,
+            inheritedHookIds: deps.hooks.inheritedHookIds(),
+          });
+          return fire.tightened;
+        } catch {
+          // Flow 306 fix (review round 1, finding 10): `HookRuntime.fire()`
+          // is not expected to reject (runtime.ts's own `runOneHook` now
+          // catches every hook failure into a `buildFailureOutcome` — see
+          // that fix), but this helper stays defensive: a caller here awaits
+          // `fireSubagentStart` with NO surrounding try/catch of its own (the
+          // MAE reservation is already admitted above by this point, and
+          // `ledger.release` only runs on the explicit `deny`/`ask` branch
+          // that follows). A rejection that escaped straight through this
+          // helper would skip that release entirely and leak the
+          // reservation for the rest of the run. Reading it as `deny` here
+          // keeps every call site's existing `deny`/`ask` handling (release
+          // + failed fleet upsert + `{ok:false}` result) as the one path a
+          // failure of any kind takes — fail-closed, consistent with a gate
+          // hook's crash semantics everywhere else.
+          return "deny";
+        }
       };
       const fireSubagentStop = async (outcome: string): Promise<void> => {
         if (deps.hooks === undefined) return;
@@ -705,7 +735,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // reservation is still released and a failed fleet upsert still
         // emitted, matching every other denial path in this file.
         const startOutcome = await fireSubagentStart("external");
-        if (startOutcome === "deny") {
+        if (startOutcome === "deny" || startOutcome === "ask") {
           emitFleetEvent({
             kind: "upsert",
             id: workerId,
@@ -774,7 +804,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // `runAgentTurn` is never invoked.
       const nativeStartedAt = performance.now();
       const nativeStartOutcome = await fireSubagentStart("internal");
-      if (nativeStartOutcome === "deny") {
+      if (nativeStartOutcome === "deny" || nativeStartOutcome === "ask") {
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "hook-denied", task });
         ledger.release(spawned.reservation.reservationId, {
           maxRuntimeMs: Math.round(performance.now() - nativeStartedAt),
@@ -920,6 +950,22 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             // Best-effort; the original `cause` below is what must surface.
           });
         }
+        // Flow 306 fix (review round 1, finding 10): this throw happens AFTER
+        // `fireSubagentStart("internal")` already ran (above) and the MAE
+        // reservation was already admitted (further above) — without this,
+        // both leaked on every `makeProvider` failure: no `SubagentStop` ever
+        // balanced the `SubagentStart` that already fired, and the ledger
+        // reservation was never released, so it stayed held for the rest of
+        // the run. Both are best-effort (never let a cleanup failure hide the
+        // original `cause`), matching the sibling denial/error paths around
+        // this one (e.g. the `nativeStartOutcome === "deny"` branch just
+        // above, and the `runExternal` catch further up).
+        await fireSubagentStop("Error").catch(() => {
+          // Best-effort; the original `cause` below is what must surface.
+        });
+        ledger.release(spawned.reservation.reservationId, {
+          maxRuntimeMs: Math.round(performance.now() - nativeStartedAt),
+        });
         throw cause;
       }
       // T13 (flow 306, W6): give the native child's OWN `runAgentTurn` a

@@ -111,6 +111,49 @@ describe("createRealHookRunner — real subprocess (bun -e scripts, unsandboxed)
     expect(elapsed).toBeLessThan(2000);
   }, 5000);
 
+  // Flow 306 fix round 1, finding 2: a timed-out child that has already
+  // spawned a DETACHED grandchild sharing (inheriting) its own stdout fd
+  // escapes the runner's SIGKILL — `process.kill(-child.pid, "SIGKILL")`
+  // only reaches the immediate child's process group, not the grandchild's
+  // own detached one — so the grandchild survives and keeps that fd open.
+  // Before the fix this meant `close` never fired and `spawnAndCollect`'s
+  // promise never resolved, hanging the calling hook (and, transitively, the
+  // whole gate) forever with no `hook-timeout` deny ever reached. Skipped on
+  // win32: process groups/`detached` don't carry the same fd-inheritance
+  // escape there. Both the immediate child and the grandchild self-exit
+  // after a few seconds (belt-and-braces process hygiene for the test run,
+  // not part of what's being asserted) — the assertion is that the runner
+  // resolves FAR sooner than that, from the grace-period fix alone.
+  test.skipIf(process.platform === "win32")(
+    "a timed-out child whose detached grandchild inherits its stdout still resolves within timeout+grace, timedOut true",
+    async () => {
+      const started = Date.now();
+      const script = [
+        "const { spawn } = require('child_process');",
+        "const gc = spawn(process.execPath, ['-e', 'setTimeout(() => process.exit(0), 5000); setInterval(() => {}, 1000);'], { detached: true, stdio: 'inherit' });",
+        "gc.unref();",
+        "setTimeout(() => process.exit(0), 5000);",
+        "setInterval(() => {}, 1000);",
+      ].join("\n");
+      const result = await runner.run({
+        argv: [process.execPath, "-e", script],
+        cwd: ".",
+        env: { PATH: process.env.PATH ?? "" },
+        stdin: "",
+        timeoutMs: 300,
+        network: "none",
+        runsIn: "unsandboxed",
+      });
+      const elapsed = Date.now() - started;
+      expect(result.timedOut).toBe(true);
+      // timeoutMs (300) + the runner's own grace period (500) + generous
+      // scheduling slack — well under the 5s the escaped grandchild would
+      // otherwise hold the fd open for.
+      expect(elapsed).toBeLessThan(3000);
+    },
+    8000,
+  );
+
   test("an env var not on the allowlist and not in command.env never reaches the child", async () => {
     const result = await runner.run({
       argv: [process.execPath, "-e", "process.stdout.write(process.env.SECRET_TOKEN ? 'leaked' : 'clean');"],

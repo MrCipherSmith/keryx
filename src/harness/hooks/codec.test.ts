@@ -86,6 +86,50 @@ describe("parseHookResult", () => {
     expect(result).toEqual({ kind: "ok", decision: "deny", additionalContext: "extra", reason: "nope", anomalies: [] });
   });
 
+  // Flow 306 fix round 1, finding 8: a hook can legally emit BOTH a
+  // top-level `decision` and a nested `hookSpecificOutput.permissionDecision`
+  // (e.g. a Claude-Code-shaped hook script built from a template that left a
+  // stale top-level `decision: "allow"` alongside a real
+  // `hookSpecificOutput.permissionDecision: "deny"`). Before the fix,
+  // `parsed.decision ?? hookSpecific?.permissionDecision` always preferred
+  // the top-level field whenever it was present at all — so this exact case
+  // silently resolved to `allow`, hiding the nested `deny`. The fix takes
+  // whichever of the two is MORE RESTRICTIVE, deny > ask > allow.
+  test("a top-level decision and hookSpecificOutput.permissionDecision both present: the MORE RESTRICTIVE one wins", () => {
+    const laxTopLevel = parseHookResult(
+      raw({
+        stdout: JSON.stringify({
+          decision: "allow",
+          hookSpecificOutput: { permissionDecision: "deny", permissionDecisionReason: "nested says no" },
+        }),
+      }),
+      gateCtx,
+    );
+    expect(laxTopLevel.kind === "ok" && laxTopLevel.decision).toBe("deny");
+
+    const laxNested = parseHookResult(
+      raw({
+        stdout: JSON.stringify({
+          decision: "deny",
+          hookSpecificOutput: { permissionDecision: "allow" },
+        }),
+      }),
+      gateCtx,
+    );
+    expect(laxNested.kind === "ok" && laxNested.decision).toBe("deny");
+
+    const oneAsks = parseHookResult(
+      raw({
+        stdout: JSON.stringify({
+          decision: "allow",
+          hookSpecificOutput: { permissionDecision: "ask" },
+        }),
+      }),
+      gateCtx,
+    );
+    expect(oneAsks.kind === "ok" && oneAsks.decision).toBe("ask");
+  });
+
   test("legacy decision:block maps to deny, approve maps to allow", () => {
     const blockResult = parseHookResult(raw({ stdout: JSON.stringify({ decision: "block" }) }), gateCtx);
     expect(blockResult.kind === "ok" && blockResult.decision).toBe("deny");

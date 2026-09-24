@@ -46,6 +46,30 @@ import type { HarnessRunInput } from "../types";
 const SCHEMA_VERSION = 1;
 
 /**
+ * Mirrors `commands/agent-hooks.ts`'s `HOOK_TOOL_NAME_ALIASES`/
+ * `aliasHookToolName` (flow 306, W6, fix round 1, finding 7): a hook
+ * `matcher` is authored against the Claude-Code-shaped tool name
+ * (`Bash`/`Edit`), not Keryx's own built-in tool name (`shell_exec`/
+ * `apply_patch`) — without this, a project hook matching `"Bash"` silently
+ * never fires under `runOffline`/`serve`, only under the interactive `keryx
+ * shell` path that already aliases. `run.ts` (harness layer) cannot import
+ * from `commands/` (commands sits above harness in the dependency
+ * direction), so this small, stable, matcher-only table is duplicated here
+ * rather than reaching upward — if either mapping changes, update both. The
+ * original Keryx tool name is always carried alongside as `keryxToolName` so
+ * a hook command can still recover it.
+ */
+const RUN_HOOK_TOOL_NAME_ALIASES: Readonly<Record<string, string>> = {
+  shell_exec: "Bash",
+  apply_patch: "Edit",
+};
+
+/** Map a Keryx tool name to the alias a hook `matcher` is tested against (see `RUN_HOOK_TOOL_NAME_ALIASES`). */
+function aliasRunHookToolName(keryxToolName: string): string {
+  return RUN_HOOK_TOOL_NAME_ALIASES[keryxToolName] ?? keryxToolName;
+}
+
+/**
  * The number of times a single normalized action (same tool + same input) may
  * be dispatched before the run declares a repeated ineffective loop and stops
  * with a bounded next action (@SC_R12_LOOP_DETECTION). The occurrence that
@@ -422,9 +446,23 @@ export async function runOffline(
       : baseSystemInstruction;
 
   // --- UserPromptSubmit: before the prompt ever reaches the model. A tightened
-  // `deny` (headless-fail-closed folds a tightened `ask` into `deny` too, since
-  // `runOffline` has no interactive approver of its own) never opens the
-  // provider stream: the run ends `blocked` with a typed blocker instead. ---
+  // `deny` never opens the provider stream: the run ends `blocked` with a
+  // typed blocker instead.
+  //
+  // Flow 306 fix (review finding 4): a tightened `ask` is ALSO treated as
+  // deny here, unconditionally — not only when `deps.hooks.interactive ===
+  // false` (`tightenOutcome`'s own headless-fail-closed fold, which already
+  // covers that case). `runOffline` is a fully headless entry point with no
+  // operator-facing surface at all: there is no `io.requestApproval` (or
+  // equivalent) anywhere in this module to resolve an `ask` even when the
+  // hook RUNTIME happens to have been constructed with `interactive: true`
+  // (e.g. a future caller reusing a shared runtime across an interactive
+  // shell session and an offline run). Folding only inside `tightenOutcome`
+  // left that combination as a silent `ask` that nothing here ever checked
+  // for, which read as "proceed" — a gate hook's `ask` failing OPEN. Treating
+  // `ask` as `deny` here, regardless of `tightened`'s own value, closes that
+  // gap without needing `tightenOutcome` to know about `runOffline`
+  // specifically. ---
   let userPromptDenied = false;
   let userPromptContext: string | undefined;
   if (deps.hooks !== undefined) {
@@ -437,7 +475,7 @@ export async function runOffline(
     if (userPromptFire.additionalContext.length > 0) {
       userPromptContext = userPromptFire.additionalContext.join("\n");
     }
-    if (userPromptFire.tightened === "deny") {
+    if (userPromptFire.tightened === "deny" || userPromptFire.tightened === "ask") {
       userPromptDenied = true;
       blockerIds.push("blocker:hook-denied:UserPromptSubmit");
     }
@@ -475,7 +513,10 @@ export async function runOffline(
       if (deps.hooks !== undefined) {
         const stopFire = await deps.hooks.fire("Stop", { sessionId, runId, stopReason: "model_end" });
         recordHookFire(stopFire);
-        if (stopFire.tightened === "deny") {
+        // Same `ask` ⇒ `deny` fold as `UserPromptSubmit` above (finding 4) —
+        // `runOffline` has no approver to resolve an `ask` regardless of the
+        // hook runtime's own `interactive` flag.
+        if (stopFire.tightened === "deny" || stopFire.tightened === "ask") {
           blockerIds.push("blocker:hook-denied:Stop");
         }
       }
@@ -561,18 +602,20 @@ export async function runOffline(
       }
     }
 
+    const hookToolName = aliasRunHookToolName(toolName);
     let preToolUseFire: HookFireResult | undefined;
     if (deps.hooks !== undefined) {
       preToolUseFire = await deps.hooks.fire(
         "PreToolUse",
         {
           toolCallId,
-          toolName,
+          toolName: hookToolName,
+          keryxToolName: toolName,
           toolInput: parsedInput,
           risk,
           policyProfile: deps.policyProfile.profileId,
         },
-        { toolName, decideOutcome: decision.decision },
+        { toolName: hookToolName, decideOutcome: decision.decision },
       );
       recordHookFire(preToolUseFire, { toolCallId });
     }
@@ -643,11 +686,12 @@ export async function runOffline(
           "PostToolUseFailure",
           {
             toolCallId,
-            toolName,
+            toolName: hookToolName,
+            keryxToolName: toolName,
             toolInput: parsedInput,
             error: { message: err instanceof Error ? err.message : String(err) },
           },
-          { toolName },
+          { toolName: hookToolName },
         );
         recordHookFire(failFire, { toolCallId });
       }
@@ -668,12 +712,13 @@ export async function runOffline(
           "PostToolUse",
           {
             toolCallId,
-            toolName,
+            toolName: hookToolName,
+            keryxToolName: toolName,
             toolInput: parsedInput,
             toolOutput: result,
             policyDecision: decision.decision,
           },
-          { toolName },
+          { toolName: hookToolName },
         );
         recordHookFire(postFire, { toolCallId });
       } else {
@@ -681,14 +726,15 @@ export async function runOffline(
           "PostToolUseFailure",
           {
             toolCallId,
-            toolName,
+            toolName: hookToolName,
+            keryxToolName: toolName,
             toolInput: parsedInput,
             error: {
               message: `Tool ${toolName} reported status ${result.status}.`,
               ...(result.errorCode !== undefined ? { code: result.errorCode } : {}),
             },
           },
-          { toolName },
+          { toolName: hookToolName },
         );
         recordHookFire(failFire, { toolCallId });
       }

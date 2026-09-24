@@ -297,3 +297,42 @@ test("UserPromptSubmit deny ends the run blocked without ever opening the provid
   expect(result.output.status).toBe("blocked");
   expect(result.output.unresolvedBlockerIds).toContain("blocker:hook-denied:UserPromptSubmit");
 });
+
+// Flow 306 fix round 1, finding 4: `runOffline` has no operator-facing
+// approval surface anywhere in this module, so a tightened `ask` for
+// UserPromptSubmit/Stop must ALSO block the run — not only a tightened
+// `deny` — even when the fake `HookRuntime` itself reports
+// `interactive: true` (e.g. a runtime shared with an interactive caller).
+// Before the fix, `runOffline` only checked `tightened === "deny"`, so this
+// `ask` silently proceeded: a gate hook's `ask` failing OPEN.
+test("UserPromptSubmit ask ALSO ends the run blocked, even on an interactive hook runtime", async () => {
+  const registry = buildRegistry(FAKE_READONLY_TOOL);
+  let streamCalls = 0;
+  const provider: ProviderPort = {
+    describe: () => fixtureProvider(makeTranscript("unused", []), "req-unused").describe(),
+    stream: (request, opts) => {
+      streamCalls += 1;
+      return fixtureProvider(makeTranscript("t-unused", []), "req-unused").stream(request, opts);
+    },
+  };
+  const executor = new FakeToolExecutor(registry, { schemaDir: SCHEMA_DIR });
+  const { runtime } = fakeHookRuntime({ interactive: true, outcomeByEvent: { UserPromptSubmit: "ask" } });
+  const deps = buildRunDeps({ provider, toolRegistry: registry, toolExecutor: executor, hooks: runtime, interactive: true });
+
+  const result: RunResult = await runOffline(buildInput(), buildConfig(), deps);
+  expect(streamCalls).toBe(0);
+  expect(result.output.status).toBe("blocked");
+  expect(result.output.unresolvedBlockerIds).toContain("blocker:hook-denied:UserPromptSubmit");
+});
+
+test("Stop ask ALSO records a hook-denied blocker, even on an interactive hook runtime", async () => {
+  const registry = buildRegistry(FAKE_READONLY_TOOL);
+  const transcript = makeTranscript("t-stop-ask", []);
+  const provider = fixtureProvider(transcript, "req-stop-ask");
+  const executor = new FakeToolExecutor(registry, { schemaDir: SCHEMA_DIR });
+  const { runtime } = fakeHookRuntime({ interactive: true, outcomeByEvent: { Stop: "ask" } });
+  const deps = buildRunDeps({ provider, toolRegistry: registry, toolExecutor: executor, hooks: runtime, interactive: true });
+
+  const result: RunResult = await runOffline(buildInput(), buildConfig(), deps);
+  expect(result.output.unresolvedBlockerIds).toContain("blocker:hook-denied:Stop");
+});

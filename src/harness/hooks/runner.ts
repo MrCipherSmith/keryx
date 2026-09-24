@@ -26,6 +26,18 @@ export interface HookRunRequest {
   timeoutMs: number;
   network: "none" | "restricted";
   runsIn: "sandbox" | "unsandboxed";
+  /**
+   * The EFFECTIVE isolation requirement for this fire (flow 306, W6, fix
+   * round 1, finding 1) — `true` when the active policy profile's
+   * `requiredControls.isolation === "required-fail-closed"`. Computed by the
+   * caller (`runtime.ts`, from the per-fire profile) rather than derived here
+   * from a caller-supplied `SandboxProfile`, because every production caller
+   * constructs its runner with `defaultSandboxProfile`, whose `required` is
+   * always `false` — so a `SandboxProfile.required` check alone never fires
+   * in production regardless of the active profile. Absent/`false` preserves
+   * the prior behavior (no refusal beyond `SandboxProfile.required`).
+   */
+  isolationRequired?: boolean;
 }
 
 export interface HookRunResult {
@@ -110,7 +122,21 @@ interface SpawnCollectResult {
   spawnError?: string;
 }
 
-/** Spawn one command, feed stdin, cap output, and SIGKILL (process-group where possible) on timeout. Never hangs. */
+/**
+ * Grace period after a SIGKILL before `spawnAndCollect` force-resolves even
+ * without a `close` event (flow 306, W6, fix round 1, finding 2). `close`
+ * only fires once every stdio fd the child held is itself closed — an
+ * escaped/detached grandchild (`setsid`-style) that inherited the child's
+ * stdout keeps that fd open past the kill, so waiting on `close` alone can
+ * hang the caller forever even though the timed-out child is long dead. The
+ * grace period bounds that wait; `exit` (which fires as soon as the child
+ * process itself terminates, independent of its stdio fds) lets us start
+ * counting the grace period from the earliest reliable signal rather than
+ * from the kill call itself.
+ */
+const CLOSE_GRACE_MS = 500;
+
+/** Spawn one command, feed stdin, cap output, and SIGKILL (process-group where possible) on timeout. Never hangs, even past an escaped grandchild holding stdio open. */
 function spawnAndCollect(cmdPath: string, args: string[], opts: SpawnCollectOptions): Promise<SpawnCollectResult> {
   return new Promise((resolve) => {
     let settled = false;
@@ -118,14 +144,49 @@ function spawnAndCollect(cmdPath: string, args: string[], opts: SpawnCollectOpti
     let stderr = "";
     let timedOut = false;
     let spawnError: string | undefined;
+    let exitCode: number | null = null;
+    let exited = false;
     const isPosix = process.platform !== "win32";
 
-    const child = spawn(cmdPath, args, {
-      cwd: opts.cwd,
-      env: opts.env,
-      stdio: ["pipe", "pipe", "pipe"],
-      detached: isPosix,
-    });
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(cmdPath, args, {
+        cwd: opts.cwd,
+        env: opts.env,
+        stdio: ["pipe", "pipe", "pipe"],
+        detached: isPosix,
+      });
+    } catch (err) {
+      // A synchronous throw from `spawn()` itself (e.g. a NUL byte in argv,
+      // or an ENOENT the platform raises synchronously) must never reject
+      // this promise — a rejection here propagates as an unhandled throw
+      // through `runCommandHook`/`fire()`, which upstream callers (finding
+      // 3) were treating as "hook not present" and failing OPEN instead of
+      // running gate failure semantics. Resolve with `spawnError` instead,
+      // exactly like the async `child.on("error", ...)` path below.
+      resolve({ exitCode: null, stdout: "", stderr: "", timedOut: false, spawnError: err instanceof Error ? err.message : String(err) });
+      return;
+    }
+
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = (code: number | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (graceTimer !== undefined) clearTimeout(graceTimer);
+      // Best-effort: unblock anything still holding these fds so the
+      // process itself doesn't linger on our account.
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      resolve({
+        exitCode: code,
+        stdout,
+        stderr,
+        timedOut,
+        ...(spawnError !== undefined ? { spawnError } : {}),
+      });
+    };
 
     const killChild = (): void => {
       try {
@@ -139,9 +200,16 @@ function spawnAndCollect(cmdPath: string, args: string[], opts: SpawnCollectOpti
       }
     };
 
+    const armGraceTimer = (): void => {
+      if (settled) return;
+      if (graceTimer !== undefined) clearTimeout(graceTimer);
+      graceTimer = setTimeout(() => finish(exitCode), CLOSE_GRACE_MS);
+    };
+
     const timer = setTimeout(() => {
       timedOut = true;
       killChild();
+      armGraceTimer();
     }, opts.timeoutMs);
 
     child.on("error", (err) => {
@@ -163,17 +231,20 @@ function spawnAndCollect(cmdPath: string, args: string[], opts: SpawnCollectOpti
     child.stdin?.on("error", () => undefined);
     child.stdin?.end(opts.stdin, "utf8");
 
+    // Fires as soon as the child process itself terminates, regardless of
+    // whether its inherited stdio fds are still open elsewhere (e.g. a
+    // detached grandchild). Once we know the process is gone, re-arm the
+    // grace timer from here so a timeout that raced the kill still bounds
+    // the wait even when `exit` arrives after the timer above already fired.
+    child.on("exit", (code) => {
+      exited = true;
+      exitCode = code;
+      if (timedOut) armGraceTimer();
+    });
+
     child.on("close", (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve({
-        exitCode: code,
-        stdout,
-        stderr,
-        timedOut,
-        ...(spawnError !== undefined ? { spawnError } : {}),
-      });
+      if (!exited) exitCode = code;
+      finish(code);
     });
   });
 }
@@ -226,7 +297,7 @@ export function createRealHookRunner(opts: CreateRealHookRunnerOptions): HookPro
       const baseProfile = opts.sandboxProfile ?? defaultSandboxProfile(resolvedCwd, resolvedCwd);
 
       if (req.runsIn === "unsandboxed") {
-        if (baseProfile.required) {
+        if (baseProfile.required || req.isolationRequired === true) {
           return fail("refused");
         }
       } else {

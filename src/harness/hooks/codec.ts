@@ -121,6 +121,25 @@ function mapDecisionString(raw: unknown): PolicyOutcome | undefined | "invalid" 
   return "invalid";
 }
 
+const POLICY_OUTCOME_RANK: Record<PolicyOutcome, number> = { allow: 0, ask: 1, deny: 2 };
+
+/**
+ * The stricter of two decisions (flow 306, W6, fix round 1, finding 8). A
+ * hook's stdout can carry BOTH a top-level `decision` and a nested
+ * `hookSpecificOutput.permissionDecision` — e.g. a Claude-Code-shaped hook
+ * that sets `hookSpecificOutput.permissionDecision: "deny"` but leaves a
+ * stale/default top-level `decision: "allow"` from a template. Preferring
+ * whichever field happened to be checked first (previously: `parsed.decision
+ * ?? hookSpecific?.permissionDecision`, i.e. always the top-level field when
+ * present) let the laxer of the two silently win. `undefined` never outranks
+ * an actual decision either field DID give.
+ */
+function mostRestrictiveDecision(a: PolicyOutcome | undefined, b: PolicyOutcome | undefined): PolicyOutcome | undefined {
+  if (a === undefined) return b;
+  if (b === undefined) return a;
+  return POLICY_OUTCOME_RANK[a] >= POLICY_OUTCOME_RANK[b] ? a : b;
+}
+
 /** Whether a hook's `class`+`event` combination is ever allowed to change the outcome. */
 function decisionIsHonored(ctx: ParseHookResultContext): boolean {
   return (ctx.cls === "gate" || ctx.cls === "gate-advisory") && GATE_CAPABLE_EVENTS.includes(ctx.event);
@@ -202,10 +221,19 @@ export function parseHookResult(raw: HookProcessOutcome, ctx: ParseHookResultCon
   const anomalies: HookAnomalyName[] = [];
   const hookSpecific = isPlainObject(parsed.hookSpecificOutput) ? parsed.hookSpecificOutput : undefined;
 
-  const decisionCandidate = mapDecisionString(parsed.decision ?? hookSpecific?.permissionDecision);
-  if (decisionCandidate === "invalid") {
+  const topDecision = mapDecisionString(parsed.decision);
+  if (topDecision === "invalid") {
     return { kind: "failure", failure: "malformed", reason: `Unrecognised decision "${String(parsed.decision)}".` };
   }
+  const hookSpecificDecision = mapDecisionString(hookSpecific?.permissionDecision);
+  if (hookSpecificDecision === "invalid") {
+    return {
+      kind: "failure",
+      failure: "malformed",
+      reason: `Unrecognised decision "${String(hookSpecific?.permissionDecision)}".`,
+    };
+  }
+  const decisionCandidate = mostRestrictiveDecision(topDecision, hookSpecificDecision);
 
   const updatedInputPresent = parsed.updatedInput !== undefined || hookSpecific?.updatedInput !== undefined;
   if (updatedInputPresent) {

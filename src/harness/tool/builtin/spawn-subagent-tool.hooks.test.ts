@@ -102,6 +102,39 @@ test("external: SubagentStart deny prevents runExternal and releases the reserva
   expect(fires.some((f) => f.event === "SubagentStop")).toBe(false);
 });
 
+// Flow 306 fix round 1, finding 4/9: `SpawnSubagentToolDeps` carries no
+// operator-facing approval callback, so a tightened `ask` must be treated
+// exactly like `deny` here — including on this fake runtime's
+// `interactive: true` (the exact combination that previously read as
+// "allow" and let `runExternal` run anyway).
+test("external: SubagentStart ask ALSO prevents runExternal and releases the reservation (no approval path on this tool)", async () => {
+  const { runtime, fires } = fakeHookRuntime({ outcomeByEvent: { SubagentStart: "ask" } });
+  let externalCalled = false;
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => stubProvider("native answer"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+    runExternal: async () => {
+      externalCalled = true;
+      return EXTERNAL_RESULT;
+    },
+  });
+
+  const result = await tool.invoke({
+    task: "Review auth module",
+    mode: "read_only",
+    label: "auth-check",
+    runtime: { kind: "external", agent: "codex-cli" },
+  });
+
+  expect(externalCalled).toBe(false);
+  expect(result.status).toBe("Denied");
+  expect(result.isError).toBe(true);
+  expect(fires.some((f) => f.event === "SubagentStop")).toBe(false);
+});
+
 test("external: SubagentStart allow runs runExternal as before, and SubagentStop fires with its outcome", async () => {
   const { runtime, fires } = fakeHookRuntime({});
   const tool = createSpawnSubagentTool({
@@ -155,6 +188,33 @@ test("native: SubagentStart deny prevents runAgentTurn (provider never streams) 
   expect(result.isError).toBe(true);
   const startFire = fires.find((f) => f.event === "SubagentStart");
   expect(startFire?.payload.spawnKind).toBe("internal");
+  expect(fires.some((f) => f.event === "SubagentStop")).toBe(false);
+});
+
+test("native: SubagentStart ask ALSO prevents runAgentTurn and releases the reservation (no approval path on this tool)", async () => {
+  const { runtime, fires } = fakeHookRuntime({ outcomeByEvent: { SubagentStart: "ask" } });
+  let streamed = false;
+  const provider: ProviderPort = {
+    ...stubProvider("native answer"),
+    async *stream(_req, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+      streamed = true;
+      yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "should not run" };
+      yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+    },
+  };
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => provider,
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+  });
+
+  const result = await tool.invoke({ task: "Review auth module", mode: "read_only", label: "auth-check" });
+
+  expect(streamed).toBe(false);
+  expect(result.status).toBe("Denied");
+  expect(result.isError).toBe(true);
   expect(fires.some((f) => f.event === "SubagentStop")).toBe(false);
 });
 

@@ -125,6 +125,41 @@ test("SubagentStart tightened ask under a non-interactive runtime fails closed (
   expect(result.ok).toBe(false);
 });
 
+// Flow 306 fix round 1, finding 4/9: an `ask` on an INTERACTIVE runtime with
+// no `requestApproval` given must ALSO fail closed — before the fix,
+// `denied` only checked `!hooks.interactive`, so this exact combination
+// silently proceeded as `allow` (a gate hook's `ask` failing OPEN).
+test("SubagentStart tightened ask on an interactive runtime STILL fails closed when no requestApproval is given", async () => {
+  const { runtime, fires } = fakeHookRuntime({ interactive: true, outcomeByEvent: { SubagentStart: "ask" } });
+  const result = await spawnChildWithHooks(makeSpawnInput(), makeSpawnDeps(), runtime, {
+    subagentId: "sub-3b",
+    parentSessionId: "parent-session-1",
+    parentRunId: "parent-run-1",
+  });
+  expect(result.ok).toBe(false);
+  expect(fires.some((f) => f.event === "SubagentStop")).toBe(false);
+});
+
+test("SubagentStart tightened ask is resolved by requestApproval: true proceeds, false refuses", async () => {
+  const { runtime: allowRuntime } = fakeHookRuntime({ interactive: true, outcomeByEvent: { SubagentStart: "ask" } });
+  const approved = await spawnChildWithHooks(makeSpawnInput(), makeSpawnDeps(), allowRuntime, {
+    subagentId: "sub-3c",
+    parentSessionId: "parent-session-1",
+    parentRunId: "parent-run-1",
+    requestApproval: async () => true,
+  });
+  expect(approved.ok).toBe(true);
+
+  const { runtime: denyRuntime } = fakeHookRuntime({ interactive: true, outcomeByEvent: { SubagentStart: "ask" } });
+  const refused = await spawnChildWithHooks(makeSpawnInput(), makeSpawnDeps(), denyRuntime, {
+    subagentId: "sub-3d",
+    parentSessionId: "parent-session-1",
+    parentRunId: "parent-run-1",
+    requestApproval: async () => false,
+  });
+  expect(refused.ok).toBe(false);
+});
+
 test("SubagentStart allow yields the same result as spawnChild, and SubagentStop fires with the given outcome", async () => {
   const { runtime, fires } = fakeHookRuntime({ inherited: ["keryx.ctx-guard"] });
   const result = await spawnChildWithHooks(makeSpawnInput(), makeSpawnDeps(), runtime, {

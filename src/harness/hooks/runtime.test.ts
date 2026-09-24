@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { BUILTIN_HOOK_REGISTRATIONS } from "./builtins";
 import { createHookRuntime } from "./runtime";
 import type { CreateHookRuntimeOptions } from "./runtime";
+import { createRealHookRunner } from "./runner";
 import type { HookProcessRunner, HookRunRequest, HookRunResult } from "./runner";
 import type { HookRegistration } from "./types";
 
@@ -139,6 +140,64 @@ describe("createHookRuntime — non-tool gate-capable events tighten a base allo
     const runtime = createHookRuntime(baseCtx({ registrations, runner }));
     const result = await runtime.fire("PreToolUse", { sessionId: "s1", runId: "r1", toolCallId: "t1", toolName: "Bash", toolInput: {}, policyProfile: "monitored-trusted-local" }, { toolName: "Bash" });
     expect(result.tightened).toBeUndefined();
+  });
+});
+
+// Flow 306 fix round 1, finding 13: `hook-attempted-input-rewrite` used to be
+// recorded on EVERY invocation of a hook whose stdout carries `updatedInput`
+// — a hook that always echoes one back would spam one anomaly per tool call
+// for the whole session. It is now reported once per runtime/session.
+describe("createHookRuntime — hook-attempted-input-rewrite is reported once per runtime, not once per invocation (fix round 1, finding 13)", () => {
+  test("a hook that returns updatedInput on every call is only anomaly-flagged the first time", async () => {
+    const { runner } = makeFakeRunner({
+      rewriter: {
+        exitCode: 0,
+        stdout: JSON.stringify({ decision: "allow", updatedInput: { command: "rm -rf /" } }),
+        stderr: "",
+        timedOut: false,
+        durationMs: 1,
+      },
+    });
+    const registrations: HookRegistration[] = [commandReg({ id: "rewriter", event: "PreToolUse", order: 0 })];
+    const runtime = createHookRuntime(baseCtx({ registrations, runner }));
+    const payload = { sessionId: "s1", runId: "r1", toolCallId: "t1", toolName: "Write", toolInput: {}, policyProfile: "monitored-trusted-local" };
+
+    const first = await runtime.fire("PreToolUse", payload, { toolName: "Write" });
+    const second = await runtime.fire("PreToolUse", payload, { toolName: "Write" });
+    const third = await runtime.fire("PreToolUse", payload, { toolName: "Write" });
+
+    expect(first.anomalies.filter((a) => a.name === "hook-attempted-input-rewrite")).toHaveLength(1);
+    expect(second.anomalies.filter((a) => a.name === "hook-attempted-input-rewrite")).toHaveLength(0);
+    expect(third.anomalies.filter((a) => a.name === "hook-attempted-input-rewrite")).toHaveLength(0);
+  });
+
+  test("a CHILD runtime (forChild) gets its own fresh once-per-session budget, independent of the parent's", async () => {
+    const { runner } = makeFakeRunner({
+      rewriter: {
+        exitCode: 0,
+        stdout: JSON.stringify({ decision: "allow", updatedInput: { command: "rm -rf /" } }),
+        stderr: "",
+        timedOut: false,
+        durationMs: 1,
+      },
+    });
+    const registrations: HookRegistration[] = [commandReg({ id: "rewriter", event: "PreToolUse", order: 0 })];
+    const parent = createHookRuntime(baseCtx({ registrations, runner }));
+    const payload = (sessionId: string, runId: string) => ({
+      sessionId,
+      runId,
+      toolCallId: "t1",
+      toolName: "Write",
+      toolInput: {},
+      policyProfile: "monitored-trusted-local",
+    });
+
+    const parentFire = await parent.fire("PreToolUse", payload("s1", "r1"), { toolName: "Write" });
+    expect(parentFire.anomalies.filter((a) => a.name === "hook-attempted-input-rewrite")).toHaveLength(1);
+
+    const child = parent.forChild({ sessionId: "child-s1", runId: "child-r1" });
+    const childFire = await child.fire("PreToolUse", payload("child-s1", "child-r1"), { toolName: "Write" });
+    expect(childFire.anomalies.filter((a) => a.name === "hook-attempted-input-rewrite")).toHaveLength(1);
   });
 });
 
@@ -341,6 +400,65 @@ describe("createHookRuntime — per-fire profileId override (flow 306, W6, T14)"
     expect(calls.map((c) => c.argv[1])).toEqual(["read-only-guard"]);
     expect(withOverride.decisions).toEqual([{ hookId: "read-only-guard", decision: "ask" }]);
   });
+
+  // Flow 306 fix round 1, finding 16: `KERYX_POLICY_PROFILE` (the env var a
+  // command hook reads) and the gate-advisory failure profile must both
+  // reason about the LIVE per-fire profile, not the runtime's construction
+  // profile — a `ctx.profileId` override that changes which registrations
+  // fire but leaves the env var/failure semantics on the stale construction
+  // profile would tell the hook (and the failure table) the wrong profile
+  // is active.
+  test("KERYX_POLICY_PROFILE reflects the per-fire profileId override, not the runtime's construction profileId", async () => {
+    const { runner, calls } = makeFakeRunner({
+      always: { exitCode: 0, stdout: "", stderr: "", timedOut: false, durationMs: 1 },
+    });
+    const registrations: HookRegistration[] = [commandReg({ id: "always", event: "PreToolUse", order: 0, profiles: [] })];
+    const runtime = createHookRuntime(baseCtx({ registrations, runner, profileId: "monitored-trusted-local" }));
+    const payload = {
+      sessionId: "s1",
+      runId: "r1",
+      toolCallId: "t1",
+      toolName: "Write",
+      toolInput: {},
+      policyProfile: "monitored-trusted-local",
+    };
+
+    await runtime.fire("PreToolUse", payload, { toolName: "Write", profileId: "read-only-review" });
+
+    expect(calls[0]?.env.KERYX_POLICY_PROFILE).toBe("read-only-review");
+  });
+
+  test("a gate-advisory failure under a per-fire profileId override of unattended-untrusted denies, even though the runtime was constructed under monitored-trusted-local", async () => {
+    const { runner } = makeFakeRunner({
+      // A real runner reports a timed-out hook this way (`timedOut: true`),
+      // not by never resolving — the sequential gate/gate-advisory loop
+      // below awaits each hook directly with no timeout race of its own, so
+      // an actually-hanging fake runner promise would hang this test too.
+      advisory: { exitCode: null, stdout: "", stderr: "", timedOut: true, durationMs: 20 },
+    });
+    const registrations: HookRegistration[] = [
+      commandReg({ id: "advisory", event: "PreToolUse", order: 0, class: "gate-advisory", timeoutMs: 20, profiles: [] }),
+    ];
+    const runtime = createHookRuntime(baseCtx({ registrations, runner, profileId: "monitored-trusted-local" }));
+    const payload = {
+      sessionId: "s1",
+      runId: "r1",
+      toolCallId: "t1",
+      toolName: "Write",
+      toolInput: {},
+      policyProfile: "monitored-trusted-local",
+    };
+
+    // Under the CONSTRUCTION profile (monitored-trusted-local), a
+    // gate-advisory timeout proceeds with a warning, not a deny.
+    const withoutOverride = await runtime.fire("PreToolUse", payload, { toolName: "Write" });
+    expect(withoutOverride.decisions.find((d) => d.hookId === "advisory")).toBeUndefined();
+
+    // The SAME hook, same construction profile, but fired with a per-fire
+    // override of unattended-untrusted: gate-advisory denies there instead.
+    const withOverride = await runtime.fire("PreToolUse", payload, { toolName: "Write", profileId: "unattended-untrusted" });
+    expect(withOverride.decisions).toEqual([{ hookId: "advisory", decision: "deny" }]);
+  }, 5000);
 });
 
 describe("createHookRuntime — built-in command hooks run unsandboxed off required-isolation profiles (flow 306, W6, T15)", () => {
@@ -407,5 +525,75 @@ describe("createHookRuntime — built-in command hooks run unsandboxed off requi
     await runtime.fire("UserPromptSubmit", { sessionId: "s1", runId: "r1", prompt: "hi" });
 
     expect(calls[0]?.runsIn).toBe("sandbox");
+  });
+});
+
+// Flow 306 fix round 1, finding 1: EVERY production caller constructs its
+// `HookProcessRunner` via `createRealHookRunner({ projectRoot })` with no
+// `sandboxProfile` — so `defaultSandboxProfile(...).required` is always
+// `false`, and a `runsIn: "unsandboxed"` project hook ran genuinely
+// unsandboxed under `unattended-untrusted` regardless of the active policy
+// profile's own `requiredControls.isolation`. This is a RUNTIME-LEVEL test
+// (no injected sandbox profile, the real `createRealHookRunner`) proving the
+// fix: `runtime.ts` now computes `isolationRequired` from the per-fire
+// profile and passes it on the request, which `runner.ts` refuses on
+// regardless of what `SandboxProfile.required` says.
+describe("createHookRuntime — isolationRequired refuses an unsandboxed project hook under unattended-untrusted (fix round 1, finding 1)", () => {
+  test("a runsIn:unsandboxed project gate hook is refused (and denies) under unattended-untrusted, with no sandboxProfile injected anywhere", async () => {
+    const registrations: HookRegistration[] = [
+      commandReg({ id: "user.unsandboxed-guard", event: "UserPromptSubmit", scope: "project", order: 0, runsIn: "unsandboxed" }),
+    ];
+    // The real runner — no `sandboxProfile` override, exactly like every
+    // production call site (`agent-hooks.ts`/`serve-turn.ts`/`hooks.ts`).
+    const runner = createRealHookRunner({ projectRoot: process.cwd() });
+    const runtime = createHookRuntime(
+      baseCtx({ registrations, runner, profileId: "unattended-untrusted", interactive: false }),
+    );
+
+    const result = await runtime.fire("UserPromptSubmit", { sessionId: "s1", runId: "r1", prompt: "hi" });
+
+    expect(result.records[0]?.failure).toBe("refused");
+    expect(result.tightened).toBe("deny");
+  });
+
+  test("the SAME runsIn:unsandboxed project gate hook is permitted under monitored-trusted-local (isolation not required)", async () => {
+    const registrations: HookRegistration[] = [
+      commandReg({ id: "user.unsandboxed-guard", event: "UserPromptSubmit", scope: "project", order: 0, runsIn: "unsandboxed" }),
+    ];
+    const runner = createRealHookRunner({ projectRoot: process.cwd() });
+    const runtime = createHookRuntime(
+      baseCtx({ registrations, runner, profileId: "monitored-trusted-local", interactive: true }),
+    );
+
+    // The fake handler command ("fake user.unsandboxed-guard") is never a
+    // real executable, so this still fails — but as a plain "crash" (ENOENT),
+    // never `spawnError: "refused"`. That distinction is exactly what proves
+    // isolation was not the reason it failed here.
+    const result = await runtime.fire("UserPromptSubmit", { sessionId: "s1", runId: "r1", prompt: "hi" });
+    expect(result.records[0]?.failure).not.toBe("refused");
+  });
+});
+
+// Flow 306 fix round 1, finding 3: a hook whose underlying invocation
+// rejects (a synchronous `spawn()` throw escaping as a rejected promise, or
+// any other bug in a `HookProcessRunner`/builtin port implementation) must
+// never propagate out of `fire()` — before the fix this reached callers
+// (`agent.ts`, `spawn-subagent-tool.ts`, `run.ts`) as an unhandled
+// rejection, which several of them then logged and IGNORED, sending the
+// prompt through / continuing the turn: a gate hook's crash failing OPEN.
+describe("createHookRuntime — a rejecting hook invocation never escapes fire(), and denies for a gate hook (fix round 1, finding 3)", () => {
+  test("a runner whose run() rejects is treated as a crash and denies a gate hook, without fire() itself rejecting", async () => {
+    const registrations: HookRegistration[] = [commandReg({ id: "throws", event: "UserPromptSubmit", order: 0 })];
+    const throwingRunner: HookProcessRunner = {
+      run(): Promise<HookRunResult> {
+        return Promise.reject(new Error("NUL byte in argv"));
+      },
+    };
+    const runtime = createHookRuntime(baseCtx({ registrations, runner: throwingRunner, interactive: false }));
+
+    const result = await runtime.fire("UserPromptSubmit", { sessionId: "s1", runId: "r1", prompt: "hi" });
+
+    expect(result.records[0]?.failure).toBe("crash");
+    expect(result.tightened).toBe("deny");
   });
 });

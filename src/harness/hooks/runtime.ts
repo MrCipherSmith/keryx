@@ -160,8 +160,24 @@ interface HookRunOutcome {
   anomalies: HookAnomaly[];
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * A cancellable delay (flow 306, W6, fix round 1, finding 15). A bare
+ * `setTimeout` left running past the `Promise.race` that lost to it keeps
+ * the event loop alive for up to `timeoutMs` (max 60s, `MAX_TIMEOUT_MS`)
+ * after `fire()` has already resolved — e.g. every `runOffline` call that
+ * completed well within its hooks' timeouts still had to wait out those
+ * timeouts before the process could exit. `clear()` lets the race's winner
+ * cancel the loser's still-pending timer; `unref()` (absent on some fakes,
+ * hence the optional call) additionally keeps a timer that nobody clears
+ * from blocking process exit on its own.
+ */
+function delay(ms: number): { promise: Promise<void>; clear: () => void } {
+  let timer!: ReturnType<typeof setTimeout>;
+  const promise = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+    timer.unref?.();
+  });
+  return { promise, clear: () => clearTimeout(timer) };
 }
 
 type TimeoutRaceResult<T> =
@@ -178,10 +194,15 @@ async function runWithTimeout<T>(fn: () => Promise<T> | T, timeoutMs: number): P
       return { ok: false, failure: "crash", reason: err instanceof Error ? err.message : String(err) };
     }
   })();
-  const timeout = delay(timeoutMs).then(
+  const timeoutDelay = delay(timeoutMs);
+  const timeout = timeoutDelay.promise.then(
     (): TimeoutRaceResult<T> => ({ ok: false, failure: "timeout", reason: "Builtin hook exceeded its timeout." }),
   );
-  return Promise.race([work, timeout]);
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    timeoutDelay.clear();
+  }
 }
 
 /** Best-effort file-path extraction from a `PreToolUse` payload's `toolInput` (Write/Edit tool shapes vary). */
@@ -208,6 +229,27 @@ class HookRuntimeImpl implements HookRuntime {
   private readonly ports: HookRuntimePorts;
   private readonly argvResolver: (argv: readonly string[]) => string[];
   private readonly editedFiles = new Set<string>();
+  /**
+   * Anomaly names already reported once for this runtime/session (flow 306,
+   * W6, fix round 1, finding 13). `hook-attempted-input-rewrite` fires from
+   * `codec.ts` on EVERY invocation of a hook whose output carries
+   * `updatedInput` — a hook that always echoes it back (or a buggy one)
+   * would otherwise spam one anomaly per tool call for the life of the
+   * session. Reported once per runtime, not once per hook id, since the
+   * point is "this session saw at least one hook attempt a rewrite", not a
+   * per-hook tally.
+   */
+  private readonly reportedOnceAnomalies = new Set<HookAnomalyName>();
+
+  /** Drop a repeat of a once-per-session anomaly name; first occurrence passes through unchanged. */
+  private dedupeOncePerSession(anomalies: HookAnomaly[]): HookAnomaly[] {
+    return anomalies.filter((a) => {
+      if (a.name !== "hook-attempted-input-rewrite") return true;
+      if (this.reportedOnceAnomalies.has(a.name)) return false;
+      this.reportedOnceAnomalies.add(a.name);
+      return true;
+    });
+  }
 
   constructor(opts: CreateHookRuntimeOptions) {
     this.regs = opts.registrations;
@@ -292,12 +334,21 @@ class HookRuntimeImpl implements HookRuntime {
     durationMs: number,
     failure: HookFailureKind,
     decideOutcome: PolicyOutcome | undefined,
+    fireProfileId: PolicyProfileId = this.profileId,
   ): HookRunOutcome {
     const effect = failureEffect({
       cls: reg.class,
       event,
       failure,
-      profileId: this.profileId,
+      // Per-fire profile (flow 306, W6, fix round 1, finding 16) — a
+      // `ctx.profileId` override changes which registrations were even
+      // SELECTED for this fire, so the failure semantics it triggers (e.g.
+      // gate-advisory's `unattended-untrusted` deny-instead-of-proceed) must
+      // reason about that same live profile, not the runtime's construction
+      // profile. Defaults to `this.profileId` for every failure path that
+      // has no fire in flight yet (byte-identical when no `ctx.profileId`
+      // override is given, which is every existing failure-matrix test).
+      profileId: fireProfileId,
       ...(decideOutcome !== undefined ? { decideOutcome } : {}),
     });
     const decision: PolicyOutcome | undefined = effect.effect === "deny" ? "deny" : undefined;
@@ -341,9 +392,10 @@ class HookRuntimeImpl implements HookRuntime {
       sessionId: this.sessionId,
       runId: this.runId,
       projectRoot: this.projectRoot,
-      policyProfile: this.profileId,
+      policyProfile: fireProfileId,
     });
     const argv = this.argvResolver(reg.handler.argv);
+    const isolationRequired = resolveLocalProfile(fireProfileId).requiredControls.isolation === "required-fail-closed";
     const raw = await this.runner.run({
       argv,
       cwd: reg.handler.cwd ?? ".",
@@ -352,15 +404,16 @@ class HookRuntimeImpl implements HookRuntime {
       timeoutMs: reg.timeoutMs,
       network: reg.network,
       runsIn: resolveBuiltinCommandRunsIn(reg, fireProfileId),
+      isolationRequired,
     });
     const parsed = parseHookResult(
       { exitCode: raw.exitCode, stdout: raw.stdout, stderr: raw.stderr, timedOut: raw.timedOut, ...(raw.spawnError !== undefined ? { spawnError: raw.spawnError } : {}) },
       { cls: reg.class, event },
     );
     if (parsed.kind === "failure") {
-      return this.buildFailureOutcome(reg, event, raw.durationMs, parsed.failure, ctx.decideOutcome);
+      return this.buildFailureOutcome(reg, event, raw.durationMs, parsed.failure, ctx.decideOutcome, fireProfileId);
     }
-    const anomalies: HookAnomaly[] = parsed.anomalies.map((name) => ({ name, hookId: reg.id }));
+    const anomalies: HookAnomaly[] = this.dedupeOncePerSession(parsed.anomalies.map((name) => ({ name, hookId: reg.id })));
     const record: HookInvocationRecord = {
       hookId: reg.id,
       event,
@@ -384,6 +437,7 @@ class HookRuntimeImpl implements HookRuntime {
     event: HookEventName,
     payload: Record<string, unknown>,
     ctx: FireContext,
+    fireProfileId: PolicyProfileId,
   ): Promise<HookRunOutcome> {
     if (reg.handler.kind !== "builtin") throw new Error("runBuiltinHook requires a builtin handler");
     const startedAt = Date.now();
@@ -393,7 +447,7 @@ class HookRuntimeImpl implements HookRuntime {
       if (kind === undefined) {
         // Registered on an event outside the fixed seven — should never happen
         // (builtins.ts pins the list), but fail closed rather than crash.
-        return this.buildFailureOutcome(reg, event, Date.now() - startedAt, "crash", ctx.decideOutcome);
+        return this.buildFailureOutcome(reg, event, Date.now() - startedAt, "crash", ctx.decideOutcome, fireProfileId);
       }
       const sink = this.ports.learningSink ?? NOOP_LEARNING_OBSERVATION_SINK;
       const result = await runWithTimeout(
@@ -402,7 +456,7 @@ class HookRuntimeImpl implements HookRuntime {
       );
       const durationMs = Date.now() - startedAt;
       if (!result.ok) {
-        return this.buildFailureOutcome(reg, event, durationMs, result.failure, ctx.decideOutcome);
+        return this.buildFailureOutcome(reg, event, durationMs, result.failure, ctx.decideOutcome, fireProfileId);
       }
       return {
         record: { hookId: reg.id, event, class: reg.class, scope: reg.scope, outcome: "none", durationMs, changedOutcome: false },
@@ -445,7 +499,7 @@ class HookRuntimeImpl implements HookRuntime {
       );
       const durationMs = Date.now() - startedAt;
       if (!result.ok) {
-        return this.buildFailureOutcome(reg, event, durationMs, result.failure, ctx.decideOutcome);
+        return this.buildFailureOutcome(reg, event, durationMs, result.failure, ctx.decideOutcome, fireProfileId);
       }
       const decision = result.value.decision;
       return {
@@ -465,19 +519,35 @@ class HookRuntimeImpl implements HookRuntime {
     }
 
     // Unknown builtin handler name — fail closed rather than silently no-op.
-    return this.buildFailureOutcome(reg, event, Date.now() - startedAt, "crash", ctx.decideOutcome);
+    return this.buildFailureOutcome(reg, event, Date.now() - startedAt, "crash", ctx.decideOutcome, fireProfileId);
   }
 
-  private runOneHook(
+  /**
+   * A hook that throws synchronously, or whose returned promise rejects
+   * (e.g. a builtin port implementation with a bug, or — before the
+   * `runner.ts` fix for finding 3 — a synchronous `spawn()` throw that used
+   * to escape as an unhandled rejection), must never propagate out of
+   * `fire()`: an uncaught rejection here was observed reaching
+   * `agent.ts`/`spawn-subagent-tool.ts` as "hook failed (ignored)", i.e. a
+   * gate crash that failed OPEN instead of running normal crash-failure
+   * semantics. Catch it here and route it through the same
+   * `buildFailureOutcome("crash", ...)` path every other failure kind uses.
+   */
+  private async runOneHook(
     reg: HookRegistration,
     event: HookEventName,
     payload: Record<string, unknown>,
     ctx: FireContext,
     fireProfileId: PolicyProfileId,
   ): Promise<HookRunOutcome> {
-    return reg.handler.kind === "command"
-      ? this.runCommandHook(reg, event, payload, ctx, fireProfileId)
-      : this.runBuiltinHook(reg, event, payload, ctx);
+    const startedAt = Date.now();
+    try {
+      return await (reg.handler.kind === "command"
+        ? this.runCommandHook(reg, event, payload, ctx, fireProfileId)
+        : this.runBuiltinHook(reg, event, payload, ctx, fireProfileId));
+    } catch {
+      return this.buildFailureOutcome(reg, event, Date.now() - startedAt, "crash", ctx.decideOutcome, fireProfileId);
+    }
   }
 
   async fire(event: HookEventName, payload: Record<string, unknown>, ctx: FireContext = {}): Promise<HookFireResult> {
@@ -509,14 +579,20 @@ class HookRuntimeImpl implements HookRuntime {
     const parallelOutcomes = await Promise.all(
       parallelGroup.map(async (reg): Promise<HookRunOutcome> => {
         const started = Date.now();
-        const raced = await Promise.race<
-          { timedOut: false; outcome: HookRunOutcome } | { timedOut: true }
-        >([
-          this.runOneHook(reg, event, payload, ctx, fireProfileId).then((outcome) => ({ timedOut: false as const, outcome })),
-          delay(reg.timeoutMs).then(() => ({ timedOut: true as const })),
-        ]);
+        const timeoutDelay = delay(reg.timeoutMs);
+        let raced: { timedOut: false; outcome: HookRunOutcome } | { timedOut: true };
+        try {
+          raced = await Promise.race<
+            { timedOut: false; outcome: HookRunOutcome } | { timedOut: true }
+          >([
+            this.runOneHook(reg, event, payload, ctx, fireProfileId).then((outcome) => ({ timedOut: false as const, outcome })),
+            timeoutDelay.promise.then(() => ({ timedOut: true as const })),
+          ]);
+        } finally {
+          timeoutDelay.clear();
+        }
         if (raced.timedOut) {
-          return this.buildFailureOutcome(reg, event, Date.now() - started, "timeout", ctx.decideOutcome);
+          return this.buildFailureOutcome(reg, event, Date.now() - started, "timeout", ctx.decideOutcome, fireProfileId);
         }
         return raced.outcome;
       }),
