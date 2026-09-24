@@ -9,11 +9,13 @@ import { findDuplicates, type Candidate } from "./dedup";
 import { ingestMemory } from "./ingest";
 import { candidatePool, searchEntries } from "./search";
 import { createMemoryReportStore } from "./report";
-import { collectEntries, memoryRoot } from "./store";
+import { collectEntries, collectEntriesStrict, memoryRoot, memoryRootFor, type MemoryScanProblem } from "./store";
 import { supersedeEntry } from "./supersede";
 import { transitionMemoryStatus } from "./lifecycle";
 import { resolveCanonicalEntryPath, writeCanonicalEntry } from "./write";
-import { renderMemoryEntry } from "./templates";
+import { containsHarnessHeaderLine, renderMemoryEntry } from "./templates";
+import { selectHandoffEntries } from "./handoff";
+import { isMemoryHarnessId, MEMORY_HARNESS_IDS } from "./harness-identity";
 import { memoryEmbeddingSpec, type Embedder } from "./embedding/adapter";
 import {
   buildEmbeddingIndex,
@@ -21,8 +23,20 @@ import {
   loadEmbeddingIndex,
   rerankByEmbedding,
 } from "./embedding/index";
-import { MEMORY_TYPES } from "./types";
+import { MEMORY_TYPES, MEMORY_TYPE_VALUES } from "./types";
 import type { MemoryConfig, MemoryEntry, ScoredEntry, SearchFilters } from "./types";
+
+// Flow 313 (W4): re-exported so `src/mcp/` (which may import only this
+// facade, never `./harness-identity` directly — M-3 boundary test) can
+// validate a harness id without a second cross-module import.
+export { isMemoryHarnessId, MEMORY_HARNESS_IDS, MEMORY_TYPE_VALUES };
+
+// Flow 313 (W4) review R3-F8, choke point d: re-exported for the same M-3
+// reason — `src/mcp/tools.ts`'s `memory.propose` boundary check uses this
+// SAME function (never a locally re-derived copy of the pattern).
+export { containsHarnessHeaderLine };
+
+export { selectHandoffEntries } from "./handoff";
 import type {
   MemoryCreateInput,
   MemoryCreateResult,
@@ -227,6 +241,177 @@ export function createMemoryService(): MemoryService {
       return checkMemory(input.cwd, config);
     },
   };
+}
+
+// --- Flow 313 (W4 portability): docs/requirements/keryx-agent-platform-
+// expansion/workstreams/W4-portability.md, "Cross-harness memory handoff".
+// Standalone functions (not on the `MemoryService` interface) so `src/mcp/`
+// tools can call them without importing `./store` / `./handoff` directly —
+// this facade (`./service`) is the only memory module import the M-3
+// boundary test allows into `src/mcp/`.
+
+export type MemoryHandoffInput = { cwd: string; from: string; target: string; scope?: "project" | "user" };
+export type MemoryHandoffEntrySummary = {
+  path: string;
+  title: string;
+  sourceHarness: string | null;
+  targetHarnesses: string[] | null;
+};
+export type MemoryHandoffResult = {
+  status: "complete" | "incomplete";
+  entries: MemoryHandoffEntrySummary[];
+  problems: MemoryScanProblem[];
+};
+
+export async function memoryHandoff(input: MemoryHandoffInput): Promise<MemoryHandoffResult> {
+  const root = memoryRootFor(input.scope ?? "project", input.cwd);
+  const scan = await collectEntriesStrict(root);
+  const selected = selectHandoffEntries(scan.entries, { from: input.from, target: input.target });
+  return {
+    status: scan.status,
+    entries: selected.map((entry) => ({
+      path: entry.relativePath,
+      title: entry.title,
+      sourceHarness: entry.sourceHarness ?? null,
+      targetHarnesses: entry.targetHarnesses ?? null,
+    })),
+    problems: scan.problems,
+  };
+}
+
+/**
+ * Flow 313 (W4) review R1-F4/R1-F14: the ONE read primitive every MCP memory
+ * read filters entries through before scoring/listing/citing them —
+ * `memory.search`, `memory_search` (the metaproject-operations projection),
+ * MCP `memory` resources (list + read), and `wiki.ask`/`wiki_ask`'s memory
+ * citations. Before this, only `memory.search` and `memory.handoff` applied
+ * any `target_harnesses` restriction at all — the other three surfaces read
+ * `collectEntries`/`collectPages` directly and leaked every restricted
+ * entry to every harness.
+ *
+ * `targetHarnessesInvalid` (set by `./store.ts#parseEntry`, R1-F14) hides the
+ * entry from EVERY harness identity, bound or unbound — a malformed/
+ * ambiguous restriction must never collapse to "unrestricted"; that is
+ * exactly the fail-open bug this flag exists to close. An absent/empty
+ * `targetHarnesses` (the back-compatible "no restriction" default) is
+ * visible to everyone, including an unbound (`null`) caller. A present,
+ * valid restriction is visible only to a bound identity it names — an
+ * unbound caller never matches a named restriction, because there is no
+ * caller identity a restricted entry could legitimately be shown to.
+ */
+export function filterEntriesForHarness<
+  T extends {
+    targetHarnesses?: string[] | null | undefined;
+    targetHarnessesInvalid?: boolean | undefined;
+  },
+>(entries: readonly T[], harnessIdentity: string | null): T[] {
+  return entries.filter((entry) => {
+    if (entry.targetHarnessesInvalid) {
+      return false;
+    }
+    const targets = entry.targetHarnesses;
+    if (!targets || targets.length === 0) {
+      return true;
+    }
+    return harnessIdentity !== null && targets.includes(harnessIdentity);
+  });
+}
+
+/**
+ * The set of project-scope memory `relativePath`s a given (or unbound)
+ * harness identity may read, per `filterEntriesForHarness` above. For a
+ * caller that lists/reads relativePaths taken DIRECTLY from the same memory
+ * root (MCP `memory` resources, `./store.ts` output) — every such path
+ * necessarily corresponds to a real, filtered-or-not entry, so absence from
+ * this set always means "restricted for this harness", never "unknown path".
+ */
+export async function memoryAllowedRelativePaths(
+  cwd: string,
+  harnessIdentity: string | null,
+): Promise<Set<string>> {
+  const entries = await collectEntries(cwd);
+  return new Set(filterEntriesForHarness(entries, harnessIdentity).map((entry) => entry.relativePath));
+}
+
+/**
+ * `relativePath -> visible?` for every ON-DISK entry, for a caller that
+ * cross-references a SEPARATELY computed hit list (`memory.search`,
+ * `memory_search`) by path rather than reading `relativePath`s straight off
+ * the memory root. A hit whose path has NO matching on-disk entry — never
+ * true in production, where the ranking and this map read the identical
+ * store, but possible with a decoupled/fake `MetaprojectPort` in tests — is
+ * treated as "unknown, not this filter's concern" (visible), exactly
+ * mirroring the pre-fix behaviour for that case; a hit backed by a real
+ * entry is filtered exactly as `filterEntriesForHarness` decides.
+ *
+ * Flow 313 (W4) review round 2, R2-I1 evaluated this default and left it as
+ * "visible": flipping it to fail-closed excludes every fixture hit in a
+ * decoupled-port test (no on-disk store to match against — see
+ * `src/mcp/memory-p0.test.ts`'s "MCP fake port fixture" purity test) for no
+ * production security gain, since real callers' hit paths and this map
+ * always read the identical store. The finding is info-severity with no
+ * demonstrated impact; both call sites document this same reasoning.
+ */
+export async function memoryHarnessVisibilityByPath(
+  cwd: string,
+  harnessIdentity: string | null,
+): Promise<Map<string, boolean>> {
+  const entries = await collectEntries(cwd);
+  const allowed = new Set(filterEntriesForHarness(entries, harnessIdentity).map((entry) => entry.relativePath));
+  const visibility = new Map<string, boolean>();
+  for (const entry of entries) {
+    visibility.set(entry.relativePath, allowed.has(entry.relativePath));
+  }
+  return visibility;
+}
+
+export type MemoryProposeInput = {
+  cwd: string;
+  title: string;
+  type: string;
+  summary: string;
+  details?: string;
+  sourceHarness?: string | null;
+  targetHarnesses?: string[];
+};
+export type MemoryProposeResult =
+  | { status: "written"; path: string }
+  | { status: "skipped"; path: string; securitySkipped: string }
+  | { status: "invalid-type"; message: string };
+
+export async function memoryPropose(input: MemoryProposeInput): Promise<MemoryProposeResult> {
+  const typeConfig = MEMORY_TYPES.find((t) => t.type === input.type);
+  if (!typeConfig) {
+    return { status: "invalid-type", message: `Unknown memory type: ${input.type}. Supported: ${MEMORY_TYPE_VALUES.join(", ")}` };
+  }
+  const slug = proposalSlug(input.title);
+  const date = new Date().toISOString().slice(0, 10);
+  const content = renderMemoryEntry({
+    title: input.title,
+    type: input.type,
+    date,
+    summary: input.summary,
+    ...(input.details && input.details.length > 0 ? { details: input.details } : {}),
+    ...(input.sourceHarness ? { sourceHarness: input.sourceHarness } : {}),
+    ...(input.targetHarnesses && input.targetHarnesses.length > 0 ? { targetHarnesses: input.targetHarnesses } : {}),
+  });
+  const write = await writeCanonicalEntry({
+    cwd: input.cwd,
+    relativePath: `${typeConfig.folder}/${slug}.md`,
+    content,
+  });
+  if (write.status === "error") {
+    throw new Error(write.error.message);
+  }
+  return write.status === "skipped"
+    ? { status: "skipped", path: write.path, securitySkipped: write.reason }
+    : { status: "written", path: write.path };
+}
+
+function proposalSlug(title: string): string {
+  const base = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return `${base.length > 0 ? base : "proposal"}-${suffix}`;
 }
 
 // Resolve the embedding capability to an `Embedder` (+ model id), or null when

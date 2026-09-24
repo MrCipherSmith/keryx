@@ -50,9 +50,19 @@ describe("AC1 (W5-b): gemini-cli, kiro, github-copilot-agent each have block + i
       expect(adapter!.adapterKind).toBe("host-hook");
 
       const block = surfacesOf(adapter!, { flag: "block" });
+      // Review round 1, F19: `rules-export` (`surfaces-rules.ts`) used to
+      // share the `instructions` flag with the pre-existing markdown-block
+      // pointer surface, which made `--surface instructions` silently also
+      // install/uninstall `rules-export`. It now carries its OWN flag
+      // (`rules`), so `instructions` is back to exactly 1 surface here, and
+      // `rules` is checked separately.
       const instructions = surfacesOf(adapter!, { flag: "instructions" });
+      const rules = surfacesOf(adapter!, { flag: "rules" });
       expect(block.length).toBe(1);
       expect(instructions.length).toBe(1);
+      expect(rules.length).toBe(1);
+      expect(rules[0]!.id).toBe("rules-export");
+      expect(rules[0]!.optIn).toBe(true);
 
       for (const surface of [...block, ...instructions]) {
         expect({ id, surface: surface.id, confidence: surface.confidence }).toEqual({

@@ -213,6 +213,102 @@ Registered with every surface flag present but `unsupported` — this is W6's
 future `keryx shell` hook runtime. No surface here is installed by `keryx
 integrations` yet; every cell is a target for that later workstream.
 
+## rules-export surface
+
+`rules-export` (flow 313, W4 portability) renders the canonical
+`.metaproject/rules/**` library — an index of path + one-line description per
+rule, never a rule's body — into a harness's own instruction file, as a
+second managed block distinct from the `keryx:instructions` pointer block
+above:
+
+```
+<!-- keryx:rules -->
+## Project rules (Keryx)
+
+Canonical source: `.metaproject/rules/` (managed by keryx; edit the rules
+there, not this block). Read the rule that matches your task before acting:
+
+- `.metaproject/rules/core/git-concurrency.mdc` — No git stash in a shared
+  tree; explicit pathspecs instead of `git add -A`; commit at task
+  boundaries.
+<!-- /keryx:rules -->
+```
+
+It is **opt-in** (`optIn: true`) — `keryx integrations install --runtime
+<id>` with no `--surface` never writes it; reach it explicitly with `--surface
+rules-export` (its id) or `--surface rules` (its flag), kept deliberately
+independent of `--surface instructions` (the pre-existing `keryx:instructions`
+pointer surfaces on gemini-cli/kiro/github-copilot-agent): naming one never
+also reaches the other. Registered for
+`claude` (`CLAUDE.md`), `codex` (`AGENTS.md`), `gemini-cli` (`GEMINI.md`),
+`github-copilot-agent` (`.github/copilot-instructions.md`, appended with no
+front matter), `cursor` (`.cursor/rules/keryx-rules.mdc`, created with
+`alwaysApply: true` front matter), `kiro` (`.kiro/steering/keryx-rules.md`,
+`inclusion: always`), and `windsurf` (`.windsurf/rules/keryx-rules.md`,
+`trigger: always_on`).
+
+The block is written through the same `markdown-block.ts` contract every
+`instructions` surface above uses — install only ever touches its OWN
+`<!-- keryx:rules -->`/`<!-- /keryx:rules -->` span, so a file already
+carrying a `keryx:index` or `keryx:instructions` block (CLAUDE.md/AGENTS.md's
+Metaproject bootstrap, or GEMINI.md/`.github/copilot-instructions.md`'s
+pointer block) keeps that other block byte-for-byte. Re-running install after
+a rule changes updates only the block; `keryx integrations uninstall
+--runtime <id> --surface rules-export` removes it and restores the
+surrounding file, with the same caveats "The `instructions` surface's managed
+markdown block" above documents for the byte-exactness of that round trip (a
+file with no final newline may gain one; a pre-existing empty/whitespace-only
+file install wrote the block into is deleted on uninstall along with it). A
+rule's own title/description text is neutralised before rendering (HTML
+comment delimiters and backticks are stripped/rewritten) so a rule file can
+never forge or close the marker itself; a rule whose own **path** cannot be
+neutralised this way (it contains a control character, `<`, `>`, a backtick,
+or a literal `<!--`/`-->`) is skipped — not rendered — and reported as an
+install warning naming the path and reason, while every other rule still
+installs. Install/uninstall also refuse to write through a symlink whose
+resolved target leaves the project root (a symlink that stays inside the
+project, e.g. `CLAUDE.md -> AGENTS.md`, is followed normally).
+
+`src/integrations/rules-export.ts`'s `renderRulesForHarnesses`/
+`installedRulesExportHarnesses` are the programmatic entry points a later
+task (`keryx bundle import --render-for`) drives; they go through the same
+installer core and install-state as every other surface, rather than a
+second bookkeeping layer.
+
+## Write containment
+
+Every write, remove, rename, and directory-create this module performs into a
+project tree — the markdown-block managed installs above, the JSON
+settings-file owner, install-state, the capability matrix artifact, the
+OpenCode plugin file, `rules distill`/`rules sync`'s writes into
+`.metaproject/` and back into the entrypoint files themselves, and agent
+export — goes through the ONE primitive in `src/lib/contained-write.ts`
+(`writeContained`/`removeContained`/`mkdirContained`/`renameContained`),
+never a raw `node:fs/promises` call. A `src/lib/contained-write.ratchet.test.ts`
+test scans these modules' source for a raw `writeFile`/`rm`/`unlink`/
+`rename`/`mkdir`/`appendFile`/`copyFile` import and fails the build if one
+creeps back in outside that one file.
+
+The primitive refuses (with a named `ContainedWriteError.reason`, never a
+silent no-op or a bare exception) on:
+
+- an absolute `rel` path, or one containing a lexical `..` segment;
+- a path that steps through a literal `.git` directory segment;
+- a symlink segment (intermediate or final) whose resolved real path leaves
+  the project root — same rule `src/lib/symlink-safety.ts` already used for
+  reads and the managed-block installs above, so both agree byte-for-byte;
+- a symlink CYCLE or a DANGLING symlink anywhere on the path;
+- overwriting an existing non-regular-file entry (writes), or a non-directory
+  entry already sitting where a directory is expected (`mkdirContained`).
+
+A symlink whose resolved target stays INSIDE the project root (the
+`CLAUDE.md -> AGENTS.md` layout mentioned above) is followed, not refused —
+the write lands in the symlink's target, exactly like a plain `writeFile`
+would, and the symlink itself is left in place. Every other write is
+atomic: the payload goes to a temporary file beside the target, then is
+renamed into place, so a reader never observes a partially written file and
+a crash mid-write leaves either the old content or none, never a truncation.
+
 ## Legacy command aliases
 
 `keryx ctx install-hook`/`uninstall-hook`, `keryx orient install-hook`, and

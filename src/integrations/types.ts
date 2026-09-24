@@ -12,6 +12,14 @@
  * subset is wired up in W5-a (block, prompt-gate, inject-context); the rest
  * are named here so `HarnessAdapter.unsupported` and future surfaces have a
  * fixed vocabulary to grow into, per the W5 spec's flag list.
+ *
+ * `"rules"` (flow 313, W4 portability, review round 1 F19) is a 13th flag
+ * added OUTSIDE the frozen W5 list, for the `rules-export` surfaces
+ * (`surfaces-rules.ts`) alone. It exists so `--surface instructions` selects
+ * only the pre-existing `keryx:instructions` pointer-block surfaces, never
+ * the (opt-in, content-reflecting) `keryx:rules` index block — the two used
+ * to share the `instructions` flag, which made `--surface instructions`
+ * silently also install/uninstall `rules-export`.
  */
 export type SurfaceFlag =
   | "block"
@@ -25,7 +33,8 @@ export type SurfaceFlag =
   | "skills"
   | "agents"
   | "instructions"
-  | "mcp";
+  | "mcp"
+  | "rules";
 
 export type Confidence = "verified" | "experimental";
 
@@ -117,6 +126,24 @@ export const SUBSYSTEM_AGENTS = "agents";
 // (`src/harness/hooks/`) — a `policy-travels-with-agent` capability like
 // `SUBSYSTEM_ACP_PERMISSION`, not a settings file keryx installs into.
 export const SUBSYSTEM_SHELL_HOOKS = "shell-hooks";
+// Flow 313 (W4 portability), T9: the canonical `.metaproject/rules/**`
+// library rendered into a harness's own instruction file as an index (title +
+// description per rule, never the rule bodies themselves). Distinct from
+// `SUBSYSTEM_INSTRUCTIONS` (the short, fixed Keryx bootstrap pointer every
+// `markdown-block.ts` surface writes) — this subsystem actually reflects
+// project content (the rule list), so it is deliberately NOT special-cased by
+// `matrix.ts`'s `classifySurfaceState` as `instruction-only`.
+export const SUBSYSTEM_RULES_EXPORT = "rules-export";
+/**
+ * Flow 312 (W3, T11): the opt-in host-harness learning observer — a passive,
+ * never-blocking hook that forwards a harness's own hook payload to `keryx
+ * learn observe --hook <runtime>` (`src/learning/observe.ts`'s
+ * `observeHostHookPayload`). Distinct from `SUBSYSTEM_SHELL_HOOKS` (W6's own
+ * compiled-in runtime, `policy-travels-with-agent`): this subsystem writes
+ * INTO a host's own settings file, the same `host-hook` shape ctx-guard/
+ * orient/security already use.
+ */
+export const SUBSYSTEM_LEARNING = "learning";
 
 /**
  * T17: the richer `customUninstall` return shape for a surface that may keep
@@ -128,6 +155,27 @@ export const SUBSYSTEM_SHELL_HOOKS = "shell-hooks";
  */
 export interface CustomUninstallResult {
   readonly removed: boolean;
+  readonly warnings?: readonly string[];
+}
+
+/**
+ * Review round 2 fix (R2-F6): the richer `customInstall` return shape for a
+ * surface that can partially succeed — writing SOME of what it manages while
+ * skipping a piece it refuses on principled grounds (e.g. `rules-export`
+ * skipping one unsafe rule name, per `export-render.ts`'s F7 fix, while still
+ * indexing every other rule). `errors` is what the plain `string[]` shape
+ * always meant: a non-empty `errors` makes `installer.ts` report `failed` and
+ * skip `recordSurfaceInstalled`, exactly as before. `warnings` — folded into
+ * the surface's `SurfaceResult.warnings` the same way `CustomUninstallResult.warnings`
+ * and an experimental surface's static risk notes already are — reports a
+ * partial skip WITHOUT making the operation a failure: before this fix,
+ * `rules-export` had no way to say "the block was written, but rule X wasn't
+ * indexed" without also reporting the whole install `failed`, which left the
+ * block on disk while the CLI and install-state disagreed with it (exit 1,
+ * but the file was written and never recorded).
+ */
+export interface CustomInstallResult {
+  readonly errors: readonly string[];
   readonly warnings?: readonly string[];
 }
 
@@ -184,7 +232,24 @@ export interface SurfaceAdapter {
   merge?(settings: Settings): Settings;
   strip?(settings: Settings): Settings;
   validate?(settings: Settings): string[];
-  customInstall?(projectRoot: string): Promise<string[]>;
+  /**
+   * Review round 2, F6: the plain `string[]` shape (every pre-flow-313
+   * surface) is treated exactly as before — every entry is an error, and any
+   * non-empty result fails the install. A surface that can partially succeed
+   * returns `CustomInstallResult` instead — see its own doc comment.
+   */
+  customInstall?(projectRoot: string): Promise<string[] | CustomInstallResult>;
+  /**
+   * Round-4 fix (R2-F6 remainder): `--dry-run` never actually calls
+   * `customInstall`, so a surface whose REAL install can report warnings
+   * (`CustomInstallResult.warnings` — `rules-export` skipping an unsafe rule
+   * name, per its own doc comment) had no way to report those SAME warnings
+   * from `--dry-run` — `keryx integrations install --dry-run` (human and
+   * `--json`) reported `warnings: []` right up until the real install that
+   * followed reported the skip. Optional: a surface without a dry-run-visible
+   * warning source (most of them) simply omits it.
+   */
+  dryRunWarnings?(projectRoot: string): Promise<readonly string[]>;
   /**
    * Uninstall this surface's artifact. The plain `boolean` shape (every
    * pre-flow-310 surface) reports only whether anything was removed. T17: a

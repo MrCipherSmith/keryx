@@ -109,6 +109,23 @@ export type MemoryEntry = {
   author?: string | null | undefined; // who wrote/proposed the claim
   confirmedBy?: string | null | undefined; // confirming participant / acceptance basis
   caveat?: string | null | undefined; // deferral/qualification attached to the claim
+  // --- Flow 313 (W4 portability): docs/requirements/keryx-agent-platform-
+  // expansion/workstreams/W4-portability.md, "Cross-harness memory handoff".
+  // Additive, back-compatible with the existing "absent -> null" convention
+  // this type already uses (see the C2/C3/AFC-25 fields above). Parsed from
+  // disk by store.ts (`Source-Harness` / `Target-Harnesses` header fields).
+  sourceHarness?: string | null | undefined; // which harness's session wrote this entry, set once at MCP server launch
+  targetHarnesses?: string[] | null | undefined; // which harnesses may read this entry; null/absent = all (back-compatible default)
+  // Flow 313 (W4) review R1-F14: `Source-Harness`/`Target-Harnesses` present in
+  // the header block but unparsable (unknown id, or the header line duplicated
+  // within the block) collapse `sourceHarness`/`targetHarnesses` to `null` —
+  // exactly the same value as "the header was never written". Without this
+  // flag that ambiguity fails OPEN: a malformed `Target-Harnesses` reads as
+  // "unrestricted" instead of "restricted to nobody". `filterEntriesForHarness`
+  // (`./service.ts`) checks this flag and hides the entry from every harness,
+  // bound or unbound, when it is set — never falling back to "absent = all".
+  targetHarnessesInvalid?: boolean;
+  sourceHarnessInvalid?: boolean;
 };
 
 // The resolved class of an entry: its explicit `class` header when present,

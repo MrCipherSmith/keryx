@@ -10,6 +10,7 @@ import path from "node:path";
 import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import { isPathInside, pathExists, toPosix } from "../lib/fs";
 import { readContainedFile } from "../lib/contained-read";
+import { memoryAllowedRelativePaths } from "../memory/service";
 
 export type ResourceClass = "artifacts" | "wiki" | "memory";
 
@@ -136,9 +137,18 @@ async function listUnderRoot(
 
 // Enumerate all readable resources for the configured classes. `roots` is the
 // config allowlist (`resources.roots`); classes outside it are not exposed.
+//
+// Flow 313 (W4) review R1-F4: `harnessIdentity` (the MCP server's bound
+// launch identity, `null` when unbound — never a caller param) restricts the
+// `memory` class the SAME way `memory.search` restricts hits: a listing
+// whose `target_harnesses` excludes this identity is never listed at all,
+// per the shared `memoryAllowedRelativePaths` primitive (`../memory/
+// service`) — a restricted entry must be "neither listed nor readable", not
+// merely unsearchable.
 export async function listResources(
   cwd: string,
   roots: string[],
+  harnessIdentity: string | null = null,
 ): Promise<ResourceListing[]> {
   const allowed = new Set(roots);
   const listings: ResourceListing[] = [];
@@ -149,7 +159,9 @@ export async function listResources(
     listings.push(...(await listUnderRoot(cwd, "wiki", wikiRoot(cwd))));
   }
   if (allowed.has("memory")) {
-    listings.push(...(await listUnderRoot(cwd, "memory", memoryRoot(cwd))));
+    const memoryListings = await listUnderRoot(cwd, "memory", memoryRoot(cwd));
+    const allowedPaths = await memoryAllowedRelativePaths(cwd, harnessIdentity);
+    listings.push(...memoryListings.filter((listing) => allowedPaths.has(listing.name)));
   }
   return listings;
 }
@@ -206,10 +218,19 @@ function resolveConfined(
 // Read a resource by URI. Throws with a leak-safe message when the URI is
 // malformed, the class is not exposed, the path escapes the root, or the file is
 // absent. Never returns content outside a configured, confined root.
+//
+// Flow 313 (W4) review R1-F4: `harnessIdentity` restricts a `memory`-class
+// read the same way `listResources` restricts its listing — a restricted
+// entry refuses even a DIRECT read by a caller who already knows its exact
+// URI (from a stale listing, a prior response, or a guess), not only an
+// enumerated one. The error is the same "not found" shape as a genuinely
+// absent resource — leak-safe, never distinguishing "restricted" from
+// "absent".
 export async function readResource(
   cwd: string,
   roots: string[],
   uri: string,
+  harnessIdentity: string | null = null,
 ): Promise<ResourceContents> {
   const parsed = parseResourceUri(uri);
   if (!parsed) {
@@ -221,6 +242,12 @@ export async function readResource(
   const resolved = resolveConfined(cwd, parsed.cls, parsed.relPath);
   if (!resolved) {
     throw new Error(`Resource path is outside its root (rejected): ${uri}`);
+  }
+  if (parsed.cls === "memory") {
+    const allowedPaths = await memoryAllowedRelativePaths(cwd, harnessIdentity);
+    if (!allowedPaths.has(parsed.relPath)) {
+      throw new Error(`Resource not found: ${uri}`);
+    }
   }
   const info = await stat(resolved.absolute).catch(() => null);
   if (!info || !info.isFile()) {

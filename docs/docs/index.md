@@ -17,6 +17,7 @@ the one that describes shipped behaviour.
 - [integrations.md](./integrations.md) — The harness adapter registry: `keryx integrations install|doctor|uninstall|matrix`, install-state and drift, the generated capability matrix, and per-harness notes (Gemini CLI, Kiro, GitHub Copilot agent, Zed).
 - [hooks.md](./hooks.md) — The `keryx shell` lifecycle hook runtime: the ten events, config files, composition with the policy engine, built-ins, the `keryx hooks` CLI, and the W3/W8 extension points.
 - [modules.md](./modules.md) — Per-module reference: purpose, CLI surface, key files, mechanics, and data paths.
+- [learning.md](./learning.md) — The self-learning loop: observe, extract, review/accept, apply, promote, graduate, prune — what is observed, what is never stored, the confidence model, and consent guarantees.
 - [cli-reference.md](./cli-reference.md) — Every command, subcommand, flag, and exit code.
 - [commands-by-task.md](./commands-by-task.md) — Every command grouped by task, generated from the same table `keryx help` and the TUI's `/help` modal use.
 - [workspace-and-lifecycle.md](./workspace-and-lifecycle.md) — The `.metaproject/` contract, manifest, agent entrypoints, and `init`/`update` lifecycle.
@@ -43,6 +44,7 @@ the one that describes shipped behaviour.
 - [Slate for external agents](guides/slate.md)
 - [Keep the wiki current](guides/keep-the-wiki-current.md)
 - [Run keryx in CI](guides/run-in-ci.md)
+- [Move skills, rules, agents, and memory between projects and machines](guides/portability.md)
 
 **Start here:** new to the project? Begin with [onboarding.md](./onboarding.md),
 then pick the guide that matches your task.

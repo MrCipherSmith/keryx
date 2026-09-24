@@ -454,6 +454,9 @@ export type WikiEvidenceInput = {
    * reports `unknown` ("not verified"), which is the honest state.
    */
   verified?: Readonly<Record<string, string>> | undefined;
+  // Flow 313 (W4) review R1-F4: threaded straight through to the underlying
+  // `wikiAsk` call below — see `WikiAskInput.harnessIdentity` (`./types.ts`).
+  harnessIdentity?: string | null | undefined;
 };
 
 const DEFAULT_EVIDENCE_BUDGET_TOKENS = 4000;
@@ -465,6 +468,7 @@ export async function wikiEvidence(input: WikiEvidenceInput): Promise<EvidencePa
     question: input.question,
     ...(input.k === undefined ? {} : { k: input.k }),
     ...(input.asOf === undefined ? {} : { asOf: input.asOf }),
+    harnessIdentity: input.harnessIdentity ?? null,
   });
 
   // A non-`ok` retrieval outcome is passed through with its own code, not

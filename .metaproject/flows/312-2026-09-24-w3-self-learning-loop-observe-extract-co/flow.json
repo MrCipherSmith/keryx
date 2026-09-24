@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,17 +7,78 @@
   "id": "312",
   "slug": "w3-self-learning-loop-observe-extract-co",
   "title": "W3: self-learning loop — observe, extract, consent-gated learned patterns, reviewer profiles, promote and graduate",
-  "status": "initializing",
+  "status": "done",
   "createdAt": "2026-09-24T07:18:32.725Z",
-  "updatedAt": "2026-09-24T07:18:32.725Z",
+  "updatedAt": "2026-09-24T17:25:44.779Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-24T17:20:55.806Z",
+      "note": "src/learning/observe.test.ts: keryx.learning-observer sink wired into the shell hook runtime writes validated tool-complete and session-end lines; secret redacted as [redacted:secret]; previews <=200 chars; digests only. PR #691 squash 08af367c."
+    },
+    "AC2": {
+      "at": "2026-09-24T17:20:55.955Z",
+      "note": "src/learning/extract.test.ts AC2 case: fail->pass fixture gives exactly one failing-to-passing-test candidate; signals/*.test.ts cover the other four signals; model extractor refused unless the capability is enabled."
+    },
+    "AC3": {
+      "at": "2026-09-24T17:20:56.096Z",
+      "note": "src/learning/confidence.test.ts: 0.4 -> 0.61 (medium); contradiction, decay and level boundaries tested."
+    },
+    "AC4": {
+      "at": "2026-09-24T17:20:56.247Z",
+      "note": "accept.test.ts, exit-guard.test.ts, store-choke-point.test.ts: acceptPattern is the only accepted transition; apply.test.ts and reviewer-profile.test.ts prove the isPathInside refusals."
+    },
+    "AC5": {
+      "at": "2026-09-24T17:20:56.386Z",
+      "note": "accept.test.ts: one index entry with exactly 4 keys; a second id adds a second key; accepting a user-scope record writes no index entry."
+    },
+    "AC6": {
+      "at": "2026-09-24T17:20:56.527Z",
+      "note": "promote.test.ts: non-TTY refusal (promote-requires-terminal), no bypass flag, 1-identity refusal, indexed accept-time confidence used, refresh overwrites only the current identity, success writes a user-scope candidate."
+    },
+    "AC7": {
+      "at": "2026-09-24T17:20:56.668Z",
+      "note": "reviewer-profile.test.ts and reviewer-id.test.ts: the rendered .mdc carries no configured login (boundary-matched, incl. bots); opaque rv- ids; reviewerProfiles must be a subset of authors."
+    },
+    "AC8": {
+      "at": "2026-09-24T17:20:56.812Z",
+      "note": "graduate.test.ts: runGraduate writes proposals only; applyGraduation (TTY) writes .metaproject/agents/<name>.md with origin.kind learned; scout --origin learned --source-ref in scout.test.ts and skills-governance.test.ts."
+    },
+    "AC9": {
+      "at": "2026-09-24T17:20:56.960Z",
+      "note": "schema.test.ts: runtime schema byte-identical to docs; every fixture record validated by validateLearnedPattern."
+    },
+    "AC10": {
+      "at": "2026-09-24T17:20:57.110Z",
+      "note": "src/learning/gitignore-guard.test.ts: git check-ignore matches observations and candidates after the managed block; the repo .gitignore carries the same entries."
+    },
+    "AC11": {
+      "at": "2026-09-24T17:20:57.265Z",
+      "note": "src/learning/exit-guard.test.ts (21 tests): no accepted record without a TTY accept and a decision line; auditAcceptedRecords flags tampering."
+    },
+    "AC12": {
+      "at": "2026-09-24T17:20:57.413Z",
+      "note": "scan.test.ts, extract.test.ts, apply.test.ts, graduate.test.ts: injection and secret text refused before persistence and before apply/graduate writes."
+    },
+    "AC13": {
+      "at": "2026-09-24T17:20:57.561Z",
+      "note": "skill-lifecycle.mdc (project and bundled, byte-identical, v0.2.0) carries the D-3 amendment; prune.test.ts covers the 30-day TTL and candidate expiry."
+    },
+    "AC14": {
+      "at": "2026-09-24T17:20:57.703Z",
+      "note": "src/integrations/surfaces-learning.test.ts: opt-in Claude learning-observer surface installs keryx learn observe --hook claude; the capability matrix drift test passes in CI."
+    },
+    "AC15": {
+      "at": "2026-09-24T17:20:57.855Z",
+      "note": "Observe deep review: 3 rounds plus fixes (T17/T18/T19/T21), no open finding at minor or above in the Observe class. CI on PR #691 green (18 pass). Final-round attribution minors R10-F1/F2 deferred as an owner-approved exception, recorded in the journal."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/691"
   },
   "baseBranch": "feat/agent-platform-expansion",
   "tasks": [
@@ -26,34 +87,1891 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T12 implementation tasks"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are part of each implementation task T5-T12 and verify tasks T13-T16"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 7,
+        "log": [
+          {
+            "at": "2026-09-24T10:59:24.782Z",
+            "outcome": "started",
+            "detail": "PR #691 review round 1 (opus)"
+          },
+          {
+            "at": "2026-09-24T11:08:44.883Z",
+            "outcome": "failed",
+            "detail": "PR review round 1: 1 blocker, 3 major, 5 minor (R1-F1..F9)"
+          },
+          {
+            "at": "2026-09-24T11:34:03.974Z",
+            "outcome": "started",
+            "detail": "PR review round 2 (opus)"
+          },
+          {
+            "at": "2026-09-24T11:42:17.954Z",
+            "outcome": "failed",
+            "detail": "PR review round 2: 1 major (R2-F1 path-in-token regression), 6 minor, 1 info; CI typecheck-and-tests: test-coverage gate + facade ratchet 152>150"
+          },
+          {
+            "at": "2026-09-24T12:02:31.922Z",
+            "outcome": "started",
+            "detail": "PR review round 3 (opus), final attempt"
+          },
+          {
+            "at": "2026-09-24T12:12:33.687Z",
+            "outcome": "failed",
+            "detail": "PR review round 3 (final): 0 blocker/major, 4 minor, 1 info; consent invariant confirmed"
+          },
+          {
+            "at": "2026-09-24T14:41:28.457Z",
+            "outcome": "failed",
+            "detail": "final verification R10 of T29: 0 blocker/major, 2 minor, 2 info; CI green 08dc37d0; health PASS; stopped for owner decision"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Core learning module: types, schema validator, confidence, identity, paths, scan, store, decisions",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:31:03.431Z",
+            "outcome": "started",
+            "detail": "312-T5 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Observe: real LearningObservationSink, shell runtime wiring, ignore block + guard test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:44:48.283Z",
+            "outcome": "started",
+            "detail": "312-T6 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Extract: five deterministic signals, candidate upsert, capability-gated model extractor port",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:44:48.402Z",
+            "outcome": "started",
+            "detail": "312-T7 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Consent CLI: keryx learn list/review/accept/reject/prune/observe/extract + index",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-24T08:00:34.669Z",
+            "outcome": "started",
+            "detail": "312-T8 sonnet"
+          },
+          {
+            "at": "2026-09-24T08:03:44.055Z",
+            "outcome": "blocked",
+            "detail": "isolation worktree mis-dispatch (worker env reported a separate worktree root; no files written)"
+          },
+          {
+            "at": "2026-09-24T08:03:53.951Z",
+            "outcome": "started",
+            "detail": "312-T8 re-dispatch, no isolation, no sub-delegation"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Apply + reviewer profiles: learn apply via applyLearningProposal, review learn --reviewer",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T08:21:12.579Z",
+            "outcome": "started",
+            "detail": "312-T9"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Promote + graduate: promote gate, graduation proposals, scout learned origin, agent candidate apply",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T08:21:12.712Z",
+            "outcome": "started",
+            "detail": "312-T10"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Host observer: opt-in Claude observe surface in W5 registry, matrix regenerated",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T08:21:12.847Z",
+            "outcome": "started",
+            "detail": "312-T11"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "D-3 skill-lifecycle amendment + learning docs + W3 doc amendments",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T08:21:12.975Z",
+            "outcome": "started",
+            "detail": "312-T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Verify: wave-3 exit guard test (no accepted without recorded human accept)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T9",
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T10:39:38.465Z",
+            "outcome": "started",
+            "detail": "312-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Verify: end-to-end CLI run observe->extract->accept->apply in a temp project",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T9",
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T10:39:38.598Z",
+            "outcome": "started",
+            "detail": "312-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Verify: deep review of Observe against the no-complete-transcript non-goal",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 6,
+        "log": [
+          {
+            "at": "2026-09-24T08:30:12.418Z",
+            "outcome": "started",
+            "detail": "312-T15 opus observe review"
+          },
+          {
+            "at": "2026-09-24T08:35:31.960Z",
+            "outcome": "failed",
+            "detail": "round 1: 3 major, 4 minor, 2 info — fixes in T17"
+          },
+          {
+            "at": "2026-09-24T10:39:38.727Z",
+            "outcome": "started",
+            "detail": "round 2 re-review after T17"
+          },
+          {
+            "at": "2026-09-24T10:43:56.812Z",
+            "outcome": "failed",
+            "detail": "round 2: 1 major (O2-1 Write content), 4 minor, 1 info; fixes in T18"
+          },
+          {
+            "at": "2026-09-24T10:55:31.476Z",
+            "outcome": "started",
+            "detail": "round 3 re-check after T18"
+          },
+          {
+            "at": "2026-09-24T11:04:30.640Z",
+            "outcome": "failed",
+            "detail": "round 3: O-1 still partial via free-text path regex; 3 minor (O3-1..O3-3) + 1 info"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Verify: targeted tests, typecheck and eslint on changed files",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T13",
+        "T14",
+        "T15",
+        "T12"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T10:57:19.342Z",
+            "outcome": "started",
+            "detail": "orchestrator local checks"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix Observe review findings O-1..O-9 and T9 concerns (learning service facade, apply dry-run)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T08:35:31.829Z",
+            "outcome": "started",
+            "detail": "312-T17 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Fix Observe round-2 findings O2-1..O2-6",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T17"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T10:43:57.059Z",
+            "outcome": "started",
+            "detail": "312-T18 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Re-plan path scrubbing (token-based) for O3-1..O3-4; fix mkdocs strict links in learning.md",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T18"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:04:30.898Z",
+            "outcome": "started",
+            "detail": "312-T19"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Fix PR review round 1 (R1-F1..F9): store choke point, single learn arg parser",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:08:45.162Z",
+            "outcome": "started",
+            "detail": "312-T20 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Fix R2-F1: classify absolute paths embedded inside tokens (stack traces, JSON, redirects, file://)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T19"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:42:25.471Z",
+            "outcome": "started",
+            "detail": "312-T21 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "Fix R2-F2..F8 + CI gates (core-gate test coverage list, facade-bypass ratchet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T20"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:42:25.599Z",
+            "outcome": "started",
+            "detail": "312-T22 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "Narrow re-plan: fix R3-F1..F5 with pre-fix-failing tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T22"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:12:33.965Z",
+            "outcome": "started",
+            "detail": "312-T23 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "Fix R4-F1: login gate checks variable text only, not fixed templates",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T23"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T12:45:01.664Z",
+            "outcome": "started",
+            "detail": "312-T24 sonnet"
+          },
+          {
+            "at": "2026-09-24T12:59:08.797Z",
+            "outcome": "failed",
+            "detail": "narrow verification: R5-F1/F2 same false-refusal class via 5+ substring fallback"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T25",
+      "title": "Re-plan login gate: boundary-only matching (drop substring fallback); graduate gates stripped member text only",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T24"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:59:09.073Z",
+            "outcome": "started",
+            "detail": "312-T25 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T26",
+      "title": "Fix R6-F1..F4: attribution gate at the source (reviewer-comment text), login-equal keyword filter in graduate, comments",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T25"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T13:22:50.907Z",
+            "outcome": "started",
+            "detail": "312-T26 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T27",
+      "title": "Fix R7-F1..F3: one shared mayCarryReviewerText predicate for every attribution gate; drop summary token gate",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T26"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T13:37:20.185Z",
+            "outcome": "started",
+            "detail": "312-T27 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T28",
+      "title": "Fix R8-F1..F4: single gateReviewerText helper for every text sink (incl. promote, graduate apply derived tokens); import-ban guard",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T27"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T13:55:49.443Z",
+            "outcome": "started",
+            "detail": "312-T28 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T29",
+      "title": "Fix R9-F1..F3: recompute graduation name/summary from members with current logins at apply; word-boundary id slug",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T28"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T14:17:41.389Z",
+            "outcome": "started",
+            "detail": "312-T29 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-24T07:18:32.725Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T07:30:28.241Z",
+      "event": "task-added",
+      "detail": "T5: Core learning module: types, schema validator, confidence, identity, paths, scan, store, decisions"
+    },
+    {
+      "at": "2026-09-24T07:30:28.362Z",
+      "event": "task-added",
+      "detail": "T6: Observe: real LearningObservationSink, shell runtime wiring, ignore block + guard test"
+    },
+    {
+      "at": "2026-09-24T07:30:28.486Z",
+      "event": "task-added",
+      "detail": "T7: Extract: five deterministic signals, candidate upsert, capability-gated model extractor port"
+    },
+    {
+      "at": "2026-09-24T07:30:28.608Z",
+      "event": "task-added",
+      "detail": "T8: Consent CLI: keryx learn list/review/accept/reject/prune/observe/extract + index"
+    },
+    {
+      "at": "2026-09-24T07:30:28.729Z",
+      "event": "task-added",
+      "detail": "T9: Apply + reviewer profiles: learn apply via applyLearningProposal, review learn --reviewer"
+    },
+    {
+      "at": "2026-09-24T07:30:28.853Z",
+      "event": "task-added",
+      "detail": "T10: Promote + graduate: promote gate, graduation proposals, scout learned origin, agent candidate apply"
+    },
+    {
+      "at": "2026-09-24T07:30:28.976Z",
+      "event": "task-added",
+      "detail": "T11: Host observer: opt-in Claude observe surface in W5 registry, matrix regenerated"
+    },
+    {
+      "at": "2026-09-24T07:30:29.094Z",
+      "event": "task-added",
+      "detail": "T12: D-3 skill-lifecycle amendment + learning docs + W3 doc amendments"
+    },
+    {
+      "at": "2026-09-24T07:30:29.220Z",
+      "event": "task-added",
+      "detail": "T13: Verify: wave-3 exit guard test (no accepted without recorded human accept)"
+    },
+    {
+      "at": "2026-09-24T07:30:29.339Z",
+      "event": "task-added",
+      "detail": "T14: Verify: end-to-end CLI run observe->extract->accept->apply in a temp project"
+    },
+    {
+      "at": "2026-09-24T07:30:29.455Z",
+      "event": "task-added",
+      "detail": "T15: Verify: deep review of Observe against the no-complete-transcript non-goal"
+    },
+    {
+      "at": "2026-09-24T07:30:29.570Z",
+      "event": "task-added",
+      "detail": "T16: Verify: targeted tests, typecheck and eslint on changed files"
+    },
+    {
+      "at": "2026-09-24T07:30:29.692Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T16 (was empty) — PR after verification"
+    },
+    {
+      "at": "2026-09-24T07:30:29.812Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (program owner per dispatch)"
+    },
+    {
+      "at": "2026-09-24T07:30:41.547Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T07:30:41.667Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T07:30:41.792Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T07:30:41.913Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T07:30:42.035Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-24T07:31:03.431Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 312-T5 sonnet"
+    },
+    {
+      "at": "2026-09-24T07:44:48.139Z",
+      "event": "task-done",
+      "detail": "T5: Core learning module: types, schema validator, confidence, identity, paths, scan, store, decisions"
+    },
+    {
+      "at": "2026-09-24T07:44:48.283Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 312-T6 sonnet"
+    },
+    {
+      "at": "2026-09-24T07:44:48.402Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 312-T7 sonnet"
+    },
+    {
+      "at": "2026-09-24T07:57:13.195Z",
+      "event": "task-done",
+      "detail": "T6: Observe: real LearningObservationSink, shell runtime wiring, ignore block + guard test"
+    },
+    {
+      "at": "2026-09-24T08:00:34.530Z",
+      "event": "task-done",
+      "detail": "T7: Extract: five deterministic signals, candidate upsert, capability-gated model extractor port"
+    },
+    {
+      "at": "2026-09-24T08:00:34.669Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 312-T8 sonnet"
+    },
+    {
+      "at": "2026-09-24T08:03:44.055Z",
+      "event": "task-attempt",
+      "detail": "T8: blocked (attempt 2) — isolation worktree mis-dispatch (worker env reported a separate worktree root; no files written)"
+    },
+    {
+      "at": "2026-09-24T08:03:53.951Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 3) — 312-T8 re-dispatch, no isolation, no sub-delegation"
+    },
+    {
+      "at": "2026-09-24T08:21:12.429Z",
+      "event": "task-done",
+      "detail": "T8: Consent CLI: keryx learn list/review/accept/reject/prune/observe/extract + index"
+    },
+    {
+      "at": "2026-09-24T08:21:12.579Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 312-T9"
+    },
+    {
+      "at": "2026-09-24T08:21:12.712Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 312-T10"
+    },
+    {
+      "at": "2026-09-24T08:21:12.847Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 312-T11"
+    },
+    {
+      "at": "2026-09-24T08:21:12.975Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 312-T12"
+    },
+    {
+      "at": "2026-09-24T08:30:08.207Z",
+      "event": "task-done",
+      "detail": "T11: Host observer: opt-in Claude observe surface in W5 registry, matrix regenerated"
+    },
+    {
+      "at": "2026-09-24T08:30:12.418Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 312-T15 opus observe review"
+    },
+    {
+      "at": "2026-09-24T08:31:25.946Z",
+      "event": "task-done",
+      "detail": "T12: D-3 skill-lifecycle amendment + learning docs + W3 doc amendments"
+    },
+    {
+      "at": "2026-09-24T08:35:22.605Z",
+      "event": "task-done",
+      "detail": "T9: Apply + reviewer profiles: learn apply via applyLearningProposal, review learn --reviewer"
+    },
+    {
+      "at": "2026-09-24T08:35:31.698Z",
+      "event": "task-added",
+      "detail": "T17: Fix Observe review findings O-1..O-9 and T9 concerns (learning service facade, apply dry-run)"
+    },
+    {
+      "at": "2026-09-24T08:35:31.829Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 312-T17 sonnet"
+    },
+    {
+      "at": "2026-09-24T08:35:31.960Z",
+      "event": "task-attempt",
+      "detail": "T15: failed (attempt 2) — round 1: 3 major, 4 minor, 2 info — fixes in T17"
+    },
+    {
+      "at": "2026-09-24T08:54:50.260Z",
+      "event": "task-done",
+      "detail": "T17: Fix Observe review findings O-1..O-9 and T9 concerns (learning service facade, apply dry-run)"
+    },
+    {
+      "at": "2026-09-24T10:39:32.714Z",
+      "event": "task-done",
+      "detail": "T10: Promote + graduate: promote gate, graduation proposals, scout learned origin, agent candidate apply"
+    },
+    {
+      "at": "2026-09-24T10:39:38.465Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 312-T13"
+    },
+    {
+      "at": "2026-09-24T10:39:38.598Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 312-T14"
+    },
+    {
+      "at": "2026-09-24T10:39:38.727Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 3) — round 2 re-review after T17"
+    },
+    {
+      "at": "2026-09-24T10:43:56.812Z",
+      "event": "task-attempt",
+      "detail": "T15: failed (attempt 4) — round 2: 1 major (O2-1 Write content), 4 minor, 1 info; fixes in T18"
+    },
+    {
+      "at": "2026-09-24T10:43:56.938Z",
+      "event": "task-added",
+      "detail": "T18: Fix Observe round-2 findings O2-1..O2-6"
+    },
+    {
+      "at": "2026-09-24T10:43:57.059Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 312-T18 sonnet"
+    },
+    {
+      "at": "2026-09-24T10:49:02.720Z",
+      "event": "task-done",
+      "detail": "T14: Verify: end-to-end CLI run observe->extract->accept->apply in a temp project"
+    },
+    {
+      "at": "2026-09-24T10:49:36.166Z",
+      "event": "task-done",
+      "detail": "T13: Verify: wave-3 exit guard test (no accepted without recorded human accept)"
+    },
+    {
+      "at": "2026-09-24T10:55:31.326Z",
+      "event": "task-done",
+      "detail": "T18: Fix Observe round-2 findings O2-1..O2-6"
+    },
+    {
+      "at": "2026-09-24T10:55:31.476Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 5) — round 3 re-check after T18"
+    },
+    {
+      "at": "2026-09-24T10:57:19.342Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — orchestrator local checks"
+    },
+    {
+      "at": "2026-09-24T10:58:35.361Z",
+      "event": "task-done",
+      "detail": "T16: Verify: targeted tests, typecheck and eslint on changed files"
+    },
+    {
+      "at": "2026-09-24T10:59:24.782Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — PR #691 review round 1 (opus)"
+    },
+    {
+      "at": "2026-09-24T11:04:30.640Z",
+      "event": "task-attempt",
+      "detail": "T15: failed (attempt 6) — round 3: O-1 still partial via free-text path regex; 3 minor (O3-1..O3-3) + 1 info"
+    },
+    {
+      "at": "2026-09-24T11:04:30.769Z",
+      "event": "task-added",
+      "detail": "T19: Re-plan path scrubbing (token-based) for O3-1..O3-4; fix mkdocs strict links in learning.md"
+    },
+    {
+      "at": "2026-09-24T11:04:30.898Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 312-T19"
+    },
+    {
+      "at": "2026-09-24T11:08:44.883Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — PR review round 1: 1 blocker, 3 major, 5 minor (R1-F1..F9)"
+    },
+    {
+      "at": "2026-09-24T11:08:45.017Z",
+      "event": "task-added",
+      "detail": "T20: Fix PR review round 1 (R1-F1..F9): store choke point, single learn arg parser"
+    },
+    {
+      "at": "2026-09-24T11:08:45.162Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 312-T20 sonnet"
+    },
+    {
+      "at": "2026-09-24T11:16:06.790Z",
+      "event": "task-done",
+      "detail": "T19: Re-plan path scrubbing (token-based) for O3-1..O3-4; fix mkdocs strict links in learning.md"
+    },
+    {
+      "at": "2026-09-24T11:33:50.346Z",
+      "event": "task-done",
+      "detail": "T20: Fix PR review round 1 (R1-F1..F9): store choke point, single learn arg parser"
+    },
+    {
+      "at": "2026-09-24T11:34:03.974Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — PR review round 2 (opus)"
+    },
+    {
+      "at": "2026-09-24T11:42:17.955Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — PR review round 2: 1 major (R2-F1 path-in-token regression), 6 minor, 1 info; CI typecheck-and-tests: test-coverage gate + facade ratchet 152>150"
+    },
+    {
+      "at": "2026-09-24T11:42:25.189Z",
+      "event": "task-added",
+      "detail": "T21: Fix R2-F1: classify absolute paths embedded inside tokens (stack traces, JSON, redirects, file://)"
+    },
+    {
+      "at": "2026-09-24T11:42:25.335Z",
+      "event": "task-added",
+      "detail": "T22: Fix R2-F2..F8 + CI gates (core-gate test coverage list, facade-bypass ratchet)"
+    },
+    {
+      "at": "2026-09-24T11:42:25.472Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 312-T21 sonnet"
+    },
+    {
+      "at": "2026-09-24T11:42:25.599Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 312-T22 sonnet"
+    },
+    {
+      "at": "2026-09-24T11:51:53.518Z",
+      "event": "task-done",
+      "detail": "T21: Fix R2-F1: classify absolute paths embedded inside tokens (stack traces, JSON, redirects, file://)"
+    },
+    {
+      "at": "2026-09-24T12:00:13.100Z",
+      "event": "task-done",
+      "detail": "T22: Fix R2-F2..F8 + CI gates (core-gate test coverage list, facade-bypass ratchet)"
+    },
+    {
+      "at": "2026-09-24T12:02:31.922Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 5) — PR review round 3 (opus), final attempt"
+    },
+    {
+      "at": "2026-09-24T12:12:33.687Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 6) — PR review round 3 (final): 0 blocker/major, 4 minor, 1 info; consent invariant confirmed"
+    },
+    {
+      "at": "2026-09-24T12:12:33.824Z",
+      "event": "task-added",
+      "detail": "T23: Narrow re-plan: fix R3-F1..F5 with pre-fix-failing tests"
+    },
+    {
+      "at": "2026-09-24T12:12:33.965Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 312-T23 sonnet"
+    },
+    {
+      "at": "2026-09-24T12:42:00.354Z",
+      "event": "task-done",
+      "detail": "T23: Narrow re-plan: fix R3-F1..F5 with pre-fix-failing tests"
+    },
+    {
+      "at": "2026-09-24T12:45:01.527Z",
+      "event": "task-added",
+      "detail": "T24: Fix R4-F1: login gate checks variable text only, not fixed templates"
+    },
+    {
+      "at": "2026-09-24T12:45:01.664Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 312-T24 sonnet"
+    },
+    {
+      "at": "2026-09-24T12:56:41.922Z",
+      "event": "task-done",
+      "detail": "T24: Fix R4-F1: login gate checks variable text only, not fixed templates"
+    },
+    {
+      "at": "2026-09-24T12:59:08.797Z",
+      "event": "task-attempt",
+      "detail": "T24: failed (attempt 2) — narrow verification: R5-F1/F2 same false-refusal class via 5+ substring fallback"
+    },
+    {
+      "at": "2026-09-24T12:59:08.936Z",
+      "event": "task-added",
+      "detail": "T25: Re-plan login gate: boundary-only matching (drop substring fallback); graduate gates stripped member text only"
+    },
+    {
+      "at": "2026-09-24T12:59:09.073Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 312-T25 sonnet"
+    },
+    {
+      "at": "2026-09-24T13:16:37.242Z",
+      "event": "task-done",
+      "detail": "T25: Re-plan login gate: boundary-only matching (drop substring fallback); graduate gates stripped member text only"
+    },
+    {
+      "at": "2026-09-24T13:22:50.766Z",
+      "event": "task-added",
+      "detail": "T26: Fix R6-F1..F4: attribution gate at the source (reviewer-comment text), login-equal keyword filter in graduate, comments"
+    },
+    {
+      "at": "2026-09-24T13:22:50.907Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — 312-T26 sonnet"
+    },
+    {
+      "at": "2026-09-24T13:32:40.845Z",
+      "event": "task-done",
+      "detail": "T26: Fix R6-F1..F4: attribution gate at the source (reviewer-comment text), login-equal keyword filter in graduate, comments"
+    },
+    {
+      "at": "2026-09-24T13:37:20.042Z",
+      "event": "task-added",
+      "detail": "T27: Fix R7-F1..F3: one shared mayCarryReviewerText predicate for every attribution gate; drop summary token gate"
+    },
+    {
+      "at": "2026-09-24T13:37:20.185Z",
+      "event": "task-attempt",
+      "detail": "T27: started (attempt 1) — 312-T27 sonnet"
+    },
+    {
+      "at": "2026-09-24T13:50:32.308Z",
+      "event": "task-done",
+      "detail": "T27: Fix R7-F1..F3: one shared mayCarryReviewerText predicate for every attribution gate; drop summary token gate"
+    },
+    {
+      "at": "2026-09-24T13:55:49.308Z",
+      "event": "task-added",
+      "detail": "T28: Fix R8-F1..F4: single gateReviewerText helper for every text sink (incl. promote, graduate apply derived tokens); import-ban guard"
+    },
+    {
+      "at": "2026-09-24T13:55:49.443Z",
+      "event": "task-attempt",
+      "detail": "T28: started (attempt 1) — 312-T28 sonnet"
+    },
+    {
+      "at": "2026-09-24T14:10:57.210Z",
+      "event": "task-done",
+      "detail": "T28: Fix R8-F1..F4: single gateReviewerText helper for every text sink (incl. promote, graduate apply derived tokens); import-ban guard"
+    },
+    {
+      "at": "2026-09-24T14:17:41.246Z",
+      "event": "task-added",
+      "detail": "T29: Fix R9-F1..F3: recompute graduation name/summary from members with current logins at apply; word-boundary id slug"
+    },
+    {
+      "at": "2026-09-24T14:17:41.389Z",
+      "event": "task-attempt",
+      "detail": "T29: started (attempt 1) — 312-T29 sonnet"
+    },
+    {
+      "at": "2026-09-24T14:31:39.342Z",
+      "event": "task-done",
+      "detail": "T29: Fix R9-F1..F3: recompute graduation name/summary from members with current logins at apply; word-boundary id slug"
+    },
+    {
+      "at": "2026-09-24T14:41:28.457Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 7) — final verification R10 of T29: 0 blocker/major, 2 minor, 2 info; CI green 08dc37d0; health PASS; stopped for owner decision"
+    },
+    {
+      "at": "2026-09-24T17:20:42.459Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/691 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T17:20:55.806Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/learning/observe.test.ts: keryx.learning-observer sink wired into the shell hook runtime writes validated tool-complete and session-end lines; secret redacted as [redacted:secret]; previews <=200 chars; digests only. PR #691 squash 08af367c. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:55.955Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/learning/extract.test.ts AC2 case: fail->pass fixture gives exactly one failing-to-passing-test candidate; signals/*.test.ts cover the other four signals; model extractor refused unless the capability is enabled. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:56.096Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/learning/confidence.test.ts: 0.4 -> 0.61 (medium); contradiction, decay and level boundaries tested. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:56.247Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: accept.test.ts, exit-guard.test.ts, store-choke-point.test.ts: acceptPattern is the only accepted transition; apply.test.ts and reviewer-profile.test.ts prove the isPathInside refusals. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:56.386Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: accept.test.ts: one index entry with exactly 4 keys; a second id adds a second key; accepting a user-scope record writes no index entry. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:56.527Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: promote.test.ts: non-TTY refusal (promote-requires-terminal), no bypass flag, 1-identity refusal, indexed accept-time confidence used, refresh overwrites only the current identity, success writes a user-scope candidate. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:56.668Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: reviewer-profile.test.ts and reviewer-id.test.ts: the rendered .mdc carries no configured login (boundary-matched, incl. bots); opaque rv- ids; reviewerProfiles must be a subset of authors. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:56.812Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: graduate.test.ts: runGraduate writes proposals only; applyGraduation (TTY) writes .metaproject/agents/<name>.md with origin.kind learned; scout --origin learned --source-ref in scout.test.ts and skills-governance.test.ts. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:56.960Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: schema.test.ts: runtime schema byte-identical to docs; every fixture record validated by validateLearnedPattern. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:57.110Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: src/learning/gitignore-guard.test.ts: git check-ignore matches observations and candidates after the managed block; the repo .gitignore carries the same entries. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:57.265Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: src/learning/exit-guard.test.ts (21 tests): no accepted record without a TTY accept and a decision line; auditAcceptedRecords flags tampering. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:57.413Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: scan.test.ts, extract.test.ts, apply.test.ts, graduate.test.ts: injection and secret text refused before persistence and before apply/graduate writes. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:57.561Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: skill-lifecycle.mdc (project and bundled, byte-identical, v0.2.0) carries the D-3 amendment; prune.test.ts covers the 30-day TTL and candidate expiry. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:57.703Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: src/integrations/surfaces-learning.test.ts: opt-in Claude learning-observer surface installs keryx learn observe --hook claude; the capability matrix drift test passes in CI. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:20:57.855Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: Observe deep review: 3 rounds plus fixes (T17/T18/T19/T21), no open finding at minor or above in the Observe class. CI on PR #691 green (18 pass). Final-round attribution minors R10-F1/F2 deferred as an owner-approved exception, recorded in the journal. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T17:21:04.448Z",
+      "event": "task-done",
+      "detail": "T15: Verify: deep review of Observe against the no-complete-transcript non-goal"
+    },
+    {
+      "at": "2026-09-24T17:21:04.582Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T17:21:16.592Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T17:21:21.606Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-24T17:21:21.607Z",
+      "event": "completion-failed",
+      "detail": "main-merge: 08af367cea4a945bf24c8a04e3d83c854d5b64b6 is not contained in origin/main | review: 4 of 5 conditions failed — terminal-dispositions (violated): 33 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-691#R1-F1 (blocker, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F2 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F3 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F4 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F5 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F6 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F7 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F8 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F9 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F1 (major, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F2 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F3 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F4 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F5 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F6 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F7 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F1 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F2 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F3 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F4 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F1 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F2 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F4 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F1 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F2 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F3 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F1 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F2 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F3 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r07#R9-F1 (minor, round 2026-09-24-ingest-691-r07): no disposition recorded | 2026-09-24-ingest-691-r07#R9-F2 (minor, round 2026-09-24-ingest-691-r07): no disposition recorded | 2026-09-24-ingest-691-r08#R10-F1 (minor, round 2026-09-24-ingest-691-r08): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-24-ingest-691-r08#R10-F2 (minor, round 2026-09-24-ingest-691-r08): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | head-commit (violated): the latest round ran against 08dc37d0eb02f825585bd73b9fda3b402661abf0, but the PR head is 3953e0407298bcdbc95d58b304e988373ff8bc60. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#691 was last collected against 08af367cea4a945bf24c8a04e3d83c854d5b64b6 (round 1), but the PR head is 3953e0407298bcdbc95d58b304e988373ff8bc60. Everything anyone said after 08af367cea4a945bf24c8a04e3d83c854d5b64b6 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 691 --sha <pr-head>`. | verifier-stats (violated): round `2026-09-24-ingest-691-r08` ran with `verification_mode: annotate` and received 0 claims while retaining 2 finding(s) at or above `minor` (2026-09-24-ingest-691-r08#R10-F1, 2026-09-24-ingest-691-r08#R10-F2). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T17:21:32.244Z",
+      "event": "completing",
+      "detail": "merged commit: 08af367cea4a945bf24c8a04e3d83c854d5b64b6"
+    },
+    {
+      "at": "2026-09-24T17:21:37.860Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-24T17:21:37.861Z",
+      "event": "completion-failed",
+      "detail": "main-merge: 08af367cea4a945bf24c8a04e3d83c854d5b64b6 is not contained in origin/main | review: 4 of 5 conditions failed — terminal-dispositions (violated): 33 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-691#R1-F1 (blocker, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F2 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F3 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F4 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F5 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F6 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F7 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F8 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F9 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F1 (major, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F2 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F3 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F4 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F5 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F6 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F7 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F1 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F2 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F3 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F4 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F1 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F2 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F4 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F1 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F2 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F3 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F1 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F2 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F3 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r07#R9-F1 (minor, round 2026-09-24-ingest-691-r07): no disposition recorded | 2026-09-24-ingest-691-r07#R9-F2 (minor, round 2026-09-24-ingest-691-r07): no disposition recorded | 2026-09-24-ingest-691-r08#R10-F1 (minor, round 2026-09-24-ingest-691-r08): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-24-ingest-691-r08#R10-F2 (minor, round 2026-09-24-ingest-691-r08): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | head-commit (violated): the latest round ran against 08dc37d0eb02f825585bd73b9fda3b402661abf0, but the PR head is 3953e0407298bcdbc95d58b304e988373ff8bc60. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#691 was last collected against 08af367cea4a945bf24c8a04e3d83c854d5b64b6 (round 1), but the PR head is 3953e0407298bcdbc95d58b304e988373ff8bc60. Everything anyone said after 08af367cea4a945bf24c8a04e3d83c854d5b64b6 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 691 --sha <pr-head>`. | verifier-stats (violated): round `2026-09-24-ingest-691-r08` ran with `verification_mode: annotate` and received 0 claims while retaining 2 finding(s) at or above `minor` (2026-09-24-ingest-691-r08#R10-F1, 2026-09-24-ingest-691-r08#R10-F2). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T17:23:16.527Z",
+      "event": "completing",
+      "detail": "merged commit: 08af367cea4a945bf24c8a04e3d83c854d5b64b6"
+    },
+    {
+      "at": "2026-09-24T17:23:21.539Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: failed"
+    },
+    {
+      "at": "2026-09-24T17:23:21.540Z",
+      "event": "completion-failed",
+      "detail": "main-merge: 08af367cea4a945bf24c8a04e3d83c854d5b64b6 is not contained in origin/main | review: 1 of 5 conditions failed — terminal-dispositions (violated): 31 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-691#R1-F1 (blocker, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F2 (major, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F3 (major, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F4 (major, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F5 (minor, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F6 (minor, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F7 (minor, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F8 (minor, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F9 (minor, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F1 (major, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F2 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F3 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F4 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F5 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F6 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F7 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r03#R3-F1 (minor, round 2026-09-24-ingest-691-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r03#R3-F2 (minor, round 2026-09-24-ingest-691-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r03#R3-F3 (minor, round 2026-09-24-ingest-691-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r03#R3-F4 (minor, round 2026-09-24-ingest-691-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r04#R6-F1 (minor, round 2026-09-24-ingest-691-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r04#R6-F2 (minor, round 2026-09-24-ingest-691-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r04#R6-F4 (minor, round 2026-09-24-ingest-691-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r05#R7-F1 (minor, round 2026-09-24-ingest-691-r05): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r05#R7-F2 (minor, round 2026-09-24-ingest-691-r05): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r05#R7-F3 (minor, round 2026-09-24-ingest-691-r05): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r06#R8-F1 (minor, round 2026-09-24-ingest-691-r06): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r06#R8-F2 (minor, round 2026-09-24-ingest-691-r06): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r06#R8-F3 (minor, round 2026-09-24-ingest-691-r06): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r07#R9-F1 (minor, round 2026-09-24-ingest-691-r07): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r07#R9-F2 (minor, round 2026-09-24-ingest-691-r07): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T17:24:39.382Z",
+      "event": "completing",
+      "detail": "merged commit: 08af367cea4a945bf24c8a04e3d83c854d5b64b6"
+    },
+    {
+      "at": "2026-09-24T17:24:44.334Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 4: failed"
+    },
+    {
+      "at": "2026-09-24T17:24:44.335Z",
+      "event": "completion-failed",
+      "detail": "main-merge: 08af367cea4a945bf24c8a04e3d83c854d5b64b6 is not contained in origin/main | review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against 08dc37d0eb02f825585bd73b9fda3b402661abf0, but the PR head is 3953e0407298bcdbc95d58b304e988373ff8bc60. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T17:24:54.906Z",
+      "event": "completing",
+      "detail": "merged commit: 08af367cea4a945bf24c8a04e3d83c854d5b64b6"
+    },
+    {
+      "at": "2026-09-24T17:24:59.964Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 5: failed"
+    },
+    {
+      "at": "2026-09-24T17:24:59.966Z",
+      "event": "completion-failed",
+      "detail": "main-merge: 08af367cea4a945bf24c8a04e3d83c854d5b64b6 is not contained in origin/main"
+    },
+    {
+      "at": "2026-09-24T17:25:36.174Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/691 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T17:25:36.416Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T17:25:44.777Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 6: passed"
+    },
+    {
+      "at": "2026-09-24T17:25:44.779Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "signatures": [
+    {
+      "at": "2026-09-24T17:20:55.806Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:55.955Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:56.096Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:56.247Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:56.386Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:56.527Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:56.668Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:56.812Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:56.960Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:57.110Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:57.265Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:57.413Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:57.561Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:57.703Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:20:57.855Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:25:44.779Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670",
+      "headCommit": "3953e0407298bcdbc95d58b304e988373ff8bc60"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-24T17:21:21.606Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "15 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "fail",
+          "detail": "08af367cea4a945bf24c8a04e3d83c854d5b64b6 is not contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "08af367cea4a945bf24c8a04e3d83c854d5b64b6 is contained in origin/feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "29 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — terminal-dispositions (violated): 33 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-691#R1-F1 (blocker, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F2 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F3 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F4 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F5 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F6 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F7 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F8 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F9 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F1 (major, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F2 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F3 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F4 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F5 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F6 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F7 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F1 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F2 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F3 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F4 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F1 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F2 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F4 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F1 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F2 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F3 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F1 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F2 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F3 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r07#R9-F1 (minor, round 2026-09-24-ingest-691-r07): no disposition recorded | 2026-09-24-ingest-691-r07#R9-F2 (minor, round 2026-09-24-ingest-691-r07): no disposition recorded | 2026-09-24-ingest-691-r08#R10-F1 (minor, round 2026-09-24-ingest-691-r08): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-24-ingest-691-r08#R10-F2 (minor, round 2026-09-24-ingest-691-r08): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | head-commit (violated): the latest round ran against 08dc37d0eb02f825585bd73b9fda3b402661abf0, but the PR head is 3953e0407298bcdbc95d58b304e988373ff8bc60. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#691 was last collected against 08af367cea4a945bf24c8a04e3d83c854d5b64b6 (round 1), but the PR head is 3953e0407298bcdbc95d58b304e988373ff8bc60. Everything anyone said after 08af367cea4a945bf24c8a04e3d83c854d5b64b6 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 691 --sha <pr-head>`. | verifier-stats (violated): round `2026-09-24-ingest-691-r08` ran with `verification_mode: annotate` and received 0 claims while retaining 2 finding(s) at or above `minor` (2026-09-24-ingest-691-r08#R10-F1, 2026-09-24-ingest-691-r08#R10-F2). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:21:37.860Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "15 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "fail",
+          "detail": "08af367cea4a945bf24c8a04e3d83c854d5b64b6 is not contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "08af367cea4a945bf24c8a04e3d83c854d5b64b6 is contained in origin/feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "29 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — terminal-dispositions (violated): 33 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-691#R1-F1 (blocker, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F2 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F3 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F4 (major, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F5 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F6 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F7 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F8 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691#R1-F9 (minor, round 2026-09-24-ingest-691): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F1 (major, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F2 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F3 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F4 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F5 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F6 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r02#R2-F7 (minor, round 2026-09-24-ingest-691-r02): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F1 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F2 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F3 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r03#R3-F4 (minor, round 2026-09-24-ingest-691-r03): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F1 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F2 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r04#R6-F4 (minor, round 2026-09-24-ingest-691-r04): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F1 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F2 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r05#R7-F3 (minor, round 2026-09-24-ingest-691-r05): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F1 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F2 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r06#R8-F3 (minor, round 2026-09-24-ingest-691-r06): no disposition recorded | 2026-09-24-ingest-691-r07#R9-F1 (minor, round 2026-09-24-ingest-691-r07): no disposition recorded | 2026-09-24-ingest-691-r07#R9-F2 (minor, round 2026-09-24-ingest-691-r07): no disposition recorded | 2026-09-24-ingest-691-r08#R10-F1 (minor, round 2026-09-24-ingest-691-r08): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-24-ingest-691-r08#R10-F2 (minor, round 2026-09-24-ingest-691-r08): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | head-commit (violated): the latest round ran against 08dc37d0eb02f825585bd73b9fda3b402661abf0, but the PR head is 3953e0407298bcdbc95d58b304e988373ff8bc60. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#691 was last collected against 08af367cea4a945bf24c8a04e3d83c854d5b64b6 (round 1), but the PR head is 3953e0407298bcdbc95d58b304e988373ff8bc60. Everything anyone said after 08af367cea4a945bf24c8a04e3d83c854d5b64b6 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 691 --sha <pr-head>`. | verifier-stats (violated): round `2026-09-24-ingest-691-r08` ran with `verification_mode: annotate` and received 0 claims while retaining 2 finding(s) at or above `minor` (2026-09-24-ingest-691-r08#R10-F1, 2026-09-24-ingest-691-r08#R10-F2). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:23:21.539Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "15 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "fail",
+          "detail": "08af367cea4a945bf24c8a04e3d83c854d5b64b6 is not contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "08af367cea4a945bf24c8a04e3d83c854d5b64b6 is contained in origin/feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "29 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 31 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-691#R1-F1 (blocker, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F2 (major, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F3 (major, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F4 (major, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F5 (minor, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F6 (minor, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F7 (minor, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F8 (minor, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691#R1-F9 (minor, round 2026-09-24-ingest-691): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F1 (major, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F2 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F3 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F4 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F5 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F6 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r02#R2-F7 (minor, round 2026-09-24-ingest-691-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r03#R3-F1 (minor, round 2026-09-24-ingest-691-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r03#R3-F2 (minor, round 2026-09-24-ingest-691-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r03#R3-F3 (minor, round 2026-09-24-ingest-691-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r03#R3-F4 (minor, round 2026-09-24-ingest-691-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r04#R6-F1 (minor, round 2026-09-24-ingest-691-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r04#R6-F2 (minor, round 2026-09-24-ingest-691-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r04#R6-F4 (minor, round 2026-09-24-ingest-691-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r05#R7-F1 (minor, round 2026-09-24-ingest-691-r05): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r05#R7-F2 (minor, round 2026-09-24-ingest-691-r05): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r05#R7-F3 (minor, round 2026-09-24-ingest-691-r05): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r06#R8-F1 (minor, round 2026-09-24-ingest-691-r06): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r06#R8-F2 (minor, round 2026-09-24-ingest-691-r06): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r06#R8-F3 (minor, round 2026-09-24-ingest-691-r06): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r07#R9-F1 (minor, round 2026-09-24-ingest-691-r07): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-691-r07#R9-F2 (minor, round 2026-09-24-ingest-691-r07): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:24:44.334Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "15 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "fail",
+          "detail": "08af367cea4a945bf24c8a04e3d83c854d5b64b6 is not contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "08af367cea4a945bf24c8a04e3d83c854d5b64b6 is contained in origin/feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "29 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — head-commit (violated): the latest round ran against 08dc37d0eb02f825585bd73b9fda3b402661abf0, but the PR head is 3953e0407298bcdbc95d58b304e988373ff8bc60. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:24:59.964Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "15 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "fail",
+          "detail": "08af367cea4a945bf24c8a04e3d83c854d5b64b6 is not contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "08af367cea4a945bf24c8a04e3d83c854d5b64b6 is contained in origin/feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "29 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 9 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
+    },
+    {
+      "at": "2026-09-24T17:25:44.777Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "15 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "29 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 9 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:634f150791b5bff6e249d403eaddee5b2b8627085b58be6d6e90685835955670"
     }
   ]
 }

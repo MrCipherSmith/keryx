@@ -39,7 +39,8 @@
         "skills",
         "agents",
         "instructions",
-        "mcp"
+        "mcp",
+        "rules"
       ]
     },
     "harnessId": {

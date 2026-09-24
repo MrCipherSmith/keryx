@@ -25,6 +25,7 @@ import {
 } from "../harness/hooks";
 import { resolveProjectRoot as resolveProjectRootFromCwd } from "../lib/contained-path";
 import { createShellImpactEvidenceProvider } from "../lib/impact-evidence-hook-adapter";
+import { createLearningObservationSink, type LearningObservationSink } from "../learning/service";
 import type { PolicyProfileId } from "../harness/policy/types";
 
 /**
@@ -174,6 +175,14 @@ export interface BuildShellHookRuntimeOptions {
   env?: NodeJS.ProcessEnv;
   /** Surfaced diagnostics sink for a config-load failure (tests / callers that want to log it). */
   onConfigError?: (diagnostics: readonly { code: string; message: string }[]) => void;
+  /**
+   * Overrides the real W3 `LearningObservationSink` (tests). Defaults to
+   * `createLearningObservationSink({ root: projectRoot })` — a real sink for
+   * every production session, harmless (no-op) unless `keryx.learning-
+   * observer`'s builtin registrations fire, and itself disabled entirely by
+   * `KERYX_LEARNING=off`.
+   */
+  learningSink?: LearningObservationSink;
 }
 
 /**
@@ -223,7 +232,15 @@ export function buildShellHookRuntime(opts: BuildShellHookRuntimeOptions): Shell
       // `KERYX_DISABLE_IMPACT_GATE` kill switch — a test (or a future caller)
       // can now flip that switch via the injectable `env` option instead of
       // mutating global state.
-      ports: { impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot, env }) },
+      ports: {
+        impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot, env }),
+        // W3 T6: the real observation sink for every production session —
+        // harmless unless `keryx.learning-observer`'s builtin registrations
+        // fire, and disabled entirely by `KERYX_LEARNING=off` (checked inside
+        // the sink itself, same as this function's own `KERYX_HOOKS=off`
+        // check above).
+        learningSink: opts.learningSink ?? createLearningObservationSink(opts.projectRoot, { env }),
+      },
     });
   } else {
     opts.onConfigError?.(loaded.diagnostics);

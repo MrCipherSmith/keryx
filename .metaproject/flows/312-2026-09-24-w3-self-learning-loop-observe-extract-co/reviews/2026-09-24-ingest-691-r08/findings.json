@@ -1,0 +1,106 @@
+[
+  {
+    "id": "R10-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Stale skill/rule graduation proposals are never re-checked against later-configured logins; graduate apply echoes their nextSteps",
+    "impact": "A later-configured login survives in proposal files and in the suggested skills-scout command.",
+    "suggested_fix": "Re-gate and recompute already-proposed proposals on rerun; recompute nextSteps from members at apply.",
+    "evidence": "r16/b.ts SINK 4: proposal files still match /alice/; apply error prints --skill-name alice-code",
+    "confidence": "high",
+    "file": "src/learning/graduate.ts",
+    "line": 439,
+    "class_scope": {
+      "sites": [
+        "graduate.ts:437-441",
+        "graduate.ts:676-681"
+      ],
+      "enumeration_method": "every read of GraduationProposalFile fields after creation; r16/b.ts SINK 4"
+    },
+    "global_id": "2026-09-24-ingest-691-r08#R10-F1",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "scratchpad/r691/r16/b.ts SINK 4: after a later login config, the proposal files still match the login; the apply error prints --skill-name alice-code. The code is unchanged at 3953e040.",
+      "verifier": "round-r08-opus"
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat, 2026-09-24): owner-approved exception, deferred to a follow-up flow (stale graduation proposals after a login config change + printed next-step command)"
+    }
+  },
+  {
+    "id": "R10-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Model-backed draft metadata (extractor label, evidence sourceRef) persisted without a login gate",
+    "impact": "A model-backed extractor could write a login into stored metadata (no in-tree implementation ships).",
+    "suggested_fix": "Fixed label for model-backed drafts; gate or shape-check sourceRef.",
+    "evidence": "r16/c.ts: extractor '@alice', sourceRef 'notes/alice[bot].md' stored",
+    "confidence": "medium",
+    "file": "src/learning/extract.ts",
+    "line": 353,
+    "class_scope": {
+      "sites": [
+        "extract.ts:329",
+        "extract.ts:349",
+        "extract.ts:352",
+        "extract.ts:353"
+      ],
+      "enumeration_method": "SignalDraft fields vs gate inputs; r16/c.ts"
+    },
+    "global_id": "2026-09-24-ingest-691-r08#R10-F2",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "scratchpad/r691/r16/c.ts: extractor '@alice' and sourceRef 'notes/alice[bot].md' were stored. The code is unchanged at 3953e040.",
+      "verifier": "round-r08-opus"
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat, 2026-09-24): owner-approved exception, deferred to a follow-up flow (model-backed draft extractor label and sourceRef login gate)"
+    }
+  },
+  {
+    "id": "R10-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Id slug normalization turns separated login pieces into the literal hyphenated login",
+    "impact": "Hyphenated login appears in ids and file names.",
+    "suggested_fix": "Drop slug segment runs equal to a slug-normalized configured login.",
+    "evidence": "r16/b.ts SINK 7: id review-conventions.alice-dev-asked-…",
+    "confidence": "medium",
+    "file": "src/learning/extract.ts",
+    "line": 153,
+    "class_scope": {
+      "sites": [
+        "extract.ts:153",
+        "paths.ts:82,109",
+        "graduate.ts buildAgentCandidate",
+        "apply.ts proposalId"
+      ],
+      "enumeration_method": "every consumer of record.id; r16/b.ts SINK 7"
+    },
+    "global_id": "2026-09-24-ingest-691-r08#R10-F3"
+  },
+  {
+    "id": "R10-F4",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "learn review/list prints stored text without re-checking current logins",
+    "impact": "Login visible in terminal output.",
+    "suggested_fix": "Document as the review surface or mark records that would be refused.",
+    "evidence": "r16/b.ts SINK 8",
+    "confidence": "low",
+    "file": "src/commands/learn.ts",
+    "line": 384,
+    "class_scope": {
+      "sites": [
+        "learn.ts:384-393",
+        "learn.ts list --json"
+      ],
+      "enumeration_method": "console output of record text in learn.ts; r16/b.ts SINK 8"
+    },
+    "global_id": "2026-09-24-ingest-691-r08#R10-F4"
+  }
+]

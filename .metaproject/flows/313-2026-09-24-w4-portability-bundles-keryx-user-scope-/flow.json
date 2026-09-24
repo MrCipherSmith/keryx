@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "313",
   "slug": "w4-portability-bundles-keryx-user-scope-",
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T07:18:33.548Z",
+  "updatedAt": "2026-09-24T17:43:12.666Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:0909b194f5b2a50596de74e9f29e2dcc26e8397dc5fe0037d973a14b4a6bddc0",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,727 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:51.891Z",
+            "outcome": "started",
+            "detail": "313-T6 lane dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:51.985Z",
+            "outcome": "started",
+            "detail": "313-T7 lane dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:52.087Z",
+            "outcome": "started",
+            "detail": "313-T8 lane dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:52.171Z",
+            "outcome": "started",
+            "detail": "313-T9 lane dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "keryx bundle CLI + --render-for + external catalog import + scout --include-imports wiring (AC9, AC15)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:52:08.401Z",
+            "outcome": "started",
+            "detail": "313-T10 dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "CLI reference + portability guide + spec status notes (AC15)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Verify Wave-3 exit: fixture bundle round trip byte-identical and user-modified file never overwritten (AC13)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Verify every AC has passing automated evidence; targeted tests, typecheck, eslint (AC1-AC15)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Adversarial PR review rounds + fix loop",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 9,
+        "log": [
+          {
+            "at": "2026-09-24T08:33:25.271Z",
+            "outcome": "started",
+            "detail": "review round 1 on PR #690"
+          },
+          {
+            "at": "2026-09-24T08:48:02.262Z",
+            "outcome": "failed",
+            "detail": "round 1: 8 blocker, 12 major, 9 minor, 4 info; fix loop attempt 1 dispatched in 5 lanes"
+          },
+          {
+            "at": "2026-09-24T09:25:40.156Z",
+            "outcome": "started",
+            "detail": "review round 2 at 7ff8a38c"
+          },
+          {
+            "at": "2026-09-24T09:49:26.671Z",
+            "outcome": "failed",
+            "detail": "round 2: R1 20 resolved/8 partial/1 unresolved; new 0 blocker, 8 major, 13 minor, 6 info; fix attempt 2 with class-level fixes"
+          },
+          {
+            "at": "2026-09-24T10:20:48.968Z",
+            "outcome": "started",
+            "detail": "review round 3 at c4ad2a60 (last attempt)"
+          },
+          {
+            "at": "2026-09-24T10:44:08.737Z",
+            "outcome": "failed",
+            "detail": "round 3: 1 blocker (R3-F1), 6 major; three-attempt budget spent -> re-plan with choke points"
+          },
+          {
+            "at": "2026-09-24T13:57:40.896Z",
+            "outcome": "failed",
+            "detail": "closure verification r06: R5-F2 and R3-F18 partial (minor each); merge rule -> stop"
+          },
+          {
+            "at": "2026-09-24T14:19:31.697Z",
+            "outcome": "failed",
+            "detail": "closure 2 check r07: R5-F2 and R3-F18 resolved; new minor R7-F1 (UTF-16 BOM non-skill kinds scanned UTF-8 only); stop"
+          },
+          {
+            "at": "2026-09-24T17:43:12.666Z",
+            "outcome": "started",
+            "detail": "closure 3 check r08: 0 blocker/major, R7-F1 resolved; R8-F1 minor deferred per owner rule; merging"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Exclude SUBSYSTEM_INSTRUCTIONS from audit NON_JSON_HOOK_SURFACE_PATHS (instructions files double-counted as hook files) + test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Fix: bundle import validates --render-for harness ids before any write (exit 2)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Re-plan after round 3: choke-point fixes (contained-write primitive, canonical path key, audit binary rule, memory splitter, distill matcher, own-repo round-trip CI test)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T11:15:03.684Z",
+            "outcome": "started",
+            "detail": "choke-point re-plan lanes C1-C4 at ca877166; round 4 verification"
+          },
+          {
+            "at": "2026-09-24T11:38:37.431Z",
+            "outcome": "failed",
+            "detail": "round 4: 0 blocker, 2 major remaining (R1-F20, R3-F1), 16 minor"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T18",
+      "title": "Final surgical pass (orchestrator exception): no binary skip; project-root containment for all writers + full ratchet; cheap minors",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T12:05:20.606Z",
+            "outcome": "started",
+            "detail": "final pass at c8d68d62; round 5 verification"
+          },
+          {
+            "at": "2026-09-24T12:22:32.538Z",
+            "outcome": "failed",
+            "detail": "round 5: 0 blocker, 2 major (R5-F1 pre-existing on main, R5-F2 new), 2 minor, 17 info; exit rule -> stop"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T19",
+      "title": "Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T13:37:39.427Z",
+            "outcome": "started",
+            "detail": "313-T19 closure fix dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T14:02:24.789Z",
+            "outcome": "started",
+            "detail": "313-T20 closure fix 2 dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T17:27:30.287Z",
+            "outcome": "started",
+            "detail": "313-T21 dispatch after merging W3 (0b983e7e)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-24T07:18:33.548Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T07:26:34.410Z",
+      "event": "task-added",
+      "detail": "T5: Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.488Z",
+      "event": "task-added",
+      "detail": "T6: Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.569Z",
+      "event": "task-added",
+      "detail": "T7: W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.646Z",
+      "event": "task-added",
+      "detail": "T8: Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.726Z",
+      "event": "task-added",
+      "detail": "T9: Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.804Z",
+      "event": "task-added",
+      "detail": "T10: keryx bundle CLI + --render-for + external catalog import + scout --include-imports wiring (AC9, AC15)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.889Z",
+      "event": "task-added",
+      "detail": "T11: CLI reference + portability guide + spec status notes (AC15)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.970Z",
+      "event": "task-added",
+      "detail": "T12: Verify Wave-3 exit: fixture bundle round trip byte-identical and user-modified file never overwritten (AC13)"
+    },
+    {
+      "at": "2026-09-24T07:26:35.048Z",
+      "event": "task-added",
+      "detail": "T13: Verify every AC has passing automated evidence; targeted tests, typecheck, eslint (AC1-AC15)"
+    },
+    {
+      "at": "2026-09-24T07:26:35.126Z",
+      "event": "task-added",
+      "detail": "T14: Adversarial PR review rounds + fix loop"
+    },
+    {
+      "at": "2026-09-24T07:26:40.127Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T07:26:40.211Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T07:26:40.300Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-24T07:29:01.511Z",
+      "event": "task-done",
+      "detail": "T5: Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)"
+    },
+    {
+      "at": "2026-09-24T07:30:51.892Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 313-T6 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:30:51.985Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 313-T7 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:30:52.087Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 313-T8 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:30:52.171Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 313-T9 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:37:09.500Z",
+      "event": "task-done",
+      "detail": "T7: W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)"
+    },
+    {
+      "at": "2026-09-24T07:45:09.768Z",
+      "event": "task-done",
+      "detail": "T9: Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)"
+    },
+    {
+      "at": "2026-09-24T07:45:09.850Z",
+      "event": "task-added",
+      "detail": "T15: Exclude SUBSYSTEM_INSTRUCTIONS from audit NON_JSON_HOOK_SURFACE_PATHS (instructions files double-counted as hook files) + test"
+    },
+    {
+      "at": "2026-09-24T07:48:35.202Z",
+      "event": "task-done",
+      "detail": "T15: Exclude SUBSYSTEM_INSTRUCTIONS from audit NON_JSON_HOOK_SURFACE_PATHS (instructions files double-counted as hook files) + test"
+    },
+    {
+      "at": "2026-09-24T07:51:39.036Z",
+      "event": "task-done",
+      "detail": "T6: Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)"
+    },
+    {
+      "at": "2026-09-24T07:52:01.118Z",
+      "event": "task-done",
+      "detail": "T8: Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)"
+    },
+    {
+      "at": "2026-09-24T07:52:08.401Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 313-T10 dispatch"
+    },
+    {
+      "at": "2026-09-24T07:58:35.734Z",
+      "event": "task-done",
+      "detail": "T11: CLI reference + portability guide + spec status notes (AC15)"
+    },
+    {
+      "at": "2026-09-24T08:11:36.604Z",
+      "event": "task-done",
+      "detail": "T10: keryx bundle CLI + --render-for + external catalog import + scout --include-imports wiring (AC9, AC15)"
+    },
+    {
+      "at": "2026-09-24T08:11:36.691Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T08:22:02.667Z",
+      "event": "task-done",
+      "detail": "T12: Verify Wave-3 exit: fixture bundle round trip byte-identical and user-modified file never overwritten (AC13)"
+    },
+    {
+      "at": "2026-09-24T08:22:02.773Z",
+      "event": "task-added",
+      "detail": "T16: Fix: bundle import validates --render-for harness ids before any write (exit 2)"
+    },
+    {
+      "at": "2026-09-24T08:24:07.803Z",
+      "event": "task-done",
+      "detail": "T16: Fix: bundle import validates --render-for harness ids before any write (exit 2)"
+    },
+    {
+      "at": "2026-09-24T08:24:07.886Z",
+      "event": "task-done",
+      "detail": "T13: Verify every AC has passing automated evidence; targeted tests, typecheck, eslint (AC1-AC15)"
+    },
+    {
+      "at": "2026-09-24T08:24:07.988Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T08:33:25.176Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T08:33:25.271Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — review round 1 on PR #690"
+    },
+    {
+      "at": "2026-09-24T08:48:02.262Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 2) — round 1: 8 blocker, 12 major, 9 minor, 4 info; fix loop attempt 1 dispatched in 5 lanes"
+    },
+    {
+      "at": "2026-09-24T09:25:40.156Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 3) — review round 2 at 7ff8a38c"
+    },
+    {
+      "at": "2026-09-24T09:49:26.671Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 4) — round 2: R1 20 resolved/8 partial/1 unresolved; new 0 blocker, 8 major, 13 minor, 6 info; fix attempt 2 with class-level fixes"
+    },
+    {
+      "at": "2026-09-24T10:20:48.968Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 5) — review round 3 at c4ad2a60 (last attempt)"
+    },
+    {
+      "at": "2026-09-24T10:44:08.737Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 6) — round 3: 1 blocker (R3-F1), 6 major; three-attempt budget spent -> re-plan with choke points"
+    },
+    {
+      "at": "2026-09-24T10:44:09.151Z",
+      "event": "task-added",
+      "detail": "T17: Re-plan after round 3: choke-point fixes (contained-write primitive, canonical path key, audit binary rule, memory splitter, distill matcher, own-repo round-trip CI test)"
+    },
+    {
+      "at": "2026-09-24T11:15:03.684Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — choke-point re-plan lanes C1-C4 at ca877166; round 4 verification"
+    },
+    {
+      "at": "2026-09-24T11:38:37.431Z",
+      "event": "task-attempt",
+      "detail": "T17: failed (attempt 2) — round 4: 0 blocker, 2 major remaining (R1-F20, R3-F1), 16 minor"
+    },
+    {
+      "at": "2026-09-24T11:38:37.866Z",
+      "event": "task-added",
+      "detail": "T18: Final surgical pass (orchestrator exception): no binary skip; project-root containment for all writers + full ratchet; cheap minors"
+    },
+    {
+      "at": "2026-09-24T12:05:20.606Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — final pass at c8d68d62; round 5 verification"
+    },
+    {
+      "at": "2026-09-24T12:22:32.538Z",
+      "event": "task-attempt",
+      "detail": "T18: failed (attempt 2) — round 5: 0 blocker, 2 major (R5-F1 pre-existing on main, R5-F2 new), 2 minor, 17 info; exit rule -> stop"
+    },
+    {
+      "at": "2026-09-24T13:37:26.787Z",
+      "event": "task-added",
+      "detail": "T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force"
+    },
+    {
+      "at": "2026-09-24T13:37:39.427Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 313-T19 closure fix dispatch"
+    },
+    {
+      "at": "2026-09-24T13:51:23.144Z",
+      "event": "task-done",
+      "detail": "T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force"
+    },
+    {
+      "at": "2026-09-24T13:57:40.896Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 7) — closure verification r06: R5-F2 and R3-F18 partial (minor each); merge rule -> stop"
+    },
+    {
+      "at": "2026-09-24T14:02:09.737Z",
+      "event": "task-added",
+      "detail": "T20: Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs"
+    },
+    {
+      "at": "2026-09-24T14:02:24.789Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 313-T20 closure fix 2 dispatch"
+    },
+    {
+      "at": "2026-09-24T14:11:15.470Z",
+      "event": "task-done",
+      "detail": "T20: Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs"
+    },
+    {
+      "at": "2026-09-24T14:19:31.697Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 8) — closure 2 check r07: R5-F2 and R3-F18 resolved; new minor R7-F1 (UTF-16 BOM non-skill kinds scanned UTF-8 only); stop"
+    },
+    {
+      "at": "2026-09-24T17:27:30.203Z",
+      "event": "task-added",
+      "detail": "T21: Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)"
+    },
+    {
+      "at": "2026-09-24T17:27:30.287Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 313-T21 dispatch after merging W3 (0b983e7e)"
+    },
+    {
+      "at": "2026-09-24T17:36:22.174Z",
+      "event": "task-done",
+      "detail": "T21: Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)"
+    },
+    {
+      "at": "2026-09-24T17:43:12.666Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 9) — closure 3 check r08: 0 blocker/major, R7-F1 resolved; R8-F1 minor deferred per owner rule; merging"
     }
   ]
 }

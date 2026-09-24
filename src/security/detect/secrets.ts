@@ -18,6 +18,19 @@ type Rule = {
 
 const RULES: Rule[] = [
   // Provider-shaped API keys.
+  // NOTE (R3-F5, flow 313 W4 review round 3): `detectSecrets` is a shared
+  // choke point (output-validation, redact.ts, export-audit.ts, resolve.ts,
+  // the audit-harness) — an AWS-shaped key is matched here UNCONDITIONALLY,
+  // deliberately including AWS's own documented placeholder shape
+  // (`AKIAIOSFODNN7EXAMPLE`), because the output-redaction consumers of this
+  // detector fail closed on ANYTHING AWS-key-shaped on purpose (see
+  // `output-validation.test.ts`'s "no safe representation" fail-closed
+  // case). The documented-placeholder EXEMPTION belongs only where a false
+  // positive on that specific literal actually blocks a legitimate W4
+  // bundle import — that is `checkSecretsInText` in
+  // `security/audit-harness/checks.ts`, which filters this rule's matches
+  // down before turning them into findings. Do not add an exemption here:
+  // it would silently weaken every other consumer's fail-closed guarantee.
   {
     policyId: "secrets.aws-access-key",
     regex: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g,
@@ -79,10 +92,19 @@ const RULES: Rule[] = [
   },
   // Credentials embedded in a URL query or in an explicitly sensitive path
   // segment. The span covers only the value, preserving the safe URL shape.
+  //
+  // R3-F5: a documentation example such as `` `?token=` `` (empty, backticked
+  // — describing the QUERY PARAMETER NAME, not a live value) used to still
+  // match: the old value class `[^&#\s]+` happily captured the closing
+  // backtick itself as a one-character "value". The value class now excludes
+  // markdown/quote delimiters (backtick, both quote kinds, angle brackets)
+  // and requires at least 3 characters, so an empty or punctuation-only
+  // "value" fails to match at all, while a real token (always alphanumeric-
+  // shaped, always longer) still does.
   {
     policyId: "secrets.url-sensitive-query",
     regex:
-      /[?&](?:api[_-]?key|access[_-]?token|auth[_-]?token|token|password|secret)=([^&#\s]+)/gi,
+      /[?&](?:api[_-]?key|access[_-]?token|auth[_-]?token|token|password|secret)=([^&#\s`'"<>]{3,})/gi,
     severity: "high",
     confidence: 0.9,
     remediation: "Remove credentials from URL query parameters.",

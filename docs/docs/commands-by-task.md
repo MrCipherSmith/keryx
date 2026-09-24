@@ -74,6 +74,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx orient` | Emit a bounded graph + wiki startup block, or install it as a turn-start hook. |
 | `keryx skills` | Manage bundled Metaproject working skills. |
 | `keryx stack` | Deterministic, offline stack detection — keryx stack detect. |
+| `keryx bundle` | Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses (W4). |
 
 ## Managed work
 
@@ -98,6 +99,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove. |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
 | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration. |
+| `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
 
 | Shell command | Summary |
 |---|---|

@@ -123,6 +123,39 @@ test("a config naming a skill outside the <module>/<skill> shape is refused", as
   }
 });
 
+// --- W3: reviewerProfiles must be a subset of authors ------------------------
+
+test("reviewerProfiles is accepted when it is a (case-insensitive) subset of authors", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-learning-config-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "review-learning.config.json"),
+      JSON.stringify({ schemaVersion: 1, skill: "review/skill", repo: "o/r", authors: ["Named", "Other"], reviewerProfiles: ["named"] }),
+      "utf8",
+    );
+    const config = await loadReviewLearningConfig(root);
+    expect(config?.reviewerProfiles).toEqual(["named"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("reviewerProfiles naming a login outside authors is refused (a superset is never allowed)", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-learning-config-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "review-learning.config.json"),
+      JSON.stringify({ schemaVersion: 1, skill: "review/skill", repo: "o/r", authors: ["named"], reviewerProfiles: ["named", "unconfigured"] }),
+      "utf8",
+    );
+    await expect(loadReviewLearningConfig(root)).rejects.toThrow(/subset of "authors"/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 // --- AC7: learned content cannot reach the keryx repository ------------------
 
 /**

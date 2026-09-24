@@ -115,6 +115,23 @@ describe("verifyAgents", () => {
     expect(agent?.problems.some((p) => p.reason === "origin-missing-source-ref")).toBe(true);
   });
 
+  // Flow 313 (W4-AC14): a bundle-imported agent carries `origin.kind:
+  // imported` with `sourceRef` set to the bundle id it came from (see
+  // `rewriteAgentOrigin` in src/bundle/export.ts). Unlike a `generated`
+  // origin, an `imported` one needs no resolver to be confirmed and simply
+  // passes once sourceRef is present.
+  test("W4-AC14: a bundle-imported definition (origin.kind: imported, sourceRef: <bundleId>) verifies ok", () => {
+    writeAgent(
+      bundledRoot,
+      "imported-agent",
+      agentMarkdown("imported-agent", {}, "\norigin:\n  kind: imported\n  sourceRef: keryx-project-25bf8e1a2393"),
+    );
+    const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
+    expect(report.ok).toBe(true);
+    const agent = report.agents.find((a) => a.name === "imported-agent");
+    expect(agent?.problems).toEqual([]);
+  });
+
   test("AC6: a generated definition whose stack pack does not resolve fails closed with stack-pack-missing", () => {
     writeAgent(
       bundledRoot,

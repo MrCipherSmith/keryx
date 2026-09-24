@@ -36,6 +36,16 @@ import {
   LAST_VERIFIED_W5B,
 } from "./surfaces-w5b";
 import { AGENTS_CLAUDE, AGENTS_CODEX, AGENTS_KIRO, AGENTS_OPENCODE } from "./surfaces-agents";
+import {
+  RULES_EXPORT_CLAUDE,
+  RULES_EXPORT_CODEX,
+  RULES_EXPORT_CURSOR,
+  RULES_EXPORT_GEMINI_CLI,
+  RULES_EXPORT_GITHUB_COPILOT_AGENT,
+  RULES_EXPORT_KIRO,
+  RULES_EXPORT_WINDSURF,
+} from "./surfaces-rules";
+import { LEARNING_OBSERVER_CLAUDE } from "./surfaces-learning";
 import { ANTIGRAVITY_DECISION_CODEC, COPILOT_DECISION_CODEC, CURSOR_DECISION_CODEC, EXIT_CODE_DECISION_CODEC } from "./codecs";
 import type { DecisionCodec, HarnessAdapter, HookAction, SettingsFileOwner, SurfaceAdapter, SurfaceFlag } from "./types";
 import { createSettingsFileOwner } from "./settings-file";
@@ -53,7 +63,15 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "Claude Code",
     confidence: "verified",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_CLAUDE, ORIENT_CLAUDE, SECURITY_CHECK_INPUT_CLAUDE, SECURITY_CHECK_OUTPUT_CLAUDE, AGENTS_CLAUDE],
+    surfaces: [
+      CTX_GUARD_CLAUDE,
+      ORIENT_CLAUDE,
+      SECURITY_CHECK_INPUT_CLAUDE,
+      SECURITY_CHECK_OUTPUT_CLAUDE,
+      AGENTS_CLAUDE,
+      RULES_EXPORT_CLAUDE,
+      LEARNING_OBSERVER_CLAUDE,
+    ],
     unsupported: {},
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "src/security/agent-hooks/runtimes.ts"],
     lastVerified: LAST_VERIFIED,
@@ -64,7 +82,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "Codex",
     confidence: "verified",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_CODEX, ORIENT_CODEX, AGENTS_CODEX],
+    surfaces: [CTX_GUARD_CODEX, ORIENT_CODEX, AGENTS_CODEX, RULES_EXPORT_CODEX],
     unsupported: {},
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "docs/docs/harness.md"],
     lastVerified: LAST_VERIFIED,
@@ -75,7 +93,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "Cursor",
     confidence: "verified",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_CURSOR, ORIENT_CURSOR, SECURITY_CHECK_INPUT_CURSOR, SECURITY_CHECK_OUTPUT_CURSOR],
+    surfaces: [CTX_GUARD_CURSOR, ORIENT_CURSOR, SECURITY_CHECK_INPUT_CURSOR, SECURITY_CHECK_OUTPUT_CURSOR, RULES_EXPORT_CURSOR],
     unsupported: {},
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "src/security/agent-hooks/runtimes.ts"],
     lastVerified: LAST_VERIFIED,
@@ -86,7 +104,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "Windsurf",
     confidence: "verified",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_WINDSURF, SECURITY_CHECK_INPUT_WINDSURF, SECURITY_CHECK_OUTPUT_WINDSURF],
+    surfaces: [CTX_GUARD_WINDSURF, SECURITY_CHECK_INPUT_WINDSURF, SECURITY_CHECK_OUTPUT_WINDSURF, RULES_EXPORT_WINDSURF],
     unsupported: { "inject-context": UNSUPPORTED_ORIENT.windsurf! },
     sourceDocs: ["src/ctx/runtimes.ts", "src/ctx/orient-runtimes.ts", "src/security/agent-hooks/runtimes.ts"],
     lastVerified: LAST_VERIFIED,
@@ -157,7 +175,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "Gemini CLI",
     confidence: "experimental",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_GEMINI_CLI, INSTRUCTIONS_GEMINI_CLI],
+    surfaces: [CTX_GUARD_GEMINI_CLI, INSTRUCTIONS_GEMINI_CLI, RULES_EXPORT_GEMINI_CLI],
     unsupported: {},
     riskNotes: [
       "Gemini CLI's hooks default-enabled flag and the version it was introduced in are not confirmed in first-party docs; verify on a live install.",
@@ -176,7 +194,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "Kiro",
     confidence: "experimental",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_KIRO, INSTRUCTIONS_KIRO, AGENTS_KIRO],
+    surfaces: [CTX_GUARD_KIRO, INSTRUCTIONS_KIRO, AGENTS_KIRO, RULES_EXPORT_KIRO],
     unsupported: {},
     riskNotes: [
       "Kiro's hook stdin field names and its shell tool's name are third-party-reported only, not confirmed by first-party docs.",
@@ -197,7 +215,7 @@ export const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
     label: "GitHub Copilot agent",
     confidence: "experimental",
     adapterKind: "host-hook",
-    surfaces: [CTX_GUARD_GITHUB_COPILOT_AGENT, INSTRUCTIONS_GITHUB_COPILOT_AGENT],
+    surfaces: [CTX_GUARD_GITHUB_COPILOT_AGENT, INSTRUCTIONS_GITHUB_COPILOT_AGENT, RULES_EXPORT_GITHUB_COPILOT_AGENT],
     unsupported: {},
     riskNotes: [
       "The shell tool name Copilot's hook payload carries is not documented; the guard parses any tool call carrying `toolArgs.command`.",

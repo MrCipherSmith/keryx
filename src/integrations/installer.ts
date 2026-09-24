@@ -302,12 +302,17 @@ async function customUninstallDryRun(
  * an install always attempts to write the block regardless of the surface's
  * current state, everything else reports `would-install`.
  */
-async function customInstallDryRun(root: string, surface: SurfaceAdapter): Promise<{ status: InstallSurfaceStatus; errors: string[] }> {
+async function customInstallDryRun(root: string, surface: SurfaceAdapter): Promise<{ status: InstallSurfaceStatus; errors: string[]; warnings: string[] }> {
+  // Round-4 fix (R2-F6 remainder): the same skip warnings a real install
+  // would report (`surface.dryRunWarnings`, e.g. rules-export's skipped
+  // unsafe rule names) are computed here too, so `--dry-run` (human and
+  // `--json`) reports them BEFORE any write happens, not only after.
+  const warnings = surface.dryRunWarnings ? [...(await surface.dryRunWarnings(root))] : [];
   if (surface.inspect) {
     const inspection = await surface.inspect(root);
-    if (inspection.state === "malformed") return { status: "failed", errors: [inspection.message ?? "malformed"] };
+    if (inspection.state === "malformed") return { status: "failed", errors: [inspection.message ?? "malformed"], warnings };
   }
-  return { status: "would-install", errors: [] };
+  return { status: "would-install", errors: [], warnings };
 }
 
 /** Partition a resolved surface list into JSON-owned (grouped by file), custom-install, and satisfied-by-runtime. */
@@ -384,6 +389,47 @@ export async function installIntegration(
   const results: SurfaceResult<InstallSurfaceStatus>[] = [];
   const errors: string[] = [];
 
+  // R3-F12: without this pass, the write loops below wrote (and recorded
+  // install-state for) each JSON settings file — and ran each custom
+  // surface's real `customInstall` — as soon as ITS OWN check passed, with
+  // no regard for whether a LATER surface in the same `install` call was
+  // about to fail. A repro: `.gemini/settings.json` writes and its
+  // install-state is recorded, then a later custom surface (e.g. one whose
+  // target resolves through an escaping symlink) refuses and the whole
+  // command exits non-zero — leaving the runtime half-installed with no way
+  // to tell from the exit code alone. Every selected target is checked here,
+  // with NO write, BEFORE the first real write happens; on any failure the
+  // whole call returns failed results for everything it touched and writes
+  // nothing at all, exactly like a single-surface refusal always did.
+  if (!opts.dryRun) {
+    const preflightErrors: string[] = [];
+    for (const [relativePath, groupSurfaces] of jsonByPath) {
+      const owner = opts.ownerOverride ?? settingsFileOwnerFor(relativePath);
+      if (!owner) {
+        preflightErrors.push(`no settings-file owner registered for ${relativePath}`);
+        continue;
+      }
+      const existing = await readSettingsFile(fileFor(root, relativePath));
+      const { errors: applyErrors } = owner.apply(existing, { install: groupSurfaces.map((s) => s.id) });
+      preflightErrors.push(...applyErrors);
+    }
+    for (const surface of custom) {
+      const dryRun = await customInstallDryRun(root, surface);
+      preflightErrors.push(...dryRun.errors);
+    }
+    if (preflightErrors.length > 0) {
+      for (const [relativePath, groupSurfaces] of jsonByPath) {
+        for (const surface of groupSurfaces) {
+          results.push({ ...baseResult(surface, relativePath), status: "failed", errors: preflightErrors, warnings: warningsFor(surface) });
+        }
+      }
+      for (const surface of custom) {
+        results.push({ ...baseResult(surface, surface.relativePath), status: "failed", errors: preflightErrors, warnings: warningsFor(surface) });
+      }
+      return { runtimeId, results, errors: preflightErrors };
+    }
+  }
+
   for (const [relativePath, groupSurfaces] of jsonByPath) {
     const owner = opts.ownerOverride ?? settingsFileOwnerFor(relativePath);
     if (!owner) {
@@ -446,7 +492,12 @@ export async function installIntegration(
       // regardless of whether the real install would actually fail.
       const dryRun = await customInstallDryRun(root, surface);
       if (dryRun.errors.length > 0) errors.push(...dryRun.errors);
-      results.push({ ...baseResult(surface, surface.relativePath), status: dryRun.status, errors: dryRun.errors, warnings: warningsFor(surface) });
+      results.push({
+        ...baseResult(surface, surface.relativePath),
+        status: dryRun.status,
+        errors: dryRun.errors,
+        warnings: [...warningsFor(surface), ...dryRun.warnings],
+      });
       continue;
     }
     // N1: a thrown error from `customInstall` (an `UnterminatedInstructionsBlockError`
@@ -456,17 +507,39 @@ export async function installIntegration(
     // surface, and it must not stop a LATER custom surface, or the
     // satisfied-by-runtime loop below, from being processed.
     let customErrors: string[];
+    // R2-F6: `customInstall` may return the richer `CustomInstallResult`
+    // shape (an `errors` channel that still fails the install exactly like
+    // the plain `string[]` shape, plus a separate `warnings` channel for a
+    // partial skip that must NOT fail it — see `CustomInstallResult`'s own
+    // doc comment).
+    let customWarnings: string[] = [];
     try {
-      customErrors = surface.customInstall ? await surface.customInstall(root) : [];
+      const result = surface.customInstall ? await surface.customInstall(root) : [];
+      if (Array.isArray(result)) {
+        customErrors = result;
+      } else {
+        customErrors = [...result.errors];
+        customWarnings = [...(result.warnings ?? [])];
+      }
     } catch (error) {
       customErrors = [(error as Error).message];
     }
     if (customErrors.length > 0) {
       errors.push(...customErrors);
-      results.push({ ...baseResult(surface, surface.relativePath), status: "failed", errors: customErrors, warnings: warningsFor(surface) });
+      results.push({
+        ...baseResult(surface, surface.relativePath),
+        status: "failed",
+        errors: customErrors,
+        warnings: [...warningsFor(surface), ...customWarnings],
+      });
       continue;
     }
-    results.push({ ...baseResult(surface, surface.relativePath), status: "installed", errors: [], warnings: warningsFor(surface) });
+    results.push({
+      ...baseResult(surface, surface.relativePath),
+      status: "installed",
+      errors: [],
+      warnings: [...warningsFor(surface), ...customWarnings],
+    });
     if (surface.relativePath) {
       await recordSurfaceInstalled(root, runtimeId, {
         moduleId: surface.id,

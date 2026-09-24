@@ -23,6 +23,12 @@ export interface McpContext {
   discovery: McpDiscovery;
   tools: ToolEntry[];
   transport: McpInvocationContext["transport"];
+  /**
+   * Flow 313 (W4-AC6): the cross-harness memory identity bound once at
+   * `serveMcp()` launch. `null` when the server was launched unbound. Never
+   * settable per tool call.
+   */
+  harnessIdentity: string | null;
 }
 
 export interface BuildMcpContextOptions {
@@ -33,6 +39,12 @@ export interface BuildMcpContextOptions {
    * so the server must not offer anything that changes state.
    */
   readonly readOnly?: boolean;
+  /**
+   * Flow 313 (W4-AC6): the harness identity bound at server launch (already
+   * validated by the caller — `serveMcp()`/`serveMcpCommand` — against the
+   * closed `MEMORY_HARNESS_IDS` set). `undefined`/`null` -> unbound.
+   */
+  readonly harnessIdentity?: string | null;
 }
 
 /** The tool registry, minus every mutating tool when `readOnly` is set. */
@@ -50,7 +62,14 @@ export async function buildMcpContext(
     loadMcpConfig(cwd),
     loadDiscovery(cwd),
   ]);
-  return { cwd, config, discovery, tools: registryFor(options), transport };
+  return {
+    cwd,
+    config,
+    discovery,
+    tools: registryFor(options),
+    transport,
+    harnessIdentity: options.harnessIdentity ?? null,
+  };
 }
 
 // A tool name passes the config filter when the include list contains "*" or the
@@ -110,7 +129,10 @@ export async function dispatchCallTool(
     return { text: "Unknown or unavailable tool.", isError: true, redaction: { state: "none", reasons: [] } };
   }
   try {
-    const result = await tool.invoke(ctx.cwd, args ?? {}, { transport: ctx.transport });
+    const result = await tool.invoke(ctx.cwd, args ?? {}, {
+      transport: ctx.transport,
+      harnessIdentity: ctx.harnessIdentity,
+    });
     const safe = validateToolOutput(result ?? null, tool.outputSchema);
     return { text: safe.text, isError: !safe.ok, redaction: safe.redaction };
   } catch (error) {
@@ -124,7 +146,10 @@ export async function dispatchListResources(ctx: McpContext): Promise<ResourceLi
   if (!ctx.discovery.mcpEnabled || !ctx.discovery.exposeResources) {
     return [];
   }
-  return listResources(ctx.cwd, ctx.config.resources.roots);
+  // Flow 313 (W4) review R1-F4: the server's bound launch identity, never a
+  // caller-supplied value — restricted `memory` entries are excluded from
+  // the listing before it ever leaves this layer.
+  return listResources(ctx.cwd, ctx.config.resources.roots, ctx.harnessIdentity);
 }
 
 export async function dispatchReadResource(
@@ -135,7 +160,7 @@ export async function dispatchReadResource(
     throw new Error("Resources are not exposed for this workspace.");
   }
   try {
-    const contents = await readResource(ctx.cwd, ctx.config.resources.roots, uri);
+    const contents = await readResource(ctx.cwd, ctx.config.resources.roots, uri, ctx.harnessIdentity);
     const safe = contents.mimeType === "application/json"
       ? validateToolOutput(JSON.parse(contents.text))
       : validateTextOutput(contents.text);

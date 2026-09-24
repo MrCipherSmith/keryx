@@ -46,6 +46,14 @@ export type ReviewLearningConfig = {
   repo: string;
   /** GitHub logins whose comments count. Empty is refused; see the loader. */
   authors: string[];
+  /**
+   * (W3) GitHub logins, among `authors`, that also get their own per-reviewer
+   * profile rule (`.metaproject/rules/reviewers/<reviewer-id>.mdc`). Must be a
+   * subset of `authors` — an author who does not count for the skill cannot
+   * count for a profile either (W3 spec, "Reviewer profiles"). Omitted means
+   * no author gets a profile.
+   */
+  reviewerProfiles?: string[];
 };
 
 export function reviewLearningConfigPath(cwd: string): string {
@@ -93,12 +101,63 @@ export async function loadReviewLearningConfig(cwd: string): Promise<ReviewLearn
     );
   }
 
+  const trimmedAuthors = authors.map((author) => author.trim());
+
+  let reviewerProfiles: string[] | undefined;
+  if (raw.reviewerProfiles !== undefined) {
+    if (!Array.isArray(raw.reviewerProfiles) || raw.reviewerProfiles.some((entry) => typeof entry !== "string")) {
+      throw new Error(`${where}: "reviewerProfiles" must be an array of strings, got ${JSON.stringify(raw.reviewerProfiles)}.`);
+    }
+    const configuredAuthors = new Set(trimmedAuthors.map((author) => author.toLowerCase()));
+    const unknown = raw.reviewerProfiles.filter((login) => !configuredAuthors.has(login.trim().toLowerCase()));
+    if (unknown.length > 0) {
+      throw new Error(
+        `${where}: "reviewerProfiles" must be a subset of "authors" (case-insensitive); not configured as an author: ${unknown.join(", ")}.`,
+      );
+    }
+    reviewerProfiles = raw.reviewerProfiles.map((login) => login.trim());
+  }
+
   return {
     schemaVersion: REVIEW_LEARNING_CONFIG_SCHEMA_VERSION,
     skill,
     repo,
-    authors: authors.map((author) => author.trim()),
+    authors: trimmedAuthors,
+    ...(reviewerProfiles !== undefined ? { reviewerProfiles } : {}),
   };
+}
+
+export type ReviewLearningConfigResult =
+  | { ok: true; config: ReviewLearningConfig | null }
+  | { ok: false; error: string };
+
+/**
+ * Guarded wrapper around `loadReviewLearningConfig` (R3-F3): never throws.
+ * A missing config still means "no logins" (`{ ok: true, config: null }`,
+ * same as the underlying loader). A MALFORMED config (bad schema version,
+ * missing/invalid `skill`/`repo`/`authors`, an unknown `reviewerProfiles`
+ * entry) is reported as `{ ok: false, error }` — the loader's own message —
+ * instead of throwing.
+ *
+ * Every login gate in `src/learning/` (extract's `configuredReviewLogins`,
+ * `apply.ts`'s and `graduate.ts`'s own login checks, the `reviewer-comment`
+ * signal) MUST go through this wrapper rather than calling
+ * `loadReviewLearningConfig` directly: a malformed config used to throw
+ * straight out of `runExtract` — AFTER its decay pass had already written —
+ * turning one bad JSON file into a half-done extract run every single time.
+ * With this wrapper, a caller that can safely proceed without logins (a
+ * non-review-conventions extract domain) degrades to "no configured
+ * logins" and reports the error; a caller that specifically needs the
+ * login gate to be trustworthy (`apply`/`graduate apply`) refuses with the
+ * named reason `review-learning-config-invalid` instead.
+ */
+export async function loadReviewLearningConfigSafe(cwd: string): Promise<ReviewLearningConfigResult> {
+  try {
+    const config = await loadReviewLearningConfig(cwd);
+    return { ok: true, config };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export type LearningSelection = {

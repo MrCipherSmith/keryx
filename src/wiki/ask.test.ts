@@ -361,3 +361,34 @@ test("historical mode: a malformed --as-of date is rejected the same way memory'
     wikiAsk({ cwd: root, question: "billing invoices payment", asOf: "not-a-date" }),
   ).rejects.toThrow(TemporalValidationError);
 });
+
+// Flow 313 (W4) review R1-F4: `memoryCandidates` used to read `collectEntries`
+// directly with no `target_harnesses` filter at all — a memory entry
+// restricted to one harness was cited to every caller regardless of
+// `harnessIdentity`. Discriminating: pre-fix, this test's "claude" call would
+// have cited `decisions/codex-only.md` exactly like the "codex" call.
+test("R1-F4: a Target-Harnesses-restricted memory entry is cited only to the harness it names", async () => {
+  await writeFile(
+    path.join(root, ".metaproject", "memory", "decisions", "codex-only.md"),
+    "# Codex only\n\nType: decision\nStatus: accepted\nSource-Harness: claude\nTarget-Harnesses: codex\n\n## Summary\n\nA zebrafish restricted decision only codex may see.\n",
+    "utf8",
+  );
+
+  const asClaude = await wikiAsk({
+    cwd: root,
+    question: "zebrafish restricted decision",
+    harnessIdentity: "claude",
+  });
+  expect(asClaude.citations.some((c) => c.path === "memory/decisions/codex-only.md")).toBe(false);
+  expect(asClaude.answerMarkdown).not.toContain("codex-only");
+
+  const asCodex = await wikiAsk({
+    cwd: root,
+    question: "zebrafish restricted decision",
+    harnessIdentity: "codex",
+  });
+  expect(asCodex.citations.some((c) => c.path === "memory/decisions/codex-only.md")).toBe(true);
+
+  const unbound = await wikiAsk({ cwd: root, question: "zebrafish restricted decision" });
+  expect(unbound.citations.some((c) => c.path === "memory/decisions/codex-only.md")).toBe(false);
+});

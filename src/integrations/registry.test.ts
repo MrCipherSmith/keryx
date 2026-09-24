@@ -54,6 +54,14 @@ const THE_12_W5_FLAGS: readonly SurfaceFlag[] = [
   "mcp",
 ];
 
+// Flow 313 (W4 portability, review round 1 F19): a 13th flag, `rules`, added
+// OUTSIDE the frozen W5 vocabulary above for the `rules-export` surfaces
+// alone (`surfaces-rules.ts`) — so `--surface instructions` stops also
+// reaching `rules-export`. `THE_12_W5_FLAGS` itself is left untouched (it
+// documents the original W5 spec's flag list); every check below that
+// validates an ACTUAL registered surface's flag uses this superset instead.
+const KNOWN_SURFACE_FLAGS: readonly SurfaceFlag[] = [...THE_12_W5_FLAGS, "rules"];
+
 describe("AC1: HARNESS_ADAPTERS names the 8 W5-a harnesses plus the W5-b (flow 307) additions, in order", () => {
   test("ids, in order", () => {
     expect(HARNESS_ADAPTERS.map((a) => a.id)).toEqual([
@@ -100,12 +108,12 @@ describe("AC1: the SurfaceFlag vocabulary is exactly the 12 W5 flags", () => {
     expect(new Set(THE_12_W5_FLAGS).size).toBe(12);
   });
 
-  test("every registered surface's flag is one of the 12", () => {
+  test("every registered surface's flag is one of the known flags (the 12 W5 flags plus `rules`)", () => {
     const seen = new Set<string>();
     for (const adapter of HARNESS_ADAPTERS) {
       for (const surface of adapter.surfaces) {
         seen.add(surface.flag);
-        expect({ adapter: adapter.id, surface: surface.id, flag: surface.flag, known: THE_12_W5_FLAGS.includes(surface.flag) }).toEqual({
+        expect({ adapter: adapter.id, surface: surface.id, flag: surface.flag, known: KNOWN_SURFACE_FLAGS.includes(surface.flag) }).toEqual({
           adapter: adapter.id,
           surface: surface.id,
           flag: surface.flag,
@@ -118,8 +126,10 @@ describe("AC1: the SurfaceFlag vocabulary is exactly the 12 W5 flags", () => {
     // gemini-cli/kiro/github-copilot-agent/zed; W6 (flow 306, T20) adds
     // keryx-shell's native `pre-tool-context`/`observe`/`post-tool`/
     // `session-start`/`stop` surfaces; flow 310 (W2) adds the opt-in
-    // `agents` surfaces for claude/codex/kiro/opencode — still a proper
-    // subset of the 12, never all of them (skills/mcp have no surface yet).
+    // `agents` surfaces for claude/codex/kiro/opencode; flow 313 (W4
+    // portability) adds the opt-in `rules` surfaces (`rules-export`) — still
+    // a proper subset of the 13, never all of them (skills/mcp have no
+    // surface yet).
     expect(seen.size).toBeGreaterThan(0);
     expect([...seen].sort()).toEqual(
       [
@@ -131,17 +141,18 @@ describe("AC1: the SurfaceFlag vocabulary is exactly the 12 W5 flags", () => {
         "post-tool",
         "pre-tool-context",
         "prompt-gate",
+        "rules",
         "session-start",
         "stop",
       ].sort(),
     );
   });
 
-  test("every unsupported reason's key is one of the 12 flags", () => {
+  test("every unsupported reason's key is one of the known flags", () => {
     let checked = 0;
     for (const adapter of HARNESS_ADAPTERS) {
       for (const flag of Object.keys(adapter.unsupported) as SurfaceFlag[]) {
-        expect({ adapter: adapter.id, flag, known: THE_12_W5_FLAGS.includes(flag) }).toEqual({
+        expect({ adapter: adapter.id, flag, known: KNOWN_SURFACE_FLAGS.includes(flag) }).toEqual({
           adapter: adapter.id,
           flag,
           known: true,

@@ -3,6 +3,7 @@ import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
 import { learnProjectSkill } from "../gdskills/learn";
+import { applyReviewerProfile, parseLearnArgs } from "../learning/service";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import {
   learningRecordPath,
@@ -228,8 +229,13 @@ const LOOP_FLAGS = ["--flow", "--task"] as const;
  * than the rule — one `--authors` on one invocation and a project has learned
  * from somebody it never named. `--repo` is likewise absent: the config names
  * the repository whose comments teach this skill.
+ *
+ * `--reviewer <id>` (W3, flow 312 T9) is the sibling entry point: with it,
+ * `keryx review learn` applies an accepted reviewer-profile candidate to
+ * `.metaproject/rules/reviewers/<id>.mdc` instead of the per-skill
+ * `--pr`-driven path above, and `--pr` is not read in that mode.
  */
-const LEARN_FLAGS = ["--pr", "--dry-run", "--json"] as const;
+const LEARN_FLAGS = ["--pr", "--reviewer", "--dry-run", "--json"] as const;
 
 const SCOPE_FLAGS = [
   "--context",
@@ -1318,7 +1324,32 @@ function requiredInteger(args: string[], name: string): number {
  *     Nothing was learned and the reason is visible.
  */
 async function runLearn(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, LEARN_FLAGS, "learn --pr <n>");
+  rejectUnknownFlags(args, LEARN_FLAGS, "learn --pr <n> | --reviewer <id>");
+  // R2-F7: parse the verb's own args ONCE with `parseLearnArgs` — the same
+  // parser `--reviewer` mode already used below it — instead of re-deriving
+  // `--dry-run`/`--json` with `args.includes` and `--reviewer` with
+  // `optionValue` on the `--pr` path. Those disagreed with the parser in two
+  // ways: `--dry-run=1` passed `rejectUnknownFlags` (it only checks flag
+  // NAMES) and then `args.includes("--dry-run")` read it as absent, so a
+  // preview request on the `--pr` path silently produced the real write;
+  // and a repeated or valueless `--reviewer` was never refused at all
+  // (`optionValue` just returns the last/`undefined` one).
+  const parsed = parseLearnArgs(args, { boolean: ["--dry-run", "--json"], value: ["--pr", "--reviewer"] });
+  if (parsed.bad.length > 0) {
+    throw new Error(`Unknown option(s) for \`keryx review learn\`: ${parsed.bad.join(", ")}.`);
+  }
+  const reviewerOccurrences = args.filter((arg) => arg === "--reviewer" || arg.startsWith("--reviewer=")).length;
+  if (reviewerOccurrences > 1) {
+    throw new Error("`--reviewer` was given more than once for `keryx review learn`.");
+  }
+  const reviewerId = parsed.values.get("--reviewer");
+  if (reviewerId !== undefined) {
+    if (reviewerId.trim().length === 0) {
+      throw new Error("`--reviewer <id>` needs a value.");
+    }
+    await runLearnReviewer(args, reviewerId);
+    return;
+  }
   const cwd = process.cwd();
   const config = await loadReviewLearningConfig(cwd);
   if (config === null) {
@@ -1328,7 +1359,10 @@ async function runLearn(args: string[]): Promise<void> {
     return;
   }
 
-  const number = requiredInteger(args, "--pr");
+  const number = parseNonNegativeInteger(parsed.values.get("--pr"), "--pr");
+  if (number === undefined) {
+    throw new Error("`--pr <n>` is required.");
+  }
   const statePath = prCommentsStatePath(cwd, config.repo, number);
   if (!(await pathExists(statePath))) {
     throw new Error(
@@ -1362,7 +1396,7 @@ async function runLearn(args: string[]): Promise<void> {
       `excluded as unconfigured: ${selection.unconfigured.length}`,
       `configured but with no recorded body: ${selection.bodyless.length}`,
     ].join(", ");
-    if (args.includes("--json")) {
+    if (parsed.flags.has("--json")) {
       console.log(
         JSON.stringify(
           { repo: config.repo, number, skill: config.skill, source: relativeSourcePath, proposal: null, selection: counts(state, selection) },
@@ -1382,10 +1416,10 @@ async function runLearn(args: string[]): Promise<void> {
     sourceType: "review",
     sourcePath: relativeSourcePath,
     skill: config.skill,
-    dryRun: args.includes("--dry-run"),
+    dryRun: parsed.flags.has("--dry-run"),
   });
 
-  if (args.includes("--json")) {
+  if (parsed.flags.has("--json")) {
     console.log(
       JSON.stringify(
         { repo: config.repo, number, skill: config.skill, source: relativeSourcePath, proposal, selection: counts(state, selection) },
@@ -1413,6 +1447,38 @@ async function runLearn(args: string[]): Promise<void> {
   console.log(
     `Nothing was written to the skill. Apply with: keryx skills learn apply ${proposal.proposalPath}`,
   );
+}
+
+/**
+ * `keryx review learn --reviewer <id>` (W3, flow 312 T9) — the per-reviewer
+ * sibling of the per-skill path above. Applies an accepted, `domain:
+ * "review-conventions"` learned-pattern record generalized to this reviewer
+ * identity into `.metaproject/rules/reviewers/<id>.mdc`. `--pr` is not read
+ * in this mode: the source is `keryx learn accept`, not a pull request.
+ */
+async function runLearnReviewer(args: string[], reviewerId: string): Promise<void> {
+  // R1-F3: `args.includes("--dry-run")` read `--dry-run=1` as absent — a
+  // preview request silently became the real write. `parseLearnArgs` (shared
+  // with `keryx learn`'s own flag parsing, `src/learning/cli-args.ts`) refuses
+  // that spelling instead of misreading it. `LEARN_FLAGS` above this function
+  // already validated the flag NAMES (`rejectUnknownFlags`); this pass adds
+  // the "=value on a boolean" check that one does not make.
+  const parsed = parseLearnArgs(args, { boolean: ["--dry-run", "--json"], value: ["--pr", "--reviewer"] });
+  if (parsed.bad.length > 0) {
+    throw new Error(`Unknown option(s) for \`keryx review learn --reviewer\`: ${parsed.bad.join(", ")}.`);
+  }
+  const dryRun = parsed.flags.has("--dry-run");
+  const result = await applyReviewerProfile(process.cwd(), reviewerId, { dryRun });
+
+  if (parsed.flags.has("--json")) {
+    console.log(JSON.stringify({ reviewer: reviewerId, dryRun, ...result }, null, 2));
+    return;
+  }
+
+  console.log(`${dryRun ? "Would write" : "Wrote"} reviewer profile: ${result.path}`);
+  console.log(`Reviewer: ${reviewerId}`);
+  console.log(`Version: ${result.version}`);
+  console.log(`Conventions added this pass: ${result.added}`);
 }
 
 function counts(state: PrCommentState, selection: LearningSelection): Record<string, number> {
@@ -2397,6 +2463,7 @@ Usage:
                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                               [--flow-link <url>] [--fixtures <dir>]
   keryx review learn --pr <n> [--dry-run] [--json]
+  keryx review learn --reviewer <id> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
   keryx review reviewers [--json]
@@ -2582,6 +2649,12 @@ learn:
   There is no --authors, --skill or --repo flag on purpose: a flag would make the
   configured list a default, and one invocation could teach a project from
   somebody it never named.
+
+  \`--reviewer <id>\` (W3) is a sibling mode: it applies an accepted, human-reviewed
+  \`domain: review-conventions\` learned-pattern record (from \`keryx learn accept\`)
+  into \`.metaproject/rules/reviewers/<id>.mdc\` — the per-reviewer rule this
+  project has learned from that reviewer's own comments, never the literal login.
+  \`--pr\` is not read in this mode.
 
 loop:
   Loop DETECTION, not counting. Escalates (exit non-zero) when the same finding

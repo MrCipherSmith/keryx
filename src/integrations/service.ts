@@ -27,7 +27,9 @@ export {
   SUBSYSTEM_AGENTS,
   SUBSYSTEM_CTX_GUARD,
   SUBSYSTEM_INSTRUCTIONS,
+  SUBSYSTEM_LEARNING,
   SUBSYSTEM_ORIENT,
+  SUBSYSTEM_RULES_EXPORT,
   SUBSYSTEM_SECURITY,
 } from "./types";
 
@@ -111,6 +113,12 @@ export {
 } from "./surfaces";
 
 export {
+  installedRulesExportHarnesses,
+  renderRulesForHarnesses,
+  type RulesExportResult,
+} from "./rules-export";
+
+export {
   ACP_PERMISSION_ZED,
   CTX_GUARD_GEMINI_CLI,
   CTX_GUARD_GITHUB_COPILOT_AGENT,
@@ -123,6 +131,13 @@ export {
   KERYX_SHELL_UNSUPPORTED_REASON,
   LAST_VERIFIED_W5B,
 } from "./surfaces-w5b";
+
+export {
+  LEARNING_OBSERVER_CLAUDE,
+  LEARNING_OBSERVER_EVENTS,
+  LEARNING_OBSERVER_SENTINEL,
+  learningObserverCommand,
+} from "./surfaces-learning";
 
 export {
   INSTRUCTIONS_END_MARKER,

@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { mkdirContained, writeContained } from "../lib/contained-write";
 import {
   planRoutingEntrypointPair,
   rulesReadmeStep,
@@ -110,7 +111,7 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
       intent: "rules distill",
       resolution: options.resolution,
     });
-    await persistManifestEntrypoints(manifestPath, manifest, result.sources);
+    await persistManifestEntrypoints(projectRoot, manifestPath, manifest, result.sources);
 
     console.log(`# rules distill`);
     console.log("");
@@ -129,9 +130,11 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
   });
   const ruleSources = syncedRules.map((rule) => rule.source);
 
-  await mkdir(path.join(metaprojectRoot, "rules"), { recursive: true });
+  // R1-F20: contained against `projectRoot`, not the (possibly symlinked)
+  // `metaprojectRoot` — see `agent-entrypoints.ts#syncAgentRules`.
+  await mkdirContained(projectRoot, `${path.relative(projectRoot, metaprojectRoot).split(path.sep).join("/")}/rules`);
 
-  await persistManifestEntrypoints(manifestPath, manifest, ruleSources);
+  await persistManifestEntrypoints(projectRoot, manifestPath, manifest, ruleSources);
   await refreshRoutingEntrypoints(
     metaprojectRoot,
     manifest,
@@ -167,21 +170,27 @@ function moduleEnabled(manifest: MetaprojectManifest, moduleName: string): boole
   return manifest.modules?.[moduleName]?.enabled === true;
 }
 
-async function writeTextIfChanged(filePath: string, content: string): Promise<void> {
+// R1-F20: `filePath` is always inside `projectRoot` (the manifest at
+// `.metaproject/metaproject.json`) — routed through `writeContained` against
+// `projectRoot` rather than a raw `writeFile`, so a symlinked `.metaproject`
+// is refused instead of followed.
+async function writeTextIfChanged(projectRoot: string, filePath: string, content: string): Promise<void> {
   if (await pathExists(filePath)) {
     const existing = await readFile(filePath, "utf8");
     if (existing === content) {
       return;
     }
   }
-  await writeFile(filePath, content, "utf8");
+  const rel = path.relative(projectRoot, filePath).split(path.sep).join("/");
+  await writeContained(projectRoot, rel, content);
 }
 
-async function writeJsonIfChanged(filePath: string, value: unknown): Promise<void> {
-  await writeTextIfChanged(filePath, `${JSON.stringify(value, null, 2)}\n`);
+async function writeJsonIfChanged(projectRoot: string, filePath: string, value: unknown): Promise<void> {
+  await writeTextIfChanged(projectRoot, filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 async function persistManifestEntrypoints(
+  projectRoot: string,
   manifestPath: string,
   manifest: MetaprojectManifest,
   ruleSources: string[],
@@ -191,7 +200,7 @@ async function persistManifestEntrypoints(
     root: ruleSources,
     metaproject: ".metaproject/index.md",
   };
-  await writeJsonIfChanged(manifestPath, manifest);
+  await writeJsonIfChanged(projectRoot, manifestPath, manifest);
 }
 
 async function refreshRoutingEntrypoints(

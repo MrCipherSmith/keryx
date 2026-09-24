@@ -1,0 +1,9 @@
+---
+description: Fixture rule for the W4 bundle round-trip end-to-end test.
+globs: ["**/*"]
+alwaysApply: false
+---
+
+# Style
+
+Keep it deterministic.

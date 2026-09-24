@@ -26,8 +26,9 @@
 // need a real directory to resolve it against, which this static-import path
 // does not have.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { writeContained } from "../lib/contained-write";
 
 import matrixSchemaJson from "../../docs/requirements/keryx-agent-platform-expansion/schemas/harness-capability-matrix.schema.json" with {
   type: "json",
@@ -375,7 +376,5 @@ export async function writeCapabilityMatrix(root: string, artifactPath: string =
       `matrix: generated document fails schema validation: ${validation.errors.map((e) => `${e.path}: ${e.message}`).join("; ")}`,
     );
   }
-  const fullPath = resolveArtifactPath(root, artifactPath);
-  await mkdir(path.dirname(fullPath), { recursive: true });
-  await writeFile(fullPath, serializeCapabilityMatrix(doc), "utf8");
+  await writeContained(root, artifactPath, serializeCapabilityMatrix(doc));
 }

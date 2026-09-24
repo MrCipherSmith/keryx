@@ -248,6 +248,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Project knowledge",
     summary: "Deterministic, offline stack detection — keryx stack detect.",
   },
+  {
+    kind: "cli",
+    name: "bundle",
+    group: "Project knowledge",
+    summary: "Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses (W4).",
+  },
 
   // ---- Managed work -----------------------------------------------------
   { kind: "cli", name: "flow", group: "Managed work", summary: "Agent-first flow lifecycle (Task Manager)." },
@@ -302,6 +308,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "hooks",
     group: "Automation",
     summary: "Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration.",
+  },
+  {
+    kind: "cli",
+    name: "learn",
+    group: "Automation",
+    summary: "Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune.",
   },
   {
     kind: "slash",
