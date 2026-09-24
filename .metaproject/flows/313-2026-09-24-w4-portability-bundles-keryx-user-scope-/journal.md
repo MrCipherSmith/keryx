@@ -226,3 +226,23 @@ Source: the review-313-r5.md report, with probes in scratchpad/review313-r5/.
 - 2026-09-24T17:27:30.203Z - task-added: T21: Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)
 - 2026-09-24T17:27:30.287Z - task-attempt: T21: started (attempt 1) — 313-T21 dispatch after merging W3 (0b983e7e)
 - 2026-09-24T17:36:22.174Z - task-done: T21: Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)
+- 2026-09-24T17:43:12.666Z - task-attempt: T14: started (attempt 9) — closure 3 check r08: 0 blocker/major, R7-F1 resolved; R8-F1 minor deferred per owner rule; merging
+- 2026-09-24T17:44Z - W3 merge and closure fix 3 (T21) are in.
+  - Before T21, origin/feat/agent-platform-expansion (W3 #691, 08af367c) was merged into flow/313-w4 as 0b983e7e.
+    - Eight conflicting files were resolved by keeping both sides.
+    - The capability matrix and the commands-by-task page were regenerated, not hand-merged.
+  - T21 (7b06de44) added one BOM-aware dual decode, used for every text kind of an imported bundle.
+  - CI is all green at 7b06de44.
+- Closure-3 check recorded as review 2026-09-24-ingest-690-r08 (a new id; r01–r07 were not re-ingested).
+  - Totals: 0 blocker, 0 major, 1 minor, 2 info. R7-F1 is resolved.
+- Owner standing rule, decided by MrCipherSmith (owner, in chat): 0 blocker/major means merge, and the remaining minors are deferred to the W4 follow-up flow.
+  - R8-F1 is recorded as `dismissed-deprioritised` in r08, with this decider named.
+  - Next: mark the PR ready and make one merge attempt.
+
+## W4 follow-up flow scope (deferred from flow 313; the program orchestrator inits it)
+- R5-F1 (major, pre-existing on main): route `keryx init` writers through contained-write — init.ts writeJsonIfChanged/writeTextIfChanged/writeTextIfMissing/copyFileIfChanged and the scaffold mkdirs, plus the writers in src/testing/service.ts. Add both files to the ratchet. Also correct the containment claim in commit 94ba146c.
+- R5-F3 (minor, pre-existing on main): write the keryx block of `.gitignore` in src/lib/metaproject-gitignore.ts through writeContained(projectRoot, ".gitignore", …). Add it to the ratchet.
+- R8-F1 (minor, test-only): the agent test at src/security/audit-harness/audit-harness.test.ts:2001 also passes on the pre-fix code. Replace it with a restricted agent whose body carries an auto-run directive, and assert `bundle-auto-run-directive`.
+- R8-F2 (info, pre-existing): gaps for UTF-32LE, a directive split across the decode boundary, and bare UTF-16 after a prefix.
+- R8-F3 (info): false positive on the direct audit path for UTF-16 agents.
+- The info items carried from rounds r05–r07 are listed in those review packages.

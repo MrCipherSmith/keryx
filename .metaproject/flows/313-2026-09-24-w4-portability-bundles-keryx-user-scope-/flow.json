@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T17:36:22.174Z",
+  "updatedAt": "2026-09-24T17:43:12.666Z",
   "source": {
     "type": "description",
     "ref": null
@@ -257,7 +257,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 8,
+        "count": 9,
         "log": [
           {
             "at": "2026-09-24T08:33:25.271Z",
@@ -298,6 +298,11 @@
             "at": "2026-09-24T14:19:31.697Z",
             "outcome": "failed",
             "detail": "closure 2 check r07: R5-F2 and R3-F18 resolved; new minor R7-F1 (UTF-16 BOM non-skill kinds scanned UTF-8 only); stop"
+          },
+          {
+            "at": "2026-09-24T17:43:12.666Z",
+            "outcome": "started",
+            "detail": "closure 3 check r08: 0 blocker/major, R7-F1 resolved; R8-F1 minor deferred per owner rule; merging"
           }
         ]
       },
@@ -737,6 +742,11 @@
       "at": "2026-09-24T17:36:22.174Z",
       "event": "task-done",
       "detail": "T21: Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)"
+    },
+    {
+      "at": "2026-09-24T17:43:12.666Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 9) — closure 3 check r08: 0 blocker/major, R7-F1 resolved; R8-F1 minor deferred per owner rule; merging"
     }
   ]
 }
