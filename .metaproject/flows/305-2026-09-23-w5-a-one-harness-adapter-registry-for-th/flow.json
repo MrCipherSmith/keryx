@@ -9,7 +9,7 @@
   "title": "W5-a: one harness adapter registry for the ctx guard, orient injector and security hooks",
   "status": "in-progress",
   "createdAt": "2026-09-23T21:26:30.854Z",
-  "updatedAt": "2026-09-23T23:40:30.632Z",
+  "updatedAt": "2026-09-24T00:34:39.688Z",
   "source": {
     "type": "description",
     "ref": null
@@ -161,7 +161,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 2,
+        "count": 4,
         "log": [
           {
             "at": "2026-09-23T23:08:19.167Z",
@@ -172,6 +172,16 @@
             "at": "2026-09-23T23:26:01.299Z",
             "outcome": "failed",
             "detail": "round 2: 0 blocker/major, 4 minor (R2-F1..F4); CI 18/18 green; fix dispatched"
+          },
+          {
+            "at": "2026-09-23T23:40:42.093Z",
+            "outcome": "started",
+            "detail": "PR #675 review round 3 (opus) on round-2 fix commit + CI"
+          },
+          {
+            "at": "2026-09-24T00:19:04.627Z",
+            "outcome": "failed",
+            "detail": "round 3: 0 blocker/major, 2 minor (R3-F1 two codec sources, R3-F2 wrapper propagation untested); CI 18/18 green; attempt budget (3) reached -> re-plan"
           }
         ]
       },
@@ -234,6 +244,27 @@
             "at": "2026-09-23T23:26:01.464Z",
             "outcome": "started",
             "detail": "305-T11 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Re-planned fix for round 3: single decision-codec source on the adapter; injectable owner on installer wrappers with real-wrapper refusal tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T00:19:04.786Z",
+            "outcome": "started",
+            "detail": "305-T12 sonnet"
           }
         ]
       },
@@ -386,6 +417,31 @@
       "at": "2026-09-23T23:40:30.632Z",
       "event": "task-done",
       "detail": "T11: Fix review round 2 minors R2-F1..F4 (registry-resolved refusal codecs, migrates-legacy verification, per-file surface id uniqueness, regression tests for round-1 fixes)"
+    },
+    {
+      "at": "2026-09-23T23:40:42.093Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 3) — PR #675 review round 3 (opus) on round-2 fix commit + CI"
+    },
+    {
+      "at": "2026-09-24T00:19:04.627Z",
+      "event": "task-attempt",
+      "detail": "T8: failed (attempt 4) — round 3: 0 blocker/major, 2 minor (R3-F1 two codec sources, R3-F2 wrapper propagation untested); CI 18/18 green; attempt budget (3) reached -> re-plan"
+    },
+    {
+      "at": "2026-09-24T00:19:04.708Z",
+      "event": "task-added",
+      "detail": "T12: Re-planned fix for round 3: single decision-codec source on the adapter; injectable owner on installer wrappers with real-wrapper refusal tests"
+    },
+    {
+      "at": "2026-09-24T00:19:04.786Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 305-T12 sonnet"
+    },
+    {
+      "at": "2026-09-24T00:34:39.688Z",
+      "event": "task-done",
+      "detail": "T12: Re-planned fix for round 3: single decision-codec source on the adapter; injectable owner on installer wrappers with real-wrapper refusal tests"
     }
   ]
 }
