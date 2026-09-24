@@ -200,6 +200,13 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // dependency this creates and why it is not a cycle either side treats as
   // accidental.
   { segment: "agents", zone: "core" },
+  // Flow 313, W4: the portable bundle export/verify/plan/apply core —
+  // deterministic filesystem bookkeeping (manifest schema validation, sha256
+  // content-addressing, tar/gzip read+write, scope/path resolution, the
+  // applied-state ledger), no provider registry, no model call, no network.
+  // Same shape as `sync`/`forgetting`/`trigger`/`governance`/`stack` above.
+  // `src/commands/bundle.ts` (adapter, T10) is what wires it to the CLI verb.
+  { segment: "bundle", zone: "core" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(

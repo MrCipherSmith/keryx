@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "demo-pattern",
+  "trigger": "when the fixture round-trip test runs an import",
+  "action": "always treat the record as a fresh candidate",
+  "domain": "tooling",
+  "scope": "user",
+  "project": {
+    "identity": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "identityKind": "path-hash"
+  },
+  "confidence": 0.6,
+  "status": "accepted",
+  "supersededBy": null,
+  "evidence": [
+    {
+      "kind": "reinforcement",
+      "sourceType": "observation",
+      "sourceRef": "obs/demo.jsonl",
+      "observedAt": "2026-09-24T00:00:00.000Z"
+    }
+  ],
+  "redaction": {
+    "scanned": true,
+    "findings": []
+  },
+  "provenance": {
+    "extractor": "repeated-correction"
+  },
+  "createdAt": "2026-09-24T00:00:00.000Z",
+  "updatedAt": "2026-09-24T00:00:00.000Z"
+}
