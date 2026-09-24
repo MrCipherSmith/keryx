@@ -9,7 +9,7 @@
   "title": "W1: stack detection, install profiles and catalog governance gates (scout, eval, stocktake)",
   "status": "in-progress",
   "createdAt": "2026-09-24T04:09:00.843Z",
-  "updatedAt": "2026-09-24T05:03:41.512Z",
+  "updatedAt": "2026-09-24T05:14:54.344Z",
   "source": {
     "type": "description",
     "ref": null
@@ -79,8 +79,19 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T05:05:14.568Z",
+            "outcome": "started",
+            "detail": "review round 1 (opus)"
+          },
+          {
+            "at": "2026-09-24T05:14:54.180Z",
+            "outcome": "failed",
+            "detail": "round 1: 8 major, 15 minor, 1 info; CI core-gate missing src/stack"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -283,6 +294,26 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix round 1: review findings F1-F23 + test:core src/stack",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T05:14:54.344Z",
+            "outcome": "started",
+            "detail": "309-T15 three lanes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -453,6 +484,26 @@
       "at": "2026-09-24T05:03:41.512Z",
       "event": "task-done",
       "detail": "T14: Fix: python/full profiles plan the pack (split pack modules into rule+skill, destination for pack layout, test full/python plan ok)"
+    },
+    {
+      "at": "2026-09-24T05:05:14.568Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1 (opus)"
+    },
+    {
+      "at": "2026-09-24T05:14:54.180Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: 8 major, 15 minor, 1 info; CI core-gate missing src/stack"
+    },
+    {
+      "at": "2026-09-24T05:14:54.265Z",
+      "event": "task-added",
+      "detail": "T15: Fix round 1: review findings F1-F23 + test:core src/stack"
+    },
+    {
+      "at": "2026-09-24T05:14:54.344Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 309-T15 three lanes"
     }
   ]
 }
