@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSkillCatalog } from "./catalog-index";
 import {
+  auditSkillSnapshot,
   checkSkillSelected,
+  collectSkillDirectorySnapshot,
   readScoutRecord,
   recordScout,
   SCOUT_FORK_THRESHOLD,
@@ -13,6 +16,13 @@ import {
   scoutSkill,
   scoutVetCandidate,
 } from "./scout";
+
+// R1-F5/R2-F13 pattern (also used in src/memory/handoff.test.ts,
+// src/gdskills/governance/stocktake.test.ts): chmod-based unreadable-file
+// tests are unenforced when running as root (root bypasses permission
+// bits), so those tests skip themselves rather than assert a false
+// negative.
+const IS_ROOT = process.getuid?.() === 0;
 
 const catalog = loadSkillCatalog(process.cwd(), { scope: "bundled" });
 
@@ -362,5 +372,97 @@ describe("scoutVetCandidate", () => {
     } finally {
       rmSync(candidateDir, { recursive: true, force: true });
     }
+  });
+});
+
+// R2-F13 (flow 313 review round 2 fix): `collectSkillDirectorySnapshot`'s
+// walk used to let an unreadable FILE's `readFile` rejection escape
+// uncaught (crashing every caller, not just the one candidate) and treat an
+// unreadable DIRECTORY or a FIFO/socket/device node as "nothing there" —
+// silently degrading the scan to a clean-looking partial one. All three are
+// now named, fail-closed reasons on the returned result rather than a thrown
+// exception or a silent gap.
+describe("collectSkillDirectorySnapshot (R2-F13)", () => {
+  test("an unreadable file yields a named 'unreadable-file' result, not a thrown/rejected promise", async () => {
+    if (IS_ROOT) return;
+    const dir = mkdtempSync(path.join(tmpdir(), "snapshot-unreadable-file-"));
+    try {
+      writeFileSync(path.join(dir, "SKILL.md"), "---\nname: x\n---\nBody.\n", "utf8");
+      writeFileSync(path.join(dir, "locked.md"), "secret");
+      chmodSync(path.join(dir, "locked.md"), 0);
+
+      // The pre-fix behaviour was an uncaught rejection here (readFile
+      // throwing inside the walk with no try/catch), which would fail this
+      // `await` with the raw fs error instead of returning a result.
+      const result = await collectSkillDirectorySnapshot(dir);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("unreadable-file");
+    } finally {
+      chmodSync(path.join(dir, "locked.md"), 0o644);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an unreadable subdirectory yields a named 'unreadable-dir' result, not a silently truncated (and falsely clean) scan", async () => {
+    if (IS_ROOT) return;
+    const dir = mkdtempSync(path.join(tmpdir(), "snapshot-unreadable-dir-"));
+    try {
+      writeFileSync(path.join(dir, "SKILL.md"), "---\nname: x\n---\nBody.\n", "utf8");
+      const sub = path.join(dir, "locked-dir");
+      mkdirSync(sub);
+      writeFileSync(path.join(sub, "hidden.md"), "should never be reported as scanned");
+      chmodSync(sub, 0);
+
+      const result = await collectSkillDirectorySnapshot(dir);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("unreadable-dir");
+    } finally {
+      chmodSync(path.join(dir, "locked-dir"), 0o755);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a FIFO inside the candidate is refused as 'special-file-refused', not silently skipped", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "snapshot-fifo-"));
+    try {
+      writeFileSync(path.join(dir, "SKILL.md"), "---\nname: x\n---\nBody.\n", "utf8");
+      const fifoPath = path.join(dir, "pipe");
+      try {
+        execFileSync("mkfifo", [fifoPath]);
+      } catch {
+        // `mkfifo` unavailable on this host/CI image — nothing to assert.
+        return;
+      }
+      const result = await collectSkillDirectorySnapshot(dir);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("special-file-refused");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// R2-I2 follow-up (flow 313 review round 2, L2 hardening): two relative
+// paths that only differ by case would silently collide when staged onto a
+// case-insensitive filesystem (the common case on macOS, where this whole
+// tool also runs) even though they came from two genuinely distinct files
+// on a case-sensitive source. Refused up front rather than one silently
+// shadowing the other during staging.
+describe("auditSkillSnapshot (R2-I2)", () => {
+  test("refuses a snapshot whose relative paths collide under case folding", async () => {
+    const files = new Map<string, Buffer>([
+      ["SKILL.md", Buffer.from("---\nname: x\n---\nBody.\n")],
+      ["reference.md", Buffer.from("one")],
+      ["REFERENCE.md", Buffer.from("two")],
+    ]);
+    const result = await auditSkillSnapshot(files);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain("case-fold collision");
+    expect(result.reason).toContain("reference.md");
+    expect(result.reason).toContain("REFERENCE.md");
   });
 });

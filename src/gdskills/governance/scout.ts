@@ -593,7 +593,27 @@ export const DEFAULT_SNAPSHOT_VETTING_LIMITS: SnapshotVettingLimits = {
   maxDepth: 20,
 };
 
-export type SnapshotCollectFailureReason = "symlink-refused" | "too-many-files" | "too-large" | "too-deep";
+/**
+ * R2-F13 follow-up (flow 313 review round 2 fix): `"unreadable-file"` and
+ * `"unreadable-dir"` are named, fail-closed reasons for a read error the
+ * walk previously either let escape uncaught (a `readFile` failure on one
+ * file used to reject the whole `collectSkillDirectorySnapshot` promise,
+ * which crashed an ENTIRE vetting batch in `vetExternalCatalog` rather than
+ * rejecting just that one candidate) or swallowed silently (a `readdir`
+ * failure on a subdirectory used to be treated as "nothing more to add
+ * here", so a partially-unreadable candidate could still read as a clean,
+ * fully-scanned pass). `"special-file-refused"` names an entry that is
+ * neither a symlink, a directory, nor a regular file (a FIFO, socket, or
+ * device node) — previously silently skipped by `!entryStat.isFile()`.
+ */
+export type SnapshotCollectFailureReason =
+  | "symlink-refused"
+  | "too-many-files"
+  | "too-large"
+  | "too-deep"
+  | "unreadable-file"
+  | "unreadable-dir"
+  | "special-file-refused";
 
 export type SnapshotCollectResult =
   | { readonly ok: true; readonly files: ReadonlyMap<string, Buffer> }
@@ -615,7 +635,7 @@ export async function collectSkillDirectorySnapshot(
   try {
     rootStat = await lstat(dir);
   } catch (error) {
-    return { ok: false, reason: "symlink-refused", message: `cannot read ${dir}: ${error instanceof Error ? error.message : String(error)}` };
+    return { ok: false, reason: "unreadable-dir", message: `cannot read ${dir}: ${error instanceof Error ? error.message : String(error)}` };
   }
   if (rootStat.isSymbolicLink()) {
     return { ok: false, reason: "symlink-refused", message: `${dir} is a symlink` };
@@ -635,13 +655,27 @@ export async function collectSkillDirectorySnapshot(
     let entries;
     try {
       entries = await readdir(absDir, { withFileTypes: true });
-    } catch {
-      return undefined; // vanished between checks; nothing more to add here.
+    } catch (error) {
+      // R2-F13: an unreadable directory (EACCES, or one that vanished
+      // between the parent's `readdir` and this one) used to be treated as
+      // "nothing more to add here" — silently degrading the scan rather
+      // than refusing it. A partially-scanned candidate must never read as
+      // indistinguishable from a genuinely complete one.
+      return {
+        ok: false,
+        reason: "unreadable-dir",
+        message: `cannot read ${relPrefix.length > 0 ? relPrefix : "."}: ${error instanceof Error ? error.message : String(error)}`,
+      };
     }
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       const abs = path.join(absDir, entry.name);
       const rel = relPrefix.length > 0 ? `${relPrefix}/${entry.name}` : entry.name;
-      const entryStat = await lstat(abs);
+      let entryStat;
+      try {
+        entryStat = await lstat(abs);
+      } catch (error) {
+        return { ok: false, reason: "unreadable-file", message: `cannot stat ${rel}: ${error instanceof Error ? error.message : String(error)}` };
+      }
       if (entryStat.isSymbolicLink()) {
         return { ok: false, reason: "symlink-refused", message: `${rel} is a symlink` };
       }
@@ -650,7 +684,14 @@ export async function collectSkillDirectorySnapshot(
         if (failure !== undefined) return failure;
         continue;
       }
-      if (!entryStat.isFile()) continue;
+      if (!entryStat.isFile()) {
+        // R2-F13: a FIFO, socket, or device node used to be silently
+        // skipped (`!entryStat.isFile()` -> `continue`) rather than
+        // refused — an unusual entry that isn't a plain file or directory
+        // is exactly the kind of thing a vetting walk should name and stop
+        // on, not quietly pretend was never there.
+        return { ok: false, reason: "special-file-refused", message: `${rel} is not a regular file or directory` };
+      }
       if (files.size >= limits.maxFiles) {
         return { ok: false, reason: "too-many-files", message: `${dir} has more than ${limits.maxFiles} files` };
       }
@@ -658,7 +699,22 @@ export async function collectSkillDirectorySnapshot(
       if (totalBytes > limits.maxTotalBytes) {
         return { ok: false, reason: "too-large", message: `${dir} exceeds ${limits.maxTotalBytes} total bytes` };
       }
-      files.set(rel, await readFile(abs));
+      // R2-F13: an unreadable file (EACCES, or a permission bit flipped
+      // mid-walk) used to reject `readFile`'s promise uncaught — which
+      // propagated all the way out of `collectSkillDirectorySnapshot` and
+      // crashed the ENTIRE batch it was part of in `vetExternalCatalog`
+      // (one bad candidate took every other candidate in the same catalog
+      // down with it). It is now a named per-candidate rejection instead;
+      // `vetExternalCatalog`'s `for (const dir of dirs)` loop continues to
+      // the next candidate exactly as it already does for any other
+      // `!snapshot.ok` reason.
+      let bytes: Buffer;
+      try {
+        bytes = await readFile(abs);
+      } catch (error) {
+        return { ok: false, reason: "unreadable-file", message: `cannot read ${rel}: ${error instanceof Error ? error.message : String(error)}` };
+      }
+      files.set(rel, bytes);
     }
     return undefined;
   }
@@ -687,6 +743,30 @@ export type SnapshotAuditResult =
 export async function auditSkillSnapshot(files: ReadonlyMap<string, Buffer>): Promise<SnapshotAuditResult> {
   if (files.size === 0) {
     return { ok: false, reason: "audit-not-applicable: the candidate has no files to scan" };
+  }
+
+  // R2-I2 follow-up (flow 313 review round 2, L2 hardening): `files`'
+  // relative paths were collected from `dir` via an `lstat`-based walk that
+  // never case-folds — correct on a case-SENSITIVE source (two distinct
+  // entries `a.md`/`A.md` are two distinct real files there). Staging them
+  // under `tmpdir()` is only safe if the staging filesystem is equally
+  // case-sensitive; on a case-INSENSITIVE one (the common case on macOS,
+  // where this whole tool also runs), the second `writeFile` below would
+  // silently land on the SAME path as the first, so only one of the two
+  // files' actual bytes ever reaches the audit even though both are
+  // separately hashed into the registry — a blind spot, not caught by any
+  // later check. Refused up front by name rather than staged and silently
+  // miscounted.
+  const caseFoldCollisions = new Map<string, string[]>();
+  for (const rel of files.keys()) {
+    const folded = rel.normalize("NFC").toLowerCase();
+    const existing = caseFoldCollisions.get(folded);
+    if (existing !== undefined) existing.push(rel);
+    else caseFoldCollisions.set(folded, [rel]);
+  }
+  const collidingPaths = [...caseFoldCollisions.values()].filter((group) => group.length > 1).flat().sort();
+  if (collidingPaths.length > 0) {
+    return { ok: false, reason: `case-fold collision: ${collidingPaths.join(", ")} would collide when staged on a case-insensitive filesystem` };
   }
 
   let stagingRoot: string | undefined;

@@ -41,6 +41,22 @@ export interface UserStorePaths {
   appliedState: string;
   hooksJson: string;
   externalSkillImports: string;
+  /**
+   * Flow 313 (W4) review round 2 fix (R2-F2, part of L2's "trust in
+   * attacker-writable state" class): a reserved tree no bundle can ever
+   * target (see `src/bundle/paths.ts`'s reserved-path list) for secrets and
+   * other Keryx-internal state that must not live inside a bundle-writable
+   * directory such as `skills/`.
+   */
+  state: string;
+  /**
+   * The external-imports registry's HMAC integrity key. Used to live at
+   * `~/.keryx/skills/.external-imports.key` — inside the same tree a
+   * user-scope bundle can write to, so a bundle landing first on a fresh
+   * home could plant the key itself and then sign a forged registry (R2-F2).
+   * Moved under `state/`, which is reserved and never a bundle apply target.
+   */
+  externalImportsKey: string;
 }
 
 /**
@@ -52,6 +68,7 @@ export function userStorePaths(
   homeDir?: string,
 ): UserStorePaths {
   const root = userStoreRoot(env, homeDir);
+  const state = path.join(root, "state");
   return {
     root,
     skills: path.join(root, "skills"),
@@ -63,5 +80,7 @@ export function userStorePaths(
     appliedState: path.join(root, "bundles", "applied-state.json"),
     hooksJson: path.join(root, "hooks.json"),
     externalSkillImports: path.join(root, "skills", "external-imports.json"),
+    state,
+    externalImportsKey: path.join(state, "external-imports.key"),
   };
 }

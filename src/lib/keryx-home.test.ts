@@ -81,6 +81,10 @@ describe("keryx-home", () => {
       expect(paths.externalSkillImports).toBe(
         "/test/home/.keryx/skills/external-imports.json",
       );
+      expect(paths.state).toBe("/test/home/.keryx/state");
+      expect(paths.externalImportsKey).toBe(
+        "/test/home/.keryx/state/external-imports.key",
+      );
     });
 
     it("respects explicit homeDir", () => {
