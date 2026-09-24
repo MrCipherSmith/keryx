@@ -18,7 +18,17 @@
       ],
       "enumeration_method": "Searched for every consumer of AGENT_SENTINEL_PREFIX in src/agents and src/security/audit-harness; reproduced the export and uninstall sites with the CLI."
     },
-    "global_id": "2026-09-24-ingest-684-r02#R2-F1"
+    "global_id": "2026-09-24-ingest-684-r02#R2-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved."
+    }
   },
   {
     "id": "R2-F2",
@@ -38,7 +48,17 @@
       ],
       "enumeration_method": "Called verifyAgentContentHash on freshly compiled output for 4 hosts × 2 adversarial inputs (probe-formats.out tail), then ran a CLI export → source change → re-export cycle."
     },
-    "global_id": "2026-09-24-ingest-684-r02#R2-F2"
+    "global_id": "2026-09-24-ingest-684-r02#R2-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved."
+    }
   },
   {
     "id": "R2-F3",
@@ -58,7 +78,17 @@
       ],
       "enumeration_method": "Called checkAgentUnrestrictedTools on a claude md for each value: null, ~, Null, [], \"\", empty, spaces."
     },
-    "global_id": "2026-09-24-ingest-684-r02#R2-F3"
+    "global_id": "2026-09-24-ingest-684-r02#R2-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved."
+    }
   },
   {
     "id": "R2-F4",
@@ -77,7 +107,17 @@
       ],
       "enumeration_method": "Compiled {policy_profile: workspace-write, tools: []} for all four hosts (probe-formats.out 'adv-ww-empty')."
     },
-    "global_id": "2026-09-24-ingest-684-r02#R2-F4"
+    "global_id": "2026-09-24-ingest-684-r02#R2-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved."
+    }
   },
   {
     "id": "R2-F5",
@@ -96,7 +136,17 @@
       ],
       "enumeration_method": "Searched for doctorIntegration( callers."
     },
-    "global_id": "2026-09-24-ingest-684-r02#R2-F5"
+    "global_id": "2026-09-24-ingest-684-r02#R2-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved."
+    }
   },
   {
     "id": "R2-F6",
@@ -115,6 +165,16 @@
       ],
       "enumeration_method": "Probe: checkAgentMissingModelTier on a kiro JSON with prose sentinel text → 0 findings."
     },
-    "global_id": "2026-09-24-ingest-684-r02#R2-F6"
+    "global_id": "2026-09-24-ingest-684-r02#R2-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at b9f6293a (after fixing commit 714a4e13) by the round-3 opus reviewer: round-3 re-ran the round-2 probe (scratchpad/review310-r2) and reported it resolved."
+    }
   }
 ]

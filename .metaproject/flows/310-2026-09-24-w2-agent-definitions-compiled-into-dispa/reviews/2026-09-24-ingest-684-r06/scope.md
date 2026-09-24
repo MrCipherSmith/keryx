@@ -4,7 +4,7 @@ target: pr
 ref: 684
 mode: ingest
 flow: 310 (explicit-flow-id)
-created_at: 2026-09-24T07:08:04.546Z
+created_at: 2026-09-24T07:08:04.821Z
 context_mode: light
 
 ## Stage counts
@@ -21,22 +21,20 @@ This is NOT `dropped 0`: nothing ran, so nothing is known.
 ### Refuted by the verifier
 
 verification_mode: annotate
-claims_received: 1
-claims_applied: 1
+claims_received: 0
+claims_applied: 0
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
 confirmed: 0
-refuted: 1
+refuted: 0
 unverifiable: 0
 unverified: 0
 
 ### Retained
 
-findings_in: 1
+findings_in: 0
 findings_removed_by_verifier: 0
-findings_retained: 1
-
-`annotate` records verdicts and removes nothing: 1 finding(s) are marked refuted and still reported.
+findings_retained: 0
 
 ### Verification claims discarded
 
@@ -52,8 +50,8 @@ cap that dropped nothing are different facts.
 ### Findings cap
 
 limit_per_reviewer: 10
-findings_seen: 1
-findings_retained: 1
+findings_seen: 0
+findings_retained: 0
 findings_truncated: 0
 blockers_exempt: 0
 reviewers_truncated: 0
@@ -80,14 +78,14 @@ The machine-readable copy is `filter_stats` in `manifest.json`; this block is
 rendered from the same record, never re-parsed out of the prose above.
 `null` means the stage did not run. It never means `0`.
 
-total: 1
+total: 0
 dropped_prefilter: null — no `--scope` was supplied to this ingest. Nothing ran, so nothing is known — this is NOT `dropped 0`.
 dropped_low_confidence: null — this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing.
 dropped_refuted: 0
 dropped_scope_b: null — no blast-radius record reached this ingest, so the scope-B screen did not run. `rejected: 0` after a screen that ran is a different fact, and the record keeps them apart.
 dropped_findings_cap: 0
 dismissed_by_round: null — the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction.
-retained: 1
+retained: 0
 
 ### by_reason
 

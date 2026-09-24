@@ -18,7 +18,17 @@
       ],
       "enumeration_method": "Found every resolveSurfaceSelection/lenientSelectors/isMultiRuntimeRequest site in src/commands/integrations.ts and src/integrations/installer.ts with `keryx ctx rg --all`. Only doctor uses the strict resolver for a multi-runtime request. Reproduced with the CLI in scratchpad/review310-r4/r-dall."
     },
-    "global_id": "2026-09-24-ingest-684-r04#R4-F1"
+    "global_id": "2026-09-24-ingest-684-r04#R4-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7fd965c5 (after fixing commit a29e6235) by the round-5 opus reviewer: round-5 re-ran the round-4 scenarios; R4-F2 resolved; R4-F1 behaviour as specified with residual gap filed as R5-F1 and fixed in 27fe9bc3.",
+      "verifier": "round-5"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7fd965c5 (after fixing commit a29e6235) by the round-5 opus reviewer: round-5 re-ran the round-4 scenarios; R4-F2 resolved; R4-F1 behaviour as specified with residual gap filed as R5-F1 and fixed in 27fe9bc3."
+    }
   },
   {
     "id": "R4-F2",
@@ -39,6 +49,16 @@
       ],
       "enumeration_method": "Enumerated every hasManagedAgentExports reference with `keryx ctx rg --all` (the definition plus one caller, inspectAgentsExports). Every customUninstall site with `keryx ctx rg --all`: the installer.ts:587 real path and the ctx/runtimes.ts:175 normalizer, which is ctx-guard only. Reproduced with the CLI in scratchpad/review310-r4/r-dry."
     },
-    "global_id": "2026-09-24-ingest-684-r04#R4-F2"
+    "global_id": "2026-09-24-ingest-684-r04#R4-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7fd965c5 (after fixing commit a29e6235) by the round-5 opus reviewer: round-5 re-ran the round-4 scenarios; R4-F2 resolved; R4-F1 behaviour as specified with residual gap filed as R5-F1 and fixed in 27fe9bc3.",
+      "verifier": "round-5"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7fd965c5 (after fixing commit a29e6235) by the round-5 opus reviewer: round-5 re-ran the round-4 scenarios; R4-F2 resolved; R4-F1 behaviour as specified with residual gap filed as R5-F1 and fixed in 27fe9bc3."
+    }
   }
 ]
