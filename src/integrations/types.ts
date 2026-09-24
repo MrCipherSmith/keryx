@@ -34,7 +34,11 @@ export type Confidence = "verified" | "experimental";
  * - `host-hook`: keryx writes into a settings file (or plugin file) the
  *   harness's own process reads — today's shape for every registered surface.
  * - `policy-travels-with-agent`: the policy ships with the agent definition
- *   rather than a host settings file (zed's future shape — W5-b).
+ *   rather than a host settings file. Zed's shape (W5-b): keryx runs AS the
+ *   ACP agent, so its own deny-by-default permission mapping
+ *   (`src/acp/permission.ts`'s `approvalFromPermissionResponse`) already
+ *   implements the surface — there is no Zed-owned settings file to install
+ *   into at all.
  * - `instruction-only`: no scriptable enforcement; only a documented
  *   convention (e.g. AGENTS.md).
  */
@@ -105,6 +109,8 @@ export interface SurfaceSlot {
 export const SUBSYSTEM_CTX_GUARD = "ctx-guard";
 export const SUBSYSTEM_ORIENT = "orient";
 export const SUBSYSTEM_SECURITY = "security";
+export const SUBSYSTEM_INSTRUCTIONS = "instructions";
+export const SUBSYSTEM_ACP_PERMISSION = "acp-permission";
 
 /**
  * One installable capability of one harness. `id` is unique within its
@@ -140,6 +146,15 @@ export interface SurfaceAdapter {
   validate?(settings: Settings): string[];
   customInstall?(projectRoot: string): Promise<string[]>;
   customUninstall?(projectRoot: string): Promise<boolean>;
+  /**
+   * Health check for a surface that has no `merge`/`strip` to validate
+   * against — a non-JSON artifact (a generated plugin file, a markdown
+   * instructions block) or a surface satisfied entirely by keryx's own
+   * runtime behavior (zed's `acp-permission` block surface). Returns a
+   * problem string per issue found, `[]` when healthy. `doctor` calls this
+   * for any surface lacking `validate`.
+   */
+  probe?(projectRoot: string): Promise<string[]>;
 
   // --- ctx-guard-only presentation/decode facts -----------------------------
   // Carried on the surface (rather than hand-duplicated per view module) so
@@ -168,6 +183,8 @@ export interface HarnessAdapter {
   /** Reason strings for flags this harness cannot support today (verbatim carry-over). */
   readonly unsupported: Partial<Record<SurfaceFlag, string>>;
   readonly sourceDocs: readonly string[];
+  /** Free-text caveats about this harness's adapter as a whole (non-empty when `confidence: "experimental"`). */
+  readonly riskNotes?: readonly string[];
   /** ISO date the confidence/unsupported facts were last checked against docs. */
   readonly lastVerified: string;
   /**

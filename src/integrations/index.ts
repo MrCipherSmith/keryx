@@ -15,7 +15,13 @@ export type {
   SurfaceSlot,
 } from "./types";
 
-export { SUBSYSTEM_CTX_GUARD, SUBSYSTEM_ORIENT, SUBSYSTEM_SECURITY } from "./types";
+export {
+  SUBSYSTEM_ACP_PERMISSION,
+  SUBSYSTEM_CTX_GUARD,
+  SUBSYSTEM_INSTRUCTIONS,
+  SUBSYSTEM_ORIENT,
+  SUBSYSTEM_SECURITY,
+} from "./types";
 
 export {
   HARNESS_ADAPTERS,
@@ -53,8 +59,12 @@ export type { GroupShape, ManagedGroupsQuery } from "./settings-json";
 
 export {
   ANTIGRAVITY_DECISION_CODEC,
+  COPILOT_DECISION_CODEC,
   CURSOR_DECISION_CODEC,
   EXIT_CODE_DECISION_CODEC,
+  parseCopilotToolArgsCommand,
+  parseKiroCommand,
+  parseRunShellCommandInput,
   parseToolName,
 } from "./codecs";
 
@@ -87,6 +97,30 @@ export {
   checkInputCommand,
   checkOutputCommand,
   ctxHookCommand,
+  nestedCtxSurface,
   orientHookCommand,
   preToolUseMatcher,
 } from "./surfaces";
+
+export {
+  ACP_PERMISSION_ZED,
+  CTX_GUARD_GEMINI_CLI,
+  CTX_GUARD_GITHUB_COPILOT_AGENT,
+  CTX_GUARD_KIRO,
+  INSTRUCTIONS_GEMINI_CLI,
+  INSTRUCTIONS_GITHUB_COPILOT_AGENT,
+  INSTRUCTIONS_KIRO,
+  INSTRUCTIONS_ZED,
+  KERYX_SHELL_UNSUPPORTED,
+  KERYX_SHELL_UNSUPPORTED_REASON,
+  LAST_VERIFIED_W5B,
+} from "./surfaces-w5b";
+
+export {
+  INSTRUCTIONS_END_MARKER,
+  INSTRUCTIONS_START_MARKER,
+  installMarkdownBlock,
+  probeMarkdownBlock,
+  renderInstructionsBlock,
+  uninstallMarkdownBlock,
+} from "./markdown-block";
