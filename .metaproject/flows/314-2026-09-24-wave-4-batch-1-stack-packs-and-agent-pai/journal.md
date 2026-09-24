@@ -87,3 +87,5 @@
   - go: go-testing table-driven-subtests 0.4
   A strong model scoring 0 on several suppression scenarios suggests those graders are mis-specified, not only weak skills. That is follow-up work (grader audit, next batch), not something to tune in this flow.
 - 2026-09-24T23:10Z - CORRECTION to the 17:20Z entry: the stack coverage count stays at 2. The earlier 2 -> 5 claim rested on the grader-tuned run that review round 1 invalidated, and no batch-1 pack cleared the honest gate. AC3, AC5 and AC11 were updated through keryx flow ac update with reasons.
+- 2026-09-24T23:50Z - Lane F accepted: the stale real-tree tests were rewritten as fixture-based tests, and W1 0.2.2, W2 0.1.6 and the guide and CLI reference now reflect the honest outcome. install.test.ts:894 EACCES reproduces identically on base origin/feat. It is a pre-existing platform flake and was not touched.
+- 2026-09-24T23:50Z - FOLLOW-UP (owner decision): the next flow is grader reliability, meaning behavior-based grading (e.g. a rubric LLM judge) plus anti-gaming tests, validated on batch 1 before batches B2-B6. The coordinator starts it; this flow does not.
