@@ -455,7 +455,16 @@ async function runApply(args: readonly string[], deps: LearnCommandDeps): Promis
   if (skill === undefined) return fail("--skill <module/name> is required");
   try {
     const root = resolveRoot(deps);
-    await applyLearnedPattern(root, id, { skill, dryRun: args.includes("--dry-run"), ...storeOptionsOf(deps) });
+    const dryRun = args.includes("--dry-run");
+    const result = await applyLearnedPattern(root, id, { skill, dryRun, ...storeOptionsOf(deps) });
+    if (dryRun) {
+      console.log(`keryx learn apply: dry run — "${id}" would update skill "${skill}" (${result.applied.previousVersion} -> ${result.applied.nextVersion}). Nothing written.`);
+    } else {
+      console.log(
+        `keryx learn apply: "${id}" applied to "${skill}" (${result.applied.previousVersion} -> ${result.applied.nextVersion}). ` +
+          `Changed sections: ${result.applied.changedSections.join(", ") || "(none)"}.`,
+      );
+    }
   } catch (error) {
     reportError(error);
   }
@@ -482,12 +491,13 @@ async function runPromote(args: readonly string[], deps: LearnCommandDeps): Prom
   }
   try {
     const root = resolveRoot(deps);
-    await promotePattern(root, id, {
+    const result = await promotePattern(root, id, {
       isTerminal: terminal,
       confirm: makeTypedIdConfirm(id, "pattern", deps),
       now: resolveNow(deps),
       ...storeOptionsOf(deps),
     });
+    console.log(`keryx learn promote: "${result.id}" promoted to scope "${result.scope}" as status "${result.status}".`);
   } catch (error) {
     reportError(error);
   }
@@ -498,12 +508,28 @@ async function runPromote(args: readonly string[], deps: LearnCommandDeps): Prom
 // ---------------------------------------------------------------------------
 
 async function runGraduateRun(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
-  const bad = unknownFlags(args, ["--domain"]);
+  const bad = unknownFlags(args, ["--domain", "--json"]);
   if (bad.length > 0) return fail(`unknown flag(s): ${bad.join(", ")}`);
   try {
     const domain = parseEnumFlag(args, "--domain", DOMAINS);
     const root = resolveRoot(deps);
-    await runGraduate(root, { ...(domain !== undefined ? { domain } : {}), now: resolveNow(deps), ...storeOptionsOf(deps) });
+    const report = await runGraduate(root, { ...(domain !== undefined ? { domain } : {}), now: resolveNow(deps), ...storeOptionsOf(deps) });
+    if (args.includes("--json")) {
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+    console.log(
+      `keryx learn graduate: ${report.proposals.length} new proposal(s), ${report.alreadyProposed.length} already proposed, ${report.refused.length} refused.`,
+    );
+    for (const proposal of report.proposals) {
+      console.log(`  + ${proposal.proposalId} (${proposal.target}, domain=${proposal.domain}) members: ${proposal.members.join(", ")}`);
+      console.log(`    ${proposal.summary}`);
+      for (const step of proposal.nextSteps) console.log(`    next: ${step}`);
+    }
+    for (const id of report.alreadyProposed) console.log(`  = ${id} (already proposed)`);
+    for (const refusal of report.refused) {
+      console.log(`  refused (${refusal.categories.join(", ")}): members ${refusal.memberIds.join(", ")}`);
+    }
   } catch (error) {
     reportError(error);
   }
@@ -525,12 +551,13 @@ async function runGraduateApply(args: readonly string[], deps: LearnCommandDeps)
   }
   try {
     const root = resolveRoot(deps);
-    await applyGraduation(root, proposalId, {
+    const result = await applyGraduation(root, proposalId, {
       isTerminal: terminal,
       confirm: makeTypedIdConfirm(proposalId, "proposal", deps),
       now: resolveNow(deps),
       ...storeOptionsOf(deps),
     });
+    console.log(`keryx learn graduate apply: "${proposalId}" applied. Agent candidate written to ${result.path}.`);
   } catch (error) {
     reportError(error);
   }
@@ -611,7 +638,7 @@ Usage:
   keryx learn reject <id> [--scope user]
   keryx learn apply <id> --skill <module/name> [--dry-run]
   keryx learn promote <id>
-  keryx learn graduate [--domain <d>]
+  keryx learn graduate [--domain <d>] [--json]
   keryx learn graduate apply <proposal-id>
   keryx learn prune [--dry-run] [--json]
 
