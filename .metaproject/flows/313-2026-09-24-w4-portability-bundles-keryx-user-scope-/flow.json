@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T11:38:37.431Z",
+  "updatedAt": "2026-09-24T11:38:37.866Z",
   "source": {
     "type": "description",
     "ref": null
@@ -349,6 +349,20 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T18",
+      "title": "Final surgical pass (orchestrator exception): no binary skip; project-root containment for all writers + full ratchet; cheap minors",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -569,6 +583,11 @@
       "at": "2026-09-24T11:38:37.431Z",
       "event": "task-attempt",
       "detail": "T17: failed (attempt 2) — round 4: 0 blocker, 2 major remaining (R1-F20, R3-F1), 16 minor"
+    },
+    {
+      "at": "2026-09-24T11:38:37.866Z",
+      "event": "task-added",
+      "detail": "T18: Final surgical pass (orchestrator exception): no binary skip; project-root containment for all writers + full ratchet; cheap minors"
     }
   ]
 }
