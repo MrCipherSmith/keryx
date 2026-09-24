@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "309",
   "slug": "w1-stack-detection-install-profiles-and-",
   "title": "W1: stack detection, install profiles and catalog governance gates (scout, eval, stocktake)",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T04:09:00.843Z",
-  "updatedAt": "2026-09-24T04:09:00.843Z",
+  "updatedAt": "2026-09-24T07:04:35.873Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:29833a8937bdcf5d8b4fd4d351bc55c77b0ff7a43cf76046267d442a6f3aecaa",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,644 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by lane tasks T5-T8"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "each lane task T5-T8 ships its own targeted tests; verification in T9/T10"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 6,
+        "log": [
+          {
+            "at": "2026-09-24T05:05:14.568Z",
+            "outcome": "started",
+            "detail": "review round 1 (opus)"
+          },
+          {
+            "at": "2026-09-24T05:14:54.180Z",
+            "outcome": "failed",
+            "detail": "round 1: 8 major, 15 minor, 1 info; CI core-gate missing src/stack"
+          },
+          {
+            "at": "2026-09-24T05:45:00.157Z",
+            "outcome": "started",
+            "detail": "review round 2 (opus verification)"
+          },
+          {
+            "at": "2026-09-24T06:10:02.574Z",
+            "outcome": "started",
+            "detail": "review round 3 (opus verification, final attempt)"
+          },
+          {
+            "at": "2026-09-24T06:43:42.863Z",
+            "outcome": "started",
+            "detail": "narrow verification round 4 (re-planned): T17 diff 88753c5e + merge bff0a030"
+          },
+          {
+            "at": "2026-09-24T06:57:51.700Z",
+            "outcome": "started",
+            "detail": "final round 5 clean (self-verification of T18)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Lane A: keryx stack detect (src/stack/, command, persistence, determinism)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:14:00.675Z",
+            "outcome": "started",
+            "detail": "309-T5 lane A"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Lane B: install manifest, plan/apply, install-state, doctor, uninstall",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:14:00.764Z",
+            "outcome": "started",
+            "detail": "309-T6 lane B"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Lane C: governance gates scout/eval/stocktake + authoring lint + metadata.origin",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:14:00.855Z",
+            "outcome": "started",
+            "detail": "309-T7 lane C"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Lane D: minimal python stack pack + stack-pack guard tests (paths/extends, scout record, eval-for-stable, export limits)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:44:05.710Z",
+            "outcome": "started",
+            "detail": "309-T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Verify: stack detect twice offline on fixture repo, identical output (Wave-2 exit)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Verify: scout/eval/stocktake run on the existing bundled catalog; record outputs in journal",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Docs: W1 spec status + CLI help for stack/skills commands",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:33:19.501Z",
+            "outcome": "started",
+            "detail": "309-T11"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Fix: investigate eval trigger grader 0/5 on review-frontend and scout calibration (react/mobx query -> create)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:33:19.413Z",
+            "outcome": "started",
+            "detail": "309-T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Fix: stack.json reasons use repo-relative paths (portable fingerprint); matched lists marker hits too",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:44:54.459Z",
+            "outcome": "started",
+            "detail": "309-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix: python/full profiles plan the pack (split pack modules into rule+skill, destination for pack layout, test full/python plan ok)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:57:14.404Z",
+            "outcome": "started",
+            "detail": "309-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix round 1: review findings F1-F23 + test:core src/stack",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T05:14:54.344Z",
+            "outcome": "started",
+            "detail": "309-T15 three lanes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Fix round 2: R2-1..R2-10 (path normalization, symlink leaf, stocktake runtime guard, eval leave-one-out + nothing-ran rule, arg parsing, pyproject, schema text)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T05:54:09.596Z",
+            "outcome": "started",
+            "detail": "309-T16 three lanes; re-planned: R2 majors recur in the same areas as round 1 (containment, eval grading) so fixes use normalize-then-compare and leave-one-out explicitly, with the reviewer repros as tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix round 3 (re-planned, narrow): R3-1..R3-5 + cheap R3-6, discriminating tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T06:20:27.543Z",
+            "outcome": "started",
+            "detail": "309-T17"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Fix round 4 (tiny): R4-1 integrations doctor NotARegularFileError, R4-2 unreadable in human output + eval error, R4-3 message",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T06:50:40.090Z",
+            "outcome": "started",
+            "detail": "309-T18"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-24T04:09:00.843Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T04:13:34.163Z",
+      "event": "task-added",
+      "detail": "T5: Lane A: keryx stack detect (src/stack/, command, persistence, determinism)"
+    },
+    {
+      "at": "2026-09-24T04:13:34.251Z",
+      "event": "task-added",
+      "detail": "T6: Lane B: install manifest, plan/apply, install-state, doctor, uninstall"
+    },
+    {
+      "at": "2026-09-24T04:13:34.341Z",
+      "event": "task-added",
+      "detail": "T7: Lane C: governance gates scout/eval/stocktake + authoring lint + metadata.origin"
+    },
+    {
+      "at": "2026-09-24T04:13:34.435Z",
+      "event": "task-added",
+      "detail": "T8: Lane D: minimal python stack pack + stack-pack guard tests (paths/extends, scout record, eval-for-stable, export limits)"
+    },
+    {
+      "at": "2026-09-24T04:13:34.528Z",
+      "event": "task-added",
+      "detail": "T9: Verify: stack detect twice offline on fixture repo, identical output (Wave-2 exit)"
+    },
+    {
+      "at": "2026-09-24T04:13:34.615Z",
+      "event": "task-added",
+      "detail": "T10: Verify: scout/eval/stocktake run on the existing bundled catalog; record outputs in journal"
+    },
+    {
+      "at": "2026-09-24T04:13:34.707Z",
+      "event": "task-added",
+      "detail": "T11: Docs: W1 spec status + CLI help for stack/skills commands"
+    },
+    {
+      "at": "2026-09-24T04:13:42.201Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T04:13:42.283Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T04:13:42.364Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T04:13:42.449Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T04:13:42.534Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-24T04:14:00.675Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 309-T5 lane A"
+    },
+    {
+      "at": "2026-09-24T04:14:00.764Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 309-T6 lane B"
+    },
+    {
+      "at": "2026-09-24T04:14:00.856Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 309-T7 lane C"
+    },
+    {
+      "at": "2026-09-24T04:24:59.578Z",
+      "event": "task-done",
+      "detail": "T5: Lane A: keryx stack detect (src/stack/, command, persistence, determinism)"
+    },
+    {
+      "at": "2026-09-24T04:29:16.939Z",
+      "event": "task-done",
+      "detail": "T7: Lane C: governance gates scout/eval/stocktake + authoring lint + metadata.origin"
+    },
+    {
+      "at": "2026-09-24T04:29:17.020Z",
+      "event": "task-added",
+      "detail": "T12: Fix: investigate eval trigger grader 0/5 on review-frontend and scout calibration (react/mobx query -> create)"
+    },
+    {
+      "at": "2026-09-24T04:33:06.190Z",
+      "event": "task-done",
+      "detail": "T6: Lane B: install manifest, plan/apply, install-state, doctor, uninstall"
+    },
+    {
+      "at": "2026-09-24T04:33:19.413Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 309-T12"
+    },
+    {
+      "at": "2026-09-24T04:33:19.501Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 309-T11"
+    },
+    {
+      "at": "2026-09-24T04:38:53.377Z",
+      "event": "task-done",
+      "detail": "T11: Docs: W1 spec status + CLI help for stack/skills commands"
+    },
+    {
+      "at": "2026-09-24T04:44:05.596Z",
+      "event": "task-done",
+      "detail": "T12: Fix: investigate eval trigger grader 0/5 on review-frontend and scout calibration (react/mobx query -> create)"
+    },
+    {
+      "at": "2026-09-24T04:44:05.710Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 309-T8"
+    },
+    {
+      "at": "2026-09-24T04:44:54.370Z",
+      "event": "task-added",
+      "detail": "T13: Fix: stack.json reasons use repo-relative paths (portable fingerprint); matched lists marker hits too"
+    },
+    {
+      "at": "2026-09-24T04:44:54.460Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 309-T13"
+    },
+    {
+      "at": "2026-09-24T04:49:02.774Z",
+      "event": "task-done",
+      "detail": "T13: Fix: stack.json reasons use repo-relative paths (portable fingerprint); matched lists marker hits too"
+    },
+    {
+      "at": "2026-09-24T04:49:08.854Z",
+      "event": "task-done",
+      "detail": "T9: Verify: stack detect twice offline on fixture repo, identical output (Wave-2 exit)"
+    },
+    {
+      "at": "2026-09-24T04:57:14.227Z",
+      "event": "task-done",
+      "detail": "T8: Lane D: minimal python stack pack + stack-pack guard tests (paths/extends, scout record, eval-for-stable, export limits)"
+    },
+    {
+      "at": "2026-09-24T04:57:14.306Z",
+      "event": "task-added",
+      "detail": "T14: Fix: python/full profiles plan the pack (split pack modules into rule+skill, destination for pack layout, test full/python plan ok)"
+    },
+    {
+      "at": "2026-09-24T04:57:14.404Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 309-T14"
+    },
+    {
+      "at": "2026-09-24T04:58:05.322Z",
+      "event": "task-done",
+      "detail": "T10: Verify: scout/eval/stocktake run on the existing bundled catalog; record outputs in journal"
+    },
+    {
+      "at": "2026-09-24T05:03:41.512Z",
+      "event": "task-done",
+      "detail": "T14: Fix: python/full profiles plan the pack (split pack modules into rule+skill, destination for pack layout, test full/python plan ok)"
+    },
+    {
+      "at": "2026-09-24T05:05:14.568Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1 (opus)"
+    },
+    {
+      "at": "2026-09-24T05:14:54.180Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: 8 major, 15 minor, 1 info; CI core-gate missing src/stack"
+    },
+    {
+      "at": "2026-09-24T05:14:54.265Z",
+      "event": "task-added",
+      "detail": "T15: Fix round 1: review findings F1-F23 + test:core src/stack"
+    },
+    {
+      "at": "2026-09-24T05:14:54.344Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 309-T15 three lanes"
+    },
+    {
+      "at": "2026-09-24T05:45:00.061Z",
+      "event": "task-done",
+      "detail": "T15: Fix round 1: review findings F1-F23 + test:core src/stack"
+    },
+    {
+      "at": "2026-09-24T05:45:00.157Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — review round 2 (opus verification)"
+    },
+    {
+      "at": "2026-09-24T05:54:09.511Z",
+      "event": "task-added",
+      "detail": "T16: Fix round 2: R2-1..R2-10 (path normalization, symlink leaf, stocktake runtime guard, eval leave-one-out + nothing-ran rule, arg parsing, pyproject, schema text)"
+    },
+    {
+      "at": "2026-09-24T05:54:09.596Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 309-T16 three lanes; re-planned: R2 majors recur in the same areas as round 1 (containment, eval grading) so fixes use normalize-then-compare and leave-one-out explicitly, with the reviewer repros as tests"
+    },
+    {
+      "at": "2026-09-24T06:09:34.123Z",
+      "event": "task-done",
+      "detail": "T16: Fix round 2: R2-1..R2-10 (path normalization, symlink leaf, stocktake runtime guard, eval leave-one-out + nothing-ran rule, arg parsing, pyproject, schema text)"
+    },
+    {
+      "at": "2026-09-24T06:10:02.574Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 4) — review round 3 (opus verification, final attempt)"
+    },
+    {
+      "at": "2026-09-24T06:20:27.463Z",
+      "event": "task-added",
+      "detail": "T17: Fix round 3 (re-planned, narrow): R3-1..R3-5 + cheap R3-6, discriminating tests"
+    },
+    {
+      "at": "2026-09-24T06:20:27.543Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 309-T17"
+    },
+    {
+      "at": "2026-09-24T06:43:21.188Z",
+      "event": "task-done",
+      "detail": "T17: Fix round 3 (re-planned, narrow): R3-1..R3-5 + cheap R3-6, discriminating tests"
+    },
+    {
+      "at": "2026-09-24T06:43:42.863Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 5) — narrow verification round 4 (re-planned): T17 diff 88753c5e + merge bff0a030"
+    },
+    {
+      "at": "2026-09-24T06:50:39.990Z",
+      "event": "task-added",
+      "detail": "T18: Fix round 4 (tiny): R4-1 integrations doctor NotARegularFileError, R4-2 unreadable in human output + eval error, R4-3 message"
+    },
+    {
+      "at": "2026-09-24T06:50:40.090Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 309-T18"
+    },
+    {
+      "at": "2026-09-24T06:57:51.618Z",
+      "event": "task-done",
+      "detail": "T18: Fix round 4 (tiny): R4-1 integrations doctor NotARegularFileError, R4-2 unreadable in human output + eval error, R4-3 message"
+    },
+    {
+      "at": "2026-09-24T06:57:51.700Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 6) — final round 5 clean (self-verification of T18)"
+    },
+    {
+      "at": "2026-09-24T07:04:35.873Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }

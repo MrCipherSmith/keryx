@@ -1,0 +1,18 @@
+{
+  "id": "python",
+  "family": "language",
+  "modules": ["python-rules", "python-skills"],
+  "detectionMarkers": ["python"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 309, W1 Lane D"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": [],
+    "test": ["python-testing"],
+    "review": [],
+    "build-fix": [],
+    "migrate": []
+  }
+}

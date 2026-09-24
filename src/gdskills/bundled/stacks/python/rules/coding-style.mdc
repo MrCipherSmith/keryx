@@ -1,0 +1,57 @@
+---
+extends: common
+paths: ["**/*.py", "**/*.pyi"]
+metadata:
+  origin: authored
+---
+
+# Python coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to Python's own
+idiom. Applies only to `*.py`/`*.pyi` files (W1-AC8) — everything not
+Python-specific still comes from the common rules this file `extends`.
+
+## Formatting and typing
+
+- Format with the project's configured formatter (`ruff format` or `black`);
+  do not hand-format around a formatter that is already configured.
+- Type-hint every new or touched public function signature (`def f(x: int)
+  -> str:`), including `Optional`/`| None` for a parameter or return that can
+  be absent. Do not add hints to untouched code in the same change.
+- Prefer `from __future__ import annotations` in modules that predate PEP 604
+  (`int | None`) rather than importing `Optional`/`Union` piecemeal.
+- Use `pathlib.Path`, not `os.path` string joins, for new filesystem code.
+
+## Naming and structure
+
+- `snake_case` for functions, variables and modules; `PascalCase` for
+  classes; `UPPER_SNAKE_CASE` for module-level constants — the PEP 8
+  baseline, not a house variant of it.
+- One public class or cohesive function group per module; a module that
+  outgrows one screen's worth of unrelated public names should split.
+- Private module/class internals get a single leading underscore
+  (`_helper`), not name-mangled double-underscore unless subclass
+  name-clash protection is the actual intent.
+
+## Errors and imports
+
+- Raise a specific exception type (`ValueError`, `KeyError`, or a project
+  exception class), never a bare `except:` or `except Exception:` that
+  swallows an unrelated failure — catch the specific type you can handle.
+- Absolute imports (`from mypackage.module import thing`), not relative
+  dot-imports (`from ..module import thing`), for anything crossing a
+  package boundary; relative imports are fine within one package's own
+  submodules.
+- Group imports stdlib / third-party / local, each group alphabetized, one
+  blank line between groups — the convention `isort`/`ruff --select I`
+  enforce; run it instead of hand-ordering when the project has it
+  configured.
+
+## Docstrings
+
+- Every public function, class and module gets a docstring stating what it
+  does and, for a function with non-obvious parameters, what each one means
+  — a one-line summary is enough when the signature is already
+  self-describing.
+- Match the project's existing docstring convention (Google-style, NumPy-style,
+  or plain reST) rather than introducing a second style in one file.

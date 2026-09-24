@@ -26,6 +26,7 @@ import { mcpCommand } from "./commands/mcp";
 import { printServeMcpHelp, serveMcpCommand } from "./commands/serve-mcp";
 import { integrateCommand } from "./commands/integrate";
 import { integrationsCommand } from "./commands/integrations";
+import { stackCommand } from "./commands/stack";
 import { statusCommand } from "./commands/status";
 import { harnessCommand } from "./commands/harness";
 import { ShellFlagError, shellCommand } from "./commands/shell";
@@ -92,6 +93,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   sync: syncCommand,
   skills: skillsCommand,
   "skill-verify-skill": skillVerifySkillCommand,
+  stack: stackCommand,
   health: healthCommand,
   metrics: metricsCommand,
   test: testCommand,
@@ -270,6 +272,7 @@ export const USAGE_BODY = `Usage:
   keryx skills sync --runtime codex|claude --target <dir>
   keryx skill-verify-skill <skill-or-target>
   keryx skills contracts validate <file> --schema subagent-result
+  keryx stack detect [--cwd <dir>] [--json] [--no-write]
   keryx metrics status|collect|validate|latest|show|plan|benchmark
   keryx test analyze
   keryx test run [--changed]
@@ -370,6 +373,7 @@ Commands:
   ctx       Run compact context commands and save raw output
   wiki      Manage the local project knowledge base
   skills    Manage bundled Metaproject working skills
+  stack     Deterministic, offline stack detection (keryx stack detect)
   health    Aggregate code quality signals and run the quality gate
   test      Analyze testing context and normalize test reports
   memory    Store and search long-term project memory

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "keryx://schemas/agent-platform/install-manifest.schema.json",
   "title": "Keryx stack catalog install manifest",
-  "description": "planned — Declares the profiles, modules, components, and per-target install state consumed by `keryx skills install` and `keryx skills doctor` for the stack-aware skills & rules catalog (W1). No runtime reads this shape yet; it is the target contract for the install-plan/install-state/doctor/uninstall surface described in workstreams/W1-stack-catalog.md.",
+  "description": "Declares the profiles, modules, components, and per-target install state consumed by `keryx skills install`/`doctor`/`uninstall` for the stack-aware skills & rules catalog (W1). Implemented as of flow 309 (Wave 2): `src/gdskills/manifest/` (`manifest.ts`/`plan.ts`/`apply.ts`/`doctor.ts`/`uninstall.ts`/`state.ts`) loads and validates the bundled `install-manifest.json` against this schema, and `$defs/installState` is the on-disk shape of `.metaproject/data/skills/install-state/<target>.json` — see workstreams/W1-stack-catalog.md for the full install-plan/install-state/doctor/uninstall lifecycle.",
   "type": "object",
   "required": ["schemaVersion", "profiles", "modules", "components"],
   "additionalProperties": false,
@@ -285,7 +285,7 @@
             "minLength": 1
           },
           "minItems": 1,
-          "description": "Absolute or project-relative paths Keryx wrote for this module on this target."
+          "description": "Project-relative, normalized paths Keryx wrote for this module on this target — never absolute, and never containing a \"..\" segment (R2-1/R2-10: an absolute path or one with a \"..\" segment is refused by every reader of install-state, not merely discouraged)."
         },
         "sha256": {
           "type": "object",

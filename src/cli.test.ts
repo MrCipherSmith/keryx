@@ -101,6 +101,10 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx integrations doctor --runtime <id>[,<id>...|all] [--json]\n",
     "  keryx integrations matrix [--check] [--write] [--json] [--file <path>]\n",
     "  integrations Install/uninstall/audit Keryx's hooks and instructions in another coding agent, and the generated capability matrix\n",
+    // Flow 309 (W1 Lane A): brand-new `stack` verb — one USAGE_BODY line plus
+    // one Commands: summary row, same shape as flow 307's `integrations`.
+    "  keryx stack detect [--cwd <dir>] [--json] [--no-write]\n",
+    "  stack     Deterministic, offline stack detection (keryx stack detect)\n",
     // Flow 306 (W6, T8): the new `keryx hooks` verb — five USAGE_BODY lines
     // (one wraps onto a continuation line) plus its Commands: summary row.
     "  keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)\n",

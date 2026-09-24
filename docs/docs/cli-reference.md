@@ -2316,6 +2316,10 @@ keryx skills inspect <project-skill>
 keryx skills route <query-or-target>
 keryx skills catalog [--profile recommended]
 keryx skills install [--profile recommended]
+keryx skills install --profile <manifest-profile> [--with <component>]... [--without <component>]...
+    [--target <harness>] [--include-deprecated] [--dry-run] [--json] [--force]
+keryx skills doctor [--target <harness>] [--json]
+keryx skills uninstall --target <harness> [--module <module-id>] [--force] [--json]
 keryx skills create <target> --module <module> --name <skill-name>
 keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
 keryx skills update [<module>/<name>|--all] [--from <origin>]
@@ -2326,6 +2330,9 @@ keryx skills learn apply <proposal.json>
 keryx skills export <project-skill> --runtime codex|claude|plugin
 keryx skills sync --runtime codex|claude --target <dir>
 keryx skills contracts validate <file> --schema <name>
+keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all] [--json]
+keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>] [--model-grader] [--json]
+keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 ```
 
 | Subcommand | Flags / args | Description |
@@ -2336,6 +2343,9 @@ keryx skills contracts validate <file> --schema <name>
 | `route <query-or-target>` | `--json` | Score/rank registry entries against a free-text query or path. |
 | `catalog` | `--profile minimal\|recommended\|full\|custom` | Print the bundled catalog for a profile. |
 | `install` | `--profile <profile>` | Install bundled skills, catalog, manifest, and contracts. Requires `.metaproject/`. |
+| `install --profile <manifest-profile>` | `--with <component>` (repeatable), `--without <component>` (repeatable), `--target <harness>`, `--include-deprecated`, `--dry-run`, `--json`, `--force` | Flow 309 (W1): resolve and apply a profile→modules/components install-manifest plan instead of the legacy profile copy. Triggered by any manifest flag, or a non-legacy `--profile` id (e.g. `core`, `react`, `nestjs`, `python`) — the four legacy ids (`minimal\|recommended\|full\|custom`) with no manifest flags still run the pre-309 behavior above. `--dry-run` prints the resolved plan without writing. Reads `.metaproject/data/stack/stack.json` (from `keryx stack detect`) when present to bias module selection; absent or unreadable fails open. `--force` overwrites drifted files; without it, a drifted/unrecorded existing file is skipped, not overwritten. v1 install destinations exist only for `--target claude` and `--target keryx-shell`. |
+| `doctor` | `--target <harness>`, `--json` | Compare the recorded install-state for a target against disk: `ok`/`drifted`/`missing`/`orphaned` per path. Exits `1` if anything is not `ok`. |
+| `uninstall` | `--target <harness>` (required), `--module <module-id>`, `--force`, `--json` | Remove only the paths recorded in install-state for a target, optionally scoped to one module. A drifted file is refused unless `--force`. |
 | `create <target>` | `--module <m>`, `--name <n>`, `--format auto\|single\|package`, `--dry-run` | Create and register a project-skill package. (`generate` is an alias.) |
 | `import --from <src>` | `--module <m>`, `--name <n>`, `--dry-run`, `--force`, `--json` | Copy a SKILL.md (directory, file, or https GitHub blob/raw URL) into `.metaproject/project-skills/<module>/<name>/`, recording Origin. `--module review` is the only module `review-orchestrator` auto-dispatches. Other hosts and GitHub tree URLs are refused. A bundled name is skipped unless `--force`. |
 | `update [<module>/<name>]` | `--all`, `--from <origin>`, `--dry-run`, `--json` | Re-read Origin and overwrite SKILL.md when the source moved on. Name one skill, or `--all`. A skill with no Origin is skipped. |
@@ -2347,6 +2357,9 @@ keryx skills contracts validate <file> --schema <name>
 | `sync` | `--runtime codex\|claude`, `--target <dir>`, `--dry-run`, `--json` | Sync exported runtime skills to an explicit target dir. Requires both `--runtime` and `--target`. |
 | `contracts list` | — | Print name/path/description for all contract schemas. |
 | `contracts validate <file>` | `--schema <name>` | Validate a JSON file against a named contract schema. Exits `1` on failure. |
+| `scout <name-or-description>` | `--record <pack-dir>`, `--include-imports`, `--candidate <dir>`, `--scope bundled\|all`, `--json` | Flow 309 (W1): pre-creation dedupe gate — does an existing skill already cover this? Scores the query against the catalog (bundled by default, `--scope all` includes project-skills); `--candidate` vets a not-yet-created skill directory; `--record` persists the scout result under a pack directory. |
+| `eval <skill-id>` | `--strictness low\|medium\|high`, `--trials N`, `--runner <provider>`, `--model-grader`, `--json` | Flow 309 (W1): behavioral compliance eval — trigger accuracy + scenario pass rate. Scenarios that need a runner capability are reported `not-run`, not failed, when none is configured. |
+| `stocktake` | `--scope bundled\|all`, `--quick`, `--json` | Flow 309 (W1): periodic catalog health check — buckets each skill `keep\|improve\|update\|retire\|merge`. `--quick` skips the slower checks. |
 
 Profiles: `minimal`, `recommended` (default), `full`, `custom`. Contract schemas:
 `subagent-result`, `subagent-dispatch`, `agent-event`, `orchestrator-state`,
@@ -2464,6 +2477,32 @@ When the `security` module is enabled, `run` runs an advisory security check on 
 captured raw log before persisting it. Advisory (the default) reports and still
 writes the log; `enforced`/`ci`/`gateway` mode can suppress raw-log persistence
 with a masked reason (the run itself is never broken).
+
+---
+
+## stack
+
+Deterministic, offline stack detection (flow 309, W1). Reads manifest files
+(`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, …), marker files
+(`Dockerfile`, `.github/workflows/*.yml`, `*.tf`, `*.sql`, …) and runs a
+bounded extension scan — no network, no model call — and writes
+`.metaproject/data/stack/stack.json`.
+
+```
+keryx stack detect [--cwd <dir>] [--json] [--no-write]
+```
+
+| Subcommand | Flags | Notes |
+|---|---|---|
+| `detect` (only subcommand) | `--cwd <dir>`, `--json`, `--no-write` | Detects the repository's stack tags. Writes `.metaproject/data/stack/stack.json` by default; `--no-write` detects and prints without writing. `--json` prints exactly the persisted document. `--cwd` points detection at another directory instead of the current one. |
+
+Every failure mode (an unreadable/unparseable manifest, a workspace root with
+no leaf dependency, a bounded scan that hits its file cap) marks `uncertain:
+true` for only the tags that signal's family covers — never every tag —
+matching `src/review/stack.ts`'s existing fail-open discipline, generalized.
+Re-running `detect` on an unchanged tree writes a byte-identical file: the
+persisted `detectedAt` is kept whenever the content fingerprint
+(`inputsSha256`) is unchanged.
 
 ---
 

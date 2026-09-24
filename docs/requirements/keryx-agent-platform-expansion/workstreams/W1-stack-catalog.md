@@ -1,5 +1,5 @@
 # W1 — Stack-aware skills & rules catalog
-Version: 0.1.2
+Version: 0.2.0
 
 ## Summary
 
@@ -11,16 +11,18 @@ content, and even those are review-only — there is no implementation skill for
 either stack. Nothing detects which stack a project uses at the catalog level;
 the only existing signal, `metadata.stack_requires`, is a narrow, manually
 authored tag consumed by exactly four review skills to gate dispatch, not to
-discover missing coverage or drive installation. This workstream is
-**planned**: it defines (1) a deterministic stack-detection contract, (2) a
+discover missing coverage or drive installation. This workstream defines
+(1) a deterministic stack-detection contract, (2) a
 "stack pack" content shape (rules + skills + agent references) covering the
 languages/frameworks Keryx has none for today, (3) an install
 profile→module→component model with plan/state/doctor/uninstall commands, (4)
 an authoring standard aligned to the public Agent Skills format, and (5)
 governance gates (scout, eval, stocktake) so catalog growth is checked rather
-than bulk-generated. No code in this workstream exists yet; every command,
-schema field, and file layout below is a target contract, not a running
-feature.
+than bulk-generated. Flow 309 (Wave 2) implemented (1) stack detection, (3)
+the install profile→module→component lifecycle (plan/apply/doctor/uninstall),
+and (5) the three governance gates; (2) stack pack content and (4) the
+authoring-standard lint remain planned — see "Implementation notes (flow 309)"
+below for what landed and what is still a target contract.
 
 ## Current state (with code paths)
 
@@ -405,16 +407,117 @@ history is inspectable without guessing from a git blame.
 
 | Command | Status | Purpose |
 |---|---|---|
-| `keryx stack detect [--cwd <dir>] [--json]` | planned | Deterministic stack detection, writes `.metaproject/data/stack/stack.json` |
-| `keryx skills install --profile <p> [--with/--without <component>] [--dry-run] [--json]` | extends existing `install --profile recommended` | Resolve profile→modules→components into an install plan/apply |
-| `keryx skills doctor [--target <id>]` | planned | Compare install-state to disk; report ok/drifted/missing/orphaned |
-| `keryx skills uninstall --target <id> [--module <id>]` | planned | Remove only Keryx-managed, recorded files |
-| `keryx skills scout <name-or-description> [--include-imports]` | planned | Pre-creation dedupe gate |
-| `keryx skills eval <skill-id> [--strictness ...] [--trials N]` | planned | Behavioral compliance eval, trigger-accuracy + pass-rate |
-| `keryx skills stocktake [--scope bundled\|all] [--quick]` | planned | Periodic keep/improve/update/retire/merge verdicts |
+| `keryx stack detect [--cwd <dir>] [--json] [--no-write]` | implemented (flow 309, Wave 2) | Deterministic stack detection, writes `.metaproject/data/stack/stack.json` |
+| `keryx skills install --profile <p> [--with/--without <component>] [--target <harness>] [--include-deprecated] [--dry-run] [--json] [--force]` | implemented (flow 309, Wave 2) | Resolve profile→modules→components into an install plan/apply |
+| `keryx skills doctor [--target <id>] [--json]` | implemented (flow 309, Wave 2) | Compare install-state to disk; report ok/drifted/missing/orphaned |
+| `keryx skills uninstall --target <id> [--module <id>] [--force] [--json]` | implemented (flow 309, Wave 2) | Remove only Keryx-managed, recorded files |
+| `keryx skills scout <name-or-description> [--include-imports] [--record <pack-dir>] [--candidate <dir>] [--scope bundled\|all] [--json]` | implemented (flow 309, Wave 2) | Pre-creation dedupe gate |
+| `keryx skills eval <skill-id> [--strictness ...] [--trials N] [--runner <provider>] [--model-grader] [--json]` | implemented (flow 309, Wave 2) | Behavioral compliance eval, trigger-accuracy + pass-rate |
+| `keryx skills stocktake [--scope bundled\|all] [--quick] [--json]` | implemented (flow 309, Wave 2) | Periodic keep/improve/update/retire/merge verdicts |
 | `keryx skills create <target> --module <module> --name <skill-name>` | existing (`src/commands/skills.ts`) | Unchanged; scout-log presence becomes a prerequisite guard for stack-pack skills |
 | `keryx skills verify <skill-or-target>` | existing | Unchanged freshness classification (`skill-lifecycle.mdc`) |
 | `keryx skills export/sync --runtime ...` | existing | Unchanged format translation; consumed by W5 harness installs |
+
+## Implementation notes (flow 309)
+
+- **Module locations.** Stack detection lives under `src/stack/` (CLI surface
+  `src/commands/stack.ts`). The install profile→module→component lifecycle
+  lives under `src/gdskills/manifest/` (plan, apply, state, doctor,
+  uninstall), fed by the bundled manifest data file
+  `src/gdskills/bundled/install-manifest.json`. The three governance gates
+  (scout, eval, stocktake) live under `src/gdskills/governance/`, dispatched
+  from `src/commands/skills-governance.ts`.
+- **`stack.json` determinism.** Re-running `keryx stack detect` on an
+  unchanged tree writes a byte-identical file: the persisted `detectedAt`
+  field is kept as-is whenever the content fingerprint (`inputsSha256`) is
+  unchanged, so a plan built from `stack.json` is reproducible across runs
+  that make no repository changes.
+- **Manifest-path trigger rule.** `keryx skills install --profile <p>` still
+  runs the pre-309 legacy copy (unchanged) when `<p>` is one of the four
+  legacy ids (`minimal|recommended|full|custom`) and no manifest-only flag is
+  present. Any manifest-only flag (`--with`, `--without`, `--target`,
+  `--include-deprecated`, `--dry-run`, `--json`, `--force`) or a non-legacy
+  profile id (e.g. `core`, `python`) instead routes to
+  `planInstall`/`applyInstall`.
+  - **`--dry-run`/`--json` on a legacy profile id (review round 1, F18).**
+    `--dry-run` or `--json` alone (no `--with`/`--without`/`--target`/
+    `--include-deprecated`) is itself a manifest-only flag, so
+    `keryx skills install --profile minimal --dry-run` routes to the
+    manifest path and previews the MANIFEST's own `minimal` profile — a
+    different, independently-maintained module set than what
+    `keryx skills install --profile minimal` (no `--dry-run`) actually
+    installs via the legacy curated-subset installer. Rather than build a
+    true legacy dry-run (no preview capability exists for that path) or
+    silently let the two diverge, `installSkillsCommand`
+    (`src/commands/skills.ts`) prints a note naming exactly this whenever a
+    legacy profile id combines with `--dry-run`/`--json` and nothing else
+    manifest-only; `--with`/`--without`/`--target`/`--include-deprecated`
+    need no note since the legacy installer has no equivalent for them to
+    diverge FROM.
+- **v1 install destinations.** The module→file destination table in
+  `src/gdskills/manifest/plan.ts` (`destinationFor`, and the roots
+  `destinationRootsForTarget` shares with `doctor.ts`'s orphan scan) resolves
+  only for `--target claude` and `--target keryx-shell`
+  (`plan.ts`'s `SUPPORTED_TARGETS`); every other `HarnessId` the type permits
+  fails `planInstall` (and, at the CLI layer, `install`/`doctor`/`uninstall`)
+  with a named error before any module-level work runs, rather than
+  resolving to an empty `ok` plan — and every module `kind` other than
+  `rule`/`skill` (`agent-ref`, `hook-runtime`, `schema`, `doc`) still fails
+  the plan with a named error per module, exactly as before.
+- **Install-state path safety (review round 1 F2/F3, hardened round 2
+  R2-1/R2-2).** `state.ts`'s `resolveContainedPath` is the one guard every
+  place that turns a path RECORDED in install-state into a filesystem
+  operation goes through (`uninstall.ts`'s removal, `doctor.ts`'s
+  re-hash/orphan-exclusion, `apply.ts`'s prior-state read AND its own file
+  writes). It rejects, in order: an absolute path; a raw path containing a
+  literal `..` segment or a backslash at all (state is Keryx-written, so
+  either means tampering, even when the path would textually normalize to
+  somewhere inside the root — round 1's guard compared the raw, un-normalized
+  path against the destination roots by string prefix, which let
+  `.claude/skills/../../<file>` pass because it textually starts with
+  `.claude/skills/`); a path whose `path.resolve`+`path.relative` normalized
+  form is empty, escapes the root, or is itself absolute; a normalized path
+  not under any of the target's own destination roots, compared by whole
+  path segments rather than a string prefix (so `.claude/skillsX` is never
+  confused with the root `.claude/skills`); and a path where ANY existing
+  segment from the project root down to and including the leaf itself is a
+  symlink (round 1's guard only checked the nearest existing ANCESTOR
+  directory, so a destination FILE that was itself a symlink — e.g. shipped
+  as `.claude/rules/<rule>.md -> ~/.bashrc` — was not caught, and `apply
+  --force` would write through it to whatever it pointed at). A record
+  failing this check makes the WHOLE install-state document untrustworthy
+  for that call (`doctor` reports `invalidState`, `uninstall`/`apply` refuse
+  the whole operation and mutate nothing). `state.ts`'s
+  `readSkillsInstallState` validates a parsed document against
+  install-manifest.schema.json's own `$defs/installState` (not a hand-rolled
+  shape check), and `skillsInstallStatePath` rejects any target id that is
+  not a bare `^[a-z][a-z0-9-]*$` component before it can reach a `path.join`
+  at all.
+- **`doctor`'s `orphaned` status is a warning, not a failure (R2-7).** The
+  orphan scan is bounded to this target's own destination roots (never the
+  whole project tree), but those roots can legitimately hold files Keryx
+  never wrote — an operator's own `.claude/rules/my-own.md`, for example.
+  `DoctorReport.ok` (and `keryx skills doctor`'s exit code) reflects only the
+  RECORDED paths: `drifted`/`missing` (or an unreadable/unsafe
+  `invalidState`) fail the command; an `orphaned` entry is reported but never
+  does.
+- **`install`/`doctor`/`uninstall` flag parsing (R2-8).** `--profile`,
+  `--target`, `--module`, `--with`, and `--without` are hard CLI errors when
+  given with no usable value — a bare trailing flag, one immediately
+  followed by another flag (e.g. `--target --json`), or an empty `--flag=`
+  — rather than silently falling back to a default target/profile.
+- **`eval` runner requirement.** `keryx skills eval` scenarios that need a
+  headless agent run report `status: "not-run"` with a reason when no runner
+  capability is configured (`--runner`), rather than failing or being
+  skipped silently — the eval's `verdict` reflects only scenarios that
+  actually ran.
+- **Stack-pack content is still deferred to Wave 4**, per this document's
+  original scope, with one exception: `src/gdskills/bundled/install-manifest.json`
+  registers a `python` profile and a `python-pack-module` component marked
+  `stability: experimental` that resolves to zero files today (the Python
+  pack itself is not authored yet) — installing the `python` profile
+  succeeds and installs the common modules only; `full` excludes
+  `python-pack-module` from its file count for the same reason.
 
 ## Data contracts
 

@@ -242,6 +242,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     summary: "Emit a bounded graph + wiki startup block, or install it as a turn-start hook.",
   },
   { kind: "cli", name: "skills", group: "Project knowledge", summary: "Manage bundled Metaproject working skills." },
+  {
+    kind: "cli",
+    name: "stack",
+    group: "Project knowledge",
+    summary: "Deterministic, offline stack detection — keryx stack detect.",
+  },
 
   // ---- Managed work -----------------------------------------------------
   { kind: "cli", name: "flow", group: "Managed work", summary: "Agent-first flow lifecycle (Task Manager)." },

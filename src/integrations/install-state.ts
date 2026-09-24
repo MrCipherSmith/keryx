@@ -52,6 +52,37 @@ export function installStatePath(root: string, runtimeId: string): string {
 }
 
 /**
+ * Thrown by {@link sha256OfRegularFile} when the path exists but is not a
+ * regular file (almost always a directory where a recorded file was
+ * expected). Flow 309 (skills install-state) needs this strict variant:
+ * `keryx skills doctor/uninstall/apply` record only individual files, so a
+ * directory there is drift that must be reported, never silently skipped.
+ * `sha256OfFile` itself stays lenient (a directory hashes to `undefined`)
+ * because the `agents` surface records whole directories.
+ */
+export class NotARegularFileError extends Error {
+  constructor(readonly relativePath: string) {
+    super(`"${relativePath}" exists but is not a regular file (likely a directory) — refusing to hash it`);
+    this.name = "NotARegularFileError";
+  }
+}
+
+/** Strict sibling of {@link sha256OfFile}: `undefined` only when the path does not exist; throws {@link NotARegularFileError} when it exists but is not a regular file. */
+export async function sha256OfRegularFile(root: string, relativePath: string): Promise<string | undefined> {
+  const file = path.join(root, ...relativePath.split("/"));
+  let stats;
+  try {
+    stats = await stat(file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || (error as NodeJS.ErrnoException).code === "ENOTDIR") return undefined;
+    throw error;
+  }
+  if (!stats.isFile()) throw new NotARegularFileError(relativePath);
+  const content = await readFile(file);
+  return createHash("sha256").update(content).digest("hex");
+}
+
+/**
  * sha256 hex of a project-relative FILE's current on-disk content, or
  * `undefined` when it does not exist. R1-F2: a directory-valued
  * `writtenPaths`/`hashPaths` entry (the `agents` surface's `relativePath` is

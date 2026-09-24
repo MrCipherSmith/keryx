@@ -55,4 +55,34 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+- Base branch: `feat/agent-platform-expansion`; worktree
+  `/Users/Goodea/goodea/keryx-ape-309-w1`, branch `flow/309-w1`.
+- Existing detection: `src/review/stack.ts` (`detectProjectStack`,
+  `STACK_TAGS`, fail-open "uncertain always means included", workspaces →
+  uncertain). Consumed by `src/commands/review.ts`; keep unchanged.
+- Legacy install: `src/commands/skills.ts` `install` branch (lines ~103-142)
+  → `installGdskills(metaprojectRoot, profile)` in `src/gdskills/install.ts`;
+  profiles `minimal|recommended|full|custom` in `src/gdskills/catalog.ts`.
+- Frontmatter parser: `src/gdskills/skill-frontmatter.ts`
+  (`parseSkillFrontmatter`, `SkillFrontmatter`); length ceilings in
+  `src/gdskills/skill-length-ceilings.ts`; guard tests
+  `src/gdskills/bundled-eval.test.ts`, `bundled-eval.ts`
+  (`evaluateBundledTree`), `agent-catalogue-xref.test.ts`,
+  `enforcement-claims.test.ts`, `skill-name-matches-directory.test.ts`.
+- Export: `src/gdskills/export.ts` (`exportProjectSkill`,
+  `HARNESS_SKILL_RUNTIMES`).
+- W5-b precedent for install-state: `src/integrations/install-state.ts`
+  (`installStatePath`, `sha256OfFile`, `readInstallState`,
+  `recordSurfaceInstalled`); capability matrix
+  `src/integrations/matrix.ts` (`generateCapabilityMatrix`,
+  `MatrixSurfaceState` = native|adapter|instruction-only|unsupported; per
+  harness `state`), artifact `docs/integrations/harness-capability-matrix.json`.
+- W8 audit facade: `src/security/service.ts` `runHarnessAudit`.
+- Harness child caps: `src/harness/child/orchestrate.ts`
+  (`DEFAULT_MAX_TREE_DEPTH`, `DEFAULT_MAX_CHILDREN`).
+- CLI registry: `src/cli.ts` command map (e.g. `integrations:
+  integrationsCommand`) + help text; import zones `src/lib/import-zones.ts`.
+- Flow 310 (W2 agents) runs in parallel: do not edit `src/agents/` or
+  agent-definition code.
+- Tooling caveat (memory): installed `keryx` may lag; exercise new code with
+  `bun ./src/cli.ts`.
