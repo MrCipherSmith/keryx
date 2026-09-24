@@ -74,12 +74,9 @@ buying anything here at all.
 
 **Vet/lint finding:** fix the underlying issue the finding names (e.g. a
 real `printf`-format mismatch, an unreachable branch, an unused
-`context.Context` parameter meant to be used). Never add a
-lint-suppression comment or a `_ = ` discard whose only purpose is to
-make the checker stop complaining without addressing what it found.
-Answer with the ONE corrected fix, not a menu of alternatives -- an
-ignored error return is fixed by checking, returning, wrapping
-(`fmt.Errorf("...: %w", err)`), or logging the error, full stop.
+`context.Context` parameter meant to be used). Never add `//nolint` or a
+`_ = ` discard whose only purpose is to make the checker stop complaining
+without addressing what it found.
 
 **Race:** read the reported access pair (`go test -race`'s output names
 both goroutines and lines). Add the missing synchronization (mutex,
@@ -112,8 +109,8 @@ State the root cause in one sentence, not just "fixed the error."
 
 - Find and fix the smallest change that addresses the actual root cause —
   never widen a fix beyond what the failure requires.
-- NEVER add a lint-suppression comment or a blank `_ =` discard to
-  silence a vet/lint finding instead of fixing what it found.
+- NEVER add `//nolint` or a blank `_ =` discard to silence a vet/lint
+  finding instead of fixing what it found.
 - NEVER change the `go` directive or a major dependency version just to
   make an error disappear without understanding why it changed.
 - NEVER add a `replace` directive to route around a real compile error
@@ -124,7 +121,7 @@ State the root cause in one sentence, not just "fixed the error."
 
 | Rationalization | Why it is wrong |
 |---|---|
-| "I'll add a lint-suppression comment here so the linter stops complaining" | Silences the finding without fixing the ignored error it caught; check the error instead |
+| "I'll add `//nolint:errcheck` here so the linter stops complaining" | Silences the finding without fixing the ignored error it caught; check the error instead |
 | "Bumping the go directive to 1.25 makes this compile" | Changes the module's declared minimum toolchain for every consumer to dodge one error; understand why the code needs 1.25 first, or fix the code to work at the declared version |
 | "This test is flaky under -race, I'll just run it without -race in CI" | Hides a real data race instead of fixing the missing synchronization; add the mutex/channel instead |
 | "I'll merge these two packages to kill the import cycle" | A cycle usually means a shared piece belongs in a third package, not that the two packages were never separate — check the actual dependency shape first |

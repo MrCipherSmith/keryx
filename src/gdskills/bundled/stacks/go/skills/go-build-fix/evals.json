@@ -31,7 +31,7 @@
       "prompt": "golangci-lint is flagging an ignored error return in my Go code. How should I fix it?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "not-contains", "value": "nolint" }
+        { "grader": "regex", "value": "if err != nil|%w|errors\\.Is|errors\\.As" }
       ]
     }
   ]

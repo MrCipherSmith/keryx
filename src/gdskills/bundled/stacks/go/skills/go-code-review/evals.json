@@ -24,6 +24,7 @@
       "strictness": "high",
       "expected_behavior": [
         { "grader": "regex", "value": "context\\.Context" },
+        { "grader": "regex", "value": "parameter|argument|r\\.Context\\(\\)|per[- ]request" },
         { "grader": "not-contains", "value": "I've fixed" }
       ]
     },
@@ -32,7 +33,8 @@
       "prompt": "Review this Go diff: a new goroutine is started inside a request handler with no WaitGroup or channel to join it. What's wrong?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "regex", "value": "[Ll]eak|join" }
+        { "grader": "regex", "value": "leak" },
+        { "grader": "regex", "value": "errgroup|Wait\\(\\)|ctx\\.Done" }
       ]
     }
   ]

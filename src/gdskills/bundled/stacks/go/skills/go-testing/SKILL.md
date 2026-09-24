@@ -100,9 +100,7 @@ Generated: internal/order/service_test.go
 - ALWAYS match the project's existing table/fixture/assertion
   conventions found in Step 1, not a different project's style.
 - NEVER modify source code — only test files and `testdata/`.
-- NEVER use `time.Sleep` to wait for a goroutine or async result, and
-  never write `time.Sleep` into example code at all -- not even to
-  simulate work inside the goroutine being waited on.
+- NEVER use `time.Sleep` to wait for a goroutine or async result.
 - Run the suite with `-race` whenever the code under test touches
   goroutines, channels, or shared state.
 
